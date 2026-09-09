@@ -9,6 +9,11 @@ The checked-in key is a development placeholder and must be replaced with the
 project's protected public key before a public release. Authenticode, Apple
 Developer ID signing, and notarization are not implemented.
 
+The archive-only native hardening audit records this boundary separately from
+the detached manifest signature. Passing PE stripping/trim-path checks does
+not make a native launcher signed; production Authenticode, Apple Developer
+ID, and notarization authority remain required release inputs.
+
 The existing signer preserves its default `manifest.json` and
 `manifest.json.sig` paths and also accepts explicit `--manifest` and
 `--signature` paths. The release-only maximum task uses those explicit paths

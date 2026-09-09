@@ -99,6 +99,16 @@ claim decompiler resistance. A real maximum archive, ordinary decompiler
 inspection, and selected-method commercial output review remain open. Details
 are in `docs/evidence/syn-009e-re-comparison-2026-09-09.md`.
 
+The archive-only native hardening audit now checks Synesis-owned Windows PE
+launchers for format, zero COFF symbols, absent debug directories/sections,
+named exports, tested local source-path signals, native private-file leakage,
+and Go `trimpath=true` metadata. Developer/protection-lite Windows x64 passed
+those structural checks; Authenticode/Apple signing is not implemented, the
+current samples carry dirty VCS metadata, and no maximum archive was supplied.
+This remains baseline evidence rather than commercial or cross-platform
+release acceptance. Details are in
+`docs/evidence/syn-009e-native-hardening-2026-09-09.md`.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

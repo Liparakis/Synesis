@@ -1,0 +1,316 @@
+{
+  "schema": 1,
+  "component": "cli",
+  "scope": "EXTRACTED_CUSTOMER_ARCHIVES_ONLY; SYNESIS-OWNED-NATIVE-PE-STATIC-AUDIT",
+  "profiles": {
+    "developer": {
+      "profile": "developer",
+      "archive": "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\distributions\\synesis-0.1.0-dev.local-windows-x64.zip",
+      "archiveSha256": "33f5cf0be281d7bae5242ba397836ca2d377114727b0e2a642cb49eb62e1723d",
+      "archiveBytes": 46504281,
+      "extractedRoot": "DISPOSED_AFTER_AUDIT",
+      "bundleRoot": "DISPOSED_AFTER_AUDIT",
+      "nativePaths": [
+        "bin/synesis-installer.exe",
+        "bin/synesis-mcp.exe"
+      ],
+      "forbiddenNativeFiles": [],
+      "binaries": {
+        "bin/synesis-installer.exe": {
+          "path": "bin/synesis-installer.exe",
+          "bytes": 6908928,
+          "sha256": "be49af2297c665ee170adef4a28f84cfce67447ea3d57a77d4eef0ca8800caa7",
+          "format": "PE32+",
+          "machine": "0x8664",
+          "sectionCount": 8,
+          "sections": [
+            ".text",
+            ".rdata",
+            ".data",
+            ".pdata",
+            ".xdata",
+            ".idata",
+            ".reloc",
+            ".symtab"
+          ],
+          "coffSymbolPointer": 6908416,
+          "coffSymbolCount": 0,
+          "debugDirectoryRva": 0,
+          "debugDirectorySize": 0,
+          "debugDirectoryPresent": false,
+          "debugSectionNames": [],
+          "exportDirectoryRva": 0,
+          "exportDirectorySize": 0,
+          "exportNameCount": 0,
+          "sourcePathSignals": [],
+          "goMetadata": {
+            "available": true,
+            "trimpath": "true",
+            "buildMode": "\tbuild\t-buildmode=exe",
+            "goVersion": "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-installer.exe: go1.26.5",
+            "module": "\tmod\tsynesis/bootstrap\t(devel)\t",
+            "vcsRevision": "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+            "output": [
+              "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-installer.exe: go1.26.5",
+              "\tpath\tsynesis/bootstrap",
+              "\tmod\tsynesis/bootstrap\t(devel)\t",
+              "\tbuild\t-buildmode=exe",
+              "\tbuild\t-compiler=gc",
+              "\tbuild\t-trimpath=true",
+              "\tbuild\tCGO_ENABLED=0",
+              "\tbuild\tGOARCH=amd64",
+              "\tbuild\tGOOS=windows",
+              "\tbuild\tGOAMD64=v1",
+              "\tbuild\tvcs=git",
+              "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+              "\tbuild\tvcs.time=2026-09-09T00:26:09Z",
+              "\tbuild\tvcs.modified=true"
+            ]
+          },
+          "signing": {
+            "status": "NotSigned",
+            "subject": "",
+            "message": "The file C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-installer.exe is not digitally signed. You cannot run this script on the current system. For more information about running scripts and setting execution policy, see about_Execution_Policies at https://go.microsoft.com/fwlink/?LinkID=135170"
+          }
+        },
+        "bin/synesis-mcp.exe": {
+          "path": "bin/synesis-mcp.exe",
+          "bytes": 2608128,
+          "sha256": "a6b0bc30a60df7748c33beaa26d4aa72820e59e628db497a22ec4803f26c24f0",
+          "format": "PE32+",
+          "machine": "0x8664",
+          "sectionCount": 8,
+          "sections": [
+            ".text",
+            ".rdata",
+            ".data",
+            ".pdata",
+            ".xdata",
+            ".idata",
+            ".reloc",
+            ".symtab"
+          ],
+          "coffSymbolPointer": 2607616,
+          "coffSymbolCount": 0,
+          "debugDirectoryRva": 0,
+          "debugDirectorySize": 0,
+          "debugDirectoryPresent": false,
+          "debugSectionNames": [],
+          "exportDirectoryRva": 0,
+          "exportDirectorySize": 0,
+          "exportNameCount": 0,
+          "sourcePathSignals": [],
+          "goMetadata": {
+            "available": true,
+            "trimpath": "true",
+            "buildMode": "\tbuild\t-buildmode=exe",
+            "goVersion": "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-mcp.exe: go1.26.5",
+            "module": "\tmod\tsynesis/bootstrap\t(devel)\t",
+            "vcsRevision": "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+            "output": [
+              "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-mcp.exe: go1.26.5",
+              "\tpath\tsynesis/bootstrap/cmd/synesis-mcp",
+              "\tmod\tsynesis/bootstrap\t(devel)\t",
+              "\tbuild\t-buildmode=exe",
+              "\tbuild\t-compiler=gc",
+              "\tbuild\t-trimpath=true",
+              "\tbuild\tCGO_ENABLED=0",
+              "\tbuild\tGOARCH=amd64",
+              "\tbuild\tGOOS=windows",
+              "\tbuild\tGOAMD64=v1",
+              "\tbuild\tvcs=git",
+              "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+              "\tbuild\tvcs.time=2026-09-09T00:26:09Z",
+              "\tbuild\tvcs.modified=true"
+            ]
+          },
+          "signing": {
+            "status": "NotSigned",
+            "subject": "",
+            "message": "The file C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\developer-998740e3d7bf491cb24b13f847599a40\\synesis-0.1.0-dev.local-windows-x64\\bin\\synesis-mcp.exe is not digitally signed. You cannot run this script on the current system. For more information about running scripts and setting execution policy, see about_Execution_Policies at https://go.microsoft.com/fwlink/?LinkID=135170"
+          }
+        }
+      },
+      "checks": {
+        "ownedNativeFiles": "PASS",
+        "peFormat": "PASS",
+        "coffSymbols": "PASS",
+        "debugDirectory": "PASS",
+        "debugSections": "PASS",
+        "namedExports": "PASS",
+        "sourcePaths": "PASS",
+        "privateNativeFiles": "PASS",
+        "goTrimpath": "PASS"
+      },
+      "nativeHardeningStatus": "PASS",
+      "nativeSigningStatus": "OPEN_NOT_SIGNED_OR_UNTRUSTED"
+    },
+    "protectionLite": {
+      "profile": "protection-lite",
+      "archive": "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
+      "archiveSha256": "9a89ab8a8ff0d39b8bb139ef187517ddd6d9d277e580226378b2479277d90df0",
+      "archiveBytes": 45911491,
+      "extractedRoot": "DISPOSED_AFTER_AUDIT",
+      "bundleRoot": "DISPOSED_AFTER_AUDIT",
+      "nativePaths": [
+        "bin/synesis-installer.exe",
+        "bin/synesis-mcp.exe"
+      ],
+      "forbiddenNativeFiles": [],
+      "binaries": {
+        "bin/synesis-installer.exe": {
+          "path": "bin/synesis-installer.exe",
+          "bytes": 6908928,
+          "sha256": "be49af2297c665ee170adef4a28f84cfce67447ea3d57a77d4eef0ca8800caa7",
+          "format": "PE32+",
+          "machine": "0x8664",
+          "sectionCount": 8,
+          "sections": [
+            ".text",
+            ".rdata",
+            ".data",
+            ".pdata",
+            ".xdata",
+            ".idata",
+            ".reloc",
+            ".symtab"
+          ],
+          "coffSymbolPointer": 6908416,
+          "coffSymbolCount": 0,
+          "debugDirectoryRva": 0,
+          "debugDirectorySize": 0,
+          "debugDirectoryPresent": false,
+          "debugSectionNames": [],
+          "exportDirectoryRva": 0,
+          "exportDirectorySize": 0,
+          "exportNameCount": 0,
+          "sourcePathSignals": [],
+          "goMetadata": {
+            "available": true,
+            "trimpath": "true",
+            "buildMode": "\tbuild\t-buildmode=exe",
+            "goVersion": "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-installer.exe: go1.26.5",
+            "module": "\tmod\tsynesis/bootstrap\t(devel)\t",
+            "vcsRevision": "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+            "output": [
+              "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-installer.exe: go1.26.5",
+              "\tpath\tsynesis/bootstrap",
+              "\tmod\tsynesis/bootstrap\t(devel)\t",
+              "\tbuild\t-buildmode=exe",
+              "\tbuild\t-compiler=gc",
+              "\tbuild\t-trimpath=true",
+              "\tbuild\tCGO_ENABLED=0",
+              "\tbuild\tGOARCH=amd64",
+              "\tbuild\tGOOS=windows",
+              "\tbuild\tGOAMD64=v1",
+              "\tbuild\tvcs=git",
+              "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+              "\tbuild\tvcs.time=2026-09-09T00:26:09Z",
+              "\tbuild\tvcs.modified=true"
+            ]
+          },
+          "signing": {
+            "status": "NotSigned",
+            "subject": "",
+            "message": "The file C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-installer.exe is not digitally signed. You cannot run this script on the current system. For more information about running scripts and setting execution policy, see about_Execution_Policies at https://go.microsoft.com/fwlink/?LinkID=135170"
+          }
+        },
+        "bin/synesis-mcp.exe": {
+          "path": "bin/synesis-mcp.exe",
+          "bytes": 2608128,
+          "sha256": "a6b0bc30a60df7748c33beaa26d4aa72820e59e628db497a22ec4803f26c24f0",
+          "format": "PE32+",
+          "machine": "0x8664",
+          "sectionCount": 8,
+          "sections": [
+            ".text",
+            ".rdata",
+            ".data",
+            ".pdata",
+            ".xdata",
+            ".idata",
+            ".reloc",
+            ".symtab"
+          ],
+          "coffSymbolPointer": 2607616,
+          "coffSymbolCount": 0,
+          "debugDirectoryRva": 0,
+          "debugDirectorySize": 0,
+          "debugDirectoryPresent": false,
+          "debugSectionNames": [],
+          "exportDirectoryRva": 0,
+          "exportDirectorySize": 0,
+          "exportNameCount": 0,
+          "sourcePathSignals": [],
+          "goMetadata": {
+            "available": true,
+            "trimpath": "true",
+            "buildMode": "\tbuild\t-buildmode=exe",
+            "goVersion": "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-mcp.exe: go1.26.5",
+            "module": "\tmod\tsynesis/bootstrap\t(devel)\t",
+            "vcsRevision": "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+            "output": [
+              "C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-mcp.exe: go1.26.5",
+              "\tpath\tsynesis/bootstrap/cmd/synesis-mcp",
+              "\tmod\tsynesis/bootstrap\t(devel)\t",
+              "\tbuild\t-buildmode=exe",
+              "\tbuild\t-compiler=gc",
+              "\tbuild\t-trimpath=true",
+              "\tbuild\tCGO_ENABLED=0",
+              "\tbuild\tGOARCH=amd64",
+              "\tbuild\tGOOS=windows",
+              "\tbuild\tGOAMD64=v1",
+              "\tbuild\tvcs=git",
+              "\tbuild\tvcs.revision=ad6f9cbc5c36586830d3b70476be194b47a18e2c",
+              "\tbuild\tvcs.time=2026-09-09T00:26:09Z",
+              "\tbuild\tvcs.modified=true"
+            ]
+          },
+          "signing": {
+            "status": "NotSigned",
+            "subject": "",
+            "message": "The file C:\\Users\\Liparakis\\AppData\\Local\\Temp\\synesis-native-hardening-ef888a73804b4cdaae7bd1eee2a40a4f\\protectionlite-d334aeb465cd418994fef3ec06f880f8\\synesis-0.1.0-dev.local-windows-x64-protection-lite\\bin\\synesis-mcp.exe is not digitally signed. You cannot run this script on the current system. For more information about running scripts and setting execution policy, see about_Execution_Policies at https://go.microsoft.com/fwlink/?LinkID=135170"
+          }
+        }
+      },
+      "checks": {
+        "ownedNativeFiles": "PASS",
+        "peFormat": "PASS",
+        "coffSymbols": "PASS",
+        "debugDirectory": "PASS",
+        "debugSections": "PASS",
+        "namedExports": "PASS",
+        "sourcePaths": "PASS",
+        "privateNativeFiles": "PASS",
+        "goTrimpath": "PASS"
+      },
+      "nativeHardeningStatus": "PASS",
+      "nativeSigningStatus": "OPEN_NOT_SIGNED_OR_UNTRUSTED"
+    }
+  },
+  "comparisons": {
+    "protectionLite": {
+      "bin/synesis-installer.exe": {
+        "sameSha256": true,
+        "developerSha256": "be49af2297c665ee170adef4a28f84cfce67447ea3d57a77d4eef0ca8800caa7",
+        "profileSha256": "be49af2297c665ee170adef4a28f84cfce67447ea3d57a77d4eef0ca8800caa7"
+      },
+      "bin/synesis-mcp.exe": {
+        "sameSha256": true,
+        "developerSha256": "a6b0bc30a60df7748c33beaa26d4aa72820e59e628db497a22ec4803f26c24f0",
+        "profileSha256": "a6b0bc30a60df7748c33beaa26d4aa72820e59e628db497a22ec4803f26c24f0"
+      }
+    }
+  },
+  "toolchain": {
+    "go": "go version go1.26.5 windows/amd64",
+    "goPath": "C:\\Program Files\\Go\\bin\\go.exe"
+  },
+  "status": "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED",
+  "nativeHardeningStatus": "PASS",
+  "nativeSigningStatus": "OPEN_NOT_SIGNED_OR_UNTRUSTED",
+  "openGates": [
+    "Commercial maximum archive was not supplied; this audit cannot promote the maximum profile.",
+    "Native Authenticode/Apple signing is not implemented by the current release pipeline; unsigned native binaries remain an open release gate."
+  ]
+}

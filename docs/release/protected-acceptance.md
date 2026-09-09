@@ -85,6 +85,32 @@ maximum archive produces PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED; a supplied
 maximum archive still requires selected-method inspection and the full
 shipped-artifact acceptance before any ring can be marked PASS.
 
+## Native hardening audit
+
+Run the native audit against the same extracted customer archives:
+
+```powershell
+.\scripts\release-native-hardening-audit.ps1 `
+  -Component cli `
+  -DeveloperArchive .\cli\build\distributions\synesis-<version>-<platform>.zip `
+  -ProtectionLiteArchive .\cli\build\protection-lite\synesis-<version>-<platform>-protection-lite.zip `
+  -MaximumArchive .\cli\build\maximum-release\synesis-<version>-<platform>-maximum-release.zip `
+  -EvidenceFile .\build\release-native-hardening\cli\native-hardening.json
+```
+
+For Synesis-owned Go launchers, the audit verifies the expected native files,
+PE format, zero COFF symbols, absent PE debug directories/debug sections,
+minimal named exports, tested local-source-path signals, absence of native
+debug/private files, and `trimpath=true` build metadata when the Go tool is
+available. It records native signing status separately. This is static
+hardening evidence only; it does not transform native code, inspect or alter
+third-party native libraries, prove cross-platform coverage, or establish a
+commercial protection ring. Missing maximum input produces
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`, and unsigned native files keep the
+signing gate open. The current parser is implemented for Windows PE launchers;
+Linux ELF and macOS Mach-O artifacts remain open until their corresponding
+native inspection and signing checks are run.
+
 ## Maximum-release gates still required
 
 After a licensed adapter has produced and signed a candidate, run the

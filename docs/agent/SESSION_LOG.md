@@ -1,3 +1,26 @@
+## 2026-09-09 — SYN-009E native hardening audit
+
+Added `scripts/release-native-hardening-audit.ps1` for extracted customer ZIPs.
+The archive-only CLI audit checks the Synesis-owned Go launcher PE format,
+COFF symbol count, debug directory/sections, named exports, tested local source
+paths, native private-file leakage, and embedded Go `trimpath=true` metadata.
+It records platform signing separately and does not inspect or alter
+third-party native libraries.
+
+The current Windows x64 developer and protection-lite archives passed all
+structural native-hardening checks. Their two native launcher hashes are
+identical, as expected for a JVM-only protection-lite transform. Authenticode
+is absent, the archives record `vcs.modified=true`, and no maximum archive was
+supplied, so the result is `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no release or
+commercial ring was promoted.
+
+Evidence: `docs/evidence/syn-009e-native-hardening-2026-09-09.md` and its JSON
+companion. No license, key, push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain the licensed maximum archive, extend or pair the
+Windows PE audit with ELF/Mach-O checks for the other release platforms, and
+close native signing only with the configured production signing authority.
+
 ## 2026-09-09 — SYN-009E archive reverse-engineering comparison
 
 Added `scripts/release-reverse-engineering-comparison.ps1` for extracted

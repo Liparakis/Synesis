@@ -69,6 +69,15 @@ but retained source-file metadata signals in most classes; it is recorded as
 partial and does not claim improved decompiler resistance. A real maximum
 archive and selected-method inspection remain required.
 
+The archive-only native hardening audit is now implemented in
+scripts/release-native-hardening-audit.ps1. The current Windows x64
+developer/protection-lite CLI archives passed the owned-launcher PE, zero-COFF-
+symbol, no-debug-directory/section, no-named-export, local-path, private-file,
+and Go-trimpath checks. Their native files are unsigned, the maximum archive
+was not supplied, and the current samples record dirty Go VCS metadata; this
+is therefore baseline evidence only and does not close native signing,
+cross-platform, or commercial maximum acceptance.
+
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
   local release commits remain unpublished, and the working tree contains this
@@ -121,6 +130,13 @@ manifest, archives the candidate, signs through the existing bootstrap signer,
 and verifies the detached signature against the embedded bootstrap public key.
 Added the source-backed tier inventory and vendor-neutral config skeleton. No
 commercial protection capability is claimed.
+
+Added the archive-only `scripts/release-native-hardening-audit.ps1` and its
+developer/lite evidence. The Windows x64 owned Go launchers passed PE,
+COFF/debug, export, local-path, private-file, and trim-path checks. The audit
+keeps native signing separate and records the maximum archive, non-Windows
+formats, ARM64, third-party native inputs, and clean release provenance as
+open.
 
 ## Verification
 
@@ -175,6 +191,11 @@ commercial protection capability is claimed.
   inspection-tool signals with status
   `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no decompiler or commercial ring was
   claimed.
+- `scripts/release-native-hardening-audit.ps1` parsed and ran against the
+  developer and protection-lite CLI ZIPs. Both owned Windows x64 launchers
+  passed the structural native-hardening checks; native signing remained
+  `OPEN_NOT_SIGNED_OR_UNTRUSTED`, the maximum archive was absent, and the
+  script returned the expected partial status.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
@@ -194,6 +215,9 @@ retrace-validated. Preserved
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release
 evidence.
+The native audit is Windows PE-only; Linux ELF, macOS Mach-O, ARM64,
+third-party native inspection, production native signing, and clean
+maximum-artifact provenance remain open.
 
 ## SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 

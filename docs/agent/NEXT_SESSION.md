@@ -52,6 +52,16 @@ disposable install, exercises the installed stable-launcher and packaged
   private/source/map entries but found class SourceFile/`.java` metadata; do
   not call the lite leakage audit complete. Supply a licensed maximum archive
   and run selected-method static inspection before closing this gate.
+- The archive-only native audit is
+  `scripts/release-native-hardening-audit.ps1`, with current Windows x64
+  developer/lite CLI evidence in
+  `docs/evidence/syn-009e-native-hardening-2026-09-09.md`. It passed PE,
+  symbol/debug, export, local-path, private-file, and Go-trimpath checks for
+  the owned launchers, but native signing is open and the maximum archive is
+  absent. The current parser is Windows PE-only; extend or pair it with
+  ELF/Mach-O inspection before marking Linux/macOS or ARM64 native coverage.
+  Run it again for the licensed maximum candidate; do not treat unsigned
+  developer/lite output as release evidence.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.
