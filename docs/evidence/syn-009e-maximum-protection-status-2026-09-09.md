@@ -334,6 +334,9 @@ release-hardening work:
 - `ae4b9852` — enabled free protection-lite optimization, mixed-case renaming,
   and source/line metadata hardening for CLI/relay and refreshed the partial
   archive, reverse-engineering, and profile evidence; checkpoint `CP-0816`.
+- `9ce6e5c7` — repackaged transformed free protection-lite CLI/relay classes
+  under `org.synesis.p`, updated compatibility assertions, and refreshed the
+  partial archive/reverse-engineering/profile evidence; checkpoint `CP-0818`.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

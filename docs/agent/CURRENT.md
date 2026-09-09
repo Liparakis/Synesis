@@ -150,8 +150,9 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains the
   preserved `CP-0758` plus unrelated pre-existing local work that remains
   uncommitted.
-- Latest implementation commits: `ae4b9852` (free protection-lite optimizer,
-  mixed-case renaming, metadata hardening, and refreshed evidence),
+- Latest implementation commits: `9ce6e5c7` (free protection-lite package
+  repackaging and refreshed evidence), `ae4b9852` (free protection-lite
+  optimizer, mixed-case renaming, metadata hardening, and refreshed evidence),
   `4cc8fec0` (bounded profile memory evidence), `974380fd` (private license
   provenance), and `690c691a` (external
   commercial-tool path boundary); the earlier

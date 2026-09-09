@@ -112,10 +112,12 @@ retention from the transformed application rules. The JSON result is explicitly
 remains open. A real maximum archive is still required for the three-profile
 comparison.
 
-The free-hardening slice is committed as `ae4b9852` and checkpointed as
-`CP-0816`. It is intentionally limited to free ProGuard optimization,
-mixed-case renaming, and source/line metadata reduction; the commercial
-maximum gate and all Seven Ring classifications remain unchanged.
+The preceding free-hardening slice is committed as `ae4b9852` and checkpointed
+as `CP-0816`. The package-repackaging follow-up is committed as `9ce6e5c7` and
+checkpointed as `CP-0818`. Both are intentionally limited to free ProGuard
+optimization, mixed-case renaming, package repackaging, and source/line
+metadata reduction; the commercial maximum gate and all Seven Ring
+classifications remain unchanged.
 
 A first-party documentation pre-screen now distinguishes vendor-described
 features from Synesis evidence. DashO's reviewed documentation supports a

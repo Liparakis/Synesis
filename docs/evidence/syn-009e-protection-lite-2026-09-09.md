@@ -54,6 +54,9 @@ This is still free package/structure hardening only. It does not claim
 control-flow protection, virtualization, string encryption, protected packing,
 anti-VM, anti-debugging, or anti-instrumentation.
 
+This package-repackaging follow-up is recorded in commit `9ce6e5c7` and
+checkpoint `CP-0818`.
+
 ## Baseline
 
 - checkout at the start of this slice: `8a5d0901b4859c9a504f7fc7009def23177f1d43`;
