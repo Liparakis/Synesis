@@ -8,7 +8,7 @@
 | Protection-lite profile | opt-in Gradle task, narrow keep rules, mapping/provenance | PASS | ProGuard 7.10.0; `docs/evidence/syn-009e-protection-lite-2026-09-09.md` |
 | Tier 0–3 source inventory | current-source public boundaries, Tier 1/2 areas, method-scoped Tier 3 candidates | PASS planning boundary / NOT EXECUTED | `docs/release/protection-tier-inventory.md`; commercial target review remains required |
 | Protected CLI archive | extracted version/help, UI, provider, MCP/Link, doctor, native installer | PASS | `:cli:protectionLiteBundleSmokeTest` |
-| Protected relay archive | transformed entrypoint reaches guarded argument parser | PASS bounded | `:relay:protectionLiteSmokeTest`; full protected relay socket gate remains open |
+| Protected relay archive | transformed entrypoint reaches guarded parser; extracted launcher authenticates/forwards/shuts down through the external observer | PASS bounded / SYNTHETIC MARKER-ONLY EXECUTED | `:relay:protectionLiteSmokeTest`, `:relay:relayArtifactAcceptanceClient`, `docs/evidence/syn-009e-relay-shipped-acceptance-2026-09-09.md`; commercial maximum archive still required |
 | Protected manifest/leakage | private manifest, no source/maps/private records, UI resource retained | PASS | `:cli:protectionLiteIntegrityCheck` |
 | Lite provenance | source/dirty state, tool, library image, rules/seed/artifact/archive hashes | PASS | private `provenance.json` outside bundle |
 | Maximum adapter contract | versioned external request/result, six ring evidence paths, private retrace/native symbols, bundle separation | PASS seam / NOT EXECUTED | `docs/release/maximum-protector-adapter.md`; no licensed adapter installed |
@@ -24,7 +24,7 @@
 | Ring 5 protected payload | mature protected loader/payload, not ZIP compression | BLOCKED | requires selected commercial capability |
 | Ring 6 anti-debug/instrumentation | safe detect/refuse behavior under controlled tests | BLOCKED | requires selected protector/runtime capability |
 | Ring 7 integrity/diversification/retrace | signed protected manifest, seed/provenance, private maps | PARTIAL | private manifest/provenance pass; signed/diversified/retrace install blocked |
-| Installed acceptance | CLI/UI/control plane/Link/provider/native; overlay/relay bounded | PARTIAL | CLI synthetic archive pass including live authenticated HTTP/SSE and signed local Link invitation/authenticated PeerSession/project sync; relay parser pass; Internet/NAT, overlay, and protected relay socket gates open |
+| Installed acceptance | CLI/UI/control plane/Link/provider/native; extracted relay startup/auth/forward/shutdown | PARTIAL | CLI synthetic archive pass including live authenticated HTTP/SSE and signed local Link invitation/authenticated PeerSession/project sync; relay external observer pass against extracted launcher; Internet/NAT, configured multi-peer overlay, and commercial maximum archive remain open |
 | Tamper acceptance | owned immutable payload detects edits; mutable state does not false-positive | PARTIAL | bootstrap gate focused-tested; rebuilt synthetic marker-only installed probe refused edited JVM/frontend payloads while mutable Link state passed; commercial maximum artifact not run |
 | Leakage audit | strings, source maps, mappings, paths, symbols, secrets | PASS lite boundary | archive excludes private/source material; commercial leakage audit open |
 | Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |

@@ -20,8 +20,8 @@ leakage, optionally verifies the private artifact manifest, and records
 private JSON evidence. For CLI candidates it also has a no-PATH disposable
 install, stable-launcher runtime-tamper, packaged frontend-asset tamper,
 provider/MCP, mutable-state, and live authenticated browser/control-plane
-HTTP/SSE gates. It keeps full relay authentication/forwarding as an explicit
-open gate. Its optional JDK
+HTTP/SSE gates. For relay candidates it now starts the extracted launcher and
+verifies authenticated forwarding through a test-only external observer. Its optional JDK
 loopback/workspace overrides are process-local and recorded as non-shipped
 compatibility inputs.
 The protector capability matrix now also records the required Java/Gradle,
@@ -38,6 +38,9 @@ acceptance, and installed signed-invitation/authenticated-PeerSession/project
 synchronization. The acceptance harness isolates `HOME`, `USERPROFILE`,
 `APPDATA`, and `LOCALAPPDATA` for every captured process, while explicit
 JDK/workspace overrides remain process-local only.
+
+The relay observer is shipped-protocol evidence only; it does not promote a
+synthetic or protection-lite archive to commercial maximum evidence.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -102,6 +105,11 @@ commercial protection capability is claimed.
 - `:relay:maximumRelease --no-configuration-cache` reached
   `maximumReleasePrepare` and failed closed as designed because no adapter is
   configured; the relay protection-lite smoke still passes with explicit JMODs.
+- `:relay:relayArtifactAcceptanceClient` passed against the extracted developer
+  relay launcher: two disposable nodes authenticated, an unauthorized node was
+  rejected, encrypted frames forwarded bidirectionally, and the relay process
+  shut down within bounds. This is protocol/shipped-launcher evidence, not
+  commercial maximum evidence.
 - The maximum tasks compile after source-tier binding; both still fail closed
   before adapter invocation because no licensed adapter is configured.
 - The shipped-artifact harness rejects both existing protection-lite archives

@@ -1,3 +1,36 @@
+## 2026-09-09 — SYN-009E extracted relay socket acceptance
+
+Closed the parser-only relay gap in the maximum-release harness without
+claiming commercial protection. Added the test-only
+`org.synesis.relay.RelayArtifactAcceptanceMain` observer and the
+`:relay:relayArtifactAcceptanceClient` Gradle task. The observer starts the
+extracted relay launcher as a child process, creates disposable Ed25519
+identities and a signed membership snapshot, verifies two allowed handshakes,
+rejects a validly signed non-allowlisted node, forwards encrypted frames in
+both directions, decrypts them only at the destination, consumes the hop
+budget, and bounds shutdown. It never enters the customer bundle.
+
+The PowerShell maximum harness now invokes that observer for the relay
+component and records `relay-auth-forwarding=PASS`. A disposable archive made
+from `relay/build/install/synesis-relay` with only a synthetic maximum marker
+completed `PASS_WITH_EXPLICIT_OPEN_GATES`; the observer emitted authenticated,
+unauthorized-rejection, forwarding, E2E, and shutdown success markers. The
+fixture was not a commercial maximum artifact, so Rings 1–6 remain blocked,
+Ring 7 remains partial, and configured multi-peer/physical network,
+performance, retrace, and commercial-protector evidence remain open.
+
+Verification: `:relay:compileTestJava` passed with the documented process-local
+JDK loopback override; `:relay:relayArtifactAcceptanceClient` passed against
+the extracted developer relay launcher; the PowerShell acceptance script AST
+parsed and the synthetic extracted relay harness passed. No production
+customer bundle was changed, no key or transient payload entered evidence, and
+no push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, inject release signing authority,
+then run the complete CLI and relay harness against the actual maximum
+archives. Keep all commercial ring claims blocked until those artifacts pass.
+
 ## 2026-09-09 — SYN-009E installed Link acceptance and launcher forwarding correction
 
 The first installed Link probe exposed a genuine Windows bootstrap defect: the

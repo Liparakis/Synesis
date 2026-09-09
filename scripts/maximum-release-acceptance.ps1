@@ -21,6 +21,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 function Require([bool]$Condition, [string]$Message)
 {
@@ -148,13 +149,25 @@ function ApplyRuntimeEnvironment([Diagnostics.ProcessStartInfo]$StartInfo)
   }
 }
 
+function ApplyBuildEnvironment([Diagnostics.ProcessStartInfo]$StartInfo)
+{
+  # The relay protocol observer is a test-only source-checkout process, not a
+  # shipped process. Preserve the build host's toolchain/cache environment,
+  # while applying only the explicit loopback compatibility override.
+  if (-not [string]::IsNullOrWhiteSpace($JdkUnixDomainTempDirectory))
+  {
+    $StartInfo.Environment['JDK_JAVA_OPTIONS'] = "-Djdk.net.unixdomain.tmpdir=$JdkUnixDomainTempDirectory"
+  }
+}
+
 function InvokeCaptured(
   [string]$FilePath,
   [string[]]$Arguments,
   [Nullable[int]]$ExpectedExitCode,
   [string]$Label,
   [int]$TimeoutSeconds = 60,
-  [string]$RawArguments = $null
+  [string]$RawArguments = $null,
+  [switch]$PreserveEnvironment
 )
 {
   $startInfo = [Diagnostics.ProcessStartInfo]::new()
@@ -165,7 +178,14 @@ function InvokeCaptured(
   $startInfo.RedirectStandardInput = $true
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
-  ApplyRuntimeEnvironment $startInfo
+  if ($PreserveEnvironment)
+  {
+    ApplyBuildEnvironment $startInfo
+  }
+  else
+  {
+    ApplyRuntimeEnvironment $startInfo
+  }
   if (-not [string]::IsNullOrEmpty($RawArguments))
   {
     $startInfo.Arguments = $RawArguments
@@ -210,10 +230,10 @@ function InvokeCaptured(
   }
 }
 
-function GetWindowsLauncherCommandLine([string[]]$Arguments)
+function GetWindowsCommandLine([string]$Executable, [string[]]$Arguments)
 {
   $parts = [System.Collections.Generic.List[string]]::new()
-  [void]$parts.Add('"' + $script:launcherPath + '"')
+  [void]$parts.Add('"' + $Executable + '"')
   foreach ($argument in $Arguments)
   {
     Require (-not $argument.Contains('"')) (
@@ -221,6 +241,11 @@ function GetWindowsLauncherCommandLine([string[]]$Arguments)
     [void]$parts.Add('"' + $argument + '"')
   }
   return ($parts -join ' ')
+}
+
+function GetWindowsLauncherCommandLine([string[]]$Arguments)
+{
+  return GetWindowsCommandLine $script:launcherPath $Arguments
 }
 
 function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$ExpectedExitCode = 0)
@@ -507,6 +532,37 @@ function InvokeLinkAcceptance([string]$Project)
   {
     StopBundleServer $hostState
   }
+}
+
+function InvokeRelayArtifactAcceptance()
+{
+  $wrapperName = if ($script:maximumAcceptanceIsWindows) { 'gradlew.bat' } else { 'gradlew' }
+  $wrapper = Join-Path $script:repositoryRoot $wrapperName
+  Require (Test-Path -LiteralPath $wrapper -PathType Leaf) (
+    "Relay artifact acceptance requires the repository Gradle wrapper: $wrapper")
+  $arguments = @(
+    '--project-dir', $script:repositoryRoot,
+    ':relay:relayArtifactAcceptanceClient',
+    '--no-daemon',
+    '--no-configuration-cache',
+    '--console=plain',
+    "-PsynesisRelayAcceptanceLauncher=$script:launcherPath"
+  )
+  if ($script:maximumAcceptanceIsWindows)
+  {
+    $commandLine = GetWindowsCommandLine $wrapper $arguments
+    $result = InvokeCaptured -FilePath 'cmd.exe' -Arguments @() -ExpectedExitCode 0 `
+      -Label 'shipped relay authenticated forwarding acceptance' `
+      -RawArguments ('/d /c call ' + $commandLine) -PreserveEnvironment
+  }
+  else
+  {
+    $result = InvokeCaptured -FilePath $wrapper -Arguments $arguments -ExpectedExitCode 0 `
+      -Label 'shipped relay authenticated forwarding acceptance' -PreserveEnvironment
+  }
+  Require ($result.Output -match '(?m)^RELAY_ARTIFACT_ACCEPTANCE=PASS\s*$') (
+    'Shipped relay acceptance client did not report a complete authenticated forwarding pass')
+  return $result.Output
 }
 
 function SendHttpText(
@@ -1194,7 +1250,23 @@ try
     $relay = InvokeBundle @('--not-an-option') 'maximum relay guarded parser' $null
     Require ($relay.ExitCode -ne 0 -and $relay.Output -match '(?i)usage: synesis-relay') 'Maximum relay launcher did not reach its guarded parser'
     RecordCheck 'relay-launcher' 'PASS' 'Shipped relay launcher reached its guarded parser'
-    RecordCheck 'relay-auth-forwarding' 'NOT_EXECUTED' 'A licensed protected relay socket/authentication scenario is still required'
+    try
+    {
+      [void](InvokeRelayArtifactAcceptance)
+      RecordCheck 'relay-auth-forwarding' 'PASS' 'Extracted shipped relay authenticated two disposable nodes, rejected an unauthorized node, forwarded bidirectionally, preserved the E2E payload, and shut down within bounds'
+    }
+    catch
+    {
+      if (IsLoopbackEnvironmentFailure $_.Exception.Message)
+      {
+        $script:environmentBlocked = $true
+        RecordCheck 'relay-auth-forwarding' 'BLOCKED_ENVIRONMENT' 'The shipped relay acceptance observer reached a host loopback compatibility failure; rerun on a host with working Java loopback support'
+      }
+      else
+      {
+        throw
+      }
+    }
   }
 
   $result.status = if ($script:environmentBlocked -or $script:runtimeBlocked) { 'PARTIAL_ACCEPTANCE_BLOCKED' } else { 'PASS_WITH_EXPLICIT_OPEN_GATES' }

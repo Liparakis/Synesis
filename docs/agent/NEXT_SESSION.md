@@ -28,9 +28,10 @@ current release-hardening task in the existing `SYN-009*` lineage.
   maximum archive exists. Its CLI path uses `--skip-path-update` for a
 disposable install, exercises the installed stable-launcher and packaged
   frontend-asset integrity gates plus the live authenticated UI/control-plane
-  HTTP/SSE seam, and keeps the relay
-  authentication/forwarding gate open until a protected socket scenario
-  passes. Its JDK/workspace compatibility overrides are process-local only.
+  HTTP/SSE seam. Its relay path starts the extracted launcher and invokes the
+  test-only `:relay:relayArtifactAcceptanceClient` observer for authenticated
+  bidirectional forwarding and bounded shutdown. Its JDK/workspace
+  compatibility overrides are process-local only.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

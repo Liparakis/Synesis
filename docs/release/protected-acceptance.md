@@ -29,8 +29,13 @@ The current gate covers:
   checks, and a non-mutating tamper-difference check.
 
 The separate relay lite archive also passes a transformed-entrypoint smoke that
-reaches the guarded argument parser. It does not yet prove a protected live
-relay socket/overlay path; that remains a maximum-release acceptance gate.
+reaches the guarded argument parser. The repository now has a test-only
+protocol observer, `:relay:relayArtifactAcceptanceClient`, which starts an
+extracted relay launcher and verifies the live authenticated socket,
+allow-list rejection, bidirectional forwarding, end-to-end envelope
+preservation, and bounded shutdown. This observer is not shipped with the
+customer bundle and does not promote a protection-lite or synthetic marker to
+commercial maximum evidence.
 
 The current run passed this gate for the Windows x64 bundle. Its result is
 `protection-lite`, not `maximum-release`.
@@ -61,10 +66,15 @@ change before restoring the file. That is a static digest-difference check,
 not runtime tamper acceptance. The harness also rejects common private
 mapping, seed, provenance, keystore, and native-debug-file leakage forms. It
 then exercises the shipped CLI/native launcher/UI/control-plane/provider/MCP
-boundaries or the relay guarded launcher boundary. It records JSON evidence
-under the private acceptance directory. The relay authentication/forwarding
-scenario remains an explicit open gate until a real protected relay socket test
-is run; a parser smoke is not promoted to full relay acceptance.
+boundaries or the relay guarded launcher plus live relay protocol boundary. For
+the relay component, the harness invokes the test-only protocol observer
+against the extracted launcher; the observer creates disposable identities,
+requires signed mutual authentication, rejects a signed but non-allowlisted
+node, forwards encrypted frames in both directions, verifies destination
+decryption, and bounds shutdown. It records JSON evidence under the private
+acceptance directory. The protocol observer is shipped-artifact evidence only;
+it does not prove any commercial transformation ring, and a real licensed
+maximum archive is still required for the maximum-release claim.
 
 For a CLI candidate, the harness also starts a bounded disposable UI server
 long enough to exercise the installed browser/control-plane seam over HTTP. It

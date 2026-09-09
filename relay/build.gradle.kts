@@ -308,6 +308,27 @@ tasks.register("protectionLiteSmokeTest") {
     }
 }
 
+val relayArtifactAcceptanceLauncher = providers.gradleProperty("synesisRelayAcceptanceLauncher")
+    .orElse("")
+
+tasks.register<JavaExec>("relayArtifactAcceptanceClient") {
+    group = "verification"
+    description = "Exercises an extracted relay artifact through authenticated forwarding."
+    notCompatibleWithConfigurationCache(
+        "The acceptance client starts an external extracted relay process."
+    )
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("org.synesis.relay.RelayArtifactAcceptanceMain")
+    doFirst {
+        val launcher = relayArtifactAcceptanceLauncher.get().trim()
+        require(launcher.isNotBlank()) {
+            "Relay artifact acceptance requires -PsynesisRelayAcceptanceLauncher=PATH"
+        }
+        args("--launcher", launcher)
+    }
+}
+
 tasks.register("protectionLiteProvenance") {
     group = "distribution"
     description = "Writes private protected-relay provenance."

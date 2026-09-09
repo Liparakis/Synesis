@@ -27,10 +27,13 @@ authenticated control-plane session/snapshot/CSRF/SSE, projection check, and
 two-process signed Link invitation/authenticated PeerSession/project-sync
 check. A Windows bootstrap forwarding defect that split invitation query
 arguments at `&host=` was corrected in `bootstrap/main.go` and verified in the
-rebuilt installed bundle. Its relay path is deliberately limited to the
-shipped guarded launcher until a real protected relay authentication/forwarding
-scenario is available. A probe against both existing lite archives failed
-closed on the profile marker, so no lite output was promoted to maximum.
+rebuilt installed bundle. The relay path now invokes the test-only
+`:relay:relayArtifactAcceptanceClient` against the extracted launcher. Two
+disposable nodes authenticated, an unauthorized node was rejected, encrypted
+frames forwarded bidirectionally with end-to-end decryption, and the relay
+shut down within bounds. A probe against both existing lite archives failed
+closed on the profile marker, so no lite output was promoted to maximum; the
+relay observer is protocol evidence, not commercial maximum evidence.
 
 The harness was then run against a synthetic marker-only maximum archive. Each
 captured process used an isolated temporary `HOME`, `USERPROFILE`, `APPDATA`,
