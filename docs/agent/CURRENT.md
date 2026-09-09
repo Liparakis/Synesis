@@ -146,8 +146,9 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains the
   preserved `CP-0758` plus unrelated pre-existing local work that remains
   uncommitted.
-- Latest implementation commits: `974380fd` (private license provenance) and
-  `690c691a` (external commercial-tool path boundary); the earlier
+- Latest implementation commits: `4cc8fec0` (bounded profile memory evidence),
+  `974380fd` (private license provenance), and `690c691a` (external
+  commercial-tool path boundary); the earlier
   post-archive native-audit, symlink-boundary, structured private-retrace,
   exact-brief Seven Ring taxonomy, bounded acceptance-timing, and packaged
   frontend static-content acceptance changes remain committed.

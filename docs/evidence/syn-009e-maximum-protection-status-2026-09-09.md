@@ -324,6 +324,8 @@ release-hardening work:
   source checkout, including canonical symlink aliases.
 - `974380fd` — required non-secret private license provenance in CLI/relay
   adapter results and release-to-release comparison records.
+- `4cc8fec0` — recorded bounded Windows process-tree working-set evidence in
+  the profile comparison harness and refreshed the partial performance record.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

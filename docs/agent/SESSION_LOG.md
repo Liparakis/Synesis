@@ -17,8 +17,9 @@ overhead, and AV/EDR remain open.
 
 Verification: corrected PowerShell AST parse, deferred-register validation,
 scoped diff check, and the bounded five-sample comparison passed; the expected
-partial exit reflects the absent licensed maximum archive. No commercial
-protector, signing authority, push, tag, release, or remote mutation occurred.
+partial exit reflects the absent licensed maximum archive. Commit `4cc8fec0`
+records this slice. No commercial protector, signing authority, push, tag,
+release, or remote mutation occurred.
 
 Exact next action: obtain the installed, licensed, version-pinned commercial
 protector and release-signing authority, then run the maximum adapter and full
