@@ -91,6 +91,14 @@ commercial ring status changed; the matrix and evidence are in
 `docs/release/protector-capability-matrix.md` and
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
 
+The archive-only reverse-engineering scanner now compares extracted developer,
+protection-lite, and optional maximum ZIPs. The current CLI developer/lite run
+found zero file-level private/source/map entries but retained SourceFile and
+`.java` metadata signals in most classes; it is therefore partial and does not
+claim decompiler resistance. A real maximum archive, ordinary decompiler
+inspection, and selected-method commercial output review remain open. Details
+are in `docs/evidence/syn-009e-re-comparison-2026-09-09.md`.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

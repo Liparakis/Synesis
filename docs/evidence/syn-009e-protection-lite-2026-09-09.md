@@ -92,6 +92,14 @@ archive, retained the packaged UI inside the protected CLI payload, and showed
 that a non-mutating change to `VERSION` produces a digest mismatch. This is a
 manifest-detection foundation, not a signed maximum-release tamper refusal.
 
+An archive-only static comparison later found zero file/entry-name matches for
+private mappings, seeds, provenance, debug symbols, source files, or source
+maps in the developer and protection-lite ZIPs. It did find `SourceFile` and
+`.java`-name metadata signals in most class entries in both profiles. That is
+not source content and does not invalidate the file-level leakage result, but
+it leaves class-metadata leakage open for the commercial profile; it is not
+reported as a complete lite leakage `PASS`.
+
 Private provenance records the source commit, dirty-tree result, tool/runtime,
 analysis library image, rules hash, seed, protected JAR hash, and shipped
 archive hash. The working tree is intentionally dirty while this task is in

@@ -1,0 +1,606 @@
+﻿{
+    "schema":  1,
+    "component":  "cli",
+    "scope":  "EXTRACTED_CUSTOMER_ARCHIVES_ONLY; STATIC_SIGNAL_SCAN; NOT_SOURCE_INSPECTION",
+    "profiles":  {
+                     "developer":  {
+                                       "profile":  "developer",
+                                       "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\distributions\\synesis-0.1.0-dev.local-windows-x64.zip",
+                                       "archiveSha256":  "33f5cf0be281d7bae5242ba397836ca2d377114727b0e2a642cb49eb62e1723d",
+                                       "archiveBytes":  46504281,
+                                       "extractedFiles":  197,
+                                       "extractedBytes":  69542917,
+                                       "nestedArchives":  21,
+                                       "nestedEntries":  3370,
+                                       "classEntries":  3247,
+                                       "internalClassEntries":  856,
+                                       "internalPackagePrefixes":  [
+                                                                       "org/synesis/cli",
+                                                                       "org/synesis/coordination",
+                                                                       "org/synesis/link",
+                                                                       "org/synesis/mcp",
+                                                                       "org/synesis/projectrecord",
+                                                                       "org/synesis/workspace"
+                                                                   ],
+                                       "architectureTermHitClassCount":  967,
+                                       "architectureTermClassCounts":  {
+                                                                           "authority":  63,
+                                                                           "claim":  93,
+                                                                           "coordination":  196,
+                                                                           "provider":  355,
+                                                                           "continuity":  28,
+                                                                           "membership":  23,
+                                                                           "overlay":  52,
+                                                                           "routing":  2,
+                                                                           "route":  35,
+                                                                           "relay":  25,
+                                                                           "onboarding":  37,
+                                                                           "workspace":  522,
+                                                                           "diagnostic":  66,
+                                                                           "peer":  109,
+                                                                           "session":  263,
+                                                                           "reconciliation":  36,
+                                                                           "integration":  87,
+                                                                           "ownership":  51,
+                                                                           "capability":  78,
+                                                                           "protection":  10,
+                                                                           "manifest":  16
+                                                                       },
+                                       "architectureClassSamples":  [
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/SynesisCli.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace",
+                                                                                         "integration",
+                                                                                         "ownership"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/bootstrap/CliRuntime.class",
+                                                                            "hits":  [
+                                                                                         "provider",
+                                                                                         "onboarding",
+                                                                                         "workspace",
+                                                                                         "diagnostic"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/BuildInfo.class",
+                                                                            "hits":  [
+                                                                                         "reconciliation"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/ConstraintCreateCommand.class",
+                                                                            "hits":  [
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/McpCommand.class",
+                                                                            "hits":  [
+                                                                                         "provider"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationAcknowledgeCommand.class",
+                                                                            "hits":  [
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationAnnounceCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractBindCommand.class",
+                                                                            "hits":  [
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractPublishCommand.class",
+                                                                            "hits":  [
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractStatusCommand.class",
+                                                                            "hits":  [
+                                                                                         "coordination",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationHandoffCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationReadinessCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "workspace",
+                                                                                         "integration"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationReleaseCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationRequestCommand.class",
+                                                                            "hits":  [
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationRespondCommand.class",
+                                                                            "hits":  [
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationStatusCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/coordination/BrowserLauncher.class",
+                                                                            "hits":  [
+                                                                                         "coordination"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/coordination/CoordinationCliSupport.class",
+                                                                            "hits":  [
+                                                                                         "coordination",
+                                                                                         "workspace"
+                                                                                     ]
+                                                                        },
+                                                                        {
+                                                                            "name":  "app/synesis-cli.jar::org/synesis/cli/command/coordination/CoordinationDemoCommand.class",
+                                                                            "hits":  [
+                                                                                         "claim",
+                                                                                         "coordination",
+                                                                                         "provider",
+                                                                                         "route",
+                                                                                         "workspace",
+                                                                                         "integration",
+                                                                                         "ownership",
+                                                                                         "capability"
+                                                                                     ]
+                                                                        }
+                                                                    ],
+                                       "sourceMetadataClassCount":  3244,
+                                       "localPathSignalClassCount":  3,
+                                       "sourceSignalClassCounts":  {
+                                                                       "source-file-attribute":  3244,
+                                                                       "java-filename":  3236,
+                                                                       "kotlin-filename":  1,
+                                                                       "scala-filename":  0,
+                                                                       "groovy-filename":  0,
+                                                                       "source-tree-path":  1,
+                                                                       "windows-local-path":  2,
+                                                                       "windows-local-path-slash":  0,
+                                                                       "unix-local-path":  0,
+                                                                       "unix-user-path":  0
+                                                                   },
+                                       "sourceMapFiles":  0,
+                                       "privateMaterialEntryCount":  0,
+                                       "privateMaterialEntries":  [
+
+                                                                  ],
+                                       "serviceLoaderEntryCount":  2,
+                                       "classAnalysisSkipped":  0,
+                                       "internalClassSamples":  [
+                                                                    "app/synesis-cli.jar::org/synesis/cli/SynesisCli.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/bootstrap/CliRuntime.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/BuildInfo.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/ConstraintCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/ConstraintCreateCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/HelpCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/McpCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/RootCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/VersionPlaceholderCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationAcknowledgeCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationAnnounceCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractBindCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractPublishCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationContractStatusCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationHandoffCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationReadinessCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationReleaseCommand.class",
+                                                                    "app/synesis-cli.jar::org/synesis/cli/command/collaboration/CollaborationRequestCommand.class"
+                                                                ],
+                                       "staticInspection":  {
+                                                                "decompiler":  "NOT_RUN",
+                                                                "reason":  "The scanner records available tools and comparative signals; it does not expose proprietary decompiled code."
+                                                            }
+                                   },
+                     "protection-lite":  {
+                                             "profile":  "protection-lite",
+                                             "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
+                                             "archiveSha256":  "9a89ab8a8ff0d39b8bb139ef187517ddd6d9d277e580226378b2479277d90df0",
+                                             "archiveBytes":  45911491,
+                                             "extractedFiles":  191,
+                                             "extractedBytes":  68870411,
+                                             "nestedArchives":  14,
+                                             "nestedEntries":  3276,
+                                             "classEntries":  3161,
+                                             "internalClassEntries":  770,
+                                             "internalPackagePrefixes":  [
+                                                                             "org/synesis/a",
+                                                                             "org/synesis/b",
+                                                                             "org/synesis/c",
+                                                                             "org/synesis/cli",
+                                                                             "org/synesis/coordination",
+                                                                             "org/synesis/mcp"
+                                                                         ],
+                                             "architectureTermHitClassCount":  584,
+                                             "architectureTermClassCounts":  {
+                                                                                 "authority":  34,
+                                                                                 "claim":  69,
+                                                                                 "coordination":  188,
+                                                                                 "provider":  209,
+                                                                                 "continuity":  8,
+                                                                                 "membership":  14,
+                                                                                 "overlay":  4,
+                                                                                 "routing":  2,
+                                                                                 "route":  26,
+                                                                                 "relay":  14,
+                                                                                 "onboarding":  4,
+                                                                                 "workspace":  54,
+                                                                                 "diagnostic":  36,
+                                                                                 "peer":  76,
+                                                                                 "session":  173,
+                                                                                 "reconciliation":  18,
+                                                                                 "integration":  53,
+                                                                                 "ownership":  29,
+                                                                                 "capability":  60,
+                                                                                 "protection":  7,
+                                                                                 "manifest":  10
+                                                                             },
+                                             "architectureClassSamples":  [
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/d.class",
+                                                                                  "hits":  [
+                                                                                               "provider"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/f.class",
+                                                                                  "hits":  [
+                                                                                               "provider"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/g.class",
+                                                                                  "hits":  [
+                                                                                               "diagnostic"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/h.class",
+                                                                                  "hits":  [
+                                                                                               "relay"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/j.class",
+                                                                                  "hits":  [
+                                                                                               "relay"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/l.class",
+                                                                                  "hits":  [
+                                                                                               "provider",
+                                                                                               "diagnostic"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/o.class",
+                                                                                  "hits":  [
+                                                                                               "relay"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/s.class",
+                                                                                  "hits":  [
+                                                                                               "diagnostic"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/t.class",
+                                                                                  "hits":  [
+                                                                                               "diagnostic",
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/u.class",
+                                                                                  "hits":  [
+                                                                                               "provider"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/y.class",
+                                                                                  "hits":  [
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/b/b.class",
+                                                                                  "hits":  [
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/a.class",
+                                                                                  "hits":  [
+                                                                                               "capability"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b$a.class",
+                                                                                  "hits":  [
+                                                                                               "peer",
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b$b.class",
+                                                                                  "hits":  [
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b.class",
+                                                                                  "hits":  [
+                                                                                               "peer",
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/d.class",
+                                                                                  "hits":  [
+                                                                                               "peer",
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/a.class",
+                                                                                  "hits":  [
+                                                                                               "overlay"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/c.class",
+                                                                                  "hits":  [
+                                                                                               "membership",
+                                                                                               "overlay",
+                                                                                               "route",
+                                                                                               "relay",
+                                                                                               "peer"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/d$a.class",
+                                                                                  "hits":  [
+                                                                                               "route"
+                                                                                           ]
+                                                                              }
+                                                                          ],
+                                             "sourceMetadataClassCount":  3158,
+                                             "localPathSignalClassCount":  3,
+                                             "sourceSignalClassCounts":  {
+                                                                             "source-file-attribute":  3158,
+                                                                             "java-filename":  2387,
+                                                                             "kotlin-filename":  1,
+                                                                             "scala-filename":  0,
+                                                                             "groovy-filename":  0,
+                                                                             "source-tree-path":  1,
+                                                                             "windows-local-path":  2,
+                                                                             "windows-local-path-slash":  0,
+                                                                             "unix-local-path":  0,
+                                                                             "unix-user-path":  0
+                                                                         },
+                                             "sourceMapFiles":  0,
+                                             "privateMaterialEntryCount":  0,
+                                             "privateMaterialEntries":  [
+
+                                                                        ],
+                                             "serviceLoaderEntryCount":  2,
+                                             "classAnalysisSkipped":  0,
+                                             "internalClassSamples":  [
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/a.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/b.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/c.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/d$a.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/d.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/e.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/f.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/g.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/h.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/i.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/j.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/k.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/l.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/m.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/n$a.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/n.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/o.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/p.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/q.class",
+                                                                          "app/synesis-cli.jar::org/synesis/a/a/r.class"
+                                                                      ],
+                                             "staticInspection":  {
+                                                                      "decompiler":  "NOT_RUN",
+                                                                      "reason":  "The scanner records available tools and comparative signals; it does not expose proprietary decompiled code."
+                                                                  }
+                                         }
+                 },
+    "comparisons":  {
+                        "developerToProtectionLite":  {
+                                                          "archiveBytes":  {
+                                                                               "from":  "developer",
+                                                                               "to":  "protection-lite",
+                                                                               "fromValue":  46504281,
+                                                                               "toValue":  45911491,
+                                                                               "delta":  -592790
+                                                                           },
+                                                          "extractedBytes":  {
+                                                                                 "from":  "developer",
+                                                                                 "to":  "protection-lite",
+                                                                                 "fromValue":  69542917,
+                                                                                 "toValue":  68870411,
+                                                                                 "delta":  -672506
+                                                                             },
+                                                          "extractedFiles":  {
+                                                                                 "from":  "developer",
+                                                                                 "to":  "protection-lite",
+                                                                                 "fromValue":  197,
+                                                                                 "toValue":  191,
+                                                                                 "delta":  -6
+                                                                             },
+                                                          "classEntries":  {
+                                                                               "from":  "developer",
+                                                                               "to":  "protection-lite",
+                                                                               "fromValue":  3247,
+                                                                               "toValue":  3161,
+                                                                               "delta":  -86
+                                                                           },
+                                                          "internalClassEntries":  {
+                                                                                       "from":  "developer",
+                                                                                       "to":  "protection-lite",
+                                                                                       "fromValue":  856,
+                                                                                       "toValue":  770,
+                                                                                       "delta":  -86
+                                                                                   },
+                                                          "architectureTermHitClassCount":  {
+                                                                                                "from":  "developer",
+                                                                                                "to":  "protection-lite",
+                                                                                                "fromValue":  967,
+                                                                                                "toValue":  584,
+                                                                                                "delta":  -383
+                                                                                            },
+                                                          "sourceMetadataClassCount":  {
+                                                                                           "from":  "developer",
+                                                                                           "to":  "protection-lite",
+                                                                                           "fromValue":  3244,
+                                                                                           "toValue":  3158,
+                                                                                           "delta":  -86
+                                                                                       },
+                                                          "localPathSignalClassCount":  {
+                                                                                            "from":  "developer",
+                                                                                            "to":  "protection-lite",
+                                                                                            "fromValue":  3,
+                                                                                            "toValue":  3,
+                                                                                            "delta":  0
+                                                                                        },
+                                                          "sourceMapFiles":  {
+                                                                                 "from":  "developer",
+                                                                                 "to":  "protection-lite",
+                                                                                 "fromValue":  0,
+                                                                                 "toValue":  0,
+                                                                                 "delta":  0
+                                                                             },
+                                                          "privateMaterialEntryCount":  {
+                                                                                            "from":  "developer",
+                                                                                            "to":  "protection-lite",
+                                                                                            "fromValue":  0,
+                                                                                            "toValue":  0,
+                                                                                            "delta":  0
+                                                                                        },
+                                                          "serviceLoaderEntryCount":  {
+                                                                                          "from":  "developer",
+                                                                                          "to":  "protection-lite",
+                                                                                          "fromValue":  2,
+                                                                                          "toValue":  2,
+                                                                                          "delta":  0
+                                                                                      },
+                                                          "architecturePackageDelta":  {
+                                                                                           "from":  "developer",
+                                                                                           "to":  "protection-lite",
+                                                                                           "removed":  [
+                                                                                                           "org/synesis/link",
+                                                                                                           "org/synesis/projectrecord",
+                                                                                                           "org/synesis/workspace"
+                                                                                                       ],
+                                                                                           "retained":  [
+                                                                                                            "org/synesis/cli",
+                                                                                                            "org/synesis/coordination",
+                                                                                                            "org/synesis/mcp"
+                                                                                                        ],
+                                                                                           "added":  [
+                                                                                                         "org/synesis/a",
+                                                                                                         "org/synesis/b",
+                                                                                                         "org/synesis/c"
+                                                                                                     ]
+                                                                                       }
+                                                      }
+                    },
+    "inspectionTools":  {
+                            "javap":  {
+                                          "available":  true,
+                                          "path":  "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.0.36-hotspot\\bin\\javap.exe"
+                                      },
+                            "cfr":  {
+                                        "available":  false,
+                                        "path":  "NOT_FOUND"
+                                    },
+                            "procyon":  {
+                                            "available":  false,
+                                            "path":  "NOT_FOUND"
+                                        },
+                            "jd-cli":  {
+                                           "available":  false,
+                                           "path":  "NOT_FOUND"
+                                       }
+                        },
+    "status":  "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED",
+    "openGates":  [
+                      "Run ordinary decompiler inspection against selected crown-jewel methods; this scanner intentionally does not publish decompiled code.",
+                      "Inspect protected output to prove genuine control-flow transformation, virtualization, and protected loading; static signal counts cannot prove those rings.",
+                      "Run the full shipped-artifact acceptance and private retrace against the licensed maximum archive.",
+                      "Supply a licensed maximum-release archive for the required developer-versus-maximum comparison."
+                  ]
+}

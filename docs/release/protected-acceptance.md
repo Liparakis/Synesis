@@ -63,6 +63,28 @@ maximum-release comparison. These measurements do not replace UI, snapshot,
 Link, route, relay-throughput, provider, AV/EDR, or commercial transformation
 acceptance.
 
+## Static reverse-engineering comparison
+
+Run the archive-only comparison against customer-style ZIPs:
+
+```powershell
+.\scripts\release-reverse-engineering-comparison.ps1 `
+  -Component cli `
+  -DeveloperArchive .\cli\build\distributions\synesis-<version>-<platform>.zip `
+  -ProtectionLiteArchive .\cli\build\protection-lite\synesis-<version>-<platform>-protection-lite.zip `
+  -MaximumArchive .\cli\build\maximum-release\synesis-<version>-<platform>-maximum-release.zip `
+  -EvidenceFile .\build\release-reverse-engineering-comparison\cli\comparison.json
+```
+
+The scanner compares class/package names, architecture-string survivors,
+source-file/debug metadata signals, local-path signals, source maps, private
+material, and available inspection tools. It is deliberately not a
+decompiler, does not publish proprietary decompiled code, and cannot prove
+virtualization, protected loading, or control-flow resistance. A missing
+maximum archive produces PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED; a supplied
+maximum archive still requires selected-method inspection and the full
+shipped-artifact acceptance before any ring can be marked PASS.
+
 ## Maximum-release gates still required
 
 After a licensed adapter has produced and signed a candidate, run the

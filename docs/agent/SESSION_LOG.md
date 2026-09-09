@@ -1,3 +1,28 @@
+## 2026-09-09 — SYN-009E archive reverse-engineering comparison
+
+Added `scripts/release-reverse-engineering-comparison.ps1` for extracted
+customer ZIPs. It validates profile markers and compares class/package names,
+architecture-string survivors, source-file/debug metadata, local-path signals,
+source maps, private-material names, ServiceLoader entries, and available
+inspection tools without reading source classes or publishing decompiled code.
+
+The current CLI developer/protection-lite run recorded 3,247 versus 3,161
+class entries, 856 versus 770 internal classes, 967 versus 584 static
+architecture-term-hit classes, and 3,244 versus 3,158 classes with
+SourceFile/source-name metadata. Both had zero file-level private/source/map
+entries. `javap` was available; CFR, Procyon, and `jd-cli` were absent, and no
+decompiler or selected-method inspection ran. The result is
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; class metadata leakage, maximum
+comparison, and real protected-method inspection remain open.
+
+Evidence: `docs/evidence/syn-009e-re-comparison-2026-09-09.md` and its JSON
+companion. No commercial ring was promoted, and no license, key, push, tag,
+release, or remote mutation occurred.
+
+Exact next action: obtain the licensed maximum archive and run this comparison,
+ordinary selected-method inspection, and the complete shipped-artifact
+acceptance before changing any ring status.
+
 ## 2026-09-09 — SYN-009E first-party commercial protector pre-screen
 
 Reviewed current first-party DashO and Zelix documentation to refine the

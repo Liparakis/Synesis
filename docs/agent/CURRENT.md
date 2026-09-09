@@ -62,6 +62,13 @@ and reproducibility guidance. Neither reviewed candidate establishes genuine
 virtual execution or protected payload loading in the evidence set, so the
 commercial matrix and Ring 2/Ring 5 gates remain unverified.
 
+The archive-only static reverse-engineering comparison is now implemented in
+scripts/release-reverse-engineering-comparison.ps1. Its current developer
+versus protection-lite CLI run found no file-level private/source/map entries,
+but retained source-file metadata signals in most classes; it is recorded as
+partial and does not claim improved decompiler resistance. A real maximum
+archive and selected-method inspection remain required.
+
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
   local release commits remain unpublished, and the working tree contains this
@@ -162,6 +169,12 @@ commercial protection capability is claimed.
   in `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`; it refines
   candidate selection without changing any commercial row to `PASS` or
   establishing Ring 2/Ring 5.
+- `scripts/release-reverse-engineering-comparison.ps1` parsed and ran against
+  the developer and protection-lite CLI ZIPs. It recorded static class/package,
+  architecture-term, metadata, path, source-map, private-material, and
+  inspection-tool signals with status
+  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no decompiler or commercial ring was
+  claimed.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.

@@ -45,6 +45,13 @@ disposable install, exercises the installed stable-launcher and packaged
   Java 26 flow/string/constant candidate. Neither documentation set proves
   Ring 2 virtualization or Ring 5 protected loading, so do not change the
   commercial matrix until a shipped artifact is exercised.
+- The archive-only reverse-engineering scanner is
+  `scripts/release-reverse-engineering-comparison.ps1`, with current
+  developer/lite CLI evidence in
+  `docs/evidence/syn-009e-re-comparison-2026-09-09.md`. It found no file-level
+  private/source/map entries but found class SourceFile/`.java` metadata; do
+  not call the lite leakage audit complete. Supply a licensed maximum archive
+  and run selected-method static inspection before closing this gate.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.
