@@ -35,6 +35,11 @@ The same values may be provided through `SYNESIS_MAXIMUM_PROTECTOR`,
 only through `SYNESIS_MANIFEST_PRIVATE_KEY_B64`. None of these values belong in
 the repository or the customer bundle.
 
+The maximum task also requires a reviewed customer-style developer archive for
+the post-protection native comparison through
+`SYNESIS_DEVELOPER_ARCHIVE` or `-PsynesisDeveloperArchive`. This is a release
+input path, not a secret, and it is never copied into the customer bundle.
+
 The adapter is invoked without a shell as:
 
 ```text
@@ -169,6 +174,15 @@ SHA-256 of the bootstrap public key, and detached-signature provenance. A
 missing Node, npm, or Go toolchain fails the maximum provenance gate; values are
 never copied into the customer bundle.
 
+After the protected archive is created, the Gradle task runs
+`scripts/release-native-hardening-audit.ps1` against the developer and maximum
+customer archives before it creates the signed release manifest. Its private
+JSON evidence is hashed into the final release record as
+`privateNativeHardeningEvidence`. CLI native signing must verify; relay records
+native signing as not-applicable only when its shipped output has no
+Synesis-owned native binary. Relay's third-party native dependency audit remains
+separate and is also required.
+
 The Gradle gate additionally requires the protected profile marker, the
 customer CLI/runtime/native launcher files for `cli`, or the protected relay
 launcher/application JARs for `relay`, with no mappings/seeds/private records,
@@ -203,8 +217,8 @@ per-platform release manifest, invokes the existing
 signature against the public key embedded in `bootstrap/main.go`. The
 candidate archive, manifest, and signature are the only customer-facing
 outputs. Mappings, retrace information, owned native symbols when applicable,
-third-party-native audit, ring evidence, configuration, seed, and provenance
-remain under the private release directory.
+third-party-native audit, native-hardening evidence, ring evidence,
+configuration, seed, and provenance remain under the private release directory.
 
 The current task is a release seam, not maximum-profile acceptance. Acceptance
 still requires inspection of the exact protected artifact and installed CLI,

@@ -119,6 +119,10 @@ private native-file leakage without modifying third-party binaries.
   private third-party-native audit and uses `nativeSymbolsScope=not-applicable`
   for relay instead of requiring fabricated Synesis symbols. See
   `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
+- The maximum Gradle tasks now run the archive-only native hardening/signing
+  audit after protection and before manifest signing. CLI requires native
+  hardening and signing `PASS`; relay may record signing `NOT_APPLICABLE` only
+  when its shipped output has no Synesis-owned native binary.
 - Actual Linux/macOS/ARM64 maximum archives, third-party native inspection,
   Authenticode/Apple signing, and notarization: OPEN.
 
@@ -140,8 +144,9 @@ also rejects a `GITHUB_SHA` that does not equal local `HEAD`.
 The existing bootstrap signer then creates and verifies the detached Ed25519
 manifest against its embedded trust root. Production signing keys are injected
 and never generated or committed. Private ring/recovery evidence hashes are
-stored only in `release-record.properties`; private material is forbidden from
-the customer archive.
+stored only in `release-record.properties`; native-hardening evidence is also
+hashed there after the protected archive is audited. Private material is
+forbidden from the customer archive.
 
 `scripts/maximum-release-provenance-comparison.ps1` requires final signed
 records, verifies private recovery/evidence hashes, and provides separate

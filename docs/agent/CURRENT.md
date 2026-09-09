@@ -85,8 +85,11 @@ maximum acceptance.
 The CLI and relay maximum-release request/private-record seams now capture a
 reproducibility snapshot: sorted lockfile count/digest, Gradle, Java, Node/npm,
 and Go toolchain versions, protector configuration digest, release identity and
-seed, plus post-signing key/public-provenance fields. Missing Node, npm, or Go
-fails the maximum provenance gate; ordinary developer tasks are unchanged.
+seed, plus post-archive native-hardening evidence and post-signing
+key/public-provenance fields. Missing Node, npm, or Go fails the maximum
+provenance gate; ordinary developer tasks are unchanged. The maximum manifest
+tasks run the native hardening/signing audit before creating the signed
+manifest, and the private record retains its hash.
 
 The new `scripts/maximum-release-provenance-comparison.ps1` harness compares
 two private maximum records for either controlled diversification or exact

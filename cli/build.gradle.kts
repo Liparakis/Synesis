@@ -73,6 +73,9 @@ val maximumReleaseResult = maximumReleaseDirectory.map { it.file("result.propert
 val maximumReleaseArtifactManifest = maximumReleasePrivateDirectory.map { it.file("artifact-manifest.txt") }
 val maximumReleaseManifest = maximumReleaseDirectory.map { it.file("manifest.json") }
 val maximumReleaseSignature = maximumReleaseDirectory.map { it.file("manifest.json.sig") }
+val maximumDeveloperArchive = providers.gradleProperty("synesisDeveloperArchive")
+    .orElse(providers.environmentVariable("SYNESIS_DEVELOPER_ARCHIVE"))
+val maximumNativeHardeningEvidence = maximumReleasePrivateDirectory.map { it.file("native-hardening.json") }
 
 fun writeMaximumProperties(file: File, values: Map<String, String>) {
     val properties = Properties()
@@ -99,6 +102,11 @@ fun maximumSha256(file: File): String {
         }
     }
     return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun maximumNativeAuditValue(file: File, key: String): String {
+    val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+    return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
 }
 
 private val releaseLockfileNames = setOf(
@@ -1322,10 +1330,62 @@ val maximumReleaseArchiveTask = tasks.register<Zip>("maximumReleaseArchive") {
     }
 }
 
+val maximumReleaseNativeHardeningAudit = tasks.register("maximumReleaseNativeHardeningAudit") {
+    group = "distribution"
+    description = "Audits the protected CLI archive's native hardening and platform signing before manifest signing."
+    notCompatibleWithConfigurationCache(
+        "Maximum release invokes the archive-only native hardening audit in the release environment."
+    )
+    dependsOn(maximumReleaseArchiveTask)
+    outputs.file(maximumNativeHardeningEvidence)
+    doLast {
+        val developerArchiveValue = maximumDeveloperArchive.orNull?.trim().orEmpty()
+        require(developerArchiveValue.isNotBlank()) {
+            "Maximum release requires SYNESIS_DEVELOPER_ARCHIVE (or -PsynesisDeveloperArchive) for the native hardening comparison."
+        }
+        val developerArchive = project.file(developerArchiveValue).absoluteFile
+        require(developerArchive.isFile) { "Developer archive for native hardening audit is missing: $developerArchive" }
+        val auditScript = rootProject.file("scripts/release-native-hardening-audit.ps1").absoluteFile
+        require(auditScript.isFile) { "Native hardening audit script is missing: $auditScript" }
+        val maximumArchive = maximumReleaseArchiveTask.get().archiveFile.get().asFile.absoluteFile
+        val evidence = maximumNativeHardeningEvidence.get().asFile.absoluteFile
+        val command = mutableListOf<String>()
+        if (OperatingSystem.current().isWindows) {
+            command.addAll(listOf("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass"))
+        } else {
+            command.addAll(listOf("pwsh", "-NoProfile"))
+        }
+        command.addAll(
+            listOf(
+                "-File", auditScript.absolutePath,
+                "-Component", "cli",
+                "-DeveloperArchive", developerArchive.absolutePath,
+                "-MaximumArchive", maximumArchive.absolutePath,
+                "-EvidenceFile", evidence.absolutePath,
+            ),
+        )
+        val process = ProcessBuilder(command)
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0 && evidence.isFile) {
+            "Maximum CLI native hardening/signing audit failed with exit code $exitCode"
+        }
+        require(maximumNativeAuditValue(evidence, "nativeHardeningStatus") == "PASS") {
+            "Maximum CLI native hardening audit did not report PASS"
+        }
+        require(maximumNativeAuditValue(evidence, "nativeSigningStatus") == "PASS") {
+            "Maximum CLI native signing audit did not report PASS"
+        }
+    }
+}
+
 val maximumReleaseManifestTask = tasks.register("maximumReleaseManifest") {
     group = "distribution"
     description = "Creates the canonical signed-release manifest for the protected CLI candidate."
-    dependsOn(maximumReleaseArchiveTask)
+    dependsOn(maximumReleaseNativeHardeningAudit)
     outputs.file(maximumReleaseManifest)
     doLast {
         fun json(value: String): String = value
@@ -1439,6 +1499,12 @@ tasks.register("maximumRelease") {
 
         val record = maximumReleasePrivateDirectory.get().asFile.resolve("release-record.properties")
         val properties = readMaximumProperties(record)
+        val nativeHardeningEvidence = maximumNativeHardeningEvidence.get().asFile
+        require(nativeHardeningEvidence.isFile) { "Maximum CLI native hardening evidence is missing" }
+        properties.setProperty("nativeHardeningStatus", "verified")
+        properties.setProperty("nativeSigningStatus", "verified")
+        properties.setProperty("privateNativeHardeningEvidence", nativeHardeningEvidence.absolutePath)
+        properties.setProperty("privateNativeHardeningEvidenceSha256", maximumSha256(nativeHardeningEvidence))
         val signingKeyId = project.providers.gradleProperty("synesisSigningKeyId")
             .orElse(project.providers.environmentVariable("SYNESIS_MANIFEST_SIGNING_KEY_ID"))
             .orNull?.trim().orEmpty()

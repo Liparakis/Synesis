@@ -68,10 +68,12 @@ disposable install, exercises the installed stable-launcher and packaged
   digest/count, Gradle/Java/Node/npm/Go versions, configuration SHA-256, seed,
   component-scoped native recovery (owned CLI symbols or relay's explicit
   not-applicable owned-symbol scope), third-party-native audit, private
-  mapping/retrace paths, and post-signing public-key provenance. The helpers
+  mapping/retrace paths, post-archive native-hardening evidence, and
+  post-signing public-key provenance. The helpers
   were syntax/evaluation checked through `:cli:tasks :relay:tasks`; execute the
-  fields only in a clean licensed maximum release and verify the private record
-  against the final manifest/signature. The scope inspection is recorded in
+  fields only in a clean licensed maximum release with
+  `SYNESIS_DEVELOPER_ARCHIVE` supplied, and verify the private record against
+  the final manifest/signature. The scope inspection is recorded in
   `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
 - The release-to-release harness is
   `scripts/maximum-release-provenance-comparison.ps1`. Run it in both

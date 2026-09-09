@@ -139,6 +139,9 @@ val relayMaximumReleaseResult = relayMaximumReleaseDirectory.map { it.file("resu
 val relayMaximumReleaseArtifactManifest = relayMaximumReleasePrivateDirectory.map { it.file("artifact-manifest.txt") }
 val relayMaximumReleaseManifest = relayMaximumReleaseDirectory.map { it.file("manifest.json") }
 val relayMaximumReleaseSignature = relayMaximumReleaseDirectory.map { it.file("manifest.json.sig") }
+val relayMaximumDeveloperArchive = providers.gradleProperty("synesisDeveloperArchive")
+    .orElse(providers.environmentVariable("SYNESIS_DEVELOPER_ARCHIVE"))
+val relayMaximumNativeHardeningEvidence = relayMaximumReleasePrivateDirectory.map { it.file("native-hardening.json") }
 
 fun writeRelayMaximumProperties(file: File, values: Map<String, String>) {
     val properties = Properties()
@@ -167,6 +170,11 @@ fun relayMaximumSha256(file: File): String {
         }
     }
     return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun relayMaximumNativeAuditValue(file: File, key: String): String {
+    val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+    return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
 }
 
 private val releaseLockfileNames = setOf(
@@ -783,10 +791,62 @@ val relayMaximumReleaseArchiveTask = tasks.register<Zip>("maximumReleaseArchive"
     }
 }
 
+val relayMaximumReleaseNativeHardeningAudit = tasks.register("maximumReleaseNativeHardeningAudit") {
+    group = "distribution"
+    description = "Audits the protected relay archive's native hardening and platform signing before manifest signing."
+    notCompatibleWithConfigurationCache(
+        "Maximum relay release invokes the archive-only native hardening audit in the release environment."
+    )
+    dependsOn(relayMaximumReleaseArchiveTask)
+    outputs.file(relayMaximumNativeHardeningEvidence)
+    doLast {
+        val developerArchiveValue = relayMaximumDeveloperArchive.orNull?.trim().orEmpty()
+        require(developerArchiveValue.isNotBlank()) {
+            "Maximum relay release requires SYNESIS_DEVELOPER_ARCHIVE (or -PsynesisDeveloperArchive) for the native hardening comparison."
+        }
+        val developerArchive = project.file(developerArchiveValue).absoluteFile
+        require(developerArchive.isFile) { "Developer archive for relay native hardening audit is missing: $developerArchive" }
+        val auditScript = rootProject.file("scripts/release-native-hardening-audit.ps1").absoluteFile
+        require(auditScript.isFile) { "Native hardening audit script is missing: $auditScript" }
+        val maximumArchive = relayMaximumReleaseArchiveTask.get().archiveFile.get().asFile.absoluteFile
+        val evidence = relayMaximumNativeHardeningEvidence.get().asFile.absoluteFile
+        val command = mutableListOf<String>()
+        if (OperatingSystem.current().isWindows) {
+            command.addAll(listOf("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass"))
+        } else {
+            command.addAll(listOf("pwsh", "-NoProfile"))
+        }
+        command.addAll(
+            listOf(
+                "-File", auditScript.absolutePath,
+                "-Component", "relay",
+                "-DeveloperArchive", developerArchive.absolutePath,
+                "-MaximumArchive", maximumArchive.absolutePath,
+                "-EvidenceFile", evidence.absolutePath,
+            ),
+        )
+        val process = ProcessBuilder(command)
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0 && evidence.isFile) {
+            "Maximum relay native hardening/signing audit failed with exit code $exitCode"
+        }
+        require(relayMaximumNativeAuditValue(evidence, "nativeHardeningStatus") == "PASS") {
+            "Maximum relay native hardening audit did not report PASS"
+        }
+        require(relayMaximumNativeAuditValue(evidence, "nativeSigningStatus") in setOf("PASS", "NOT_APPLICABLE")) {
+            "Maximum relay native signing audit did not report PASS or NOT_APPLICABLE"
+        }
+    }
+}
+
 val relayMaximumReleaseManifestTask = tasks.register("maximumReleaseManifest") {
     group = "distribution"
     description = "Creates the canonical signed-release manifest for the protected relay candidate."
-    dependsOn(relayMaximumReleaseArchiveTask)
+    dependsOn(relayMaximumReleaseNativeHardeningAudit)
     outputs.file(relayMaximumReleaseManifest)
     doLast {
         fun json(value: String): String = value
@@ -900,6 +960,19 @@ tasks.register("maximumRelease") {
 
         val record = relayMaximumReleasePrivateDirectory.get().asFile.resolve("release-record.properties")
         val properties = readRelayMaximumProperties(record)
+        val nativeHardeningEvidence = relayMaximumNativeHardeningEvidence.get().asFile
+        require(nativeHardeningEvidence.isFile) { "Maximum relay native hardening evidence is missing" }
+        val nativeSigningStatus = relayMaximumNativeAuditValue(nativeHardeningEvidence, "nativeSigningStatus")
+        require(nativeSigningStatus in setOf("PASS", "NOT_APPLICABLE")) {
+            "Maximum relay native signing audit did not report PASS or NOT_APPLICABLE"
+        }
+        properties.setProperty("nativeHardeningStatus", "verified")
+        properties.setProperty(
+            "nativeSigningStatus",
+            if (nativeSigningStatus == "PASS") "verified" else "not-applicable",
+        )
+        properties.setProperty("privateNativeHardeningEvidence", nativeHardeningEvidence.absolutePath)
+        properties.setProperty("privateNativeHardeningEvidenceSha256", relayMaximumSha256(nativeHardeningEvidence))
         val signingKeyId = project.providers.gradleProperty("synesisSigningKeyId")
             .orElse(project.providers.environmentVariable("SYNESIS_MANIFEST_SIGNING_KEY_ID"))
             .orNull?.trim().orEmpty()

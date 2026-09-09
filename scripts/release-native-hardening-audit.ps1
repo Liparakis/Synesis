@@ -875,6 +875,7 @@ foreach ($comparisonName in @('protectionLite', 'maximum'))
 }
 $result.nativeHardeningStatus = if (@($hardeningStatuses | Where-Object { $_ -eq 'FAIL' }).Count -gt 0) { 'FAIL' } elseif (@($hardeningStatuses | Where-Object { $_ -ne 'PASS' -and $_ -ne 'NOT_APPLICABLE' }).Count -gt 0) { 'PARTIAL' } else { 'PASS' }
 $result.nativeSigningStatus = if ($signingStatuses.Count -eq 0) { 'NOT_APPLICABLE' } elseif (@($signingStatuses | Where-Object { $_ -ne 'PASS' }).Count -gt 0) { 'OPEN_NOT_SIGNED_OR_UNTRUSTED' } else { 'PASS' }
+$nativeSigningSatisfied = $result.nativeSigningStatus -in @('PASS', 'NOT_APPLICABLE')
 
 $result.openGates = @(
   'Commercial maximum archive was not supplied; this audit cannot promote the maximum profile.',
@@ -884,7 +885,7 @@ if ($archives.Contains('maximum'))
 {
   $result.openGates = @($result.openGates | Where-Object { $_ -notlike 'Commercial maximum archive was not supplied*' })
 }
-if ($result.nativeSigningStatus -eq 'PASS')
+if ($nativeSigningSatisfied)
 {
   $result.openGates = @($result.openGates | Where-Object { $_ -notlike 'Native Authenticode/Apple signing*' })
 }
@@ -893,12 +894,16 @@ $result.status = if ($result.nativeHardeningStatus -eq 'FAIL') {
   'FAIL_NATIVE_HARDENING'
 } elseif (-not $archives.Contains('maximum')) {
   'PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED'
-} elseif ($result.nativeSigningStatus -ne 'PASS') {
+} elseif (-not $nativeSigningSatisfied) {
   'PARTIAL_NATIVE_SIGNING_OPEN'
 } elseif ($result.nativeHardeningStatus -ne 'PASS') {
   'PARTIAL_NATIVE_HARDENING'
 } else {
-  'PASS_NATIVE_HARDENING_AND_SIGNING'
+  if ($result.nativeSigningStatus -eq 'NOT_APPLICABLE') {
+    'PASS_NATIVE_HARDENING_NATIVE_SIGNING_NOT_APPLICABLE'
+  } else {
+    'PASS_NATIVE_HARDENING_AND_SIGNING'
+  }
 }
 
 if (-not $KeepExtracted)

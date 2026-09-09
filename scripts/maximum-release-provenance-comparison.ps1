@@ -154,8 +154,26 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
   {
     [void](RequiredValue $properties $signedField)
   }
+  Require ((RequiredValue $properties 'nativeHardeningStatus') -eq 'verified') (
+    "$Label release record lacks verified native hardening")
+  $nativeSigningStatus = RequiredValue $properties 'nativeSigningStatus'
+  if ($Component -eq 'cli')
+  {
+    Require ($nativeSigningStatus -eq 'verified') "$Label CLI release record lacks verified native signing"
+  }
+  else
+  {
+    Require ($nativeSigningStatus -in @('verified', 'not-applicable')) (
+      "$Label relay native signing status is unsupported: $nativeSigningStatus")
+  }
   $manifest = ValidateManifest $recordPath $properties
   $privateRoot = Split-Path -Parent $recordPath
+  $nativeHardeningEvidence = ResolvePrivateFile (RequiredValue $properties 'privateNativeHardeningEvidence') (
+    "$Label native hardening evidence")
+  Require (IsUnder $nativeHardeningEvidence $privateRoot) "$Label native hardening evidence escapes the private release directory"
+  Require ((Get-Item -LiteralPath $nativeHardeningEvidence).Length -gt 0) "$Label native hardening evidence is empty"
+  Require ((Sha256 $nativeHardeningEvidence) -eq (RequiredValue $properties 'privateNativeHardeningEvidenceSha256').ToLowerInvariant()) (
+    "$Label native hardening evidence hash does not match release-record.properties")
   foreach ($ring in @('controlFlow', 'virtualization', 'strings', 'analysisEnvironment', 'protectedPayload', 'antiDebug'))
   {
     $evidencePath = ResolvePrivateFile (RequiredValue $properties "privateEvidence.$ring") "$Label $ring evidence"

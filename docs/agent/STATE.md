@@ -142,6 +142,16 @@ those private hashes before accepting diversification or reproducibility input.
 The consolidated maximum status report records every required final-report
 field and keeps commercial rings blocked until real licensed output exists.
 
+The maximum CLI and relay manifest tasks now invoke
+`scripts/release-native-hardening-audit.ps1` after archiving the protected
+output and before creating the canonical signed manifest. CLI requires native
+hardening and platform signing `PASS`; relay accepts `NOT_APPLICABLE` signing
+only when its shipped output has no Synesis-owned native binary. The private
+native-audit JSON and SHA-256 are written into the final release record, and
+the provenance comparison verifies the status and hash. The task requires a
+reviewed developer archive through `SYNESIS_DEVELOPER_ARCHIVE` or
+`-PsynesisDeveloperArchive`.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files
@@ -167,6 +177,22 @@ plain Gradle invocation still fails before project evaluation with
 release pass. No commercial adapter or signed maximum record exists.
 
 Evidence: `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
+
+## 2026-09-09 — SYN-009E post-archive native audit ordering
+
+Integrated the existing PE/ELF/Mach-O native hardening audit into both maximum
+Gradle pipelines. The audit now runs after the protected ZIP is created and
+before manifest creation/signing; a failed or unsigned CLI native output stops
+the release, while a dependency-only relay may record native signing as
+not-applicable. Final private records retain the audit JSON path/hash, and the
+release-to-release comparator requires verified native hardening/signing state
+and the matching private evidence hash.
+
+The native audit and provenance scripts parsed successfully, and both Gradle
+task graphs configured successfully with the documented process-local Windows
+loopback workaround. No commercial maximum archive, platform signing
+authority, or signed record exists, so this is a release gate seam rather than
+maximum evidence.
 
 ## Immediate next action
 

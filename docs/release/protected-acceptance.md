@@ -138,6 +138,15 @@ macOS Mach-O, but each real customer archive still requires its corresponding
 native inspection and platform-signing checks; cross-compiled parser fixtures
 are not release evidence.
 
+The maximum Gradle tasks run this audit after the protected archive is created
+and before the canonical manifest is signed. Supply the developer archive to
+that task with `SYNESIS_DEVELOPER_ARCHIVE` or
+`-PsynesisDeveloperArchive`; the resulting private JSON evidence is hashed into
+`release-record.properties`. A CLI maximum candidate requires native hardening
+and native signing `PASS`. A relay candidate may record native signing as
+`NOT_APPLICABLE` only when it has no Synesis-owned native output; its separate
+third-party-native audit is still mandatory.
+
 ## Maximum-release gates still required
 
 After a licensed adapter has produced and signed a candidate, run the
@@ -251,9 +260,11 @@ The following must be separately evidenced before a customer release can be
 called maximum:
 
 1. a licensed, version-pinned adapter must produce the exact JVM/native/UI/relay
-   inputs, all six commercial ring evidence records, private mapping/retrace/native
-   symbols, a release-specific transformation seed, and a customer/private
-   boundary that passes the Gradle adapter gate;
+   inputs, all six commercial ring evidence records, private mapping/retrace,
+   component-scoped owned native symbols where applicable, and a private audit
+   of shipped third-party native dependencies, plus a release-specific
+   transformation seed and a customer/private boundary that passes the Gradle
+   adapter gate;
 2. all six vendor transformation rings on the exact JVM/native/UI/relay
    inputs, with genuine virtualization and protected loading demonstrated by
    the selected commercial tool, plus the separately verified signed-integrity
@@ -262,8 +273,8 @@ called maximum:
    provider-boundary behavior;
 4. tamper detection/refusal for the signed immutable payload and protected
    loader;
-5. private JVM retrace, native symbol recovery, release diversification, and
-   leakage scans;
+5. private JVM retrace, owned native symbol recovery where applicable,
+   third-party native audit, release diversification, and leakage scans;
 6. performance, startup, memory, and archive-size comparisons against the
    developer baseline; and
 7. final manifest/signature, installer/doctor verification, normal-host,

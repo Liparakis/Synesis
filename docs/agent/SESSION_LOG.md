@@ -1,3 +1,24 @@
+## 2026-09-09 — SYN-009E post-archive native audit ordering
+
+Integrated the existing archive-only PE/ELF/Mach-O native hardening audit into
+the CLI and relay maximum Gradle pipelines. The protected archive is now
+audited before canonical manifest creation/signing; CLI requires native
+hardening and signing `PASS`, while relay may record native signing as
+`NOT_APPLICABLE` only for a dependency-only native surface. The private audit
+JSON and hash are retained in the final release record, and the provenance
+comparator verifies them.
+
+Added the reviewed developer-archive input requirement
+(`SYNESIS_DEVELOPER_ARCHIVE` / `-PsynesisDeveloperArchive`) and aligned the
+protected-acceptance procedure, maximum adapter documentation, status report,
+state, next-session instructions, and test matrix. Both Gradle task graphs and
+the two PowerShell scripts configured/parsed successfully. No commercial
+maximum artifact, signing authority, or remote mutation was used.
+
+Exact next action: run the scoped diff checks and checkpoint, then commit this
+post-archive native-audit gate while keeping Rings 1–6 blocked and Ring 7
+partial.
+
 ## 2026-09-09 — SYN-009E adapter provenance echo gate
 
 Tightened both maximum-release adapter tasks so the result must echo the
