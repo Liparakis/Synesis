@@ -1,3 +1,21 @@
+## 2026-09-09 — SYN-009E adapter provenance echo gate
+
+Tightened both maximum-release adapter tasks so the result must echo the
+requested clean-release provenance before any commercial evidence is accepted:
+release seed, lockfile count/digest, Gradle/Java/Node/npm/Go toolchains,
+protector configuration digest, and keep-rule/protected-acceptance procedure
+digests, in addition to the existing source/tier bindings. The request now
+carries those inventory/procedure digests explicitly as well.
+
+This prevents an adapter from returning a valid-looking six-ring result for a
+different configuration or source-scoped acceptance contract. The result is
+still private build output; no seed or recovery material is copied into the
+customer archive.
+
+Exact next action: evaluate both Gradle task graphs, then run the full maximum
+adapter and shipped-artifact acceptance only in a clean licensed release
+environment.
+
 ## 2026-09-09 — SYN-009E release provenance comparison seam
 
 Added `scripts/maximum-release-provenance-comparison.ps1` to close the gap

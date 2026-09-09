@@ -79,12 +79,14 @@ It also supplies absolute paths to the current source-scoped inventories:
 tierInventory=<docs/release/protection-tier-inventory.md>
 tierInventorySha256=<sha256 of that inventory>
 keepRuleInventory=<docs/release/protection-keep-rules.md>
+keepRuleInventorySha256=<sha256 of that inventory>
 acceptanceProcedure=<docs/release/protected-acceptance.md>
+acceptanceProcedureSha256=<sha256 of that procedure>
 ```
 
-The adapter must bind its vendor configuration to the tier-inventory digest;
-the Gradle gate rejects a result that does not return the same digest. The
-vendor configuration may be generated from
+The adapter must bind its vendor configuration and result to all three
+source-scoped inventory/procedure digests; the Gradle gate rejects a result
+that does not return the same values. The vendor configuration may be generated from
 `maximum-protector-config.template.properties`, but that file is only a
 vendor-neutral skeleton and is not itself a licensed protector configuration.
 
@@ -104,9 +106,22 @@ profile=maximum-release
 component=<the request component, cli or relay>
 releaseId=<same release ID as the request>
 sourceCommit=<same source commit as the request>
+dirtyTree=false
+seed=<same release seed as the request>
 protectorName=<exact vendor/product>
 protectorVersion=<exact pinned version>
 tierInventorySha256=<same digest as the request>
+keepRuleInventorySha256=<same digest as the request>
+acceptanceProcedureSha256=<same digest as the request>
+lockfileCount=<same count as the request>
+lockfilesSha256=<same digest as the request>
+gradleVersion=<same version as the request>
+javaRuntime=<same runtime as the request>
+javaToolchain=<same toolchain as the request>
+nodeVersion=<same version as the request>
+npmVersion=<same version as the request>
+nativeToolchain=<same version as the request>
+configurationSha256=<same digest as the request>
 ring.controlFlow=verified
 ring.virtualization=verified
 ring.strings=verified
@@ -136,7 +151,9 @@ record.
 The maximum request also carries a reproducibility snapshot for the exact
 source checkout: the sorted lockfile digest/count, Gradle version, Java
 runtime/toolchain, Node/npm versions, native Go toolchain, and protector
-configuration digest. The private `release-record.properties` repeats those
+configuration digest. The adapter result must echo that snapshot and the
+inventory/procedure digests before the task accepts it. The private
+`release-record.properties` repeats those
 values together with the release ID, seed, protector identity, artifact
 manifest hashes, and—after signing—the signing key ID, fixed publication time,
 SHA-256 of the bootstrap public key, and detached-signature provenance. A

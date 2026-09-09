@@ -13,7 +13,8 @@ boundary. No commercial Seven Rings capability is claimed until its actual
 protector output is installed and exercised.
 The current-source Tier 0–3 inventory and vendor-neutral adapter configuration
 skeleton are now explicit; maximum tasks reject dirty release checkouts and
-bind adapter results to the inventory digest.
+bind adapter results to the tier, keep-rule, acceptance-procedure, and full
+reproducibility digests requested by the release.
 An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
 only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records

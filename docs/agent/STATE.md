@@ -11,9 +11,10 @@ against the public key embedded in `bootstrap/main.go`.
 
 The request/result is now bound to the current-source Tier 0–3 inventory,
 narrow keep-rule inventory, and protected-acceptance procedure by SHA-256
-digest. Both maximum tasks reject dirty source checkouts before invoking the
-adapter and require the result to echo the release identity, source commit,
-and inventory digest. A vendor-neutral private configuration skeleton records
+digest, plus the requested seed, lockfile snapshot, Java/Gradle/Node/npm/Go
+toolchain values, and protector configuration digest. Both maximum tasks reject
+dirty source checkouts before invoking the adapter and require the result to
+echo that complete provenance. A vendor-neutral private configuration skeleton records
 the six required commercial rings and the legitimate-VM/fail-safe policy.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs

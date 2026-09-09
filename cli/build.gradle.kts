@@ -1076,7 +1076,9 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "tierInventory" to tierInventory.absolutePath,
                 "tierInventorySha256" to maximumSha256(tierInventory),
                 "keepRuleInventory" to keepRuleInventory.absolutePath,
+                "keepRuleInventorySha256" to maximumSha256(keepRuleInventory),
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
+                "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
@@ -1117,6 +1119,27 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(resultValue("sourceCommit") == sourceCommit) { "Maximum protector result source commit does not match the request" }
         require(resultValue("tierInventorySha256") == maximumSha256(tierInventory)) {
             "Maximum protector result was not built from the requested tier inventory"
+        }
+        val expectedProvenance = linkedMapOf(
+            "sourceCommit" to sourceCommit,
+            "dirtyTree" to dirtyTree.toString(),
+            "seed" to seed,
+            "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
+            "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
+            "gradleVersion" to requestedProvenance.getValue("gradleVersion"),
+            "javaRuntime" to requestedProvenance.getValue("javaRuntime"),
+            "javaToolchain" to requestedProvenance.getValue("javaToolchain"),
+            "nodeVersion" to requestedProvenance.getValue("nodeVersion"),
+            "npmVersion" to requestedProvenance.getValue("npmVersion"),
+            "nativeToolchain" to requestedProvenance.getValue("nativeToolchain"),
+            "configurationSha256" to requestedProvenance.getValue("configurationSha256"),
+            "keepRuleInventorySha256" to maximumSha256(keepRuleInventory),
+            "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
+        )
+        expectedProvenance.forEach { (key, expected) ->
+            require(resultValue(key) == expected) {
+                "Maximum protector result $key does not match the request provenance"
+            }
         }
         require(resultValue("protectorName").isNotBlank()) { "Maximum protector name is missing from the private result" }
         require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
@@ -1236,6 +1259,9 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "schema" to "1",
                 "profile" to "maximum-release",
                 "component" to "cli",
+                "tierInventorySha256" to maximumSha256(tierInventory),
+                "keepRuleInventorySha256" to maximumSha256(keepRuleInventory),
+                "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
                 "privateRetraceFile" to resultValue("retraceFile"),

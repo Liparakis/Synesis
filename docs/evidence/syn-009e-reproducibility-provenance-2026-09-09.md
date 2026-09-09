@@ -19,6 +19,8 @@ The maximum-release request and private `release-record.properties` now bind:
 - JDK/runtime and Gradle versions;
 - Node/npm and native Go toolchain versions;
 - protector name/version and configuration path/SHA-256;
+- Tier 0–3, keep-rule, and protected-acceptance inventory/procedure
+  SHA-256 digests, echoed by the adapter result;
 - release ID and protection seed; and
 - after manifest signing, signing key ID, fixed publication time, bootstrap
   public-key SHA-256, manifest/signature hashes, and detached-signature
@@ -55,8 +57,8 @@ The nine files are discovered from the repository while excluding `.git`,
 
 - `:cli:tasks :relay:tasks --no-configuration-cache --no-daemon --console=plain`
   passed with the documented process-local JDK loopback-directory override.
-  This evaluated both Gradle scripts and their new helper code; it did not
-  invoke a maximum release.
+  This evaluated both Gradle scripts and their new provenance-echo gates; it
+  did not invoke a maximum release.
 - The normal inherited host environment still fails before Gradle evaluation
   with the previously recorded loopback-connection error.
 - No maximum request/result, customer bundle, private release record, signed
