@@ -2937,3 +2937,43 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs68-69
   replacement/A2, create a substitute B, or patch production speculatively.
 - Exact continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-09 — SYN-054 known-project discovery activation
+
+SYN-054 is the sole active task. The source-backed architecture is a
+workspace-local persistent discovery index under the existing Synesis
+application-state root, observed by valid init, UI/runtime startup, and MCP
+startup. No daemon, crawler, runtime merge, or MCP tool is authorized.
+
+Exact next action: implement ADR-0072's registry seam and hooks, then run the
+disposable lifecycle matrix. Keep live state process-local and report missing
+paths or identity mismatches without deleting or silently rewriting known
+metadata.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-09 — SYN-054 focused implementation checkpoint
+
+SYN-054 implementation and lifecycle evidence are complete for this slice;
+the task remains ACTIVE in the durable task ledger while unrelated baseline
+regressions are documented. `KnownProjectRegistry` persists
+only validated discovery metadata under the existing application-state root;
+CLI init/common project resolution, UI startup, and MCP startup observe it;
+the authenticated local control plane and frontend expose known projects.
+
+Evidence: focused registry tests, affected control-plane/CLI/MCP tests, strict
+workspace compile/architecture/format/Javadoc gates, frontend typecheck/lint/
+tests/build, and an installed real-project run with two disposable Git
+projects plus a separate MCP process all pass. A fresh authenticated live
+loopback probe also returned both known projects with the expected `LIVE` and
+`INACTIVE` statuses and matched the metadata-only registry. The broad
+workspace/CLI/MCP check is red in unrelated coordination/provider tests and
+was stopped after repeated failures. The named `AgentNextActionServiceTest`
+failures reproduce on an untouched detached base worktree, so they are not a
+discovery regression.
+
+Exact next action: preserve the verified implementation; no further
+product-code work is required for SYN-054. Commit or publication requires
+explicit authorization.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

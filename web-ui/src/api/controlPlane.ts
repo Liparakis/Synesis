@@ -19,6 +19,12 @@ export interface ProjectSnapshot {
   createdAt: string;
 }
 
+export interface KnownProjectSnapshot extends ProjectSnapshot {
+  firstObservedAt: string;
+  lastObservedAt: string;
+  status: "LIVE" | "INACTIVE" | "UNAVAILABLE" | "IDENTITY_MISMATCH";
+}
+
 export interface ProviderSnapshot {
   id: string;
   supportLevel: string;
@@ -194,6 +200,7 @@ export interface Snapshot {
   apiVersion: string;
   runtime: RuntimeSnapshot;
   project: ProjectSnapshot | null;
+  knownProjects: KnownProjectSnapshot[];
   providers: ProviderSnapshot[];
   agents: AgentSnapshot[];
   workgroups: WorkGroupSnapshot[];
@@ -265,6 +272,7 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
   const relay = network.relay ?? ({} as RelaySnapshot);
   return {
     ...input,
+    knownProjects: input.knownProjects ?? [],
     providers: input.providers ?? [],
     agents: input.agents ?? [],
     workgroups: input.workgroups ?? [],

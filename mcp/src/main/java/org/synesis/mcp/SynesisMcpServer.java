@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.synesis.mcp.application.McpProtocolHandler;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.application.agent.AgentSessionService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
@@ -101,6 +102,16 @@ public final class SynesisMcpServer {
             + " provider=" + provider + " continuityMode=" + continuityMode + " cwd=" + Path.of(".")
             .toAbsolutePath()
             .normalize());
+
+    try {
+      ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+          projectRoot);
+      new KnownProjectRegistry().observe(location);
+    } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
+      System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
+    } catch (ProjectApplicationService.ProjectApplicationException invalidProject) {
+      System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + invalidProject.code());
+    }
 
     AgentSessionService sessionService = new AgentSessionService();
     SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);

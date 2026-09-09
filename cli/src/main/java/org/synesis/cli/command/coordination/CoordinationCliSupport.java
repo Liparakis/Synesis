@@ -11,6 +11,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 /**
  * Shared project/profile resolution for public coordination commands.
@@ -31,8 +32,14 @@ public final class CoordinationCliSupport {
   public static ProjectApplicationService.ProjectLocation project(CliRuntime runtime, Path project)
       throws ProjectApplicationService.ProjectApplicationException {
     Objects.requireNonNull(runtime, "runtime");
-    return runtime.projectService()
+    ProjectApplicationService.ProjectLocation location = runtime.projectService()
         .require(project == null ? Path.of(".") : project);
+    try {
+      new KnownProjectRegistry().observe(location);
+    } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
+      runtime.terminal().stderr("PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
+    }
+    return location;
   }
 
   /**

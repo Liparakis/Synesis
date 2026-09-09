@@ -1386,3 +1386,20 @@ ended without executing it; no production change justified | SYN-039 / CP-0534 |
 | CP-0534 final diagnostics | fixture collaboration status, control checkout, Doctor | same evidence | no unresolved
 WorkGroup state and healthy or explicitly accepted diagnostics | NOT REACHED/SEPARATE; WorkGroup ACTIVE; control clean
 with pytest 5/5; Doctor DEGRADED with six warnings, zero errors, zero critical findings | SYN-039 / CP-0534 |
+## SYN-054 persistent known-project discovery — 2026-09-09
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Valid lifecycle observation | real disposable initialized projects observed through installed CLI init and MCP startup | PASS |
+| Idempotence | repeated observation retains one identity and one entry while refreshing last observation | PASS |
+| Restart persistence | new registry instance and separate CLI processes read prior entries | PASS |
+| Runtime disappearance | registry retains entries after MCP process exit | PASS via process-retention evidence |
+| Independent projects | two disposable projects remain distinct by UUID and path | PASS |
+| Missing path | unavailable remembered path is not reported live | PASS focused |
+| Identity mismatch | changed metadata at remembered path is rejected/classified, not silently accepted | PASS focused |
+| Metadata boundary | registry file contains no agents, WorkGroups, claims, tasks, capabilities, peers, overlay, diagnostics, or provider state | PASS focused |
+| Existing behavior | affected CLI, control-plane, MCP, and frontend regressions | PASS focused; unrelated broad failures reproduce on untouched base |
+| Authenticated UI/control-plane enumeration | one-time bootstrap exchange followed by `/api/v1/projects` over loopback with two disposable projects; serving project is `LIVE`, remembered project is `INACTIVE` | PASS installed runtime |
+
+Exact next action: preserve the verified discovery checks; no further
+SYN-054 product-code work is required.

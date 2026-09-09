@@ -14,6 +14,7 @@ describe("control-plane client helpers", () => {
       apiVersion: "v1",
       runtime: {} as never,
       project: null,
+      knownProjects: [],
       providers: [],
       agents: [],
       workgroups: [],

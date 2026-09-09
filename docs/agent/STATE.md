@@ -4190,3 +4190,51 @@ No production source, provider credentials, global Java settings, or durable
 
 Read-only diagnosis of the owner/reviewer snapshot-ordering projection, then
 one new fresh acceptance target only if the exact sequence is corrected.
+## 2026-09-09 — SYN-054 discovery activation
+
+The explicit persistent known-project discovery goal is now the sole active
+task. Source review found no global daemon or runtime registry: `synesis ui`
+starts one project-local loopback control plane, `ProjectApplicationService`
+validates `.synesis/project.json`, and MCP attaches to that same project
+identity. The implementation must therefore remain a workspace-local
+persistent index reused by existing CLI/UI/MCP lifecycle hooks. `SL-D-035` is
+paused while this bounded slice proceeds.
+
+Immediate next action: add ADR-0072 and implement the registry with only
+project UUID, normalized path, project creation time, first observation, and
+last observation persisted; live status must remain process-local.
+## 2026-09-09 — SYN-054 implementation and focused acceptance
+
+Implemented ADR-0072's persistent `KnownProjectRegistry` under the existing
+Synesis application-state root. It persists only project UUID, normalized path,
+project creation time, first observation, and last observation. Init, common
+CLI project resolution, UI/coordination startup, and valid MCP startup observe
+projects without changing the ten-tool MCP catalog. The loopback control plane
+and installed frontend expose the bounded known-project view; only the current
+serving project is marked `LIVE` in memory.
+
+Focused registry tests pass for idempotence, restart persistence, two distinct
+projects, missing paths, identity mismatch, and metadata-only storage. A real
+installed CLI run observed two disposable Git projects in separate processes;
+a separate MCP process refreshed one observation, retained both entries, and
+exited cleanly. Frontend typecheck/lint/test/build and affected workspace,
+CLI, and MCP tests pass. Strict workspace compilation, architecture, format,
+and Javadoc gates pass.
+
+The broad `:workspace:check :cli:check :mcp:check` run remains incomplete and
+red in unrelated existing coordination/provider/workspace tests, including
+`AgentNextActionServiceTest`, `CapabilityNegotiationTest`,
+`ProjectCommandServiceTest`, and `ProviderSessionBindingServiceTest`; it was
+stopped after repeated failures. A fresh installed `coordination serve`
+process was then authenticated through its one-time bootstrap exchange; with
+two disposable projects in the same application-state root,
+`GET /api/v1/projects` returned both distinct identities, marking the serving
+project `LIVE` and the other remembered project `INACTIVE`. The response
+matched the registry's persisted discovery-only fields. A detached worktree at
+the untouched base commit reproduced the named `AgentNextActionServiceTest`
+assertion failures, establishing that this remaining broad red result is not a
+SYN-054 regression.
+
+Immediate next action: preserve the verified SYN-054 state; no further
+product-code work is required for this goal. Commit or publication requires
+explicit authorization.

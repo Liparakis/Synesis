@@ -437,8 +437,8 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
       }
       if (path.equals(API_PREFIX + "/projects")) {
         requireMethod(exchange, "GET");
-        sendJson(exchange, 200, Map.of("apiVersion", "v1", "projects", List.of(
-            readModel.snapshot().get("project"))));
+        sendJson(exchange, 200, Map.of("apiVersion", "v1", "projects",
+            readModel.knownProjects()));
         return;
       }
       if (path.equals(API_PREFIX + "/agents") || path.equals(API_PREFIX + "/workgroups")

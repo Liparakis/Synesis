@@ -1,3 +1,32 @@
+# SYN-054 persistent known-project discovery — activated 2026-09-09
+
+Add the smallest event-driven local discovery index needed for Synesis to
+truthfully remember initialized projects it has legitimately encountered.
+Keep project runtimes authoritative for agents, WorkGroups, claims, tasks,
+capabilities, peers, overlay, diagnostics, and coordination state. Reuse the
+existing project identity, CLI/UI, MCP startup, and application-state seams;
+do not add a daemon, filesystem crawler, new MCP tool, global coordination
+authority, runtime auto-start, or project relocation workflow.
+
+- Status: ACTIVE / implementation and lifecycle evidence complete; unrelated
+  baseline regressions documented
+- Exact next action: preserve the verified state; no further product-code work
+  is required for this goal. Any commit or publication is separately
+  authorized.
+- Architecture basis: current-source review and ADR-0072.
+- Boundary: known-project metadata is persistent local index data; live status
+  is process-local evidence only and is never persisted.
+- Required fields: project UUID, validated remembered path, project creation
+  time, first observation time, and last observation time. No authoritative
+  display name exists in current project metadata, so no name is persisted.
+- Required behavior: event-driven observation from init, UI/runtime startup,
+  and valid MCP attachment; idempotent re-observation; restart persistence;
+  unavailable-path and identity-mismatch reporting; current live-project
+  reporting only when the serving process owns the live runtime.
+- Scope exclusions: no recursive disk scan, project deletion or relocation,
+  automatic runtime startup, aggregated project-local state, multi-project
+  SSE fanout, remote exposure, or MCP catalog change.
+
 # SYN-009E Synesis maximum-protection commercial release profile — activated 2026-09-09
 
 Build and verify a release-only maximum-protection profile for Synesis using

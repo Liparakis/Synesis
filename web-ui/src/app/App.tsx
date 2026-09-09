@@ -250,21 +250,25 @@ function DashboardView({snapshot, onNavigate}: {
 }
 
 export function ProjectsView({snapshot}: { snapshot: Snapshot }) {
+  const projects = snapshot.knownProjects ?? [];
   return (
       <div className="page-stack">
         <PageHeader eyebrow="PROJECTS" title="Projects"
-                    description="Projects served by this local Synesis runtime."/>
-        {snapshot.project ? <section className="project-card panel">
+                    description="Projects this Synesis installation has legitimately encountered."/>
+        {projects.length > 0 ? <div className="card-list">{projects.map((project) => {
+          const active = project.id === snapshot.project?.id;
+          return <section className="project-card panel" key={project.id}>
               <div className="project-icon"><Boxes size={22}/></div>
               <div className="project-body">
-                <div className="card-kicker">ACTIVE PROJECT</div>
-                <h2>{snapshot.project.name}</h2><p className="mono subdued">{snapshot.project.id}</p>
+                <div className="card-kicker">{active ? "ACTIVE PROJECT" : "KNOWN PROJECT"}</div>
+                <h2>{project.name}</h2><p className="mono subdued">{project.id}</p>
                 <div className="project-meta"><span><Server
-                    size={14}/> {snapshot.project.path}</span><span><Users
+                    size={14}/> {project.path}</span>{active && <><span><Users
                     size={14}/> {snapshot.agents.length} participants</span><span><GitBranch
-                    size={14}/> {snapshot.workgroups.length} WorkGroups</span></div>
+                    size={14}/> {snapshot.workgroups.length} WorkGroups</span></>}</div>
               </div>
-              <StatusBadge value={snapshot.runtime.status}/></section> :
+              <StatusBadge value={project.status}/></section>;
+        })}</div> :
             <EmptyState icon={Boxes} title="No project initialized"
                         text="Initialize a Git project with Synesis to see it here."/>}
       </div>

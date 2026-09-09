@@ -1,6 +1,39 @@
 # Current Task
 
-## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
+## SYN-054 Persistent known-project discovery — implementation and lifecycle-evidence gate — 2026-09-09
+
+- Task ID: SYN-054
+Status: **ACTIVE / implementation and lifecycle evidence complete; unrelated baseline regressions documented**.
+
+The current slice adds a persistent event-driven index of initialized Synesis
+projects legitimately encountered through existing init, UI/runtime, and MCP
+startup paths. The registry is discovery metadata only. Project-local
+coordination and runtime state remain authoritative in each project.
+
+Acceptance is not complete until real disposable projects prove observation,
+idempotence, restart persistence, runtime disappearance retention, distinct
+identities, missing-path behavior, identity-mismatch rejection, metadata-only
+persistence, and unchanged project-local control-plane/MCP behavior.
+
+Implemented registry, CLI/UI/MCP hooks, authenticated known-project adapter,
+and frontend view. Focused registry, affected control-plane/CLI/MCP, strict
+Javadoc/compile, and frontend checks pass. Two real disposable projects were
+observed through installed CLI init and a separate MCP process; the registry
+persisted two distinct identities across processes. A live authenticated
+loopback control-plane probe returned both projects with `LIVE` and `INACTIVE`
+statuses and matched the registry's metadata-only contents. The broad
+workspace check remains red in unrelated coordination/provider tests and was
+stopped after repeated failures. The named `AgentNextActionServiceTest`
+failures also reproduce on an untouched detached worktree at the current base
+commit, before SYN-054 changes, so they are not attributed to this slice.
+
+Exact next action: preserve the verified SYN-054 state; no further product-code
+work is required for this goal. Any commit or publication remains a separate
+explicit action.
+
+## Historical current task — SYN-009E
+
+### Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
 Status: **COMPLETE FOR PROTECTION-LITE SCOPE; COMMERCIAL MAXIMUM DEFERRED / EXTERNAL DEPENDENCY**.
 The free protection implementation and its release plumbing are closed for

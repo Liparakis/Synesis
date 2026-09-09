@@ -6664,3 +6664,55 @@ Exact next action: obtain an installed, licensed, version-pinned commercial
 protector and redacted licensing attestation, then run the complete maximum
 artifact and shipped acceptance from a clean reviewed checkout; keep Rings 1–6
 blocked and Ring 7 partial until that evidence exists.
+## 2026-09-09 — SYN-054 persistent known-project discovery implementation
+
+Implemented ADR-0072's smallest source-backed discovery layer. The workspace
+`KnownProjectRegistry` uses the existing Synesis application-state root,
+strict bounded JSON, file locking, atomic replacement, and validated
+`ProjectApplicationService` identity. It persists project UUID, normalized
+path, creation time, first observation, and last observation only; live status
+is derived in memory and never stored.
+
+Init, common CLI project resolution, UI/coordination startup, and valid MCP
+startup now observe projects transparently. The existing authenticated local
+control plane exposes the registry and the installed frontend renders known
+projects without project-local counts for inactive entries. The MCP catalog
+and project-local authority remain unchanged.
+
+Verification passed: focused registry tests; affected workspace control-plane,
+CLI init, and MCP catalog tests; strict workspace compile, architecture,
+format, and Javadoc gates; frontend typecheck, lint, tests, and build; and an
+installed real lifecycle with two disposable Git projects observed by two
+CLI processes and one separate MCP process. The registry retained two
+distinct identities and refreshed one observation after MCP exit.
+
+The broader `:workspace:check :cli:check :mcp:check` run exposed repeated
+unrelated coordination/provider/workspace assertion failures and was stopped;
+it is incomplete evidence, not a discovery pass. The authenticated UI HTTP
+enumeration probe was rejected by the host shell before execution. No commit,
+push, tag, release, or remote mutation was performed.
+
+## 2026-09-09 — SYN-054 authenticated control-plane enumeration
+
+Rebuilt the installed CLI and created a fresh disposable Git project pair under
+an isolated application-state root. Started the installed project-local
+`coordination serve` listener with the bounded Windows loopback compatibility
+override, exchanged its one-time bootstrap token for a control session, and
+queried `/api/v1/projects`. The authenticated response returned both distinct
+project UUIDs and paths, with the serving project `LIVE` and the other
+remembered project `INACTIVE`. The persisted registry contained only the
+documented identity/path/timestamp fields.
+
+The public control-plane reference was reconciled so `/api/v1/projects` now
+documents the bounded known-project index and derived status semantics. The
+broad workspace/CLI/MCP regression result remains unchanged: unrelated
+coordination/provider failures require separate reconciliation, so SYN-054
+remains ACTIVE and is not yet marked complete.
+
+The named `AgentNextActionServiceTest` failures were then run in a detached
+worktree at the untouched base commit
+`aa7f731531cde76fb54ce4742f1a2949e24d52e0`. The same assertion failures
+reproduced before the SYN-054 working-tree changes, so the remaining broad red
+result is recorded as a pre-existing regression condition rather than a
+discovery-layer failure. The temporary worktree and disposable project
+fixture were removed. No commit or publication was made.

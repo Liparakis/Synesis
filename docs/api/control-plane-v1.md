@@ -59,7 +59,7 @@ missing asset paths do not.
 |--------|------------------------|-------------------------------------------------------------|
 | GET    | `/api/v1/health`       | Listener, project ID, and durable sequence health           |
 | GET    | `/api/v1/snapshot`     | Complete bounded public-safe project snapshot               |
-| GET    | `/api/v1/projects`     | The currently served project identity                       |
+| GET    | `/api/v1/projects`     | Bounded known-project identities and derived statuses       |
 | GET    | `/api/v1/agents`       | Participant and current work summaries                      |
 | GET    | `/api/v1/workgroups`   | WorkGroup status and participant summaries                  |
 | GET    | `/api/v1/claims`       | Work-intent selectors and conflict summaries                |
@@ -75,8 +75,14 @@ raw event payloads, and arbitrary file contents are not DTO fields. Network
 state is `UNCONFIGURED` until a signed membership source configures the
 long-lived Link/overlay owner; the endpoint does not invent connection state.
 
-`/api/v1/projects` reports the one project served by this listener. It is not a
-project registry and does not scan the filesystem for additional projects.
+`/api/v1/projects` reports the bounded installation-local known-project index.
+Entries are recorded only when an existing Synesis lifecycle or runtime path
+successfully validates a project through `ProjectApplicationService`; the
+endpoint does not scan the filesystem, crawl directories, or infer projects
+from coordination data. Each entry contains only project identity, validated
+path, creation/observation timestamps, and a derived status of `LIVE`,
+`INACTIVE`, `UNAVAILABLE`, or `IDENTITY_MISMATCH`. Status is recomputed at read
+time, and only the project served by the current listener can be `LIVE`.
 
 The `LinkNetworkProjection` adapter maps a single consistent runtime source of
 `PeerSession`, verified `OverlayMembershipView`, verified

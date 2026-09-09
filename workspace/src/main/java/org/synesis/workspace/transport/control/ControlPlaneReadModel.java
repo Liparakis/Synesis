@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.synesis.coordination.application.CoordinationService;
@@ -22,6 +23,7 @@ import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 /**
  * Explicit, public-safe read model for the local Synesis control plane.
@@ -39,6 +41,7 @@ public final class ControlPlaneReadModel {
   private final ProviderApplicationService providerService;
   private final DoctorService doctorService;
   private final Supplier<NetworkSnapshot> network;
+  private final KnownProjectRegistry projectRegistry;
 
   /**
    * Creates a read model with an unconfigured network view.
@@ -66,11 +69,29 @@ public final class ControlPlaneReadModel {
   public ControlPlaneReadModel(ProjectApplicationService.ProjectLocation location,
       CoordinationService coordination, ProviderApplicationService providerService,
       DoctorService doctorService, Supplier<NetworkSnapshot> network) {
+    this(location, coordination, providerService, doctorService, network, null);
+  }
+
+  /**
+   * Creates a read model with the installation-local known-project index.
+   *
+   * @param location        current project location
+   * @param coordination    durable coordination service for the current project
+   * @param providerService provider lifecycle service for the current project
+   * @param doctorService   read-only diagnostic service for the current project
+   * @param network         authoritative network state source
+   * @param projectRegistry installation-local discovery index
+   */
+  public ControlPlaneReadModel(ProjectApplicationService.ProjectLocation location,
+      CoordinationService coordination, ProviderApplicationService providerService,
+      DoctorService doctorService, Supplier<NetworkSnapshot> network,
+      KnownProjectRegistry projectRegistry) {
     this.location = Objects.requireNonNull(location, "location");
     this.coordination = Objects.requireNonNull(coordination, "coordination");
     this.providerService = Objects.requireNonNull(providerService, "provider service");
     this.doctorService = Objects.requireNonNull(doctorService, "doctor service");
     this.network = Objects.requireNonNull(network, "network");
+    this.projectRegistry = projectRegistry;
   }
 
   private static List<Map<String, Object>> selectors(List<ResourceSelector> selectors) {
@@ -100,6 +121,7 @@ public final class ControlPlaneReadModel {
     result.put("apiVersion", "v1");
     result.put("runtime", runtime(networkSnapshot));
     result.put("project", project());
+    result.put("knownProjects", knownProjects());
     result.put("providers", providers());
     result.put("agents", agents());
     result.put("workgroups", workgroups());
@@ -144,6 +166,43 @@ public final class ControlPlaneReadModel {
    */
   public UUID projectId() {
     return location.projectId();
+  }
+
+  /**
+   * Returns bounded discovery metadata for projects known to this installation.
+   *
+   * <p>Only the current control-plane project is marked live. Other entries
+   * are read from validated metadata and never from stale runtime snapshots.</p>
+   *
+   * @return JSON-compatible known-project list
+   */
+  public List<Map<String, Object>> knownProjects() {
+    if (projectRegistry == null) {
+      Map<String, Object> current = project();
+      current.put("firstObservedAt", current.get("createdAt"));
+      current.put("lastObservedAt", current.get("createdAt"));
+      current.put("status", "LIVE");
+      return List.of(current);
+    }
+    try {
+      return projectRegistry.projects(Set.of(location.projectId())).stream()
+          .limit(MAX_COLLECTION_ITEMS)
+          .map(view -> {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("id", view.projectId().toString());
+            result.put("name", view.path().getFileName() == null
+                ? view.path().toString() : view.path().getFileName().toString());
+            result.put("path", view.path().toString());
+            result.put("createdAt", view.createdAt().toString());
+            result.put("firstObservedAt", view.firstObservedAt().toString());
+            result.put("lastObservedAt", view.lastObservedAt().toString());
+            result.put("status", view.status().name());
+            return result;
+          })
+          .toList();
+    } catch (KnownProjectRegistry.RegistryException unavailable) {
+      return List.of();
+    }
   }
 
   private Map<String, Object> runtime(NetworkSnapshot networkSnapshot) {

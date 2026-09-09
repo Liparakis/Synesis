@@ -1,3 +1,40 @@
+## SYN-054
+
+### Persistent known-project discovery — activated 2026-09-09
+
+- Status: ACTIVE
+- Evidence status: implementation and lifecycle evidence complete; unrelated baseline regressions documented
+- Purpose: persist the minimum discovery metadata for valid Synesis projects
+  encountered through normal Synesis use, while preserving project-local
+  runtime authority and the existing ten-tool MCP contract.
+- Architecture: one workspace registry component using the existing
+  `AdministrativeStateLocator.applicationStateRoot()` convention; CLI init,
+  UI/runtime startup, and valid MCP startup observe projects transparently.
+  The existing loopback control plane adapts the registry for a bounded known-
+  projects view. No daemon or second runtime is created.
+- Acceptance criteria: a valid unknown project is observed and listed;
+  repeated observation is idempotent; registry restart preserves it; stopping
+  MCP/runtime does not delete it; a second project remains distinct; missing
+  paths are not reported live; identity mismatch is detected; only discovery
+  metadata is persisted; and existing project-local control-plane/MCP behavior
+  remains unchanged.
+- Persisted fields: project UUID, normalized path, project `createdAt`,
+  `firstObservedAt`, and `lastObservedAt`. No project name is persisted
+  because current project identity metadata has no authoritative name field.
+- Scope boundary: no filesystem crawler, global coordination state, runtime
+  auto-start, project deletion/relocation workflow, project-local state cache,
+  remote registry, MCP tool, or UI redesign.
+- Required documentation: ADR-0072, registry model and lifecycle behavior,
+  durable state/checkpoint updates, and `docs/agent/DEFERRED.md` review.
+- Required verification: focused registry tests; disposable real-project
+  lifecycle tests covering restart, idempotence, two identities, unavailable
+  path, mismatch, and non-persistence of coordination state; existing
+  project-local control-plane and MCP regressions; frontend checks if the
+  known-project view changes.
+- Exact next action: preserve the verified implementation; no further product-
+  code work is required for SYN-054. Commit or publication requires explicit
+  authorization.
+
 ## SYN-009E
 
 - ID: SYN-009E

@@ -22,6 +22,7 @@ import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
 import org.synesis.workspace.transport.control.ControlPlaneReadModel;
 import org.synesis.workspace.transport.control.LinkNetworkProjection;
 import org.synesis.workspace.transport.control.LinkRuntimeOwner;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 /**
  * Shared composition for the coordination server and the installed browser UI command.
@@ -50,6 +51,12 @@ final class CoordinationServerLauncher {
       int duration, boolean openBrowser, boolean browserOpen) {
     try {
       var location = CoordinationCliSupport.project(runtime, project);
+      var projectRegistry = new KnownProjectRegistry();
+      try {
+        projectRegistry.observe(location);
+      } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
+        runtime.terminal().stderr("PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
+      }
       var projectData = CoordinationCliSupport.data(location, data);
       var identityDirectory = CoordinationCliSupport.identity(location, identity);
       var node = CoordinationCliSupport.loadIdentity(identityDirectory);
@@ -64,7 +71,7 @@ final class CoordinationServerLauncher {
       var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, Optional.empty(),
           eventHub::publish);
       var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(),
-          new DoctorService(), new LinkNetworkProjection(linkOwner));
+          new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
       var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub);
       try (control;
           linkOwner;

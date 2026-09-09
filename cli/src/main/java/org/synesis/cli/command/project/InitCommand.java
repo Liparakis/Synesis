@@ -5,6 +5,7 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -39,6 +40,12 @@ public final class InitCommand implements Callable<Integer> {
       ProjectApplicationService.InitResult result = runtime.projectService()
           .init(root);
       var location = result.location();
+      try {
+        new KnownProjectRegistry().observe(location);
+        runtime.terminal().stdout("PROJECT_DISCOVERY=RECORDED");
+      } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
+        runtime.terminal().stderr("PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
+      }
       runtime.terminal()
           .stdout("INIT_RESULT=" + result.status());
       runtime.terminal()
