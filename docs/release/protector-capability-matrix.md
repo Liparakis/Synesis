@@ -55,8 +55,9 @@ signed-candidate seam documented in
 validates the contract and keeps the maximum task fail-closed; it does not
 change any `UNVERIFIED` commercial row to `PASS`.
 
-The open-source lite result does not satisfy Rings 1, 2, 4, 5, or 6. It
-provides only a bounded shrinking/renaming compatibility baseline and private
-mapping material. Ring 7 remains only a release-foundation partial until the
-protected artifact is included in the existing signed manifest and its
-tamper/retrace/diversification gates pass.
+The open-source lite result does not satisfy the commercial transformation
+claims. It provides only a bounded shrinking/renaming compatibility baseline
+and private mapping material. The release-level signed-integrity/diversification
+ring remains only a foundation partial until the protected artifact is
+included in the existing signed manifest and its tamper/retrace/diversification
+gates pass.

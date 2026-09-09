@@ -1104,6 +1104,10 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "protectorVersion" to resultValue("protectorVersion"),
                 "configuration" to configFile.absolutePath,
                 "seed" to seed,
+                "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "diversification" to resultValue("diversification"),
+                "privateRetraceFile" to resultValue("retraceFile"),
+                "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
                 "artifactManifest" to maximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to maximumSha256(maximumReleaseArtifactManifest.get().asFile),
             ),
@@ -1240,6 +1244,7 @@ tasks.register("maximumRelease") {
         properties.setProperty("manifestSha256", maximumSha256(maximumReleaseManifest.get().asFile))
         properties.setProperty("signature", maximumReleaseSignature.get().asFile.name)
         properties.setProperty("signatureSha256", maximumSha256(maximumReleaseSignature.get().asFile))
+        properties.setProperty("signedIntegrity", "verified")
         properties.setProperty("signedAgainstBootstrapKey", "true")
         record.outputStream().use { properties.store(it, "Synesis maximum-release private record") }
         logger.lifecycle(

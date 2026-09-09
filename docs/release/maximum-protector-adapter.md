@@ -58,11 +58,20 @@ and `component=cli` or `component=relay`. It contains the exact source
 commit/dirty-tree state,
 release ID, release seed, platform, readable developer input bundle, requested
 customer output directory, private-record directory, configuration path, and
-the required ring names:
+the six vendor-transformation ring names:
 
 ```text
 requiredRings=controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug
 ```
+
+The signed-integrity layer is deliberately not an adapter-reported ring. The
+Gradle release task owns that boundary: it creates the private per-file
+artifact manifest, archives the customer bundle, creates the canonical release
+manifest, invokes the existing bootstrap signer, and verifies the detached
+Ed25519 signature against the embedded bootstrap trust root. The private
+release record receives `signedIntegrity=verified` only after that verification
+passes. This keeps a vendor result from turning a claimed integrity setting
+into evidence.
 
 It also supplies absolute paths to the current source-scoped inventories:
 
@@ -116,6 +125,11 @@ evidence.analysisEnvironment=<file below privateDirectory>
 evidence.protectedPayload=<file below privateDirectory>
 evidence.antiDebug=<file below privateDirectory>
 ```
+
+The adapter result therefore proves the six vendor transformation classes,
+release diversification, and private recovery material. The signed-integrity
+layer is proved by the later Gradle/bootstrap manifest verification and is
+recorded separately in the private release record.
 
 The Gradle gate additionally requires the protected profile marker, the
 customer CLI/runtime/native launcher files for `cli`, or the protected relay

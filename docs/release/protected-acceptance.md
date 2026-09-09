@@ -73,9 +73,10 @@ called maximum:
    inputs, all six commercial ring evidence records, private retrace/native
    symbols, a release-specific transformation seed, and a customer/private
    boundary that passes the Gradle adapter gate;
-2. all seven requested protection rings on the exact JVM/native/UI/relay
+2. all six vendor transformation rings on the exact JVM/native/UI/relay
    inputs, with genuine virtualization and protected loading demonstrated by
-   the selected commercial tool;
+   the selected commercial tool, plus the separately verified signed-integrity
+   layer produced by the Gradle/bootstrap release pipeline;
 3. relay and overlay/Link acceptance from the protected artifacts, including
    provider-boundary behavior;
 4. tamper detection/refusal for the signed immutable payload and protected
