@@ -1141,6 +1141,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "retraceEvidenceFormat" to "properties-v1:schema,status,retraceTool,testCase,mappingSha256,inputStackTraceSha256,outputStackTraceSha256",
+                "licenseEvidenceFormat" to "properties-v1:licenseMode,licenseEvidence",
                 "nativeSymbolsScope" to "owned",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
@@ -1207,6 +1208,12 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
             "Maximum protector version must be pinned in the private result"
         }
+        require(resultValue("licenseEvidenceFormat") == "properties-v1:licenseMode,licenseEvidence") {
+            "Maximum protector result must identify the private license-attestation format"
+        }
+        require(resultValue("licenseMode").isNotBlank() && resultValue("licenseMode") != "unknown") {
+            "Maximum protector license mode must be recorded without exposing license material"
+        }
         require(resultValue("nativeSymbolsScope") == "owned") {
             "Maximum CLI release must report nativeSymbolsScope=owned for its Synesis-owned native launchers"
         }
@@ -1222,6 +1229,10 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         val thirdPartyNativeAudit = project.file(resultValue("thirdPartyNativeAudit"))
         require(isUnder(thirdPartyNativeAudit, privateDirectory) && thirdPartyNativeAudit.isFile && thirdPartyNativeAudit.length() > 0L) {
             "Maximum CLI third-party native audit is missing or outside the private boundary"
+        }
+        val licenseEvidence = project.file(resultValue("licenseEvidence"))
+        require(isUnder(licenseEvidence, privateDirectory) && licenseEvidence.isFile && licenseEvidence.length() > 0L) {
+            "Maximum CLI private license attestation is missing or outside the private boundary"
         }
 
         require(samePath(resultValue("bundleDirectory"), outputBundle)) {
@@ -1344,6 +1355,10 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         privateEvidenceProperties["privateDiversificationEvidence"] = diversificationEvidence.absolutePath
         privateEvidenceProperties["privateDiversificationEvidenceSha256"] = maximumSha256(diversificationEvidence)
+        privateEvidenceProperties["privateLicenseEvidenceFormat"] = resultValue("licenseEvidenceFormat")
+        privateEvidenceProperties["privateLicenseMode"] = resultValue("licenseMode")
+        privateEvidenceProperties["privateLicenseEvidence"] = licenseEvidence.absolutePath
+        privateEvidenceProperties["privateLicenseEvidenceSha256"] = maximumSha256(licenseEvidence)
         writeMaximumProperties(
             privateDirectory.resolve("release-record.properties"),
             maximumReleaseProvenance(

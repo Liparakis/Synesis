@@ -611,6 +611,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedureSha256" to relayMaximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "retraceEvidenceFormat" to "properties-v1:schema,status,retraceTool,testCase,mappingSha256,inputStackTraceSha256,outputStackTraceSha256",
+                "licenseEvidenceFormat" to "properties-v1:licenseMode,licenseEvidence",
                 "nativeSymbolsScopePolicy" to "owned-or-not-applicable",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
@@ -677,6 +678,12 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
             "Maximum relay protector version must be pinned"
         }
+        require(resultValue("licenseEvidenceFormat") == "properties-v1:licenseMode,licenseEvidence") {
+            "Maximum relay protector result must identify the private license-attestation format"
+        }
+        require(resultValue("licenseMode").isNotBlank() && resultValue("licenseMode") != "unknown") {
+            "Maximum relay license mode must be recorded without exposing license material"
+        }
 
         fun normalized(path: File): String = path.toPath().toAbsolutePath().normalize().toString()
         fun samePath(actual: String, expected: File): Boolean =
@@ -693,6 +700,10 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         val thirdPartyNativeAudit = project.file(resultValue("thirdPartyNativeAudit"))
         require(isUnder(thirdPartyNativeAudit, privateDirectory) && thirdPartyNativeAudit.isFile && thirdPartyNativeAudit.length() > 0L) {
             "Maximum relay third-party native audit is missing or outside the private boundary"
+        }
+        val licenseEvidence = project.file(resultValue("licenseEvidence"))
+        require(isUnder(licenseEvidence, privateDirectory) && licenseEvidence.isFile && licenseEvidence.length() > 0L) {
+            "Maximum relay private license attestation is missing or outside the private boundary"
         }
 
         require(samePath(resultValue("bundleDirectory"), outputBundle)) {
@@ -807,6 +818,10 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         privateEvidenceProperties["privateDiversificationEvidence"] = diversificationEvidence.absolutePath
         privateEvidenceProperties["privateDiversificationEvidenceSha256"] = relayMaximumSha256(diversificationEvidence)
+        privateEvidenceProperties["privateLicenseEvidenceFormat"] = resultValue("licenseEvidenceFormat")
+        privateEvidenceProperties["privateLicenseMode"] = resultValue("licenseMode")
+        privateEvidenceProperties["privateLicenseEvidence"] = licenseEvidence.absolutePath
+        privateEvidenceProperties["privateLicenseEvidenceSha256"] = relayMaximumSha256(licenseEvidence)
         writeRelayMaximumProperties(
             privateDirectory.resolve("release-record.properties"),
             maximumReleaseProvenance(

@@ -27,6 +27,14 @@ The CLI and relay tasks additionally reject adapter and configuration paths
 that are lexically or canonically inside the source checkout, including
 symlink aliases, so commercial binaries and license-bearing configuration
 remain private release-environment inputs.
+The schema-1 adapter result now additionally requires a non-secret
+`licenseMode`, the exact `licenseEvidenceFormat`, and a non-empty redacted
+license attestation below the private directory; both component records hash
+that attestation without accepting license keys or tokens.
+The release-to-release provenance comparator now requires the same private
+license-attestation format and mode in both records and verifies each
+attestation path and SHA-256 before diversification or reproducibility is
+reported.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs
 against extracted customer archives only. It enforces the maximum profile

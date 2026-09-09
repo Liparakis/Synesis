@@ -16,6 +16,12 @@ The CLI and relay maximum tasks now reject adapter/configuration paths that
 resolve lexically or canonically inside the source checkout, including
 symlink aliases; keep commercial binaries and license-bearing configuration in
 the private release environment.
+The schema-1 adapter result also requires a non-secret `licenseMode` and a
+redacted private `licenseEvidence` attestation; the Gradle records hash it, but
+the actual vendor entitlement remains CI/release-environment state.
+The provenance comparator also validates the private license-attestation path,
+hash, format, and shared mode before it can report diversification or
+reproducibility; its current missing-record result remains partial.
 
 - Exact next action: obtain an installed, licensed, version-pinned commercial
   protector and its reviewed adapter/configuration, inject release signing

@@ -6544,3 +6544,26 @@ Exact next action: obtain an installed, licensed, version-pinned commercial
 protector and release-signing authority, then run the complete maximum artifact
 and shipped acceptance from a clean reviewed checkout; keep Rings 1–6 blocked
 and Ring 7 partial until that evidence exists.
+
+## 2026-09-09 — SYN-009E private license-provenance contract
+
+The maximum adapter seam now requires explicit non-secret licensing provenance
+in both CLI and relay results: `licenseEvidenceFormat`, `licenseMode`, and a
+non-empty redacted `licenseEvidence` file below the private release directory.
+The Gradle tasks retain only its SHA-256 and mode in the private release record;
+license keys, tokens, and account credentials are not accepted as result fields
+or written to ordinary logs. The request, adapter procedure, vendor-neutral
+template, ADR, status, state, and test matrix now document this boundary.
+
+Verification: the CLI and relay Gradle task listings configured successfully
+with the documented process-local loopback workaround after the contract
+change. No commercial adapter or license material was supplied, so maximum
+execution remains fail-closed.
+The provenance comparator was also updated to verify the private attestation
+path/hash and shared format/mode; its PowerShell AST parse passed and the
+missing-record probe returned `PARTIAL_MAXIMUM_RECORDS_NOT_SUPPLIED`.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and redacted licensing attestation, then run the complete maximum
+artifact and shipped acceptance from a clean reviewed checkout; keep Rings 1–6
+blocked and Ring 7 partial until that evidence exists.

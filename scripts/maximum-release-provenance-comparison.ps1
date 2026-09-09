@@ -150,6 +150,10 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
     "$Label release record does not bind the current mandatory Ring 1-6 commercial classes")
   Require ((RequiredValue $properties 'dirtyTree') -eq 'false') "$Label release record is not from a clean checkout"
   Require ((RequiredValue $properties 'diversification') -eq 'verified') "$Label release record lacks verified diversification"
+  Require ((RequiredValue $properties 'privateLicenseEvidenceFormat') -eq 'properties-v1:licenseMode,licenseEvidence') (
+    "$Label release record lacks the private license-attestation format")
+  $licenseMode = RequiredValue $properties 'privateLicenseMode'
+  Require ($licenseMode -ne 'unknown') "$Label release record has an unknown license mode"
   Require ((RequiredValue $properties 'signedIntegrity') -eq 'verified') "$Label release record lacks verified signed integrity"
   Require ((RequiredValue $properties 'signedAgainstBootstrapKey') -eq 'true') "$Label release record lacks bootstrap trust-root verification"
   foreach ($signedField in @('manifestSha256', 'signatureSha256', 'bootstrapPublicKeySha256', 'signingKeyId', 'publishedAt', 'signingProvenance'))
@@ -191,6 +195,12 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
   Require ((Get-Item -LiteralPath $diversificationPath).Length -gt 0) "$Label diversification evidence is empty"
   Require ((Sha256 $diversificationPath) -eq (RequiredValue $properties 'privateDiversificationEvidenceSha256').ToLowerInvariant()) (
     "$Label diversification evidence hash does not match release-record.properties")
+  $licenseEvidencePath = ResolvePrivateFile (RequiredValue $properties 'privateLicenseEvidence') (
+    "$Label license attestation")
+  Require (IsUnder $licenseEvidencePath $privateRoot) "$Label license attestation escapes the private release directory"
+  Require ((Get-Item -LiteralPath $licenseEvidencePath).Length -gt 0) "$Label license attestation is empty"
+  Require ((Sha256 $licenseEvidencePath) -eq (RequiredValue $properties 'privateLicenseEvidenceSha256').ToLowerInvariant()) (
+    "$Label license attestation hash does not match release-record.properties")
   $mappingPath = $null
   foreach ($recovery in @('privateRetraceFile', 'privateMappingFile'))
   {
@@ -292,7 +302,9 @@ $sharedFields = @(
   'npmVersion',
   'nativeToolchain',
   'commercialRings',
-  'nativeSymbolsScope'
+  'nativeSymbolsScope',
+  'privateLicenseEvidenceFormat',
+  'privateLicenseMode'
 )
 
 try
@@ -326,6 +338,7 @@ try
     sharedProvenance = 'MATCH'
     sourceCommit = $firstProperties['sourceCommit']
     protector = "$($firstProperties['protectorName'])/$($firstProperties['protectorVersion'])"
+    licenseMode = $firstProperties['privateLicenseMode']
     firstReleaseId = $firstReleaseId
     secondReleaseId = $secondReleaseId
     releaseIdsDiffer = ($firstReleaseId -ne $secondReleaseId)

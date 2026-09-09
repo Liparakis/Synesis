@@ -67,6 +67,14 @@ executable adapter is preferred. Gradle discards adapter output so that vendor
 license paths, credentials, or private protector diagnostics are not copied
 into ordinary build logs.
 
+The vendor license itself is supplied only by the private CI/release
+environment chosen by the adapter wrapper (for example, a secret-backed
+license service or mounted entitlement). The wrapper must not place a license
+key, token, or account credential in the request, result, logs, customer
+bundle, or committed configuration. Instead it returns a non-secret license
+mode plus a redacted attestation file under the private release directory;
+the Gradle gate hashes that attestation into the private release record.
+
 The maximum task must run from a reviewed clean release commit. A dirty
 developer checkout is rejected before adapter invocation; the request still
 records the source commit and dirty-tree state so a release record cannot
@@ -86,6 +94,7 @@ the six mandatory commercial-ring names. The v1 property is retained as
 requiredRings=controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug
 nativeSymbolsScope=owned (cli)
 nativeSymbolsScopePolicy=owned-or-not-applicable (relay)
+licenseEvidenceFormat=properties-v1:licenseMode,licenseEvidence
 ```
 
 The Ring 7 release classification is owned by the release pipeline and private
@@ -136,6 +145,9 @@ dirtyTree=false
 seed=<same release seed as the request>
 protectorName=<exact vendor/product>
 protectorVersion=<exact pinned version>
+licenseMode=<non-secret CI/release license mode>
+licenseEvidenceFormat=properties-v1:licenseMode,licenseEvidence
+licenseEvidence=<redacted, non-secret attestation file below privateDirectory>
 tierInventorySha256=<same digest as the request>
 keepRuleInventorySha256=<same digest as the request>
 acceptanceProcedureSha256=<same digest as the request>
@@ -172,9 +184,12 @@ evidence.protectedPayload=<file below privateDirectory>
 evidence.antiDebug=<file below privateDirectory>
 ```
 
-The adapter result therefore proves the six mandatory commercial-ring classes
-and non-empty private evidence for each claim. The Gradle task hashes every
-private capability/diversification evidence file into
+The adapter result therefore records the six mandatory commercial-ring classes,
+the non-secret licensing provenance, and non-empty private evidence for each
+claim. A license attestation is provenance for release review, not a license
+key and not a substitute for verifying the vendor entitlement in the private
+release environment. The Gradle task hashes every private
+capability/diversification/license evidence file into
 `release-record.properties`, and requires non-empty mapping and retrace
 material plus a structured private retrace-acceptance record. That record uses
 schema `1`, reports `status=verified`, names the retrace tool and private test

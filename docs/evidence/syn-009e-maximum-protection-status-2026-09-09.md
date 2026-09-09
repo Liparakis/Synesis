@@ -187,6 +187,16 @@ source checkout, including symlink aliases. This keeps commercial binaries and
 license-bearing configuration in the private release environment rather than
 allowing a committed or hidden build-tree input.
 
+The adapter result now also requires a non-secret license mode, an explicit
+attestation format, and a non-empty redacted license-attestation file below the
+private directory. The CLI and relay private records hash that attestation;
+this is release provenance and review evidence, not a license key or a claim
+that an entitlement exists in the current checkout.
+
+The release-to-release provenance comparator now requires and verifies the
+private attestation path, SHA-256, format, and shared mode before it can report
+diversification or reproducibility; no positive commercial records exist.
+
 The existing bootstrap signer then creates and verifies the detached Ed25519
 manifest against its embedded trust root. Production signing keys are injected
 and never generated or committed. Private capability/recovery evidence hashes are

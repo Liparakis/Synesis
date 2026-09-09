@@ -21,6 +21,10 @@ Both maximum tasks now reject a protector executable or configuration that is
 lexically or canonically inside the source checkout, including symlink aliases;
 commercial binaries and license-bearing configuration therefore remain an
 external private-release input.
+The v1 adapter result now also requires a non-secret `licenseMode` and a
+redacted private `licenseEvidence` attestation, whose hash is retained only in
+the private release record; license keys and tokens are never accepted as
+result fields.
 The adapter documentation now explicitly maps a future Virbox Java VME/BCE
 wrapper to Rings 2 and 5 while keeping those results evidence-gated; no
 vendor-specific Virbox command or configuration is committed.
@@ -204,6 +208,11 @@ of the adapter and configuration must be outside the source checkout. This
 prevents committed or symlinked commercial license material from entering the
 release path.
 
+The result contract now requires private non-secret licensing provenance:
+`licenseEvidenceFormat`, `licenseMode`, and a redacted attestation file below
+the private directory. CLI and relay release records hash that attestation;
+the adapter still owns the actual CI-injected vendor entitlement.
+
 Added the archive-only `scripts/release-native-hardening-audit.ps1` and its
 developer/lite evidence. The Windows x64 owned Go launchers passed PE,
 COFF/debug, export, local-path, private-file, and trim-path checks. The audit
@@ -232,6 +241,8 @@ open.
   the documented process-local loopback workaround after the path-boundary
   change. Deliberate in-checkout adapter probes for both CLI and relay failed
   closed with the new outside-source-checkout guard.
+- The same task-list configuration passed after adding the private license
+  attestation contract; no commercial adapter or license material was supplied.
 - The shipped-artifact harness rejects both existing protection-lite archives
   as non-maximum, proving the profile boundary without mislabeling lite output.
 - A synthetic marker-only maximum archive completed the extracted CLI harness:
@@ -278,6 +289,10 @@ establishing Rings 1–6 or any maximum Seven Ring result.
   environment failed before Gradle evaluation. This evaluated the new
   reproducibility helpers and exposed both maximum task seams; no customer
   artifact or release record was produced.
+- `scripts/maximum-release-provenance-comparison.ps1` now requires and hashes
+  each record's non-secret license attestation and compares its format/mode as
+  shared provenance. PowerShell AST parsing passed; its missing-record probe
+  returned the expected `PARTIAL_MAXIMUM_RECORDS_NOT_SUPPLIED` status.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.

@@ -30,7 +30,8 @@ environment and receives a versioned request file. It must return a protected
 CLI or standalone relay bundle, private evidence, exact protector
 identity/version, all six mandatory Ring 1–6 statuses, diversification status,
 retrace data, and native symbols. The Gradle gate validates path separation,
-required customer files, private-material leakage, and a private immutable
+required customer files, private-material leakage, non-secret license
+provenance, and a private immutable
 artifact manifest for each component. It never converts the adapter's
 assertions into public marketing claims without the separate artifact and
 installed-runtime acceptance.
@@ -48,6 +49,12 @@ native symbols, capability evidence, manifest, and signature are kept outside th
 customer archive except for the signed manifest and detached signature that
 the existing distribution flow needs. Adapter output is discarded from normal
 logs to reduce accidental disclosure.
+
+Commercial license material is supplied only by the private release
+environment. The adapter result carries a non-secret `licenseMode` and a
+redacted private `licenseEvidence` attestation; the Gradle gate hashes that
+attestation into the private record but never accepts a license key, token, or
+account credential as a result field.
 
 The request is bound to the current source-scoped Tier 0–3 inventory and its
 SHA-256 digest, the narrow keep-rule inventory, and the protected acceptance
