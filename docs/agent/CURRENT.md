@@ -184,11 +184,12 @@ synthetic or protection-lite evidence.
 
 ## Immediate next action
 
-To advance `SYN-009E` beyond `PARTIAL`, obtain an installed, licensed,
-version-pinned commercial protector and its reviewed adapter/configuration,
-inject the release signing authority, and run the maximum-release acceptance.
-Until that external tool is available, preserve the passing lite evidence and
-keep the maximum gate fail-closed. Use
+Continue with the next product stage, UI polish. Resume the deferred
+commercial maximum capability only after an installed, licensed,
+version-pinned commercial protector and its reviewed adapter/configuration are
+available; inject the release signing authority then and run the maximum-
+release acceptance. Until that external tool is available, preserve the
+passing lite evidence and keep the maximum gate fail-closed. Use
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
 resuming after a stop.
 

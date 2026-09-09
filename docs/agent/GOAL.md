@@ -7,7 +7,7 @@ protected profile must distinguish protection-lite from the requested
 commercial maximum profile and must classify every Seven Rings capability with
 artifact and installed-runtime evidence rather than marketing terminology.
 
-- Status: COMPLETE FOR PROTECTION-LITE SCOPE; commercial maximum protection DEFERRED / EXTERNAL DEPENDENCY
+- Status: ROADMAP COMPLETE FOR PROTECTION-LITE SCOPE; commercial maximum protection DEFERRED / EXTERNAL DEPENDENCY
 - Baseline: activation checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43`
   on `master`; the completed local release/UI series is being closed and
   published with the authorized final push. `CP-0758.md` is preserved as the
