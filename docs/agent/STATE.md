@@ -23,11 +23,14 @@ private per-file artifact manifest, and records private JSON evidence. Its CLI
 path covers the shipped launcher, UI/control-plane, provider, native, and MCP
 boundaries, including immutable JVM and packaged frontend-asset tamper and
 mutable `Link` state. The CLI path now also performs a live packaged UI root,
-authenticated control-plane session/snapshot/CSRF/SSE, and projection check;
-its relay path is deliberately limited to the shipped guarded launcher until
-a real protected relay authentication/forwarding scenario is available. A
-probe against both existing lite archives failed closed on the profile marker,
-so no lite output was promoted to maximum.
+authenticated control-plane session/snapshot/CSRF/SSE, projection check, and
+two-process signed Link invitation/authenticated PeerSession/project-sync
+check. A Windows bootstrap forwarding defect that split invitation query
+arguments at `&host=` was corrected in `bootstrap/main.go` and verified in the
+rebuilt installed bundle. Its relay path is deliberately limited to the
+shipped guarded launcher until a real protected relay authentication/forwarding
+scenario is available. A probe against both existing lite archives failed
+closed on the profile marker, so no lite output was promoted to maximum.
 
 The harness was then run against a synthetic marker-only maximum archive. Each
 captured process used an isolated temporary `HOME`, `USERPROFILE`, `APPDATA`,
@@ -39,10 +42,13 @@ overrides reached UI/control-plane ready and MCP `ensure_session=ready`, recordi
 `PASS_WITH_EXPLICIT_OPEN_GATES`. These overrides are not shipped launcher
 configuration and do not establish commercial maximum evidence.
 
-The latest short-path compatibility rerun recorded the new live HTTP/SSE
-control-plane check as `PASS` in the synthetic harness evidence. The input was
-still only a marker-only synthetic archive; this does not promote any
-commercial ring or complete protected Link/overlay/relay acceptance.
+The latest rebuilt-bundle compatibility rerun recorded the live HTTP/SSE
+control-plane check and installed Link invitation/PeerSession/project-sync
+check as `PASS` in the synthetic harness evidence, with overall
+`PASS_WITH_EXPLICIT_OPEN_GATES`. The input was still only a marker-only
+synthetic archive; this does not promote any commercial ring or complete
+protected overlay/relay acceptance. Durable details are in
+`docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md`.
 
 The protector matrix now enumerates the required Java 25/Gradle, transformation,
 virtualization, protected-loading, anti-analysis, compatibility, seeded
@@ -57,7 +63,9 @@ this host. The CLI and relay maximum tasks were rerun and failed closed at
 profile. The CLI normal bundle smoke, relay lite archive smoke, and explicit
 signer-path regression test pass; the full bootstrap
 Go suite passes after its disposable migration fixtures isolate the developer's
-`HOME`/`USERPROFILE` provider configuration.
+`HOME`/`USERPROFILE` provider configuration. The focused bootstrap test and
+the rebuilt platform bundle also cover the corrected Windows stable-launcher
+argument-forwarding path.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits

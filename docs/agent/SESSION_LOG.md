@@ -1,3 +1,34 @@
+## 2026-09-09 — SYN-009E installed Link acceptance and launcher forwarding correction
+
+The first installed Link probe exposed a genuine Windows bootstrap defect: the
+generated `synesis-launcher.ps1` forwarded an argument array through `cmd /c
+call`, so a signed invitation query was split at `&host=` before reaching the
+versioned payload. `bootstrap/main.go` now preserves the existing manifest,
+profile, and maximum-release doctor gates while constructing one explicitly
+quoted raw `cmd /d /s /c` invocation. It fails closed for embedded quote,
+percent, exclamation, and caret characters rather than reinterpreting them.
+
+The focused `bootstrap` Go suite passed. `:cli:nativeMcpLauncher` and
+`:cli:platformBundle` passed with the documented process-local JDK loopback
+override. A fresh synthetic marker-only archive built from that bundle reached
+`PASS_WITH_EXPLICIT_OPEN_GATES` in the extracted acceptance harness. The
+installed CLI completed a signed two-profile invitation exchange, authenticated
+the remote `PeerSession`, and completed project synchronization. The same run
+passed installed UI/control-plane HTTP/SSE, JVM/frontend tamper, mutable-state,
+provider, native MCP, and MCP session checks.
+
+Evidence: `docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md`.
+Checkpoint: `docs/agent/checkpoints/CP-0775.md`.
+The archive was synthetic marker-only, so Rings 1–6 remain blocked, Ring 7 is
+partial, and overlay/Internet-NAT/protected-relay/performance/retrace gates
+remain open. No commercial protector, release key, push, tag, or remote
+mutation occurred.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, inject release signing authority,
+then run the same acceptance against a real maximum archive. Keep all
+commercial claims blocked until that artifact is exercised.
+
 ## 2026-09-09 — SYN-009E live shipped control-plane acceptance seam
 
 Extended `scripts/maximum-release-acceptance.ps1` with a bounded installed

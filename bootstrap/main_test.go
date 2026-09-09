@@ -579,6 +579,34 @@ func TestMaximumProfileIsRecordedAndStableLauncherEmitsIntegrityGate(t *testing.
 	}
 }
 
+func TestWindowsStableLauncherPreservesAmpersandArgument(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows stable launcher forwarding is platform-specific")
+	}
+	withoutPathMutation(t)
+	root := t.TempDir()
+	archive := writeBundleArchive(t, root, "0.1.0")
+	manifest := writeDevelopmentManifest(t, root, "0.1.0", archive)
+	installRoot := filepath.Join(root, "install")
+	if err := runInstall("install", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(paths.bin, "synesis-launcher.ps1")
+	output, err := exec.Command(
+		"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launcher,
+		"echo-arg", "foo&bar").CombinedOutput()
+	if err != nil {
+		t.Fatalf("stable launcher rejected a quoted ampersand argument: %v launcher=%s\n%s", err, launcher, output)
+	}
+	if !strings.Contains(string(output), "ARG=\"foo&bar\"") {
+		t.Fatalf("stable launcher did not preserve the ampersand argument: %s", output)
+	}
+}
+
 func TestRejectsInvalidSignatureAndArtifactMismatch(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -681,7 +709,7 @@ func writeBundleArchiveWithProfile(t *testing.T, root, version, profile string) 
 	addZipFile(t, writer, "runtime/release", []byte("runtime"), 0o644)
 	addZipFile(t, writer, "VERSION", []byte(version+"\n"), 0o644)
 	if runtime.GOOS == "windows" {
-		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" echo DOCTOR=PASS\r\r\n"), 0o644)
+		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" echo DOCTOR=PASS\r\r\nif \"%1\"==\"echo-arg\" echo ARG=%2\r\n"), 0o644)
 	} else {
 		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then echo DOCTOR=PASS; fi\n"), 0o755)
 	}

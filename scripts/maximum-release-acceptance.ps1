@@ -153,7 +153,8 @@ function InvokeCaptured(
   [string[]]$Arguments,
   [Nullable[int]]$ExpectedExitCode,
   [string]$Label,
-  [int]$TimeoutSeconds = 60
+  [int]$TimeoutSeconds = 60,
+  [string]$RawArguments = $null
 )
 {
   $startInfo = [Diagnostics.ProcessStartInfo]::new()
@@ -165,9 +166,16 @@ function InvokeCaptured(
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
   ApplyRuntimeEnvironment $startInfo
-  foreach ($argument in $Arguments)
+  if (-not [string]::IsNullOrEmpty($RawArguments))
   {
-    [void]$startInfo.ArgumentList.Add($argument)
+    $startInfo.Arguments = $RawArguments
+  }
+  else
+  {
+    foreach ($argument in $Arguments)
+    {
+      [void]$startInfo.ArgumentList.Add($argument)
+    }
   }
   $process = [Diagnostics.Process]::new()
   $process.StartInfo = $startInfo
@@ -202,11 +210,25 @@ function InvokeCaptured(
   }
 }
 
+function GetWindowsLauncherCommandLine([string[]]$Arguments)
+{
+  $parts = [System.Collections.Generic.List[string]]::new()
+  [void]$parts.Add('"' + $script:launcherPath + '"')
+  foreach ($argument in $Arguments)
+  {
+    Require (-not $argument.Contains('"')) (
+      "Windows acceptance argument contains an unsupported quote: $argument")
+    [void]$parts.Add('"' + $argument + '"')
+  }
+  return ($parts -join ' ')
+}
+
 function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$ExpectedExitCode = 0)
 {
   if ($script:maximumAcceptanceIsWindows)
   {
-    return InvokeCaptured 'cmd.exe' (@('/d', '/c', $script:launcherPath) + $Arguments) $ExpectedExitCode $Label
+    $commandLine = GetWindowsLauncherCommandLine $Arguments
+    return InvokeCaptured -FilePath 'cmd.exe' -Arguments @() -ExpectedExitCode $ExpectedExitCode -Label $Label -RawArguments ('/d /s /c "' + $commandLine + '"')
   }
   return InvokeCaptured $script:launcherPath $Arguments $ExpectedExitCode $Label
 }
@@ -221,10 +243,7 @@ function StartBundleServer(
   if ($script:maximumAcceptanceIsWindows)
   {
     $startInfo.FileName = 'cmd.exe'
-    foreach ($argument in (@('/d', '/c', $script:launcherPath) + $Arguments))
-    {
-      [void]$startInfo.ArgumentList.Add($argument)
-    }
+    $startInfo.Arguments = '/d /s /c "' + (GetWindowsLauncherCommandLine $Arguments) + '"'
   }
   else
   {
@@ -325,6 +344,169 @@ function StopBundleServer([object]$State)
     try { [void]$task.GetAwaiter().GetResult() } catch { }
   }
   try { $State.Process.Dispose() } catch { }
+}
+
+function StartBundleLineProcess(
+  [string[]]$Arguments,
+  [string]$Label,
+  [string]$ReadyPattern,
+  [int]$ReadyTimeoutSeconds = 45
+)
+{
+  $startInfo = [Diagnostics.ProcessStartInfo]::new()
+  if ($script:maximumAcceptanceIsWindows)
+  {
+    $startInfo.FileName = 'cmd.exe'
+    $startInfo.Arguments = '/d /s /c "' + (GetWindowsLauncherCommandLine $Arguments) + '"'
+  }
+  else
+  {
+    $startInfo.FileName = $script:launcherPath
+    foreach ($argument in $Arguments)
+    {
+      [void]$startInfo.ArgumentList.Add($argument)
+    }
+  }
+  $startInfo.WorkingDirectory = $tempRoot
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardInput = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  ApplyRuntimeEnvironment $startInfo
+  $process = [Diagnostics.Process]::new()
+  $process.StartInfo = $startInfo
+  Require $process.Start() "Could not start ${Label}: $script:launcherPath"
+  $stderrTask = $process.StandardError.ReadToEndAsync()
+  $process.StandardInput.Close()
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $match = $null
+  $deadline = [DateTime]::UtcNow.AddSeconds($ReadyTimeoutSeconds)
+  $lineTask = $process.StandardOutput.ReadLineAsync()
+  while ([DateTime]::UtcNow -lt $deadline -and -not $process.HasExited)
+  {
+    if (-not $lineTask.Wait(250))
+    {
+      continue
+    }
+    $line = $lineTask.GetAwaiter().GetResult()
+    if ($null -eq $line)
+    {
+      break
+    }
+    [void]$lines.Add($line)
+    if ($line -match $ReadyPattern)
+    {
+      $match = @{}
+      foreach ($key in $Matches.Keys)
+      {
+        $match[$key] = $Matches[$key]
+      }
+      break
+    }
+    $lineTask = $process.StandardOutput.ReadLineAsync()
+  }
+  if ($null -eq $match)
+  {
+    try
+    {
+      if (-not $process.HasExited) { $process.Kill($true) }
+      [void]$process.WaitForExit(5000)
+    }
+    catch
+    {
+      # Preserve the readiness failure as the useful acceptance result.
+    }
+    $stderr = ''
+    try
+    {
+      if ($stderrTask.Wait(2000)) { $stderr = $stderrTask.GetAwaiter().GetResult() }
+    }
+    catch
+    {
+      $stderr = $_.Exception.Message
+    }
+    throw "$Label did not report the expected readiness line within ${ReadyTimeoutSeconds}s. stdout=$($lines -join "`n") stderr=$stderr"
+  }
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  return [pscustomobject]@{
+    Process = $process
+    StdoutTask = $stdoutTask
+    StderrTask = $stderrTask
+    Match = $match
+  }
+}
+
+function FinishBundleProcess(
+  [object]$State,
+  [string]$Label,
+  [int]$ExpectedExitCode = 0,
+  [int]$TimeoutSeconds = 60
+)
+{
+  Require $State.Process.WaitForExit($TimeoutSeconds * 1000) "$Label exceeded the ${TimeoutSeconds}s acceptance timeout"
+  $stdout = $State.StdoutTask.GetAwaiter().GetResult()
+  $stderr = $State.StderrTask.GetAwaiter().GetResult()
+  $combined = ($stdout + "`n" + $stderr).Trim()
+  Require ($State.Process.ExitCode -eq $ExpectedExitCode) (
+    "$Label exited $($State.Process.ExitCode), expected ${ExpectedExitCode}: $combined"
+  )
+  return [pscustomobject]@{
+    ExitCode = $State.Process.ExitCode
+    Output = $combined
+  }
+}
+
+function InvokeLinkAcceptance([string]$Project)
+{
+  $hostState = $null
+  $hostProfile = Join-Path $tempRoot 'link-host-profile'
+  $joinProfile = Join-Path $tempRoot 'link-join-profile'
+  New-Item -ItemType Directory -Force -Path $hostProfile, $joinProfile | Out-Null
+  try
+  {
+    $hostIdentity = InvokeBundle @(
+      'identity', 'show', '--project', $Project, '--profile', $hostProfile
+    ) 'maximum Link host identity'
+    $hostMatch = [regex]::Match($hostIdentity.Output, '(?m)^NODE_ID=(sl1-[0-9a-f]{64})\s*$')
+    Require $hostMatch.Success 'Maximum Link host identity output was incomplete'
+    $hostId = $hostMatch.Groups[1].Value
+
+    $joinIdentity = InvokeBundle @(
+      'identity', 'show', '--project', $Project, '--profile', $joinProfile
+    ) 'maximum Link join identity'
+    $joinMatch = [regex]::Match($joinIdentity.Output, '(?m)^NODE_ID=(sl1-[0-9a-f]{64})\s*$')
+    Require $joinMatch.Success 'Maximum Link join identity output was incomplete'
+    $joinId = $joinMatch.Groups[1].Value
+    Require ($hostId -ne $joinId) 'Maximum Link fixture generated duplicate identities'
+
+    [void](InvokeBundle @(
+      'project', 'create', '--project', $Project, '--profile', $hostProfile, '--peer', $joinId
+    ) 'maximum Link host project configuration')
+    [void](InvokeBundle @(
+      'project', 'create', '--project', $Project, '--profile', $joinProfile, '--peer', $hostId
+    ) 'maximum Link join project configuration')
+
+    $hostState = StartBundleLineProcess @(
+      'sync', 'host', '--project', $Project, '--profile', $hostProfile
+    ) 'maximum shipped Link host' '^INVITATION=(?<invitation>\S+)\s*$'
+    $invitation = $hostState.Match['invitation']
+    Require (-not [string]::IsNullOrWhiteSpace($invitation)) 'Maximum Link invitation was empty'
+    $joinResult = InvokeBundle @(
+      'sync', 'join', $invitation, '--project', $Project, '--profile', $joinProfile,
+      '--expect-host', $hostId
+    ) 'maximum shipped Link join'
+    Require ($joinResult.Output -match "(?m)^AUTHENTICATED_REMOTE=$hostId\s*$" -and
+      $joinResult.Output -match '(?m)^SYNC_RESULT=(SUCCESS|PARTIAL_SUCCESS)\s*$') (
+      "Maximum shipped Link join did not report authenticated synchronization: $($joinResult.Output)")
+    $hostResult = FinishBundleProcess $hostState 'maximum shipped Link host'
+    Require ($hostResult.Output -notmatch '(?i)^ERROR=') 'Maximum Link host reported an error'
+    return "Two installed CLI processes completed signed invitation exchange, authenticated PeerSession, project synchronization, and cleanup between $hostId and $joinId"
+  }
+  finally
+  {
+    StopBundleServer $hostState
+  }
 }
 
 function SendHttpText(
@@ -493,6 +675,11 @@ function InvokeControlPlaneHttpAcceptance([string]$Project)
 function IsLoopbackEnvironmentFailure([string]$Message)
 {
   return $Message -match '(?i)COORDINATION_ERROR=Unable to establish loopback connection|Unable to establish loopback connection|SocketException: Invalid argument: connect'
+}
+
+function IsLinkRuntimeBlock([string]$Message)
+{
+  return $Message -match '(?i)ERROR=(TRANSPORT_FAILED|SYNC_FAILED)|NO_USABLE_CANDIDATE|CONNECTION_FAILED|HOST_TIMEOUT|QUIC'
 }
 
 function EnsureExecutable([string]$Path)
@@ -884,6 +1071,30 @@ try
     Require ($codexInstall.Output -match 'SYNTHETIC_CHECK=PASSED') 'Maximum Codex provider synthetic check did not pass'
     [void](InvokeBundle @('doctor', '--project', $project) 'maximum doctor')
     RecordCheck 'cli-project-provider-doctor' 'PASS' 'Disposable project initialization, Claude lifecycle, Codex installation, and doctor passed'
+
+    try
+    {
+      $linkDetail = InvokeLinkAcceptance $project
+      RecordCheck 'cli-link-onboarding-peer-session' 'PASS' $linkDetail
+    }
+    catch
+    {
+      if (IsLoopbackEnvironmentFailure $_.Exception.Message)
+      {
+        $script:environmentBlocked = $true
+        RecordCheck 'cli-link-onboarding-peer-session' 'BLOCKED_ENVIRONMENT' 'The installed two-process Link probe reached the host loopback compatibility boundary; no PeerSession pass was claimed'
+      }
+      elseif (IsLinkRuntimeBlock $_.Exception.Message)
+      {
+        $script:runtimeBlocked = $true
+        RecordCheck 'cli-link-onboarding-peer-session' 'BLOCKED_RUNTIME' 'The installed two-process Link probe reached a bounded native/QUIC runtime boundary; no PeerSession pass was claimed'
+      }
+      else
+      {
+        throw
+      }
+    }
+
     try
     {
       [void](InvokeBundle @('ui', '--project', $project, '--duration-seconds', '1', '--no-browser') 'maximum UI/control-plane smoke')
@@ -925,10 +1136,9 @@ try
     if ($script:maximumAcceptanceIsWindows)
     {
       $mcpInfo.FileName = 'cmd.exe'
-      foreach ($argument in (@('/d', '/c', $script:launcherPath, 'mcp', '--provider', 'codex', '--project', $project, '--connection-instance-id', 'maximum-acceptance-1')))
-      {
-        [void]$mcpInfo.ArgumentList.Add($argument)
-      }
+      $mcpInfo.Arguments = '/d /s /c "' + (GetWindowsLauncherCommandLine @(
+        'mcp', '--provider', 'codex', '--project', $project,
+        '--connection-instance-id', 'maximum-acceptance-1')) + '"'
     }
     else
     {

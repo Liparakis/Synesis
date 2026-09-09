@@ -75,6 +75,15 @@ first authenticated `text/event-stream` snapshot. This is a shipped-artifact
 HTTP/SSE acceptance check; it is not browser automation and it does not prove
 the protected Link, overlay, relay, or commercial transformation rings.
 
+The CLI harness also exercises the installed Link boundary with two isolated
+profiles. It creates reciprocal one-peer project configuration, starts an
+installed host, passes the signed invitation transiently to a second installed
+joiner, and requires the authenticated remote identity plus a successful
+project synchronization. The invitation is not written to evidence. This is
+local shipped CLI/Link serialization, authentication, native QUIC/PeerSession,
+and onboarding evidence; it does not prove Internet NAT traversal, multi-peer
+overlay routing, or relay forwarding.
+
 The CLI path also targets one packaged `web-ui` JavaScript or CSS entry inside
 the installed JAR. It edits that entry in a disposable copy, requires the
 stable launcher to refuse the changed immutable payload, and restores the
@@ -87,8 +96,9 @@ flag. It then launches the installed stable wrapper, edits one file inside the
 installed immutable version, and requires the wrapper to refuse to start. The
 file is restored before the harness adds disposable mutable `Link` state and
 requires a normal start. This exercises the bootstrap-owned runtime gate
-without changing the operator's PATH; it remains unexecuted until a real
-licensed maximum archive is available.
+without changing the operator's PATH. A rebuilt synthetic marker-only run
+executes this boundary; the commercial maximum claim remains unexecuted until
+a real licensed maximum archive is available.
 
 For an installed CLI candidate, the stable bootstrap launcher carries the
 profile into the active pointer and invokes the existing versioned installer
@@ -98,6 +108,15 @@ bootstrap test and recorded in
 `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; it is not a
 runtime acceptance result until a real licensed maximum archive is installed,
 tampered, and restored in a disposable environment.
+
+On Windows, the generated stable launcher forwards arguments to the versioned
+payload through one explicitly quoted raw `cmd /d /s /c` invocation. It rejects
+embedded quote, percent, exclamation, and caret characters rather than
+allowing command re-interpretation; this preserves signed invitation queries
+containing `&` without weakening the manifest/profile/doctor gates. The
+corresponding installed Link result is recorded in
+`docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md` and remains
+synthetic marker-only evidence until a commercial maximum archive is used.
 
 On Windows hosts with the documented JDK AF_UNIX temporary-path problem, the
 harness records the default UI/MCP result as blocked and exits `2` rather than

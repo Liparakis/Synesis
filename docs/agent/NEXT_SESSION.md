@@ -34,6 +34,13 @@ disposable install, exercises the installed stable-launcher and packaged
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.
+- The Windows stable-launcher forwarding path was corrected in
+  `bootstrap/main.go` so signed Link invitations containing `&host=` reach the
+  versioned payload intact. The rebuilt synthetic installed-artifact run
+  passed two-process signed invitation exchange, authenticated PeerSession,
+  project synchronization, UI/control-plane HTTP/SSE, tamper, provider, and
+  MCP checks. Details are in
+  `docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md`.
 - The latest local source commits are unpublished; no push occurred. The
   bootstrap Go suite passes after its disposable migration fixtures isolate
   `HOME`/`USERPROFILE` from real developer provider state. The extracted

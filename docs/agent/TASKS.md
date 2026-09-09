@@ -7,8 +7,10 @@
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
   manifest, leakage, and provenance checks pass; the external CLI/relay
   maximum-protector adapter and existing bootstrap-signing seam are implemented
-  but commercial execution remains blocked; no Seven Rings claim is accepted
-  without shipped-artifact evidence.
+  but commercial execution remains blocked. The rebuilt synthetic installed
+  CLI probe also passes signed local Link invitation, authenticated PeerSession,
+  and project synchronization; no Seven Rings claim is accepted without
+  shipped-artifact evidence from a real commercial maximum build.
 - Purpose: Extend the existing `SYN-009C` distribution and `SYN-009D` stable
   installation foundations with separate `developer`, `protection-lite`, and
   `maximum-release` packaging profiles. The developer profile stays readable;

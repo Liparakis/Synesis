@@ -1436,8 +1436,23 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 $e = Join-Path $r 'bin\synesis.cmd'
 if (-not (Test-Path -LiteralPath $e)) { exit 1 }
-& cmd.exe /d /c call $e @ForwardArgs
-exit $LASTEXITCODE
+$command = [System.Collections.Generic.List[string]]::new()
+[void]$command.Add(('"' + $e + '"'))
+foreach ($argument in $ForwardArgs) {
+if ($argument.Contains('"') -or $argument.Contains('%') -or $argument.Contains('!') -or $argument.Contains('^')) { exit 1 }
+if ($argument -match '[\s&|<>()]') {
+[void]$command.Add(('"' + $argument + '"'))
+} else {
+[void]$command.Add($argument)
+}
+}
+$startInfo = [Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = if ([string]::IsNullOrWhiteSpace($env:ComSpec)) { 'cmd.exe' } else { $env:ComSpec }
+$startInfo.Arguments = '/d /s /c "' + ($command -join ' ') + '"'
+$startInfo.UseShellExecute = $false
+$child = [Diagnostics.Process]::Start($startInfo)
+$child.WaitForExit()
+exit $child.ExitCode
 `
 		if err := atomicWrite(filepath.Join(paths.bin, "synesis-launcher.ps1"), []byte(ps1)); err != nil {
 			return err

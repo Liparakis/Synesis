@@ -30,11 +30,14 @@ anti-analysis evaluation dimensions without converting any commercial
 candidate to an unverified pass.
 The bootstrap now records the selected protection profile in the active
 pointer and makes the stable launcher invoke the existing payload-manifest
-doctor only for `maximum-release`; a synthetic marker-only disposable probe
-passed tamper refusal and mutable `Link`-state acceptance. The acceptance
-harness isolates `HOME`, `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA` for
-every captured process, while explicit JDK/workspace overrides remain
-process-local only.
+doctor only for `maximum-release`. Its Windows forwarding path now preserves
+signed invitation query arguments containing `&` while rejecting unsafe
+embedded command characters. A rebuilt synthetic marker-only disposable
+probe passed immutable JVM/frontend tamper refusal, mutable `Link`-state
+acceptance, and installed signed-invitation/authenticated-PeerSession/project
+synchronization. The acceptance harness isolates `HOME`, `USERPROFILE`,
+`APPDATA`, and `LOCALAPPDATA` for every captured process, while explicit
+JDK/workspace overrides remain process-local only.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -108,8 +111,14 @@ commercial protection capability is claimed.
   provider lifecycle, packaged UI root, authenticated control-plane
   session/snapshot/CSRF/SSE, UI/control-plane, native MCP, and ready MCP
   session all passed when the documented process-local host compatibility
-  overrides were supplied. The default host run remains explicitly partial at
-  the loopback and provider-workspace gates.
+  overrides were supplied. The rebuilt installed launcher also completed a
+  signed local Link invitation, authenticated the remote PeerSession, and
+  completed project synchronization. The default host run remains explicitly
+  partial at the loopback and provider-workspace gates.
+- `go test ./...` in `bootstrap`, `:cli:nativeMcpLauncher`, and
+  `:cli:platformBundle` passed with the documented process-local Gradle/JDK
+  workaround. The installed result is summarized in
+  `docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md`.
 - `go test . -run '^TestMaximumProfileIsRecordedAndStableLauncherEmitsIntegrityGate$' -count=1` passed.
 - The generated maximum stable-launcher gate passed PowerShell AST parsing;
   the disposable marker-only runtime probe refused an edited immutable payload
@@ -124,10 +133,12 @@ commercial protection capability is claimed.
 ## Current failures
 
 No licensed commercial protector, adapter, private configuration, or release
-signing authority is installed. The marker-only runtime probe used an existing
-lite bundle and does not prove any commercial transformation ring. The
-synthetic marker-only harness is artifact/bootstrap evidence only; the
-commercial maximum profile and all Seven Rings remain blocked. Preserved
+signing authority is installed. The marker-only runtime probe used a rebuilt
+platform bundle with only a synthetic maximum marker and does not prove any
+commercial transformation ring. The synthetic marker-only harness is
+artifact/bootstrap evidence only; Rings 1–6 remain blocked and Ring 7 remains
+partial until a licensed commercial release is signed, diversified, and
+retrace-validated. Preserved
 `CP-0758`, `.editorconfig`, and unrelated relay source changes remain
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release
