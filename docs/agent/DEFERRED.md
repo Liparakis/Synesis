@@ -12,10 +12,12 @@ distribution, and packaged UI seams.
 
 Promotion requires a readable developer profile, an opt-in protection-lite
 build with private mappings/provenance, narrow reflection/resource/native keep
-rules, an installed protected acceptance harness, and explicit capability
-evidence for every Seven Ring. Commercial-only Rings 2, 4, 5, and 6 remain
-blocked until a licensed protector is installed and its actual customer-style
-output is exercised. Open-source renaming/shrinking is not a substitute.
+rules, an installed protected acceptance harness, and explicit evidence for
+every Seven Ring. Rings III and IV remain blocked; Ring V is only a bounded
+developer/lite baseline; and Rings VI–VII remain partial until a licensed
+protector is installed and its actual customer-style output is exercised.
+Optional vendor capabilities are not ring substitutes. Open-source
+renaming/shrinking is not a substitute.
 
 This task must not introduce a home-grown VM or packer, destructive
 anti-debugging, host surveillance, a customer downgrade flag, production keys,

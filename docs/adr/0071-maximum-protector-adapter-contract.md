@@ -25,8 +25,8 @@ Add one explicit provider-agnostic adapter contract to the release-only Gradle
 pipeline. The adapter is an external executable owned by the release
 environment and receives a versioned request file. It must return a protected
 CLI or standalone relay bundle, private evidence, exact protector
-identity/version, all six commercial ring statuses, diversification status,
-retrace data, and native symbols. The Gradle gate validates path separation,
+identity/version, all six optional vendor-capability statuses, diversification
+status, retrace data, and native symbols. The Gradle gate validates path separation,
 required customer files, private-material leakage, and a private immutable
 artifact manifest for each component. It never converts the adapter's
 assertions into public marketing claims without the separate artifact and
@@ -41,7 +41,7 @@ The final candidate task then:
    bootstrapper.
 
 The adapter request, result, configuration, seed, mappings, retrace data,
-native symbols, ring evidence, manifest, and signature are kept outside the
+native symbols, capability evidence, manifest, and signature are kept outside the
 customer archive except for the signed manifest and detached signature that
 the existing distribution flow needs. Adapter output is discarded from normal
 logs to reduce accidental disclosure.
@@ -80,8 +80,9 @@ implementation.
   boundary without requiring a global `org.synesis.**` keep or whole-system
   virtualization.
 - Missing protector, configuration, explicit release ID/seed, signing key,
-  ring evidence, inventory binding, clean release checkout, or signature
-  causes a fail-closed result.
+  capability evidence, inventory binding, clean release checkout, or signature
+  causes a fail-closed result; the Seven Ring classification is then recorded
+  separately by the release pipeline.
 - A symbolic link in the customer or private output tree fails the release
   before manifesting or signing; the adapter must emit ordinary files and
   directories within the requested roots.

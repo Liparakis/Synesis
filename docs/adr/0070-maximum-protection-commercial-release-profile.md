@@ -19,19 +19,23 @@ must materially increase the cost of casual static and dynamic reverse
 engineering while remaining supportable, signed, installable, and safe. The
 requested Seven Rings are:
 
-1. control-flow obfuscation;
-2. genuine code virtualization;
-3. runtime string/constant protection;
-4. safe analysis-environment detection;
-5. protected payload packaging/loading;
-6. safe anti-debugging and anti-instrumentation; and
-7. signed integrity, release diversification, and private recovery tooling.
+1. shrink, strip, and sanitize;
+2. symbol obfuscation;
+3. string and constant protection;
+4. control-flow hardening;
+5. native hardening;
+6. distribution integrity and signing; and
+7. release diversification, private mappings, and provenance/retrace.
 
-Renaming is not control-flow protection. Compression is not protected
-packing. A VM-name check is not an analysis policy. A debug flag is not
-anti-debugging. A wrapper, method-handle dispatch table, or ordinary encrypted
-class loader is not code virtualization unless the selected protector's
-documented transformation makes it a genuine virtual execution boundary.
+The adapter also carries optional vendor-capability dimensions for stronger
+control-flow, genuine virtualization, protected loading, safe analysis-risk
+handling, and anti-debug/instrumentation behavior. Those dimensions are not
+substitutes for the Seven Rings. Renaming is not control-flow protection;
+compression is not protected packing; a VM-name check is not an analysis
+policy; and a debug flag is not anti-debugging. A wrapper, method-handle
+dispatch table, or ordinary encrypted class loader is not code virtualization
+unless the selected protector's documented transformation makes it a genuine
+virtual execution boundary.
 
 The repository already owns the relevant distribution seams:
 
@@ -52,11 +56,11 @@ security and operational boundaries without improving protection.
 
 The protection pipeline is opt-in and release-only:
 
-| Profile | Purpose | Transformations | Runtime use |
-|---|---|---|---|
-| `developer` | normal engineering | none beyond ordinary compiler/jlink settings | default local build and tests |
-| `protection-lite` | cheap compatibility and artifact audit | shrinking, renaming, metadata reduction, mappings, and any explicitly verified open-source string protection | internal CI/disposable acceptance only unless separately approved |
-| `maximum-release` | customer-style commercial release | every licensed and verified ring, selective Tier 2/3 targeting, finalized assets, immutable manifest, signing, and post-protection acceptance | ship only after all required gates pass |
+| Profile           | Purpose                                | Transformations                                                                                                                               | Runtime use                                                       |
+|-------------------|----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| `developer`       | normal engineering                     | none beyond ordinary compiler/jlink settings                                                                                                  | default local build and tests                                     |
+| `protection-lite` | cheap compatibility and artifact audit | shrinking, renaming, metadata reduction, mappings, and any explicitly verified open-source string protection                                  | internal CI/disposable acceptance only unless separately approved |
+| `maximum-release` | customer-style commercial release      | every licensed and verified ring, selective Tier 2/3 targeting, finalized assets, immutable manifest, signing, and post-protection acceptance | ship only after all required gates pass                           |
 
 No customer-facing runtime switch may downgrade a maximum release to a
 developer profile. Internal acceptance accommodations must be build-time and
@@ -94,10 +98,10 @@ The source is classified into four protection tiers:
   routing, relay policy, and runtime recovery decisions are candidates for
   stronger control-flow and constant transformations after profiling.
 - **Tier 3 — crown-jewel methods.** Only intentionally selected decision
-  methods may receive virtualization, maximum control-flow hardening, or a
-  protected payload boundary. Netty/QUIC loops, relay forwarding hot paths,
-  DTO accessors, CLI parsing, and browser assets are not default Tier 3
-  targets.
+  methods may receive maximum control-flow/string protection and, if a vendor
+  proves it safely, an optional virtualization or protected-payload boundary.
+  Netty/QUIC loops, relay forwarding hot paths, DTO accessors, CLI parsing, and
+  browser assets are not default Tier 3 targets.
 
 The final Tier 2/3 list must be source- and profile-specific, reviewed against
 the current implementation, and accompanied by before/after performance
@@ -131,10 +135,11 @@ matrix:
   [control-flow obfuscation](https://support.preemptive.com/hc/en-us/articles/32019801944081-Control-Flow-Obfuscation),
   and [string encryption](https://support.preemptive.com/hc/en-us/articles/32020004710033-String-Encryption).
 
-The matrix must record `PASS`, `UNVERIFIED`, or `BLOCKED` for each ring and
-each candidate. Marketing descriptions or a successful build invocation are
-not sufficient evidence for virtualization, protected loading, anti-analysis,
-or anti-instrumentation.
+The capability matrix must record `PASS`, `UNVERIFIED`, or `BLOCKED` for each
+vendor capability and candidate. Marketing descriptions or a successful build
+invocation are not sufficient evidence for virtualization, protected loading,
+anti-analysis, or anti-instrumentation. The Seven Ring result remains a
+separate release-artifact classification.
 
 ### 4. Preserve reflection, resource, and native contracts narrowly
 
@@ -189,9 +194,11 @@ protected operation. It may refuse a high-value protected operation; it may
 not fingerprint users, scan unrelated files, attack debuggers/hypervisors,
 install persistence, disable security tools, or damage the host.
 
-The commercial tool must prove controlled normal-host, legitimate-VM, CI,
-debugger/instrumentation, and tamper behavior before Ring 4 or Ring 6 is
-accepted. No local `if (debug)`, VM-name check, or environment variable counts.
+If the selected commercial tool exposes an optional analysis-risk or
+anti-instrumentation capability, it must prove controlled normal-host,
+legitimate-VM, CI, debugger/instrumentation, and tamper behavior before that
+capability is enabled. No local `if (debug)`, VM-name check, or environment
+variable counts.
 
 ### 7. Browser and native scope
 
@@ -221,7 +228,7 @@ Positive consequences:
 Costs and limits:
 
 - a commercial license and a non-interactive CI installation are required for
-  the requested maximum rings;
+  the requested maximum transformation and release evidence;
 - protected output may be slower, larger, harder to diagnose, and more likely
   to trigger AV/EDR heuristics;
 - reflection, JNI, Netty, ServiceLoader, and resource compatibility require
@@ -229,7 +236,8 @@ Costs and limits:
 - obfuscation does not make secrets safe or prevent a determined analyst from
   observing behavior; and
 - until licensed tooling is exercised, the maximum profile is `PARTIAL` and
-  the missing rings remain explicitly blocked.
+  the missing Seven Ring evidence remains explicitly blocked or partial by
+  ring.
 
 ## Rejected alternatives
 

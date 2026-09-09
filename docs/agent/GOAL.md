@@ -27,20 +27,23 @@ artifact and installed-runtime evidence rather than marketing terminology.
   acceptance with injected release signing authority; until that
   authority/tool exists, run only from a clean reviewed release checkout, keep
   the maximum gate fail-closed, and do not invent a replacement implementation.
-- Required rings: control-flow hardening, genuine virtualization, runtime
-  string/constant protection, safe analysis-environment detection, protected
-  payload packaging, safe anti-debug/instrumentation handling, and signed
-  integrity/diversification/private retrace.
+- Required Seven Rings: shrink/strip/sanitize, symbol obfuscation,
+  string/constant protection, control-flow hardening, native hardening,
+  distribution integrity/signing, and release diversification/private
+  mappings/provenance/retrace. The maximum adapter retains separate optional
+  vendor-capability fields for virtualization, protected loading, safe
+  analysis-risk handling, and anti-debug/instrumentation; those fields are not
+  ring substitutes.
 - Honest boundary: ProGuard 7.10.0 transformation is only `PROTECTION_LITE`;
   the provider-agnostic CLI/relay maximum adapter and existing bootstrap-
-  signer seam are release plumbing, not ring evidence. Commercial rings remain
-  `BLOCKED` until a licensed protector is installed and its shipped output is
-  exercised. The independent acceptance harness rejects lite artifacts and
+  signer seam are release plumbing, not ring evidence. Commercial Seven Ring
+  evidence remains blocked or partial until a licensed protector is installed
+  and its shipped output is exercised. The independent acceptance harness rejects lite artifacts and
   leaves relay authentication/forwarding explicitly open until real protected
   socket evidence exists.
-- Developer boundary: no protection transforms, anti-debug behavior, packing,
-  or virtualization may enter the normal developer build or customer-visible
-  runtime toggle surface.
+- Developer boundary: no release-only protection transforms, hostile
+  anti-analysis behavior, packing, or virtualization may enter the normal
+  developer build or customer-visible runtime toggle surface.
 - Release boundary: no production signing keys, commercial licenses, private
   seeds, mappings, or native symbols may be committed or shipped; no push,
   tag, release, or remote mutation is authorized.

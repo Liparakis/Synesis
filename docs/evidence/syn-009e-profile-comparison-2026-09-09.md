@@ -25,6 +25,13 @@ performance-win claim: this is a small, non-isolated cold-process sample and
 does not cover UI latency, snapshot latency, Link establishment, route
 selection, relay throughput, or provider lifecycle.
 
+The extracted acceptance harness now records bounded `durationMs` values for
+provider/doctor, Link onboarding, UI smoke, authenticated control-plane
+HTTP/SSE, and relay forwarding checks in its machine-readable result. Those
+values are a measurement seam for the eventual maximum archive, not current
+developer/lite results; peak memory, route microbenchmarks, commercial
+transformation overhead, and AV/EDR impact remain open.
+
 The wrapper-level Windows process did not expose a reliable peak working-set
 value, so memory is recorded as `NOT_AVAILABLE`; no memory claim is made.
 
@@ -34,5 +41,5 @@ The JSON result is
 still required to complete the three-profile comparison.
 
 This evidence is profile-engineering data only. It does not promote
-protection-lite to maximum protection or change the blocked status of Rings
-1–6 and the partial status of Ring 7.
+protection-lite to maximum protection or change the blocked/partial status of
+the Seven Rings in the maximum-release report.

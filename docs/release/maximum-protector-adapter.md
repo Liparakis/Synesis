@@ -63,7 +63,9 @@ and `component=cli` or `component=relay`. It contains the exact source
 commit/dirty-tree state,
 release ID, release seed, platform, readable developer input bundle, requested
 customer output directory, private-record directory, configuration path, and
-the six vendor-transformation ring names:
+the six optional vendor-capability names. The v1 property is retained as
+`requiredRings` for adapter compatibility; it is not the Seven Ring release
+classification:
 
 ```text
 requiredRings=controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug
@@ -71,7 +73,8 @@ nativeSymbolsScope=owned (cli)
 nativeSymbolsScopePolicy=owned-or-not-applicable (relay)
 ```
 
-The signed-integrity layer is deliberately not an adapter-reported ring. The
+The Seven Ring release classification is owned by the release pipeline. The
+signed-integrity layer is deliberately not an adapter-reported capability. The
 Gradle release task owns that boundary: it creates the private per-file
 artifact manifest, archives the customer bundle, creates the canonical release
 manifest, invokes the existing bootstrap signer, and verifies the detached
@@ -153,9 +156,9 @@ evidence.protectedPayload=<file below privateDirectory>
 evidence.antiDebug=<file below privateDirectory>
 ```
 
-The adapter result therefore proves the six vendor transformation classes,
-release diversification, and non-empty private evidence for each of those
-claims. The Gradle task hashes every private ring/diversification evidence
+The adapter result therefore proves the six requested vendor capability
+classes, release diversification, and non-empty private evidence for each of
+those claims. The Gradle task hashes every private capability/diversification evidence
 file into `release-record.properties`, and requires non-empty mapping and
 retrace material plus a structured private retrace-acceptance record. That
 record uses schema `1`, reports `status=verified`, names the retrace tool and
@@ -166,6 +169,17 @@ native launchers, as is a third-party-native audit for shipped dependency binari
 signed-integrity layer is proved by
 the later Gradle/bootstrap manifest verification and is recorded separately in
 the private release record.
+
+For the Seven Ring report, the validated outputs are classified as follows:
+Ring I uses the customer-bundle shrink/strip/leakage audit; Ring II uses the
+owned JVM symbol/package comparison; Ring III uses the vendor string/constant
+evidence; Ring IV uses the vendor control-flow evidence and protected-artifact
+inspection; Ring V uses the archive native-hardening audit and private symbols;
+Ring VI uses the Gradle/bootstrap manifest and tamper result; and Ring VII uses
+the release seed/provenance, private mapping, and structured retrace result.
+The optional virtualization, protected-loading, analysis-risk, and
+anti-instrumentation fields remain separate vendor capabilities and cannot
+replace any of those classifications.
 
 The maximum request also carries a reproducibility snapshot for the exact
 source checkout: the sorted lockfile digest/count, Gradle version, Java
@@ -199,7 +213,7 @@ symbolic links. The Gradle boundary rejects them before manifesting or signing
 so lexical containment checks cannot be redirected outside the requested
 roots.
 A result property is not
-itself proof that a ring is real: the evidence files and the later shipped
+itself proof that a capability or ring is real: the evidence files and the later shipped
 artifact/installed-runtime acceptance must demonstrate the vendor's actual
 transformation and safe behavior. In particular, renaming is not accepted as
 control-flow protection, compression is not accepted as packing, and a VM-name
@@ -227,7 +241,7 @@ signature against the public key embedded in `bootstrap/main.go`. The
 candidate archive, manifest, and signature are the only customer-facing
 outputs. Mappings, retrace information, structured retrace-acceptance evidence,
 owned native symbols when applicable, third-party-native audit,
-native-hardening evidence, ring evidence,
+native-hardening evidence, Seven Ring evidence,
 configuration, seed, and provenance remain under the private release directory.
 
 The current task is a release seam, not maximum-profile acceptance. Acceptance

@@ -72,7 +72,10 @@ commercial protector review is:
   decision paths it invokes;
 - `OwnershipRegistry.evaluate`;
 - capability acceptance/validation decision paths in
-  `CapabilityRequestProjection` and the corresponding coordination service;
+  `coordination/src/main/java/org/synesis/coordination/domain/capability/CapabilityRequestProjection.java`
+  (`validate`, `apply`, `processAccepted`, and `processValidated`) together
+  with the event-validation boundary in
+  `coordination/src/main/java/org/synesis/coordination/persistence/PredictionEventStore.java`;
 - `OverlayMembershipView.accept`;
 - `OverlayRouteSelector.select` and its authorization decision path; and
 - `OverlayRelayPolicy.allows` when profiling shows the policy is a meaningful

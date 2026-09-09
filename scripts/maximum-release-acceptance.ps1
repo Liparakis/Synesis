@@ -98,17 +98,55 @@ $result = [ordered]@{
     userStateRoot = $runtimeUserStateRoot
     scope = 'PROCESS_LOCAL_ONLY; NOT_SHIPPED_LAUNCHER_CONFIGURATION'
   }
+  performance = [ordered]@{
+    schema = 1
+    status = 'BOUNDARY_TIMINGS_ONLY'
+    unit = 'milliseconds'
+    openBoundaries = @(
+      'peak process memory',
+      'overlay route-selection micro-operation',
+      'commercial transformation overhead',
+      'AV/EDR impact'
+    )
+  }
   checks = [ordered]@{}
   status = 'NOT_STARTED'
 }
 $script:environmentBlocked = $false
 $script:runtimeBlocked = $false
 
-function RecordCheck([string]$Name, [string]$Status, [string]$Detail)
+function RecordCheck(
+  [string]$Name,
+  [string]$Status,
+  [string]$Detail,
+  [Nullable[double]]$DurationMs = $null
+)
 {
-  $result.checks[$Name] = [ordered]@{
+  $entry = [ordered]@{
     status = $Status
     detail = $Detail
+  }
+  if ($null -ne $DurationMs)
+  {
+    $entry.durationMs = [Math]::Round([double]$DurationMs, 3)
+  }
+  $result.checks[$Name] = $entry
+}
+
+function InvokeMeasured([scriptblock]$Action)
+{
+  $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+  try
+  {
+    $value = & $Action
+    return [pscustomobject]@{
+      Value = $value
+      DurationMs = [Math]::Round($stopwatch.Elapsed.TotalMilliseconds, 3)
+    }
+  }
+  finally
+  {
+    $stopwatch.Stop()
   }
 }
 
@@ -1117,21 +1155,24 @@ try
     & git -C $project add README.md
     & git -C $project commit -m 'Initial maximum acceptance baseline' | Out-Null
     Require ($LASTEXITCODE -eq 0) 'Could not commit the disposable maximum acceptance project'
-    [void](InvokeBundle @('init', '--project', $project) 'maximum project init')
-    [void](InvokeBundle @('provider', 'list', '--project', $project) 'maximum provider list')
-    [void](InvokeBundle @('provider', 'install', 'claude', '--project', $project) 'maximum provider install')
-    [void](InvokeBundle @('provider', 'status', 'claude', '--project', $project) 'maximum provider status')
-    [void](InvokeBundle @('provider', 'uninstall', 'claude', '--project', $project) 'maximum provider uninstall')
-    $codexInstall = InvokeBundle @('provider', 'install', 'codex', '--project', $project) 'maximum Codex provider install'
-    Require ($codexInstall.Output -match 'PROVIDER_INSTALL_RESULT=(SUCCESS|ALREADY_INSTALLED|DEGRADED)') 'Maximum Codex provider installation did not return a supported result'
-    Require ($codexInstall.Output -match 'SYNTHETIC_CHECK=PASSED') 'Maximum Codex provider synthetic check did not pass'
-    [void](InvokeBundle @('doctor', '--project', $project) 'maximum doctor')
-    RecordCheck 'cli-project-provider-doctor' 'PASS' 'Disposable project initialization, Claude lifecycle, Codex installation, and doctor passed'
+    $providerMeasurement = InvokeMeasured {
+      [void](InvokeBundle @('init', '--project', $project) 'maximum project init')
+      [void](InvokeBundle @('provider', 'list', '--project', $project) 'maximum provider list')
+      [void](InvokeBundle @('provider', 'install', 'claude', '--project', $project) 'maximum provider install')
+      [void](InvokeBundle @('provider', 'status', 'claude', '--project', $project) 'maximum provider status')
+      [void](InvokeBundle @('provider', 'uninstall', 'claude', '--project', $project) 'maximum provider uninstall')
+      $codexInstall = InvokeBundle @('provider', 'install', 'codex', '--project', $project) 'maximum Codex provider install'
+      Require ($codexInstall.Output -match 'PROVIDER_INSTALL_RESULT=(SUCCESS|ALREADY_INSTALLED|DEGRADED)') 'Maximum Codex provider installation did not return a supported result'
+      Require ($codexInstall.Output -match 'SYNTHETIC_CHECK=PASSED') 'Maximum Codex provider synthetic check did not pass'
+      [void](InvokeBundle @('doctor', '--project', $project) 'maximum doctor')
+    }
+    RecordCheck 'cli-project-provider-doctor' 'PASS' 'Disposable project initialization, Claude lifecycle, Codex installation, and doctor passed' $providerMeasurement.DurationMs
 
     try
     {
-      $linkDetail = InvokeLinkAcceptance $project
-      RecordCheck 'cli-link-onboarding-peer-session' 'PASS' $linkDetail
+      $linkMeasurement = InvokeMeasured { InvokeLinkAcceptance $project }
+      $linkDetail = $linkMeasurement.Value
+      RecordCheck 'cli-link-onboarding-peer-session' 'PASS' $linkDetail $linkMeasurement.DurationMs
     }
     catch
     {
@@ -1153,8 +1194,10 @@ try
 
     try
     {
-      [void](InvokeBundle @('ui', '--project', $project, '--duration-seconds', '1', '--no-browser') 'maximum UI/control-plane smoke')
-      RecordCheck 'cli-ui-control-plane' 'PASS' 'Shipped UI/control-plane server completed the no-browser smoke'
+      $uiMeasurement = InvokeMeasured {
+        [void](InvokeBundle @('ui', '--project', $project, '--duration-seconds', '1', '--no-browser') 'maximum UI/control-plane smoke')
+      }
+      RecordCheck 'cli-ui-control-plane' 'PASS' 'Shipped UI/control-plane server completed the no-browser smoke' $uiMeasurement.DurationMs
     }
     catch
     {
@@ -1174,8 +1217,8 @@ try
     {
       try
       {
-        InvokeControlPlaneHttpAcceptance $project
-        RecordCheck 'cli-control-plane-http-sse' 'PASS' 'Installed launcher served the packaged UI root and passed health, one-time bootstrap/session, authenticated snapshot/diagnostics/network, CSRF refusal, and initial SSE snapshot checks'
+        $controlPlaneMeasurement = InvokeMeasured { InvokeControlPlaneHttpAcceptance $project }
+        RecordCheck 'cli-control-plane-http-sse' 'PASS' 'Installed launcher served the packaged UI root and passed health, one-time bootstrap/session, authenticated snapshot/diagnostics/network, CSRF refusal, and initial SSE snapshot checks' $controlPlaneMeasurement.DurationMs
       }
       catch
       {
@@ -1252,8 +1295,8 @@ try
     RecordCheck 'relay-launcher' 'PASS' 'Shipped relay launcher reached its guarded parser'
     try
     {
-      [void](InvokeRelayArtifactAcceptance)
-      RecordCheck 'relay-auth-forwarding' 'PASS' 'Extracted shipped relay authenticated two disposable nodes, rejected an unauthorized node, forwarded bidirectionally, preserved the E2E payload, and shut down within bounds'
+      $relayMeasurement = InvokeMeasured { [void](InvokeRelayArtifactAcceptance) }
+      RecordCheck 'relay-auth-forwarding' 'PASS' 'Extracted shipped relay authenticated two disposable nodes, rejected an unauthorized node, forwarded bidirectionally, preserved the E2E payload, and shut down within bounds' $relayMeasurement.DurationMs
     }
     catch
     {

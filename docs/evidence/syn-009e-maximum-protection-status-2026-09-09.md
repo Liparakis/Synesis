@@ -13,9 +13,9 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified local HEAD is `edfd155f9aacca02fc6b5b9866a33693a985746b`
-  at checkpoint `CP-0796`; the post-archive native-audit and output-boundary
-  gates are committed locally.
+- Latest verified local HEAD is `eebc6bcf686960bb3cea628d4f4ac2b58ea0f188`
+  at checkpoint `CP-0799`; the post-archive native-audit, output-boundary, and
+  structured private-retrace gates are committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
   checkout and must run from a reviewed clean release commit.
@@ -73,20 +73,24 @@ compatibility rules are in `docs/release/protection-keep-rules.md`.
 
 ## Seven Rings
 
+The release report uses the ring structure from the current brief. The adapter's
+six `requiredRings` fields are retained as optional vendor-capability inputs;
+they are not substituted for this release classification.
+
 | Ring | Result | Evidence and exact boundary |
 |---|---|---|
-| 1 — Control-flow obfuscation | **BLOCKED** | Lite renaming is not control-flow protection; commercial transformation and crown-jewel decompiler inspection are absent. |
-| 2 — Code virtualization | **BLOCKED** | No licensed protector output proves genuine virtual execution; wrappers, dispatch tables, and encrypted loaders are explicitly rejected. |
-| 3 — String/constant encryption | **BLOCKED** | Lite does not claim runtime string/constant protection; commercial before/after static evidence is absent. |
-| 4 — Analysis-environment policy | **BLOCKED** | Safe multi-signal behavior and legitimate-VM/CI acceptance require the selected protector and controlled tests. VM-name checks are not accepted. |
-| 5 — Protected payload/packing | **BLOCKED** | Existing archive/bootstrap integrity is a foundation; ZIP compression is not packing and no commercial protected loader is present. |
-| 6 — Anti-debug/instrumentation | **BLOCKED** | No commercial detect/refuse evidence exists; no hostile or destructive anti-debugging was implemented. |
-| 7 — Integrity/diversification/private recovery | **PARTIAL** | Bootstrap signing, immutable manifests, provenance, private mappings/retrace/native evidence gates, and comparison tooling exist; signed commercial records, release-to-release positive comparisons, and installed maximum tamper/retrace runs are absent. |
+| I — Shrink, strip, sanitize | **PARTIAL BASELINE** | Developer/lite archive extraction, profile markers, private-material leakage, manifest, and metadata audits exist; a commercial maximum archive has not been inspected. |
+| II — Symbol obfuscation | **PARTIAL BASELINE** | Lite renaming/package reduction is measured and public contracts are scoped; maximum protected symbol inspection remains absent. |
+| III — String/constant protection | **BLOCKED** | Lite does not claim runtime string/constant protection; commercial before/after static evidence is absent. |
+| IV — Control-flow hardening | **BLOCKED** | Commercial transformation and shipped crown-jewel decompiler inspection are absent; renaming is not control-flow hardening. |
+| V — Native hardening | **PARTIAL BASELINE** | Windows x64 Synesis-owned launcher audit passes for developer/lite; maximum cross-platform archives, signing, and private recovery remain open, while relay third-party native audit is separate. |
+| VI — Distribution integrity/signing | **PARTIAL SEAM** | Existing bootstrap signing, immutable manifests, tamper gates, and private manifest generation exist; no signed commercial maximum artifact has been exercised. |
+| VII — Diversification/private recovery | **PARTIAL SEAM** | Release-ID/seed provenance, private mappings, structured retrace-acceptance validation, and comparison tooling exist; no positive commercial pair or installed maximum retrace exists. |
 
 The exact ring boundary and fail-safe policy are also captured in
 `docs/adr/0070-maximum-protection-commercial-release-profile.md`.
 
-## Keep rules, virtualization, and anti-analysis policy
+## Keep rules, optional vendor capabilities, and anti-analysis policy
 
 The keep-rule audit is narrow and source-backed: Picocli metadata, MCP
 reflection, UI resources, Netty/QUIC loading, native/resource names, and public
@@ -94,10 +98,12 @@ protocol/configuration contracts are preserved. The scan found no additional
 owned ServiceLoader registration or JNI declaration requiring a global rule.
 Global `org.synesis.**` keeping is prohibited.
 
-Planned Tier 3 virtualization targets are authority resolution, workspace trust,
-ownership/capability decisions, overlay membership/route policy, and relay
-admission policy. They remain unexecuted until a commercial tool proves genuine
-virtualization on the shipped artifact.
+Planned Tier 3 maximum-transformation targets are authority resolution,
+workspace trust, ownership/capability decisions, overlay membership/route
+policy, and relay admission policy. They remain unexecuted until a commercial
+tool proves the selected control-flow/string transformation on the shipped
+artifact. Optional virtualization or protected-loading claims require separate
+vendor evidence and do not replace Ring IV.
 
 The anti-analysis policy is fail-safe: ordinary VMware, Hyper-V, Parallels,
 VDI, CI, and development VMs must continue to work. Only documented,
@@ -136,8 +142,9 @@ Evidence: `docs/evidence/syn-009e-native-hardening-2026-09-09.md` and
 
 The maximum Gradle seams require an executable version-pinned external
 adapter, private configuration, explicit release ID/seed, a clean checkout,
-all six ring records, non-empty diversification/ring evidence, non-empty
-mapping/retrace outputs, and a structured private retrace-acceptance record
+the optional vendor-capability records, non-empty private capability and
+diversification evidence, non-empty mapping/retrace outputs, and a structured
+private retrace-acceptance record
 bound to the mapping hash. Owned native-symbol material is required where the component owns
 native launchers, a private audit of shipped third-party native dependencies,
 and a customer/private boundary. Results must echo the source, seed, lockfile
@@ -147,7 +154,7 @@ also rejects a `GITHUB_SHA` that does not equal local `HEAD`.
 
 The existing bootstrap signer then creates and verifies the detached Ed25519
 manifest against its embedded trust root. Production signing keys are injected
-and never generated or committed. Private ring/recovery evidence hashes are
+and never generated or committed. Private capability/recovery evidence hashes are
 stored only in `release-record.properties`; native-hardening evidence is also
 hashed there after the protected archive is audited. Private material is
 forbidden from the customer archive.
@@ -172,9 +179,11 @@ The current five-sample Windows x64 CLI comparison recorded:
 | protection-lite | 45,911,491 bytes | 68,870,411 bytes | 685.841 ms |
 | maximum-release | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED |
 
-Peak memory was unavailable from the wrapper. UI latency, control-plane
-latency, Link setup, route selection, relay throughput, provider lifecycle,
-and maximum performance remain open.
+Peak memory was unavailable from the wrapper. The extracted acceptance harness
+now records bounded `durationMs` values for provider/doctor, Link onboarding,
+UI smoke, authenticated control-plane HTTP/SSE, and relay forwarding, but no
+commercial maximum run has populated those fields. Route-selection
+microbenchmarks, relay throughput, and transformation overhead remain open.
 
 The archive-only static comparison found zero source-map/private-file entries
 in developer/lite archives and recorded lite renaming/package changes, but
@@ -218,7 +227,7 @@ secret, mapping, seed, production signing key, or private recovery file was
 committed.
 
 Private retrace acceptance, mapping, owned native-symbol recovery where applicable,
-third-party native audit, and ring evidence are contracted and fail closed, but
+third-party native audit, and Seven Ring evidence are contracted and fail closed, but
 no positive licensed adapter output exists to exercise retrace or native
 acceptance.
 
@@ -246,4 +255,5 @@ authority, and clean release checkout; then run the complete maximum adapter,
 signed-record comparison, native audit, shipped CLI/UI/control-plane/
 Link/overlay/relay/provider acceptance, tamper/retrace/leakage/performance,
 and AV/EDR checks. Until those artifacts and results exist, the maximum
-profile must remain PARTIAL and the six commercial rings must remain blocked.
+profile must remain PARTIAL; Rings III–IV remain blocked and Rings V–VII remain
+baseline/partial until the commercial artifact gates pass.

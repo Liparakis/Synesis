@@ -63,6 +63,14 @@ maximum-release comparison. These measurements do not replace UI, snapshot,
 Link, route, relay-throughput, provider, AV/EDR, or commercial transformation
 acceptance.
 
+The extracted acceptance harness also writes a `performance` object with
+`status=BOUNDARY_TIMINGS_ONLY` and per-check `durationMs` values for the
+shipped provider/doctor, Link onboarding, UI smoke, authenticated control-plane
+HTTP/SSE, and relay forwarding checks. Peak memory, route-selection
+microbenchmarks, commercial transformation overhead, and AV/EDR impact remain
+explicitly open; absent values are not interpreted as zero or as a release
+claim.
+
 ## Maximum release reproducibility and diversification
 
 The profile-size comparison above does not establish release diversification
@@ -267,24 +275,26 @@ The following must be separately evidenced before a customer release can be
 called maximum:
 
 1. a licensed, version-pinned adapter must produce the exact JVM/native/UI/relay
-   inputs, all six commercial ring evidence records, private mapping/retrace,
-   component-scoped owned native symbols where applicable, and a private audit
-   of shipped third-party native dependencies, plus a release-specific
-   transformation seed and a customer/private boundary that passes the Gradle
-   adapter gate;
-2. all six vendor transformation rings on the exact JVM/native/UI/relay
-   inputs, with genuine virtualization and protected loading demonstrated by
-   the selected commercial tool, plus the separately verified signed-integrity
-   layer produced by the Gradle/bootstrap release pipeline;
-3. relay and overlay/Link acceptance from the protected artifacts, including
-   provider-boundary behavior;
-4. tamper detection/refusal for the signed immutable payload and protected
-   loader;
-5. private JVM retrace acceptance, owned native symbol recovery where applicable,
-   third-party native audit, release diversification, and leakage scans;
-6. performance, startup, memory, and archive-size comparisons against the
-   developer baseline; and
-7. final manifest/signature, installer/doctor verification, normal-host,
-   legitimate-VM, CI, debugger/instrumentation, and failure-safety evidence.
+   inputs, private mapping/retrace material, component-scoped owned native
+   symbols where applicable, and a private audit of shipped third-party native
+   dependencies, plus a release-specific seed and customer/private boundary
+   that passes the Gradle adapter gate;
+2. Ring I–IV evidence must show shrinking/stripping, symbol protection,
+   runtime string/constant protection, and material control-flow hardening on
+   the shipped backend without relabeling compression, renaming, or wrappers;
+3. Ring V native hardening must cover Synesis-owned binaries, preserve
+   third-party native contracts, and retain private recovery symbols where
+   applicable;
+4. Ring VI must produce a canonical immutable manifest, release signature, and
+   safe tamper refusal while excluding legitimate mutable runtime state;
+5. Ring VII must prove release-specific diversification, private provenance,
+   and a controlled protected-stack-trace retrace using artifacts outside the
+   customer bundle;
+6. relay, overlay/Link, UI/control-plane, provider/native, tamper, leakage,
+   startup, memory, and archive-size acceptance must run against the exact
+   protected artifacts; and
+7. performance comparisons must include the recorded boundary timings plus
+   any required route/throughput/memory measurements, with large regressions
+   investigated before release.
 
 No missing maximum gate is replaced by a passing lite smoke test.

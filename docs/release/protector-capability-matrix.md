@@ -18,7 +18,8 @@ not claim the capability.
 
 The claim table above remains deliberately `UNVERIFIED` for commercial
 candidates. The following is a first-party documentation pre-screen, not
-Synesis artifact evidence and not permission to mark any ring `PASS`.
+Synesis artifact evidence and not permission to mark any vendor capability or
+Seven Ring `PASS`.
 
 | Candidate | Documentation signals found | Limits that remain for SYN-009E |
 | --- | --- | --- |
@@ -29,12 +30,13 @@ Detailed links and the exact distinction between vendor documentation and local
 artifact evidence are recorded in
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. Neither candidate
 is selected as the maximum protector until a licensed version is installed and
-the missing Ring 2/Ring 5 and compatibility gates are exercised.
+the required vendor capabilities and Seven Ring compatibility gates are
+exercised.
 
 ## Required evaluation dimensions
 
-The ring table above is the claim boundary. The following dimensions are the
-minimum evaluation record for selecting DashO or Zelix; an `UNVERIFIED`
+The capability table above is the claim boundary. The following dimensions are
+the minimum evaluation record for selecting DashO or Zelix; an `UNVERIFIED`
 commercial cell cannot be converted to `PASS` by documentation alone.
 
 | Dimension | ProGuard 7.10.0 local result | yGuard | R8 | DashO | Zelix KlassMaster |
@@ -62,9 +64,11 @@ before that evaluation.
 
 The commercial candidates remain candidates, not evidence. A future maximum
 release entry requires the exact licensed version, non-interactive Gradle/CI
-invocation, protected artifact inspection, normal-host and legitimate-VM
-acceptance, debugger/instrumentation safety checks, tamper behavior, private
-retrace, and performance/size measurements.
+invocation, protected artifact inspection, public-contract compatibility,
+tamper behavior, private retrace, and performance/size measurements. Any
+optional virtualization, protected-loading, analysis-risk, or
+anti-instrumentation claim requires its own shipped-artifact evidence and is
+not silently counted as one of the Seven Rings.
 
 The repository now has a provider-agnostic maximum-protector adapter and
 signed-candidate seam documented in
@@ -73,8 +77,8 @@ validates the contract and keeps the maximum task fail-closed; it does not
 change any `UNVERIFIED` commercial row to `PASS`.
 
 The open-source lite result does not satisfy the commercial transformation
-claims. It provides only a bounded shrinking/renaming compatibility baseline
-and private mapping material. The release-level signed-integrity/diversification
-ring remains only a foundation partial until the protected artifact is
-included in the existing signed manifest and its tamper/retrace/diversification
-gates pass.
+claims. It provides only a bounded shrink/strip/rename compatibility baseline
+and private mapping material. Rings III and IV remain blocked; Ring V is only a
+developer/lite native baseline; and Rings VI–VII remain foundation partials
+until the protected artifact is included in the existing signed manifest and
+its tamper/retrace/diversification gates pass.
