@@ -21,7 +21,8 @@ An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
 only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records
 private JSON evidence. For CLI candidates it also has a no-PATH disposable
-install, stable-launcher runtime-tamper, packaged frontend-asset tamper,
+install, stable-launcher runtime-tamper, packaged frontend static-content and
+frontend-asset tamper,
 provider/MCP, mutable-state, and live authenticated browser/control-plane
 HTTP/SSE gates. For relay candidates it now starts the extracted launcher and
 verifies authenticated forwarding through a test-only external observer. Its optional JDK
@@ -122,13 +123,13 @@ synthetic or protection-lite evidence.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
-  local release commits remain unpublished, and the working tree contains this
-  scoped follow-up, preserved
-  `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
-- Last implementation commit: `4ae2fe4f`; checkpoint `CP-0802`; the
+  local release commits remain unpublished, and the working tree contains the
+  preserved `CP-0758` plus unrelated pre-existing local work that remains
+  uncommitted.
+- Last implementation commit: `cbecbac5`; checkpoint `CP-0804`; the
   post-archive native-audit, symlink-boundary, structured private-retrace,
-  exact-brief Seven Ring taxonomy, and bounded acceptance-timing changes are
-  committed.
+  exact-brief Seven Ring taxonomy, bounded acceptance-timing, and packaged
+  frontend static-content acceptance changes are committed.
   No push has occurred.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,

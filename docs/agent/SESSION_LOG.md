@@ -6484,3 +6484,21 @@ record never enters the customer bundle.
 Exact next action: configure a real licensed adapter to emit this record and
 run the positive retrace acceptance; until then, retain the fail-closed
 maximum gate and do not upgrade Ring 7.
+## 2026-09-09 — SYN-009E packaged frontend static-content acceptance gate
+
+Extended `scripts/maximum-release-acceptance.ps1` with a shipped-artifact
+inspection of `web-ui/index.html` and packaged JavaScript/CSS entries. The gate
+rejects external runtime `script`/`link` URLs, source-map or `sourceURL`
+references, and Vite/local-development markers before the existing packaged
+frontend tamper check. The protection-lite JAR passed the exact helper smoke;
+this is acceptance-harness coverage, not commercial maximum evidence.
+
+Updated `docs/release/protected-acceptance.md` and `TEST_MATRIX.md` to define
+the boundary. PowerShell AST parsing, scoped diff checks, and positive/negative
+static-content regex cases passed. Commit `cbecbac5` and checkpoint `CP-0804`
+record the slice; no push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and release-signing authority, then run the complete maximum
+artifact and shipped acceptance from a clean reviewed checkout; keep Rings 1–6
+blocked and Ring 7 partial until that evidence exists.

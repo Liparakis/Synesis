@@ -4,7 +4,7 @@
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
-The last implementation commit is `4ae2fe4f` at checkpoint `CP-0802`; the maximum
+The last implementation commit is `cbecbac5` at checkpoint `CP-0804`; the maximum
 customer/private output boundary also rejects symbolic links before manifesting
 or signing, and the private retrace-acceptance record is bound to its mapping
 hash. The current brief's six commercial transformation fields are Rings 1–6,
@@ -34,8 +34,9 @@ fields remain a compatibility schema for those six classes.
   `scripts/maximum-release-acceptance.ps1`; it must be run only after a real
   maximum archive exists. Its CLI path uses `--skip-path-update` for a
 disposable install, exercises the installed stable-launcher and packaged
-  frontend-asset integrity gates plus the live authenticated UI/control-plane
-  HTTP/SSE seam. Its relay path starts the extracted launcher and invokes the
+  frontend static-content and frontend-asset integrity gates plus the live
+  authenticated UI/control-plane HTTP/SSE seam. Its relay path starts the
+  extracted launcher and invokes the
   test-only `:relay:relayArtifactAcceptanceClient` observer for authenticated
   bidirectional forwarding and bounded shutdown. Its JDK/workspace
   compatibility overrides are process-local only.

@@ -27,7 +27,8 @@ against extracted customer archives only. It enforces the maximum profile
 marker, rejects mappings/source/private material, optionally verifies the
 private per-file artifact manifest, and records private JSON evidence. Its CLI
 path covers the shipped launcher, UI/control-plane, provider, native, and MCP
-boundaries, including immutable JVM and packaged frontend-asset tamper and
+boundaries, including packaged frontend static-content inspection, immutable
+JVM and packaged frontend-asset tamper and
 mutable `Link` state. The CLI path now also performs a live packaged UI root,
 authenticated control-plane session/snapshot/CSRF/SSE, projection check, and
 two-process signed Link invitation/authenticated PeerSession/project-sync
@@ -178,6 +179,13 @@ retrace tool and test case, bind the exact private mapping hash, and hash the
 input and translated stack traces. CLI/relay Gradle records and the provenance
 comparator retain and verify that evidence; no positive commercial retrace run
 exists yet.
+
+The follow-on acceptance slice `cbecbac5`, checkpointed at `CP-0804`, adds a
+shipped-artifact scan for `web-ui/index.html` and packaged JavaScript/CSS. It
+rejects external runtime URLs, source-map/sourceURL references, and
+Vite/local-development markers. The existing protection-lite JAR passed this
+inspection; the gate remains unexecuted against a real licensed maximum
+archive and does not promote the lite artifact.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits

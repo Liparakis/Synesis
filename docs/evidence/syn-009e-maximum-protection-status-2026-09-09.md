@@ -15,10 +15,10 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified implementation slice is `4ae2fe4f`, checkpointed as
-  `CP-0802`; the post-archive native-audit, output-boundary, structured
-  private-retrace, exact-brief taxonomy, and acceptance-timing slices are
-  committed locally.
+- Latest verified implementation slice is `cbecbac5`, checkpointed as
+  `CP-0804`; the post-archive native-audit, output-boundary, structured
+  private-retrace, exact-brief taxonomy, acceptance-timing, and packaged
+  frontend static-content slices are committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
   checkout and must run from a reviewed clean release commit.
@@ -211,8 +211,8 @@ records private JSON evidence.
 Current bounded evidence is not commercial maximum evidence:
 
 - CLI protection-lite and synthetic marker-only installed candidate: version,
-  help, doctor, packaged UI/control-plane HTTP/SSE, provider/MCP, native
-  installer, immutable JVM/frontend tamper refusal, mutable-state
+  help, doctor, packaged UI/static-content inspection, control-plane HTTP/SSE,
+  provider/MCP, native installer, immutable JVM/frontend tamper refusal, mutable-state
   non-false-positive behavior, local Link invitation/PeerSession/project sync;
   result remains `PASS_WITH_EXPLICIT_OPEN_GATES`.
 - Relay protection-lite/extracted launcher: bounded authentication,
@@ -220,6 +220,11 @@ Current bounded evidence is not commercial maximum evidence:
   observer; commercial maximum relay archive is absent.
 - Overlay/Internet NAT, protected multi-peer route selection, and final
   provider/native maximum acceptance remain unexecuted.
+
+The new `frontend-static-leakage` check passed against the existing
+protection-lite JAR through the helper smoke, but the independent harness has
+not been run against a licensed maximum archive. It therefore remains an
+implemented gate, not a commercial result.
 
 Tamper acceptance is therefore partial: synthetic immutable-payload refusal
 passed, but the real signed commercial maximum archive and protected loader
@@ -259,6 +264,9 @@ release-hardening work:
 - `4ae2fe4f` — reconciled the release contract and durable evidence to the
   exact current brief's Ring 1–7 taxonomy and bound the provenance comparator
   to the six mandatory commercial classes.
+- `cbecbac5` — added packaged frontend static-content leakage acceptance for
+  external runtime URLs, source-map/development references, and Vite/local
+  markers.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
