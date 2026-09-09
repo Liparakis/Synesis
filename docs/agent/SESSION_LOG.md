@@ -30,6 +30,13 @@ The comparison harness now requires the final signed-integrity fields and
 rechecks every private evidence/recovery hash before it accepts either a
 diversification or reproducibility pair.
 
+Added `docs/evidence/syn-009e-maximum-protection-status-2026-09-09.md`, a
+single evidence-linked report covering the brief's required starting state,
+profiles, Tier 0–3 scope, all Seven Rings, native/signing/integrity,
+diversification, private recovery, shipped acceptance, leakage, performance,
+commits, and exact external blockers. It deliberately classifies commercial
+execution as required rather than calling lite or synthetic evidence maximum.
+
 ## 2026-09-09 — SYN-009E release provenance comparison seam
 
 Added `scripts/maximum-release-provenance-comparison.ps1` to close the gap

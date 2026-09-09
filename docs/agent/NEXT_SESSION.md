@@ -75,6 +75,9 @@ disposable install, exercises the installed stable-launcher and packaged
   `Diversification` and `Reproducibility` modes against two clean licensed
   maximum private records; the current missing-record result is partial and
   no positive commercial comparison exists.
+- The consolidated report is
+  `docs/evidence/syn-009e-maximum-protection-status-2026-09-09.md`; update its
+  partial rows only with evidence from the actual licensed maximum artifacts.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

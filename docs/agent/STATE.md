@@ -133,6 +133,8 @@ empty mapping/retrace outputs, and empty native-symbol directories, then hashes
 the accepted private evidence into the release record.
 The comparison harness requires the final signed-integrity fields and checks
 those private hashes before accepting diversification or reproducibility input.
+The consolidated maximum status report records every required final-report
+field and keeps commercial rings blocked until real licensed output exists.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits

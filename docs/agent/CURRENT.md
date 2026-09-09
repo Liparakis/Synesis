@@ -99,6 +99,10 @@ diversification, non-empty mapping/retrace files, and at least one native
 symbol file; their hashes are retained only in the private release record.
 The release-to-release comparison now verifies those private hashes and the
 final signed-integrity fields before comparing two records.
+The consolidated evidence report is
+`docs/evidence/syn-009e-maximum-protection-status-2026-09-09.md`; it keeps the
+brief's full final-report fields explicitly partial rather than promoting
+synthetic or protection-lite evidence.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
