@@ -173,6 +173,11 @@ callable DashO, Zelix/KlassMaster, or external maximum adapter on `PATH`, and
 has no configured maximum-release or signing inputs; no commercial artifact was
 run or claimed.
 
+The latest evidence-only refresh is commit `18da2f4b`, checkpointed at
+`CP-0807`. It records the same absent release inputs against the current
+checkout and leaves the maximum gate fail-closed; it does not alter the
+historical implementation-slice descriptions above.
+
 The maximum adapter contract now also requires a schema-1 private
 retrace-acceptance properties file. It must report verified status, identify the
 retrace tool and test case, bind the exact private mapping hash, and hash the

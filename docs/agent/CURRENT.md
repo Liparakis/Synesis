@@ -134,6 +134,10 @@ synthetic or protection-lite evidence.
   post-archive native-audit, symlink-boundary, structured private-retrace,
   exact-brief Seven Ring taxonomy, bounded acceptance-timing, and packaged
   frontend static-content acceptance changes are committed.
+- Current evidence refresh: `18da2f4b`; checkpoint `CP-0807`. The commercial
+  tool-availability probe is current for this checkout and confirms that no
+  licensed adapter, commercial configuration, signing key, or release seed is
+  available; this is evidence of the blocker, not a commercial-ring result.
   No push has occurred.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,

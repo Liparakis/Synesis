@@ -277,6 +277,9 @@ release-hardening work:
   markers.
 - `caaa0427` — refreshed current-source Tier 0–3 path/signature and
   compatibility-boundary evidence; no commercial transformation was claimed.
+- `18da2f4b` — refreshed the commercial-tool availability evidence and
+  confirmed that no licensed adapter, commercial configuration, signing key,
+  or release seed is available in the current release environment.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

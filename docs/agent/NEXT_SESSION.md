@@ -4,7 +4,8 @@
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
-The last implementation commit is `cbecbac5` at checkpoint `CP-0804`; the maximum
+The last implementation commit is `cbecbac5` at checkpoint `CP-0804`; the
+current evidence-only refresh is `18da2f4b` at checkpoint `CP-0807`; the maximum
 customer/private output boundary also rejects symbolic links before manifesting
 or signing, and the private retrace-acceptance record is bound to its mapping
 hash. The current brief's six commercial transformation fields are Rings 1–6,

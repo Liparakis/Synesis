@@ -3,7 +3,7 @@
 | Area | Check | Result | Evidence / boundary |
 |---|---|---|---|
 | Task transition | `SYN-053` closed for current scope; `SYN-009E` active | PASS | `CP-0758`, durable state files |
-| Starting checkout | activation HEAD/status/remote parity | PASS | activation `8a5d090`; current local release head `4ae2fe4f`; CP-0758 preserved; no push |
+| Starting checkout | activation HEAD/status/remote parity | PASS | activation `8a5d090`; latest release-environment probe `18da2f4b` / `CP-0807`; CP-0758 preserved; no push |
 | Developer profile | readable normal build and existing bundle smoke | PASS baseline | prior bundle smoke; must remain unchanged |
 | Protection-lite profile | opt-in Gradle task, narrow keep rules, mapping/provenance | PASS | ProGuard 7.10.0; `docs/evidence/syn-009e-protection-lite-2026-09-09.md` |
 | Tier 0–3 source inventory | current-source public boundaries, Tier 1/2 areas, method-scoped Tier 3 candidates | PASS source-presence audit / COMMERCIAL NOT EXECUTED | `docs/release/protection-tier-inventory.md`, `docs/evidence/syn-009e-protection-scope-audit-2026-09-09.md`; commercial target and performance review remain required |

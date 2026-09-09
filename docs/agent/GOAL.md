@@ -12,7 +12,8 @@ artifact and installed-runtime evidence rather than marketing terminology.
   on `master`; the scoped release commits remain local and ahead of
   `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
   and remains uncommitted.
-- Last implementation checkpoint: `4ae2fe4f` at `CP-0802`; the working copy also
+- Last implementation checkpoint: `cbecbac5` at `CP-0804`; current evidence
+  refresh `18da2f4b` is checkpointed at `CP-0807`; the working copy also
   contains a stable, unexplained
   formatter-like rewrite of unrelated files outside this release slice.
   Those files remain untouched and are not release evidence.
