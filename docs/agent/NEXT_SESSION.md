@@ -26,16 +26,21 @@ current release-hardening task in the existing `SYN-009*` lineage.
 - The extracted-candidate harness is
   `scripts/maximum-release-acceptance.ps1`; it must be run only after a real
   maximum archive exists. Its CLI path uses `--skip-path-update` for a
-  disposable install, exercises the installed stable-launcher integrity gate,
-  and keeps the relay authentication/forwarding gate open until a protected
-  socket scenario passes.
+  disposable install, exercises the installed stable-launcher and packaged
+  frontend-asset integrity gates, and keeps the relay
+  authentication/forwarding gate open until a protected socket scenario
+  passes. Its JDK/workspace compatibility overrides are process-local only.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.
-- The latest local source commits are unpublished; no push occurred. The full
-  bootstrap Go suite is currently incomplete because three update/migration
-  tests fail with `update migrations not prepared`; the signer subpackage
-  passes.
+- The latest local source commits are unpublished; no push occurred. The
+  bootstrap Go suite passes after its disposable migration fixtures isolate
+  `HOME`/`USERPROFILE` from real developer provider state. The extracted
+  acceptance harness now isolates `HOME`, `USERPROFILE`, `APPDATA`, and
+  `LOCALAPPDATA` for every captured process as well.
+- Synthetic marker-only harness evidence reached all CLI/UI/MCP checks with
+  explicit host compatibility overrides; the default host result remains
+  `PARTIAL_ACCEPTANCE_BLOCKED` and is not a commercial maximum result.
 
 ## 2026-09-09 — packaged browser-opening runtime correction
 

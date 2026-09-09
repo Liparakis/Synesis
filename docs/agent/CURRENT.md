@@ -18,8 +18,11 @@ An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
 only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records
 private JSON evidence. For CLI candidates it also has a no-PATH disposable
-install, stable-launcher runtime-tamper, and mutable-state gate. It keeps full
-relay authentication/forwarding as an explicit open gate.
+install, stable-launcher runtime-tamper, packaged frontend-asset tamper,
+provider/MCP, and mutable-state gates. It keeps full relay
+authentication/forwarding as an explicit open gate. Its optional JDK
+loopback/workspace overrides are process-local and recorded as non-shipped
+compatibility inputs.
 The protector capability matrix now also records the required Java/Gradle,
 compatibility, reproducibility, recovery, performance, licensing, and
 anti-analysis evaluation dimensions without converting any commercial
@@ -27,7 +30,10 @@ candidate to an unverified pass.
 The bootstrap now records the selected protection profile in the active
 pointer and makes the stable launcher invoke the existing payload-manifest
 doctor only for `maximum-release`; a synthetic marker-only disposable probe
-passed tamper refusal and mutable `Link`-state acceptance.
+passed tamper refusal and mutable `Link`-state acceptance. The acceptance
+harness isolates `HOME`, `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA` for
+every captured process, while explicit JDK/workspace overrides remain
+process-local only.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -96,14 +102,19 @@ commercial protection capability is claimed.
   before adapter invocation because no licensed adapter is configured.
 - The shipped-artifact harness rejects both existing protection-lite archives
   as non-maximum, proving the profile boundary without mislabeling lite output.
+- A synthetic marker-only maximum archive completed the extracted CLI harness:
+  immutable JVM and packaged frontend tamper refusal, mutable `Link` state,
+  provider lifecycle, UI/control-plane, native MCP, and ready MCP session all
+  passed when the documented process-local host compatibility overrides were
+  supplied. The default host run remains explicitly partial at the loopback
+  and provider-workspace gates.
 - `go test . -run '^TestMaximumProfileIsRecordedAndStableLauncherEmitsIntegrityGate$' -count=1` passed.
 - The generated maximum stable-launcher gate passed PowerShell AST parsing;
   the disposable marker-only runtime probe refused an edited immutable payload
   and passed after mutable `Link` state was added. This is bootstrap evidence,
   not commercial maximum evidence.
-- `go test ./...` remains separately incomplete because the three existing
-  bootstrap update/migration fixtures fail with `update migrations not
-  prepared`; signer and MCP subpackages pass.
+- `go test ./...` in `bootstrap` now passes after the test fixture helper
+  isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
 - `git diff --check` passed for the scoped changes; `agent-resume.ps1` and the
   deferred validator passed.
@@ -112,11 +123,9 @@ commercial protection capability is claimed.
 
 No licensed commercial protector, adapter, private configuration, or release
 signing authority is installed. The marker-only runtime probe used an existing
-lite bundle and does not prove any commercial transformation ring. The full
-`go test ./...` run remains incomplete because three existing bootstrap
-update/migration tests fail with `update migrations not prepared`; the signer
-and MCP subpackages pass. The maximum profile and all commercial Seven Rings
-remain blocked. Preserved
+lite bundle and does not prove any commercial transformation ring. The
+synthetic marker-only harness is artifact/bootstrap evidence only; the
+commercial maximum profile and all Seven Rings remain blocked. Preserved
 `CP-0758`, `.editorconfig`, and unrelated relay source changes remain
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release

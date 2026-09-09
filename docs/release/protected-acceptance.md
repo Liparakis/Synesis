@@ -66,6 +66,12 @@ under the private acceptance directory. The relay authentication/forwarding
 scenario remains an explicit open gate until a real protected relay socket test
 is run; a parser smoke is not promoted to full relay acceptance.
 
+The CLI path also targets one packaged `web-ui` JavaScript or CSS entry inside
+the installed JAR. It edits that entry in a disposable copy, requires the
+stable launcher to refuse the changed immutable payload, and restores the
+original JAR byte-for-byte before continuing. This is separate from the
+generic first-file tamper check and from mutable `Link` state.
+
 For the CLI component, the harness also installs the extracted candidate into
 a second disposable root with the explicit `--skip-path-update` acceptance
 flag. It then launches the installed stable wrapper, edits one file inside the
@@ -83,6 +89,27 @@ bootstrap test and recorded in
 `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; it is not a
 runtime acceptance result until a real licensed maximum archive is installed,
 tampered, and restored in a disposable environment.
+
+On Windows hosts with the documented JDK AF_UNIX temporary-path problem, the
+harness records the default UI/MCP result as blocked and exits `2` rather than
+silently treating it as a pass. A host-compatible rerun may supply explicit,
+process-local overrides:
+
+```powershell
+.\scripts\maximum-release-acceptance.ps1 `
+  -Component cli `
+  -Archive .\cli\build\maximum-release\synesis-<version>-<platform>-maximum-release.zip `
+  -JdkUnixDomainTempDirectory C:\t\synesis-loopback-probe `
+  -LocalAppDataOverride C:\t\synesis-maximum-runtime-data
+```
+
+The JSON evidence records these overrides as
+`PROCESS_LOCAL_ONLY; NOT_SHIPPED_LAUNCHER_CONFIGURATION`. They are host
+compatibility inputs, not a release feature and not evidence that the default
+customer environment passes. Every captured shipped process also receives a
+disposable `HOME`, `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA`; this keeps
+provider installation and workspace admission tests from mutating the
+operator's real configuration.
 
 The following must be separately evidenced before a customer release can be
 called maximum:

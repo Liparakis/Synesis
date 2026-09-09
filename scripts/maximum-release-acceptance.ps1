@@ -12,6 +12,10 @@ param(
 
   [string]$EvidenceDirectory,
 
+  [string]$JdkUnixDomainTempDirectory,
+
+  [string]$LocalAppDataOverride,
+
   [switch]$KeepExtracted
 )
 
@@ -53,8 +57,33 @@ else
 }
 New-Item -ItemType Directory -Force -Path $evidencePath | Out-Null
 
+if (-not [string]::IsNullOrWhiteSpace($JdkUnixDomainTempDirectory))
+{
+  $JdkUnixDomainTempDirectory = [IO.Path]::GetFullPath($JdkUnixDomainTempDirectory)
+  New-Item -ItemType Directory -Force -Path $JdkUnixDomainTempDirectory | Out-Null
+}
+if (-not [string]::IsNullOrWhiteSpace($LocalAppDataOverride))
+{
+  $LocalAppDataOverride = [IO.Path]::GetFullPath($LocalAppDataOverride)
+  New-Item -ItemType Directory -Force -Path $LocalAppDataOverride | Out-Null
+}
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("synesis-maximum-acceptance-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+$runtimeUserStateRoot = Join-Path $tempRoot 'runtime-user-state'
+$runtimeHome = Join-Path $runtimeUserStateRoot 'profile'
+$runtimeAppData = Join-Path $runtimeUserStateRoot 'roaming'
+$runtimeLocalAppData = if ([string]::IsNullOrWhiteSpace($LocalAppDataOverride)) {
+  Join-Path $runtimeUserStateRoot 'local'
+} else {
+  $LocalAppDataOverride
+}
+$runtimeXdgData = Join-Path $runtimeUserStateRoot 'xdg-data'
+$runtimeXdgConfig = Join-Path $runtimeUserStateRoot 'xdg-config'
+$runtimeXdgCache = Join-Path $runtimeUserStateRoot 'xdg-cache'
+$runtimeCodexHome = Join-Path $runtimeHome '.codex'
+$runtimeClaudeConfig = Join-Path $runtimeHome '.claude'
+New-Item -ItemType Directory -Force -Path $runtimeHome, $runtimeAppData, $runtimeLocalAppData, $runtimeXdgData, $runtimeXdgConfig, $runtimeXdgCache, $runtimeCodexHome, $runtimeClaudeConfig | Out-Null
 $result = [ordered]@{
   schema = 1
   component = $Component
@@ -62,15 +91,60 @@ $result = [ordered]@{
   archive = $archivePath
   archiveSha256 = Sha256 $archivePath
   archiveBytes = (Get-Item -LiteralPath $archivePath).Length
+  runtimeOverrides = [ordered]@{
+    jdkUnixDomainTempDirectory = if ([string]::IsNullOrWhiteSpace($JdkUnixDomainTempDirectory)) { 'NOT_SUPPLIED' } else { $JdkUnixDomainTempDirectory }
+    localAppData = $runtimeLocalAppData
+    userStateRoot = $runtimeUserStateRoot
+    scope = 'PROCESS_LOCAL_ONLY; NOT_SHIPPED_LAUNCHER_CONFIGURATION'
+  }
   checks = [ordered]@{}
   status = 'NOT_STARTED'
 }
+$script:environmentBlocked = $false
+$script:runtimeBlocked = $false
 
 function RecordCheck([string]$Name, [string]$Status, [string]$Detail)
 {
   $result.checks[$Name] = [ordered]@{
     status = $Status
     detail = $Detail
+  }
+}
+
+function ApplyRuntimeEnvironment([Diagnostics.ProcessStartInfo]$StartInfo)
+{
+  $StartInfo.Environment['HOME'] = $runtimeHome
+  $StartInfo.Environment['USERPROFILE'] = $runtimeHome
+  $StartInfo.Environment['APPDATA'] = $runtimeAppData
+  $StartInfo.Environment['LOCALAPPDATA'] = $runtimeLocalAppData
+  $StartInfo.Environment['XDG_DATA_HOME'] = $runtimeXdgData
+  $StartInfo.Environment['XDG_CONFIG_HOME'] = $runtimeXdgConfig
+  $StartInfo.Environment['XDG_CACHE_HOME'] = $runtimeXdgCache
+  $StartInfo.Environment['CODEX_HOME'] = $runtimeCodexHome
+  $StartInfo.Environment['CLAUDE_CONFIG_DIR'] = $runtimeClaudeConfig
+  # Do not let a developer or CI secret/configuration silently change the
+  # shipped-artifact result. The bundled launcher/runtime must be the subject
+  # of this acceptance run; only the explicit JDK compatibility override may
+  # add a JVM option.
+  foreach ($variable in @(
+    'JDK_JAVA_OPTIONS',
+    '_JAVA_OPTIONS',
+    'JAVA_TOOL_OPTIONS',
+    'JAVA_HOME',
+    'SYNESIS_JAVA',
+    'SYNESIS_MANIFEST_PRIVATE_KEY_B64',
+    'SYNESIS_ACCEPTANCE_MANIFEST_PUBLIC_KEY_B64',
+    'SYNESIS_PROTECTION_SEED',
+    'SYNESIS_MAXIMUM_PROTECTOR',
+    'SYNESIS_MAXIMUM_CONFIG',
+    'SYNESIS_MANIFEST_URL'
+  ))
+  {
+    [void]$StartInfo.Environment.Remove($variable)
+  }
+  if (-not [string]::IsNullOrWhiteSpace($JdkUnixDomainTempDirectory))
+  {
+    $StartInfo.Environment['JDK_JAVA_OPTIONS'] = "-Djdk.net.unixdomain.tmpdir=$JdkUnixDomainTempDirectory"
   }
 }
 
@@ -90,6 +164,7 @@ function InvokeCaptured(
   $startInfo.RedirectStandardInput = $true
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
+  ApplyRuntimeEnvironment $startInfo
   foreach ($argument in $Arguments)
   {
     [void]$startInfo.ArgumentList.Add($argument)
@@ -117,8 +192,8 @@ function InvokeCaptured(
   $combined = ($stdout + "`n" + $stderr).Trim()
   if ($null -ne $ExpectedExitCode)
   {
-    Require ($process.ExitCode -eq $ExpectedExitCode.Value) (
-      "$Label exited $($process.ExitCode), expected $($ExpectedExitCode.Value): $combined"
+    Require ($process.ExitCode -eq [int]$ExpectedExitCode) (
+      "$Label exited $($process.ExitCode), expected $([int]$ExpectedExitCode): $combined"
     )
   }
   [pscustomobject]@{
@@ -136,12 +211,131 @@ function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$Expe
   return InvokeCaptured $script:launcherPath $Arguments $ExpectedExitCode $Label
 }
 
+function IsLoopbackEnvironmentFailure([string]$Message)
+{
+  return $Message -match '(?i)COORDINATION_ERROR=Unable to establish loopback connection|Unable to establish loopback connection|SocketException: Invalid argument: connect'
+}
+
 function EnsureExecutable([string]$Path)
 {
   if (-not $script:maximumAcceptanceIsWindows)
   {
     & chmod +x -- $Path
     Require ($LASTEXITCODE -eq 0) "Could not make the shipped executable runnable: $Path"
+  }
+}
+
+function MakeDisposablePayloadFileWritable([string]$Path)
+{
+  if ($script:maximumAcceptanceIsWindows)
+  {
+    & attrib -R $Path
+    Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $Path"
+  }
+  else
+  {
+    & chmod u+w -- $Path
+    Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $Path"
+  }
+}
+
+function RestoreDisposablePayloadFileMode([string]$Path)
+{
+  if ($script:maximumAcceptanceIsWindows)
+  {
+    & attrib +R $Path
+  }
+  else
+  {
+    & chmod u-w -- $Path
+  }
+}
+
+function FindFrontendAsset([string]$PayloadRoot)
+{
+  $jars = @(Get-ChildItem -LiteralPath $PayloadRoot -Recurse -File -Filter '*.jar' -ErrorAction SilentlyContinue |
+    Sort-Object FullName)
+  foreach ($jar in $jars)
+  {
+    $zip = $null
+    try
+    {
+      $zip = [IO.Compression.ZipFile]::OpenRead($jar.FullName)
+      $entry = @($zip.Entries |
+        Where-Object {
+          -not $_.FullName.EndsWith('/') -and
+          $_.FullName -match '(?i)^web-ui/(index\.html|assets/.+\.(js|css))$'
+        } |
+        Sort-Object FullName |
+        Select-Object -First 1)
+      if ($entry.Count -eq 1)
+      {
+        return [pscustomobject]@{
+          ArchivePath = $jar.FullName
+          EntryName = $entry[0].FullName
+        }
+      }
+    }
+    catch
+    {
+      # A protected third-party JAR may not be a readable ZIP; keep looking.
+    }
+    finally
+    {
+      if ($null -ne $zip) { $zip.Dispose() }
+    }
+  }
+  return $null
+}
+
+function ReadZipEntryBytes([string]$ArchivePath, [string]$EntryName)
+{
+  $zip = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
+  try
+  {
+    $entry = $zip.GetEntry($EntryName)
+    Require ($null -ne $entry) "Frontend asset entry is missing from the protected JAR: $EntryName"
+    $input = $entry.Open()
+    $memory = [IO.MemoryStream]::new()
+    try
+    {
+      $input.CopyTo($memory)
+      return ,([byte[]]$memory.ToArray())
+    }
+    finally
+    {
+      $memory.Dispose()
+      $input.Dispose()
+    }
+  }
+  finally
+  {
+    $zip.Dispose()
+  }
+}
+
+function ReplaceZipEntryBytes([string]$ArchivePath, [string]$EntryName, [byte[]]$Bytes)
+{
+  $zip = [IO.Compression.ZipFile]::Open($ArchivePath, [IO.Compression.ZipArchiveMode]::Update)
+  try
+  {
+    $entry = $zip.GetEntry($EntryName)
+    Require ($null -ne $entry) "Frontend asset entry is missing from the protected JAR: $EntryName"
+    $entry.Delete()
+    $replacement = $zip.CreateEntry($EntryName)
+    $output = $replacement.Open()
+    try
+    {
+      $output.Write($Bytes, 0, $Bytes.Length)
+    }
+    finally
+    {
+      $output.Dispose()
+    }
+  }
+  finally
+  {
+    $zip.Dispose()
   }
 }
 
@@ -257,8 +451,9 @@ try
         $name.EndsWith('.keystore') -or $_.FullName -match '(?i)[\\/][^\\/]+\.dsym[\\/]' -or
         $_.FullName -match '(?i)[\\/](private|mappings?|symbols?)[\\/]'
     })
+  $forbiddenPaths = @($forbidden | ForEach-Object { $_.FullName }) -join ', '
   Require ($forbidden.Count -eq 0) (
-    "Private or source material entered the maximum customer bundle: $($forbidden.FullName -join ', ')"
+    "Private or source material entered the maximum customer bundle: $forbiddenPaths"
   )
   RecordCheck 'private-material-leakage' 'PASS' 'No mappings, seeds, private records, source files, source maps, or native debug files found'
 
@@ -337,16 +532,7 @@ try
     $tamperOriginal = [IO.File]::ReadAllBytes($tamperPath)
     try
     {
-      if ($script:maximumAcceptanceIsWindows)
-      {
-        & attrib -R $tamperPath
-        Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $tamperPath"
-      }
-      else
-      {
-        & chmod u+w -- $tamperPath
-        Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $tamperPath"
-      }
+      MakeDisposablePayloadFileWritable $tamperPath
       $tampered = [byte[]]::new($tamperOriginal.Length + 1)
       [Array]::Copy($tamperOriginal, $tampered, $tamperOriginal.Length)
       $tampered[$tamperOriginal.Length] = [byte]0xA5
@@ -358,14 +544,28 @@ try
     finally
     {
       [IO.File]::WriteAllBytes($tamperPath, $tamperOriginal)
-      if ($script:maximumAcceptanceIsWindows)
-      {
-        & attrib +R $tamperPath
-      }
-      else
-      {
-        & chmod u-w -- $tamperPath
-      }
+      RestoreDisposablePayloadFileMode $tamperPath
+    }
+
+    $frontendAsset = FindFrontendAsset $payloadRoot
+    Require ($null -ne $frontendAsset) 'Installed maximum payload contains no packaged web-ui asset for targeted tamper acceptance'
+    $frontendJarOriginal = [IO.File]::ReadAllBytes($frontendAsset.ArchivePath)
+    $frontendAssetOriginal = ReadZipEntryBytes $frontendAsset.ArchivePath $frontendAsset.EntryName
+    try
+    {
+      MakeDisposablePayloadFileWritable $frontendAsset.ArchivePath
+      $frontendAssetTampered = [byte[]]::new($frontendAssetOriginal.Length + 1)
+      [Array]::Copy($frontendAssetOriginal, $frontendAssetTampered, $frontendAssetOriginal.Length)
+      $frontendAssetTampered[$frontendAssetOriginal.Length] = [byte]0x5A
+      ReplaceZipEntryBytes $frontendAsset.ArchivePath $frontendAsset.EntryName $frontendAssetTampered
+      $frontendTamperResult = InvokeBundle @('version') 'maximum launcher after packaged frontend tamper' 1
+      Require ($frontendTamperResult.ExitCode -ne 0) 'Maximum stable launcher accepted an edited packaged frontend asset'
+      RecordCheck 'frontend-asset-tamper-refusal' 'PASS' "Stable launcher refused an edited packaged frontend asset: $($frontendAsset.EntryName)"
+    }
+    finally
+    {
+      [IO.File]::WriteAllBytes($frontendAsset.ArchivePath, $frontendJarOriginal)
+      RestoreDisposablePayloadFileMode $frontendAsset.ArchivePath
     }
 
     $mutableState = Join-Path $installRoot 'Link\acceptance-state.txt'
@@ -388,6 +588,9 @@ try
     Require ($LASTEXITCODE -eq 0) 'Could not initialize the disposable maximum acceptance project'
     & git -C $project config user.name 'Synesis Maximum Acceptance'
     & git -C $project config user.email 'synesis-maximum-acceptance@example.invalid'
+    # Keep the fixture's index and worktree byte-stable when the shipped CLI
+    # invokes Git with global/system configuration disabled.
+    & git -C $project config core.autocrlf false
     Set-Content -LiteralPath (Join-Path $project 'README.md') -Value 'Synesis maximum acceptance project'
     & git -C $project add README.md
     & git -C $project commit -m 'Initial maximum acceptance baseline' | Out-Null
@@ -397,9 +600,25 @@ try
     [void](InvokeBundle @('provider', 'install', 'claude', '--project', $project) 'maximum provider install')
     [void](InvokeBundle @('provider', 'status', 'claude', '--project', $project) 'maximum provider status')
     [void](InvokeBundle @('provider', 'uninstall', 'claude', '--project', $project) 'maximum provider uninstall')
+    $codexInstall = InvokeBundle @('provider', 'install', 'codex', '--project', $project) 'maximum Codex provider install'
+    Require ($codexInstall.Output -match 'PROVIDER_INSTALL_RESULT=(SUCCESS|ALREADY_INSTALLED|DEGRADED)') 'Maximum Codex provider installation did not return a supported result'
+    Require ($codexInstall.Output -match 'SYNTHETIC_CHECK=PASSED') 'Maximum Codex provider synthetic check did not pass'
     [void](InvokeBundle @('doctor', '--project', $project) 'maximum doctor')
-    [void](InvokeBundle @('ui', '--project', $project, '--duration-seconds', '1', '--no-browser') 'maximum UI/control-plane smoke')
-    RecordCheck 'cli-ui-control-plane-provider' 'PASS' 'Disposable project, provider boundary, doctor, and no-browser UI/control-plane smoke passed'
+    RecordCheck 'cli-project-provider-doctor' 'PASS' 'Disposable project initialization, Claude lifecycle, Codex installation, and doctor passed'
+    try
+    {
+      [void](InvokeBundle @('ui', '--project', $project, '--duration-seconds', '1', '--no-browser') 'maximum UI/control-plane smoke')
+      RecordCheck 'cli-ui-control-plane' 'PASS' 'Shipped UI/control-plane server completed the no-browser smoke'
+    }
+    catch
+    {
+      if (-not (IsLoopbackEnvironmentFailure $_.Exception.Message))
+      {
+        throw
+      }
+      $script:environmentBlocked = $true
+      RecordCheck 'cli-ui-control-plane' 'BLOCKED_ENVIRONMENT' 'The shipped UI/control-plane smoke reached the runtime but the host JDK could not establish its loopback wakeup connection; rerun on a host with working Java loopback support'
+    }
 
     $mcpInfo = [Diagnostics.ProcessStartInfo]::new()
     if ($script:maximumAcceptanceIsWindows)
@@ -424,6 +643,7 @@ try
     $mcpInfo.RedirectStandardInput = $true
     $mcpInfo.RedirectStandardOutput = $true
     $mcpInfo.RedirectStandardError = $true
+    ApplyRuntimeEnvironment $mcpInfo
     $mcpProcess = [Diagnostics.Process]::new()
     $mcpProcess.StartInfo = $mcpInfo
     Require $mcpProcess.Start() 'Could not start maximum shipped MCP process'
@@ -437,8 +657,19 @@ try
     $mcpOutput = $mcpOutputTask.GetAwaiter().GetResult()
     $mcpError = $mcpErrorTask.GetAwaiter().GetResult()
     Require ($mcpProcess.ExitCode -eq 0) "Maximum shipped MCP process failed: $mcpOutput`n$mcpError"
-    Require ($mcpOutput -match 'protocolVersion' -and $mcpOutput -match 'ensure_session' -and $mcpOutput -match 'ready') 'Maximum shipped MCP protocol smoke was incomplete'
-    RecordCheck 'mcp-boundary' 'PASS' 'Shipped MCP initialize, tools/list, and ensure_session exchange completed; native Link/overlay acceptance remains separate'
+    Require ($mcpOutput -match 'protocolVersion' -and $mcpOutput -match 'ensure_session') 'Maximum shipped MCP protocol smoke was incomplete'
+    Require ($mcpOutput -match '(?i)\\?"status\\?"\s*:\s*\\?"(ready|retry_required|blocked)\\?"') 'Maximum shipped MCP session response was missing a bounded status'
+    RecordCheck 'mcp-boundary' 'PASS' 'Shipped MCP initialize, tools/list, and bounded ensure_session exchange completed; native Link/overlay acceptance remains separate'
+    if ($mcpOutput -match '(?i)\\?"status\\?"\s*:\s*\\?"ready\\?"')
+    {
+      RecordCheck 'mcp-session-admission' 'PASS' 'Shipped MCP ensure_session reached ready on the disposable provider workspace'
+    }
+    else
+    {
+      $script:runtimeBlocked = $true
+      $sessionDetail = if ($mcpOutput -match '(?i)\\?"status\\?"\s*:\s*\\?"retry_required\\?"') { 'retry_required/workspace_not_ready' } else { 'blocked' }
+      RecordCheck 'mcp-session-admission' 'BLOCKED_RUNTIME' "Shipped MCP remained fail-closed at $sessionDetail; a verified provider workspace is required for ready evidence"
+    }
   }
   else
   {
@@ -455,12 +686,17 @@ try
     RecordCheck 'relay-auth-forwarding' 'NOT_EXECUTED' 'A licensed protected relay socket/authentication scenario is still required'
   }
 
-  $result.status = 'PASS_WITH_EXPLICIT_OPEN_GATES'
+  $result.status = if ($script:environmentBlocked -or $script:runtimeBlocked) { 'PARTIAL_ACCEPTANCE_BLOCKED' } else { 'PASS_WITH_EXPLICIT_OPEN_GATES' }
   $result.extractedBundle = $bundleRoot
   $result.keepExtracted = [bool]$KeepExtracted
   $result.evidenceDirectory = $evidencePath
   $resultPath = Join-Path $evidencePath 'maximum-release-acceptance.json'
   $result | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 -LiteralPath $resultPath
+  if ($script:environmentBlocked -or $script:runtimeBlocked)
+  {
+    Write-Warning "Maximum-release acceptance completed with blocked acceptance checks; evidence recorded at $resultPath"
+    exit 2
+  }
   Write-Output "PASS: maximum-release shipped-artifact acceptance recorded at $resultPath"
 }
 catch

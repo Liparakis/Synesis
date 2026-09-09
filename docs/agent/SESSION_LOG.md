@@ -1,3 +1,43 @@
+## 2026-09-09 — SYN-009E installed maximum-harness seam follow-up
+
+The extracted maximum-release harness was extended to target a packaged
+frontend JavaScript/CSS entry in addition to a generic immutable payload file,
+to exercise both Claude lifecycle and Codex installation, and to preserve
+bounded partial results when the host cannot provide Java loopback or a
+verified provider workspace. Every captured shipped process now receives an
+isolated temporary `HOME`, `USERPROFILE`, `APPDATA`, and `LOCALAPPDATA`, so
+provider installation cannot mutate the developer's real configuration. The
+disposable Git fixture now pins
+`core.autocrlf=false` so the shipped CLI's global/system Git isolation does not
+mistake PowerShell CRLF output for dirty user content. A strict-mode nullable
+PowerShell exit-code defect and empty-forbidden-list formatting defect were
+also fixed.
+
+Synthetic marker-only maximum archive evidence:
+
+- default host run: `PARTIAL_ACCEPTANCE_BLOCKED`; UI/control-plane was
+  `BLOCKED_ENVIRONMENT`, MCP session admission was
+  `BLOCKED_RUNTIME=retry_required/workspace_not_ready`, while immutable JVM
+  payload tamper, packaged frontend tamper, mutable `Link` state, provider
+  lifecycle, native MCP, and MCP wire framing passed;
+- process-local compatibility rerun using
+  `-JdkUnixDomainTempDirectory C:\t\synesis-loopback-probe` and
+  `-LocalAppDataOverride C:\t\synesis-maximum-harness-runtime-override-15`:
+  UI reached `COORDINATION_SERVE_READY`, MCP reached `ensure_session=ready`,
+  and the result was `PASS_WITH_EXPLICIT_OPEN_GATES`.
+
+These are bootstrap/extracted-artifact checks against a protection-lite bundle
+with a synthetic marker, not commercial Seven Rings evidence. No commercial
+protector, signing authority, push, tag, release, or remote mutation occurred.
+The focused bootstrap Go suite also passed after its migration fixtures
+isolated `HOME`/`USERPROFILE` from developer provider state and the harness
+scrubbed ambient provider/JVM configuration from captured processes.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, inject release signing authority,
+then run the same acceptance against a real maximum archive. Keep all commercial
+claims blocked until that artifact is exercised.
+
 ## 2026-09-09 — SYN-009E extracted maximum-release acceptance harness
 
 Added `scripts/maximum-release-acceptance.ps1` so maximum acceptance is

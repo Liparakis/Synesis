@@ -821,6 +821,11 @@ func assertNoLegacyLayout(t *testing.T, paths installPaths) {
 
 func withoutPathMutation(t *testing.T) {
 	t.Helper()
+	// Migration planning must not inspect the developer's real provider
+	// configuration while these disposable installation fixtures run.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	previous := pathUpdater
 	pathUpdater = func(installPaths, bool) error { return nil }
 	t.Cleanup(func() { pathUpdater = previous })
