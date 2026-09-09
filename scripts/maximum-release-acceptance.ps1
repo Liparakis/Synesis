@@ -211,6 +211,285 @@ function InvokeBundle([string[]]$Arguments, [string]$Label, [Nullable[int]]$Expe
   return InvokeCaptured $script:launcherPath $Arguments $ExpectedExitCode $Label
 }
 
+function StartBundleServer(
+  [string[]]$Arguments,
+  [string]$Label,
+  [int]$ReadyTimeoutSeconds = 20
+)
+{
+  $startInfo = [Diagnostics.ProcessStartInfo]::new()
+  if ($script:maximumAcceptanceIsWindows)
+  {
+    $startInfo.FileName = 'cmd.exe'
+    foreach ($argument in (@('/d', '/c', $script:launcherPath) + $Arguments))
+    {
+      [void]$startInfo.ArgumentList.Add($argument)
+    }
+  }
+  else
+  {
+    $startInfo.FileName = $script:launcherPath
+    foreach ($argument in $Arguments)
+    {
+      [void]$startInfo.ArgumentList.Add($argument)
+    }
+  }
+  $startInfo.WorkingDirectory = $tempRoot
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardInput = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  ApplyRuntimeEnvironment $startInfo
+  $process = [Diagnostics.Process]::new()
+  $process.StartInfo = $startInfo
+  Require $process.Start() "Could not start ${Label}: $script:launcherPath"
+  $stderrTask = $process.StandardError.ReadToEndAsync()
+  $process.StandardInput.Close()
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $ready = $null
+  $deadline = [DateTime]::UtcNow.AddSeconds($ReadyTimeoutSeconds)
+  $lineTask = $process.StandardOutput.ReadLineAsync()
+  while ([DateTime]::UtcNow -lt $deadline -and -not $process.HasExited)
+  {
+    if (-not $lineTask.Wait(250))
+    {
+      continue
+    }
+    $line = $lineTask.GetAwaiter().GetResult()
+    if ($null -eq $line)
+    {
+      break
+    }
+    [void]$lines.Add($line)
+    if ($line -match 'COORDINATION_SERVE_READY endpoint=(?<endpoint>\S+)\s+project=\S+.*\s+controlBootstrap=(?<bootstrap>\S+)\s+uiRoute=/')
+    {
+      $ready = [pscustomobject]@{
+        Endpoint = $Matches['endpoint'].TrimEnd('/')
+        Bootstrap = $Matches['bootstrap']
+        Line = $line
+      }
+      break
+    }
+    $lineTask = $process.StandardOutput.ReadLineAsync()
+  }
+  if ($null -eq $ready)
+  {
+    try
+    {
+      if (-not $process.HasExited) { $process.Kill($true) }
+      [void]$process.WaitForExit(5000)
+    }
+    catch
+    {
+      # Preserve the readiness failure as the useful acceptance result.
+    }
+    $stderr = ''
+    try
+    {
+      if ($stderrTask.Wait(2000)) { $stderr = $stderrTask.GetAwaiter().GetResult() }
+    }
+    catch
+    {
+      $stderr = $_.Exception.Message
+    }
+    throw "$Label did not report COORDINATION_SERVE_READY within ${ReadyTimeoutSeconds}s. stdout=$($lines -join "`n") stderr=$stderr"
+  }
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  return [pscustomobject]@{
+    Process = $process
+    StdoutTask = $stdoutTask
+    StderrTask = $stderrTask
+    Ready = $ready
+  }
+}
+
+function StopBundleServer([object]$State)
+{
+  if ($null -eq $State)
+  {
+    return
+  }
+  try
+  {
+    if (-not $State.Process.HasExited) { $State.Process.Kill($true) }
+    [void]$State.Process.WaitForExit(5000)
+  }
+  catch
+  {
+    # The bounded acceptance process may already have exited.
+  }
+  foreach ($task in @($State.StdoutTask, $State.StderrTask))
+  {
+    if ($null -eq $task) { continue }
+    try { [void]$task.GetAwaiter().GetResult() } catch { }
+  }
+  try { $State.Process.Dispose() } catch { }
+}
+
+function SendHttpText(
+  [System.Net.Http.HttpClient]$Client,
+  [System.Net.Http.HttpMethod]$Method,
+  [string]$Uri,
+  [hashtable]$Headers,
+  [string]$Body
+)
+{
+  $request = [System.Net.Http.HttpRequestMessage]::new($Method, $Uri)
+  try
+  {
+    if ($null -ne $Headers)
+    {
+      foreach ($name in $Headers.Keys)
+      {
+        [void]$request.Headers.TryAddWithoutValidation($name, [string]$Headers[$name])
+      }
+    }
+    if ($null -ne $Body)
+    {
+      $request.Content = [System.Net.Http.StringContent]::new(
+        $Body, [Text.Encoding]::UTF8, 'application/json')
+    }
+    $response = $Client.SendAsync($request).GetAwaiter().GetResult()
+    try
+    {
+      $responseBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+      return [pscustomobject]@{
+        StatusCode = [int]$response.StatusCode
+        Body = $responseBody
+      }
+    }
+    finally
+    {
+      $response.Dispose()
+    }
+  }
+  finally
+  {
+    $request.Dispose()
+  }
+}
+
+function ReadSseSnapshot(
+  [System.Net.Http.HttpClient]$Client,
+  [string]$Uri,
+  [string]$SessionToken
+)
+{
+  $request = [System.Net.Http.HttpRequestMessage]::new(
+    [System.Net.Http.HttpMethod]::Get, $Uri)
+  $response = $null
+  $stream = $null
+  $cancellation = $null
+  try
+  {
+    [void]$request.Headers.TryAddWithoutValidation(
+      'Accept', 'text/event-stream')
+    [void]$request.Headers.TryAddWithoutValidation(
+      'X-Synesis-Control-Session', $SessionToken)
+    $response = $Client.SendAsync(
+      $request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).
+      GetAwaiter().GetResult()
+    Require ([int]$response.StatusCode -eq 200) (
+      "Control-plane SSE returned HTTP $([int]$response.StatusCode)")
+    Require ($null -ne $response.Content.Headers.ContentType -and
+      $response.Content.Headers.ContentType.MediaType -eq 'text/event-stream') (
+      'Control-plane SSE response did not advertise text/event-stream')
+    $stream = $response.Content.ReadAsStream()
+    $cancellation = [Threading.CancellationTokenSource]::new(5000)
+    $buffer = [byte[]]::new(8192)
+    $text = [Text.StringBuilder]::new()
+    while ($text.Length -lt 262144)
+    {
+      $read = $stream.ReadAsync($buffer, 0, $buffer.Length, $cancellation.Token).
+        GetAwaiter().GetResult()
+      if ($read -eq 0) { break }
+      [void]$text.Append([Text.Encoding]::UTF8.GetString($buffer, 0, $read))
+      $current = $text.ToString()
+      if ($current -match '(?m)^event:\s*snapshot\s*$' -and
+        $current -match '(?m)^data:')
+      {
+        return $current
+      }
+    }
+    Require $false 'Control-plane SSE did not emit an initial snapshot event'
+    return $text.ToString()
+  }
+  finally
+  {
+    if ($null -ne $cancellation) { $cancellation.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+    if ($null -ne $response) { $response.Dispose() }
+    $request.Dispose()
+  }
+}
+
+function InvokeControlPlaneHttpAcceptance([string]$Project)
+{
+  $server = $null
+  $client = $null
+  $handler = $null
+  try
+  {
+    $server = StartBundleServer @(
+      'ui', '--project', $Project, '--duration-seconds', '30', '--no-browser'
+    ) 'maximum UI/control-plane HTTP acceptance'
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.UseProxy = $false
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds(5)
+    $base = $server.Ready.Endpoint
+    $health = SendHttpText $client ([System.Net.Http.HttpMethod]::Get) "$base/api/v1/health" $null $null
+    Require ($health.StatusCode -eq 200 -and $health.Body -match '"loopbackOnly"\s*:\s*true') (
+      "Control-plane health failed: HTTP $($health.StatusCode) $($health.Body)")
+    $root = SendHttpText $client ([System.Net.Http.HttpMethod]::Get) "$base/" $null $null
+    Require ($root.StatusCode -eq 200 -and $root.Body -match '(?i)<html') (
+      "Packaged browser UI root failed: HTTP $($root.StatusCode)")
+
+    $invalidBody = (@{ bootstrapToken = 'invalid-maximum-acceptance-token' } |
+      ConvertTo-Json -Compress)
+    $invalidSession = SendHttpText $client ([System.Net.Http.HttpMethod]::Post) "$base/api/v1/session" $null $invalidBody
+    Require ($invalidSession.StatusCode -eq 401) (
+      "Invalid control bootstrap was not rejected: HTTP $($invalidSession.StatusCode)")
+
+    $sessionBody = (@{ bootstrapToken = $server.Ready.Bootstrap } | ConvertTo-Json -Compress)
+    $session = SendHttpText $client ([System.Net.Http.HttpMethod]::Post) "$base/api/v1/session" $null $sessionBody
+    Require ($session.StatusCode -eq 201) "Control-plane session failed: HTTP $($session.StatusCode)"
+    $credentials = $session.Body | ConvertFrom-Json
+    $sessionToken = [string]$credentials.sessionToken
+    $csrfToken = [string]$credentials.csrfToken
+    Require (-not [string]::IsNullOrWhiteSpace($sessionToken) -and
+      -not [string]::IsNullOrWhiteSpace($csrfToken)) 'Control-plane session credentials were incomplete'
+    $reused = SendHttpText $client ([System.Net.Http.HttpMethod]::Post) "$base/api/v1/session" $null $sessionBody
+    Require ($reused.StatusCode -eq 401) 'Control-plane bootstrap token was reusable'
+
+    $sessionHeaders = @{ 'X-Synesis-Control-Session' = $sessionToken }
+    $snapshot = SendHttpText $client ([System.Net.Http.HttpMethod]::Get) "$base/api/v1/snapshot" $sessionHeaders $null
+    Require ($snapshot.StatusCode -eq 200 -and $snapshot.Body -match '"project"' -and
+      $snapshot.Body -match '"diagnostics"' -and $snapshot.Body -match '"network"' -and
+      $snapshot.Body -notlike "*$($server.Ready.Bootstrap)*") (
+      "Authenticated control-plane snapshot failed: HTTP $($snapshot.StatusCode)")
+    $diagnostics = SendHttpText $client ([System.Net.Http.HttpMethod]::Get) "$base/api/v1/diagnostics" $sessionHeaders $null
+    Require ($diagnostics.StatusCode -eq 200 -and $diagnostics.Body -match 'schemaVersion') (
+      "Authenticated diagnostics failed: HTTP $($diagnostics.StatusCode)")
+    $network = SendHttpText $client ([System.Net.Http.HttpMethod]::Get) "$base/api/v1/network" $sessionHeaders $null
+    Require ($network.StatusCode -eq 200 -and $network.Body -match '"relay"') (
+      "Authenticated network projection failed: HTTP $($network.StatusCode)")
+    $missingCsrf = (@{ operationId = 'missing'; answerUri = 'missing' } |
+      ConvertTo-Json -Compress)
+    $csrfCheck = SendHttpText $client ([System.Net.Http.HttpMethod]::Post) "$base/api/v1/commands/answer" $sessionHeaders $missingCsrf
+    Require ($csrfCheck.StatusCode -eq 403) 'Control-plane mutation without CSRF was not rejected'
+    $sse = ReadSseSnapshot $client "$base/api/v1/events" $sessionToken
+    Require ($sse -match '"snapshot"') 'Control-plane SSE snapshot payload was incomplete'
+  }
+  finally
+  {
+    if ($null -ne $client) { $client.Dispose() }
+    if ($null -ne $handler) { $handler.Dispose() }
+    StopBundleServer $server
+  }
+}
+
 function IsLoopbackEnvironmentFailure([string]$Message)
 {
   return $Message -match '(?i)COORDINATION_ERROR=Unable to establish loopback connection|Unable to establish loopback connection|SocketException: Invalid argument: connect'
@@ -618,6 +897,28 @@ try
       }
       $script:environmentBlocked = $true
       RecordCheck 'cli-ui-control-plane' 'BLOCKED_ENVIRONMENT' 'The shipped UI/control-plane smoke reached the runtime but the host JDK could not establish its loopback wakeup connection; rerun on a host with working Java loopback support'
+    }
+
+    if ($script:environmentBlocked)
+    {
+      RecordCheck 'cli-control-plane-http-sse' 'BLOCKED_ENVIRONMENT' 'The live authenticated browser/control-plane HTTP and SSE probe was not attempted because the same host loopback compatibility check was blocked'
+    }
+    else
+    {
+      try
+      {
+        InvokeControlPlaneHttpAcceptance $project
+        RecordCheck 'cli-control-plane-http-sse' 'PASS' 'Installed launcher served the packaged UI root and passed health, one-time bootstrap/session, authenticated snapshot/diagnostics/network, CSRF refusal, and initial SSE snapshot checks'
+      }
+      catch
+      {
+        if (-not (IsLoopbackEnvironmentFailure $_.Exception.Message))
+        {
+          throw
+        }
+        $script:environmentBlocked = $true
+        RecordCheck 'cli-control-plane-http-sse' 'BLOCKED_ENVIRONMENT' 'The live authenticated browser/control-plane HTTP and SSE probe reached a host loopback compatibility failure; rerun on a host with working Java loopback support'
+      }
     }
 
     $mcpInfo = [Diagnostics.ProcessStartInfo]::new()

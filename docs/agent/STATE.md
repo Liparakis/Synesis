@@ -22,10 +22,12 @@ marker, rejects mappings/source/private material, optionally verifies the
 private per-file artifact manifest, and records private JSON evidence. Its CLI
 path covers the shipped launcher, UI/control-plane, provider, native, and MCP
 boundaries, including immutable JVM and packaged frontend-asset tamper and
-mutable `Link` state; its relay path is deliberately limited to the shipped
-guarded launcher until a real protected relay authentication/forwarding
-scenario is available. A probe against both existing lite archives failed
-closed on the profile marker, so no lite output was promoted to maximum.
+mutable `Link` state. The CLI path now also performs a live packaged UI root,
+authenticated control-plane session/snapshot/CSRF/SSE, and projection check;
+its relay path is deliberately limited to the shipped guarded launcher until
+a real protected relay authentication/forwarding scenario is available. A
+probe against both existing lite archives failed closed on the profile marker,
+so no lite output was promoted to maximum.
 
 The harness was then run against a synthetic marker-only maximum archive. Each
 captured process used an isolated temporary `HOME`, `USERPROFILE`, `APPDATA`,
@@ -36,6 +38,11 @@ second run with explicit process-local JDK AF_UNIX and workspace-root
 overrides reached UI/control-plane ready and MCP `ensure_session=ready`, recording
 `PASS_WITH_EXPLICIT_OPEN_GATES`. These overrides are not shipped launcher
 configuration and do not establish commercial maximum evidence.
+
+The latest short-path compatibility rerun recorded the new live HTTP/SSE
+control-plane check as `PASS` in the synthetic harness evidence. The input was
+still only a marker-only synthetic archive; this does not promote any
+commercial ring or complete protected Link/overlay/relay acceptance.
 
 The protector matrix now enumerates the required Java 25/Gradle, transformation,
 virtualization, protected-loading, anti-analysis, compatibility, seeded

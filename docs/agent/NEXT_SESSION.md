@@ -26,8 +26,9 @@ current release-hardening task in the existing `SYN-009*` lineage.
 - The extracted-candidate harness is
   `scripts/maximum-release-acceptance.ps1`; it must be run only after a real
   maximum archive exists. Its CLI path uses `--skip-path-update` for a
-  disposable install, exercises the installed stable-launcher and packaged
-  frontend-asset integrity gates, and keeps the relay
+disposable install, exercises the installed stable-launcher and packaged
+  frontend-asset integrity gates plus the live authenticated UI/control-plane
+  HTTP/SSE seam, and keeps the relay
   authentication/forwarding gate open until a protected socket scenario
   passes. Its JDK/workspace compatibility overrides are process-local only.
 - The bootstrap runtime-integrity seam is recorded in

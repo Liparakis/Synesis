@@ -66,6 +66,15 @@ under the private acceptance directory. The relay authentication/forwarding
 scenario remains an explicit open gate until a real protected relay socket test
 is run; a parser smoke is not promoted to full relay acceptance.
 
+For a CLI candidate, the harness also starts a bounded disposable UI server
+long enough to exercise the installed browser/control-plane seam over HTTP. It
+checks the packaged HTML root, public loopback health, invalid and one-time
+bootstrap handling, authenticated session credentials, snapshot/diagnostics/
+network projections, CSRF refusal for an unauthenticated mutation, and the
+first authenticated `text/event-stream` snapshot. This is a shipped-artifact
+HTTP/SSE acceptance check; it is not browser automation and it does not prove
+the protected Link, overlay, relay, or commercial transformation rings.
+
 The CLI path also targets one packaged `web-ui` JavaScript or CSS entry inside
 the installed JAR. It edits that entry in a disposable copy, requires the
 stable launcher to refuse the changed immutable payload, and restores the

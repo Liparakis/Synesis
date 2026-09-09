@@ -19,8 +19,9 @@ only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records
 private JSON evidence. For CLI candidates it also has a no-PATH disposable
 install, stable-launcher runtime-tamper, packaged frontend-asset tamper,
-provider/MCP, and mutable-state gates. It keeps full relay
-authentication/forwarding as an explicit open gate. Its optional JDK
+provider/MCP, mutable-state, and live authenticated browser/control-plane
+HTTP/SSE gates. It keeps full relay authentication/forwarding as an explicit
+open gate. Its optional JDK
 loopback/workspace overrides are process-local and recorded as non-shipped
 compatibility inputs.
 The protector capability matrix now also records the required Java/Gradle,
@@ -104,10 +105,11 @@ commercial protection capability is claimed.
   as non-maximum, proving the profile boundary without mislabeling lite output.
 - A synthetic marker-only maximum archive completed the extracted CLI harness:
   immutable JVM and packaged frontend tamper refusal, mutable `Link` state,
-  provider lifecycle, UI/control-plane, native MCP, and ready MCP session all
-  passed when the documented process-local host compatibility overrides were
-  supplied. The default host run remains explicitly partial at the loopback
-  and provider-workspace gates.
+  provider lifecycle, packaged UI root, authenticated control-plane
+  session/snapshot/CSRF/SSE, UI/control-plane, native MCP, and ready MCP
+  session all passed when the documented process-local host compatibility
+  overrides were supplied. The default host run remains explicitly partial at
+  the loopback and provider-workspace gates.
 - `go test . -run '^TestMaximumProfileIsRecordedAndStableLauncherEmitsIntegrityGate$' -count=1` passed.
 - The generated maximum stable-launcher gate passed PowerShell AST parsing;
   the disposable marker-only runtime probe refused an edited immutable payload

@@ -1,3 +1,26 @@
+## 2026-09-09 — SYN-009E live shipped control-plane acceptance seam
+
+Extended `scripts/maximum-release-acceptance.ps1` with a bounded installed
+UI/control-plane HTTP/SSE probe. It discovers `COORDINATION_SERVE_READY`,
+checks the packaged HTML root, loopback health, invalid and one-time bootstrap,
+authenticated session/snapshot/diagnostics/network responses, CSRF refusal, and
+the initial authenticated SSE snapshot before terminating the disposable server.
+
+PowerShell AST parsing and the deferred-register validator passed. A synthetic
+marker-only archive passed the new check and the existing launcher/provider/
+native/MCP/tamper checks with the documented short-path process-local
+compatibility overrides; the JSON result was
+`PASS_WITH_EXPLICIT_OPEN_GATES`. The default host compatibility boundary remains
+blocked when Java cannot establish its loopback wakeup connection. This is not
+commercial maximum evidence: the input archive is synthetic, and commercial
+rings plus protected Link/overlay/relay/retrace/performance acceptance remain
+open.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, inject release signing authority,
+then run the same acceptance against a real maximum archive. Keep all
+commercial claims blocked until that artifact is exercised.
+
 ## 2026-09-09 — SYN-009E installed maximum-harness seam follow-up
 
 The extracted maximum-release harness was extended to target a packaged
