@@ -1,5 +1,26 @@
 # Deferred Functionality Register
 
+## SYN-009E promotion review — 2026-09-09
+
+The explicit maximum-protection goal promotes a release-engineering task in
+the existing `SYN-009C`/`SYN-009D` distribution lineage. It does not promote a
+new runtime service, protocol, provider, or frontend architecture. ADR-0070
+selects additive release-only profiles over the current Gradle platform bundle,
+Go bootstrap integrity, stable installation, native launcher, relay
+distribution, and packaged UI seams.
+
+Promotion requires a readable developer profile, an opt-in protection-lite
+build with private mappings/provenance, narrow reflection/resource/native keep
+rules, an installed protected acceptance harness, and explicit capability
+evidence for every Seven Ring. Commercial-only Rings 2, 4, 5, and 6 remain
+blocked until a licensed protector is installed and its actual customer-style
+output is exercised. Open-source renaming/shrinking is not a substitute.
+
+This task must not introduce a home-grown VM or packer, destructive
+anti-debugging, host surveillance, a customer downgrade flag, production keys,
+commercial credentials, public release, push, tag, or remote mutation. The
+deferred register remains part of every release/security checkpoint.
+
 ## SYN-053 promotion review — 2026-09-08
 
 The explicit user goal promotes the first installed browser UI over the

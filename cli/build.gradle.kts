@@ -1,12 +1,16 @@
 import org.gradle.internal.os.OperatingSystem
 import java.io.DataOutputStream
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.jar.JarFile
+import java.util.zip.ZipFile
 
 plugins {
     application
@@ -33,10 +37,27 @@ val runtimeImageDirectory = layout.buildDirectory.dir("platform-runtime")
 val nativeMcpDirectory = layout.buildDirectory.dir("native-mcp")
 val githubSha = providers.environmentVariable("GITHUB_SHA").orElse("UNKNOWN")
 val runtimeVersion = Runtime.version().toString()
+val protectionReleaseId = providers.gradleProperty("synesisReleaseId")
+    .orElse(providers.environmentVariable("SYNESIS_RELEASE_ID").orElse("local"))
+val protectionSeed = providers.gradleProperty("synesisProtectionSeed")
+    .orElse(providers.environmentVariable("SYNESIS_PROTECTION_SEED").orElse("UNSET"))
+val protectionJmods = providers.gradleProperty("synesisJmods")
+    .orElse(providers.environmentVariable("SYNESIS_JMODS").orElse(""))
 val launcherBat = layout.buildDirectory.file("install/synesis/bin/synesis.bat")
 val launcherUnix = layout.buildDirectory.file("install/synesis/bin/synesis")
 val cliSourceDirectory = layout.projectDirectory.dir("src").asFile
 val cliBuildFile = layout.projectDirectory.file("build.gradle.kts").asFile
+val protectionLiteConfiguration = configurations.create("protectionLite")
+val protectionLiteDirectory = layout.buildDirectory.dir("protection-lite")
+val protectionLiteBundleDirectory = protectionLiteDirectory.map { it.dir("bundle") }
+val protectionLitePrivateDirectory = protectionLiteDirectory.map { it.dir("private") }
+val protectionLiteJar = protectionLiteDirectory.map { it.file("synesis-cli-protection-lite.jar") }
+val protectionLiteMapping = protectionLitePrivateDirectory.map { it.file("mapping.txt") }
+val protectionLiteSeeds = protectionLitePrivateDirectory.map { it.file("seeds.txt") }
+val protectionLiteUsage = protectionLitePrivateDirectory.map { it.file("usage.txt") }
+val protectionLiteArtifactManifest = protectionLitePrivateDirectory.map { it.file("artifact-manifest.txt") }
+val protectionLiteProvenance = protectionLitePrivateDirectory.map { it.file("provenance.json") }
+val protectionLiteRules = layout.projectDirectory.file("src/release/proguard/protection-lite.pro")
 
 abstract class GenerateBuildInfoTask : DefaultTask() {
     @get:OutputDirectory
@@ -117,6 +138,7 @@ dependencies {
     runtimeOnly(project(":mcp"))
     implementation(libs.picocli)
     implementation(libs.zxing.core)
+    add("protectionLite", libs.proguard.base)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -365,6 +387,473 @@ exec "$APP_HOME/runtime/bin/java" --enable-native-access=ALL-UNNAMED -cp "$APP_H
         if (!isWindows) {
             bin.resolve("synesis").setExecutable(true)
         }
+    }
+}
+
+// The CLI script is evaluated before some sibling Java plugins register their
+// lazy `jar` tasks. Evaluate only these release inputs before resolving the
+// providers; the normal build tasks remain unchanged.
+listOf(":link", ":project-record", ":workspace", ":coordination", ":mcp-contract", ":mcp", ":web-ui")
+    .forEach { evaluationDependsOn(it) }
+
+val protectionLiteOwnedJarProviders = listOf(
+    project(":link").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":project-record").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":workspace").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":coordination").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":mcp-contract").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":mcp").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+    project(":web-ui").tasks.named<Jar>("jar").flatMap { it.archiveFile },
+)
+
+val protectionLiteInputTasks = listOf(
+    tasks.named<Jar>("jar"),
+    project(":link").tasks.named<Jar>("jar"),
+    project(":project-record").tasks.named<Jar>("jar"),
+    project(":workspace").tasks.named<Jar>("jar"),
+    project(":coordination").tasks.named<Jar>("jar"),
+    project(":mcp-contract").tasks.named<Jar>("jar"),
+    project(":mcp").tasks.named<Jar>("jar"),
+    project(":web-ui").tasks.named<Jar>("jar"),
+)
+
+val protectionLite = tasks.register<JavaExec>("protectionLite") {
+    group = "distribution"
+    description = "Builds the explicit ProGuard protection-lite JVM payload."
+    notCompatibleWithConfigurationCache(
+        "Protection-lite resolves toolchain/library paths and invokes an external protector."
+    )
+    dependsOn(protectionLiteInputTasks)
+    classpath = protectionLiteConfiguration
+    mainClass.set("proguard.ProGuard")
+    inputs.files(protectionLiteOwnedJarProviders)
+    inputs.file(protectionLiteRules)
+    outputs.files(protectionLiteJar, protectionLiteMapping, protectionLiteSeeds, protectionLiteUsage)
+    doFirst {
+        val outputJar = protectionLiteJar.get().asFile
+        val privateDirectory = protectionLitePrivateDirectory.get().asFile
+        delete(protectionLiteDirectory.get().asFile)
+        outputJar.parentFile.mkdirs()
+        privateDirectory.mkdirs()
+        val ownedJars = protectionLiteOwnedJarProviders.map { it.get().asFile }.distinct()
+        require(ownedJars.all { it.isFile }) { "Protection-lite input JAR missing: $ownedJars" }
+        val ownedPaths = ownedJars.map { it.absoluteFile.normalize() }.toSet()
+        val externalJars = configurations.runtimeClasspath.get().files
+            .filter { it.isFile && it.extension.equals("jar", ignoreCase = true) }
+            .filterNot { it.absoluteFile.normalize() in ownedPaths }
+            .distinctBy { it.absoluteFile.normalize() }
+        val javaHome = project.extensions.getByType<JavaToolchainService>().launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }.get().metadata.installationPath.asFile
+        val configuredJmods = protectionJmods.get().trim()
+        val jmods = if (configuredJmods.isBlank()) javaHome.resolve("jmods") else file(configuredJmods)
+        require(jmods.exists()) { "Java library image path missing: $jmods" }
+        val requiredJmodNames = setOf(
+            "java.base.jmod", "java.desktop.jmod", "java.logging.jmod", "java.naming.jmod",
+            "java.net.http.jmod", "jdk.httpserver.jmod", "jdk.jfr.jmod", "jdk.unsupported.jmod",
+        )
+        val jmodFiles = if (jmods.isDirectory) {
+            requiredJmodNames.mapNotNull { name -> jmods.resolve(name).takeIf { it.isFile } }
+        } else {
+            listOf(jmods)
+        }
+        require(jmodFiles.isNotEmpty()) { "Java library modules are required for protection-lite analysis: $jmods" }
+        setArgs(
+            buildList {
+                addAll(listOf("-include", protectionLiteRules.asFile.absolutePath))
+                ownedJars.forEach { addAll(listOf("-injars", it.absolutePath + "(!META-INF/MANIFEST.MF)")) }
+                addAll(listOf("-outjars", outputJar.absolutePath))
+                jmodFiles.forEach {
+                    val path = if (it.extension.equals("jmod", ignoreCase = true)) {
+                        it.absolutePath + "(!**.jar;!module-info.class)"
+                    } else {
+                        it.absolutePath
+                    }
+                    addAll(listOf("-libraryjars", path))
+                }
+                externalJars.forEach { addAll(listOf("-libraryjars", it.absolutePath)) }
+                addAll(listOf(
+                    "-printmapping", protectionLiteMapping.get().asFile.absolutePath,
+                    "-printseeds", protectionLiteSeeds.get().asFile.absolutePath,
+                    "-printusage", protectionLiteUsage.get().asFile.absolutePath,
+                ))
+            },
+        )
+    }
+}
+
+val protectionLiteBundle = tasks.register<Sync>("protectionLiteBundle") {
+    group = "distribution"
+    description = "Stages a self-contained protection-lite bundle without mutating the developer bundle."
+    dependsOn(platformBundle, protectionLite)
+    into(protectionLiteBundleDirectory)
+    from(platformBundleDirectory)
+    doLast {
+        val bundleRoot = protectionLiteBundleDirectory.get().asFile
+        val app = bundleRoot.resolve("app")
+        val appLib = app.resolve("lib")
+        require(app.isDirectory && appLib.isDirectory) { "Staged bundle layout is incomplete: $bundleRoot" }
+        val ownedNames = protectionLiteOwnedJarProviders.map { it.get().asFile.name }.toSet()
+        appLib.listFiles()?.filter { it.name in ownedNames }?.forEach { delete(it) }
+        val protectedCliJar = app.resolve("synesis-cli.jar")
+        delete(protectedCliJar)
+        copy {
+            from(protectionLiteJar)
+            into(app)
+            rename { "synesis-cli.jar" }
+        }
+        bundleRoot.resolve("PROTECTION_PROFILE").writeText("protection-lite\n")
+    }
+}
+
+val protectionLiteArchive = tasks.register<Zip>("protectionLiteArchive") {
+    group = "distribution"
+    description = "Archives the staged protection-lite bundle as a shipped candidate artifact."
+    dependsOn(protectionLiteBundle)
+    archiveFileName.set("synesis-${bundleVersion.get()}-${bundlePlatform.get()}-protection-lite.zip")
+    destinationDirectory.set(protectionLiteDirectory)
+    from(protectionLiteBundleDirectory) {
+        into("synesis-${bundleVersion.get()}-${bundlePlatform.get()}-protection-lite")
+    }
+}
+
+val protectionLiteBundleSmokeTest = tasks.register("protectionLiteBundleSmokeTest") {
+    group = "verification"
+    description = "Extracts and runs bounded CLI, UI, provider, MCP, and native checks against the protection-lite archive."
+    notCompatibleWithConfigurationCache(
+        "Protection-lite smoke testing extracts an archive and launches external processes."
+    )
+    dependsOn(protectionLiteArchive)
+    doLast {
+        val smokeRoot = Files.createTempDirectory("synesis-protection-lite-smoke-").toFile()
+        val archive = protectionLiteArchive.get().archiveFile.get().asFile
+        val extractedRoot = smokeRoot.resolve("bundle")
+        copy {
+            from(zipTree(archive))
+            into(extractedRoot)
+        }
+        val bundleRoot = extractedRoot.resolve("synesis-${bundleVersion.get()}-${bundlePlatform.get()}-protection-lite")
+        val launcher = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis.cmd" else "synesis")
+        val installer = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-installer.exe" else "synesis-installer")
+        val nativeMcp = bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-mcp.exe" else "synesis-mcp")
+        require(launcher.isFile) { "Protection-lite launcher missing: $launcher" }
+        require(installer.isFile) { "Protection-lite native installer missing: $installer" }
+        require(nativeMcp.isFile) { "Protection-lite native MCP launcher missing: $nativeMcp" }
+        if (!isWindows) {
+            require(launcher.setExecutable(true)) { "Unable to restore Unix protected launcher permissions" }
+            require(installer.setExecutable(true)) { "Unable to restore Unix protected installer permissions" }
+            require(nativeMcp.setExecutable(true)) { "Unable to restore Unix protected MCP launcher permissions" }
+            require(bundleRoot.resolve("runtime/bin/java").setExecutable(true)) {
+                "Unable to restore Unix protected runtime permissions"
+            }
+        }
+        fun launcherCommand(vararg arguments: String): MutableList<String> =
+            (if (isWindows) mutableListOf("cmd.exe", "/c", launcher.absolutePath)
+            else mutableListOf(launcher.absolutePath)).apply { addAll(arguments) }
+
+        fun runWithExit(expectedExitCode: Int, vararg arguments: String): String {
+            val process = ProcessBuilder(launcherCommand(*arguments)).directory(smokeRoot)
+                .redirectErrorStream(true)
+                .apply { environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath }
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            require(process.waitFor() == expectedExitCode) {
+                "Protection-lite command failed: ${arguments.joinToString(" ")}\n$output"
+            }
+            return output
+        }
+
+        fun run(vararg arguments: String): String = runWithExit(0, *arguments)
+
+        fun installerVersion(installer: java.io.File, workingDirectory: java.io.File): String {
+            val command = if (isWindows) {
+                mutableListOf("cmd.exe", "/c", installer.absolutePath, "version")
+            } else {
+                mutableListOf(installer.absolutePath, "version")
+            }
+            val process = ProcessBuilder(command).directory(workingDirectory).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            require(process.waitFor() == 0) { "Protected native installer version check failed:\n$output" }
+            return output
+        }
+
+        fun git(vararg arguments: String) {
+            val command = mutableListOf("git", "-C", smokeRoot.resolve("project").absolutePath).apply { addAll(arguments) }
+            val process = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true).apply {
+                environment().putAll(
+                    mapOf(
+                        "GIT_CONFIG_NOSYSTEM" to "1",
+                        "GIT_CONFIG_NOGLOBAL" to "1",
+                        "GIT_TERMINAL_PROMPT" to "0",
+                        "GIT_OPTIONAL_LOCKS" to "0",
+                        "GIT_AUTHOR_NAME" to "Synesis Protection Smoke",
+                        "GIT_AUTHOR_EMAIL" to "synesis-protection-smoke@example.invalid",
+                        "GIT_COMMITTER_NAME" to "Synesis Protection Smoke",
+                        "GIT_COMMITTER_EMAIL" to "synesis-protection-smoke@example.invalid",
+                    ),
+                )
+            }.start()
+            val output = process.inputStream.bufferedReader().readText()
+            require(process.waitFor() == 0) { "Protection smoke Git command failed: ${command.joinToString(" ")}\n$output" }
+        }
+
+        try {
+            require(run("version").contains("SYNESIS_VERSION=")) { "Protected version output missing" }
+            require(run("--help").contains("Usage:")) { "Protected help output missing" }
+            require(run("ui", "--help").contains("Start Synesis locally")) {
+                "Protected UI command metadata missing"
+            }
+            require(installerVersion(installer, smokeRoot).contains("SYNESIS_BOOTSTRAP_VERSION=")) {
+                "Protected native installer version output missing"
+            }
+            val nativeMcpProcess = ProcessBuilder(mutableListOf(nativeMcp.absolutePath, "version"))
+                .directory(smokeRoot).redirectErrorStream(true).start()
+            val nativeMcpOutput = nativeMcpProcess.inputStream.bufferedReader().readText()
+            require(nativeMcpProcess.waitFor() == 0 && nativeMcpOutput.contains("SYNESIS_VERSION=")) {
+                "Protected native MCP launcher failed to reach the protected CLI:\n$nativeMcpOutput"
+            }
+            val profileMarker = bundleRoot.resolve("PROTECTION_PROFILE")
+            require(profileMarker.readText() == "protection-lite\n") { "Protection profile marker missing" }
+
+            val project = smokeRoot.resolve("project")
+            require(project.mkdirs()) { "Unable to create protected smoke project: $project" }
+            git("init")
+            git("config", "user.name", "Synesis Protection Smoke")
+            git("config", "user.email", "synesis-protection-smoke@example.invalid")
+            project.resolve("README.md").writeText("Synesis protection smoke project\n")
+            git("add", ".")
+            git("commit", "-m", "Initial protection smoke baseline")
+            run("init", "--project", project.absolutePath)
+            run("provider", "list", "--project", project.absolutePath)
+            run("provider", "install", "claude", "--project", project.absolutePath)
+            run("provider", "status", "claude", "--project", project.absolutePath)
+            run("provider", "uninstall", "claude", "--project", project.absolutePath)
+            run("provider", "install", "codex", "--project", project.absolutePath)
+            run("doctor", "--project", project.absolutePath)
+            run("ui", "--project", project.absolutePath, "--duration-seconds", "1", "--no-browser")
+
+            val mcpProcess = ProcessBuilder(
+                launcherCommand(
+                    "mcp", "--provider", "codex", "--project", project.absolutePath,
+                    "--connection-instance-id", "protection-smoke-1",
+                ),
+            ).directory(smokeRoot).start()
+            val mcpWriter = mcpProcess.outputStream.bufferedWriter(Charsets.UTF_8)
+            val mcpReader = mcpProcess.inputStream.bufferedReader(Charsets.UTF_8)
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n")
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n")
+            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}\n")
+            mcpWriter.flush()
+            mcpWriter.close()
+            val line1 = mcpReader.readLine()
+            val line2 = mcpReader.readLine()
+            val line3 = mcpReader.readLine()
+            require(mcpProcess.waitFor() == 0) { "Protected MCP process failed to exit 0" }
+            require(line1 != null && line1.contains("protocolVersion")) { "Protected MCP initialize failed: $line1" }
+            require(line2 != null && line2.contains("\"name\":\"ensure_session\"")) {
+                "Protected MCP tools/list failed: $line2"
+            }
+            require(line3 != null && line3.contains("ready")) { "Protected MCP ensure_session failed: $line3" }
+        } finally {
+            delete(smokeRoot)
+        }
+    }
+}
+
+val protectionLiteProvenanceTask = tasks.register("protectionLiteProvenance") {
+    group = "distribution"
+    description = "Writes the private protection-lite provenance record outside the customer bundle."
+    dependsOn(protectionLite, protectionLiteArchive)
+    outputs.files(protectionLiteProvenance, protectionLiteArtifactManifest)
+    doLast {
+        fun sha256(file: java.io.File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
+        fun json(value: String): String = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+
+        fun gitValue(vararg arguments: String): String {
+            val process = ProcessBuilder(listOf("git") + arguments.toList())
+                .directory(rootProject.layout.projectDirectory.asFile)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            require(process.waitFor() == 0) {
+                "Unable to read Git provenance (${arguments.joinToString(" ")}): $output"
+            }
+            return output
+        }
+
+        val configuredCommit = githubSha.get().trim()
+        val sourceCommit = configuredCommit
+            .takeIf { it.isNotBlank() && it != "UNKNOWN" }
+            ?: gitValue("rev-parse", "HEAD")
+        val dirtyTree = gitValue("status", "--porcelain", "--untracked-files=all").isNotBlank()
+        val protectionJavaHome = project.extensions.getByType<JavaToolchainService>().launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }.get().metadata.installationPath.asFile
+        val configuredJmods = protectionJmods.get().trim()
+        val libraryJmods = if (configuredJmods.isBlank()) {
+            protectionJavaHome.resolve("jmods")
+        } else {
+            file(configuredJmods)
+        }
+        val jarHash = sha256(protectionLiteJar.get().asFile)
+        val archive = protectionLiteArchive.get().archiveFile.get().asFile
+        val archiveHash = sha256(archive)
+        val rulesHash = sha256(protectionLiteRules.asFile)
+        val bundleRoot = protectionLiteBundleDirectory.get().asFile
+        val manifestLines = Files.walk(bundleRoot.toPath()).use { paths ->
+            paths
+                .filter { path -> Files.isRegularFile(path) }
+                .map { path ->
+                    val relative = bundleRoot.toPath().relativize(path).toString()
+                        .replace(File.separatorChar, '/')
+                    "$relative\t${sha256(path.toFile())}"
+                }
+                .sorted()
+                .toList()
+        }
+        val manifestText = "# SYNESIS_PROTECTION_LITE_MANIFEST_V1\n" +
+                manifestLines.joinToString("\n", postfix = "\n")
+        protectionLiteArtifactManifest.get().asFile.parentFile.mkdirs()
+        protectionLiteArtifactManifest.get().asFile.writeText(manifestText)
+        val manifestHash = sha256(protectionLiteArtifactManifest.get().asFile)
+        val record = """{
+  "schema": 1,
+  "profile": "protection-lite",
+  "releaseId": "${json(protectionReleaseId.get())}",
+  "sourceCommit": "${json(sourceCommit)}",
+  "dirtyTree": $dirtyTree,
+  "tool": "ProGuard",
+  "toolVersion": "${libs.versions.proguard.get()}",
+  "javaRuntime": "$runtimeVersion",
+  "libraryJmods": "${json(libraryJmods.absolutePath)}",
+  "rulesSha256": "$rulesHash",
+  "seed": "${json(protectionSeed.get())}",
+  "artifact": "${protectionLiteJar.get().asFile.name}",
+  "artifactSha256": "$jarHash",
+  "shippedArchive": "${archive.name}",
+  "shippedArchiveSha256": "$archiveHash",
+  "artifactManifest": "${protectionLiteArtifactManifest.get().asFile.name}",
+  "artifactManifestSha256": "$manifestHash",
+  "mapping": "${protectionLiteMapping.get().asFile.name}",
+  "seeds": "${protectionLiteSeeds.get().asFile.name}",
+  "usage": "${protectionLiteUsage.get().asFile.name}"
+}
+""".trimIndent() + "\n"
+        protectionLiteProvenance.get().asFile.parentFile.mkdirs()
+        protectionLiteProvenance.get().asFile.writeText(record)
+    }
+}
+
+val protectionLiteIntegrityCheck = tasks.register("protectionLiteIntegrityCheck") {
+    group = "verification"
+    description = "Checks the private protection-lite artifact manifest and non-shipping support boundary."
+    dependsOn(protectionLiteProvenanceTask)
+    notCompatibleWithConfigurationCache(
+        "Integrity acceptance inspects generated archives and private provenance files."
+    )
+    doLast {
+        fun sha256Bytes(bytes: ByteArray): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+        }
+
+        fun sha256(file: java.io.File): String = sha256Bytes(file.readBytes())
+
+        val bundleRoot = protectionLiteBundleDirectory.get().asFile
+        val manifestFile = protectionLiteArtifactManifest.get().asFile
+        val manifestLines = manifestFile.readLines()
+        require(manifestLines.firstOrNull() == "# SYNESIS_PROTECTION_LITE_MANIFEST_V1") {
+            "Protection-lite artifact manifest header missing"
+        }
+        val entries = manifestLines.drop(1).filter { it.isNotBlank() }.map { line ->
+            val parts = line.split('\t', limit = 2)
+            require(parts.size == 2 && parts[0].isNotBlank() && parts[1].matches(Regex("[0-9a-f]{64}"))) {
+                "Malformed protection-lite manifest line: $line"
+            }
+            parts[0] to parts[1]
+        }
+        require(entries.isNotEmpty()) { "Protection-lite artifact manifest is empty" }
+        require(entries.map { it.first }.distinct().size == entries.size) {
+            "Protection-lite artifact manifest contains duplicate paths"
+        }
+        entries.forEach { (relative, expectedHash) ->
+            val file = bundleRoot.resolve(relative.replace('/', File.separatorChar)).normalize()
+            require(file.toPath().startsWith(bundleRoot.toPath())) {
+                "Protection-lite manifest escapes bundle root: $relative"
+            }
+            require(file.isFile) { "Protected artifact missing from manifest: $relative" }
+            require(sha256(file) == expectedHash) { "Protected artifact hash mismatch: $relative" }
+        }
+
+        require(!bundleRoot.resolve("private").exists()) {
+            "Private protection material entered the customer bundle"
+        }
+        val mapping = protectionLiteMapping.get().asFile.readText()
+        require(mapping.contains("org.synesis.cli.SynesisCli -> org.synesis.cli.SynesisCli:")) {
+            "Protected CLI entrypoint is absent from the private mapping"
+        }
+        require(mapping.contains("org.synesis.cli.bootstrap.CliRuntime -> org.synesis.cli.a.a:")) {
+            "Expected transformed CLI implementation is absent from the private mapping"
+        }
+        ZipFile(protectionLiteArchive.get().archiveFile.get().asFile).use { zip ->
+            val names = zip.entries().asSequence().map { it.name }.toList()
+            require(names.none { name ->
+                name.endsWith(".java") || name.endsWith(".map") || name.endsWith(".sourcemap") ||
+                        name.contains("mapping.txt") || name.contains("seeds.txt") || name.contains("usage.txt") ||
+                        name.contains("provenance.json") || name.contains("artifact-manifest.txt")
+            }) { "Private/source material leaked into the protection-lite archive" }
+            require(names.any { it.endsWith("/app/synesis-cli.jar") }) {
+                "Protected CLI payload is absent from the protection-lite archive"
+            }
+        }
+        JarFile(protectionLiteJar.get().asFile).use { jar ->
+            require(jar.entries().asSequence().any { it.name == "web-ui/index.html" }) {
+                "Packaged UI resource is absent from the protected CLI payload"
+            }
+            require(jar.entries().asSequence().any { it.name.startsWith("org/synesis/a/") && it.name.endsWith(".class") }) {
+                "Protected CLI payload contains no renamed implementation class"
+            }
+        }
+
+        val versionEntry = entries.singleOrNull { it.first == "VERSION" }
+        require(versionEntry != null) { "Protection-lite manifest lacks VERSION" }
+        val tamperedHash = sha256Bytes((bundleRoot.resolve("VERSION").readBytes() + "tampered".toByteArray()))
+        require(tamperedHash != versionEntry.second) {
+            "Protection-lite manifest failed the non-mutating tamper-difference check"
+        }
+    }
+}
+
+tasks.register("maximumRelease") {
+    group = "distribution"
+    description = "Fails closed until a licensed maximum-profile protector is configured."
+    doLast {
+        val tool = providers.gradleProperty("synesisMaximumProtector")
+            .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_PROTECTOR")).orNull
+        require(!tool.isNullOrBlank()) {
+            "Maximum release is blocked: set -PsynesisMaximumProtector or SYNESIS_MAXIMUM_PROTECTOR " +
+                    "to a licensed, version-pinned protector integration; protection-lite is not a substitute."
+        }
+        throw GradleException(
+            "Maximum release integration is not enabled for '$tool'; no commercial protector is installed in this checkout."
+        )
     }
 }
 

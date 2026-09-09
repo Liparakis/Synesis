@@ -1,3 +1,27 @@
+## 2026-09-09 — SYN-009E maximum-protection task activation
+
+The completed installed browser UI slice is preserved at checkpoint `CP-0758`.
+The actual activation checkout is `8a5d090` on `master`, synchronized with
+`origin/master`; no push or reset occurred. `SYN-009E` is now the current
+release-hardening task in the existing `SYN-009C`/`SYN-009D` lineage.
+
+The task separates readable developer output, an opt-in `PROTECTION_LITE`
+profile, and a licensed `MAXIMUM_RELEASE` profile. The current normal bundle
+smoke is baseline evidence only. Commercial-only capabilities are explicitly
+blocked until actual tooling is installed and a shipped protected distribution
+proves them. ADR-0070 and the initial protection test matrix record the
+boundary.
+
+Protection-lite now has an opt-in ProGuard 7.10.0 CLI profile and a standalone
+relay profile. The protected CLI archive passes extracted CLI, UI/control-plane,
+provider, MCP/Link, native installer, private manifest, leakage, and
+non-mutating tamper-difference checks. The protected relay archive reaches its
+guarded parser. Provenance records the source/dirty state, rules/library image,
+artifact and archive hashes; no commercial maximum claim is made.
+
+Exact next action: run the post-change developer regression and capture the
+remaining size/startup evidence, then checkpoint and commit. Do not push.
+
 ## 2026-09-08 — SYN-053 browser UI implementation and installed acceptance
 
 The first real installed browser UI is implemented locally. `web-ui` is a

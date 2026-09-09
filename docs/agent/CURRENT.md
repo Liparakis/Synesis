@@ -1,8 +1,53 @@
 # Current Task
 
-## SYN-053 first installed Synesis browser UI — implementation and acceptance gate — 2026-09-08
+## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
-Status: **ACTIVE / IMPLEMENTED; FINAL LOCAL COMMIT AND ACCEPTANCE CHECKPOINT**.
+Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM BLOCKED**.
+The completed installed UI slice is preserved under `CP-0758`; the current
+task extends the existing `SYN-009C`/`SYN-009D` distribution and signing
+foundations into separate developer, protection-lite, and maximum-release
+profiles. No commercial Seven Rings capability is claimed until its actual
+protector output is installed and exercised.
+
+- Task ID: SYN-009E
+- Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
+  the working tree now contains this scoped release slice, preserved
+  `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
+- Existing release seams: Gradle platform bundles and jlink runtime, Go
+  bootstrap signed-manifest/payload verification, stable flat installation,
+  native launcher/installer, packaged frontend resources, and relay's separate
+  application distribution.
+- Protection boundary: developer builds remain readable; protection-lite is an
+  explicit release-engineering profile; maximum-release is gated on licensed
+  commercial tooling and must not expose a runtime downgrade switch.
+
+## Immediate next action
+
+Run the post-change `:cli:bundleSmokeTest`, the protected CLI and relay archive
+acceptance tasks, and a size/startup comparison; then record the results in
+the evidence and checkpoint files. Use
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
+resuming after a stop.
+
+## Current constraints
+
+- Do not change normal developer tasks or apply protection transforms to
+  ordinary tests/IDE output.
+- Do not call renaming virtualization, compression packing, weak VM checks, or
+  debug flags a pass for the corresponding Seven Ring.
+- Keep public CLI/protocol/JSON/resource/JNI/ServiceLoader contracts stable and
+  justify every nontrivial keep rule.
+- Use existing installer/payload integrity rather than creating a parallel
+  trust system; mutable user state must not be covered as immutable payload.
+- No home-grown VM, packer, hostile anti-debug, debugger attack, arbitrary
+  process killing, host surveillance, secret/key/license commit, push, tag,
+  release, or remote mutation.
+- Record `developer`, `protection-lite`, and `maximum-release` separately in
+  every result; unavailable commercial execution remains a blocker.
+
+## SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
+
+Status: **COMPLETE FOR CURRENT SCOPE; CHECKPOINT CP-0758 RECORDED**.
 The user-provided browser goal now activates the first product UI over the
 verified local control plane. ADR-0069 selects an install-bundled `web-ui`
 module, same-origin static serving from the existing JDK listener, fragment
@@ -14,12 +59,10 @@ The Windows self-contained runtime packaging was corrected to include
 - Baseline: backend commit `2be88cf` was clean and pushed to `origin/master`
   before UI work. No UI changes were included in that push.
 
-## Immediate next action
+## Historical continuation note
 
 Preserve the verified local SYN-053 commits and do not push UI changes without
-a separate explicit instruction. If the task resumes, start with
-`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` and review
-the existing acceptance evidence before any further change.
+a separate explicit instruction. Further work is tracked under `SYN-009E`.
 
 ## Current constraints
 
@@ -265,7 +308,8 @@ Evidence: `docs/evidence/syn049-fresh-unattended-two-worker-2026-09-06-runs70-74
 
 ## Immediate next action
 
-Investigate run-#74 AppServer `process_exit` evidence read-only. Do not patch
+Perform a read-only investigation of run-#74 AppServer `process_exit` evidence.
+Do not patch
 production, reuse a target, repair `.synesis`, copy snapshots/worktrees,
 invoke replacement/A2, or claim SYN-049 completion.
 

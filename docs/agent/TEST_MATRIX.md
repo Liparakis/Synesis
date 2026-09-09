@@ -1,3 +1,32 @@
+## SYN-009E maximum-protection release profile — current gate — 2026-09-09
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Task transition | `SYN-053` closed for current scope; `SYN-009E` active | PASS | `CP-0758`, durable state files |
+| Starting checkout | activation HEAD/status/remote parity | PASS | `8a5d090`; CP-0758 preserved; no push |
+| Developer profile | readable normal build and existing bundle smoke | PASS baseline | prior bundle smoke; must remain unchanged |
+| Protection-lite profile | opt-in Gradle task, narrow keep rules, mapping/provenance | PASS | ProGuard 7.10.0; `docs/evidence/syn-009e-protection-lite-2026-09-09.md` |
+| Protected CLI archive | extracted version/help, UI, provider, MCP/Link, doctor, native installer | PASS | `:cli:protectionLiteBundleSmokeTest` |
+| Protected relay archive | transformed entrypoint reaches guarded argument parser | PASS bounded | `:relay:protectionLiteSmokeTest`; full protected relay socket gate remains open |
+| Protected manifest/leakage | private manifest, no source/maps/private records, UI resource retained | PASS | `:cli:protectionLiteIntegrityCheck` |
+| Lite provenance | source/dirty state, tool, library image, rules/seed/artifact/archive hashes | PASS | private `provenance.json` outside bundle |
+| Maximum profile | licensed commercial protector exercised | BLOCKED | no commercial protector/license installed |
+| Ring 1 control flow | material transformation beyond renaming | BLOCKED | lite renaming is not control-flow protection |
+| Ring 2 virtualization | genuine virtual execution output | BLOCKED | requires selected commercial capability |
+| Ring 3 strings/constants | runtime protection and before/after audit | BLOCKED | lite rules do not claim string/constant protection |
+| Ring 4 analysis environment | safe multi-signal policy, legitimate VM pass | BLOCKED | requires selected protector/runtime capability |
+| Ring 5 protected payload | mature protected loader/payload, not ZIP compression | BLOCKED | requires selected commercial capability |
+| Ring 6 anti-debug/instrumentation | safe detect/refuse behavior under controlled tests | BLOCKED | requires selected protector/runtime capability |
+| Ring 7 integrity/diversification/retrace | signed protected manifest, seed/provenance, private maps | PARTIAL | private manifest/provenance pass; signed/diversified/retrace install blocked |
+| Installed acceptance | CLI/UI/control plane/Link/provider/native; overlay/relay bounded | PARTIAL | CLI archive pass; relay parser pass; full protected overlay/relay socket gate open |
+| Tamper acceptance | owned immutable payload detects edits; mutable state does not false-positive | PARTIAL | digest-difference check only; signed installer refusal not run |
+| Leakage audit | strings, source maps, mappings, paths, symbols, secrets | PASS lite boundary | archive excludes private/source material; commercial leakage audit open |
+| Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |
+
+Exact next action: run the post-change developer regression and timed
+developer/protected size-startup comparison; keep all commercial-only rows
+explicitly blocked until the licensed tool is exercised.
+
 ## SYN-053 installed browser UI — acceptance — 2026-09-08
 
 | Area | Check | Result | Evidence |

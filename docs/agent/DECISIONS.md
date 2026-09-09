@@ -2,6 +2,13 @@
 
 Product decisions are indexed in ADRs under `docs/adr/`.
 
+- ADR-0070: Synesis maximum-protection commercial release profile — accepted
+  for `SYN-009E`; readable developer builds remain separate from opt-in
+  protection-lite and licensed maximum-release packaging, the existing
+  distribution/integrity foundations are extended in place, virtualization and
+  protected packing are selective and evidence-gated, legitimate VMs are not
+  rejected by presence alone, and anti-analysis is fail-safe and non-hostile.
+
 - ADR-0069: Installed browser UI over the local control plane — accepted for
   SYN-053; a locked TypeScript/React/Vite/Tailwind `web-ui` module produces
   packaged static resources served same-origin by the existing loopback server,

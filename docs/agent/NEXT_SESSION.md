@@ -1,3 +1,21 @@
+## 2026-09-09 — SYN-009E maximum-protection release task
+
+`SYN-053` is complete for its current installed-UI scope at `CP-0758`. The
+activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
+no push has occurred. `SYN-009E` is now the sole
+current release-hardening task in the existing `SYN-009*` lineage.
+
+- Exact next action: run the post-change developer regression, relay/CLI
+  protection-lite acceptance and size/startup metrics, then checkpoint and
+  commit only the scoped release-hardening files without pushing.
+- Required continuation command:
+  `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+- Do not claim virtualization, packing, anti-VM, or anti-debug from open-source
+  renaming/shrinking. Commercial execution remains required for those rings.
+- Preserve the existing installer/payload signing boundary and keep production
+  keys, commercial licenses, release seeds, mappings, and native symbols out
+  of Git and customer artifacts.
+
 ## 2026-09-09 — packaged browser-opening runtime correction
 
 The Windows jlink runtime previously omitted `java.desktop`, causing the

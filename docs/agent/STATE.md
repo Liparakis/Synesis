@@ -1,3 +1,38 @@
+## 2026-09-09 — SYN-009E maximum-protection release task activation
+
+The completed installed browser UI task is closed for its current scope after
+checkpoint `CP-0758`. The actual checkout at activation is commit
+`8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`, synchronized with
+`origin/master`; the only working-tree item is the preserved untracked
+`docs/agent/checkpoints/CP-0758.md`. No reset or remote mutation occurred.
+
+`SYN-009E` is the next release/security task in the existing `SYN-009C` and
+`SYN-009D` lineage. ADR-0070 selects an additive release-only pipeline over
+the current Gradle bundles, jlink/native build, Go bootstrap integrity, stable
+installation, and packaged UI seams. It explicitly separates readable
+developer output from `PROTECTION_LITE` and the licensed `MAXIMUM_RELEASE`
+profile. ProGuard/yGuard-class output is not treated as virtualization,
+packing, anti-debug, or commercial maximum protection.
+
+## Exact next action
+
+Run the post-change developer bundle regression, relay and CLI protection-lite
+acceptance/metrics, then checkpoint and commit only the scoped release slice;
+keep maximum-release claims blocked without commercial execution.
+
+## Current evidence boundary
+
+The normal developer bundle smoke was the baseline before this slice. The CLI
+protection-lite archive now passes extracted CLI, UI/control-plane, provider,
+MCP/Link, native-installer, private-manifest, leakage, and non-mutating
+tamper-difference checks. The standalone relay protection-lite archive reaches
+its guarded parser. Existing installer signatures, payload manifests, stable
+activation, native `-trimpath`/stripped builds, and packaged frontend assets
+are foundations, not proof of all Seven Rings. No commercial protector or
+license is installed locally, so Rings 1, 2, 3, 4, 5, and 6 remain unclaimed;
+Ring 7 is partial until signed protected-release provenance,
+diversification, private retrace, and installed tamper refusal are exercised.
+
 ## 2026-09-08 — SYN-053 first installed browser UI activation
 
 The user-provided product goal activates the first real Synesis browser UI over

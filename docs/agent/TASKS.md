@@ -1,9 +1,63 @@
+## SYN-009E
+
+- ID: SYN-009E
+- Priority: P0
+- Title: Synesis maximum-protection commercial release profile
+- Status: ACTIVE
+- Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
+  manifest, leakage, and provenance checks pass; maximum profile integration
+  remains blocked; no Seven Rings claim is accepted without shipped-artifact
+  evidence.
+- Purpose: Extend the existing `SYN-009C` distribution and `SYN-009D` stable
+  installation foundations with separate `developer`, `protection-lite`, and
+  `maximum-release` packaging profiles. The developer profile stays readable;
+  the maximum profile uses licensed commercial protection where available and
+  fails closed in its protection boundary without unsafe anti-analysis.
+- Dependencies: `SYN-009C` DONE at CP-0110, `SYN-009D` DONE, the completed
+  `SYN-053` UI checkpoint `CP-0758`, current release/signing code, and
+  ADR-0070. `SYN-010A`/`SYN-010B` remain separate publication/aggregation
+  tasks and are not silently reopened.
+- Acceptance criteria: a protection-only Gradle seam exists and is absent from
+  normal developer tasks; owned JVM/native/frontend artifacts are classified
+  by Tier 0–3; narrow reflection/resource/native keep boundaries are recorded;
+  protection-lite produces mappings and a private provenance record; maximum
+  profile configuration covers all Seven Rings without relabeling weaker
+  transforms; existing signed-manifest/payload integrity is extended or
+  explicitly bounded; protected bundles are installed and exercised through
+  CLI, UI/control plane, Link, overlay, relay, and bounded provider/native
+  flows; tamper, mutable-state, secret-leakage, mapping, source-map, size,
+  performance, and retrace evidence is recorded.
+- Seven Rings: Ring 1 and Ring 3 may be `PASS` only after protected output
+  inspection; Ring 2, Ring 4, Ring 5, and Ring 6 require genuine selected
+  protector capability and executed acceptance; Ring 7 requires signed
+  provenance, immutable-artifact verification, release diversification, and
+  private retrace evidence. Missing commercial tooling is an explicit blocker,
+  not a passing substitute.
+- Required documentation: ADR-0070, protection profile/tool capability
+  matrix, keep-rule and contract inventory, protected acceptance procedure,
+  signing/provenance/retrace guidance, performance/size evidence, and durable
+  state/checkpoint updates including `docs/agent/DEFERRED.md`.
+- Required tests: normal bundle regression; protection-lite build and mapping
+  checks; protected installed CLI/UI/control-plane acceptance; Link/overlay/
+  relay/provider/native smoke where configured; protected artifact manifest and
+  tamper checks; mutable-state negative check; static string/metadata/source
+  map audits; retrace; performance/size comparison; and commercial-tool
+  acceptance for any claimed maximum ring.
+- Scope boundary: no home-grown virtual machine, malware-like packer,
+  destructive anti-debug, host surveillance, customer downgrade flag, product
+  protocol redesign, frontend concealment project, production key creation,
+  commercial-license commit, public release, push, tag, or remote mutation.
+- Exact next action: run the post-change developer regression and capture
+  relay/CLI protection-lite size/startup evidence, then checkpoint and commit
+  the scoped release-hardening slice without pushing.
+
 ## SYN-053
 
 ### First installed Synesis browser UI — activated 2026-09-08
 
-- Status: ACTIVE
-- Verification: IMPLEMENTED; focused, packaged, installed, and browser acceptance pass; final local checkpoint pending
+- Status: COMPLETE FOR CURRENT SCOPE; checkpoint `CP-0758` recorded
+- Verification: IMPLEMENTED; focused, packaged, installed, and browser
+  acceptance pass; local UI commits remain intentionally unpushed
 - Purpose: build and integrate the first real browser UI as an install-bundled
   static frontend over the existing authenticated local control plane.
 - Planning basis: explicit user-provided browser-UI goal, current-source
@@ -27,8 +81,8 @@
   SSE update, invite flow, Link/relay/control-plane regressions, deferred
   validation, and `git diff --check`.
 - Exact next action: preserve the verified local UI commits and keep them
-  unpushed until separately authorized; on resume, review the recorded
-  acceptance evidence before making another change.
+  unpushed until separately authorized; subsequent work is tracked by
+  `SYN-009E`.
 - Scope exclusions: no Electron/native GUI, cloud dashboard, SaaS login,
   telemetry, external CDN, browser-side P2P, OS URI registration, fake
   production data, Link/overlay redesign, WorkGroup semantics redesign, or

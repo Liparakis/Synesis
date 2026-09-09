@@ -1,4 +1,39 @@
-# SYN-053 first installed Synesis browser UI — activated 2026-09-08
+# SYN-009E Synesis maximum-protection commercial release profile — activated 2026-09-09
+
+Build and verify a release-only maximum-protection profile for Synesis using
+the existing `SYN-009*` distribution, bootstrap, signing, and stable-install
+lineage. Keep the ordinary developer build readable and debuggable. The
+protected profile must distinguish protection-lite from the requested
+commercial maximum profile and must classify every Seven Rings capability with
+artifact and installed-runtime evidence rather than marketing terminology.
+
+- Status: ACTIVE / protection-lite evidence complete; maximum profile blocked
+- Baseline: actual checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43` on
+  `master`, synchronized with `origin/master`; `CP-0758.md` is preserved as
+  the completed UI checkpoint and remains uncommitted.
+- Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
+  foundations; this task extends them rather than creating a parallel release
+  system. `SYN-010B` remains a separate historical aggregation task.
+- Planning basis: the user-provided maximum-protection goal, current-source
+  and bundle investigation, and ADR-0070.
+- Exact next action: run the post-change developer regression, relay/CLI
+  protection-lite acceptance, and release metrics; then checkpoint and commit
+  only the scoped release-hardening files without pushing.
+- Required rings: control-flow hardening, genuine virtualization, runtime
+  string/constant protection, safe analysis-environment detection, protected
+  payload packaging, safe anti-debug/instrumentation handling, and signed
+  integrity/diversification/private retrace.
+- Honest boundary: ProGuard 7.10.0 transformation is only `PROTECTION_LITE`;
+  commercial rings remain `BLOCKED` until a licensed protector is installed
+  and its shipped output is exercised.
+- Developer boundary: no protection transforms, anti-debug behavior, packing,
+  or virtualization may enter the normal developer build or customer-visible
+  runtime toggle surface.
+- Release boundary: no production signing keys, commercial licenses, private
+  seeds, mappings, or native symbols may be committed or shipped; no push,
+  tag, release, or remote mutation is authorized.
+
+# SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 
 Build and integrate the first real Synesis browser UI as a first-class,
 install-bundled repository module over the existing local control plane. The
@@ -7,14 +42,14 @@ diagnostic state; use the existing authenticated snapshot/SSE/onboarding
 contract; remain truthful for empty and `UNCONFIGURED` states; and require no
 Node runtime or development server after installation.
 
-- Status: ACTIVE / implementation complete for current local scope; final checkpoint pending
+- Status: COMPLETE FOR CURRENT LOCAL SCOPE; checkpoint `CP-0758.md` recorded
 - Baseline: backend commit `2be88cf` was pushed to `origin/master` before UI
   work. UI commits remain local until separately authorized.
 - Planning basis: user-provided browser-UI goal, current-source investigation,
   and ADR-0069.
 - Exact next action: preserve the verified local UI commits and do not push UI
-  commits without explicit authorization; on resume, review the acceptance
-  evidence before making another change.
+  commits without explicit authorization; release-hardening work proceeds under
+  `SYN-009E`.
 - Security boundary: preserve loopback-only binding, exact Host/Origin checks,
   one-time fragment bootstrap, session/CSRF headers, explicit DTOs, bounded
   SSE, and no secret exposure.
@@ -30,7 +65,8 @@ provider, Link, overlay, relay, and diagnostic state. It exposes versioned
 localhost HTTP queries and supported commands plus bounded SSE updates for a
 future browser UI; it does not build that UI.
 
-- Status: ACTIVE / implementation foundation and focused real-CLI acceptance complete; broader acceptance gate
+- Status: COMPLETE FOR CURRENT SCOPE / implementation foundation and focused
+  real-CLI acceptance complete; broader acceptance remains separately bounded
 - Exact next action: review and commit the verified local slice; do not claim live overlay/relay acceptance without a real long-lived owner.
 - Planning basis: current-source re-investigation and ADR-0067.
 - Security boundary: loopback-only bind, exact Host/Origin checks, one-time bootstrap, session plus CSRF for mutations, bounded bodies/queues, explicit DTOs, and no secret exposure.
