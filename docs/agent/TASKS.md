@@ -5,9 +5,9 @@
 - Title: Synesis maximum-protection commercial release profile
 - Status: ACTIVE
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
-  manifest, leakage, and provenance checks pass; the external maximum-
-  protector adapter and existing bootstrap-signing seam are implemented but
-  commercial execution remains blocked; no Seven Rings claim is accepted
+  manifest, leakage, and provenance checks pass; the external CLI/relay
+  maximum-protector adapter and existing bootstrap-signing seam are implemented
+  but commercial execution remains blocked; no Seven Rings claim is accepted
   without shipped-artifact evidence.
 - Purpose: Extend the existing `SYN-009C` distribution and `SYN-009D` stable
   installation foundations with separate `developer`, `protection-lite`, and
@@ -20,7 +20,9 @@
   tasks and are not silently reopened.
 - Acceptance criteria: a protection-only Gradle seam exists and is absent from
   normal developer tasks; owned JVM/native/frontend artifacts are classified
-  by Tier 0–3; narrow reflection/resource/native keep boundaries are recorded;
+  by Tier 0–3 in a current-source inventory; the external maximum adapter is
+  bound to that inventory and a clean reviewed release checkout; narrow
+  reflection/resource/native keep boundaries are recorded;
   protection-lite produces mappings and a private provenance record; maximum
   profile configuration covers all Seven Rings without relabeling weaker
   transforms; existing signed-manifest/payload integrity is extended or

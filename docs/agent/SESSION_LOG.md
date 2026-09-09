@@ -1,3 +1,30 @@
+## 2026-09-09 — SYN-009E source-tier binding and clean-release gate
+
+The maximum CLI and standalone-relay adapter requests now carry the current
+source-backed Tier 0–3 inventory, its SHA-256 digest, the keep-rule inventory,
+and the protected-acceptance procedure. Results must echo the release ID,
+source commit, and inventory digest. Both tasks reject a dirty source checkout
+before invoking a licensed adapter, preserving reproducibility rather than
+silently packaging local edits.
+
+Added `docs/release/protection-tier-inventory.md` and the vendor-neutral
+`maximum-protector-config.template.properties`. The inventory identifies the
+actual CLI/MCP/relay/protocol/resource contracts, Tier 1 implementation, Tier
+2 authority/coordination/provider/overlay engines, and method-scoped Tier 3
+candidates. It does not claim any commercial transformation was executed.
+
+Verification: CLI maximum task compiled and failed closed at the absent adapter;
+relay maximum task compiled and failed closed at the absent adapter; relay
+protection-lite smoke passed with the explicit Java 21 JMOD directory; scoped
+`git diff --check` passed. The current working copy still contains 1,532
+stable formatter-like rewrites outside this slice; they remain unstaged and
+untouched. No push, reset, tag, or release occurred.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, then run maximum artifact and
+installed-runtime acceptance from a clean reviewed release checkout. Do not
+claim the commercial rings before that execution.
+
 ## 2026-09-09 — SYN-009E maximum-protection task activation
 
 The completed installed browser UI slice is preserved at checkpoint `CP-0758`.
@@ -5920,21 +5947,24 @@ The host has no `dasho`, Zelix/KlassMaster, yGuard, R8, or maximum-protector
 environment/configuration. The existing protection-lite result therefore
 remains a baseline and the six commercial rings remain blocked.
 
-Added ADR-0071 and a release-only CLI adapter contract. The maximum task now
-requires a real version-pinned adapter and private configuration, explicit
-release identity/seed, all six ring evidence files, release diversification,
-private retrace/native symbols, and a customer/private output boundary. It
-creates a private immutable artifact manifest, archives the candidate, invokes
-the existing Go bootstrap signer with an injected CI key, and verifies the
-detached signature against the compiled bootstrap public key. No custom
-obfuscator, VM, packer, hostile anti-debugger, or alternate trust system was
-introduced.
+Added ADR-0071 and a release-only CLI/relay adapter contract. The maximum
+tasks now require a real version-pinned adapter and private configuration,
+explicit release identity/seed, all six ring evidence files, release
+diversification, private retrace/native symbols, and a customer/private output
+boundary. They create private immutable artifact manifests, archive each
+candidate, invoke the existing Go bootstrap signer with an injected CI key,
+and verify detached signatures against the compiled bootstrap public key. No
+custom obfuscator, VM, packer, hostile anti-debugger, or alternate trust system
+was introduced.
 
 Verification:
 
 - `:cli:maximumRelease` under the documented process-local Gradle workaround
   reached `:cli:maximumReleasePrepare` and failed closed because no adapter was
   supplied.
+- `:relay:maximumRelease` reached `:relay:maximumReleasePrepare` and failed
+  closed because no adapter was supplied; the relay lite archive smoke passed
+  with explicit JMODs.
 - `go test ./cmd/sign-manifest` passed, including the explicit-path signer
   regression test.
 - A full `go test ./...` run remains incomplete: three existing bootstrap

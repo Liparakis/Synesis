@@ -24,16 +24,17 @@ after the protected archive is final.
 Add one explicit provider-agnostic adapter contract to the release-only Gradle
 pipeline. The adapter is an external executable owned by the release
 environment and receives a versioned request file. It must return a protected
-CLI bundle, private evidence, exact protector identity/version, all six
-commercial ring statuses, diversification status, retrace data, and native
-symbols. The Gradle gate validates path separation, required customer files,
-private-material leakage, and a private immutable artifact manifest. It never
-converts the adapter's assertions into public marketing claims without the
-separate artifact and installed-runtime acceptance.
+CLI or standalone relay bundle, private evidence, exact protector
+identity/version, all six commercial ring statuses, diversification status,
+retrace data, and native symbols. The Gradle gate validates path separation,
+required customer files, private-material leakage, and a private immutable
+artifact manifest for each component. It never converts the adapter's
+assertions into public marketing claims without the separate artifact and
+installed-runtime acceptance.
 
 The final candidate task then:
 
-1. writes a reproducible per-platform release manifest;
+1. writes a reproducible per-component, per-platform release manifest;
 2. calls the existing `bootstrap/cmd/sign-manifest` implementation with an
    injected `SYNESIS_MANIFEST_PRIVATE_KEY_B64` secret; and
 3. verifies the detached signature against the public key compiled into the
@@ -45,6 +46,13 @@ customer archive except for the signed manifest and detached signature that
 the existing distribution flow needs. Adapter output is discarded from normal
 logs to reduce accidental disclosure.
 
+The request is bound to the current source-scoped Tier 0–3 inventory and its
+SHA-256 digest, the narrow keep-rule inventory, and the protected acceptance
+procedure. The result must echo the release ID, source commit, and inventory
+digest. The maximum tasks reject a dirty source checkout so a protected
+release cannot be presented as reproducible while silently including local
+developer edits.
+
 The signer now accepts explicit manifest and signature paths while preserving
 its existing defaults. This lets the release task sign a build-directory
 candidate without mutating the source checkout or creating a second signing
@@ -54,8 +62,12 @@ implementation.
 
 - A real commercial integration can be supplied without changing the normal
   developer build or pretending that ProGuard is maximum protection.
+- The tier inventory gives the vendor adapter a reviewed, source-backed target
+  boundary without requiring a global `org.synesis.**` keep or whole-system
+  virtualization.
 - Missing protector, configuration, explicit release ID/seed, signing key,
-  ring evidence, or signature causes a fail-closed result.
+  ring evidence, inventory binding, clean release checkout, or signature
+  causes a fail-closed result.
 - The adapter contract is intentionally vendor-neutral; a release engineer
   still must write or obtain the vendor-specific wrapper and review its exact
   configuration.

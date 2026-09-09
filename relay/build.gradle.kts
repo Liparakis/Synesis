@@ -1,6 +1,12 @@
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
+import java.util.Locale
+import java.util.Properties
 import org.gradle.internal.os.OperatingSystem
 
 plugins {
@@ -110,6 +116,64 @@ val relayProtectionLiteJar = relayProtectionLiteDirectory.map { it.file("synesis
 val relayProtectionLiteMapping = relayProtectionLitePrivateDirectory.map { it.file("mapping.txt") }
 val relayProtectionLiteProvenance = relayProtectionLitePrivateDirectory.map { it.file("provenance.json") }
 val relayProtectionLiteRules = layout.projectDirectory.file("src/release/proguard/protection-lite.pro")
+val relayMaximumProtector = providers.gradleProperty("synesisMaximumProtector")
+    .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_PROTECTOR").orElse(""))
+val relayMaximumProtectorConfig = providers.gradleProperty("synesisMaximumConfig")
+    .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_CONFIG").orElse(""))
+val relayMaximumReleaseId = providers.gradleProperty("synesisReleaseId")
+    .orElse(providers.environmentVariable("SYNESIS_RELEASE_ID").orElse("local"))
+val relayMaximumSeed = providers.gradleProperty("synesisProtectionSeed")
+    .orElse(providers.environmentVariable("SYNESIS_PROTECTION_SEED").orElse("UNSET"))
+val relayMaximumHostArch = if (System.getProperty("os.arch").lowercase(Locale.ROOT).contains("aarch64")) "arm64" else "x64"
+val relayMaximumPlatform = when {
+    OperatingSystem.current().isWindows -> "windows-$relayMaximumHostArch"
+    OperatingSystem.current().isMacOsX -> "macos-$relayMaximumHostArch"
+    else -> "linux-$relayMaximumHostArch"
+}
+val relayMaximumReleaseDirectory = layout.buildDirectory.dir("maximum-release")
+val relayMaximumReleaseBundleDirectory = relayMaximumReleaseDirectory.map { it.dir("bundle") }
+val relayMaximumReleasePrivateDirectory = relayMaximumReleaseDirectory.map { it.dir("private") }
+val relayMaximumReleaseRequest = relayMaximumReleaseDirectory.map { it.file("request.properties") }
+val relayMaximumReleaseResult = relayMaximumReleaseDirectory.map { it.file("result.properties") }
+val relayMaximumReleaseArtifactManifest = relayMaximumReleasePrivateDirectory.map { it.file("artifact-manifest.txt") }
+val relayMaximumReleaseManifest = relayMaximumReleaseDirectory.map { it.file("manifest.json") }
+val relayMaximumReleaseSignature = relayMaximumReleaseDirectory.map { it.file("manifest.json.sig") }
+
+fun writeRelayMaximumProperties(file: File, values: Map<String, String>) {
+    val properties = Properties()
+    values.forEach { (key, value) -> properties.setProperty(key, value) }
+    file.parentFile.mkdirs()
+    file.outputStream().use { properties.store(it, "Synesis maximum-release adapter contract") }
+}
+
+fun readRelayMaximumProperties(file: File): Properties {
+    require(file.isFile) { "Maximum-release adapter result is missing: $file" }
+    return Properties().also { properties ->
+        file.inputStream().use { input -> properties.load(input) }
+    }
+}
+
+fun relayMaximumProperty(properties: Properties, key: String): String = properties.getProperty(key)?.trim().orEmpty()
+
+fun relayMaximumSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(8192)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun relayMaximumHexDecode(value: String): ByteArray {
+    require(value.length % 2 == 0 && value.matches(Regex("[0-9a-fA-F]+"))) {
+        "Expected an even-length hexadecimal value"
+    }
+    return ByteArray(value.length / 2) { index -> value.substring(index * 2, index * 2 + 2).toInt(16).toByte() }
+}
 
 val relayProtectionLiteOwnedJarProviders = listOf(
     project(":link").tasks.named<Jar>("jar").flatMap { it.archiveFile },
@@ -276,5 +340,369 @@ tasks.register("protectionLiteProvenance") {
 """.trimIndent() + "\n"
         relayProtectionLiteProvenance.get().asFile.parentFile.mkdirs()
         relayProtectionLiteProvenance.get().asFile.writeText(record)
+    }
+}
+
+val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
+    group = "distribution"
+    description = "Invokes the supplied licensed maximum-protection adapter and validates the protected relay boundary."
+    notCompatibleWithConfigurationCache(
+        "Maximum protection invokes a release-environment adapter and inspects customer/private output boundaries."
+    )
+    dependsOn(tasks.installDist)
+    inputs.dir(layout.buildDirectory.dir("install/synesis-relay"))
+    outputs.dir(relayMaximumReleaseBundleDirectory)
+    outputs.dir(relayMaximumReleasePrivateDirectory)
+    doLast {
+        val protectorValue = relayMaximumProtector.get().trim()
+        require(protectorValue.isNotBlank()) {
+            "Maximum relay release is blocked: set -PsynesisMaximumProtector or SYNESIS_MAXIMUM_PROTECTOR " +
+                    "to a licensed, version-pinned protector adapter."
+        }
+        val configValue = relayMaximumProtectorConfig.get().trim()
+        require(configValue.isNotBlank()) {
+            "Maximum relay release is blocked: set -PsynesisMaximumConfig or SYNESIS_MAXIMUM_CONFIG " +
+                    "to the private, version-pinned protector configuration."
+        }
+        val protectorFile = project.file(protectorValue).absoluteFile
+        val configFile = project.file(configValue).absoluteFile
+        require(protectorFile.isFile) { "Maximum protector adapter is not a file: $protectorFile" }
+        require(configFile.isFile) { "Maximum protector configuration is not a file: $configFile" }
+
+        val releaseId = relayMaximumReleaseId.get().trim()
+        val seed = relayMaximumSeed.get().trim()
+        require(releaseId.isNotBlank() && !releaseId.equals("local", ignoreCase = true)) {
+            "Maximum relay release requires an explicit non-local release ID."
+        }
+        require(seed.isNotBlank() && !seed.equals("UNSET", ignoreCase = true)) {
+            "Maximum relay release requires a release-specific protection seed."
+        }
+
+        fun gitValue(vararg arguments: String): String {
+            val process = ProcessBuilder(listOf("git") + arguments.toList())
+                .directory(rootProject.layout.projectDirectory.asFile)
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.PIPE)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            require(process.waitFor() == 0) {
+                "Unable to read Git provenance (${arguments.joinToString(" ")}): $output"
+            }
+            return output
+        }
+
+        val sourceCommit = gitValue("rev-parse", "HEAD")
+        val dirtyTree = gitValue("status", "--porcelain", "--untracked-files=all").isNotBlank()
+        require(!dirtyTree) {
+            "Maximum relay release requires a clean source checkout; run it from a reviewed release commit, not a dirty developer workspace."
+        }
+        val tierInventory = rootProject.file("docs/release/protection-tier-inventory.md")
+        val keepRuleInventory = rootProject.file("docs/release/protection-keep-rules.md")
+        val acceptanceProcedure = rootProject.file("docs/release/protected-acceptance.md")
+        require(tierInventory.isFile && keepRuleInventory.isFile && acceptanceProcedure.isFile) {
+            "Maximum relay release source/acceptance inventories are incomplete"
+        }
+        val inputBundle = layout.buildDirectory.dir("install/synesis-relay").get().asFile.absoluteFile
+        val root = relayMaximumReleaseDirectory.get().asFile
+        delete(root)
+        val outputBundle = relayMaximumReleaseBundleDirectory.get().asFile.absoluteFile
+        val privateDirectory = relayMaximumReleasePrivateDirectory.get().asFile.absoluteFile
+        outputBundle.mkdirs()
+        privateDirectory.mkdirs()
+        val requestFile = relayMaximumReleaseRequest.get().asFile.absoluteFile
+        val resultFile = relayMaximumReleaseResult.get().asFile.absoluteFile
+        writeRelayMaximumProperties(
+            requestFile,
+            linkedMapOf(
+                "schema" to "1",
+                "profile" to "maximum-release",
+                "component" to "relay",
+                "releaseId" to releaseId,
+                "version" to relayProtectionVersion.get(),
+                "platform" to relayMaximumPlatform,
+                "sourceCommit" to sourceCommit,
+                "dirtyTree" to dirtyTree.toString(),
+                "seed" to seed,
+                "inputBundle" to inputBundle.path,
+                "outputBundle" to outputBundle.path,
+                "privateDirectory" to privateDirectory.path,
+                "configuration" to configFile.path,
+                "tierInventory" to tierInventory.absolutePath,
+                "tierInventorySha256" to relayMaximumSha256(tierInventory),
+                "keepRuleInventory" to keepRuleInventory.absolutePath,
+                "acceptanceProcedure" to acceptanceProcedure.absolutePath,
+                "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "invocation" to "The adapter must invoke the selected commercial protector; this task does not implement protection.",
+            ),
+        )
+
+        val command = if (OperatingSystem.current().isWindows && protectorFile.extension.lowercase(Locale.ROOT) in setOf("cmd", "bat")) {
+            listOf("cmd.exe", "/d", "/c", protectorFile.absolutePath, "--synesis-request", requestFile.absolutePath)
+        } else {
+            listOf(protectorFile.absolutePath, "--synesis-request", requestFile.absolutePath)
+        }
+        val process = ProcessBuilder(command)
+            .directory(root)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0) {
+            "Maximum relay protector adapter failed with exit code $exitCode; adapter output was discarded to avoid leaking release secrets."
+        }
+
+        val result = readRelayMaximumProperties(resultFile)
+        fun resultValue(key: String): String = relayMaximumProperty(result, key)
+
+        require(resultValue("schema") == "1") { "Maximum relay protector result schema must be 1" }
+        require(resultValue("status") == "success") { "Maximum relay protector result did not report success" }
+        require(resultValue("profile") == "maximum-release") { "Maximum relay protector result profile is not maximum-release" }
+        require(resultValue("component") == "relay") { "Maximum relay protector result component is not relay" }
+        require(resultValue("releaseId") == releaseId) { "Maximum relay protector result release ID does not match the request" }
+        require(resultValue("sourceCommit") == sourceCommit) { "Maximum relay protector result source commit does not match the request" }
+        require(resultValue("tierInventorySha256") == relayMaximumSha256(tierInventory)) {
+            "Maximum relay protector result was not built from the requested tier inventory"
+        }
+        require(resultValue("protectorName").isNotBlank()) { "Maximum relay protector name is missing" }
+        require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
+            "Maximum relay protector version must be pinned"
+        }
+
+        fun normalized(path: File): String = path.toPath().toAbsolutePath().normalize().toString()
+        fun samePath(actual: String, expected: File): Boolean =
+            normalized(project.file(actual)).equals(normalized(expected), ignoreCase = OperatingSystem.current().isWindows)
+        fun isUnder(child: File, parent: File): Boolean {
+            val childPath = normalized(child)
+            val parentPath = normalized(parent)
+            return childPath == parentPath || childPath.startsWith("$parentPath${File.separator}")
+        }
+
+        require(samePath(resultValue("bundleDirectory"), outputBundle)) {
+            "Maximum relay protector wrote its bundle outside the requested output boundary"
+        }
+        require(samePath(resultValue("privateDirectory"), privateDirectory)) {
+            "Maximum relay protector wrote private records outside the requested private boundary"
+        }
+        require(outputBundle.isDirectory) { "Maximum relay protector did not produce the customer bundle: $outputBundle" }
+        require(privateDirectory.isDirectory) { "Maximum relay protector did not produce private records: $privateDirectory" }
+        require(!isUnder(privateDirectory, outputBundle)) { "Private relay records overlap the customer bundle" }
+
+        listOf(
+            "controlFlow",
+            "virtualization",
+            "strings",
+            "analysisEnvironment",
+            "protectedPayload",
+            "antiDebug",
+        ).forEach { ring ->
+            require(resultValue("ring.$ring") == "verified") {
+                "Maximum relay protector did not verify the required ring: $ring"
+            }
+            val evidence = project.file(resultValue("evidence.$ring"))
+            require(isUnder(evidence, privateDirectory) && evidence.isFile) {
+                "Maximum relay evidence for $ring is missing or outside the private boundary"
+            }
+        }
+        require(resultValue("diversification") == "verified") {
+            "Maximum relay protector did not verify release diversification"
+        }
+        val retraceFile = project.file(resultValue("retraceFile"))
+        val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
+        require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile) {
+            "Maximum relay private retrace output is missing or outside the private boundary"
+        }
+        require(isUnder(nativeSymbolsDirectory, privateDirectory) && nativeSymbolsDirectory.isDirectory) {
+            "Maximum relay native symbols are missing or outside the private boundary"
+        }
+
+        require(outputBundle.resolve("PROTECTION_PROFILE").run { isFile && readText().trim() == "maximum-release" }) {
+            "Maximum relay output is missing PROTECTION_PROFILE=maximum-release"
+        }
+        val launcherName = if (OperatingSystem.current().isWindows) "synesis-relay.bat" else "synesis-relay"
+        require(outputBundle.resolve("bin").resolve(launcherName).isFile) {
+            "Maximum relay customer bundle is missing bin/$launcherName"
+        }
+        require(outputBundle.resolve("lib").listFiles()?.any { it.isFile && it.extension == "jar" } == true) {
+            "Maximum relay customer bundle contains no application JAR"
+        }
+        val forbidden = setOf("mapping.txt", "seeds.txt", "usage.txt", "provenance.json", "artifact-manifest.txt")
+        Files.walk(outputBundle.toPath()).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.forEach { path ->
+                val name = path.fileName.toString().lowercase(Locale.ROOT)
+                require(
+                    name !in forbidden && !name.endsWith(".sourcemap") && !name.endsWith(".pdb") &&
+                            !name.endsWith(".dsym") && !name.endsWith(".map")
+                ) { "Maximum relay bundle contains private/source material: $path" }
+            }
+        }
+
+        val manifestLines = Files.walk(outputBundle.toPath()).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .map { path ->
+                    val relative = outputBundle.toPath().relativize(path).toString()
+                        .replace(File.separatorChar, '/')
+                    "$relative\t${relayMaximumSha256(path.toFile())}"
+                }
+                .sorted()
+                .toList()
+        }
+        relayMaximumReleaseArtifactManifest.get().asFile.writeText(
+            "# SYNESIS_MAXIMUM_RELAY_MANIFEST_V1\n" + manifestLines.joinToString("\n", postfix = "\n")
+        )
+        writeRelayMaximumProperties(
+            privateDirectory.resolve("release-record.properties"),
+            linkedMapOf(
+                "schema" to "1",
+                "profile" to "maximum-release",
+                "component" to "relay",
+                "releaseId" to releaseId,
+                "sourceCommit" to sourceCommit,
+                "dirtyTree" to dirtyTree.toString(),
+                "protectorName" to resultValue("protectorName"),
+                "protectorVersion" to resultValue("protectorVersion"),
+                "configuration" to configFile.absolutePath,
+                "seed" to seed,
+                "artifactManifest" to relayMaximumReleaseArtifactManifest.get().asFile.name,
+                "artifactManifestSha256" to relayMaximumSha256(relayMaximumReleaseArtifactManifest.get().asFile),
+            ),
+        )
+    }
+}
+
+val relayMaximumReleaseArchiveTask = tasks.register<Zip>("maximumReleaseArchive") {
+    group = "distribution"
+    description = "Archives the externally protected maximum-release relay bundle."
+    dependsOn(relayMaximumReleasePrepare)
+    archiveFileName.set("synesis-relay-${relayProtectionVersion.get()}-$relayMaximumPlatform-maximum-release.zip")
+    destinationDirectory.set(relayMaximumReleaseDirectory)
+    from(relayMaximumReleaseBundleDirectory) {
+        into("synesis-relay-$relayMaximumPlatform-maximum-release")
+    }
+}
+
+val relayMaximumReleaseManifestTask = tasks.register("maximumReleaseManifest") {
+    group = "distribution"
+    description = "Creates the canonical signed-release manifest for the protected relay candidate."
+    dependsOn(relayMaximumReleaseArchiveTask)
+    outputs.file(relayMaximumReleaseManifest)
+    doLast {
+        fun json(value: String): String = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+
+        val keyId = project.providers.gradleProperty("synesisSigningKeyId")
+            .orElse(project.providers.environmentVariable("SYNESIS_MANIFEST_SIGNING_KEY_ID")).orNull?.trim().orEmpty()
+        require(keyId.isNotBlank()) {
+            "Maximum relay release requires SYNESIS_MANIFEST_SIGNING_KEY_ID; no signing key is generated here."
+        }
+        val publishedAt = project.providers.gradleProperty("synesisPublishedAt")
+            .orElse(project.providers.environmentVariable("SYNESIS_RELEASE_PUBLISHED_AT")).orNull?.trim().orEmpty()
+        require(publishedAt.isNotBlank()) {
+            "Maximum relay release requires SYNESIS_RELEASE_PUBLISHED_AT for reproducible release metadata."
+        }
+        val minimumBootstrapVersion = project.providers.gradleProperty("synesisMinimumBootstrapVersion")
+            .orElse(project.providers.environmentVariable("SYNESIS_MINIMUM_BOOTSTRAP_VERSION"))
+            .orElse("0.1.0-dev.local").get()
+        val archive = relayMaximumReleaseArchiveTask.get().archiveFile.get().asFile
+        relayMaximumReleaseManifest.get().asFile.writeText(
+            """{
+  "schemaVersion": 1,
+  "channel": "maximum-release",
+  "component": "relay",
+  "version": "${json(relayProtectionVersion.get())}",
+  "publishedAt": "${json(publishedAt)}",
+  "minimumBootstrapVersion": "${json(minimumBootstrapVersion)}",
+  "developmentOnly": false,
+  "signingKeyId": "${json(keyId)}",
+  "releaseId": "${json(relayMaximumReleaseId.get())}",
+  "artifacts": {
+    "${json(relayMaximumPlatform)}": {
+      "url": "${json(archive.name)}",
+      "sha256": "${relayMaximumSha256(archive)}",
+      "size": ${archive.length()}
+    }
+  }
+}
+""".trimIndent() + "\n"
+        )
+    }
+}
+
+val relayMaximumReleaseSignTask = tasks.register("maximumReleaseSign") {
+    group = "distribution"
+    description = "Signs the maximum-release relay manifest with the existing bootstrap signer."
+    dependsOn(relayMaximumReleaseManifestTask)
+    outputs.file(relayMaximumReleaseSignature)
+    doLast {
+        require(!System.getenv("SYNESIS_MANIFEST_PRIVATE_KEY_B64").isNullOrBlank()) {
+            "Maximum relay release requires SYNESIS_MANIFEST_PRIVATE_KEY_B64; production signing keys are injected, never generated or committed."
+        }
+        val process = ProcessBuilder(
+            "go", "run", "./cmd/sign-manifest",
+            "--manifest", relayMaximumReleaseManifest.get().asFile.absolutePath,
+            "--signature", relayMaximumReleaseSignature.get().asFile.absolutePath,
+        )
+            .directory(rootProject.file("bootstrap"))
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0 && relayMaximumReleaseSignature.get().asFile.isFile) {
+            "Existing bootstrap manifest signer failed for the relay with exit code $exitCode"
+        }
+    }
+}
+
+tasks.register("maximumRelease") {
+    group = "distribution"
+    description = "Builds, signs, and verifies a licensed maximum-release relay candidate."
+    dependsOn(relayMaximumReleaseSignTask)
+    notCompatibleWithConfigurationCache(
+        "Maximum relay release verifies an injected signature against the bootstrap trust root."
+    )
+    doLast {
+        val bootstrapSource = rootProject.file("bootstrap/main.go").readText()
+        val publicKeyHex = Regex("""manifestPublicKeyHex\s*=\s*\"([0-9a-fA-F]+)\"""")
+            .find(bootstrapSource)?.groupValues?.get(1)
+            ?: error("Embedded bootstrap manifest public key is missing")
+        val publicKeyBytes = relayMaximumHexDecode(publicKeyHex)
+        require(publicKeyBytes.size == 32) { "Embedded bootstrap manifest public key must be 32 bytes" }
+        val x509Prefix = byteArrayOf(
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+        )
+        val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(
+            X509EncodedKeySpec(x509Prefix + publicKeyBytes)
+        )
+        val signatureText = relayMaximumReleaseSignature.get().asFile.readText().trim()
+        val signatureBytes = try {
+            Base64.getDecoder().decode(signatureText)
+        } catch (exception: IllegalArgumentException) {
+            throw GradleException("Maximum relay detached signature is not valid base64", exception)
+        }
+        val verifier = Signature.getInstance("Ed25519")
+        verifier.initVerify(publicKey)
+        val manifestBytes = relayMaximumReleaseManifest.get().asFile.readBytes()
+        verifier.update(manifestBytes)
+        require(verifier.verify(signatureBytes)) {
+            "Maximum relay manifest signature does not verify against bootstrap/main.go trust root"
+        }
+        require(relayMaximumReleaseManifest.get().asFile.readText().contains("\"developmentOnly\": false")) {
+            "Maximum relay manifest must not be marked development-only"
+        }
+
+        val record = relayMaximumReleasePrivateDirectory.get().asFile.resolve("release-record.properties")
+        val properties = readRelayMaximumProperties(record)
+        properties.setProperty("manifest", relayMaximumReleaseManifest.get().asFile.name)
+        properties.setProperty("manifestSha256", relayMaximumSha256(relayMaximumReleaseManifest.get().asFile))
+        properties.setProperty("signature", relayMaximumReleaseSignature.get().asFile.name)
+        properties.setProperty("signatureSha256", relayMaximumSha256(relayMaximumReleaseSignature.get().asFile))
+        properties.setProperty("signedAgainstBootstrapKey", "true")
+        record.outputStream().use { properties.store(it, "Synesis maximum-relay private record") }
+        logger.lifecycle(
+            "Maximum relay candidate verified: ${relayMaximumReleaseArchiveTask.get().archiveFile.get().asFile.absolutePath}"
+        )
     }
 }

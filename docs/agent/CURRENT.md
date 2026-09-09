@@ -2,15 +2,18 @@
 
 ## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
-Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER SEAM PASS; COMMERCIAL MAXIMUM BLOCKED**.
+Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER SEAM AND SOURCE-TIER BINDING PASS; COMMERCIAL MAXIMUM BLOCKED**.
 The completed installed UI slice is preserved under `CP-0758`; the current
 task extends the existing `SYN-009C`/`SYN-009D` distribution and signing
 foundations into separate developer, protection-lite, and maximum-release
 profiles. A versioned external-protector request/result contract now feeds the
-release-only maximum task, which validates private evidence and signs/verifies
-the candidate through the existing bootstrap boundary. No commercial Seven
-Rings capability is claimed until its actual protector output is installed and
-exercised.
+release-only CLI and standalone-relay maximum tasks, which validate private
+evidence and sign/verify each candidate through the existing bootstrap
+boundary. No commercial Seven Rings capability is claimed until its actual
+protector output is installed and exercised.
+The current-source Tier 0–3 inventory and vendor-neutral adapter configuration
+skeleton are now explicit; maximum tasks reject dirty release checkouts and
+bind adapter results to the inventory digest.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -54,14 +57,16 @@ resuming after a stop.
 ## Work completed
 
 Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
-The release-only CLI task now requires an explicit licensed adapter,
+The release-only CLI and relay tasks now require an explicit licensed adapter,
 version-pinned private configuration, release ID/seed, six ring evidence
 records, diversification, private retrace/native symbols, and separated
-customer/private output. It creates a private artifact manifest, archives the
-candidate, signs through the existing bootstrap signer, and verifies the
-detached signature against the embedded bootstrap public key. Extended the
-signer with explicit manifest/signature paths and added a focused regression
-test. No commercial protection capability is claimed.
+customer/private output. It now also binds the request/result to the current
+Tier 0–3 source inventory, keep-rule inventory, and acceptance procedure,
+requires a clean reviewed release checkout, creates a private artifact
+manifest, archives the candidate, signs through the existing bootstrap signer,
+and verifies the detached signature against the embedded bootstrap public key.
+Added the source-backed tier inventory and vendor-neutral config skeleton. No
+commercial protection capability is claimed.
 
 ## Verification
 
@@ -70,6 +75,11 @@ test. No commercial protection capability is claimed.
 - `:cli:maximumRelease --no-configuration-cache` reached
   `maximumReleasePrepare` and failed closed as designed because no adapter is
   configured.
+- `:relay:maximumRelease --no-configuration-cache` reached
+  `maximumReleasePrepare` and failed closed as designed because no adapter is
+  configured; the relay protection-lite smoke still passes with explicit JMODs.
+- The maximum tasks compile after source-tier binding; both still fail closed
+  before adapter invocation because no licensed adapter is configured.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
 - `git diff --check` passed for the scoped changes; `agent-resume.ps1` and the
   deferred validator passed.
@@ -82,7 +92,9 @@ incomplete because three existing bootstrap update/migration tests fail with
 `update migrations not prepared`; the signer and MCP subpackages pass. The
 maximum profile and all commercial Seven Rings remain blocked. Preserved
 `CP-0758`, `.editorconfig`, and unrelated relay source changes remain
-untouched.
+untouched. A stable formatter-like rewrite of 1,532 other tracked files is
+also present outside this slice; it remains unstaged and is not release
+evidence.
 
 ## SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 

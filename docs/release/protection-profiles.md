@@ -39,10 +39,23 @@ developer build.
   '-PsynesisSigningKeyId=<key-id>' `
   '-PsynesisPublishedAt=<fixed-rfc3339-time>' `
   --dependency-verification=strict --no-configuration-cache
+
+.\gradlew.bat :relay:maximumRelease `
+  '-PsynesisMaximumProtector=C:\private\bin\synesis-maximum-adapter.exe' `
+  '-PsynesisMaximumConfig=C:\private\config\maximum.properties' `
+  '-PsynesisReleaseId=1.0.0-windows-x64-r001' `
+  '-PsynesisProtectionSeed=<release-specific-secret>' `
+  '-PsynesisSigningKeyId=<key-id>' `
+  '-PsynesisPublishedAt=<fixed-rfc3339-time>' `
+  --dependency-verification=strict --no-configuration-cache
 ```
 
 The adapter request/result schema and private-evidence requirements are
 documented in [maximum-protector-adapter.md](maximum-protector-adapter.md).
+The current source-scoped Tier 0–3 boundary is recorded in
+[protection-tier-inventory.md](protection-tier-inventory.md), and the
+vendor-neutral configuration skeleton is
+[maximum-protector-config.template.properties](maximum-protector-config.template.properties).
 No adapter, commercial configuration, release seed, or signing secret is
 provided in this checkout, so this command remains expected to fail closed.
 
@@ -67,6 +80,9 @@ image rather than silently relying on a developer machine.
 `maximum-release` is not an alias for lite. It must fail closed when the
 licensed protector adapter, its configuration, private recovery records, final
 manifest/signature, and post-protection acceptance evidence are absent. The
+maximum task also requires a clean reviewed release checkout; preserved local
+UI work or unrelated developer edits must remain outside the release checkout
+rather than being silently included in provenance. The
 Gradle seam signs the candidate through the existing bootstrap signer and
 verifies the compiled bootstrap trust root; it does not make the commercial
 ring claims without the later artifact and installed-runtime acceptance.

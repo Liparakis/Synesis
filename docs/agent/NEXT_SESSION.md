@@ -1,4 +1,4 @@
-## 2026-09-09 — SYN-009E maximum-protection adapter/signing seam
+## 2026-09-09 — SYN-009E maximum-protection adapter/signing and tier-binding seam
 
 `SYN-053` is complete for its current installed-UI scope at `CP-0758`. The
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
@@ -7,8 +7,9 @@ current release-hardening task in the existing `SYN-009*` lineage.
 
 - Exact next action: obtain an installed, licensed, version-pinned commercial
   protector and its reviewed adapter/configuration, inject release signing
-  authority, and run the maximum-release acceptance; absent that tool, keep the
-  maximum gate fail-closed and preserve the lite evidence.
+  authority, and run the maximum-release acceptance from a clean reviewed
+  release checkout; absent that tool, keep the maximum gate fail-closed and
+  preserve the lite evidence.
 - Required continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not claim virtualization, packing, anti-VM, or anti-debug from open-source
@@ -16,9 +17,12 @@ current release-hardening task in the existing `SYN-009*` lineage.
 - Preserve the existing installer/payload signing boundary and keep production
   keys, commercial licenses, release seeds, mappings, and native symbols out
   of Git and customer artifacts.
-- The provider-agnostic adapter contract is in
+- The provider-agnostic CLI/relay adapter contract is in
   `docs/release/maximum-protector-adapter.md`; ADR-0071 records why it is only
   a release seam and not evidence of the commercial rings.
+- The current-source Tier 0–3 boundary is in
+  `docs/release/protection-tier-inventory.md`; the vendor-neutral config
+  skeleton is `docs/release/maximum-protector-config.template.properties`.
 - The latest local source commits are unpublished; no push occurred. The full
   bootstrap Go suite is currently incomplete because three update/migration
   tests fail with `update migrations not prepared`; the signer subpackage

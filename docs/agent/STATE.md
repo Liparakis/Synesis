@@ -1,32 +1,43 @@
-## 2026-09-09 — SYN-009E maximum-protection adapter/signing seam — current
+## 2026-09-09 — SYN-009E maximum-protection adapter/signing and tier-binding seam — current
 
 The release-only maximum boundary now has a versioned external protector
-adapter contract. `:cli:maximumReleasePrepare` requires a real executable
-adapter, private configuration, explicit release ID/seed, all six ring evidence
-records, private retrace/native symbols, and a separated customer bundle. The
-final CLI candidate task archives the protected output, invokes the existing
-bootstrap manifest signer with an injected key, and verifies the detached
-signature against the public key embedded in `bootstrap/main.go`.
+adapter contract for both the CLI and standalone relay. The two
+`maximumReleasePrepare` tasks require a real executable adapter, private
+configuration, explicit release ID/seed, all six ring evidence records,
+private retrace/native symbols, and a separated customer bundle. Each
+candidate task archives the protected output, invokes the existing bootstrap
+manifest signer with an injected key, and verifies the detached signature
+against the public key embedded in `bootstrap/main.go`.
+
+The request/result is now bound to the current-source Tier 0–3 inventory,
+narrow keep-rule inventory, and protected-acceptance procedure by SHA-256
+digest. Both maximum tasks reject dirty source checkouts before invoking the
+adapter and require the result to echo the release identity, source commit,
+and inventory digest. A vendor-neutral private configuration skeleton records
+the six required commercial rings and the legitimate-VM/fail-safe policy.
 
 This is release plumbing, not commercial protection evidence. No DashO, Zelix,
 or equivalent licensed adapter/configuration/signing authority is installed on
-this host. The maximum task was rerun and failed closed at
+this host. The CLI and relay maximum tasks were rerun and failed closed at
 `maximumReleasePrepare`; `protection-lite` remains the only passing protected
-profile. The explicit signer-path regression test passes; the full bootstrap
+profile. The CLI normal bundle smoke, relay lite archive smoke, and explicit
+signer-path regression test pass; the full bootstrap
 Go suite remains incomplete because three pre-existing update/migration tests
 fail at `update migrations not prepared`.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
-reset, or mutation of the preserved UI checkpoint or
-unrelated relay edits occurred.
+reset, or mutation of the preserved UI checkpoint or unrelated relay edits
+occurred. An unexplained formatter-like rewrite of 1,532 other tracked files
+is stable and remains outside the slice; it must not be staged or treated as
+release evidence.
 
 ## Immediate next action
 
 Obtain an installed, licensed, version-pinned commercial protector and its
 reviewed adapter/configuration, inject the release signing authority, then run
-the maximum-release artifact and installed-runtime acceptance. Until that
-external state exists, preserve the passing lite evidence and keep maximum
-claims blocked.
+the maximum-release artifact and installed-runtime acceptance from a clean
+reviewed release checkout. Until that external state exists, preserve the
+passing lite evidence and keep maximum claims blocked.
 
 ## 2026-09-09 — SYN-009E maximum-protection release task activation
 

@@ -6,11 +6,13 @@
 | Starting checkout | activation HEAD/status/remote parity | PASS | `8a5d090`; CP-0758 preserved; no push |
 | Developer profile | readable normal build and existing bundle smoke | PASS baseline | prior bundle smoke; must remain unchanged |
 | Protection-lite profile | opt-in Gradle task, narrow keep rules, mapping/provenance | PASS | ProGuard 7.10.0; `docs/evidence/syn-009e-protection-lite-2026-09-09.md` |
+| Tier 0–3 source inventory | current-source public boundaries, Tier 1/2 areas, method-scoped Tier 3 candidates | PASS planning boundary / NOT EXECUTED | `docs/release/protection-tier-inventory.md`; commercial target review remains required |
 | Protected CLI archive | extracted version/help, UI, provider, MCP/Link, doctor, native installer | PASS | `:cli:protectionLiteBundleSmokeTest` |
 | Protected relay archive | transformed entrypoint reaches guarded argument parser | PASS bounded | `:relay:protectionLiteSmokeTest`; full protected relay socket gate remains open |
 | Protected manifest/leakage | private manifest, no source/maps/private records, UI resource retained | PASS | `:cli:protectionLiteIntegrityCheck` |
 | Lite provenance | source/dirty state, tool, library image, rules/seed/artifact/archive hashes | PASS | private `provenance.json` outside bundle |
 | Maximum adapter contract | versioned external request/result, six ring evidence paths, private retrace/native symbols, bundle separation | PASS seam / NOT EXECUTED | `docs/release/maximum-protector-adapter.md`; no licensed adapter installed |
+| Maximum relay adapter contract | same six-ring/private-output gate for standalone relay | PASS seam / NOT EXECUTED | `:relay:maximumReleasePrepare`; no licensed adapter installed |
 | Maximum candidate signing | existing bootstrap signer with injected key; detached signature verified against embedded trust root | NOT EXECUTED / BLOCKED | requires protected adapter output and release signing authority |
 | Maximum profile | licensed commercial protector exercised | BLOCKED | no commercial protector/license installed |
 | Ring 1 control flow | material transformation beyond renaming | BLOCKED | lite renaming is not control-flow protection |
