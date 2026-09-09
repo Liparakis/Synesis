@@ -178,10 +178,12 @@ callable DashO, Zelix/KlassMaster, Virbox, or external maximum adapter on
 has no configured maximum-release or signing inputs; no commercial artifact was
 run or claimed.
 
-The latest evidence-only refresh is commit `18da2f4b`, checkpointed at
-`CP-0807`. It records the same absent release inputs against the current
-checkout and leaves the maximum gate fail-closed; it does not alter the
-historical implementation-slice descriptions above.
+The availability evidence-only refresh is commit `18da2f4b`, checkpointed at
+`CP-0807`. The follow-on candidate-capability review is commit `4b2836a2`,
+checkpointed at `CP-0810`; it adds Virbox as an `UNVERIFIED` Ring 2/5
+candidate without changing any commercial result. The maximum gate remains
+fail-closed, and the historical implementation-slice descriptions above remain
+unchanged.
 
 The maximum adapter contract now also requires a schema-1 private
 retrace-acceptance properties file. It must report verified status, identify the

@@ -294,6 +294,9 @@ release-hardening work:
 - `18da2f4b` — refreshed the commercial-tool availability evidence and
   confirmed that no licensed adapter, commercial configuration, signing key,
   or release seed is available in the current release environment.
+- `4b2836a2` — added the first-party Virbox Java VME/BCE candidate review,
+  documented its Ring 2/5 evaluation boundary, and confirmed it is not
+  installed or callable in this release environment.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
