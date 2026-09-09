@@ -71,6 +71,8 @@ final class GeneratedOnboardingTest {
       host.getOutputStream().flush();
       CapturedProcess capturedHost = hostFuture.get(75, TimeUnit.SECONDS);
       CapturedProcess capturedJoin = joinFuture.get(75, TimeUnit.SECONDS);
+      assertTrue(join.waitFor(10, TimeUnit.SECONDS), "join process did not exit");
+      assertTrue(host.waitFor(10, TimeUnit.SECONDS), "host process did not exit");
       assertEquals(0, join.exitValue());
       assertEquals(0, host.exitValue());
       String joinOutput = capturedJoin.output();
