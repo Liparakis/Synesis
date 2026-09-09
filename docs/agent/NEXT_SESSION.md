@@ -4,9 +4,11 @@
 activation checkout was `8a5d090` on `master`; `CP-0758` remains preserved and
 no push has occurred. `SYN-009E` is now the sole
 current release-hardening task in the existing `SYN-009*` lineage.
-The last implementation checkpoint is `edfd155f` at `CP-0796`; the maximum
+The last implementation commit is `da934163` at checkpoint `CP-0800`; the maximum
 customer/private output boundary also rejects symbolic links before manifesting
-or signing.
+or signing, and the private retrace-acceptance record is bound to its mapping
+hash. The Seven Ring report now follows the current brief, while the adapter's
+six vendor-capability fields remain a compatibility schema.
 
 - Exact next action: obtain an installed, licensed, version-pinned commercial
   protector and its reviewed adapter/configuration, inject release signing
@@ -16,13 +18,14 @@ or signing.
 - Required continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not claim virtualization, packing, anti-VM, or anti-debug from open-source
-  renaming/shrinking. Commercial execution remains required for those rings.
+  renaming/shrinking. Those are optional vendor capabilities; commercial
+  execution remains required for the blocked/partial Seven Ring evidence.
 - Preserve the existing installer/payload signing boundary and keep production
   keys, commercial licenses, release seeds, mappings, and native symbols out
   of Git and customer artifacts.
 - The provider-agnostic CLI/relay adapter contract is in
   `docs/release/maximum-protector-adapter.md`; ADR-0071 records why it is only
-  a release seam and not evidence of the commercial rings.
+  a release seam and not evidence of the commercial capabilities or Seven Rings.
 - The current-source Tier 0–3 boundary is in
   `docs/release/protection-tier-inventory.md`; the vendor-neutral config
   skeleton is `docs/release/maximum-protector-config.template.properties`.
@@ -41,13 +44,17 @@ disposable install, exercises the installed stable-launcher and packaged
   `docs/evidence/syn-009e-profile-comparison-2026-09-09.json` and is explicitly
   partial until a licensed maximum ZIP is supplied. The current wrapper cannot
   expose reliable peak memory, and the cold startup delta must not be reported
-  as a performance win.
+  as a performance win. The extracted acceptance harness now records bounded
+  `durationMs` values for provider/doctor, Link, UI, authenticated control-plane
+  HTTP/SSE, and relay forwarding; route microbenchmarks and transformation
+  overhead remain open.
 - The documentation-only commercial pre-screen is in
   `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. DashO is the
   first Java 25/Gradle candidate to evaluate when licensed; Zelix remains a
-  Java 26 flow/string/constant candidate. Neither documentation set proves
-  Ring 2 virtualization or Ring 5 protected loading, so do not change the
-  commercial matrix until a shipped artifact is exercised.
+  Java 26 flow/string/constant candidate. Neither documentation set proves the
+  optional virtualization/protected-loading capabilities or any maximum Seven
+  Ring result, so do not change the commercial matrix until a shipped artifact
+  is exercised.
 - The archive-only reverse-engineering scanner is
   `scripts/release-reverse-engineering-comparison.ps1`, with current
   developer/lite CLI evidence in

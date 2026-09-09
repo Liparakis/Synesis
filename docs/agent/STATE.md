@@ -3,8 +3,8 @@
 The release-only maximum boundary now has a versioned external protector
 adapter contract for both the CLI and standalone relay. The two
 `maximumReleasePrepare` tasks require a real executable adapter, private
-configuration, explicit release ID/seed, all six ring evidence records,
-private mapping/retrace, component-scoped native recovery/audit, and a
+configuration, explicit release ID/seed, all six optional vendor-capability
+evidence records, private mapping/retrace, component-scoped native recovery/audit, and a
 separated customer bundle. CLI-owned native launchers require private symbols;
 relay's current distribution has no Synesis-owned native binary and therefore
 uses an explicit not-applicable owned-symbol scope plus a third-party audit.
@@ -19,7 +19,8 @@ digest, plus the requested seed, lockfile snapshot, Java/Gradle/Node/npm/Go
 toolchain values, and protector configuration digest. Both maximum tasks reject
 dirty source checkouts before invoking the adapter and require the result to
 echo that complete provenance. A vendor-neutral private configuration skeleton records
-the six required commercial rings and the legitimate-VM/fail-safe policy.
+the six optional vendor capabilities and the legitimate-VM/fail-safe policy;
+the release report separately classifies the Seven Rings.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs
 against extracted customer archives only. It enforces the maximum profile
@@ -54,9 +55,15 @@ The latest rebuilt-bundle compatibility rerun recorded the live HTTP/SSE
 control-plane check and installed Link invitation/PeerSession/project-sync
 check as `PASS` in the synthetic harness evidence, with overall
 `PASS_WITH_EXPLICIT_OPEN_GATES`. The input was still only a marker-only
-synthetic archive; this does not promote any commercial ring or complete
+synthetic archive; this does not promote any commercial capability or complete
 protected overlay/relay acceptance. Durable details are in
 `docs/evidence/syn-009e-link-shipped-acceptance-2026-09-09.md`.
+
+The acceptance harness now records a structured boundary-timing object and
+per-check `durationMs` values for provider/doctor, Link onboarding, UI smoke,
+authenticated control-plane HTTP/SSE, and relay forwarding. Peak memory, route
+microbenchmarks, commercial transformation overhead, and AV/EDR impact remain
+open rather than being inferred from absent values.
 
 The protector matrix now enumerates the required Java 25/Gradle, transformation,
 virtualization, protected-loading, anti-analysis, compatibility, seeded
@@ -92,7 +99,7 @@ string-encryption, and runtime-protection features. Zelix's reviewed
 documentation supports Java 26 bytecode handling, flow/string/constant
 transforms, scripting, and reproducibility guidance. Neither reviewed set
 establishes genuine JVM virtualization or protected payload loading, so no
-commercial ring status changed; the matrix and evidence are in
+optional vendor-capability status changed; the matrix and evidence are in
 `docs/release/protector-capability-matrix.md` and
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
 
@@ -140,7 +147,8 @@ native recovery rule before comparing records.
 The comparison harness requires the final signed-integrity fields and checks
 those private hashes before accepting diversification or reproducibility input.
 The consolidated maximum status report records every required final-report
-field and keeps commercial rings blocked until real licensed output exists.
+field and keeps the Seven Ring result blocked or partial until real licensed
+output exists.
 
 The maximum CLI and relay manifest tasks now invoke
 `scripts/release-native-hardening-audit.ps1` after archiving the protected
@@ -152,7 +160,7 @@ the provenance comparison verifies the status and hash. The task requires a
 reviewed developer archive through `SYNESIS_DEVELOPER_ARCHIVE` or
 `-PsynesisDeveloperArchive`.
 
-At checkpoint `CP-0796`, commit `edfd155f` records that the maximum CLI and
+The committed prep slice `da934163`, checkpointed at `CP-0800`, records that the maximum CLI and
 relay boundaries also reject any
 symbolic link found in the adapter-produced customer bundle or private release
 directory before manifesting, leakage inspection, or signing. This closes the
@@ -251,9 +259,10 @@ tamper-difference checks. The standalone relay protection-lite archive reaches
 its guarded parser. Existing installer signatures, payload manifests, stable
 activation, native `-trimpath`/stripped builds, and packaged frontend assets
 are foundations, not proof of all Seven Rings. No commercial protector or
-license is installed locally, so Rings 1, 2, 3, 4, 5, and 6 remain unclaimed;
-Ring 7 is partial until signed protected-release provenance,
-diversification, private retrace, and installed tamper refusal are exercised.
+license is installed locally, so Rings III and IV remain blocked; Ring V is a
+baseline only; and Rings VI and VII are partial until signed protected-release
+provenance, diversification, private retrace, and installed tamper refusal are
+exercised.
 
 ## 2026-09-08 — SYN-053 first installed browser UI activation
 

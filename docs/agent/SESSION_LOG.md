@@ -1,3 +1,35 @@
+## 2026-09-09 — SYN-009E Seven Ring alignment and acceptance timing seam
+
+Reread the exact referenced brief at
+`C:\Users\Liparakis\.codex\attachments\6839f961-2ec7-4927-81e1-54412fed9434\pasted-text-1.txt`;
+its SHA-256 is
+`74E92E54E6A0846885E99461128492AD6E56C6D7CE41542F43E94D25404ED404`.
+The source-backed Tier 3 inventory was corrected to use the actual capability
+projection path and exact acceptance/validation methods.
+
+The extracted maximum acceptance harness now records a structured
+`BOUNDARY_TIMINGS_ONLY` performance object and per-check `durationMs` values for
+provider/doctor, Link onboarding, UI smoke, authenticated control-plane
+HTTP/SSE, and relay forwarding. It explicitly leaves peak memory, route
+microbenchmarks, commercial transformation overhead, and AV/EDR impact open.
+
+The active release documents were aligned to the brief's Seven Rings:
+shrink/strip/sanitize, symbols, strings/constants, control flow, native,
+integrity/signing, and diversification/private recovery. The existing adapter
+`requiredRings` property remains the compatibility name for six optional vendor
+capabilities; it is no longer treated as the release-ring taxonomy. No
+commercial capability or maximum artifact was claimed.
+
+Verification: brief reread/hash, current-source inventory audit, PowerShell AST
+parse, measurement-helper smoke, and scoped `git diff --check` passed. Commit
+`da934163` records the slice; checkpoint `CP-0800` was created afterward. No
+push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain the installed, licensed, version-pinned commercial
+protector and release-signing authority, then run the maximum adapter and
+shipped-artifact acceptance from a clean reviewed checkout; otherwise keep the
+maximum gate fail-closed.
+
 ## 2026-09-09 — SYN-009E post-archive native audit ordering
 
 Integrated the existing archive-only PE/ELF/Mach-O native hardening audit into

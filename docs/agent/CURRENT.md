@@ -53,6 +53,11 @@ protection-lite at 45,911,491 / 68,870,411 / 685.841 ms. Its result is
 is not a performance claim, wrapper peak memory is `NOT_AVAILABLE`, and UI,
 route, Link, relay, provider, AV/EDR, and commercial maximum measurements
 remain open.
+The extracted acceptance harness now also records a `performance` object with
+bounded per-check `durationMs` values for provider/doctor, Link onboarding, UI
+smoke, authenticated control-plane HTTP/SSE, and relay forwarding. It leaves
+peak memory, route microbenchmarks, commercial transformation overhead, and
+AV/EDR impact explicitly open.
 
 The first-party DashO/Zelix documentation pre-screen is now recorded
 separately from artifact evidence. It narrows the next licensed evaluation:
@@ -60,8 +65,9 @@ DashO documents Java 25/26 bytecode support, scoped control-flow/string
 transforms, Gradle/CLI integration, and runtime protection; Zelix documents
 Java 26 bytecode handling, flow/string/constant transforms, Gradle scripting,
 and reproducibility guidance. Neither reviewed candidate establishes genuine
-virtual execution or protected payload loading in the evidence set, so the
-commercial matrix and Ring 2/Ring 5 gates remain unverified.
+virtual execution or protected payload loading in the evidence set, so those
+optional vendor capabilities remain unverified; this does not change the
+Seven Ring classification.
 
 The archive-only static reverse-engineering comparison is now implemented in
 scripts/release-reverse-engineering-comparison.ps1. Its current developer
@@ -116,9 +122,10 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains this
   scoped follow-up, preserved
   `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
-- Last implementation checkpoint: `edfd155f9aacca02fc6b5b9866a33693a985746b`
-  at `CP-0796`; the post-archive native-audit and symlink-boundary gates are
-  committed, with no staged changes and no push at that checkpoint.
+- Last implementation commit: `da934163`; checkpoint `CP-0800`; the
+  post-archive native-audit, symlink-boundary, structured private-retrace,
+  Seven Ring taxonomy, and bounded acceptance-timing changes are committed.
+  No push has occurred.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,
   native launcher/installer, packaged frontend resources, and relay's separate
@@ -157,8 +164,8 @@ resuming after a stop.
 
 Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
 The release-only CLI and relay tasks now require an explicit licensed adapter,
-version-pinned private configuration, release ID/seed, six ring evidence
-records, diversification, private mapping/retrace, component-scoped native
+version-pinned private configuration, release ID/seed, six optional vendor-
+capability evidence records, diversification, private mapping/retrace, component-scoped native
 recovery/audit, and separated customer/private output. It now also binds the request/result to the current
 Tier 0–3 source inventory, keep-rule inventory, and acceptance procedure,
 requires a clean reviewed release checkout, creates a private artifact
@@ -220,7 +227,7 @@ open.
 - The first-party commercial protector documentation pre-screen was recorded
   in `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`; it refines
   candidate selection without changing any commercial row to `PASS` or
-  establishing Ring 2/Ring 5.
+  establishing optional virtualization/protected-loading capabilities.
 - `scripts/release-reverse-engineering-comparison.ps1` parsed and ran against
   the developer and protection-lite CLI ZIPs. It recorded static class/package,
   architecture-term, metadata, path, source-map, private-material, and
@@ -248,10 +255,10 @@ open.
 No licensed commercial protector, adapter, private configuration, or release
 signing authority is installed. The marker-only runtime probe used a rebuilt
 platform bundle with only a synthetic maximum marker and does not prove any
-commercial transformation ring. The synthetic marker-only harness is
-artifact/bootstrap evidence only; Rings 1–6 remain blocked and Ring 7 remains
-partial until a licensed commercial release is signed, diversified, and
-retrace-validated. Preserved
+commercial transformation or Seven Ring completion. The synthetic marker-only
+harness is artifact/bootstrap evidence only; Rings III–IV remain blocked and
+Rings V–VII remain baseline/partial until a licensed commercial release is
+signed, diversified, and retrace-validated. Preserved
 `CP-0758`, `.editorconfig`, and unrelated relay source changes remain
 untouched. A stable formatter-like rewrite of 1,532 other tracked files is
 also present outside this slice; it remains unstaged and is not release

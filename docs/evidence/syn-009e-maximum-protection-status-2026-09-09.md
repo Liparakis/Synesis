@@ -13,9 +13,9 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified local HEAD is `eebc6bcf686960bb3cea628d4f4ac2b58ea0f188`
-  at checkpoint `CP-0799`; the post-archive native-audit, output-boundary, and
-  structured private-retrace gates are committed locally.
+- Latest verified local HEAD is `da934163`; checkpoint `CP-0800`; the
+  post-archive native-audit, output-boundary, structured private-retrace,
+  taxonomy, and acceptance-timing slices are committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
   checkout and must run from a reviewed clean release commit.
@@ -245,6 +245,10 @@ release-hardening work:
 - `9de90337` — complete adapter provenance echo binding;
 - `18092671` — CLI source-commit verification;
 - `afd83488` — concrete private maximum evidence requirements.
+- `eebc6bcf` — structured private retrace-acceptance evidence bound to the
+  exact mapping and trace hashes.
+- `da934163` — aligned the release report to the brief's Seven Ring taxonomy
+  and added bounded acceptance timing fields.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
