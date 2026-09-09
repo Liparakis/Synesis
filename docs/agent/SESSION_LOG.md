@@ -6522,3 +6522,25 @@ Verification: read-only source/path/signature scan, boundary search, scoped
 diff check, and deferred-register validation. Exact next action: obtain the
 licensed commercial protector and repeat the compatibility review against its
 complete input closure before selecting shipped Tier 3 transformations.
+
+## 2026-09-09 — SYN-009E private commercial-tool path boundary
+
+The maximum CLI and standalone-relay tasks previously documented their
+protector and configuration as private release inputs but accepted a path
+inside the source checkout if the caller supplied one. Added a fail-closed
+boundary that checks both the normalized lexical path and the canonical path of
+each input, rejecting committed files and symlink aliases before release
+provenance or adapter invocation. Updated the adapter procedure, ADR-0071,
+current state, next-session handoff, and test matrix.
+
+Verification: `git diff --check` passed for the scoped files;
+`:cli:tasks :relay:tasks --no-configuration-cache --no-daemon` passed with the
+documented process-local loopback workaround; deliberate in-checkout probes
+for both `:cli:maximumReleasePrepare` and `:relay:maximumReleasePrepare`
+failed closed with the new boundary. No commercial license, key, artifact, or
+remote state was used or modified.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and release-signing authority, then run the complete maximum artifact
+and shipped acceptance from a clean reviewed checkout; keep Rings 1–6 blocked
+and Ring 7 partial until that evidence exists.

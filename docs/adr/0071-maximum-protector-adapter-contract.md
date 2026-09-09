@@ -56,6 +56,11 @@ digest. The maximum tasks reject a dirty source checkout so a protected
 release cannot be presented as reproducible while silently including local
 developer edits.
 
+The adapter executable and protector configuration must also resolve outside
+the source checkout. The Gradle gate checks both the lexical path and the
+canonical path, preventing a committed file or a symlink alias from being used
+as the private commercial tool/configuration boundary.
+
 The customer bundle and private release directory are also required to be
 symlink-free. The Gradle gate rejects symbolic links after the adapter returns,
 before it walks either tree to create manifests or inspect private-material

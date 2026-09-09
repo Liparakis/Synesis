@@ -50,6 +50,12 @@ the post-protection native comparison through
 `SYNESIS_DEVELOPER_ARCHIVE` or `-PsynesisDeveloperArchive`. This is a release
 input path, not a secret, and it is never copied into the customer bundle.
 
+The Gradle gates reject both the adapter executable and the protector
+configuration when either path is lexically or canonically inside the source
+checkout. This includes symlink aliases, so commercial binaries and
+license-bearing configuration must come from the private release environment;
+they cannot be committed to the repository or hidden under its build tree.
+
 The adapter is invoked without a shell as:
 
 ```text

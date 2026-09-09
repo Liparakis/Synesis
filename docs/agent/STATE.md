@@ -23,6 +23,10 @@ records the six Ring 1–6 capabilities and the legitimate-VM/fail-safe policy;
 the release report separately classifies Ring 7. The adapter documentation now
 also records how a future Virbox VME/BCE wrapper would map Rings 2 and 5
 without committing a vendor-specific command or treating settings as evidence.
+The CLI and relay tasks additionally reject adapter and configuration paths
+that are lexically or canonically inside the source checkout, including
+symlink aliases, so commercial binaries and license-bearing configuration
+remain private release-environment inputs.
 
 The independent `scripts/maximum-release-acceptance.ps1` harness now runs
 against extracted customer archives only. It enforces the maximum profile

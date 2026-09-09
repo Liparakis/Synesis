@@ -181,6 +181,12 @@ snapshot, Java/Gradle/Node/npm/Go toolchains, protector configuration, Tier
 0–3 inventory, keep-rule inventory, and acceptance-procedure digests. The CLI
 also rejects a `GITHUB_SHA` that does not equal local `HEAD`.
 
+Both CLI and relay additionally reject the adapter executable and protector
+configuration when either normalized lexical or canonical path is inside the
+source checkout, including symlink aliases. This keeps commercial binaries and
+license-bearing configuration in the private release environment rather than
+allowing a committed or hidden build-tree input.
+
 The existing bootstrap signer then creates and verifies the detached Ed25519
 manifest against its embedded trust root. Production signing keys are injected
 and never generated or committed. Private capability/recovery evidence hashes are

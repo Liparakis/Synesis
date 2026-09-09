@@ -1039,6 +1039,24 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         val configFile = project.file(configValue).absoluteFile
         require(protectorFile.isFile) { "Maximum protector adapter is not a file: $protectorFile" }
         require(configFile.isFile) { "Maximum protector configuration is not a file: $configFile" }
+        val sourceCheckout = rootProject.layout.projectDirectory.asFile.absoluteFile
+        fun normalizedPath(file: File): String = file.toPath().toAbsolutePath().normalize().toString()
+            .let { path -> if (isWindows) path.lowercase(Locale.ROOT) else path }
+        fun isWithin(child: String, parent: String): Boolean {
+            val boundary = parent.trimEnd(File.separatorChar) + File.separator
+            return child == parent || child.startsWith(boundary)
+        }
+        val sourceCheckoutPath = normalizedPath(sourceCheckout)
+        val canonicalSourceCheckoutPath = normalizedPath(sourceCheckout.canonicalFile)
+        fun isInSourceCheckout(file: File): Boolean =
+            isWithin(normalizedPath(file), sourceCheckoutPath) ||
+                    isWithin(normalizedPath(file.canonicalFile), canonicalSourceCheckoutPath)
+        require(!isInSourceCheckout(protectorFile)) {
+            "Maximum protector adapter must be supplied outside the source checkout"
+        }
+        require(!isInSourceCheckout(configFile)) {
+            "Maximum protector configuration must be supplied outside the source checkout"
+        }
 
         val releaseId = protectionReleaseId.get().trim()
         val seed = protectionSeed.get().trim()

@@ -12,6 +12,10 @@ or signing, and the private retrace-acceptance record is bound to its mapping
 hash. The current brief's six commercial transformation fields are Rings 1–6,
 while Ring 7 is owned by the signed release/provenance boundary; the adapter
 fields remain a compatibility schema for those six classes.
+The CLI and relay maximum tasks now reject adapter/configuration paths that
+resolve lexically or canonically inside the source checkout, including
+symlink aliases; keep commercial binaries and license-bearing configuration in
+the private release environment.
 
 - Exact next action: obtain an installed, licensed, version-pinned commercial
   protector and its reviewed adapter/configuration, inject release signing

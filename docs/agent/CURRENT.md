@@ -17,6 +17,10 @@ bind adapter results to the tier, keep-rule, acceptance-procedure, and full
 reproducibility digests requested by the release. The current brief's six
 commercial adapter classes are Rings 1–6; Ring 7 is the signed-integrity,
 diversification, and private-retrace boundary owned by the release pipeline.
+Both maximum tasks now reject a protector executable or configuration that is
+lexically or canonically inside the source checkout, including symlink aliases;
+commercial binaries and license-bearing configuration therefore remain an
+external private-release input.
 The adapter documentation now explicitly maps a future Virbox Java VME/BCE
 wrapper to Rings 2 and 5 while keeping those results evidence-gated; no
 vendor-specific Virbox command or configuration is committed.
@@ -194,6 +198,12 @@ and verifies the detached signature against the embedded bootstrap public key.
 Added the source-backed tier inventory and vendor-neutral config skeleton. No
 commercial protection capability is claimed.
 
+The maximum CLI and relay tasks now enforce the private-tool boundary before
+release provenance or adapter invocation: both the lexical and canonical paths
+of the adapter and configuration must be outside the source checkout. This
+prevents committed or symlinked commercial license material from entering the
+release path.
+
 Added the archive-only `scripts/release-native-hardening-audit.ps1` and its
 developer/lite evidence. The Windows x64 owned Go launchers passed PE,
 COFF/debug, export, local-path, private-file, and trim-path checks. The audit
@@ -218,6 +228,10 @@ open.
   commercial maximum evidence.
 - The maximum tasks compile after source-tier binding; both still fail closed
   before adapter invocation because no licensed adapter is configured.
+- `:cli:tasks :relay:tasks --no-configuration-cache --no-daemon` passed with
+  the documented process-local loopback workaround after the path-boundary
+  change. Deliberate in-checkout adapter probes for both CLI and relay failed
+  closed with the new outside-source-checkout guard.
 - The shipped-artifact harness rejects both existing protection-lite archives
   as non-maximum, proving the profile boundary without mislabeling lite output.
 - A synthetic marker-only maximum archive completed the extracted CLI harness:
