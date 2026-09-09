@@ -53,10 +53,11 @@ disposable install, exercises the installed stable-launcher and packaged
   overhead remain open.
 - The documentation-only commercial pre-screen is in
   `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. DashO is the
-  first Java 25/Gradle candidate to evaluate when licensed; Zelix remains a
-  Java 26 flow/string/constant candidate. Neither documentation set proves
-  Rings 1–6 or any maximum Seven Ring result, so do not change the commercial
-  matrix until a shipped artifact is exercised.
+  first Java 25/Gradle candidate for Rings 1, 3, and bounded Ring 6; Zelix
+  remains a Java 26 flow/string/constant candidate; Virbox is the first
+  documented Ring 2/5 candidate through its Java VME/BCE modes. None proves a
+  Seven Ring locally, so do not change any commercial result until a shipped
+  artifact is exercised.
 - The archive-only reverse-engineering scanner is
   `scripts/release-reverse-engineering-comparison.ps1`, with current
   developer/lite CLI evidence in

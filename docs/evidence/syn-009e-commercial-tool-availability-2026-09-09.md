@@ -29,12 +29,16 @@ klassmaster
 yguard
 r8
 synesis-maximum-adapter
+virboxprotector_con
+virboxprotector
+VirboxProtector
 ```
 
 The absence of `r8`, yGuard, and other open-source tools is not itself a
 maximum-profile blocker, because the repository already has its selected
 ProGuard protection-lite baseline. The missing callable commercial adapter is
-the relevant blocker.
+the relevant blocker. The newly reviewed Virbox candidate is likewise not
+installed or callable in this release environment.
 
 ## Release-input probe
 

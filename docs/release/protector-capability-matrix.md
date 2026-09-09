@@ -13,6 +13,7 @@ not claim the capability.
 | [R8](https://r8.googlesource.com/r8/) | `UNVERIFIED` for this Java distribution | `UNVERIFIED` | `UNVERIFIED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | `BLOCKED` | not selected; no JVM release proof |
 | [DashO](https://support.preemptive.com/hc/en-us) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 | [Zelix KlassMaster](https://www.zelix.com/klassmaster/docs/obfuscateOptions.html) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
+| [Virbox Protector Standalone](https://documentation.virbox.com/use-cases/protect-desktop-applications/protect-jar-war-project-with-java-vme-protection-mode) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | Java VME/BCE evaluation candidate; separate licenses and no tool in checkout |
 
 ## Documentation-only candidate pre-screen
 
@@ -25,18 +26,18 @@ Seven Ring `PASS`.
 | --- | --- | --- |
 | DashO 12.8 | PreEmptive's changelog records Java 25 bytecode/JEP support in 12.6, Java 26 bytecode support in 12.8, Gradle/CLI integration, and runtime self-protection improvements. Its project reference documents scoped control-flow and string-encryption transforms. | The reviewed material does not establish genuine JVM code virtualization or a protected customer payload loader. Java 25 Gradle, reflection/ServiceLoader/JNI/native-QUIC compatibility, shipped artifact inspection, safe debugger/VM behavior, and private recovery remain unexecuted. |
 | Zelix KlassMaster 26 | Zelix documents processing bytecode through Java 26, script/Gradle invocation, flow obfuscation, string/integer/long encryption, reference/reflection handling, change logs/stack-trace translation, and a reproducible-obfuscated-output tutorial. | The reviewed material does not establish genuine virtual execution, a protected payload loader/packing mechanism, or Synesis-safe anti-debug/instrumentation behavior. The exact Java 25 Gradle/native/Link acceptance, shipped inspection, and private recovery remain unexecuted. |
+| Virbox Protector Standalone | Official Java VME material describes method virtualization into a private VM; Java BCE material describes encrypted method bytecode with a supplied Java agent; the CLI documentation exposes Java VME/BCE modes and states that separate licenses are required. | This is documentation-only evidence, not a Synesis artifact. Java 25/Gradle/Link/native-QUIC compatibility, selective method limits, protected-loader behavior, reproducibility, private retrace, and safe Java anti-VM/anti-debug behavior remain unexecuted. Native VM/debug/kernel protections described elsewhere are not automatically acceptable for this JVM profile. |
 
 Detailed links and the exact distinction between vendor documentation and local
 artifact evidence are recorded in
-`docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. Neither candidate
-is selected as the maximum protector until a licensed version is installed and
-the required vendor capabilities and Seven Ring compatibility gates are
-exercised.
+`docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. No candidate is
+selected as the maximum protector until a licensed version is installed and the
+required vendor capabilities and Seven Ring compatibility gates are exercised.
 
 ## Required evaluation dimensions
 
 The capability table above is the claim boundary. The following dimensions are
-the minimum evaluation record for selecting DashO or Zelix; an `UNVERIFIED`
+the minimum evaluation record for selecting a commercial candidate; an `UNVERIFIED`
 commercial cell cannot be converted to `PASS` by documentation alone.
 
 | Dimension | ProGuard 7.10.0 local result | yGuard | R8 | DashO | Zelix KlassMaster |
@@ -55,6 +56,23 @@ commercial cell cannot be converted to `PASS` by documentation alone.
 | JNI, reflection, ServiceLoader, Netty/native compatibility | `PASS` only for the bounded CLI/relay lite checks | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
 | Performance, memory, and archive-size impact | `PASS` for bounded lite measurements only | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
 | License automation and CI secret boundary | open-source dependency is integrated; commercial licensing is not applicable | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+
+### Virbox-specific evaluation dimensions
+
+Virbox requires an additional evaluation record because its official Java
+materials describe two distinct protection modes rather than one drop-in
+obfuscation profile:
+
+| Dimension | Virbox result in this checkout |
+| --- | --- |
+| Java 25 input/runtime and Gradle invocation | `UNVERIFIED` |
+| Java VME selective method virtualization | `UNVERIFIED` — documented candidate, no artifact |
+| Java BCE encrypted method payload and agent boundary | `UNVERIFIED` — documented candidate, no artifact |
+| Safe legitimate-VM/CI behavior | `UNVERIFIED`; native VM-detection claims do not establish Java safety |
+| Debugger/agent/instrumentation behavior | `UNVERIFIED`; kernel/RASP features require separate safety review |
+| Reflection, constructors, embedded JARs, JNI/native QUIC, and provider compatibility | `UNVERIFIED` |
+| Seeded reproducibility, mapping/retrace, and private recovery | `UNVERIFIED` |
+| License automation and CI secret boundary | `UNVERIFIED`; VME and BCE licenses are separately documented |
 
 For a commercial candidate, the missing cells require the exact licensed
 version, vendor configuration, non-interactive invocation, shipped artifact,

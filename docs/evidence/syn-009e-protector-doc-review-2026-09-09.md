@@ -73,6 +73,31 @@ anti-debug/instrumentation behavior. Exact Java 25 Gradle/native/Link
 acceptance, shipped artifact inspection, seeded diversification, and private
 retrace remain unexecuted.
 
+## Virbox Protector Standalone
+
+Virbox's official Java VME documentation explicitly describes selected Java
+methods being transformed into self-defined bytecode executed by a private VM.
+Its Java BCE documentation describes encrypted method bytecode that is
+decrypted at execution through a supplied Java agent, and the CLI documentation
+exposes Java VME and Java BCE modes. The documentation states that the two Java
+modes require separate licenses and lists compatibility limits, including
+unsupported reflective methods and certain embedded-JAR scenarios for VME.
+
+Sources:
+
+- [Virbox Java VME protection](https://documentation.virbox.com/use-cases/protect-desktop-applications/protect-jar-war-project-with-java-vme-protection-mode)
+- [Virbox Java BCE protection](https://documentation.virbox.com/use-cases/protect-desktop-applications/protect-jar-war-project-with-java-bce-protection-mode)
+- [Virbox CLI Java VME/BCE modes](https://documentation.virbox.com/fundamentals/cli-tool-user-manual/user-manual_virbox-protector-command-line)
+
+This is the first reviewed candidate with documentation that directly maps to
+the brief's Ring 2 virtualization and Ring 5 protected-bytecode goals, but it
+is not local evidence. Java 25/Gradle/Link/native-QUIC compatibility, selected
+method restrictions, protected-loader behavior, reproducibility, private
+retrace, and a safe Java anti-VM/anti-debug policy remain unexecuted. Native
+VM-detection and kernel/RASP features documented for other application modes
+cannot be imported into this profile without a separate safety and platform
+review.
+
 ## Selection consequence
 
 DashO is a credible first candidate for a licensed Java 25/Gradle evaluation
@@ -88,3 +113,9 @@ virtualization or Ring 5 protected loading; the reviewed pages also do not
 establish the required Synesis-safe Ring 4 policy. The maximum adapter must
 therefore remain fail-closed until a licensed candidate proves every required
 ring and the shipped artifact survives Synesis acceptance.
+
+Virbox is now the first candidate to evaluate specifically for Rings 2 and 5,
+because its official Java VME/BCE documentation describes private-VM execution
+and encrypted method payloads. It is not selected: the separate-license
+boundary, Java/runtime compatibility, and safe Ring 4/6 behavior are unknown,
+and no Virbox executable or protected Synesis artifact is installed here.

@@ -66,7 +66,7 @@ smoke, authenticated control-plane HTTP/SSE, and relay forwarding. It leaves
 peak memory, route microbenchmarks, commercial transformation overhead, and
 AV/EDR impact explicitly open.
 
-The first-party DashO/Zelix documentation pre-screen is now recorded
+The first-party DashO/Zelix/Virbox documentation pre-screen is now recorded
 separately from artifact evidence. It narrows the next licensed evaluation:
 DashO documents Java 25/26 bytecode support, scoped control-flow/string
 transforms, Gradle/CLI integration, and runtime debug/tamper checks; Zelix
@@ -76,6 +76,9 @@ genuine virtual execution, protected payload loading, or the required
 Synesis-safe Java anti-VM policy. DashO is therefore the first licensed
 candidate to evaluate for Rings 1, 3, and bounded Ring 6 behavior, while all
 commercial ring claims remain unverified until shipped output is exercised.
+Virbox's Java VME/BCE documentation makes it the first candidate to evaluate
+specifically for Rings 2 and 5, but its separate-license boundary and Java-safe
+Ring 4/6 behavior are also unverified.
 
 The archive-only static reverse-engineering comparison is now implemented in
 scripts/release-reverse-engineering-comparison.ps1. Its current developer

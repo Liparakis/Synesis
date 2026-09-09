@@ -46,9 +46,12 @@ is release-only and opt-in.
 
 ProGuard 7.10.0 is selected only for `protection-lite`. DashO and Zelix
 KlassMaster remain credible commercial evaluation candidates based on the
-first-party documentation pre-screen. Neither is selected as the maximum
-protector because neither is installed, licensed, or exercised against a
-Synesis artifact. No vendor documentation is treated as local ring evidence.
+first-party documentation pre-screen. Virbox Protector Standalone is now an
+additional candidate because its Java VME/BCE documentation directly describes
+private-VM method execution and encrypted method payloads. No candidate is
+selected as the maximum protector because none is installed, licensed, or
+exercised against a Synesis artifact. No vendor documentation is treated as
+local ring evidence.
 
 The current first-party recheck sharpens that choice: DashO documents
 control-flow, string encryption, and runtime debug/tamper checks, while Zelix
@@ -56,8 +59,10 @@ documents flow/string/constant protection and reproducible output. The reviewed
 pages still do not establish genuine JVM virtualization, protected payload
 loading, or the Synesis-safe Java anti-VM/anti-instrumentation behavior needed
 for Rings 2, 4, and 5. DashO is the first licensed candidate to evaluate for
-Rings 1, 3, and bounded Ring 6 behavior; this is a selection priority, not a
-pass.
+Rings 1, 3, and bounded Ring 6 behavior, while Virbox is the first candidate
+to evaluate specifically for Rings 2 and 5; these are selection priorities,
+not passes. Virbox's separately licensed VME/BCE modes and its Java-safe Ring
+4/6 behavior remain unverified.
 
 The capability matrix is in
 `docs/release/protector-capability-matrix.md`; the documentation-only review is
@@ -293,8 +298,8 @@ release-hardening work:
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,
 and no push was performed. The exact remaining external action is to obtain an
-installed, licensed, version-pinned commercial protector (DashO or Zelix
-candidate evaluation), its reviewed adapter/configuration, platform signing
+installed, licensed, version-pinned commercial protector (with DashO/Zelix and
+Virbox candidate evaluation), its reviewed adapter/configuration, platform signing
 authority, and clean release checkout; then run the complete maximum adapter,
 signed-record comparison, native audit, shipped CLI/UI/control-plane/
 Link/overlay/relay/provider acceptance, tamper/retrace/leakage/performance,

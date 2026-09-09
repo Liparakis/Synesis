@@ -101,7 +101,10 @@ documentation supports Java 26 bytecode handling, flow/string/constant
 transforms, scripting, and reproducibility guidance. The fresh first-party
 recheck still establishes neither genuine JVM virtualization, protected payload
 loading, nor a Synesis-safe Java anti-VM policy, so no Ring 1–6 capability
-status changed; the matrix and evidence are in
+status changed. Virbox's Java VME/BCE documentation is the first reviewed
+candidate that directly maps to Rings 2 and 5, but its separate licenses,
+Java/runtime compatibility, and safe Ring 4/6 behavior remain unverified. The
+matrix and evidence are in
 `docs/release/protector-capability-matrix.md` and
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
 
@@ -170,7 +173,8 @@ directory before manifesting, leakage inspection, or signing. This closes the
 lexical path-boundary bypass where a symlink could resolve outside the
 requested root. The Gradle task graphs configured successfully with the
 process-local loopback workaround. The current release environment has no
-callable DashO, Zelix/KlassMaster, or external maximum adapter on `PATH`, and
+callable DashO, Zelix/KlassMaster, Virbox, or external maximum adapter on
+`PATH`, and
 has no configured maximum-release or signing inputs; no commercial artifact was
 run or claimed.
 
