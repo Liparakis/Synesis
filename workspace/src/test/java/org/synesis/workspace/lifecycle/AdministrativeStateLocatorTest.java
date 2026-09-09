@@ -14,57 +14,57 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class AdministrativeStateLocatorTest {
 
-    private static void init(Path root) throws Exception {
-        Files.createDirectories(root);
-        run(root, "git", "init");
-        run(root, "git", "config", "user.name", "Test User");
-        run(root, "git", "config", "user.email", "test@example.com");
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        run(root, "git", "add", "README.md");
-        run(root, "git", "commit", "-m", "baseline");
-    }
+  private static void init(Path root) throws Exception {
+    Files.createDirectories(root);
+    run(root, "git", "init");
+    run(root, "git", "config", "user.name", "Test User");
+    run(root, "git", "config", "user.email", "test@example.com");
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    run(root, "git", "add", "README.md");
+    run(root, "git", "commit", "-m", "baseline");
+  }
 
-    private static void run(Path directory, String... command) throws Exception {
-        org.synesis.workspace.test.TestGit.run(directory,
-                java.util.Arrays.copyOfRange(command, 1, command.length));
-    }
+  private static void run(Path directory, String... command) throws Exception {
+    org.synesis.workspace.test.TestGit.run(directory,
+        java.util.Arrays.copyOfRange(command, 1, command.length));
+  }
 
-    @Test
-    void sameRepositoryHasStableIdentity(@TempDir Path temp) throws Exception {
-        Path root = temp.resolve("repo");
-        init(root);
-        AdministrativeStateLocator locator = new AdministrativeStateLocator();
+  @Test
+  void sameRepositoryHasStableIdentity(@TempDir Path temp) throws Exception {
+    Path root = temp.resolve("repo");
+    init(root);
+    AdministrativeStateLocator locator = new AdministrativeStateLocator();
 
-        AdministrativeStateLocator.Resolution first = locator.resolve(root);
-        AdministrativeStateLocator.Resolution second = locator.resolve(root.resolve("."));
+    AdministrativeStateLocator.Resolution first = locator.resolve(root);
+    AdministrativeStateLocator.Resolution second = locator.resolve(root.resolve("."));
 
-        assertEquals(first.commonDirectory(), second.commonDirectory());
-        assertEquals(first.repositoryIdentity(), second.repositoryIdentity());
-        assertEquals(first.administrativeRoot(), second.administrativeRoot());
-        assertTrue(first.administrativeRoot()
-                .endsWith(Path.of(first.repositoryIdentity(), "admin")));
-    }
+    assertEquals(first.commonDirectory(), second.commonDirectory());
+    assertEquals(first.repositoryIdentity(), second.repositoryIdentity());
+    assertEquals(first.administrativeRoot(), second.administrativeRoot());
+    assertTrue(first.administrativeRoot()
+        .endsWith(Path.of(first.repositoryIdentity(), "admin")));
+  }
 
-    @Test
-    void unrelatedRepositoriesDoNotShareAdministrativeIdentity(@TempDir Path temp) throws Exception {
-        Path first = temp.resolve("first");
-        Path second = temp.resolve("second");
-        init(first);
-        init(second);
+  @Test
+  void unrelatedRepositoriesDoNotShareAdministrativeIdentity(@TempDir Path temp) throws Exception {
+    Path first = temp.resolve("first");
+    Path second = temp.resolve("second");
+    init(first);
+    init(second);
 
-        AdministrativeStateLocator locator = new AdministrativeStateLocator();
-        assertNotEquals(locator.resolve(first)
-                        .repositoryIdentity(),
-                locator.resolve(second)
-                        .repositoryIdentity());
-    }
+    AdministrativeStateLocator locator = new AdministrativeStateLocator();
+    assertNotEquals(locator.resolve(first)
+            .repositoryIdentity(),
+        locator.resolve(second)
+            .repositoryIdentity());
+  }
 
-    @Test
-    void identityIsIndependentOfPathSeparator(@TempDir Path temp) {
-        Path path = temp.resolve(".git");
-        String forward = AdministrativeStateLocator.identity(path);
-        String normalized = AdministrativeStateLocator.identity(Path.of(path.toString()
-                .replace('\\', '/')));
-        assertEquals(forward, normalized);
-    }
+  @Test
+  void identityIsIndependentOfPathSeparator(@TempDir Path temp) {
+    Path path = temp.resolve(".git");
+    String forward = AdministrativeStateLocator.identity(path);
+    String normalized = AdministrativeStateLocator.identity(Path.of(path.toString()
+        .replace('\\', '/')));
+    assertEquals(forward, normalized);
+  }
 }

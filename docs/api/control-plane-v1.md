@@ -55,18 +55,18 @@ missing asset paths do not.
 
 ## Read endpoints
 
-| Method | Path | Result |
-| --- | --- | --- |
-| GET | `/api/v1/health` | Listener, project ID, and durable sequence health |
-| GET | `/api/v1/snapshot` | Complete bounded public-safe project snapshot |
-| GET | `/api/v1/projects` | The currently served project identity |
-| GET | `/api/v1/agents` | Participant and current work summaries |
-| GET | `/api/v1/workgroups` | WorkGroup status and participant summaries |
-| GET | `/api/v1/claims` | Work-intent selectors and conflict summaries |
-| GET | `/api/v1/capabilities` | Capability handles, lifecycle, and explicit contract fields |
-| GET | `/api/v1/network` | Physical Link, overlay, route, and relay read-model seam |
-| GET | `/api/v1/diagnostics` | Safe doctor findings without raw detail maps |
-| GET | `/api/v1/events` | Live SSE updates with an initial snapshot event |
+| Method | Path                   | Result                                                      |
+|--------|------------------------|-------------------------------------------------------------|
+| GET    | `/api/v1/health`       | Listener, project ID, and durable sequence health           |
+| GET    | `/api/v1/snapshot`     | Complete bounded public-safe project snapshot               |
+| GET    | `/api/v1/projects`     | The currently served project identity                       |
+| GET    | `/api/v1/agents`       | Participant and current work summaries                      |
+| GET    | `/api/v1/workgroups`   | WorkGroup status and participant summaries                  |
+| GET    | `/api/v1/claims`       | Work-intent selectors and conflict summaries                |
+| GET    | `/api/v1/capabilities` | Capability handles, lifecycle, and explicit contract fields |
+| GET    | `/api/v1/network`      | Physical Link, overlay, route, and relay read-model seam    |
+| GET    | `/api/v1/diagnostics`  | Safe doctor findings without raw detail maps                |
+| GET    | `/api/v1/events`       | Live SSE updates with an initial snapshot event             |
 
 The snapshot is assembled explicitly from `ProjectApplicationService`, the
 durable coordination projections, provider status, and `DoctorService`.

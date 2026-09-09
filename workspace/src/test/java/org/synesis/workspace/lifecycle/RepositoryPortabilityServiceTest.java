@@ -16,84 +16,85 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class RepositoryPortabilityServiceTest {
 
-    private final RepositoryPortabilityService service = new RepositoryPortabilityService();
+  private final RepositoryPortabilityService service = new RepositoryPortabilityService();
 
-    private static RepositoryPortabilityService.TreeEntry entry(String path) {
-        return new RepositoryPortabilityService.TreeEntry(path, 33188, "blob", "blob");
-    }
+  private static RepositoryPortabilityService.TreeEntry entry(String path) {
+    return new RepositoryPortabilityService.TreeEntry(path, 33188, "blob", "blob");
+  }
 
-    private static boolean has(RepositoryPortabilityService.Report report,
-            RepositoryPortabilityService.FindingCode code) {
-        return report.findings()
-                .stream()
-                .anyMatch(finding -> finding.code() == code);
-    }
+  private static boolean has(RepositoryPortabilityService.Report report,
+      RepositoryPortabilityService.FindingCode code) {
+    return report.findings()
+        .stream()
+        .anyMatch(finding -> finding.code() == code);
+  }
 
-    private static void assertEqualsFindings(RepositoryPortabilityService.Report first,
-            RepositoryPortabilityService.Report second) {
-        assertEquals(first.findings(), second.findings());
-        assertFalse(first.portable());
-    }
+  private static void assertEqualsFindings(RepositoryPortabilityService.Report first,
+      RepositoryPortabilityService.Report second) {
+    assertEquals(first.findings(), second.findings());
+    assertFalse(first.portable());
+  }
 
-    private static void git(Path root, String... args) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, args);
-    }
+  private static void git(Path root, String... args) throws Exception {
+    org.synesis.workspace.test.TestGit.run(root, args);
+  }
 
-    @Test
-    void changedPathCollidingWithUnchangedBaselineIsRejected() {
-        RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
-                entry("src/Parser.java"), entry("src/parser.java")));
+  @Test
+  void changedPathCollidingWithUnchangedBaselineIsRejected() {
+    RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
+        entry("src/Parser.java"), entry("src/parser.java")));
 
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.CASE_COLLISION));
-    }
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.CASE_COLLISION));
+  }
 
-    @Test
-    void unicodeAndWindowsAliasesAreDetectedAcrossTheCompleteTree() {
-        RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
-                entry("café.txt"), entry("cafe\u0301.txt"), entry("README"), entry("README."),
-                entry("CON.txt")));
+  @Test
+  void unicodeAndWindowsAliasesAreDetectedAcrossTheCompleteTree() {
+    RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
+        entry("café.txt"), entry("cafe\u0301.txt"), entry("README"), entry("README."),
+        entry("CON.txt")));
 
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.UNICODE_NORMALIZATION_COLLISION));
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.TRAILING_ALIAS_COLLISION));
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.WINDOWS_RESERVED_NAME));
-    }
+    assertTrue(
+        has(report, RepositoryPortabilityService.FindingCode.UNICODE_NORMALIZATION_COLLISION));
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.TRAILING_ALIAS_COLLISION));
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.WINDOWS_RESERVED_NAME));
+  }
 
-    @Test
-    void separatorsSymlinksAndSubmodulesFailClosed() {
-        RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
-                new RepositoryPortabilityService.TreeEntry("link", 40960, "symlink", "l"),
-                new RepositoryPortabilityService.TreeEntry("link/child.txt", 33188, "blob", "b"),
-                new RepositoryPortabilityService.TreeEntry("vendor/module", 57344, "commit", "c"),
-                entry("src\\generated.txt")));
+  @Test
+  void separatorsSymlinksAndSubmodulesFailClosed() {
+    RepositoryPortabilityService.Report report = service.validateEntries("tree", List.of(
+        new RepositoryPortabilityService.TreeEntry("link", 40960, "symlink", "l"),
+        new RepositoryPortabilityService.TreeEntry("link/child.txt", 33188, "blob", "b"),
+        new RepositoryPortabilityService.TreeEntry("vendor/module", 57344, "commit", "c"),
+        entry("src\\generated.txt")));
 
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.SYMLINK_TRAVERSAL));
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.UNSUPPORTED_SUBMODULE));
-        assertTrue(has(report, RepositoryPortabilityService.FindingCode.PATH_SEPARATOR_AMBIGUITY));
-    }
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.SYMLINK_TRAVERSAL));
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.UNSUPPORTED_SUBMODULE));
+    assertTrue(has(report, RepositoryPortabilityService.FindingCode.PATH_SEPARATOR_AMBIGUITY));
+  }
 
-    @Test
-    void validationOrderIsIndependentOfHostAndInputOrder() {
-        List<RepositoryPortabilityService.TreeEntry> entries = List.of(
-                entry("src/Parser.java"), entry("src/parser.java"), entry("docs/readme"));
-        RepositoryPortabilityService.Report first = service.validateEntries("tree", entries);
-        RepositoryPortabilityService.Report second = service.validateEntries("tree", List.of(
-                entries.get(2), entries.get(1), entries.get(0)));
+  @Test
+  void validationOrderIsIndependentOfHostAndInputOrder() {
+    List<RepositoryPortabilityService.TreeEntry> entries = List.of(
+        entry("src/Parser.java"), entry("src/parser.java"), entry("docs/readme"));
+    RepositoryPortabilityService.Report first = service.validateEntries("tree", entries);
+    RepositoryPortabilityService.Report second = service.validateEntries("tree", List.of(
+        entries.get(2), entries.get(1), entries.get(0)));
 
-        assertEqualsFindings(first, second);
-    }
+    assertEqualsFindings(first, second);
+  }
 
-    @Test
-    void gitPreflightValidatesTheCompleteHeadTree(@TempDir Path temp) throws Exception {
-        Path root = temp.resolve("repo");
-        Files.createDirectories(root);
-        git(root, "init");
-        git(root, "config", "user.name", "Test User");
-        git(root, "config", "user.email", "test@example.com");
-        Files.writeString(root.resolve("README.md"), "portable\n", StandardCharsets.UTF_8);
-        git(root, "add", ".");
-        git(root, "commit", "-m", "portable baseline");
+  @Test
+  void gitPreflightValidatesTheCompleteHeadTree(@TempDir Path temp) throws Exception {
+    Path root = temp.resolve("repo");
+    Files.createDirectories(root);
+    git(root, "init");
+    git(root, "config", "user.name", "Test User");
+    git(root, "config", "user.email", "test@example.com");
+    Files.writeString(root.resolve("README.md"), "portable\n", StandardCharsets.UTF_8);
+    git(root, "add", ".");
+    git(root, "commit", "-m", "portable baseline");
 
-        assertTrue(service.preflight(root)
-                .portable());
-    }
+    assertTrue(service.preflight(root)
+        .portable());
+  }
 }

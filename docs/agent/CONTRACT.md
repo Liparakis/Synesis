@@ -4,13 +4,16 @@
 - Contract status: ACTIVE
 - Implementation permitted: YES
 
-You are the principal protocol and networking engineer responsible for designing and materializing Synesis Link v1 as
+You are the principal protocol and networking engineer responsible for designing and materializing
+Synesis Link v1 as
 the first production-quality transport/session module in the Synesis repository.
 
 Work autonomously in small, verified vertical slices.
 
-Do not stop after planning, scaffolding, architecture documents, or partial implementation. Continue until the
-repository satisfies the Synesis Link v1 completion criteria or an architecture-changing blocker genuinely requires
+Do not stop after planning, scaffolding, architecture documents, or partial implementation. Continue
+until the
+repository satisfies the Synesis Link v1 completion criteria or an architecture-changing blocker
+genuinely requires
 human input.
 
 Your conversational context is temporary and untrusted.
@@ -28,15 +31,15 @@ Before planning, editing code, researching dependencies, or running broad comman
 
 3. Read:
 
-    - `docs/agent/CONTRACT.md`
-    - `docs/agent/GOAL.md`
-    - `docs/agent/STATE.md`
-    - `docs/agent/TASKS.md`
-    - `docs/agent/CURRENT.md`
-    - `docs/agent/DECISIONS.md`
-    - `docs/agent/FAILED_ATTEMPTS.md`
-    - `docs/agent/TEST_MATRIX.md`
-    - `docs/agent/NEXT_SESSION.md`
+  - `docs/agent/CONTRACT.md`
+  - `docs/agent/GOAL.md`
+  - `docs/agent/STATE.md`
+  - `docs/agent/TASKS.md`
+  - `docs/agent/CURRENT.md`
+  - `docs/agent/DECISIONS.md`
+  - `docs/agent/FAILED_ATTEMPTS.md`
+  - `docs/agent/TEST_MATRIX.md`
+  - `docs/agent/NEXT_SESSION.md`
 
 4. Inspect Git status and the actual repository.
 5. Reconcile any stale documentation with repository reality.
@@ -82,7 +85,8 @@ Use the installed `constraint-driven-architecture` skill:
 - whenever changing module boundaries;
 - whenever changing protocol guarantees;
 - whenever introducing a major dependency;
-- whenever changing identity, authentication, wire format, compatibility, persistence, security, or deployment
+- whenever changing identity, authentication, wire format, compatibility, persistence, security, or
+  deployment
   assumptions;
 - whenever implementation begins diverging materially from the agreed architecture.
 
@@ -96,7 +100,8 @@ The current implemented product boundary is:
 
 # Synesis Link
 
-Synesis Link is a standalone, local-first, direct peer-to-peer networking and authenticated session-liveness library
+Synesis Link is a standalone, local-first, direct peer-to-peer networking and authenticated
+session-liveness library
 built on QUIC.
 
 The repository is `synesis`; Synesis Link is the `link/` transport/session module.
@@ -125,7 +130,8 @@ Build Synesis Link v1 so that two computers can:
 9. detect graceful peer shutdown promptly;
 10. infer ungraceful connection loss through bounded application-level liveness timeouts;
 11. distinguish healthy, uncertain, expired, failed, and gracefully closed sessions;
-12. tolerate ordinary packet loss, NAT rebinding, address changes, and QUIC path migration without falsely expiring
+12. tolerate ordinary packet loss, NAT rebinding, address changes, and QUIC path migration without
+    falsely expiring
     healthy sessions;
 13. reconnect through a new authenticated session;
 14. prevent old-session messages from being confused with a new session;
@@ -133,11 +139,13 @@ Build Synesis Link v1 so that two computers can:
 16. open bounded typed QUIC streams for future protocols without implementing those protocols;
 17. operate without an authoritative server;
 18. operate without a mandatory Synesis-hosted rendezvous service;
-19. report honestly when direct peer-to-peer connectivity is impossible under the current network conditions.
+19. report honestly when direct peer-to-peer connectivity is impossible under the current network
+    conditions.
 
 Synesis Link must never claim every pair of computers can connect directly.
 
-When both peers are behind restrictive NATs, carrier-grade NAT, or firewalls that prohibit direct paths, direct
+When both peers are behind restrictive NATs, carrier-grade NAT, or firewalls that prohibit direct
+paths, direct
 communication may be impossible without rendezvous or relay infrastructure.
 
 V1 must report that limitation diagnostically rather than hiding it.
@@ -282,9 +290,11 @@ Synesis Link must still define:
 
 ## No false instant-disconnection claim
 
-Graceful shutdown may be detected promptly when the peer sends an authenticated goodbye or QUIC close signal.
+Graceful shutdown may be detected promptly when the peer sends an authenticated goodbye or QUIC
+close signal.
 
-Crashes, power loss, machine sleep, cable removal, blackholed traffic, and network partitions can only be inferred after
+Crashes, power loss, machine sleep, cable removal, blackholed traffic, and network partitions can
+only be inferred after
 bounded timeouts.
 
 Never claim instant crash detection.

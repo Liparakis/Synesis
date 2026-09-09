@@ -48,8 +48,10 @@ SHA-256 83751F15CB6A0A7B97DF67752C001E3FE1C20E18FFBFEC3FF63567296205EB6C
 
 The version-matched upstream source was the official `rust-v0.145.0` tag
 (tag commit `25af12f7e61572b0bc18ddb1008be543b91519b0`). The relevant sources
-are [`codex-mcp/runtime.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/runtime.rs),
-[`codex-mcp/rmcp_client.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/rmcp_client.rs),
+are [
+`codex-mcp/runtime.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/runtime.rs),
+[
+`codex-mcp/rmcp_client.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/codex-mcp/src/rmcp_client.rs),
 [
 `rmcp-client/stdio_server_launcher.rs`](https://github.com/openai/codex/blob/rust-v0.145.0/codex-rs/rmcp-client/src/stdio_server_launcher.rs),
 [

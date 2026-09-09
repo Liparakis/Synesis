@@ -47,7 +47,7 @@ tasks.register("formatCheck") {
     val sourceDirectory = layout.projectDirectory.dir("src").asFile
     doLast {
         val files = sourceDirectory.walkTopDown()
-            .filter { it.isFile && it.extension == "java" }
+                .filter { it.isFile && it.extension == "java" }
         val offenders = files.filter { source ->
             source.useLines { lines -> lines.any { it.endsWith(" ") || it.endsWith("\t") } }
         }.toList()

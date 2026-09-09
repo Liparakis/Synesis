@@ -41,17 +41,18 @@ tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
-    maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
+    maxParallelForks = forkOverride
+            ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
 // Shared helper: source files under `dir` with the given extensions.
 fun filesUnder(dir: File, extensions: Set<String>): List<File> =
-    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+        if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+        else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
 // Shared helper: lines across `.java` files under `dir` containing `pattern`.
 fun linesContaining(dir: File, pattern: String): List<String> =
-    filesUnder(dir, setOf("java")).flatMap { file -> file.readLines().filter { it.contains(pattern) } }
+        filesUnder(dir, setOf("java")).flatMap { file -> file.readLines().filter { it.contains(pattern) } }
 
 tasks.register("formatCheck") {
     group = "verification"
@@ -83,8 +84,8 @@ tasks.register("architectureCheck") {
     val projectRecordSource = layout.projectDirectory.dir("../project-record/src/main/java").asFile
     doLast {
         val reverseHits = projectRecordSource.walkTopDown()
-            .filter { it.isFile && it.extension == "java" }
-            .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace") } }
+                .filter { it.isFile && it.extension == "java" }
+                .flatMap { file -> file.readLines().filter { it.contains("org.synesis.workspace") } }
         require(reverseHits.none()) { "Project-record imports workspace code: $reverseHits" }
     }
 }

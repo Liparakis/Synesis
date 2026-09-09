@@ -9,38 +9,38 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class ManualCandidateProvider implements CandidateProvider {
 
-    private final String id;
-    private final List<Candidate> candidates;
+  private final String id;
+  private final List<Candidate> candidates;
 
-    /**
-     * Creates an immutable manual provider.
-     *
-     * @param id         stable provider identifier
-     * @param candidates explicitly configured candidates
-     */
-    public ManualCandidateProvider(String id, List<Candidate> candidates) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("provider ID is blank");
-        }
-        this.id = id;
-        this.candidates = List.copyOf(candidates);
+  /**
+   * Creates an immutable manual provider.
+   *
+   * @param id         stable provider identifier
+   * @param candidates explicitly configured candidates
+   */
+  public ManualCandidateProvider(String id, List<Candidate> candidates) {
+    if (id == null || id.isBlank()) {
+      throw new IllegalArgumentException("provider ID is blank");
     }
+    this.id = id;
+    this.candidates = List.copyOf(candidates);
+  }
 
-    @Override
-    public String id() {
-        return id;
-    }
+  @Override
+  public String id() {
+    return id;
+  }
 
-    @Override
-    public Set<CandidateType> supportedTypes() {
-        return Set.of(CandidateType.MANUAL, CandidateType.LAN, CandidateType.IPV6);
-    }
+  @Override
+  public Set<CandidateType> supportedTypes() {
+    return Set.of(CandidateType.MANUAL, CandidateType.LAN, CandidateType.IPV6);
+  }
 
-    @Override
-    public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {
-        if (cancellation.isCancelled()) {
-            return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException());
-        }
-        return CompletableFuture.completedFuture(candidates);
+  @Override
+  public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {
+    if (cancellation.isCancelled()) {
+      return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException());
     }
+    return CompletableFuture.completedFuture(candidates);
+  }
 }

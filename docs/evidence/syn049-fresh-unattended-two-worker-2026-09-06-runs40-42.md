@@ -26,8 +26,10 @@ its own isolated worktree without re-announcing its existing claim.
 
 ## Host, provenance, and source
 
-- Synesis source checkout before the run sequence: `7e79faa4257e276fc053343cbc84f53b9aa34d24`, branch `master`.
-- Starting worktree had the three narrow managed-continuation source/test edits later recorded with the evidence.
+- Synesis source checkout before the run sequence: `7e79faa4257e276fc053343cbc84f53b9aa34d24`,
+  branch `master`.
+- Starting worktree had the three narrow managed-continuation source/test edits later recorded with
+  the evidence.
 - Runtime source provenance: `a7697bbb5de83ced8b61b275056f9204e4467fbc`.
 - JDK: `C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin\java.exe`, version `25+36-LTS`.
 - Process-local property: `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
@@ -58,7 +60,8 @@ restoration to the older pre-run configuration hash was not established.
 
 Target: `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260906-42`.
 
-- fixture baseline before Synesis initialization: branch `main`, commit `2215a11dddd3cfd084232a3fd542ae8a6e934789`;
+- fixture baseline before Synesis initialization: branch `main`, commit
+  `2215a11dddd3cfd084232a3fd542ae8a6e934789`;
 - initialized Synesis baseline: `8a5516af6855a2659d9aec347ffc1d71db8b07ab`;
 - project: `cde93ec3-3872-46d9-9bc9-e0f45b4d8e1e`;
 - WorkGroup: `3f6f6f6a-0c5c-3abc-ae58-85c89cdf29cd`;
@@ -104,9 +107,11 @@ Run #42 reached:
 
 Read-only continuity inspection for run #42 recorded:
 
-- Thread A: `01a074d7-47b7-7340-99b5-e8b2b055b18a`, generation 1, lifecycle `COMPLETED`, ownership revision 2,
+- Thread A: `01a074d7-47b7-7340-99b5-e8b2b055b18a`, generation 1, lifecycle `COMPLETED`, ownership
+  revision 2,
   `persistenceReady=true`, provider row/rollout/history present;
-- Thread B: `01a074d6-a0a9-7f13-b705-1212c8aa9475`, generation 1, lifecycle `COMPLETED`, ownership revision 2,
+- Thread B: `01a074d6-a0a9-7f13-b705-1212c8aa9475`, generation 1, lifecycle `COMPLETED`, ownership
+  revision 2,
   `persistenceReady=true`, provider row/rollout/history present;
 - A checkpoint revision 12 and B checkpoint revision 16, both `evidenceComplete=true`;
 - A and B managed attachments remained generation-1 `ACTIVE` records after normal cleanup.

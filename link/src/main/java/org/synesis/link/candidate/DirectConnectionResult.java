@@ -14,10 +14,10 @@ import org.synesis.link.session.PeerSession;
 public record DirectConnectionResult(PeerSession session, ConnectionFailureCategory failureCategory,
                                      List<ConnectionAttemptDiagnostic> diagnostics) {
 
-    /**
-     * Copies diagnostics; {@code session} is null only when no winner exists.
-     */
-    public DirectConnectionResult {
-        diagnostics = List.copyOf(diagnostics);
-    }
+  /**
+   * Copies diagnostics; {@code session} is null only when no winner exists.
+   */
+  public DirectConnectionResult {
+    diagnostics = List.copyOf(diagnostics);
+  }
 }

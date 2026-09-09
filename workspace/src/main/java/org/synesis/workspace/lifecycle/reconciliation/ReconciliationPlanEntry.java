@@ -16,23 +16,23 @@ import java.util.Objects;
  * @since 1.0
  */
 public record ReconciliationPlanEntry(
-        int schemaVersion,
-        String actionId,
-        ReconciliationAction action,
-        String targetResourceId,
-        boolean executable,
-        List<String> reasons,
-        String preconditionSummary
+    int schemaVersion,
+    String actionId,
+    ReconciliationAction action,
+    String targetResourceId,
+    boolean executable,
+    List<String> reasons,
+    String preconditionSummary
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public ReconciliationPlanEntry {
-        Objects.requireNonNull(actionId, "actionId");
-        Objects.requireNonNull(action, "action");
-        Objects.requireNonNull(targetResourceId, "targetResourceId");
-        Objects.requireNonNull(reasons, "reasons");
-        Objects.requireNonNull(preconditionSummary, "preconditionSummary");
-    }
+  /**
+   * Invariant validation.
+   */
+  public ReconciliationPlanEntry {
+    Objects.requireNonNull(actionId, "actionId");
+    Objects.requireNonNull(action, "action");
+    Objects.requireNonNull(targetResourceId, "targetResourceId");
+    Objects.requireNonNull(reasons, "reasons");
+    Objects.requireNonNull(preconditionSummary, "preconditionSummary");
+  }
 }

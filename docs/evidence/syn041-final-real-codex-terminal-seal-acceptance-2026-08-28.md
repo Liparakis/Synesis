@@ -17,7 +17,8 @@ The actual run used the normal authenticated Codex environment:
 
 - Codex: `codex-cli 0.145.0`, `Logged in using ChatGPT`;
 - direct topology: Codex -> official `synesis-mcp.exe` -> bundled Java;
-- bundle: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64`;
+- bundle:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64`;
 - bundle rebuilt with `TEMP=C:\t` and `TMP=C:\t`, build time
   `2026-08-28T20:43:33.732344700Z`, `BUILD_COMMIT=UNKNOWN` because the
   checkout was intentionally dirty;

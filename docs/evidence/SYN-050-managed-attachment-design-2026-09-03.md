@@ -64,7 +64,8 @@ Relevant source locations include:
 
 * [
   `CodexAppServerLifecycleService`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexAppServerLifecycleService.java)
-* [`ProjectRuntimeHost`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/ProjectRuntimeHost.java)
+* [
+  `ProjectRuntimeHost`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/ProjectRuntimeHost.java)
 * [
   `CodexLifecycleStateStore`](../../workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexLifecycleStateStore.java)
 * [
@@ -658,4 +659,5 @@ therefore **PARTIAL**: the managed provider lifecycle seam is observable, but
 the protected attachment chain is not proven and production implementation
 remains blocked. Full redacted commands, hashes, reports, and the no-bypass
 record are in
-[`SYN-050-protected-carrier-prototype-2026-09-03.md`](SYN-050-protected-carrier-prototype-2026-09-03.md).
+[
+`SYN-050-protected-carrier-prototype-2026-09-03.md`](SYN-050-protected-carrier-prototype-2026-09-03.md).

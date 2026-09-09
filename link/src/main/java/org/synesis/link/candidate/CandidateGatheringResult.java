@@ -10,13 +10,14 @@ import java.util.List;
  * @param timedOut    whether the global deadline ended gathering
  */
 public record CandidateGatheringResult(List<Candidate> candidates,
-                                       List<CandidateProviderDiagnostic> diagnostics, boolean timedOut) {
+                                       List<CandidateProviderDiagnostic> diagnostics,
+                                       boolean timedOut) {
 
-    /**
-     * Copies collections so late provider callbacks cannot mutate the result.
-     */
-    public CandidateGatheringResult {
-        candidates = List.copyOf(candidates);
-        diagnostics = List.copyOf(diagnostics);
-    }
+  /**
+   * Copies collections so late provider callbacks cannot mutate the result.
+   */
+  public CandidateGatheringResult {
+    candidates = List.copyOf(candidates);
+    diagnostics = List.copyOf(diagnostics);
+  }
 }

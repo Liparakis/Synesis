@@ -21,95 +21,99 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 @Timeout(60)
 final class CodexHookProcessTest {
 
-    private static CommandResult hook(Path project, String event) throws Exception {
-        Process process = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), project, "hook", "codex");
-        process.getOutputStream()
-                .write(event.getBytes(StandardCharsets.UTF_8));
-        process.getOutputStream()
-                .close();
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
-        return new CommandResult(process.exitValue(), DistributionLauncherTest.output(process));
+  private static CommandResult hook(Path project, String event) throws Exception {
+    Process process = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), project,
+        "hook", "codex");
+    process.getOutputStream()
+        .write(event.getBytes(StandardCharsets.UTF_8));
+    process.getOutputStream()
+        .close();
+    assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+    return new CommandResult(process.exitValue(), DistributionLauncherTest.output(process));
+  }
+
+  private static CommandResult run(Path project, String... arguments) throws Exception {
+    Process process = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), project,
+        arguments);
+    assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+    return new CommandResult(process.exitValue(), DistributionLauncherTest.output(process));
+  }
+
+  private static String event(Path root, String command) {
+    Map<String, Object> input = new LinkedHashMap<>();
+    input.put("command", command);
+    Map<String, Object> event = new LinkedHashMap<>();
+    event.put("hook_event_name", "PreToolUse");
+    event.put("cwd", root.toString());
+    event.put("tool_name", "apply_patch");
+    event.put("tool_input", input);
+    return ProviderJson.write(event);
+  }
+
+  private static void cleanup(Path root) {
+    try (var paths = Files.walk(root)) {
+      paths.sorted(java.util.Comparator.reverseOrder())
+          .forEach(path -> {
+            try {
+              Files.deleteIfExists(path);
+            } catch (Exception ignored) {
+            }
+          });
+    } catch (Exception ignored) {
     }
+  }
 
-    private static CommandResult run(Path project, String... arguments) throws Exception {
-        Process process = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), project, arguments);
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
-        return new CommandResult(process.exitValue(), DistributionLauncherTest.output(process));
+  private static void git(Path project, String... arguments) throws Exception {
+    String[] command = new String[arguments.length + 3];
+    command[0] = "git";
+    command[1] = "-C";
+    command[2] = project.toString();
+    System.arraycopy(arguments, 0, command, 3, arguments.length);
+    Process process = new ProcessBuilder(command)
+        .redirectErrorStream(true)
+        .start();
+    assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+    String output = DistributionLauncherTest.output(process);
+    assertEquals(0, process.exitValue(), output);
+  }
+
+  @Test
+  void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
+    Path project = Files.createTempDirectory("synesis-codex-process-");
+    try {
+      git(project, "init");
+      assertEquals(0, run(project, "init", "--project", project.toString()).exit());
+      assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer",
+          "sl1-" + "0".repeat(64)).exit());
+      CommandResult constraint = run(project, "constraint", "create", "--project",
+          project.toString(),
+          "--title", "Protect source", "--rationale", "Frozen source scope.", "--scope",
+          "src/protected/**", "--effect", "block");
+      assertEquals(0, constraint.exit(), constraint.output());
+
+      CommandResult blocked = hook(project,
+          event(project,
+              "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
+      assertEquals(0, blocked.exit(), blocked.output());
+      assertTrue(blocked.output()
+          .contains("\"permissionDecision\":\"deny\""), blocked.output());
+      assertTrue(blocked.output()
+          .contains("WORKSPACE_UNVERIFIED"), blocked.output());
+
+      CommandResult allowed = hook(project,
+          event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
+      assertEquals(0, allowed.exit(), allowed.output());
+      assertTrue(allowed.output()
+          .contains("WORKSPACE_UNVERIFIED"), allowed.output());
+    } finally {
+      cleanup(project);
     }
+  }
 
-    private static String event(Path root, String command) {
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("command", command);
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("hook_event_name", "PreToolUse");
-        event.put("cwd", root.toString());
-        event.put("tool_name", "apply_patch");
-        event.put("tool_input", input);
-        return ProviderJson.write(event);
-    }
+  /**
+   * Captures one hook subprocess result for protocol assertions.
+   */
+  private record CommandResult(int exit, String output) {
 
-    private static void cleanup(Path root) {
-        try (var paths = Files.walk(root)) {
-            paths.sorted(java.util.Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (Exception ignored) {
-                        }
-                    });
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static void git(Path project, String... arguments) throws Exception {
-        String[] command = new String[arguments.length + 3];
-        command[0] = "git";
-        command[1] = "-C";
-        command[2] = project.toString();
-        System.arraycopy(arguments, 0, command, 3, arguments.length);
-        Process process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
-        String output = DistributionLauncherTest.output(process);
-        assertEquals(0, process.exitValue(), output);
-    }
-
-    @Test
-    void generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned() throws Exception {
-        Path project = Files.createTempDirectory("synesis-codex-process-");
-        try {
-            git(project, "init");
-            assertEquals(0, run(project, "init", "--project", project.toString()).exit());
-            assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer",
-                    "sl1-" + "0".repeat(64)).exit());
-            CommandResult constraint = run(project, "constraint", "create", "--project", project.toString(),
-                    "--title", "Protect source", "--rationale", "Frozen source scope.", "--scope",
-                    "src/protected/**", "--effect", "block");
-            assertEquals(0, constraint.exit(), constraint.output());
-
-            CommandResult blocked = hook(project,
-                    event(project, "*** Begin Patch\n*** Update File: src/protected/file.txt\n*** End Patch"));
-            assertEquals(0, blocked.exit(), blocked.output());
-            assertTrue(blocked.output()
-                    .contains("\"permissionDecision\":\"deny\""), blocked.output());
-            assertTrue(blocked.output()
-                    .contains("WORKSPACE_UNVERIFIED"), blocked.output());
-
-            CommandResult allowed = hook(project,
-                    event(project, "*** Begin Patch\n*** Add File: docs/readme.txt\n*** End Patch"));
-            assertEquals(0, allowed.exit(), allowed.output());
-            assertTrue(allowed.output()
-                    .contains("WORKSPACE_UNVERIFIED"), allowed.output());
-        } finally {
-            cleanup(project);
-        }
-    }
-
-    /**
-     * Captures one hook subprocess result for protocol assertions.
-     */
-    private record CommandResult(int exit, String output) {
-
-    }
+  }
 }

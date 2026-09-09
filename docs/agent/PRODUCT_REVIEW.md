@@ -1,7 +1,9 @@
 # Product Review & Future Planning (through CP-0084)
 
-This document evaluates the Synesis Link project as a product rather than an architectural exercise, analyzing the
-current value, operator friction points, comparing three potential next directions, and choosing the next product
+This document evaluates the Synesis Link project as a product rather than an architectural exercise,
+analyzing the
+current value, operator friction points, comparing three potential next directions, and choosing the
+next product
 milestone.
 
 ---
@@ -10,23 +12,33 @@ milestone.
 
 Through CP-0084, Synesis implements the following user-facing capabilities:
 
-1. **Cryptographic Identity Bootstrap**: Operators can automatically create, store, and reuse secure Ed25519 node
+1. **Cryptographic Identity Bootstrap**: Operators can automatically create, store, and reuse secure
+   Ed25519 node
    identities (`sl1-...`).
-2. **Listener-First Onboarding**: Hosts can generate signed connectivity invitations (`synesis://join/<invitation>`) to
+2. **Listener-First Onboarding**: Hosts can generate signed connectivity invitations (
+   `synesis://join/<invitation>`) to
    establish secure sessions with peers on the same local network.
-3. **Guided Workspace Demo Flow (SYN-004)**: Hosts can parameterize invitations with `project`, `record`, and `host`
-   parameters, forming a single convenience URI. Clients parse this URI, perform cryptographic host identity pinning,
+3. **Guided Workspace Demo Flow (SYN-004)**: Hosts can parameterize invitations with `project`,
+   `record`, and `host`
+   parameters, forming a single convenience URI. Clients parse this URI, perform cryptographic host
+   identity pinning,
    and complete the connection.
-4. **Trust Bootstrapping Safeguard**: For unconfigured projects, clients reject automatic configuration from the
+4. **Trust Bootstrapping Safeguard**: For unconfigured projects, clients reject automatic
+   configuration from the
    convenience URI unless the operator explicitly confirms the host identity fingerprint using
    `--expect-host <host-node-id>`.
-5. **Separated Stderr Diagnostics**: Stderr prints diagnostic `ERROR=` and `HINT=` outputs to keep stdout strictly
+5. **Separated Stderr Diagnostics**: Stderr prints diagnostic `ERROR=` and `HINT=` outputs to keep
+   stdout strictly
    machine-readable.
-6. **Signed Decision Records (SDR1)**: Operators can create signed, versioned, immutable decision records (`PROPOSED`,
-   `ACCEPTED`, `REJECTED`, `SUPERSEDED`) containing title, rationale, and a logical evidence digest (SHA-256).
-7. **One-Shot Sync**: Operators can request synchronization of a specific decision record from a configured host,
+6. **Signed Decision Records (SDR1)**: Operators can create signed, versioned, immutable decision
+   records (`PROPOSED`,
+   `ACCEPTED`, `REJECTED`, `SUPERSEDED`) containing title, rationale, and a logical evidence
+   digest (SHA-256).
+7. **One-Shot Sync**: Operators can request synchronization of a specific decision record from a
+   configured host,
    reporting outcomes (`APPLIED`, `DUPLICATE`, `REJECTED`, `UNKNOWN`).
-8. **On-Demand Search & Inspection**: Operators can search verified decision heads locally using query terms, status,
+8. **On-Demand Search & Inspection**: Operators can search verified decision heads locally using
+   query terms, status,
    owner, or limit, and inspect the complete validated revision chain of any single record.
 
 ---
@@ -52,21 +64,29 @@ Through CP-0084, Synesis implements the following user-facing capabilities:
 
 ### Justification
 
-While **Direction 3 (Agent-Work Foundation)** is the ultimate destination of the Synesis vision, implementing it now
-represents a premature leap in complexity. An agent-work system requires a reliable, synchronized shared state of the
-project to retrieve tasks and verify results. Currently, syncing multiple decision records is extremely painful and
+While **Direction 3 (Agent-Work Foundation)** is the ultimate destination of the Synesis vision,
+implementing it now
+represents a premature leap in complexity. An agent-work system requires a reliable, synchronized
+shared state of the
+project to retrieve tasks and verify results. Currently, syncing multiple decision records is
+extremely painful and
 manual—each record requires its own invitation link and separate connection.
 
-**Direction 1 (Project-wide Reconciliation)** is the smallest, most secure, and lowest-risk milestone that directly
-advances Synesis from a single-record state-sync demo toward a useful cooperative workspace. Reconciling all missing or
-divergent record heads under a project in one single session eliminates the manual invitation loop entirely, providing
-the robust multi-record synchronization foundation required before any automated task execution can be safely built.
+**Direction 1 (Project-wide Reconciliation)** is the smallest, most secure, and lowest-risk
+milestone that directly
+advances Synesis from a single-record state-sync demo toward a useful cooperative workspace.
+Reconciling all missing or
+divergent record heads under a project in one single session eliminates the manual invitation loop
+entirely, providing
+the robust multi-record synchronization foundation required before any automated task execution can
+be safely built.
 
 ---
 
 ## 4. Exact Operator-Visible Outcome
 
-After completing this milestone, Operator B will be able to synchronize the entire project history from Operator A with
+After completing this milestone, Operator B will be able to synchronize the entire project history
+from Operator A with
 a single command:
 
 ```powershell
@@ -84,7 +104,8 @@ DUPLICATE_RECORDS=2
 SYNC_RESULT=SUCCESS
 ```
 
-If any conflicts or validation failures occur, they will be reported cleanly to `stderr` with diagnostics:
+If any conflicts or validation failures occur, they will be reported cleanly to `stderr` with
+diagnostics:
 
 ```text
 ERROR=SYNC_CONFLICT
@@ -95,13 +116,18 @@ HINT=One or more record heads have divergent signatures. Verify author keys or r
 
 ## 5. Proposed Task/Checkpoint Breakdown
 
-1. **SYN-005-PLAN**: Plan the project-wide reconciliation protocol. Define the bulk-sync message format (e.g.
-   `PROJECT_SYNC_REQUEST`, `PROJECT_SYNC_RESPONSE`, `BATCH_RECORD_TRANSFER`) over the existing Link seam.
-2. **SYN-005-CP-W5**: Implement bulk project state reconciliation logic in `:project-record` to compute missing or
+1. **SYN-005-PLAN**: Plan the project-wide reconciliation protocol. Define the bulk-sync message
+   format (e.g.
+   `PROJECT_SYNC_REQUEST`, `PROJECT_SYNC_RESPONSE`, `BATCH_RECORD_TRANSFER`) over the existing Link
+   seam.
+2. **SYN-005-CP-W5**: Implement bulk project state reconciliation logic in `:project-record` to
+   compute missing or
    divergent heads between two peers.
-3. **SYN-005-CP-W6**: Implement the network protocol and CLI changes. Integrate the batch sync message exchange into the
+3. **SYN-005-CP-W6**: Implement the network protocol and CLI changes. Integrate the batch sync
+   message exchange into the
    workspace launcher commands.
-4. **SYN-005-CP-W7**: Add generated-launcher integration tests proving that multi-record histories with history gaps,
+4. **SYN-005-CP-W7**: Add generated-launcher integration tests proving that multi-record histories
+   with history gaps,
    matching heads, and corrupt/tampered records are safely and deterministically reconciled.
 
 ---
@@ -109,25 +135,29 @@ HINT=One or more record heads have divergent signatures. Verify author keys or r
 ## 6. Invariants and Non-Goals
 
 - **Invariants**:
-    - The synchronization session remains strictly single-use and operator-triggered (one-shot).
-    - All records must pass signature validation before being written to local storage.
+  - The synchronization session remains strictly single-use and operator-triggered (one-shot).
+  - All records must pass signature validation before being written to local storage.
 - **Non-Goals**:
-    - No background sync daemons, file watchers, or continuous replication loops.
-    - No automatic multi-peer routing or gossip (restricted strictly to two allowlisted peers).
-    - No network auto-discovery or local network scanning.
+  - No background sync daemons, file watchers, or continuous replication loops.
+  - No automatic multi-peer routing or gossip (restricted strictly to two allowlisted peers).
+  - No network auto-discovery or local network scanning.
 
 ---
 
 ## 7. Risks and Invalidation Conditions
 
-- **Storage Bloat / DOS Risk**: An allowlisted but compromised peer could send an infinite batch of signed records,
+- **Storage Bloat / DOS Risk**: An allowlisted but compromised peer could send an infinite batch of
+  signed records,
   exhausting disk space.
-    - *Mitigation*: Impose a strict batch size limit (e.g. max 100 records per session) and validate total record count
-      against project configuration limits.
-- **Divergent Heads / Conflict Resolution**: If both peers have written different revision 2s to the same record, a
+  - *Mitigation*: Impose a strict batch size limit (e.g. max 100 records per session) and validate
+    total record count
+    against project configuration limits.
+- **Divergent Heads / Conflict Resolution**: If both peers have written different revision 2s to the
+  same record, a
   state conflict arises.
-    - *Mitigation*: Divergent heads that cannot be ordered chronologically must be quarantined immediately to prevent
-      pollution of the active heads view.
+  - *Mitigation*: Divergent heads that cannot be ordered chronologically must be quarantined
+    immediately to prevent
+    pollution of the active heads view.
 
 ---
 

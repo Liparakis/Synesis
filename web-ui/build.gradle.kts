@@ -25,22 +25,22 @@ val npmCi = tasks.register<Exec>("npmCi") {
 }
 
 fun npmTask(name: String, descriptionText: String, vararg arguments: String) =
-    tasks.register<Exec>(name) {
-        group = "web-ui"
-        description = descriptionText
-        dependsOn(npmCi)
-        inputs.files(packageJson, packageLock, sourceDirectory, publicDirectory,
-            layout.projectDirectory.file("index.html"),
-            layout.projectDirectory.file("vite.config.ts"),
-            layout.projectDirectory.file("tsconfig.json"),
-            layout.projectDirectory.file("tsconfig.node.json"),
-            layout.projectDirectory.file("tailwind.config.cjs"),
-            layout.projectDirectory.file("postcss.config.cjs"),
-            layout.projectDirectory.file("eslint.config.js"),
-            layout.projectDirectory.file("vitest.config.ts"))
-        workingDir(layout.projectDirectory)
-        commandLine(npmCommand, "run", *arguments)
-    }
+        tasks.register<Exec>(name) {
+            group = "web-ui"
+            description = descriptionText
+            dependsOn(npmCi)
+            inputs.files(packageJson, packageLock, sourceDirectory, publicDirectory,
+                    layout.projectDirectory.file("index.html"),
+                    layout.projectDirectory.file("vite.config.ts"),
+                    layout.projectDirectory.file("tsconfig.json"),
+                    layout.projectDirectory.file("tsconfig.node.json"),
+                    layout.projectDirectory.file("tailwind.config.cjs"),
+                    layout.projectDirectory.file("postcss.config.cjs"),
+                    layout.projectDirectory.file("eslint.config.js"),
+                    layout.projectDirectory.file("vitest.config.ts"))
+            workingDir(layout.projectDirectory)
+            commandLine(npmCommand, "run", *arguments)
+        }
 
 val typecheck = npmTask("webUiTypecheck", "Type-checks the web UI.", "typecheck")
 val lint = npmTask("webUiLint", "Lints the web UI.", "lint")

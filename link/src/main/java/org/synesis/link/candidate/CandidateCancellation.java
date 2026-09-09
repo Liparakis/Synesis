@@ -6,10 +6,10 @@ package org.synesis.link.candidate;
 @FunctionalInterface
 public interface CandidateCancellation {
 
-    /**
-     * Returns whether the owning operation has been cancelled.
-     *
-     * @return true after cancellation wins
-     */
-    boolean isCancelled();
+  /**
+   * Returns whether the owning operation has been cancelled.
+   *
+   * @return true after cancellation wins
+   */
+  boolean isCancelled();
 }

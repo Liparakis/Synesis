@@ -22,7 +22,8 @@ SYN-041 is therefore formally **DONE / ACCEPTED**. SYN-039 remains
 - Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001`.
 - The starting worktree was intentionally dirty with the recorded SYN-041
   implementation/evidence and five preserved unrelated lifecycle files.
-- Official bundle: `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64`.
+- Official bundle:
+  `C:\Users\Liparakis\Desktop\Synesis\cli\build\platform-bundle\synesis-0.1.0-dev.local-windows-x64`.
 - Launcher: `bin\synesis-mcp.exe`; SHA-256 at launch:
   `33A75B968C97AA90DC3106776797B0291AA0C6CA9A3F3713095FE029E31A1924`.
 - Codex: `codex-cli 0.145.0`; authentication: normal `Logged in using

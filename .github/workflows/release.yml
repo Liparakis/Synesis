@@ -1,129 +1,129 @@
 name: release-artifacts
 
 on:
-    push:
-        branches: [ '**' ]
-        tags: [ 'v*' ]
-    pull_request:
-    workflow_dispatch:
-        inputs:
-            release_tag:
-                description: Optional GitHub Release tag; blank creates a manual prerelease
-                required: false
-                default: ''
-                type: string
+  push:
+    branches: [ '**' ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional GitHub Release tag; blank creates a manual prerelease
+        required: false
+        default: ''
+        type: string
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
-    java:
-        runs-on: ubuntu-24.04
+  java:
+    runs-on: ubuntu-24.04
+    env:
+      JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: microsoft
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          add-job-summary: never
+      - run: ./gradlew.bat check --dependency-verification=strict
+        if: runner.os == 'Windows'
+      - run: ./gradlew check --dependency-verification=strict
+        if: runner.os != 'Windows'
+
+  prepare-release:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Create GitHub release
         env:
-            JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
-        steps:
-            -   uses: actions/checkout@v5
-            -   uses: actions/setup-java@v5
-                with:
-                    distribution: microsoft
-                    java-version: '25'
-            -   uses: gradle/actions/setup-gradle@v6
-                with:
-                    add-job-summary: never
-            -   run: ./gradlew.bat check --dependency-verification=strict
-                if: runner.os == 'Windows'
-            -   run: ./gradlew check --dependency-verification=strict
-                if: runner.os != 'Windows'
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+          AUTO_PRERELEASE: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && !inputs.release_tag) }}
+        run: |
+          if [[ ! "${RELEASE_TAG}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "release_tag may contain only letters, numbers, dots, underscores, and hyphens" >&2
+              exit 1
+          fi
+          if gh release view "${RELEASE_TAG}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              exit 0
+          fi
+          release_args=("${RELEASE_TAG}" --target "${GITHUB_SHA}" --title "${RELEASE_TAG}" --generate-notes)
+          if [[ "${AUTO_PRERELEASE}" == "true" ]]; then
+              release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}" --repo "${{ github.repository }}"
 
-    prepare-release:
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        runs-on: ubuntu-24.04
-        steps:
-            -   uses: actions/checkout@v5
-                with:
-                    fetch-depth: 0
-            -   name: Create GitHub release
-                env:
-                    GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-                    AUTO_PRERELEASE: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && !inputs.release_tag) }}
-                run: |
-                    if [[ ! "${RELEASE_TAG}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-                        echo "release_tag may contain only letters, numbers, dots, underscores, and hyphens" >&2
-                        exit 1
-                    fi
-                    if gh release view "${RELEASE_TAG}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
-                        exit 0
-                    fi
-                    release_args=("${RELEASE_TAG}" --target "${GITHUB_SHA}" --title "${RELEASE_TAG}" --generate-notes)
-                    if [[ "${AUTO_PRERELEASE}" == "true" ]]; then
-                        release_args+=(--prerelease)
-                    fi
-                    gh release create "${release_args[@]}" --repo "${{ github.repository }}"
-
-    bundles:
-        needs: [ java, prepare-release ]
-        if: always() && needs.java.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped')
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { platform: windows-x64, runner: windows-2025, file: synesis-windows-x64.exe }
-                    - { platform: windows-arm64, runner: windows-11-arm, file: synesis-windows-arm64.exe }
-                    - { platform: linux-x64, runner: ubuntu-24.04, file: synesis-linux-x64 }
-                    - { platform: linux-arm64, runner: ubuntu-24.04-arm, file: synesis-linux-arm64 }
-                    - { platform: macos-x64, runner: macos-15-intel, file: synesis-macos-x64 }
-                    - { platform: macos-arm64, runner: macos-15, file: synesis-macos-arm64 }
-        runs-on: ${{ matrix.runner }}
-        steps:
-            -   uses: actions/checkout@v5
-            -   uses: actions/setup-java@v5
-                with:
-                    distribution: microsoft
-                    java-version: '25'
-            -   uses: gradle/actions/setup-gradle@v6
-                with:
-                    add-job-summary: never
-            -   uses: actions/setup-go@v6
-                with:
-                    go-version: '1.26.5'
-                    cache-dependency-path: bootstrap/go.mod
-            -   run: ./gradlew.bat :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
-                if: runner.os == 'Windows'
-            -   run: ./gradlew :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
-                if: runner.os != 'Windows'
-                env:
-                    JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
-            -   name: Publish raw runnable release asset (Windows)
-                if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os == 'Windows'
-                env:
-                    GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-                shell: pwsh
-                run: |
-                    for ($attempt = 1; $attempt -le 12; $attempt++) {
-                        gh release upload "$env:RELEASE_TAG" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber
-                        if ($LASTEXITCODE -eq 0) {
-                            exit 0
-                        }
-                        if ($attempt -lt 12) {
-                            Start-Sleep -Seconds 5
-                        }
-                    }
-                    exit $LASTEXITCODE
-            -   name: Publish raw runnable release asset (Unix)
-                if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os != 'Windows'
-                env:
-                    GH_TOKEN: ${{ github.token }}
-                    RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-                shell: bash
-                run: |
-                    for attempt in {1..12}; do
-                        if gh release upload "${RELEASE_TAG}" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber; then
-                            exit 0
-                        fi
-                        if [[ "${attempt}" -lt 12 ]]; then
-                            sleep 5
-                        fi
-                    done
-                    exit 1
+  bundles:
+    needs: [ java, prepare-release ]
+    if: always() && needs.java.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: windows-x64, runner: windows-2025, file: synesis-windows-x64.exe }
+          - { platform: windows-arm64, runner: windows-11-arm, file: synesis-windows-arm64.exe }
+          - { platform: linux-x64, runner: ubuntu-24.04, file: synesis-linux-x64 }
+          - { platform: linux-arm64, runner: ubuntu-24.04-arm, file: synesis-linux-arm64 }
+          - { platform: macos-x64, runner: macos-15-intel, file: synesis-macos-x64 }
+          - { platform: macos-arm64, runner: macos-15, file: synesis-macos-arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: microsoft
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          add-job-summary: never
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: bootstrap/go.mod
+      - run: ./gradlew.bat :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
+        if: runner.os == 'Windows'
+      - run: ./gradlew :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
+        if: runner.os != 'Windows'
+        env:
+          JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
+      - name: Publish raw runnable release asset (Windows)
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+              gh release upload "$env:RELEASE_TAG" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber
+              if ($LASTEXITCODE -eq 0) {
+                  exit 0
+              }
+              if ($attempt -lt 12) {
+                  Start-Sleep -Seconds 5
+              }
+          }
+          exit $LASTEXITCODE
+      - name: Publish raw runnable release asset (Unix)
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os != 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+              if gh release upload "${RELEASE_TAG}" "cli/build/distributions/${{ matrix.file }}" --repo "${{ github.repository }}" --clobber; then
+                  exit 0
+              fi
+              if [[ "${attempt}" -lt 12 ]]; then
+                  sleep 5
+              fi
+          done
+          exit 1

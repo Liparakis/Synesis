@@ -20,30 +20,30 @@ import java.util.Objects;
  * @since 1.0
  */
 public record PersistedCleanupPlanEntry(
-        int schemaVersion,
-        LifecycleResourceType resourceType,
-        String resourceId,
-        String resourcePath,
-        CleanupClassification classification,
-        boolean eligible,
-        List<String> reasons,
-        long estimatedBytes,
-        String pathSafetyCode,
-        LifecycleResourceFingerprint fingerprint,
-        String proposedOperation
+    int schemaVersion,
+    LifecycleResourceType resourceType,
+    String resourceId,
+    String resourcePath,
+    CleanupClassification classification,
+    boolean eligible,
+    List<String> reasons,
+    long estimatedBytes,
+    String pathSafetyCode,
+    LifecycleResourceFingerprint fingerprint,
+    String proposedOperation
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public PersistedCleanupPlanEntry {
-        Objects.requireNonNull(resourceType, "resourceType");
-        Objects.requireNonNull(resourceId, "resourceId");
-        Objects.requireNonNull(resourcePath, "resourcePath");
-        Objects.requireNonNull(classification, "classification");
-        Objects.requireNonNull(reasons, "reasons");
-        Objects.requireNonNull(pathSafetyCode, "pathSafetyCode");
-        Objects.requireNonNull(fingerprint, "fingerprint");
-        Objects.requireNonNull(proposedOperation, "proposedOperation");
-    }
+  /**
+   * Invariant validation.
+   */
+  public PersistedCleanupPlanEntry {
+    Objects.requireNonNull(resourceType, "resourceType");
+    Objects.requireNonNull(resourceId, "resourceId");
+    Objects.requireNonNull(resourcePath, "resourcePath");
+    Objects.requireNonNull(classification, "classification");
+    Objects.requireNonNull(reasons, "reasons");
+    Objects.requireNonNull(pathSafetyCode, "pathSafetyCode");
+    Objects.requireNonNull(fingerprint, "fingerprint");
+    Objects.requireNonNull(proposedOperation, "proposedOperation");
+  }
 }

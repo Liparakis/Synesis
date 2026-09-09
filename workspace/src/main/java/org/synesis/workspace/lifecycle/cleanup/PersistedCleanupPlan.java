@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Immutable persisted cleanup plan document stored outside control repository under
- * external workspace root administration directory.
+ * Immutable persisted cleanup plan document stored outside control repository under external
+ * workspace root administration directory.
  *
  * @param schemaVersion                  schema version (1)
  * @param planId                         opaque plan identifier
@@ -24,31 +24,31 @@ import java.util.Objects;
  * @since 1.0
  */
 public record PersistedCleanupPlan(
-        int schemaVersion,
-        String planId,
-        String projectId,
-        String controlRepositoryPath,
-        String externalWorkspaceRoot,
-        long createdAtEpochMillis,
-        Map<String, String> retentionPolicySnapshot,
-        long durableStateSequence,
-        int totalDiscoveredCount,
-        int totalExecutableCount,
-        long totalEstimatedReclaimableBytes,
-        String contentHash,
-        List<PersistedCleanupPlanEntry> entries
+    int schemaVersion,
+    String planId,
+    String projectId,
+    String controlRepositoryPath,
+    String externalWorkspaceRoot,
+    long createdAtEpochMillis,
+    Map<String, String> retentionPolicySnapshot,
+    long durableStateSequence,
+    int totalDiscoveredCount,
+    int totalExecutableCount,
+    long totalEstimatedReclaimableBytes,
+    String contentHash,
+    List<PersistedCleanupPlanEntry> entries
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public PersistedCleanupPlan {
-        Objects.requireNonNull(planId, "planId");
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
-        Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
-        Objects.requireNonNull(retentionPolicySnapshot, "retentionPolicySnapshot");
-        Objects.requireNonNull(contentHash, "contentHash");
-        Objects.requireNonNull(entries, "entries");
-    }
+  /**
+   * Invariant validation.
+   */
+  public PersistedCleanupPlan {
+    Objects.requireNonNull(planId, "planId");
+    Objects.requireNonNull(projectId, "projectId");
+    Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
+    Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
+    Objects.requireNonNull(retentionPolicySnapshot, "retentionPolicySnapshot");
+    Objects.requireNonNull(contentHash, "contentHash");
+    Objects.requireNonNull(entries, "entries");
+  }
 }

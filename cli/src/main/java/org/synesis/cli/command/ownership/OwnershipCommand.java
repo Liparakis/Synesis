@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "ownership", description = "Claim and release semantic capability ownership.", mixinStandardHelpOptions = true)
 public final class OwnershipCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the ownership command parent.
-     */
-    public OwnershipCommand() {
-    }
+  /**
+   * Creates the ownership command parent.
+   */
+  public OwnershipCommand() {
+  }
 
-    /**
-     * Prints child command help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints child command help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

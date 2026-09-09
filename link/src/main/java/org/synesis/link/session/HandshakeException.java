@@ -10,29 +10,29 @@ import java.io.Serial;
  */
 public final class HandshakeException extends Exception {
 
-    @Serial
-    private static final long serialVersionUID = 1L;
-    /**
-     * Stable category retained for callers.
-     */
-    private final HandshakeFailureCode code;
+  @Serial
+  private static final long serialVersionUID = 1L;
+  /**
+   * Stable category retained for callers.
+   */
+  private final HandshakeFailureCode code;
 
-    /**
-     * Creates a categorized handshake failure.
-     *
-     * @param code stable failure category
-     */
-    public HandshakeException(HandshakeFailureCode code) {
-        super(code.name());
-        this.code = code;
-    }
+  /**
+   * Creates a categorized handshake failure.
+   *
+   * @param code stable failure category
+   */
+  public HandshakeException(HandshakeFailureCode code) {
+    super(code.name());
+    this.code = code;
+  }
 
-    /**
-     * Returns the stable failure category.
-     *
-     * @return failure code
-     */
-    public HandshakeFailureCode code() {
-        return code;
-    }
+  /**
+   * Returns the stable failure category.
+   *
+   * @return failure code
+   */
+  public HandshakeFailureCode code() {
+    return code;
+  }
 }

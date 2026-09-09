@@ -18,45 +18,45 @@ import picocli.CommandLine.Option;
 @SuppressWarnings("resource")
 public final class SpeculationPrepareCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Option(names = "--project")
-    private Path project;
-    @Option(names = "--prediction", required = true)
-    private UUID prediction;
-    @Option(names = "--base-commit", required = true)
-    private String baseCommit;
+  private final CliRuntime runtime;
+  @Option(names = "--project")
+  private Path project;
+  @Option(names = "--prediction", required = true)
+  private UUID prediction;
+  @Option(names = "--base-commit", required = true)
+  private String baseCommit;
 
-    /**
-     * Creates a preparation command.
-     *
-     * @param runtime composed CLI runtime
-     */
-    public SpeculationPrepareCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
+  /**
+   * Creates a preparation command.
+   *
+   * @param runtime composed CLI runtime
+   */
+  public SpeculationPrepareCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
 
-    /**
-     * Creates the worktree and records its metadata. @return stable exit code
-     */
-    @Override
-    public Integer call() {
-        try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(),
-                    location.synesisDirectory()
-                            .resolve("local"), prediction, baseCommit);
-            workspace.create();
-            runtime.terminal()
-                    .stdout("SPECULATION_PREPARED=true");
-            runtime.terminal()
-                    .stdout("PREDICTION_ID=" + prediction);
-            runtime.terminal()
-                    .stdout("WORKTREE=" + workspace.worktree());
-            return ExitCodes.OK;
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("SPECULATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
-        }
+  /**
+   * Creates the worktree and records its metadata. @return stable exit code
+   */
+  @Override
+  public Integer call() {
+    try {
+      var location = CoordinationCliSupport.project(runtime, project);
+      SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(),
+          location.synesisDirectory()
+              .resolve("local"), prediction, baseCommit);
+      workspace.create();
+      runtime.terminal()
+          .stdout("SPECULATION_PREPARED=true");
+      runtime.terminal()
+          .stdout("PREDICTION_ID=" + prediction);
+      runtime.terminal()
+          .stdout("WORKTREE=" + workspace.worktree());
+      return ExitCodes.OK;
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("SPECULATION_ERROR=" + failure.getMessage());
+      return ExitCodes.LOCAL_CONFIGURATION;
     }
+  }
 }

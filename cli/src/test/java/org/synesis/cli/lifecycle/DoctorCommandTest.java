@@ -19,23 +19,24 @@ import org.synesis.cli.terminal.ConsoleTerminal;
  */
 public class DoctorCommandTest {
 
-    @Test
-    public void testDoctorCliConciseAndJson(@TempDir Path tempDir) {
-        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+  @Test
+  public void testDoctorCliConciseAndJson(@TempDir Path tempDir) {
+    ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    ByteArrayOutputStream stderr = new ByteArrayOutputStream();
 
-        ConsoleTerminal terminal = new ConsoleTerminal(
-                new PrintStream(stdout, true, StandardCharsets.UTF_8),
-                new PrintStream(stderr, true, StandardCharsets.UTF_8)
-        );
+    ConsoleTerminal terminal = new ConsoleTerminal(
+        new PrintStream(stdout, true, StandardCharsets.UTF_8),
+        new PrintStream(stderr, true, StandardCharsets.UTF_8)
+    );
 
-        CliRuntime runtime = CliRuntime.defaults(terminal);
+    CliRuntime runtime = CliRuntime.defaults(terminal);
 
-        int exitCode = SynesisCli.execute(new String[]{"doctor", "--project", tempDir.toString()}, runtime);
-        assertEquals(0, exitCode);
+    int exitCode = SynesisCli.execute(new String[]{"doctor", "--project", tempDir.toString()},
+        runtime);
+    assertEquals(0, exitCode);
 
-        String output = stdout.toString();
-        assertTrue(output.contains("DOCTOR_RESULT="));
-        assertTrue(output.contains("FINDINGS="));
-    }
+    String output = stdout.toString();
+    assertTrue(output.contains("DOCTOR_RESULT="));
+    assertTrue(output.contains("FINDINGS="));
+  }
 }

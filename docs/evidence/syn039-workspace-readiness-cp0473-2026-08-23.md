@@ -35,7 +35,8 @@ process anchor, or command namespace gate was weakened.
 Changed files:
 
 - `workspace/src/main/java/org/synesis/workspace/provider/codex/CodexTomlConfiguration.java`;
-- `workspace/src/main/java/org/synesis/workspace/application/provider/ProviderMcpConfigurationService.java`;
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/ProviderMcpConfigurationService.java`;
 - `workspace/src/test/java/org/synesis/workspace/ProviderApplicationServiceTest.java`.
 
 Commit: `bea47c4 Pin Codex MCP sessions to initialized projects`.

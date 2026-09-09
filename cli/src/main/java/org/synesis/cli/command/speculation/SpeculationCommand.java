@@ -6,19 +6,19 @@ import picocli.CommandLine.Command;
  * Parent for isolated speculative worktree lifecycle commands.
  */
 @Command(name = "speculation", description = "Prepare and gate isolated prediction worktrees.",
-        mixinStandardHelpOptions = true)
+    mixinStandardHelpOptions = true)
 public final class SpeculationCommand implements Runnable {
 
-    /**
-     * Creates the speculation command parent.
-     */
-    public SpeculationCommand() {
-    }
+  /**
+   * Creates the speculation command parent.
+   */
+  public SpeculationCommand() {
+  }
 
-    /**
-     * Runs the parent help command.
-     */
-    @Override
-    public void run() {
-    }
+  /**
+   * Runs the parent help command.
+   */
+  @Override
+  public void run() {
+  }
 }

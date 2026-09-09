@@ -37,12 +37,13 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
-    maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
+    maxParallelForks = forkOverride
+            ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
 fun filesUnder(dir: File, extensions: Set<String>): List<File> =
-    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+        if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+        else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
 tasks.register("formatCheck") {
     group = "verification"
@@ -52,7 +53,7 @@ tasks.register("formatCheck") {
     doLast {
         val files = listOf(sourceDirectory, buildFile).flatMap { root ->
             if (root.isDirectory) root.walkTopDown().filter { it.isFile && it.extension in setOf("java", "kt", "kts") }
-                .toList()
+                    .toList()
             else listOfNotNull(root.takeIf { it.isFile && it.extension in setOf("java", "kt", "kts") })
         }
         val offenders = files.filter { source ->

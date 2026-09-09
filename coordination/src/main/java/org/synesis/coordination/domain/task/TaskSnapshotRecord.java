@@ -25,124 +25,125 @@ import java.util.UUID;
  * @since 1.0
  */
 public record TaskSnapshotRecord(
-        UUID taskId,
-        String snapshotId,
-        String nodeId,
-        String supervisorId,
-        String workerId,
-        String providerSessionId,
-        String baseCommit,
-        String commitSha,
-        List<String> changedPaths,
-        List<String> capabilityDependencies,
-        String summary,
-        long createdAtMillis,
-        SnapshotProvenance provenance,
-        boolean reviewRequired
+    UUID taskId,
+    String snapshotId,
+    String nodeId,
+    String supervisorId,
+    String workerId,
+    String providerSessionId,
+    String baseCommit,
+    String commitSha,
+    List<String> changedPaths,
+    List<String> capabilityDependencies,
+    String summary,
+    long createdAtMillis,
+    SnapshotProvenance provenance,
+    boolean reviewRequired
 ) {
 
-    /**
-     * Maximum number of changed paths per snapshot.
-     */
-    public static final int MAX_CHANGED_PATHS = 128;
+  /**
+   * Maximum number of changed paths per snapshot.
+   */
+  public static final int MAX_CHANGED_PATHS = 128;
 
-    /**
-     * Maximum length of the summary text in characters.
-     */
-    public static final int MAX_SUMMARY_LENGTH = 500;
+  /**
+   * Maximum length of the summary text in characters.
+   */
+  public static final int MAX_SUMMARY_LENGTH = 500;
 
-    /**
-     * Compact constructor enforcing invariants.
-     *
-     * @param taskId                 task identifier
-     * @param snapshotId             unique snapshot locator string
-     * @param nodeId                 worker node ID
-     * @param supervisorId           worker supervisor ID
-     * @param workerId               worker ID
-     * @param providerSessionId      provider session ID
-     * @param baseCommit             Git base commit SHA
-     * @param commitSha              Git commit SHA
-     * @param changedPaths           bounded list of changed paths
-     * @param capabilityDependencies list of capability dependencies
-     * @param summary                human-readable summary
-     * @param createdAtMillis        creation timestamp
-     * @param provenance             immutable lane provenance
-     * @param reviewRequired         whether review acceptance gates integration
-     */
-    public TaskSnapshotRecord {
-        Objects.requireNonNull(taskId, "taskId");
-        Objects.requireNonNull(snapshotId, "snapshotId");
-        Objects.requireNonNull(nodeId, "nodeId");
-        Objects.requireNonNull(supervisorId, "supervisorId");
-        Objects.requireNonNull(workerId, "workerId");
-        Objects.requireNonNull(providerSessionId, "providerSessionId");
-        Objects.requireNonNull(baseCommit, "baseCommit");
-        Objects.requireNonNull(commitSha, "commitSha");
-        changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
-        capabilityDependencies = List.copyOf(Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
-        Objects.requireNonNull(summary, "summary");
-        Objects.requireNonNull(provenance, "provenance");
-        if (changedPaths.size() > MAX_CHANGED_PATHS) {
-            throw new IllegalArgumentException("too many changed paths (max " + MAX_CHANGED_PATHS + ")");
-        }
-        if (summary.isBlank() || summary.length() > MAX_SUMMARY_LENGTH) {
-            throw new IllegalArgumentException("summary must be 1-" + MAX_SUMMARY_LENGTH + " characters");
-        }
+  /**
+   * Compact constructor enforcing invariants.
+   *
+   * @param taskId                 task identifier
+   * @param snapshotId             unique snapshot locator string
+   * @param nodeId                 worker node ID
+   * @param supervisorId           worker supervisor ID
+   * @param workerId               worker ID
+   * @param providerSessionId      provider session ID
+   * @param baseCommit             Git base commit SHA
+   * @param commitSha              Git commit SHA
+   * @param changedPaths           bounded list of changed paths
+   * @param capabilityDependencies list of capability dependencies
+   * @param summary                human-readable summary
+   * @param createdAtMillis        creation timestamp
+   * @param provenance             immutable lane provenance
+   * @param reviewRequired         whether review acceptance gates integration
+   */
+  public TaskSnapshotRecord {
+    Objects.requireNonNull(taskId, "taskId");
+    Objects.requireNonNull(snapshotId, "snapshotId");
+    Objects.requireNonNull(nodeId, "nodeId");
+    Objects.requireNonNull(supervisorId, "supervisorId");
+    Objects.requireNonNull(workerId, "workerId");
+    Objects.requireNonNull(providerSessionId, "providerSessionId");
+    Objects.requireNonNull(baseCommit, "baseCommit");
+    Objects.requireNonNull(commitSha, "commitSha");
+    changedPaths = List.copyOf(Objects.requireNonNull(changedPaths, "changedPaths"));
+    capabilityDependencies = List.copyOf(
+        Objects.requireNonNull(capabilityDependencies, "capabilityDependencies"));
+    Objects.requireNonNull(summary, "summary");
+    Objects.requireNonNull(provenance, "provenance");
+    if (changedPaths.size() > MAX_CHANGED_PATHS) {
+      throw new IllegalArgumentException("too many changed paths (max " + MAX_CHANGED_PATHS + ")");
     }
-
-    /**
-     * Constructs a record with the pre-review-gate shape.
-     *
-     * <p>Existing callers and historical payloads default to an unreviewed
-     * snapshot. New reviewed publication must use the canonical constructor
-     * with {@code reviewRequired=true}.</p>
-     *
-     * @param taskId                 task identifier
-     * @param snapshotId             snapshot ID
-     * @param nodeId                 node ID
-     * @param supervisorId           supervisor ID
-     * @param workerId               worker ID
-     * @param providerSessionId      provider session ID
-     * @param baseCommit             base commit
-     * @param commitSha              commit SHA
-     * @param changedPaths           changed paths
-     * @param capabilityDependencies dependencies
-     * @param summary                summary
-     * @param createdAtMillis        creation timestamp
-     * @param provenance             immutable lane provenance
-     */
-    public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
-            String workerId, String providerSessionId, String baseCommit, String commitSha,
-            List<String> changedPaths, List<String> capabilityDependencies, String summary,
-            long createdAtMillis, SnapshotProvenance provenance) {
-        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
-                commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
-                provenance, false);
+    if (summary.isBlank() || summary.length() > MAX_SUMMARY_LENGTH) {
+      throw new IllegalArgumentException("summary must be 1-" + MAX_SUMMARY_LENGTH + " characters");
     }
+  }
 
-    /**
-     * Constructs a record with default provenance for a minimal snapshot payload.
-     *
-     * @param taskId                 task ID
-     * @param snapshotId             snapshot ID
-     * @param nodeId                 node ID
-     * @param supervisorId           supervisor ID
-     * @param workerId               worker ID
-     * @param providerSessionId      session ID
-     * @param baseCommit             base commit
-     * @param commitSha              commit SHA
-     * @param changedPaths           changed paths
-     * @param capabilityDependencies dependencies
-     * @param summary                summary
-     * @param createdAtMillis        creation timestamp
-     */
-    public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
-            String workerId, String providerSessionId, String baseCommit, String commitSha,
-            List<String> changedPaths, List<String> capabilityDependencies, String summary,
-            long createdAtMillis) {
-        this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
-                commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
-                new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
-                        capabilityDependencies, List.of(), List.of(), commitSha, commitSha));
-    }
+  /**
+   * Constructs a record with the pre-review-gate shape.
+   *
+   * <p>Existing callers and historical payloads default to an unreviewed
+   * snapshot. New reviewed publication must use the canonical constructor with
+   * {@code reviewRequired=true}.</p>
+   *
+   * @param taskId                 task identifier
+   * @param snapshotId             snapshot ID
+   * @param nodeId                 node ID
+   * @param supervisorId           supervisor ID
+   * @param workerId               worker ID
+   * @param providerSessionId      provider session ID
+   * @param baseCommit             base commit
+   * @param commitSha              commit SHA
+   * @param changedPaths           changed paths
+   * @param capabilityDependencies dependencies
+   * @param summary                summary
+   * @param createdAtMillis        creation timestamp
+   * @param provenance             immutable lane provenance
+   */
+  public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+      String workerId, String providerSessionId, String baseCommit, String commitSha,
+      List<String> changedPaths, List<String> capabilityDependencies, String summary,
+      long createdAtMillis, SnapshotProvenance provenance) {
+    this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+        commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
+        provenance, false);
+  }
+
+  /**
+   * Constructs a record with default provenance for a minimal snapshot payload.
+   *
+   * @param taskId                 task ID
+   * @param snapshotId             snapshot ID
+   * @param nodeId                 node ID
+   * @param supervisorId           supervisor ID
+   * @param workerId               worker ID
+   * @param providerSessionId      session ID
+   * @param baseCommit             base commit
+   * @param commitSha              commit SHA
+   * @param changedPaths           changed paths
+   * @param capabilityDependencies dependencies
+   * @param summary                summary
+   * @param createdAtMillis        creation timestamp
+   */
+  public TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, String supervisorId,
+      String workerId, String providerSessionId, String baseCommit, String commitSha,
+      List<String> changedPaths, List<String> capabilityDependencies, String summary,
+      long createdAtMillis) {
+    this(taskId, snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit,
+        commitSha, changedPaths, capabilityDependencies, summary, createdAtMillis,
+        new SnapshotProvenance(taskId, taskId, nodeId, providerSessionId, 1,
+            capabilityDependencies, List.of(), List.of(), commitSha, commitSha));
+  }
 }

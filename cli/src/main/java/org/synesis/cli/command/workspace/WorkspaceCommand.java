@@ -8,9 +8,9 @@ import picocli.CommandLine.Command;
 @Command(name = "workspace", description = "Perform workspace verification and mutation operations.", mixinStandardHelpOptions = true)
 public final class WorkspaceCommand {
 
-    /**
-     * Creates the workspace command group.
-     */
-    public WorkspaceCommand() {
-    }
+  /**
+   * Creates the workspace command group.
+   */
+  public WorkspaceCommand() {
+  }
 }

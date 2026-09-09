@@ -38,7 +38,8 @@ Worker A:
 - participant `agt_bb795d72-d4b9-348c-883b-d5981ef0386a`
 - WorkIntent `85006b86-3b38-3931-b285-e10494dd7910`
 - provider Thread A `01a075ad-0c0c-7981-a769-c2e7698fad9f`
-- claims: `src/main/java/tasktracker/domain`, `src/main/java/tasktracker/persistence`, and their focused tests
+- claims: `src/main/java/tasktracker/domain`, `src/main/java/tasktracker/persistence`, and their
+  focused tests
 - proof digest only: `83a5bd7242112ea065e86d55bbfe808df61c3f9f5039566246d4094166239a1b`
 
 Worker B:
@@ -47,7 +48,8 @@ Worker B:
 - participant `agt_e93fc4b9-5311-3b7d-8af6-35f56684925d`
 - WorkIntent `7914887a-239f-346e-867b-93a462c9d998`
 - provider Thread B `01a075ac-8c83-7d63-ae49-a8b1a89dabfb`
-- claims: `src/main/java/tasktracker/application`, `src/main/java/tasktracker/api`, and their focused tests
+- claims: `src/main/java/tasktracker/application`, `src/main/java/tasktracker/api`, and their
+  focused tests
 - proof digest only: `18795ddd3a157cf71f6d8d31c11c97a91f65def09a83a0d5a97b51c9b211aa577`
 
 ## Runtime and collaboration evidence

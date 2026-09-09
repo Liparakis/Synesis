@@ -12,95 +12,95 @@ import java.util.Locale;
  */
 public enum AgentNextAction {
 
-    /**
-     * Re-run session bootstrap or session refresh before proceeding.
-     */
-    ENSURE_SESSION("ensure_session"),
+  /**
+   * Re-run session bootstrap or session refresh before proceeding.
+   */
+  ENSURE_SESSION("ensure_session"),
 
-    /**
-     * Provide input/output/behavior contract specifications for requested capability.
-     */
-    REQUEST_COORDINATION("request_coordination"),
+  /**
+   * Provide input/output/behavior contract specifications for requested capability.
+   */
+  REQUEST_COORDINATION("request_coordination"),
 
-    /**
-     * Wait for background owner response or pending event.
-     */
-    WAIT("wait"),
+  /**
+   * Wait for background owner response or pending event.
+   */
+  WAIT("wait"),
 
-    /**
-     * Retry the operation after refreshing session context.
-     */
-    RETRY("retry"),
+  /**
+   * Retry the operation after refreshing session context.
+   */
+  RETRY("retry"),
 
-    /**
-     * Stop operation and request human intervention.
-     */
-    REQUEST_HUMAN_HELP("request_human_help"),
+  /**
+   * Stop operation and request human intervention.
+   */
+  REQUEST_HUMAN_HELP("request_human_help"),
 
-    /**
-     * Respond to pending capability request from another worker as the capability owner.
-     */
-    RESPOND_COORDINATION("respond_coordination"),
+  /**
+   * Respond to pending capability request from another worker as the capability owner.
+   */
+  RESPOND_COORDINATION("respond_coordination"),
 
-    /**
-     * Choose the structured result for a visible review decision before
-     * submitting the existing coordination response.
-     */
-    REVIEW_DECISION("review_decision"),
+  /**
+   * Choose the structured result for a visible review decision before submitting the existing
+   * coordination response.
+   */
+  REVIEW_DECISION("review_decision"),
 
-    /**
-     * Revise capability request contract in response to owner feedback.
-     */
-    REVISE_CAPABILITY_REQUEST("revise_capability_request"),
+  /**
+   * Revise capability request contract in response to owner feedback.
+   */
+  REVISE_CAPABILITY_REQUEST("revise_capability_request"),
 
-    /**
-     * Validate the currently available implementation snapshot.
-     */
-    VALIDATE_IMPLEMENTATION("validate_implementation"),
+  /**
+   * Validate the currently available implementation snapshot.
+   */
+  VALIDATE_IMPLEMENTATION("validate_implementation"),
 
-    /**
-     * Respond to a validation revision request by fixing and republishing the implementation.
-     */
-    RESPOND_TO_VALIDATION_REVISION("respond_to_validation_revision"),
+  /**
+   * Respond to a validation revision request by fixing and republishing the implementation.
+   */
+  RESPOND_TO_VALIDATION_REVISION("respond_to_validation_revision"),
 
-    /**
-     * Publish the current implementation as an immutable lane snapshot.
-     */
-    FINISH_LANE("finish_lane");
+  /**
+   * Publish the current implementation as an immutable lane snapshot.
+   */
+  FINISH_LANE("finish_lane");
 
-    private final String value;
+  private final String value;
 
-    AgentNextAction(String value) {
-        this.value = value;
+  AgentNextAction(String value) {
+    this.value = value;
+  }
+
+  /**
+   * Parses a string into an {@link AgentNextAction}.
+   *
+   * @param input string value
+   * @return matching next action
+   * @throws IllegalArgumentException if unknown
+   */
+  public static AgentNextAction fromValue(String input) {
+    if (input == null) {
+      throw new IllegalArgumentException("nextAction value cannot be null");
     }
-
-    /**
-     * Parses a string into an {@link AgentNextAction}.
-     *
-     * @param input string value
-     * @return matching next action
-     * @throws IllegalArgumentException if unknown
-     */
-    public static AgentNextAction fromValue(String input) {
-        if (input == null) {
-            throw new IllegalArgumentException("nextAction value cannot be null");
-        }
-        String normalized = input.trim()
-                .toLowerCase(Locale.ROOT);
-        for (AgentNextAction action : values()) {
-            if (action.value.equals(normalized)) {
-                return action;
-            }
-        }
-        throw new IllegalArgumentException("Unknown agent next action: " + input);
+    String normalized = input.trim()
+        .toLowerCase(Locale.ROOT);
+    for (AgentNextAction action : values()) {
+      if (action.value.equals(normalized)) {
+        return action;
+      }
     }
+    throw new IllegalArgumentException("Unknown agent next action: " + input);
+  }
 
-    /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
+  /**
+   * Returns the stable lowercase JSON representation.
+   *
+   * @return lowercase string representation
+   */
+  public String value() {
+    return value;
+  }
 }

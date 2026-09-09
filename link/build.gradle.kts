@@ -50,7 +50,8 @@ tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
-    maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
+    maxParallelForks = forkOverride
+            ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
 tasks.register<JavaExec>("demoCli") {
@@ -62,20 +63,20 @@ tasks.register<JavaExec>("demoCli") {
 }
 
 fun filesUnder(dir: File, extensions: Set<String>): List<File> =
-    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+        if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+        else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
 val linkRepositoryRoot = rootProject.layout.projectDirectory.asFile
 val linkFormatRoots = listOf(
-    layout.projectDirectory.dir("src").asFile,
-    linkRepositoryRoot.resolve("docs"),
-    layout.projectDirectory.file("build.gradle.kts").asFile,
-    linkRepositoryRoot.resolve("README.md"),
-    linkRepositoryRoot.resolve("AGENTS.md"),
-    linkRepositoryRoot.resolve("CONTRIBUTING.md"),
-    linkRepositoryRoot.resolve("SECURITY.md"),
-    linkRepositoryRoot.resolve("settings.gradle.kts"),
-    linkRepositoryRoot.resolve("build.gradle.kts")
+        layout.projectDirectory.dir("src").asFile,
+        linkRepositoryRoot.resolve("docs"),
+        layout.projectDirectory.file("build.gradle.kts").asFile,
+        linkRepositoryRoot.resolve("README.md"),
+        linkRepositoryRoot.resolve("AGENTS.md"),
+        linkRepositoryRoot.resolve("CONTRIBUTING.md"),
+        linkRepositoryRoot.resolve("SECURITY.md"),
+        linkRepositoryRoot.resolve("settings.gradle.kts"),
+        linkRepositoryRoot.resolve("build.gradle.kts")
 ).filter { it.exists() }
 
 abstract class TrailingWhitespaceTask : DefaultTask() {

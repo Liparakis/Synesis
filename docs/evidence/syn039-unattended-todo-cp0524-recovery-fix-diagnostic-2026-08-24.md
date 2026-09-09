@@ -26,12 +26,15 @@ checkout mutation was performed.
 ## Durable coordination state
 
 - WorkGroup: `e8a79ccc-6731-3881-aa99-922517a45497`, `ACTIVE`, version 1
-- Agent A: `agt_1fcf92e4-36f8-3834-bedb-7778fb6d1e1f`, intent `7926a4ac-5844-379d-bb37-20b51d01f8bc`, epoch 1,
+- Agent A: `agt_1fcf92e4-36f8-3834-bedb-7778fb6d1e1f`, intent
+  `7926a4ac-5844-379d-bb37-20b51d01f8bc`, epoch 1,
   `PATH_EXACT todo.py`
-- Agent B: `agt_20fb2541-1874-3258-b67b-e88c11cfc200`, intent `95c7d25e-fc7a-3a41-bdf7-b5f4318557a7`, epoch 1,
+- Agent B: `agt_20fb2541-1874-3258-b67b-e88c11cfc200`, intent
+  `95c7d25e-fc7a-3a41-bdf7-b5f4318557a7`, epoch 1,
   `PATH_EXACT test_todo.py`
 - REVIEW request: `8b83d2f9-8008-4228-bf70-b8eec13bd29e`, A → B, `ACCEPTED`
-- REVIEW grant: `0af27869-aa5a-3ea2-afd5-a7eb1b17ed30`, target A, target intent B, epoch 1, single-use, available
+- REVIEW grant: `0af27869-aa5a-3ea2-afd5-a7eb1b17ed30`, target A, target intent B, epoch 1,
+  single-use, available
 - Snapshots: none
 - Validation decisions: none
 - Integration: none
@@ -85,12 +88,14 @@ ready/isolated or coordination state in this diagnostic.
 
 - `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS (11 tests)
 - `:workspace:test --tests org.synesis.workspace.ProviderSessionBindingServiceTest`: PASS (12 tests)
-- `:coordination:test --tests org.synesis.coordination.collaboration.WorkIntentServiceTest`: PASS/from cache
+- `:coordination:test --tests org.synesis.coordination.collaboration.WorkIntentServiceTest`:
+  PASS/from cache
 - coordination/workspace/MCP Javadocs: PASS
 - deferred and fixture validators: PASS
 - bootstrap `go vet ./...`: PASS
 - `git diff --check`: PASS
-- `:cli:platformBundle --rerun-tasks --no-daemon`: PASS after the diagnostic MCP children exited; the first attempt was
+- `:cli:platformBundle --rerun-tasks --no-daemon`: PASS after the diagnostic MCP children exited;
+  the first attempt was
   blocked by those still-open external MCP JAR handles
 
 Raw action logs remain under the harness directory above.

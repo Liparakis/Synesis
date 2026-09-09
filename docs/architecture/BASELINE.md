@@ -13,8 +13,10 @@ Netty/native types. Identity, candidate, protocol, session, liveness,
 transport, observability, and test support remain packages inside Link, not
 additional Gradle subprojects.
 
-The baseline has one local process, no authoritative server, no database, no broker, and no mandatory rendezvous or
-relay. Direct connectivity is attempted from caller-supplied and locally gathered candidates; failure is diagnostic.
+The baseline has one local process, no authoritative server, no database, no broker, and no
+mandatory rendezvous or
+relay. Direct connectivity is attempted from caller-supplied and locally gathered candidates;
+failure is diagnostic.
 
 ## Evidence ledger
 
@@ -29,32 +31,41 @@ relay. Direct connectivity is attempted from caller-supplied and locally gathere
 ## Trust and ownership
 
 - Application caller owns identity-storage policy, session lifecycle, and application streams.
-- Synesis Link owns long-term identity operations, signed descriptors, authenticated sessions, liveness, and resource
+- Synesis Link owns long-term identity operations, signed descriptors, authenticated sessions,
+  liveness, and resource
   limits.
 - QUIC/native code is a transport trust zone; its types do not cross the public API.
-- Remote peers control candidate descriptors, handshake input, frame bytes, stream requests, and timing; all are bounded
+- Remote peers control candidate descriptors, handshake input, frame bytes, stream requests, and
+  timing; all are bounded
   and validated before allocation.
 
 ## Reliability and contract gates
 
-Every candidate attempt and handshake has a deadline and cancellation path. Retries create new authenticated attempts
-and never resurrect a terminal session. Control messages are bounded and isolated from application streams. Duplicate,
+Every candidate attempt and handshake has a deadline and cancellation path. Retries create new
+authenticated attempts
+and never resurrect a terminal session. Control messages are bounded and isolated from application
+streams. Duplicate,
 stale, reordered, malformed, and oversized input is rejected deterministically.
 
 ## Rejected alternatives
 
-- Additional Gradle modules: rejected because no independent release, ownership, scaling, or storage boundary is
+- Additional Gradle modules: rejected because no independent release, ownership, scaling, or storage
+  boundary is
   evidenced. The single Link subproject is the repository's current implementation boundary.
-- Mandatory rendezvous/relay: rejected because direct-first and serverless operation are product invariants.
+- Mandatory rendezvous/relay: rejected because direct-first and serverless operation are product
+  invariants.
 - Custom QUIC/TLS: rejected because it expands security and maintenance risk without product value.
-- HTTP/3 as the public abstraction: rejected because Synesis Link needs raw bidirectional streams and its own control
+- HTTP/3 as the public abstraction: rejected because Synesis Link needs raw bidirectional streams
+  and its own control
   protocol.
 
 ## Fitness functions
 
-- `scripts/agent-doctor.ps1` rejects obvious scope leakage, secrets, stale task state, and missing package-info once
+- `scripts/agent-doctor.ps1` rejects obvious scope leakage, secrets, stale task state, and missing
+  package-info once
   Java exists.
-- Gradle compile/test/Javadoc tasks must pass with warnings treated as failures where tooling permits.
+- Gradle compile/test/Javadoc tasks must pass with warnings treated as failures where tooling
+  permits.
 - Public API tests must not import internal transport types.
 - Protocol tests must run without public internet access.
 - Resource-limit and lifecycle tests must prove bounded cleanup.

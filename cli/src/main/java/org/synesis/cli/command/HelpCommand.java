@@ -10,23 +10,23 @@ import picocli.CommandLine.Spec;
 @Command(name = "help", description = "Show Synesis command help.")
 public final class HelpCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the help command.
-     */
-    public HelpCommand() {
-    }
+  /**
+   * Creates the help command.
+   */
+  public HelpCommand() {
+  }
 
-    /**
-     * Prints root help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .getParent()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints root help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .getParent()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

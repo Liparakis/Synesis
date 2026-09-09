@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "project", description = "Manage the current Synesis project.")
 public final class ProjectCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the project parent command.
-     */
-    public ProjectCommand() {
-    }
+  /**
+   * Creates the project parent command.
+   */
+  public ProjectCommand() {
+  }
 
-    /**
-     * Prints project help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints project help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

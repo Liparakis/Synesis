@@ -1,3 +1,15 @@
+## 2026-09-09 — SYN-009E free protection closeout
+
+The current executable protection stage is complete for `PROTECTION_LITE`.
+CLI and relay protection-lite acceptance, private mappings/provenance,
+artifact-integrity checks, package repackaging, frontend/native supporting
+audits, and the maximum fail-closed gate were verified. The commercial
+maximum profile remains explicitly deferred because no licensed,
+version-pinned protector adapter or production signing authority is present.
+No Seven Ring capability is promoted by the lite profile. `SYN-009E` is closed
+for this free scope; future commercial execution must resume from the existing
+adapter/signing seam without weakening the gate.
+
 ## 2026-09-09 — SYN-009E maximum-protection adapter/signing and tier-binding seam — current
 
 The release-only maximum boundary now has a versioned external protector

@@ -476,9 +476,11 @@ this pass; ordinary MCP stays `SESSION_BOUND`.
 
 The complete design, prototype result, focused tests, acceptance plan,
 unknowns, and evidence classification are recorded in
-[`SYN-050-protected-carrier-prototype-2026-09-03.md`](../evidence/SYN-050-protected-carrier-prototype-2026-09-03.md)
+[
+`SYN-050-protected-carrier-prototype-2026-09-03.md`](../evidence/SYN-050-protected-carrier-prototype-2026-09-03.md)
 and
-[`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
+[
+`SYN-050-managed-attachment-design-2026-09-03.md`](../evidence/SYN-050-managed-attachment-design-2026-09-03.md).
 The exact child-launch source trace and disposable result are in
 [
 `SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md`](../evidence/SYN-050-codex-app-server-child-launch-boundary-2026-09-03.md).

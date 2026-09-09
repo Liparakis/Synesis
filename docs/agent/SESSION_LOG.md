@@ -1,3 +1,15 @@
+## 2026-09-09 — SYN-009E protection-lite closeout reconciliation
+
+Closed the current executable protection stage for the free scope. The CLI
+and relay protection-lite checks had passed, the maximum-release gate remained
+fail-closed without a licensed adapter, and the commercial maximum was
+classified as deferred rather than incomplete free work. Reconciled the task,
+current-state, deferred-register, and continuation records. The final closeout
+also includes the authorized formatter/implementation changes and checkpoint
+history after auditing for secrets and generated artifacts. The two known
+trailing-whitespace lines in `ProjectApplicationService.java` were removed;
+`CP-0752.md` has no remaining whitespace failure.
+
 ## 2026-09-09 — SYN-009E free package-repackaging hardening
 
 Extended the free protection-lite CLI and relay rules with ProGuard

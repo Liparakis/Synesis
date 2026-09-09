@@ -7,7 +7,8 @@ Date: 2026-08-25
 Fresh disposable project and harness:
 
 - Project: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-ordinary-cp0539-2026-08-25-001`
-- Harness logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-ordinary-cp0539-2026-08-25-001\logs`
+- Harness logs:
+  `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-ordinary-cp0539-2026-08-25-001\logs`
 - Project ID: `90e72ce7-7f62-44b4-a91d-a2f6de33ed26`
 - MCP: repository-built bundled `synesis-mcp.exe`, 10 tools, project-pinned
 - Agents: two independent GPT-5.6 Luna Codex sessions, ready/isolated, no

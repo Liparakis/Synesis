@@ -19,59 +19,60 @@ import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
  */
 class ReconciliationPlanTest {
 
-    @Test
-    void persistsAndLoadsImmutableReconciliationPlanOutsideControlCheckout(@TempDir Path tempDir) throws Exception {
-        Path controlRoot = tempDir.resolve("control-repo");
-        Files.createDirectories(controlRoot);
-        new ProjectApplicationService().init(controlRoot);
+  @Test
+  void persistsAndLoadsImmutableReconciliationPlanOutsideControlCheckout(@TempDir Path tempDir)
+      throws Exception {
+    Path controlRoot = tempDir.resolve("control-repo");
+    Files.createDirectories(controlRoot);
+    new ProjectApplicationService().init(controlRoot);
 
-        ReconciliationPlanStore store = new ReconciliationPlanStore();
-        ReconciliationPlan plan = store.createAndSave(
-                controlRoot, "proj-rec", 1,
-                List.of(new ReconciliationPlanEntry(
-                        1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
-                        true, List.of("session_recovery_eligible"), "Process death verified"
-                ))
-        );
+    ReconciliationPlanStore store = new ReconciliationPlanStore();
+    ReconciliationPlan plan = store.createAndSave(
+        controlRoot, "proj-rec", 1,
+        List.of(new ReconciliationPlanEntry(
+            1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
+            true, List.of("session_recovery_eligible"), "Process death verified"
+        ))
+    );
 
-        assertNotNull(plan.planId());
-        assertTrue(plan.planId()
-                .startsWith("recplan-"));
+    assertNotNull(plan.planId());
+    assertTrue(plan.planId()
+        .startsWith("recplan-"));
 
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
-                .resolve(plan.planId() + ".json");
-        assertTrue(Files.exists(planFile));
-        assertFalse(planFile.startsWith(controlRoot));
+    Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
+    Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
+        .resolve(plan.planId() + ".json");
+    assertTrue(Files.exists(planFile));
+    assertFalse(planFile.startsWith(controlRoot));
 
-        ReconciliationPlan loaded = store.load(controlRoot, plan.planId());
-        assertEquals(plan.planId(), loaded.planId());
-        assertEquals(plan.contentHash(), loaded.contentHash());
-    }
+    ReconciliationPlan loaded = store.load(controlRoot, plan.planId());
+    assertEquals(plan.planId(), loaded.planId());
+    assertEquals(plan.contentHash(), loaded.contentHash());
+  }
 
-    @Test
-    void rejectsTamperedReconciliationPlan(@TempDir Path tempDir) throws Exception {
-        Path controlRoot = tempDir.resolve("control-repo");
-        Files.createDirectories(controlRoot);
-        new ProjectApplicationService().init(controlRoot);
+  @Test
+  void rejectsTamperedReconciliationPlan(@TempDir Path tempDir) throws Exception {
+    Path controlRoot = tempDir.resolve("control-repo");
+    Files.createDirectories(controlRoot);
+    new ProjectApplicationService().init(controlRoot);
 
-        ReconciliationPlanStore store = new ReconciliationPlanStore();
-        ReconciliationPlan plan = store.createAndSave(
-                controlRoot, "proj-rec", 1,
-                List.of(new ReconciliationPlanEntry(
-                        1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
-                        true, List.of("session_recovery_eligible"), "Process death verified"
-                ))
-        );
+    ReconciliationPlanStore store = new ReconciliationPlanStore();
+    ReconciliationPlan plan = store.createAndSave(
+        controlRoot, "proj-rec", 1,
+        List.of(new ReconciliationPlanEntry(
+            1, "rec-1", ReconciliationAction.MARK_SESSION_SUSPENDED, "sess-1",
+            true, List.of("session_recovery_eligible"), "Process death verified"
+        ))
+    );
 
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
-                .resolve(plan.planId() + ".json");
+    Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
+    Path planFile = workspaceRoot.resolve("admin/reconciliation-plans")
+        .resolve(plan.planId() + ".json");
 
-        String content = Files.readString(planFile);
-        String tampered = content.replace("totalInspectedCount\":1", "totalInspectedCount\":999");
-        Files.writeString(planFile, tampered);
+    String content = Files.readString(planFile);
+    String tampered = content.replace("totalInspectedCount\":1", "totalInspectedCount\":999");
+    Files.writeString(planFile, tampered);
 
-        assertThrows(Exception.class, () -> store.load(controlRoot, plan.planId()));
-    }
+    assertThrows(Exception.class, () -> store.load(controlRoot, plan.planId()));
+  }
 }

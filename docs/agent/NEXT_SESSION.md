@@ -1,3 +1,12 @@
+## 2026-09-09 — SYN-009E protection closeout
+
+The free protection stage is complete and has been reconciled for closeout.
+CLI and relay protection-lite checks passed; the maximum-release task still
+fails closed without a licensed adapter. Commercial maximum protection is
+deferred, not claimed or silently substituted with lite. The next product
+stage is UI polish. Resume SYN-009E only when the licensed protector,
+reviewed adapter/configuration, and production signing authority exist.
+
 ## 2026-09-09 — SYN-009E maximum-protection adapter/signing and tier-binding seam
 
 `SYN-053` is complete for its current installed-UI scope at `CP-0758`. The
@@ -29,11 +38,10 @@ The provenance comparator also validates the private license-attestation path,
 hash, format, and shared mode before it can report diversification or
 reproducibility; its current missing-record result remains partial.
 
-- Exact next action: obtain an installed, licensed, version-pinned commercial
-  protector and its reviewed adapter/configuration, inject release signing
-  authority, and run the maximum-release acceptance from a clean reviewed
-  release checkout; absent that tool, keep the maximum gate fail-closed and
-  preserve the lite evidence.
+- Exact next action: no further free-protection implementation. Resume the
+  deferred commercial maximum capability only when its licensed protector,
+  reviewed adapter/configuration, and production signing authority are
+  available; otherwise preserve the passing lite evidence and fail closed.
 - Required continuation command:
   `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
 - Do not claim virtualization, packing, anti-VM, or anti-debug from open-source

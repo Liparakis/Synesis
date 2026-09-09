@@ -16,35 +16,36 @@ import org.synesis.workspace.application.ProjectApplicationService;
  */
 public class RepairPlanTest {
 
-    @Test
-    public void testRepairPlanPrepareShowExecuteRollback(@TempDir Path tempDir) throws Exception {
-        ProjectApplicationService projectService = new ProjectApplicationService();
-        projectService.init(tempDir);
+  @Test
+  public void testRepairPlanPrepareShowExecuteRollback(@TempDir Path tempDir) throws Exception {
+    ProjectApplicationService projectService = new ProjectApplicationService();
+    projectService.init(tempDir);
 
-        Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(tempDir);
-        Path adminDir = workspaceRoot.resolve("admin");
-        Files.createDirectories(adminDir);
-        Path lockFile = adminDir.resolve("cleanup-execution.lock");
-        Files.writeString(lockFile, "{ \"pid\": 9999999 }");
+    Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(
+        tempDir);
+    Path adminDir = workspaceRoot.resolve("admin");
+    Files.createDirectories(adminDir);
+    Path lockFile = adminDir.resolve("cleanup-execution.lock");
+    Files.writeString(lockFile, "{ \"pid\": 9999999 }");
 
-        RepairService repairService = new RepairService();
+    RepairService repairService = new RepairService();
 
-        // 1. Prepare Plan
-        RepairPlan plan = repairService.preparePlan(tempDir);
-        assertNotNull(plan.planId());
-        assertTrue(plan.supportedRepairsCount() > 0);
+    // 1. Prepare Plan
+    RepairPlan plan = repairService.preparePlan(tempDir);
+    assertNotNull(plan.planId());
+    assertTrue(plan.supportedRepairsCount() > 0);
 
-        // 2. Show Plan
-        RepairPlan loadedPlan = repairService.showPlan(tempDir, plan.planId());
-        assertEquals(plan.contentHash(), loadedPlan.contentHash());
+    // 2. Show Plan
+    RepairPlan loadedPlan = repairService.showPlan(tempDir, plan.planId());
+    assertEquals(plan.contentHash(), loadedPlan.contentHash());
 
-        // 3. Execute Plan
-        RepairService.ExecutionResult result = repairService.executePlan(tempDir, plan.planId());
-        assertEquals(1, result.completedCount());
-        assertFalse(Files.exists(lockFile), "Stale lock file should have been removed");
+    // 3. Execute Plan
+    RepairService.ExecutionResult result = repairService.executePlan(tempDir, plan.planId());
+    assertEquals(1, result.completedCount());
+    assertFalse(Files.exists(lockFile), "Stale lock file should have been removed");
 
-        // 4. Rollback Execution
-        repairService.rollback(tempDir, result.executionId());
-        assertTrue(Files.exists(lockFile), "Rollback should restore administrative file");
-    }
+    // 4. Rollback Execution
+    repairService.rollback(tempDir, result.executionId());
+    assertTrue(Files.exists(lockFile), "Rollback should restore administrative file");
+  }
 }

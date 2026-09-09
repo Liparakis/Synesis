@@ -11,12 +11,12 @@ import org.junit.jupiter.api.Test;
  */
 class ProviderJsonTest {
 
-    @Test
-    void preservesIntegralJsonNumbersForJsonRpcIdentifiers() {
-        Object parsed = ProviderJson.parse("{\"id\":0,\"fraction\":1.5}");
+  @Test
+  void preservesIntegralJsonNumbersForJsonRpcIdentifiers() {
+    Object parsed = ProviderJson.parse("{\"id\":0,\"fraction\":1.5}");
 
-        Map<?, ?> object = assertInstanceOf(Map.class, parsed);
-        assertInstanceOf(Long.class, object.get("id"));
-        assertEquals("{\"id\":0,\"fraction\":1.5}", ProviderJson.write(object));
-    }
+    Map<?, ?> object = assertInstanceOf(Map.class, parsed);
+    assertInstanceOf(Long.class, object.get("id"));
+    assertEquals("{\"id\":0,\"fraction\":1.5}", ProviderJson.write(object));
+  }
 }

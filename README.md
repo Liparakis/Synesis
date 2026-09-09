@@ -2,7 +2,8 @@
 
 # 🧩 Synesis
 
-**A local-first coordination and constraint-enforcement layer for independently running AI coding agents.**
+**A local-first coordination and constraint-enforcement layer for independently running AI coding
+agents.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20developer%20preview-orange)](#implemented-today)
@@ -13,27 +14,33 @@
 [![MCP Tools](https://img.shields.io/badge/MCP-tools-10-informational)](#implemented-today)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](AGENTS.md)
 
-Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded provider integrations.
+Local identity. Workspace boundaries. Peer sessions over Synesis Link. Bounded provider
+integrations.
 
 </div>
 
 ---
 
-> ⚠️ **Early developer preview.** This is not a production security, compliance, or policy guarantee. Provider hooks can
+> ⚠️ **Early developer preview.** This is not a production security, compliance, or policy
+> guarantee. Provider hooks can
 > be bypassed, direct connectivity can fail, and APIs may change.
 
 ## Implemented today
 
-- 🔗 **Synesis Link** — authenticated peer identity, candidate exchange, QUIC sessions, bounded control/liveness
+- 🔗 **Synesis Link** — authenticated peer identity, candidate exchange, QUIC sessions, bounded
+  control/liveness
   behavior, graceful close, and a bounded application stream.
-- 🗂️ **Project-local state** — initialization, identity bootstrap, signed onboarding invitations, typed constraints,
-  provider hooks, workspace verification, lifecycle inspection/cleanup, repair, and reconciliation diagnostics.
-- 🛠️ **Unified tooling** — a single `synesis` CLI and stdio MCP server with exactly 10 tools. One persistent MCP
+- 🗂️ **Project-local state** — initialization, identity bootstrap, signed onboarding invitations,
+  typed constraints,
+  provider hooks, workspace verification, lifecycle inspection/cleanup, repair, and reconciliation
+  diagnostics.
+- 🛠️ **Unified tooling** — a single `synesis` CLI and stdio MCP server with exactly 10 tools. One
+  persistent MCP
   connection owns one provider binding; worker sessions and worktrees remain isolated.
 - 🔌 **Provider integrations**
 
   | Provider     | ID              | Maturity                             |
-    |--------------|-----------------|--------------------------------------|
+      |--------------|-----------------|--------------------------------------|
   | Codex        | `codex`         | `experimental`, trust-review limited |
   | Claude Code  | `claude`        | `experimental`                       |
 
@@ -79,10 +86,12 @@ synesis provider install claude
 synesis provider status claude
 ```
 
-Normal work uses the provider's managed hook or MCP connection. Read files through Synesis, apply revision-bearing
+Normal work uses the provider's managed hook or MCP connection. Read files through Synesis, apply
+revision-bearing
 patches, and stop when identity, ownership, freshness, or workspace verification fails.
 
-📖 See the [getting-started guide](docs/getting-started/README.md) and [provider guides](docs/providers/README.md).
+📖 See the [getting-started guide](docs/getting-started/README.md)
+and [provider guides](docs/providers/README.md).
 
 ## Contributing
 
@@ -103,26 +112,28 @@ generated files, transcripts, and machine-specific paths out of commits.
 - [ ] Production packaging hardening, signing replacement, and notarization
 - [ ] Remote coordination, rendezvous, relay fallback, and hole-punching
 
-> Incomplete items are future work, not current product claims. Synesis does **not** currently provide hosted services,
+> Incomplete items are future work, not current product claims. Synesis does **not** currently
+> provide hosted services,
 > rendezvous, relay fallback, or remote multi-machine coordination.
 > The [deferred capability register](docs/agent/DEFERRED.md) is authoritative.
 
 ## Documentation map
 
-| Topic                      | Link                                                                     |
-|----------------------------|--------------------------------------------------------------------------|
-| Getting started            | [docs/getting-started/README.md](docs/getting-started/README.md)         |
-| Provider guides            | [docs/providers/README.md](docs/providers/README.md)                     |
-| Architecture               | [docs/architecture/README.md](docs/architecture/README.md)               |
+| Topic                      | Link                                                                                   |
+|----------------------------|----------------------------------------------------------------------------------------|
+| Getting started            | [docs/getting-started/README.md](docs/getting-started/README.md)                       |
+| Provider guides            | [docs/providers/README.md](docs/providers/README.md)                                   |
+| Architecture               | [docs/architecture/README.md](docs/architecture/README.md)                             |
 | Installed browser UI       | [docs/architecture/installed-browser-ui.md](docs/architecture/installed-browser-ui.md) |
-| Operations                 | [docs/operations/README.md](docs/operations/README.md)                   |
-| Current repository state   | [docs/development/current-state.md](docs/development/current-state.md)   |
-| Development & verification | [docs/development/build-and-test.md](docs/development/build-and-test.md) |
-| Security model             | [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)           |
-| Release & signing notes    | [docs/release/RELEASE_READINESS.md](docs/release/RELEASE_READINESS.md)   |
-| Repository agent contract  | [AGENTS.md](AGENTS.md)                                                   |
+| Operations                 | [docs/operations/README.md](docs/operations/README.md)                                 |
+| Current repository state   | [docs/development/current-state.md](docs/development/current-state.md)                 |
+| Development & verification | [docs/development/build-and-test.md](docs/development/build-and-test.md)               |
+| Security model             | [docs/security/THREAT_MODEL.md](docs/security/THREAT_MODEL.md)                         |
+| Release & signing notes    | [docs/release/RELEASE_READINESS.md](docs/release/RELEASE_READINESS.md)                 |
+| Repository agent contract  | [AGENTS.md](AGENTS.md)                                                                 |
 
 ## License
 
-Synesis is licensed under the **GNU Affero General Public License v3.0 only** (SPDX: `AGPL-3.0-only`). See [
+Synesis is licensed under the **GNU Affero General Public License v3.0 only** (SPDX:
+`AGPL-3.0-only`). See [
 `LICENSE`](LICENSE).

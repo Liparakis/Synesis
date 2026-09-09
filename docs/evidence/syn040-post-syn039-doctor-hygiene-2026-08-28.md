@@ -1,14 +1,18 @@
 # SYN-040 Post-SYN-039 Doctor hygiene investigation
 
 Date: 2026-08-28
-Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001` (`feat: complete autonomous workgroup lifecycle`)
-Scope: classify the six Doctor warnings observed after the accepted SYN-039 run. No repair, cleanup, migration
+Starting HEAD: `f5622eba03c7631a7e3c8620a5598e8037ded001` (
+`feat: complete autonomous workgroup lifecycle`)
+Scope: classify the six Doctor warnings observed after the accepted SYN-039 run. No repair, cleanup,
+migration
 execution, or source-product mutation was authorized.
 
 ## Warning inventory
 
-The current packaged bundle (`0.1.0-dev.local`) reports `DEGRADED`, six warnings, zero errors, zero mutations,
-`CLEANUP_RECOMMENDED=false`, `RECONCILIATION_RECOMMENDED=true`, and `REPAIR_AVAILABLE=true` against the SYN-039 fixture.
+The current packaged bundle (`0.1.0-dev.local`) reports `DEGRADED`, six warnings, zero errors, zero
+mutations,
+`CLEANUP_RECOMMENDED=false`, `RECONCILIATION_RECOMMENDED=true`, and `REPAIR_AVAILABLE=true` against
+the SYN-039 fixture.
 
 | # | Finding and object                                                                                                                                                                                             | Source and durable state                                                                                                                                                                                                               | Classification and actionability                                                                                                                                                                                                     |
 |---|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -19,48 +23,70 @@ The current packaged bundle (`0.1.0-dev.local`) reports `DEGRADED`, six warnings
 | 5 | `provider_migration_required`; provider `antigravity`; fingerprint `ac0a3dfd6dddb20962cecff6ee5fe65e19d3923be20e52c5ab52ff877f7e4c32`                                                                          | `DoctorService.checkProviderConfiguration` delegates to `ProviderConfigMigrationService`; the user-global provider configuration is not the stable launcher configuration.                                                             | **C — user-global configuration is stale.** Existing `synesis provider migrate --dry-run/--prepare/--execute` is the supported path. No user-global file was changed.                                                                |
 | 6 | `provider_migration_required`; provider `codex`; fingerprint `57de4cf40144bdf7d00010f2f5557a7d642c2b9705309bfade167dd313e2ca93`                                                                                | Same migration service and same user-global configuration boundary.                                                                                                                                                                    | **C — user-global configuration is stale.** The direct isolated acceptance bundle is correct; it does not make the user-global config current. No migration was executed.                                                            |
 
-The two lease fingerprints are exact SHA-256 values of `stale_lease_` plus the two acceptance connection IDs. They
-identify the acceptance-created lease records, but they do not prove whether the provider process ended through clean
+The two lease fingerprints are exact SHA-256 values of `stale_lease_` plus the two acceptance
+connection IDs. They
+identify the acceptance-created lease records, but they do not prove whether the provider process
+ended through clean
 MCP EOF or an abnormal path.
 
 ## Causal and invariant review
 
-1. A completed binding cannot become recovery eligible: the accepted completion path marks the exact provider binding
-   `COMPLETED`; lease liveness separately returns `CLOSED_CLEANLY` as terminal when clean EOF invokes
+1. A completed binding cannot become recovery eligible: the accepted completion path marks the exact
+   provider binding
+   `COMPLETED`; lease liveness separately returns `CLOSED_CLEANLY` as terminal when clean EOF
+   invokes
    `McpProtocolHandler.close`.
-2. A completed participant plus released claims plus a completed WorkGroup makes collaboration state non-actionable. The
-   final SYN-039 evidence was `ACTIVE WorkGroups=0`, `TASKS=0`, `OWNERSHIPS=0`; the stale lease warning is outside that
+2. A completed participant plus released claims plus a completed WorkGroup makes collaboration state
+   non-actionable. The
+   final SYN-039 evidence was `ACTIVE WorkGroups=0`, `TASKS=0`, `OWNERSHIPS=0`; the stale lease
+   warning is outside that
    projection.
-3. Normal provider exit after explicit completion is terminal/historical in a fresh packaged run. An abnormal provider
-   death while active must remain stale/recovery-relevant; changing close handling to hide that would violate
+3. Normal provider exit after explicit completion is terminal/historical in a fresh packaged run. An
+   abnormal provider
+   death while active must remain stale/recovery-relevant; changing close handling to hide that
+   would violate
    fail-closed behavior.
-4. Therefore no proven product defect exists in the remaining lease warning, and no Doctor correlation change is
+4. Therefore no proven product defect exists in the remaining lease warning, and no Doctor
+   correlation change is
    justified from this evidence.
-5. The current aggregate provider status label `BOUND` is not used as proof of active work: it does not distinguish
+5. The current aggregate provider status label `BOUND` is not used as proof of active work: it does
+   not distinguish
    completed bindings. The exact binding and lease evidence are authoritative.
 
 ## Fresh packaged runtime
 
-Disposable fixture: `C:\\t\\syn040-packaged-clean-20260828-001`, project ID `f370eadd-3d0a-4918-aeae-b39d4946bb35`.
+Disposable fixture: `C:\\t\\syn040-packaged-clean-20260828-001`, project ID
+`f370eadd-3d0a-4918-aeae-b39d4946bb35`.
 
-Sequence: fresh `synesis-mcp.exe` process -> `initialize` -> `ensure_session` with `no_change_allowed` producer task ->
-projected `get_next_action` -> exact projected `finish_lane` payload -> provider EOF -> process exit -> Doctor.
+Sequence: fresh `synesis-mcp.exe` process -> `initialize` -> `ensure_session` with
+`no_change_allowed` producer task ->
+projected `get_next_action` -> exact projected `finish_lane` payload -> provider EOF -> process
+exit -> Doctor.
 
-Result: `NO_CHANGE`, `claimsReleased=true`, `workGroupState=COMPLETED`, `MCP_EXIT=0`, isolated Doctor `HEALTHY`, zero
-warnings, zero mutations. This is the smallest ordinary workflow proving that clean provider termination does not leave
+Result: `NO_CHANGE`, `claimsReleased=true`, `workGroupState=COMPLETED`, `MCP_EXIT=0`, isolated
+Doctor `HEALTHY`, zero
+warnings, zero mutations. This is the smallest ordinary workflow proving that clean provider
+termination does not leave
 a stale lease.
 
 ## Verification and scope
 
 - Current bundle native hash: `07F23EF1E1C9C6D344CA31A640CAA92BD483345C6F8260DE82A84C69F9E4A53B`.
-- Current bundle JAR hash: `E5D10201094A99925E975DC593A8DF606DE7308A080E48652186D07DAE313329`; it differs from the
-  earlier closure artifact because the build metadata embeds the current timestamp. Native behavior was unchanged.
-- Prior SYN-039 focused tests, strict Javadocs, deferred validation, bundle build, and smoke evidence remain the
+- Current bundle JAR hash: `E5D10201094A99925E975DC593A8DF606DE7308A080E48652186D07DAE313329`; it
+  differs from the
+  earlier closure artifact because the build metadata embeds the current timestamp. Native behavior
+  was unchanged.
+- Prior SYN-039 focused tests, strict Javadocs, deferred validation, bundle build, and smoke
+  evidence remain the
   accepted evidence baseline. A fresh Gradle rerun on this host failed before task execution with
-  `Unable to establish loopback connection`, including a fresh Gradle cache; this is reported as an environment
+  `Unable to establish loopback connection`, including a fresh Gradle cache; this is reported as an
+  environment
   limitation, not as a passing test.
-- The five pre-existing lifecycle edits under `workspace/src/main/java/org/synesis/workspace/lifecycle/` and their two
-  tests were inspected and excluded: their output truncation/repository-portability behavior has no demonstrated causal
+- The five pre-existing lifecycle edits under
+  `workspace/src/main/java/org/synesis/workspace/lifecycle/` and their two
+  tests were inspected and excluded: their output truncation/repository-portability behavior has no
+  demonstrated causal
   link to any Doctor finding.
-- No source product fix, repair, cleanup, provider migration, push, tag, release, architecture change, or SYN-039
+- No source product fix, repair, cleanup, provider migration, push, tag, release, architecture
+  change, or SYN-039
   reopening was performed.

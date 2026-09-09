@@ -29,218 +29,218 @@ import org.synesis.link.identity.NodeIdentity;
  */
 class ImplementationLifecycleTest {
 
-    @Test
-    void implementationEventPayloadRoundTrip() throws Exception {
-        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
-        List<String> changedPaths = List.of("src/Foo.java", "src/Bar.java");
-        List<String> failedTests = List.of("FooTest.shouldReturnBar");
+  @Test
+  void implementationEventPayloadRoundTrip() throws Exception {
+    CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+    List<String> changedPaths = List.of("src/Foo.java", "src/Bar.java");
+    List<String> failedTests = List.of("FooTest.shouldReturnBar");
 
-        ImplementationEventPayload payload = new ImplementationEventPayload(
-                handle, 1, "abc123", "def456",
-                changedPaths, "Initial implementation",
-                "revision_required", "Test failure", failedTests,
-                "/tmp/validation-worktree");
+    ImplementationEventPayload payload = new ImplementationEventPayload(
+        handle, 1, "abc123", "def456",
+        changedPaths, "Initial implementation",
+        "revision_required", "Test failure", failedTests,
+        "/tmp/validation-worktree");
 
-        byte[] encoded = payload.encode();
-        ImplementationEventPayload decoded = ImplementationEventPayload.decode(encoded);
+    byte[] encoded = payload.encode();
+    ImplementationEventPayload decoded = ImplementationEventPayload.decode(encoded);
 
-        assertEquals(handle.value(),
-                decoded.handle()
-                        .value());
-        assertEquals(1, decoded.revisionNumber());
-        assertEquals("abc123", decoded.baseCommit());
-        assertEquals("def456", decoded.commitSha());
-        assertEquals(changedPaths, decoded.changedPaths());
-        assertEquals("Initial implementation", decoded.summary());
-        assertEquals("revision_required", decoded.validationResult());
-        assertEquals("Test failure", decoded.validationReason());
-        assertEquals(failedTests, decoded.failedAcceptanceTests());
-        assertEquals("/tmp/validation-worktree", decoded.worktreePath());
-    }
+    assertEquals(handle.value(),
+        decoded.handle()
+            .value());
+    assertEquals(1, decoded.revisionNumber());
+    assertEquals("abc123", decoded.baseCommit());
+    assertEquals("def456", decoded.commitSha());
+    assertEquals(changedPaths, decoded.changedPaths());
+    assertEquals("Initial implementation", decoded.summary());
+    assertEquals("revision_required", decoded.validationResult());
+    assertEquals("Test failure", decoded.validationReason());
+    assertEquals(failedTests, decoded.failedAcceptanceTests());
+    assertEquals("/tmp/validation-worktree", decoded.worktreePath());
+  }
 
-    @Test
-    void fullLifecycleProjectionWithSlice2States(@TempDir Path tempDir) throws Exception {
-        UUID projectId = UUID.randomUUID();
-        NodeIdentity requesterIdentity = NodeIdentity.generate();
-        NodeIdentity ownerIdentity = NodeIdentity.generate();
+  @Test
+  void fullLifecycleProjectionWithSlice2States(@TempDir Path tempDir) throws Exception {
+    UUID projectId = UUID.randomUUID();
+    NodeIdentity requesterIdentity = NodeIdentity.generate();
+    NodeIdentity ownerIdentity = NodeIdentity.generate();
 
-        PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
+    PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
 
-        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
-        CapabilityContract contract = new CapabilityContract("UUID id",
-                "Optional<P>",
-                List.of("behavior"),
-                List.of("test"));
+    CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+    CapabilityContract contract = new CapabilityContract("UUID id",
+        "Optional<P>",
+        List.of("behavior"),
+        List.of("test"));
 
-        // 1. Create request
-        CapabilityRequestPayload created = new CapabilityRequestPayload(
-                handle, "catalog.product-query",
-                requesterIdentity.nodeId(), ownerIdentity.nodeId(),
-                contract, CapabilityLifecycleState.AWAITING_OWNER, null);
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED,
-                requesterIdentity.nodeId(), created.encode(), requesterIdentity);
+    // 1. Create request
+    CapabilityRequestPayload created = new CapabilityRequestPayload(
+        handle, "catalog.product-query",
+        requesterIdentity.nodeId(), ownerIdentity.nodeId(),
+        contract, CapabilityLifecycleState.AWAITING_OWNER, null);
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED,
+        requesterIdentity.nodeId(), created.encode(), requesterIdentity);
 
-        // 2. Owner accepts
-        CapabilityRequestPayload accepted = new CapabilityRequestPayload(
-                handle, "catalog.product-query",
-                requesterIdentity.nodeId(), ownerIdentity.nodeId(),
-                contract, CapabilityLifecycleState.ACCEPTED, null);
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
-                ownerIdentity.nodeId(), accepted.encode(), ownerIdentity);
+    // 2. Owner accepts
+    CapabilityRequestPayload accepted = new CapabilityRequestPayload(
+        handle, "catalog.product-query",
+        requesterIdentity.nodeId(), ownerIdentity.nodeId(),
+        contract, CapabilityLifecycleState.ACCEPTED, null);
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
+        ownerIdentity.nodeId(), accepted.encode(), ownerIdentity);
 
-        CapabilityRequestProjection proj = store.capabilityRequestProjection();
-        assertEquals(CapabilityLifecycleState.ACCEPTED,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
+    CapabilityRequestProjection proj = store.capabilityRequestProjection();
+    assertEquals(CapabilityLifecycleState.ACCEPTED,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
 
-        // 3. Owner publishes implementation
-        ImplementationEventPayload published = new ImplementationEventPayload(
-                handle, 1, "abc0", "def1",
-                List.of("src/Main.java"), "First revision",
-                "", "", List.of(), "");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
-                ownerIdentity.nodeId(), published.encode(), ownerIdentity);
+    // 3. Owner publishes implementation
+    ImplementationEventPayload published = new ImplementationEventPayload(
+        handle, 1, "abc0", "def1",
+        List.of("src/Main.java"), "First revision",
+        "", "", List.of(), "");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
+        ownerIdentity.nodeId(), published.encode(), ownerIdentity);
 
-        assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
-        Optional<ImplementationRevisionRecord> impl = proj.findLatestImplementation(handle.value());
-        assertTrue(impl.isPresent());
-        assertEquals(1,
-                impl.get()
-                        .revisionNumber());
-        assertEquals("def1",
-                impl.get()
-                        .commitSha());
+    assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
+    Optional<ImplementationRevisionRecord> impl = proj.findLatestImplementation(handle.value());
+    assertTrue(impl.isPresent());
+    assertEquals(1,
+        impl.get()
+            .revisionNumber());
+    assertEquals("def1",
+        impl.get()
+            .commitSha());
 
-        // 4. Requester starts validation
-        ImplementationEventPayload validationStarted = new ImplementationEventPayload(
-                handle, 1, "abc0", "def1",
-                List.of("src/Main.java"), "First revision",
-                "", "", List.of(), "/tmp/val-wt");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED,
-                requesterIdentity.nodeId(), validationStarted.encode(), requesterIdentity);
+    // 4. Requester starts validation
+    ImplementationEventPayload validationStarted = new ImplementationEventPayload(
+        handle, 1, "abc0", "def1",
+        List.of("src/Main.java"), "First revision",
+        "", "", List.of(), "/tmp/val-wt");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED,
+        requesterIdentity.nodeId(), validationStarted.encode(), requesterIdentity);
 
-        assertEquals(CapabilityLifecycleState.VALIDATING,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
-        Optional<ValidationContextRecord> ctx = proj.findValidationContext(handle.value());
-        assertTrue(ctx.isPresent());
-        assertEquals("/tmp/val-wt",
-                ctx.get()
-                        .worktreePath());
+    assertEquals(CapabilityLifecycleState.VALIDATING,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
+    Optional<ValidationContextRecord> ctx = proj.findValidationContext(handle.value());
+    assertTrue(ctx.isPresent());
+    assertEquals("/tmp/val-wt",
+        ctx.get()
+            .worktreePath());
 
-        // 5. Requester requests revision
-        ImplementationEventPayload revRequired = new ImplementationEventPayload(
-                handle, 1, "abc0", "def1",
-                List.of("src/Main.java"), "First revision",
-                "revision_required", "Missing test coverage", List.of("FooTest"), "");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
-                requesterIdentity.nodeId(), revRequired.encode(), requesterIdentity);
+    // 5. Requester requests revision
+    ImplementationEventPayload revRequired = new ImplementationEventPayload(
+        handle, 1, "abc0", "def1",
+        List.of("src/Main.java"), "First revision",
+        "revision_required", "Missing test coverage", List.of("FooTest"), "");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+        requesterIdentity.nodeId(), revRequired.encode(), requesterIdentity);
 
-        assertEquals(CapabilityLifecycleState.IMPLEMENTING,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
-        assertFalse(proj.findValidationContext(handle.value())
-                .isPresent());
-        assertEquals("Missing test coverage",
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .reason());
+    assertEquals(CapabilityLifecycleState.IMPLEMENTING,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
+    assertFalse(proj.findValidationContext(handle.value())
+        .isPresent());
+    assertEquals("Missing test coverage",
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .reason());
 
-        // 6. Owner publishes revision 2
-        ImplementationEventPayload published2 = new ImplementationEventPayload(
-                handle, 2, "def1", "ghi2",
-                List.of("src/Main.java", "src/MainTest.java"), "Second revision with tests",
-                "", "", List.of(), "");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
-                ownerIdentity.nodeId(), published2.encode(), ownerIdentity);
+    // 6. Owner publishes revision 2
+    ImplementationEventPayload published2 = new ImplementationEventPayload(
+        handle, 2, "def1", "ghi2",
+        List.of("src/Main.java", "src/MainTest.java"), "Second revision with tests",
+        "", "", List.of(), "");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
+        ownerIdentity.nodeId(), published2.encode(), ownerIdentity);
 
-        assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
-        assertEquals(2,
-                proj.findLatestImplementation(handle.value())
-                        .orElseThrow()
-                        .revisionNumber());
+    assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
+    assertEquals(2,
+        proj.findLatestImplementation(handle.value())
+            .orElseThrow()
+            .revisionNumber());
 
-        // 7. Requester validates revision 2 (start + validate in one sequence)
-        ImplementationEventPayload val2Started = new ImplementationEventPayload(
-                handle, 2, "def1", "ghi2",
-                List.of("src/Main.java", "src/MainTest.java"), "Second revision with tests",
-                "", "", List.of(), "/tmp/val-wt-2");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED,
-                requesterIdentity.nodeId(), val2Started.encode(), requesterIdentity);
+    // 7. Requester validates revision 2 (start + validate in one sequence)
+    ImplementationEventPayload val2Started = new ImplementationEventPayload(
+        handle, 2, "def1", "ghi2",
+        List.of("src/Main.java", "src/MainTest.java"), "Second revision with tests",
+        "", "", List.of(), "/tmp/val-wt-2");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED,
+        requesterIdentity.nodeId(), val2Started.encode(), requesterIdentity);
 
-        ImplementationEventPayload validatedPayload = new ImplementationEventPayload(
-                handle, 2, "def1", "ghi2",
-                List.of(), "done", "accepted", "", List.of(), "");
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
-                requesterIdentity.nodeId(), validatedPayload.encode(), requesterIdentity);
+    ImplementationEventPayload validatedPayload = new ImplementationEventPayload(
+        handle, 2, "def1", "ghi2",
+        List.of(), "done", "accepted", "", List.of(), "");
+    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
+        requesterIdentity.nodeId(), validatedPayload.encode(), requesterIdentity);
 
-        assertEquals(CapabilityLifecycleState.VALIDATED,
-                proj.findByHandle(handle.value())
-                        .orElseThrow()
-                        .state());
-        assertFalse(proj.findValidationContext(handle.value())
-                .isPresent());
-    }
+    assertEquals(CapabilityLifecycleState.VALIDATED,
+        proj.findByHandle(handle.value())
+            .orElseThrow()
+            .state());
+    assertFalse(proj.findValidationContext(handle.value())
+        .isPresent());
+  }
 
-    @Test
-    void sliceLifecycleStatesArePersistedAndReplayable(@TempDir Path tempDir) throws Exception {
-        UUID projectId = UUID.randomUUID();
-        NodeIdentity requesterIdentity = NodeIdentity.generate();
-        NodeIdentity ownerIdentity = NodeIdentity.generate();
+  @Test
+  void sliceLifecycleStatesArePersistedAndReplayable(@TempDir Path tempDir) throws Exception {
+    UUID projectId = UUID.randomUUID();
+    NodeIdentity requesterIdentity = NodeIdentity.generate();
+    NodeIdentity ownerIdentity = NodeIdentity.generate();
 
-        PredictionEventStore store1 = new PredictionEventStore(tempDir, projectId);
+    PredictionEventStore store1 = new PredictionEventStore(tempDir, projectId);
 
-        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
-        CapabilityContract contract = new CapabilityContract("UUID id",
-                "Optional<P>",
-                List.of("behavior"),
-                List.of("test"));
+    CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+    CapabilityContract contract = new CapabilityContract("UUID id",
+        "Optional<P>",
+        List.of("behavior"),
+        List.of("test"));
 
-        CapabilityRequestPayload created = new CapabilityRequestPayload(
-                handle, "catalog.product-query",
-                requesterIdentity.nodeId(), ownerIdentity.nodeId(),
-                contract, CapabilityLifecycleState.AWAITING_OWNER, null);
-        store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED,
-                requesterIdentity.nodeId(), created.encode(), requesterIdentity);
+    CapabilityRequestPayload created = new CapabilityRequestPayload(
+        handle, "catalog.product-query",
+        requesterIdentity.nodeId(), ownerIdentity.nodeId(),
+        contract, CapabilityLifecycleState.AWAITING_OWNER, null);
+    store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED,
+        requesterIdentity.nodeId(), created.encode(), requesterIdentity);
 
-        CapabilityRequestPayload accepted = new CapabilityRequestPayload(
-                handle, "catalog.product-query",
-                requesterIdentity.nodeId(), ownerIdentity.nodeId(),
-                contract, CapabilityLifecycleState.ACCEPTED, null);
-        store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
-                ownerIdentity.nodeId(), accepted.encode(), ownerIdentity);
+    CapabilityRequestPayload accepted = new CapabilityRequestPayload(
+        handle, "catalog.product-query",
+        requesterIdentity.nodeId(), ownerIdentity.nodeId(),
+        contract, CapabilityLifecycleState.ACCEPTED, null);
+    store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
+        ownerIdentity.nodeId(), accepted.encode(), ownerIdentity);
 
-        ImplementationEventPayload published = new ImplementationEventPayload(
-                handle, 1, "abc0", "def1",
-                List.of("src/Main.java"), "First revision",
-                "", "", List.of(), "");
-        store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
-                ownerIdentity.nodeId(), published.encode(), ownerIdentity);
+    ImplementationEventPayload published = new ImplementationEventPayload(
+        handle, 1, "abc0", "def1",
+        List.of("src/Main.java"), "First revision",
+        "", "", List.of(), "");
+    store1.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
+        ownerIdentity.nodeId(), published.encode(), ownerIdentity);
 
-        // Simulate restart by opening a new store on the same directory
-        PredictionEventStore store2 = new PredictionEventStore(tempDir, projectId);
-        CapabilityRequestProjection proj = store2.capabilityRequestProjection();
+    // Simulate restart by opening a new store on the same directory
+    PredictionEventStore store2 = new PredictionEventStore(tempDir, projectId);
+    CapabilityRequestProjection proj = store2.capabilityRequestProjection();
 
-        CapabilityRequestRecord record = proj.findByHandle(handle.value())
-                .orElseThrow();
-        assertNotNull(record);
-        assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, record.state());
-        assertEquals(1,
-                proj.findLatestImplementation(handle.value())
-                        .orElseThrow()
-                        .revisionNumber());
-        assertEquals("def1",
-                proj.findLatestImplementation(handle.value())
-                        .orElseThrow()
-                        .commitSha());
-    }
+    CapabilityRequestRecord record = proj.findByHandle(handle.value())
+        .orElseThrow();
+    assertNotNull(record);
+    assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, record.state());
+    assertEquals(1,
+        proj.findLatestImplementation(handle.value())
+            .orElseThrow()
+            .revisionNumber());
+    assertEquals("def1",
+        proj.findLatestImplementation(handle.value())
+            .orElseThrow()
+            .commitSha());
+  }
 }

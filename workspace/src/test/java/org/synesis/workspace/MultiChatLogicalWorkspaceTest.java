@@ -40,354 +40,359 @@ import org.synesis.workspace.test.TestGit;
 @SuppressWarnings("MultipleOccurrences")
 final class MultiChatLogicalWorkspaceTest {
 
-    private static String gitOutput(Path root, String... args) throws Exception {
-        return TestGit.output(root, args);
+  private static String gitOutput(Path root, String... args) throws Exception {
+    return TestGit.output(root, args);
+  }
+
+  private static void git(Path root, String... args) throws Exception {
+    TestGit.run(root, args);
+  }
+
+  private static void assertPortableValidation(Path worktree, String relativePath, String expected)
+      throws Exception {
+    Process validator = new ProcessBuilder(PortableTestCommand.fixture(
+        "validate", relativePath, expected))
+        .directory(worktree.toFile())
+        .redirectErrorStream(true)
+        .start();
+    if (!validator.waitFor(5, TimeUnit.SECONDS)) {
+      validator.destroyForcibly();
+      fail("portable validation timed out for " + relativePath);
     }
+    String output = new String(validator.getInputStream()
+        .readAllBytes(), StandardCharsets.UTF_8);
+    assertEquals(0, validator.exitValue(), output);
+  }
 
-    private static void git(Path root, String... args) throws Exception {
-        TestGit.run(root, args);
+  @Test
+  void newDefaultLaneUsesFreshWorkGroupAfterDefaultGroupCompletes() throws Exception {
+    Path root = Files.createTempDirectory("synesis-workgroup-terminal-");
+    git(root, "init");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "base\n");
+    git(root, "add", ".");
+    git(root, "commit", "-m", "base");
+
+    ProviderTestSupport.install(location, "codex");
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    bindings.ensure(location, "codex", "terminal-owner");
+    bindings.ensure(location, "codex", "terminal-late");
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+
+    assertTrue(collaboration.announce(root, "codex", "terminal-owner", "initial", "complete",
+            List.of(ResourceSelector.pathExact("src/initial.py")))
+        .acquired());
+    var original = collaboration.status(root)
+        .groups()
+        .stream()
+        .findFirst()
+        .orElseThrow();
+    collaboration.closeWorkGroup(root, original.workGroupId(),
+        org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED,
+        original.version());
+
+    var late = collaboration.announce(root, "codex", "terminal-late", "new task", "complete",
+        List.of(ResourceSelector.pathExact("src/new.py")));
+    assertTrue(late.acquired());
+    assertNotEquals(original.workGroupId(),
+        late.intent()
+            .workGroupId());
+    var groups = collaboration.status(root)
+        .groups();
+    assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED,
+        groups.stream()
+            .filter(group -> group.workGroupId()
+                .equals(original.workGroupId()))
+            .findFirst()
+            .orElseThrow()
+            .status());
+    assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE,
+        groups.stream()
+            .filter(group -> group.workGroupId()
+                .equals(late.intent()
+                    .workGroupId()))
+            .findFirst()
+            .orElseThrow()
+            .status());
+  }
+
+  @Test
+  void disjointLanesMutateIndependentlyAndOverlapHasOneWinner() throws Exception {
+    Path root = Files.createTempDirectory("synesis-workgroup-acceptance-");
+    git(root, "init");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "base\n");
+    Files.createDirectories(root.resolve("tests"));
+    Files.writeString(root.resolve("tests/test_lanes.py"),
+        "def test_lane_outputs():\n    assert open('src/a.py').read().strip() == 'lane-a'\n    assert open('src/b.py').read().strip() == 'lane-b'\n");
+    git(root, "add", ".");
+    git(root, "commit", "-m", "base");
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    ProviderTestSupport.install(location, "codex");
+    var laneA = bindings.ensure(location, "codex", "chat-a")
+        .binding();
+    var laneB = bindings.ensure(location, "codex", "chat-b")
+        .binding();
+    Path laneAWorktree = Path.of(laneA.worktreePath());
+    Path laneBWorktree = Path.of(laneB.worktreePath());
+    assertNotEquals(laneA.worktreePath(), laneB.worktreePath());
+
+    UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    assertTrue(collaboration.announce(root, "codex", "chat-a", "group", "tests",
+            List.of(ResourceSelector.pathExact("src/a.py")))
+        .acquired());
+    assertTrue(collaboration.announce(root, "codex", "chat-b", "group", "tests",
+            List.of(ResourceSelector.pathExact("src/b.py")))
+        .acquired());
+    assertFalse(collaboration.announce(root, "codex", "chat-b", "overlap", "blocked",
+            List.of(ResourceSelector.pathExact("src/a.py")))
+        .acquired());
+    assertEquals(1,
+        collaboration.status(root)
+            .groups()
+            .stream()
+            .filter(candidate -> candidate.workGroupId()
+                .equals(group))
+            .count());
+
+    WorkspacePatchService patches = new WorkspacePatchService();
+    assertSame(AgentStatus.COMPLETED,
+        patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-a",
+                "src/a.py", true, "a\n", null, List.of()))
+            .status());
+    assertSame(AgentStatus.COMPLETED,
+        patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-b",
+                "src/b.py", true, "b\n", null, List.of()))
+            .status());
+    assertTrue(Files.exists(laneAWorktree
+        .resolve("src/a.py")));
+    assertTrue(Files.exists(laneBWorktree
+        .resolve("src/b.py")));
+
+    Files.writeString(laneAWorktree
+        .resolve("src/a.py"), "lane-a\n");
+    Files.writeString(laneBWorktree
+        .resolve("src/b.py"), "lane-b\n");
+    String base = gitOutput(root, "rev-parse", "HEAD");
+    TaskSnapshotService snapshots = new TaskSnapshotService();
+    TaskSnapshotRecord snapshotA = snapshots.createSnapshot(UUID.randomUUID(),
+        "node-a",
+        "sup-a",
+        "worker-a",
+        "chat-a",
+        laneAWorktree,
+        root,
+        "lane A",
+        java.util.Optional.empty(),
+        List.of(),
+        List.of(ResourceSelector.pathExact("src/a.py")),
+        group,
+        UUID.randomUUID(),
+        WorkspaceCollaborationService.participantHandle(laneA.sessionId()),
+        laneA.sessionId(),
+        1,
+        List.of());
+    TaskSnapshotRecord snapshotB = snapshots.createSnapshot(UUID.randomUUID(),
+        "node-b",
+        "sup-b",
+        "worker-b",
+        "chat-b",
+        laneBWorktree,
+        root,
+        "lane B",
+        java.util.Optional.empty(),
+        List.of(),
+        List.of(ResourceSelector.pathExact("src/b.py")),
+        group,
+        UUID.randomUUID(),
+        WorkspaceCollaborationService.participantHandle(laneB.sessionId()),
+        laneB.sessionId(),
+        1,
+        List.of());
+    IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
+    IntegrationWorkspaceService.IntegrationWorktreeResult integrated = integration.prepareIntegrationWorktree(
+        root, "acceptance-" + UUID.randomUUID(), base, List.of(snapshotA, snapshotB));
+    try {
+      assertTrue(integrated.success(), integrated.failureReason());
+      assertEquals("lane-a\n",
+          Files.readString(integrated.worktreePath()
+                  .resolve("src/a.py"))
+              .replace("\r\n", "\n"));
+      assertEquals("lane-b\n",
+          Files.readString(integrated.worktreePath()
+                  .resolve("src/b.py"))
+              .replace("\r\n", "\n"));
+      assertPortableValidation(integrated.worktreePath(), "src/a.py", "lane-a");
+      assertPortableValidation(integrated.worktreePath(), "src/b.py", "lane-b");
+    } finally {
+      integration.removeIntegrationWorktree(integrated.worktreePath());
     }
+    collaboration.release(root, "codex", "chat-a");
+    assertTrue(collaboration.status(root)
+        .intents()
+        .stream()
+        .anyMatch(i ->
+            i.selectors()
+                .contains(ResourceSelector.pathExact("src/b.py"))));
+  }
 
-    private static void assertPortableValidation(Path worktree, String relativePath, String expected)
-            throws Exception {
-        Process validator = new ProcessBuilder(PortableTestCommand.fixture(
-                "validate", relativePath, expected))
-                .directory(worktree.toFile())
-                .redirectErrorStream(true)
-                .start();
-        if (!validator.waitFor(5, TimeUnit.SECONDS)) {
-            validator.destroyForcibly();
-            fail("portable validation timed out for " + relativePath);
-        }
-        String output = new String(validator.getInputStream()
-                .readAllBytes(), StandardCharsets.UTF_8);
-        assertEquals(0, validator.exitValue(), output);
-    }
+  @Test
+  void repairJoinMaterializesImmutableConflictIntoNewProviderLane() throws Exception {
+    Path root = Files.createTempDirectory("synesis-repair-join-");
+    git(root, "init");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "base\n");
+    Files.createDirectories(root.resolve("src"));
+    Files.writeString(root.resolve("src/conflict.py"), "control-base\n");
+    git(root, "add", ".");
+    git(root, "commit", "-m", "base");
+    ProviderTestSupport.install(location, "codex");
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var sourceBinding = bindings.ensure(location, "codex", "repair-source")
+        .binding();
+    Path sourceWorktree = Path.of(sourceBinding.worktreePath());
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("src/conflict.py"));
+    assertTrue(collaboration.announce(root, "codex", "repair-source", "source", "repair",
+            selectors)
+        .acquired());
+    UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId())
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    Files.createDirectories(sourceWorktree
+        .resolve("src"));
+    Files.writeString(sourceWorktree
+        .resolve("src/conflict.py"), "original\n");
+    TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(),
+        "node",
+        "sup",
+        "worker",
+        sourceBinding.sessionId(),
+        sourceWorktree,
+        root,
+        "conflict",
+        java.util.Optional.empty(),
+        List.of(),
+        selectors,
+        group,
+        sourceIntentId,
+        WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()),
+        sourceBinding.sessionId(),
+        1,
+        List.of());
+    IdentityBootstrap bootstrap = new IdentityBootstrap(location.profile()
+        .resolve("link"));
+    var identity = bootstrap.loadOrCreate()
+        .identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(),
+        snapshot.snapshotId(),
+        snapshot.nodeId(),
+        snapshot.supervisorId(),
+        snapshot.workerId(),
+        snapshot.providerSessionId(),
+        snapshot.baseCommit(),
+        snapshot.commitSha(),
+        snapshot.changedPaths(),
+        snapshot.capabilityDependencies(),
+        snapshot.summary(),
+        snapshot.provenance());
+    store.append(snapshot.taskId(),
+        PredictionEventType.TASK_SNAPSHOT_CREATED,
+        identity.nodeId(),
+        payload.encode(),
+        identity);
 
-    @Test
-    void newDefaultLaneUsesFreshWorkGroupAfterDefaultGroupCompletes() throws Exception {
-        Path root = Files.createTempDirectory("synesis-workgroup-terminal-");
-        git(root, "init");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "base\n");
-        git(root, "add", ".");
-        git(root, "commit", "-m", "base");
+    // Advance the control checkout independently.  The repair lane must
+    // start here, not at the source lane's stale base commit.
+    Files.writeString(root.resolve("src/conflict.py"), "control-change\n");
+    git(root, "add", "src/conflict.py");
+    git(root, "commit", "-m", "control change");
+    String currentControlHead = gitOutput(root, "rev-parse", "HEAD");
+    var targetBinding = bindings.ensure(location, "codex", "repair-target")
+        .binding();
+    Path targetWorktree = Path.of(targetBinding.worktreePath());
 
-        ProviderTestSupport.install(location, "codex");
-        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        bindings.ensure(location, "codex", "terminal-owner");
-        bindings.ensure(location, "codex", "terminal-late");
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    String attemptId = "repair-attempt-" + UUID.randomUUID();
+    IntegrationAttemptPayload started = new IntegrationAttemptPayload(attemptId,
+        location.projectId(),
+        List.of(snapshot.snapshotId()), currentControlHead, "", "started", "");
+    store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED,
+        identity.nodeId(), started.encode(), identity);
+    IntegrationAttemptPayload conflict = new IntegrationAttemptPayload(attemptId,
+        location.projectId(),
+        List.of(snapshot.snapshotId()), currentControlHead, "", "conflict", "merge conflict");
+    store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_CONFLICTED,
+        identity.nodeId(), conflict.encode(), identity);
+    store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
+        identity.nodeId(), conflict.encode(), identity);
 
-        assertTrue(collaboration.announce(root, "codex", "terminal-owner", "initial", "complete",
-                        List.of(ResourceSelector.pathExact("src/initial.py")))
-                .acquired());
-        var original = collaboration.status(root)
-                .groups()
-                .stream()
-                .findFirst()
-                .orElseThrow();
-        collaboration.closeWorkGroup(root, original.workGroupId(),
-                org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED, original.version());
+    Files.writeString(targetWorktree
+        .resolve("unowned.txt"), "must-not-be-adopted\n");
+    IOException dirtyTarget = assertThrows(IOException.class,
+        () -> collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
+            snapshot.snapshotId()));
+    assertTrue(dirtyTarget.getMessage()
+        .startsWith("REPAIR_TARGET_DIRTY"), dirtyTarget.getMessage());
+    assertTrue(collaboration.status(root)
+        .intents()
+        .stream()
+        .anyMatch(intent ->
+            intent.intentId()
+                .equals(sourceIntentId)
+                && intent.selectors()
+                .equals(selectors)));
+    Files.delete(targetWorktree
+        .resolve("unowned.txt"));
 
-        var late = collaboration.announce(root, "codex", "terminal-late", "new task", "complete",
-                List.of(ResourceSelector.pathExact("src/new.py")));
-        assertTrue(late.acquired());
-        assertNotEquals(original.workGroupId(),
-                late.intent()
-                        .workGroupId());
-        var groups = collaboration.status(root)
-                .groups();
-        assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED,
-                groups.stream()
-                        .filter(group -> group.workGroupId()
-                                .equals(original.workGroupId()))
-                        .findFirst()
-                        .orElseThrow()
-                        .status());
-        assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE,
-                groups.stream()
-                        .filter(group -> group.workGroupId()
-                                .equals(late.intent()
-                                        .workGroupId()))
-                        .findFirst()
-                        .orElseThrow()
-                        .status());
-    }
+    var joined = collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
+        snapshot.snapshotId());
+    assertTrue(joined.acquired());
+    assertEquals(currentControlHead, gitOutput(targetWorktree, "rev-parse", "HEAD"));
+    assertEquals(snapshot.commitSha(),
+        gitOutput(targetWorktree, "rev-parse", "CHERRY_PICK_HEAD"));
+    String conflicted = Files.readString(targetWorktree
+            .resolve("src/conflict.py"))
+        .replace("\r\n", "\n");
+    assertTrue(conflicted.contains("<<<<<<<"), conflicted);
+    assertEquals(snapshot.commitSha(),
+        gitOutput(root,
+            "rev-parse",
+            snapshot.provenance()
+                .snapshotRef()));
+    assertTrue(collaboration.status(root)
+        .intents()
+        .stream()
+        .anyMatch(intent ->
+            intent.intentId()
+                .equals(joined.intent()
+                    .intentId())
+                && intent.participant()
+                .equals(
+                    WorkspaceCollaborationService.participantHandle(targetBinding.sessionId()))));
 
-    @Test
-    void disjointLanesMutateIndependentlyAndOverlapHasOneWinner() throws Exception {
-        Path root = Files.createTempDirectory("synesis-workgroup-acceptance-");
-        git(root, "init");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "base\n");
-        Files.createDirectories(root.resolve("tests"));
-        Files.writeString(root.resolve("tests/test_lanes.py"),
-                "def test_lane_outputs():\n    assert open('src/a.py').read().strip() == 'lane-a'\n    assert open('src/b.py').read().strip() == 'lane-b'\n");
-        git(root, "add", ".");
-        git(root, "commit", "-m", "base");
-        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        ProviderTestSupport.install(location, "codex");
-        var laneA = bindings.ensure(location, "codex", "chat-a")
-                .binding();
-        var laneB = bindings.ensure(location, "codex", "chat-b")
-                .binding();
-        Path laneAWorktree = Path.of(laneA.worktreePath());
-        Path laneBWorktree = Path.of(laneB.worktreePath());
-        assertNotEquals(laneA.worktreePath(), laneB.worktreePath());
-
-        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        assertTrue(collaboration.announce(root, "codex", "chat-a", "group", "tests",
-                        List.of(ResourceSelector.pathExact("src/a.py")))
-                .acquired());
-        assertTrue(collaboration.announce(root, "codex", "chat-b", "group", "tests",
-                        List.of(ResourceSelector.pathExact("src/b.py")))
-                .acquired());
-        assertFalse(collaboration.announce(root, "codex", "chat-b", "overlap", "blocked",
-                        List.of(ResourceSelector.pathExact("src/a.py")))
-                .acquired());
-        assertEquals(1,
-                collaboration.status(root)
-                        .groups()
-                        .stream()
-                        .filter(candidate -> candidate.workGroupId()
-                                .equals(group))
-                        .count());
-
-        WorkspacePatchService patches = new WorkspacePatchService();
-        assertSame(AgentStatus.COMPLETED,
-                patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-a",
-                                "src/a.py", true, "a\n", null, List.of()))
-                        .status());
-        assertSame(AgentStatus.COMPLETED,
-                patches.applyPatch(new WorkspacePatchService.PatchRequest(root, "codex", "chat-b",
-                                "src/b.py", true, "b\n", null, List.of()))
-                        .status());
-        assertTrue(Files.exists(laneAWorktree
-                .resolve("src/a.py")));
-        assertTrue(Files.exists(laneBWorktree
-                .resolve("src/b.py")));
-
-        Files.writeString(laneAWorktree
-                .resolve("src/a.py"), "lane-a\n");
-        Files.writeString(laneBWorktree
-                .resolve("src/b.py"), "lane-b\n");
-        String base = gitOutput(root, "rev-parse", "HEAD");
-        TaskSnapshotService snapshots = new TaskSnapshotService();
-        TaskSnapshotRecord snapshotA = snapshots.createSnapshot(UUID.randomUUID(),
-                "node-a",
-                "sup-a",
-                "worker-a",
-                "chat-a",
-                laneAWorktree,
-                root,
-                "lane A",
-                java.util.Optional.empty(),
-                List.of(),
-                List.of(ResourceSelector.pathExact("src/a.py")),
-                group,
-                UUID.randomUUID(),
-                WorkspaceCollaborationService.participantHandle(laneA.sessionId()),
-                laneA.sessionId(),
-                1,
-                List.of());
-        TaskSnapshotRecord snapshotB = snapshots.createSnapshot(UUID.randomUUID(),
-                "node-b",
-                "sup-b",
-                "worker-b",
-                "chat-b",
-                laneBWorktree,
-                root,
-                "lane B",
-                java.util.Optional.empty(),
-                List.of(),
-                List.of(ResourceSelector.pathExact("src/b.py")),
-                group,
-                UUID.randomUUID(),
-                WorkspaceCollaborationService.participantHandle(laneB.sessionId()),
-                laneB.sessionId(),
-                1,
-                List.of());
-        IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
-        IntegrationWorkspaceService.IntegrationWorktreeResult integrated = integration.prepareIntegrationWorktree(
-                root, "acceptance-" + UUID.randomUUID(), base, List.of(snapshotA, snapshotB));
-        try {
-            assertTrue(integrated.success(), integrated.failureReason());
-            assertEquals("lane-a\n",
-                    Files.readString(integrated.worktreePath()
-                                    .resolve("src/a.py"))
-                            .replace("\r\n", "\n"));
-            assertEquals("lane-b\n",
-                    Files.readString(integrated.worktreePath()
-                                    .resolve("src/b.py"))
-                            .replace("\r\n", "\n"));
-            assertPortableValidation(integrated.worktreePath(), "src/a.py", "lane-a");
-            assertPortableValidation(integrated.worktreePath(), "src/b.py", "lane-b");
-        } finally {
-            integration.removeIntegrationWorktree(integrated.worktreePath());
-        }
-        collaboration.release(root, "codex", "chat-a");
-        assertTrue(collaboration.status(root)
-                .intents()
-                .stream()
-                .anyMatch(i ->
-                        i.selectors()
-                                .contains(ResourceSelector.pathExact("src/b.py"))));
-    }
-
-    @Test
-    void repairJoinMaterializesImmutableConflictIntoNewProviderLane() throws Exception {
-        Path root = Files.createTempDirectory("synesis-repair-join-");
-        git(root, "init");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "base\n");
-        Files.createDirectories(root.resolve("src"));
-        Files.writeString(root.resolve("src/conflict.py"), "control-base\n");
-        git(root, "add", ".");
-        git(root, "commit", "-m", "base");
-        ProviderTestSupport.install(location, "codex");
-        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        var sourceBinding = bindings.ensure(location, "codex", "repair-source")
-                .binding();
-        Path sourceWorktree = Path.of(sourceBinding.worktreePath());
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("src/conflict.py"));
-        assertTrue(collaboration.announce(root, "codex", "repair-source", "source", "repair",
-                        selectors)
-                .acquired());
-        UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId())
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId())
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        Files.createDirectories(sourceWorktree
-                .resolve("src"));
-        Files.writeString(sourceWorktree
-                .resolve("src/conflict.py"), "original\n");
-        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(),
-                "node",
-                "sup",
-                "worker",
-                sourceBinding.sessionId(),
-                sourceWorktree,
-                root,
-                "conflict",
-                java.util.Optional.empty(),
-                List.of(),
-                selectors,
-                group,
-                sourceIntentId,
-                WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()),
-                sourceBinding.sessionId(),
-                1,
-                List.of());
-        IdentityBootstrap bootstrap = new IdentityBootstrap(location.profile()
-                .resolve("link"));
-        var identity = bootstrap.loadOrCreate()
-                .identity();
-        PredictionEventStore store = new PredictionEventStore(location.root()
-                .resolve(".synesis/coordination"), location.projectId());
-        TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(),
-                snapshot.snapshotId(),
-                snapshot.nodeId(),
-                snapshot.supervisorId(),
-                snapshot.workerId(),
-                snapshot.providerSessionId(),
-                snapshot.baseCommit(),
-                snapshot.commitSha(),
-                snapshot.changedPaths(),
-                snapshot.capabilityDependencies(),
-                snapshot.summary(),
-                snapshot.provenance());
-        store.append(snapshot.taskId(),
-                PredictionEventType.TASK_SNAPSHOT_CREATED,
-                identity.nodeId(),
-                payload.encode(),
-                identity);
-
-        // Advance the control checkout independently.  The repair lane must
-        // start here, not at the source lane's stale base commit.
-        Files.writeString(root.resolve("src/conflict.py"), "control-change\n");
-        git(root, "add", "src/conflict.py");
-        git(root, "commit", "-m", "control change");
-        String currentControlHead = gitOutput(root, "rev-parse", "HEAD");
-        var targetBinding = bindings.ensure(location, "codex", "repair-target")
-                .binding();
-        Path targetWorktree = Path.of(targetBinding.worktreePath());
-
-        String attemptId = "repair-attempt-" + UUID.randomUUID();
-        IntegrationAttemptPayload started = new IntegrationAttemptPayload(attemptId, location.projectId(),
-                List.of(snapshot.snapshotId()), currentControlHead, "", "started", "");
-        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED,
-                identity.nodeId(), started.encode(), identity);
-        IntegrationAttemptPayload conflict = new IntegrationAttemptPayload(attemptId, location.projectId(),
-                List.of(snapshot.snapshotId()), currentControlHead, "", "conflict", "merge conflict");
-        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_CONFLICTED,
-                identity.nodeId(), conflict.encode(), identity);
-        store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED,
-                identity.nodeId(), conflict.encode(), identity);
-
-        Files.writeString(targetWorktree
-                .resolve("unowned.txt"), "must-not-be-adopted\n");
-        IOException dirtyTarget = assertThrows(IOException.class,
-                () -> collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
-                        snapshot.snapshotId()));
-        assertTrue(dirtyTarget.getMessage()
-                .startsWith("REPAIR_TARGET_DIRTY"), dirtyTarget.getMessage());
-        assertTrue(collaboration.status(root)
-                .intents()
-                .stream()
-                .anyMatch(intent ->
-                        intent.intentId()
-                                .equals(sourceIntentId)
-                                && intent.selectors()
-                                .equals(selectors)));
-        Files.delete(targetWorktree
-                .resolve("unowned.txt"));
-
-        var joined = collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId, snapshot.snapshotId());
-        assertTrue(joined.acquired());
-        assertEquals(currentControlHead, gitOutput(targetWorktree, "rev-parse", "HEAD"));
-        assertEquals(snapshot.commitSha(),
-                gitOutput(targetWorktree, "rev-parse", "CHERRY_PICK_HEAD"));
-        String conflicted = Files.readString(targetWorktree
-                        .resolve("src/conflict.py"))
-                .replace("\r\n", "\n");
-        assertTrue(conflicted.contains("<<<<<<<"), conflicted);
-        assertEquals(snapshot.commitSha(),
-                gitOutput(root,
-                        "rev-parse",
-                        snapshot.provenance()
-                                .snapshotRef()));
-        assertTrue(collaboration.status(root)
-                .intents()
-                .stream()
-                .anyMatch(intent ->
-                        intent.intentId()
-                                .equals(joined.intent()
-                                        .intentId())
-                                && intent.participant()
-                                .equals(WorkspaceCollaborationService.participantHandle(targetBinding.sessionId()))));
-
-        long repairEvents = new PredictionEventStore(location.root()
-                .resolve(".synesis/coordination"), location.projectId())
-                .events()
-                .stream()
-                .filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED)
-                .count();
-        assertTrue(collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
-                        snapshot.snapshotId())
-                .acquired());
-        long retriedRepairEvents = new PredictionEventStore(location.root()
-                .resolve(".synesis/coordination"), location.projectId())
-                .events()
-                .stream()
-                .filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED)
-                .count();
-        assertEquals(repairEvents, retriedRepairEvents);
-    }
+    long repairEvents = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId())
+        .events()
+        .stream()
+        .filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED)
+        .count();
+    assertTrue(collaboration.joinRepair(root, "codex", "repair-target", sourceIntentId,
+            snapshot.snapshotId())
+        .acquired());
+    long retriedRepairEvents = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId())
+        .events()
+        .stream()
+        .filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED)
+        .count();
+    assertEquals(repairEvents, retriedRepairEvents);
+  }
 }

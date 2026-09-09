@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Immutable persisted reconciliation plan document stored outside control repository under
- * external workspace root administration directory.
+ * Immutable persisted reconciliation plan document stored outside control repository under external
+ * workspace root administration directory.
  *
  * @param schemaVersion         schema version (1)
  * @param planId                opaque plan identifier
@@ -20,27 +20,27 @@ import java.util.Objects;
  * @since 1.0
  */
 public record ReconciliationPlan(
-        int schemaVersion,
-        String planId,
-        String projectId,
-        String controlRepositoryPath,
-        String externalWorkspaceRoot,
-        long createdAtEpochMillis,
-        int totalInspectedCount,
-        int executableCount,
-        String contentHash,
-        List<ReconciliationPlanEntry> entries
+    int schemaVersion,
+    String planId,
+    String projectId,
+    String controlRepositoryPath,
+    String externalWorkspaceRoot,
+    long createdAtEpochMillis,
+    int totalInspectedCount,
+    int executableCount,
+    String contentHash,
+    List<ReconciliationPlanEntry> entries
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public ReconciliationPlan {
-        Objects.requireNonNull(planId, "planId");
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
-        Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
-        Objects.requireNonNull(contentHash, "contentHash");
-        Objects.requireNonNull(entries, "entries");
-    }
+  /**
+   * Invariant validation.
+   */
+  public ReconciliationPlan {
+    Objects.requireNonNull(planId, "planId");
+    Objects.requireNonNull(projectId, "projectId");
+    Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
+    Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
+    Objects.requireNonNull(contentHash, "contentHash");
+    Objects.requireNonNull(entries, "entries");
+  }
 }

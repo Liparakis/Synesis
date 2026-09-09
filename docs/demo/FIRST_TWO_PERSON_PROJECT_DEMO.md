@@ -88,13 +88,17 @@ INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&record
 ```
 
 > [!IMPORTANT]
-> The `--expect-host` parameter is used to bootstrap cryptographic trust for a new project. It is secure and trustworthy
-**only** when the expected host identity (fingerprint) is obtained through an independent, verified out-of-band
-> channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint received over the
+> The `--expect-host` parameter is used to bootstrap cryptographic trust for a new project. It is
+> secure and trustworthy
+**only** when the expected host identity (fingerprint) is obtained through an independent, verified
+> out-of-band
+> channel (e.g., in person, via secure chat, or a pre-trusted document). Never trust a fingerprint
+> received over the
 > same
 > untrusted transport channel as the invitation URI convenience bundle.
 
-Operator B can now onboard and sync the record with a single command by passing the parameterized invitation link and
+Operator B can now onboard and sync the record with a single command by passing the parameterized
+invitation link and
 confirming the host fingerprint:
 
 ```powershell
@@ -114,7 +118,8 @@ SYNC_RESULT=APPLIED
 
 #### Option B: Manual Flow (SYN-003)
 
-Alternatively, Operator A starts the sync host without specifying a record, generating the default invitation link:
+Alternatively, Operator A starts the sync host without specifying a record, generating the default
+invitation link:
 
 ```powershell
 & $ws --profile $profileA sync host
@@ -126,7 +131,8 @@ Output:
 INVITATION=synesis://join/<signed-invitation-link>?project=<PROJECT_UUID>&host=sl1-<A_NODE_ID_HEX>
 ```
 
-Operator B joins the host and syncs the record by passing the invitation link, project ID, record ID, and expected host
+Operator B joins the host and syncs the record by passing the invitation link, project ID, record
+ID, and expected host
 Node ID:
 
 ```powershell
@@ -192,12 +198,16 @@ SIGNATURE_VALID=true
 
 ## Safe output
 
-Normal successful output contains stable labels such as `NODE_ID`, `PROJECT_ID`, `RECORD_ID`, `DIGEST`, `VERSION`,
-`REVISION`, `EVIDENCE_DIGEST`, and `SIGNATURE_VALID`. It does not expose private keys, absolute paths, endpoints, or
-stack traces. Evidence references are recorded as logical references only; this slice does not fetch or validate their
+Normal successful output contains stable labels such as `NODE_ID`, `PROJECT_ID`, `RECORD_ID`,
+`DIGEST`, `VERSION`,
+`REVISION`, `EVIDENCE_DIGEST`, and `SIGNATURE_VALID`. It does not expose private keys, absolute
+paths, endpoints, or
+stack traces. Evidence references are recorded as logical references only; this slice does not fetch
+or validate their
 files.
 
 ## Deferred work
 
-No background sync, retries, reconnect, discovery, membership, workers, leases, autonomy, federation, Obsidian
+No background sync, retries, reconnect, discovery, membership, workers, leases, autonomy,
+federation, Obsidian
 integration, or physical-machine claims are included in this module.

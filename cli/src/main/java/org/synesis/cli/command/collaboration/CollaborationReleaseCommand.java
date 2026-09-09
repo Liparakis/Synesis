@@ -14,41 +14,41 @@ import picocli.CommandLine.Option;
 @Command(name = "release", description = "Release this connection's claims.", mixinStandardHelpOptions = true)
 public final class CollaborationReleaseCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
-    private Path project;
-    @Option(names = "--provider", defaultValue = "codex")
-    private String provider;
-    @Option(names = "--connection-instance-id", required = true)
-    private String connectionInstanceId;
+  private final CliRuntime runtime;
+  @Option(names = "--project", defaultValue = ".")
+  private Path project;
+  @Option(names = "--provider", defaultValue = "codex")
+  private String provider;
+  @Option(names = "--connection-instance-id", required = true)
+  private String connectionInstanceId;
 
-    /**
-     * Creates the command.
-     *
-     * @param runtime composed CLI runtime
-     */
-    public CollaborationReleaseCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
+  /**
+   * Creates the command.
+   *
+   * @param runtime composed CLI runtime
+   */
+  public CollaborationReleaseCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
 
-    /**
-     * Executes the release.
-     *
-     * @return process exit code
-     */
-    @Override
-    public Integer call() {
-        try {
-            new WorkspaceCollaborationService().release(project.toAbsolutePath()
-                            .normalize(), provider,
-                    connectionInstanceId);
-            runtime.terminal()
-                    .stdout("CLAIMS_RELEASED=true");
-            return ExitCodes.OK;
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("COLLABORATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
-        }
+  /**
+   * Executes the release.
+   *
+   * @return process exit code
+   */
+  @Override
+  public Integer call() {
+    try {
+      new WorkspaceCollaborationService().release(project.toAbsolutePath()
+              .normalize(), provider,
+          connectionInstanceId);
+      runtime.terminal()
+          .stdout("CLAIMS_RELEASED=true");
+      return ExitCodes.OK;
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("COLLABORATION_ERROR=" + failure.getMessage());
+      return ExitCodes.LOCAL_CONFIGURATION;
     }
+  }
 }

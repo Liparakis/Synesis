@@ -14,16 +14,16 @@ import java.util.Objects;
  */
 public record AgentMutationResult(String path, String revision, int changedFiles) {
 
-    /**
-     * Validates and normalizes relative path.
-     */
-    public AgentMutationResult {
-        Objects.requireNonNull(path, "path");
-        if (path.startsWith("/") || path.startsWith("\\") || path.contains(":\\")) {
-            throw new IllegalArgumentException("Agent mutation result path must be relative: " + path);
-        }
-        if (changedFiles < 1) {
-            throw new IllegalArgumentException("changedFiles must be positive");
-        }
+  /**
+   * Validates and normalizes relative path.
+   */
+  public AgentMutationResult {
+    Objects.requireNonNull(path, "path");
+    if (path.startsWith("/") || path.startsWith("\\") || path.contains(":\\")) {
+      throw new IllegalArgumentException("Agent mutation result path must be relative: " + path);
     }
+    if (changedFiles < 1) {
+      throw new IllegalArgumentException("changedFiles must be positive");
+    }
+  }
 }

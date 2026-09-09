@@ -16,77 +16,78 @@ import java.util.UUID;
  * @param status              lifecycle status
  */
 public record CoordinationRequest(UUID requestId, UUID projectId, String requester,
-                                  String target, UUID conflictingIntentId, Kind kind, String proposal, Status status) {
+                                  String target, UUID conflictingIntentId, Kind kind,
+                                  String proposal, Status status) {
 
-    /**
-     * Validates bounded request fields.
-     */
-    public CoordinationRequest {
-        Objects.requireNonNull(requestId, "request ID");
-        Objects.requireNonNull(projectId, "project ID");
-        Objects.requireNonNull(requester, "requester");
-        Objects.requireNonNull(target, "target");
-        Objects.requireNonNull(conflictingIntentId, "conflicting intent ID");
-        Objects.requireNonNull(kind, "kind");
-        Objects.requireNonNull(proposal, "proposal");
-        Objects.requireNonNull(status, "status");
-        if (requester.isBlank() || target.isBlank() || proposal.isBlank() || proposal.length() > 8192) {
-            throw new IllegalArgumentException("invalid coordination request");
-        }
-        if (requester.equals(target)) {
-            throw new IllegalArgumentException("request cannot target requester");
-        }
+  /**
+   * Validates bounded request fields.
+   */
+  public CoordinationRequest {
+    Objects.requireNonNull(requestId, "request ID");
+    Objects.requireNonNull(projectId, "project ID");
+    Objects.requireNonNull(requester, "requester");
+    Objects.requireNonNull(target, "target");
+    Objects.requireNonNull(conflictingIntentId, "conflicting intent ID");
+    Objects.requireNonNull(kind, "kind");
+    Objects.requireNonNull(proposal, "proposal");
+    Objects.requireNonNull(status, "status");
+    if (requester.isBlank() || target.isBlank() || proposal.isBlank() || proposal.length() > 8192) {
+      throw new IllegalArgumentException("invalid coordination request");
     }
+    if (requester.equals(target)) {
+      throw new IllegalArgumentException("request cannot target requester");
+    }
+  }
 
+  /**
+   * Request categories supported by the first negotiation slice.
+   */
+  public enum Kind {
     /**
-     * Request categories supported by the first negotiation slice.
+     * Contract negotiation.
      */
-    public enum Kind {
-        /**
-         * Contract negotiation.
-         */
-        CONTRACT,
-        /**
-         * Ownership handoff negotiation.
-         */
-        HANDOFF,
-        /**
-         * Scope revision negotiation.
-         */
-        SCOPE_REVISION,
-        /**
-         * Read-only review admission negotiation.
-         */
-        REVIEW
-    }
+    CONTRACT,
+    /**
+     * Ownership handoff negotiation.
+     */
+    HANDOFF,
+    /**
+     * Scope revision negotiation.
+     */
+    SCOPE_REVISION,
+    /**
+     * Read-only review admission negotiation.
+     */
+    REVIEW
+  }
 
+  /**
+   * Durable request lifecycle.
+   */
+  public enum Status {
     /**
-     * Durable request lifecycle.
+     * Pending.
      */
-    public enum Status {
-        /**
-         * Pending.
-         */
-        PENDING,
-        /**
-         * Accepted.
-         */
-        ACCEPTED,
-        /**
-         * Revised.
-         */
-        REVISED,
-        /**
-         * Rejected.
-         */
-        REJECTED,
-        /**
-         * Cancelled.
-         */
-        CANCELLED,
-        /**
-         * Completed.
-         */
-        COMPLETED
-    }
+    PENDING,
+    /**
+     * Accepted.
+     */
+    ACCEPTED,
+    /**
+     * Revised.
+     */
+    REVISED,
+    /**
+     * Rejected.
+     */
+    REJECTED,
+    /**
+     * Cancelled.
+     */
+    CANCELLED,
+    /**
+     * Completed.
+     */
+    COMPLETED
+  }
 }

@@ -17,57 +17,57 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(45)
 public final class DistributionLauncherTest {
 
-    public static Path launcher() {
-        String executable = isWindows() ? "synesis.bat" : "synesis";
-        Path local = Path.of("build", "install", "synesis", "bin", executable);
-        return Files.exists(local) ? local.toAbsolutePath() : Path.of("cli")
-                                                              .resolve(local)
-                                                              .toAbsolutePath();
+  public static Path launcher() {
+    String executable = isWindows() ? "synesis.bat" : "synesis";
+    Path local = Path.of("build", "install", "synesis", "bin", executable);
+    return Files.exists(local) ? local.toAbsolutePath() : Path.of("cli")
+                                                          .resolve(local)
+                                                          .toAbsolutePath();
+  }
+
+  public static Process start(Path launcher, Path profile, String... arguments) throws IOException {
+    java.util.ArrayList<String> command = new java.util.ArrayList<>();
+    if (isWindows()) {
+      command.add("cmd.exe");
+      command.add("/c");
     }
-
-    public static Process start(Path launcher, Path profile, String... arguments) throws IOException {
-        java.util.ArrayList<String> command = new java.util.ArrayList<>();
-        if (isWindows()) {
-            command.add("cmd.exe");
-            command.add("/c");
-        }
-        command.add(launcher.toString());
-        for (String argument : arguments) {
-            command.add(isWindows() && argument.matches(".*[&*].*")
-                    ? "\"" + argument + "\"" : argument);
-        }
-        ProcessBuilder builder = new ProcessBuilder(command);
-        builder.environment()
-                .put("SYNESIS_LINK_PROFILE", profile.toString());
-        builder.redirectErrorStream(true);
-        return builder.start();
+    command.add(launcher.toString());
+    for (String argument : arguments) {
+      command.add(isWindows() && argument.matches(".*[&*].*")
+          ? "\"" + argument + "\"" : argument);
     }
+    ProcessBuilder builder = new ProcessBuilder(command);
+    builder.environment()
+        .put("SYNESIS_LINK_PROFILE", profile.toString());
+    builder.redirectErrorStream(true);
+    return builder.start();
+  }
 
-    private static boolean isWindows() {
-        return System.getProperty("os.name")
-                .toLowerCase(java.util.Locale.ROOT)
-                .contains("win");
-    }
+  private static boolean isWindows() {
+    return System.getProperty("os.name")
+        .toLowerCase(java.util.Locale.ROOT)
+        .contains("win");
+  }
 
-    public static String output(Process process) throws IOException {
-        return new String(process.getInputStream()
-                .readAllBytes(), StandardCharsets.UTF_8);
-    }
+  public static String output(Process process) throws IOException {
+    return new String(process.getInputStream()
+        .readAllBytes(), StandardCharsets.UTF_8);
+  }
 
-    @Test
-    void generatedLauncherSupportsHelpVersionAndIdentity() throws Exception {
-        Path profile = Files.createTempDirectory("synesis-launcher-profile");
-        Path launcher = launcher();
-        Process help = start(launcher, profile, "--help");
-        assertEquals(0, help.waitFor());
-        assertTrue(output(help).contains("Usage: synesis"));
+  @Test
+  void generatedLauncherSupportsHelpVersionAndIdentity() throws Exception {
+    Path profile = Files.createTempDirectory("synesis-launcher-profile");
+    Path launcher = launcher();
+    Process help = start(launcher, profile, "--help");
+    assertEquals(0, help.waitFor());
+    assertTrue(output(help).contains("Usage: synesis"));
 
-        Process version = start(launcher, profile, "--version");
-        assertEquals(0, version.waitFor());
-        assertTrue(output(version).contains("synesis 0.1.0-SNAPSHOT"));
+    Process version = start(launcher, profile, "--version");
+    assertEquals(0, version.waitFor());
+    assertTrue(output(version).contains("synesis 0.1.0-SNAPSHOT"));
 
-        Process identity = start(launcher, profile, "identity", "show");
-        assertEquals(0, identity.waitFor());
-        assertTrue(output(identity).contains("NODE_ID=sl1-"));
-    }
+    Process identity = start(launcher, profile, "identity", "show");
+    assertEquals(0, identity.waitFor());
+    assertTrue(output(identity).contains("NODE_ID=sl1-"));
+  }
 }

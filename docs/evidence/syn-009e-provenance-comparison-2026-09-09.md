@@ -8,8 +8,9 @@ Status: **IMPLEMENTED SEAM / NOT EXECUTED AGAINST A COMMERCIAL ARTIFACT**.
 `release-record.properties` files and the canonical private artifact manifests
 they name. It requires both records to describe clean `maximum-release`
 builds for the selected component, verifies each manifest hash against its
-record, and compares the exact source/toolchain/protector/configuration
-provenance fields.
+record, verifies signed-record provenance and non-empty private recovery/ring
+evidence hashes, and compares the exact source/toolchain/protector/configuration
+and source-scoped inventory/procedure digest fields.
 
 It has two explicit modes:
 

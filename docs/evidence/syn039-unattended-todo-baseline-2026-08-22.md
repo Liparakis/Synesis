@@ -64,7 +64,8 @@ The raw Codex JSONL captures remain under its `baseline-logs` directory:
 This real run did **not** reach an overlapping reviewer claim: B was blocked
 at the missing review grant before it could attempt to claim A's files. The
 existing deterministic two-process test still establishes the lower-level
-collision behavior: `mcp/src/test/java/org/synesis/mcp/application/TwoProcessCapabilityNegotiationProcessTest.java`
+collision behavior:
+`mcp/src/test/java/org/synesis/mcp/application/TwoProcessCapabilityNegotiationProcessTest.java`
 asserts that an overlapping claim and mutation are rejected with
 `overlapping_claim`. SYN-039 therefore has two distinct baseline gates: the
 real-agent path cannot yet authorize a reviewer, while the underlying claim

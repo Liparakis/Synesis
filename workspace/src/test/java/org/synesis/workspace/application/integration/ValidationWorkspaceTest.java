@@ -13,28 +13,30 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ValidationWorkspaceTest {
 
-    @Test
-    void validationRootIsOutsideControlCheckout(@TempDir Path projectRoot) {
-        Path valRoot = ValidationWorkspaceService.resolveValidationRoot(projectRoot);
-        Path normalizedProject = projectRoot.toAbsolutePath()
-                .normalize();
-        Path normalizedVal = valRoot.toAbsolutePath()
-                .normalize();
+  @Test
+  void validationRootIsOutsideControlCheckout(@TempDir Path projectRoot) {
+    Path valRoot = ValidationWorkspaceService.resolveValidationRoot(projectRoot);
+    Path normalizedProject = projectRoot.toAbsolutePath()
+        .normalize();
+    Path normalizedVal = valRoot.toAbsolutePath()
+        .normalize();
 
-        // Must NOT be inside project root
-        assertFalse(normalizedVal.startsWith(normalizedProject), "Validation root must be outside control checkout");
-    }
+    // Must NOT be inside project root
+    assertFalse(normalizedVal.startsWith(normalizedProject),
+        "Validation root must be outside control checkout");
+  }
 
-    @Test
-    void legacyInTreeValidationDirectoryIsDiscoveredAndCleaned(@TempDir Path projectRoot) throws Exception {
-        Path legacyDir = projectRoot.resolve(".synesis/validation");
-        Files.createDirectories(legacyDir);
-        assertTrue(Files.exists(legacyDir));
+  @Test
+  void legacyInTreeValidationDirectoryIsDiscoveredAndCleaned(@TempDir Path projectRoot)
+      throws Exception {
+    Path legacyDir = projectRoot.resolve(".synesis/validation");
+    Files.createDirectories(legacyDir);
+    assertTrue(Files.exists(legacyDir));
 
-        // Calling resolveValidationRoot does not touch legacy, but creating/cleaning does
-        ValidationWorkspaceService.resolveValidationRoot(projectRoot);
-        // Ensure legacy directory is cleanable
-        Files.deleteIfExists(legacyDir);
-        assertFalse(Files.exists(legacyDir));
-    }
+    // Calling resolveValidationRoot does not touch legacy, but creating/cleaning does
+    ValidationWorkspaceService.resolveValidationRoot(projectRoot);
+    // Ensure legacy directory is cleanable
+    Files.deleteIfExists(legacyDir);
+    assertFalse(Files.exists(legacyDir));
+  }
 }

@@ -18,21 +18,26 @@ Result: FAILED at the first unexecutable projected lifecycle action
 - MCP startup: version `0.1.0-SNAPSHOT`, protocol `2025-06-18`, commit `bc334ac`, exactly 10 tools
 - Agent A MCP connection: `conn-instance-f4bee313-c118-4a7d-962d-b0d47dfd3d6c`
 - Agent B MCP connection: `conn-instance-9e75fa35-cab7-46ff-9722-8af13cf979bc`
-- Both agents reached the current bundled MCP, the same project, distinct isolated worktrees, and `ready / isolated`
+- Both agents reached the current bundled MCP, the same project, distinct isolated worktrees, and
+  `ready / isolated`
   sessions.
 
 ## Durable coordination state
 
 - WorkGroup: `cc2e1711-a898-3a56-84b1-458afaa45bdc` — `ACTIVE`
-- Agent A participant: `agt_87130706-4cfe-3ee9-8466-2530ca6d9023`; claim `PATH_EXACT:todo.py`; epoch `1`; implementation
+- Agent A participant: `agt_87130706-4cfe-3ee9-8466-2530ca6d9023`; claim `PATH_EXACT:todo.py`; epoch
+  `1`; implementation
   intent `31e6db39-4d4c-3902-bffd-e58b62c3c1e9`
-- Agent B participant: `agt_91993120-8c58-3c9e-a441-3201146926a4`; claim `PATH_EXACT:test_todo.py`; epoch `1`; test
+- Agent B participant: `agt_91993120-8c58-3c9e-a441-3201146926a4`; claim `PATH_EXACT:test_todo.py`;
+  epoch `1`; test
   intent `4520f5f6-64b7-32a8-ba16-f524f0331a31`
 - First REVIEW request: `6039b52e-f583-4d5c-a495-b7df3220cde8`
-- First REVIEW grant: `c8e4ad1e-7169-3541-95a4-2741e7b299d0`; single-use; epoch `1`; consumed by Agent A; validation
+- First REVIEW grant: `c8e4ad1e-7169-3541-95a4-2741e7b299d0`; single-use; epoch `1`; consumed by
+  Agent A; validation
   accepted
 - Reverse REVIEW request: `f86b3b97-5189-458f-8477-fa96a52c55a8`
-- Reverse REVIEW grant: `0b0e4809-6964-34e2-9702-ab39586bb3e7`; single-use; epoch `1`; consumed by Agent B
+- Reverse REVIEW grant: `0b0e4809-6964-34e2-9702-ab39586bb3e7`; single-use; epoch `1`; consumed by
+  Agent B
 
 Agent B published and integrated its test snapshot:
 
@@ -68,19 +73,25 @@ finish_lane({"summary":"Publish the completed immutable snapshot"})
 => status=blocked, reason=task_not_ready, nextAction=retry
 ```
 
-The same exact projected action was replayed once and returned the same result. Agent A's assigned worktree remained at
-the managed baseline; `todo.py` still contained `raise NotImplementedError`, and no Agent A snapshot, validation, or
+The same exact projected action was replayed once and returned the same result. Agent A's assigned
+worktree remained at
+the managed baseline; `todo.py` still contained `raise NotImplementedError`, and no Agent A
+snapshot, validation, or
 integration record was created. The agent did not ignore a concrete projection.
 
 ## Classification
 
 This is a production projection defect, not a grant or ownership failure.
-`AgentNextActionService.snapshotPublicationAction` treated a consumed peer REVIEW grant as sufficient to project
-`finish_lane`, while `AgentTaskCompletionService` correctly rejects an empty source snapshot (`NO_CHANGES_TO_PUBLISH` /
+`AgentNextActionService.snapshotPublicationAction` treated a consumed peer REVIEW grant as
+sufficient to project
+`finish_lane`, while `AgentTaskCompletionService` correctly rejects an empty source snapshot (
+`NO_CHANGES_TO_PUBLISH` /
 `task_not_ready`). The projection was therefore not executable for the authenticated lane state.
 
-The required narrow correction is to apply the snapshot service's read-only changed-path and artifact-policy
-precondition before projecting `finish_lane`. Review admission, grants, claims, epochs, ownership, and fail-closed
+The required narrow correction is to apply the snapshot service's read-only changed-path and
+artifact-policy
+precondition before projecting `finish_lane`. Review admission, grants, claims, epochs, ownership,
+and fail-closed
 completion behavior are out of scope.
 
 ## Final diagnostics
@@ -91,12 +102,15 @@ completion behavior are out of scope.
 - Doctor: `DEGRADED`, six warnings, zero critical/errors
 - Doctor warnings: two `stale_session_lease`, two `provider_migration_required`,
   `command_namespace_reconciliation_required`, and `command_capacity_or_retention`
-- Those warnings did not prevent ready/isolated MCP sessions or cause the first lifecycle failure; they remain
+- Those warnings did not prevent ready/isolated MCP sessions or cause the first lifecycle failure;
+  they remain
   separately classified.
 - The recurring root Git subprocess startup stall remains separate infrastructure evidence.
 
 ## Next action
 
-Run focused regression and bundle verification for the guarded projection, rebuild the bundled MCP, then rerun a fresh
-exact-projection two-agent diagnostic. Stop at the first later lifecycle failure and preserve it as the next SYN-039
+Run focused regression and bundle verification for the guarded projection, rebuild the bundled MCP,
+then rerun a fresh
+exact-projection two-agent diagnostic. Stop at the first later lifecycle failure and preserve it as
+the next SYN-039
 blocker.

@@ -14,22 +14,22 @@ import org.synesis.workspace.application.provider.continuity.ProviderThreadOwner
  */
 final class ManagedCodexThreadBrokerTest {
 
-    @Test
-    void acceptsOnlyActiveCodexOwnershipAndRejectsThreadSwitch() {
-        var owner = new ProviderThreadOwnershipRecord(1, "project", "codex", "thread-a", "binding-a",
-                ProviderThreadOwnershipRecord.Status.ACTIVE, 1, 1, 1);
-        var broker = new ManagedCodexThreadBroker(owner);
+  @Test
+  void acceptsOnlyActiveCodexOwnershipAndRejectsThreadSwitch() {
+    var owner = new ProviderThreadOwnershipRecord(1, "project", "codex", "thread-a", "binding-a",
+        ProviderThreadOwnershipRecord.Status.ACTIVE, 1, 1, 1);
+    var broker = new ManagedCodexThreadBroker(owner);
 
-        assertDoesNotThrow(() -> broker.requirePinnedThread("thread-a"));
-        assertThrows(IllegalStateException.class, () -> broker.requirePinnedThread("thread-b"));
-        assertThrows(IllegalStateException.class, () -> broker.verifyReturnedThread("thread-b"));
-    }
+    assertDoesNotThrow(() -> broker.requirePinnedThread("thread-a"));
+    assertThrows(IllegalStateException.class, () -> broker.requirePinnedThread("thread-b"));
+    assertThrows(IllegalStateException.class, () -> broker.verifyReturnedThread("thread-b"));
+  }
 
-    @Test
-    void unavailableProcessSupervisorFailsClosedBeforeLaunch() {
-        var supervisor = ManagedProcessTreeSupervisor.unavailable();
+  @Test
+  void unavailableProcessSupervisorFailsClosedBeforeLaunch() {
+    var supervisor = ManagedProcessTreeSupervisor.unavailable();
 
-        assertThrows(java.io.IOException.class,
-                () -> supervisor.launch(List.of("codex"), Path.of("."), Map.of("CODEX_HOME", "normal")));
-    }
+    assertThrows(java.io.IOException.class,
+        () -> supervisor.launch(List.of("codex"), Path.of("."), Map.of("CODEX_HOME", "normal")));
+  }
 }

@@ -7,48 +7,67 @@ import java.security.GeneralSecurityException;
  */
 public final class OverlayRelayException extends GeneralSecurityException {
 
-    private static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 1L;
+  /**
+   * Categorized reason for the relay failure.
+   */
+  private final Failure failure;
 
-    /** Relay failure categories. */
-    public enum Failure {
-        /** The source node is not permitted to use the relay. */
-        UNAUTHORIZED_NODE,
-        /** The project or destination is not permitted by relay policy. */
-        UNAUTHORIZED_PROJECT,
-        /** The relay connection bound has been reached. */
-        CONNECTION_LIMIT,
-        /** The destination is not currently connected. */
-        NO_ROUTE,
-        /** The frame cannot consume the relay hop. */
-        HOP_LIMIT_EXCEEDED,
-        /** The frame was already accepted by this relay. */
-        DUPLICATE,
-        /** The bounded destination queue is full. */
-        QUEUE_FULL,
-        /** The source exceeded its configured rate budget. */
-        RATE_LIMITED
-    }
+  /**
+   * Creates a categorized relay failure.
+   *
+   * @param failure bounded failure category
+   * @param message diagnostic without payload or key material
+   */
+  public OverlayRelayException(Failure failure, String message) {
+    super(message);
+    this.failure = java.util.Objects.requireNonNull(failure, "failure");
+  }
 
-    /** Categorized reason for the relay failure. */
-    private final Failure failure;
+  /**
+   * Returns the bounded failure category.
+   *
+   * @return category
+   */
+  public Failure failure() {
+    return failure;
+  }
 
+  /**
+   * Relay failure categories.
+   */
+  public enum Failure {
     /**
-     * Creates a categorized relay failure.
-     *
-     * @param failure bounded failure category
-     * @param message diagnostic without payload or key material
+     * The source node is not permitted to use the relay.
      */
-    public OverlayRelayException(Failure failure, String message) {
-        super(message);
-        this.failure = java.util.Objects.requireNonNull(failure, "failure");
-    }
-
+    UNAUTHORIZED_NODE,
     /**
-     * Returns the bounded failure category.
-     *
-     * @return category
+     * The project or destination is not permitted by relay policy.
      */
-    public Failure failure() {
-        return failure;
-    }
+    UNAUTHORIZED_PROJECT,
+    /**
+     * The relay connection bound has been reached.
+     */
+    CONNECTION_LIMIT,
+    /**
+     * The destination is not currently connected.
+     */
+    NO_ROUTE,
+    /**
+     * The frame cannot consume the relay hop.
+     */
+    HOP_LIMIT_EXCEEDED,
+    /**
+     * The frame was already accepted by this relay.
+     */
+    DUPLICATE,
+    /**
+     * The bounded destination queue is full.
+     */
+    QUEUE_FULL,
+    /**
+     * The source exceeded its configured rate budget.
+     */
+    RATE_LIMITED
+  }
 }

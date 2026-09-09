@@ -24,203 +24,206 @@ import org.synesis.workspace.application.provider.ProviderApplicationService;
  */
 class AgentSessionServiceTest {
 
-    private AgentSessionService sessionService;
-    private Path tempRoot;
-    private String previousLauncher;
-    private String previousMcpLauncher;
+  private AgentSessionService sessionService;
+  private Path tempRoot;
+  private String previousLauncher;
+  private String previousMcpLauncher;
 
-    private static void git(Path root, String... arguments) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, arguments);
+  private static void git(Path root, String... arguments) throws Exception {
+    org.synesis.workspace.test.TestGit.run(root, arguments);
+  }
+
+  @BeforeEach
+  void setUp() throws Exception {
+    tempRoot = Files.createTempDirectory("synesis-session-test-");
+    git(tempRoot, "init");
+    git(tempRoot, "config", "user.name", "Test User");
+    git(tempRoot, "config", "user.email", "test@example.com");
+    Files.writeString(tempRoot.resolve("README.md"), "# Test Repo\n");
+    git(tempRoot, "add", ".");
+    git(tempRoot, "commit", "-m", "Initial commit");
+
+    ProjectApplicationService projectService = new ProjectApplicationService();
+    projectService.init(tempRoot);
+    previousLauncher = System.getProperty("synesis.launcher");
+    previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
+    System.setProperty("synesis.launcher",
+        Files.createTempFile("synesis-test-launcher-", ".bat")
+            .toString());
+    System.setProperty("synesis.mcp.launcher",
+        Files.createTempFile("synesis-test-mcp-", ".exe")
+            .toString());
+    ProviderApplicationService providerService = new ProviderApplicationService();
+    var installed = providerService.install(projectService.locate(tempRoot), "codex");
+    assertTrue(installed.values()
+        .containsKey("PROVIDER_INSTALL_RESULT"));
+    sessionService = new AgentSessionService();
+  }
+
+  @org.junit.jupiter.api.AfterEach
+  void restoreProviderLauncherProperties() {
+    if (previousLauncher == null) {
+      System.clearProperty("synesis.launcher");
+    } else {
+      System.setProperty("synesis.launcher", previousLauncher);
     }
-
-    @BeforeEach
-    void setUp() throws Exception {
-        tempRoot = Files.createTempDirectory("synesis-session-test-");
-        git(tempRoot, "init");
-        git(tempRoot, "config", "user.name", "Test User");
-        git(tempRoot, "config", "user.email", "test@example.com");
-        Files.writeString(tempRoot.resolve("README.md"), "# Test Repo\n");
-        git(tempRoot, "add", ".");
-        git(tempRoot, "commit", "-m", "Initial commit");
-
-        ProjectApplicationService projectService = new ProjectApplicationService();
-        projectService.init(tempRoot);
-        previousLauncher = System.getProperty("synesis.launcher");
-        previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
-        System.setProperty("synesis.launcher",
-                Files.createTempFile("synesis-test-launcher-", ".bat")
-                        .toString());
-        System.setProperty("synesis.mcp.launcher",
-                Files.createTempFile("synesis-test-mcp-", ".exe")
-                        .toString());
-        ProviderApplicationService providerService = new ProviderApplicationService();
-        var installed = providerService.install(projectService.locate(tempRoot), "codex");
-        assertTrue(installed.values()
-                .containsKey("PROVIDER_INSTALL_RESULT"));
-        sessionService = new AgentSessionService();
+    if (previousMcpLauncher == null) {
+      System.clearProperty("synesis.mcp.launcher");
+    } else {
+      System.setProperty("synesis.mcp.launcher", previousMcpLauncher);
     }
+  }
 
-    @org.junit.jupiter.api.AfterEach
-    void restoreProviderLauncherProperties() {
-        if (previousLauncher == null) {
-            System.clearProperty("synesis.launcher");
-        } else {
-            System.setProperty("synesis.launcher", previousLauncher);
-        }
-        if (previousMcpLauncher == null) {
-            System.clearProperty("synesis.mcp.launcher");
-        } else {
-            System.setProperty("synesis.mcp.launcher", previousMcpLauncher);
-        }
-    }
+  @Test
+  void testValidInitializedProjectResolvesSuccessfully() throws Exception {
+    AgentSessionService.SessionResolutionRequest request = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-1", null, false);
 
-    @Test
-    void testValidInitializedProjectResolvesSuccessfully() throws Exception {
-        AgentSessionService.SessionResolutionRequest request = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-1", null, false);
+    AgentSessionService.AgentSessionContext context = sessionService.resolveSessionContext(request);
 
-        AgentSessionService.AgentSessionContext context = sessionService.resolveSessionContext(request);
+    assertNotNull(context);
+    assertNotNull(context.sessionId());
+    assertNotNull(context.workerId());
+    assertNotNull(context.supervisorId());
+    assertNotNull(context.worktreePath());
+    assertEquals("WORKSPACE_UNVERIFIED", context.providerTrustState());
+    assertEquals("VERIFIED",
+        context.binding()
+            .verificationState());
+    assertTrue(context.isIsolatedWorkspace());
+  }
 
-        assertNotNull(context);
-        assertNotNull(context.sessionId());
-        assertNotNull(context.workerId());
-        assertNotNull(context.supervisorId());
-        assertNotNull(context.worktreePath());
-        assertEquals("WORKSPACE_UNVERIFIED", context.providerTrustState());
-        assertEquals("VERIFIED",
-                context.binding()
-                        .verificationState());
-        assertTrue(context.isIsolatedWorkspace());
-    }
+  @Test
+  void testSameConnectionInstanceResumesSameSession() throws Exception {
+    AgentSessionService.SessionResolutionRequest req1 = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-same", null, false);
+    AgentSessionService.SessionResolutionRequest req2 = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-same", null, false);
 
-    @Test
-    void testSameConnectionInstanceResumesSameSession() throws Exception {
-        AgentSessionService.SessionResolutionRequest req1 = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-same", null, false);
-        AgentSessionService.SessionResolutionRequest req2 = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-same", null, false);
+    AgentSessionService.AgentSessionContext ctx1 = sessionService.resolveSessionContext(req1);
+    AgentSessionService.AgentSessionContext ctx2 = sessionService.resolveSessionContext(req2);
 
-        AgentSessionService.AgentSessionContext ctx1 = sessionService.resolveSessionContext(req1);
-        AgentSessionService.AgentSessionContext ctx2 = sessionService.resolveSessionContext(req2);
+    assertEquals(ctx1.sessionId(), ctx2.sessionId());
+    assertEquals(ctx1.workerId(), ctx2.workerId());
+    assertEquals(ctx1.supervisorId(), ctx2.supervisorId());
+    assertEquals(ctx1.worktreePath(), ctx2.worktreePath());
+  }
 
-        assertEquals(ctx1.sessionId(), ctx2.sessionId());
-        assertEquals(ctx1.workerId(), ctx2.workerId());
-        assertEquals(ctx1.supervisorId(), ctx2.supervisorId());
-        assertEquals(ctx1.worktreePath(), ctx2.worktreePath());
-    }
+  @Test
+  void testTwoConnectionInstancesCreateDifferentSessionsWorkersAndWorktrees() throws Exception {
+    AgentSessionService.SessionResolutionRequest req1 = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-A", null, false);
+    AgentSessionService.SessionResolutionRequest req2 = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-B", null, false);
 
-    @Test
-    void testTwoConnectionInstancesCreateDifferentSessionsWorkersAndWorktrees() throws Exception {
-        AgentSessionService.SessionResolutionRequest req1 = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-A", null, false);
-        AgentSessionService.SessionResolutionRequest req2 = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-B", null, false);
+    AgentSessionService.AgentSessionContext ctx1 = sessionService.resolveSessionContext(req1);
+    AgentSessionService.AgentSessionContext ctx2 = sessionService.resolveSessionContext(req2);
 
-        AgentSessionService.AgentSessionContext ctx1 = sessionService.resolveSessionContext(req1);
-        AgentSessionService.AgentSessionContext ctx2 = sessionService.resolveSessionContext(req2);
+    assertNotEquals(ctx1.sessionId(), ctx2.sessionId());
+    assertNotEquals(ctx1.workerId(), ctx2.workerId());
+    assertNotEquals(ctx1.worktreePath(), ctx2.worktreePath());
+  }
 
-        assertNotEquals(ctx1.sessionId(), ctx2.sessionId());
-        assertNotEquals(ctx1.workerId(), ctx2.workerId());
-        assertNotEquals(ctx1.worktreePath(), ctx2.worktreePath());
-    }
+  @Test
+  void testCodexAndClaudeBindingsRemainDistinct() throws Exception {
+    new ProviderApplicationService().install(new ProjectApplicationService().locate(tempRoot),
+        "claude");
+    AgentSessionService.SessionResolutionRequest codexReq = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-shared-id", null, false);
+    AgentSessionService.SessionResolutionRequest agReq = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "claude", "conn-instance-shared-id", null, false);
 
-    @Test
-    void testCodexAndClaudeBindingsRemainDistinct() throws Exception {
-        new ProviderApplicationService().install(new ProjectApplicationService().locate(tempRoot), "claude");
-        AgentSessionService.SessionResolutionRequest codexReq = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-shared-id", null, false);
-        AgentSessionService.SessionResolutionRequest agReq = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "claude", "conn-instance-shared-id", null, false);
+    AgentSessionService.AgentSessionContext codexCtx = sessionService.resolveSessionContext(
+        codexReq);
+    AgentSessionService.AgentSessionContext agCtx = sessionService.resolveSessionContext(agReq);
 
-        AgentSessionService.AgentSessionContext codexCtx = sessionService.resolveSessionContext(codexReq);
-        AgentSessionService.AgentSessionContext agCtx = sessionService.resolveSessionContext(agReq);
+    assertNotEquals(codexCtx.sessionId(), agCtx.sessionId());
+    assertEquals("codex",
+        codexCtx.binding()
+            .provider());
+    assertEquals("claude",
+        agCtx.binding()
+            .provider());
+  }
 
-        assertNotEquals(codexCtx.sessionId(), agCtx.sessionId());
-        assertEquals("codex",
-                codexCtx.binding()
-                        .provider());
-        assertEquals("claude",
-                agCtx.binding()
-                        .provider());
-    }
+  @Test
+  void testEnsureSessionOutputIsConciseAndContainsNoInternalIdsOrPaths() {
+    AgentSessionService.AgentTaskIntent intent = new AgentSessionService.AgentTaskIntent(
+        "Implement feature", "Tests pass", List.of("catalog"), List.of());
+    AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-123", intent, false);
 
-    @Test
-    void testEnsureSessionOutputIsConciseAndContainsNoInternalIdsOrPaths() {
-        AgentSessionService.AgentTaskIntent intent = new AgentSessionService.AgentTaskIntent(
-                "Implement feature", "Tests pass", List.of("catalog"), List.of());
-        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-123", intent, false);
+    AgentResponse response = sessionService.ensureSession(req);
 
-        AgentResponse response = sessionService.ensureSession(req);
+    assertEquals(AgentStatus.READY, response.status());
+    String json = response.toJson();
 
-        assertEquals(AgentStatus.READY, response.status());
-        String json = response.toJson();
+    assertTrue(json.contains("\"status\":\"ready\""));
+    assertTrue(json.contains("\"workspace\":\"isolated\""));
+    assertTrue(json.contains("\"pending\":0"));
 
-        assertTrue(json.contains("\"status\":\"ready\""));
-        assertTrue(json.contains("\"workspace\":\"isolated\""));
-        assertTrue(json.contains("\"pending\":0"));
+    assertFalse(json.contains("sessionId"));
+    assertFalse(json.contains("workerId"));
+    assertFalse(json.contains("supervisorId"));
+    assertFalse(json.contains("projectId"));
+    assertFalse(json.contains("nodeId"));
+    assertFalse(json.contains("worktreePath"));
+    assertFalse(json.contains("conn-instance"));
+    assertFalse(json.contains(tempRoot.toString()));
+  }
 
-        assertFalse(json.contains("sessionId"));
-        assertFalse(json.contains("workerId"));
-        assertFalse(json.contains("supervisorId"));
-        assertFalse(json.contains("projectId"));
-        assertFalse(json.contains("nodeId"));
-        assertFalse(json.contains("worktreePath"));
-        assertFalse(json.contains("conn-instance"));
-        assertFalse(json.contains(tempRoot.toString()));
-    }
+  @Test
+  void testUninitializedProjectReturnsRetryRequiredResponse() throws Exception {
+    Path uninit = Files.createTempDirectory("synesis-uninit-");
+    AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+        uninit, "codex", "conn-instance-1", null, false);
 
-    @Test
-    void testUninitializedProjectReturnsRetryRequiredResponse() throws Exception {
-        Path uninit = Files.createTempDirectory("synesis-uninit-");
-        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
-                uninit, "codex", "conn-instance-1", null, false);
+    AgentResponse response = sessionService.ensureSession(req);
 
-        AgentResponse response = sessionService.ensureSession(req);
+    assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
+    assertEquals(AgentReason.WORKSPACE_NOT_READY, response.reason());
+    assertEquals(AgentNextAction.ENSURE_SESSION, response.nextAction());
+  }
 
-        assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
-        assertEquals(AgentReason.WORKSPACE_NOT_READY, response.reason());
-        assertEquals(AgentNextAction.ENSURE_SESSION, response.nextAction());
-    }
+  @Test
+  void initializedProjectWithoutProviderIntegrationIsBlockedBeforeBinding() throws Exception {
+    Path uninstalled = Files.createTempDirectory("synesis-provider-required-");
+    git(uninstalled, "init");
+    git(uninstalled, "config", "user.name", "Test User");
+    git(uninstalled, "config", "user.email", "test@example.com");
+    Files.writeString(uninstalled.resolve("README.md"), "# Uninstalled provider\n");
+    git(uninstalled, "add", ".");
+    git(uninstalled, "commit", "-m", "Initial commit");
+    new ProjectApplicationService().init(uninstalled);
 
-    @Test
-    void initializedProjectWithoutProviderIntegrationIsBlockedBeforeBinding() throws Exception {
-        Path uninstalled = Files.createTempDirectory("synesis-provider-required-");
-        git(uninstalled, "init");
-        git(uninstalled, "config", "user.name", "Test User");
-        git(uninstalled, "config", "user.email", "test@example.com");
-        Files.writeString(uninstalled.resolve("README.md"), "# Uninstalled provider\n");
-        git(uninstalled, "add", ".");
-        git(uninstalled, "commit", "-m", "Initial commit");
-        new ProjectApplicationService().init(uninstalled);
+    AgentResponse response = new AgentSessionService().ensureSession(
+        new AgentSessionService.SessionResolutionRequest(uninstalled, "codex",
+            "uninstalled-connection",
+            null, false));
 
-        AgentResponse response = new AgentSessionService().ensureSession(
-                new AgentSessionService.SessionResolutionRequest(uninstalled, "codex", "uninstalled-connection",
-                        null, false));
+    assertEquals(AgentStatus.BLOCKED, response.status());
+    assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED, response.reason());
+    assertEquals(AgentNextAction.REQUEST_HUMAN_HELP, response.nextAction());
+  }
 
-        assertEquals(AgentStatus.BLOCKED, response.status());
-        assertEquals(AgentReason.PROVIDER_INTEGRATION_REQUIRED, response.reason());
-        assertEquals(AgentNextAction.REQUEST_HUMAN_HELP, response.nextAction());
-    }
+  @Test
+  void testWorktreeAsProjectRootFailsClosed() throws Exception {
+    AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
+        tempRoot, "codex", "conn-instance-1", null, false);
+    AgentSessionService.AgentSessionContext ctx = sessionService.resolveSessionContext(req);
 
-    @Test
-    void testWorktreeAsProjectRootFailsClosed() throws Exception {
-        AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(
-                tempRoot, "codex", "conn-instance-1", null, false);
-        AgentSessionService.AgentSessionContext ctx = sessionService.resolveSessionContext(req);
+    Path worktreePath = ctx.worktreePath();
+    AgentSessionService.SessionResolutionRequest invalidReq = new AgentSessionService.SessionResolutionRequest(
+        worktreePath, "codex", "conn-instance-2", null, false);
 
-        Path worktreePath = ctx.worktreePath();
-        AgentSessionService.SessionResolutionRequest invalidReq = new AgentSessionService.SessionResolutionRequest(
-                worktreePath, "codex", "conn-instance-2", null, false);
+    AgentResponse response = sessionService.ensureSession(invalidReq);
 
-        AgentResponse response = sessionService.ensureSession(invalidReq);
+    assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
+  }
 
-        assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
-    }
-
-    @Test
-    void testTaskIntentValidation() {
-        assertThrows(IllegalArgumentException.class, () -> new AgentSessionService.AgentTaskIntent(
-                "a".repeat(4097), "ok", List.of(), List.of()));
-    }
+  @Test
+  void testTaskIntentValidation() {
+    assertThrows(IllegalArgumentException.class, () -> new AgentSessionService.AgentTaskIntent(
+        "a".repeat(4097), "ok", List.of(), List.of()));
+  }
 }

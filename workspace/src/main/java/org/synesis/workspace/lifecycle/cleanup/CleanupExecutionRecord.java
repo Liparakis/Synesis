@@ -17,27 +17,27 @@ import java.util.Objects;
  * @since 1.0
  */
 public record CleanupExecutionRecord(
-        String executionId,
-        String planId,
-        String entryResourceId,
-        LifecycleResourceType resourceType,
-        CleanupEntryExecutionState state,
-        String preconditionReason,
-        long timestampEpochMillis,
-        long bytesReclaimed,
-        String diagnosticDetails
+    String executionId,
+    String planId,
+    String entryResourceId,
+    LifecycleResourceType resourceType,
+    CleanupEntryExecutionState state,
+    String preconditionReason,
+    long timestampEpochMillis,
+    long bytesReclaimed,
+    String diagnosticDetails
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public CleanupExecutionRecord {
-        Objects.requireNonNull(executionId, "executionId");
-        Objects.requireNonNull(planId, "planId");
-        Objects.requireNonNull(entryResourceId, "entryResourceId");
-        Objects.requireNonNull(resourceType, "resourceType");
-        Objects.requireNonNull(state, "state");
-        Objects.requireNonNull(preconditionReason, "preconditionReason");
-        Objects.requireNonNull(diagnosticDetails, "diagnosticDetails");
-    }
+  /**
+   * Invariant validation.
+   */
+  public CleanupExecutionRecord {
+    Objects.requireNonNull(executionId, "executionId");
+    Objects.requireNonNull(planId, "planId");
+    Objects.requireNonNull(entryResourceId, "entryResourceId");
+    Objects.requireNonNull(resourceType, "resourceType");
+    Objects.requireNonNull(state, "state");
+    Objects.requireNonNull(preconditionReason, "preconditionReason");
+    Objects.requireNonNull(diagnosticDetails, "diagnosticDetails");
+  }
 }

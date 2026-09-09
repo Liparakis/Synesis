@@ -7,8 +7,8 @@ import org.synesis.workspace.agent.AgentResponse;
  * Result of translating an internal application outcome into a public agent response.
  *
  * <p>Holds both the public concise {@link AgentResponse} and internal correlation metadata.
- * Internal diagnostic details (decision ID, evidence hash, decision enum) are retained
- * here for logging and correlation but are omitted from {@link #publicResponse()}.
+ * Internal diagnostic details (decision ID, evidence hash, decision enum) are retained here for
+ * logging and correlation but are omitted from {@link #publicResponse()}.
  *
  * @param publicResponse            concise agent-facing response
  * @param internalDecision          internal broker decision (or {@code null})
@@ -21,20 +21,20 @@ import org.synesis.workspace.agent.AgentResponse;
  * @since 1.0
  */
 public record TranslatedOutcome(
-        AgentResponse publicResponse,
-        WorkspaceMutationBroker.Decision internalDecision,
-        String internalReasonCode,
-        String decisionId,
-        String evidenceHash,
-        boolean safeToRetry,
-        boolean waitRequired,
-        boolean humanInterventionRequired
+    AgentResponse publicResponse,
+    WorkspaceMutationBroker.Decision internalDecision,
+    String internalReasonCode,
+    String decisionId,
+    String evidenceHash,
+    boolean safeToRetry,
+    boolean waitRequired,
+    boolean humanInterventionRequired
 ) {
 
-    /**
-     * Validates required outcome fields.
-     */
-    public TranslatedOutcome {
-        Objects.requireNonNull(publicResponse, "publicResponse");
-    }
+  /**
+   * Validates required outcome fields.
+   */
+  public TranslatedOutcome {
+    Objects.requireNonNull(publicResponse, "publicResponse");
+  }
 }

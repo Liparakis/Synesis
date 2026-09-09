@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "task", description = "Create and claim coordination tasks.", mixinStandardHelpOptions = true)
 public final class TaskCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the task command parent.
-     */
-    public TaskCommand() {
-    }
+  /**
+   * Creates the task command parent.
+   */
+  public TaskCommand() {
+  }
 
-    /**
-     * Prints child command help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints child command help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

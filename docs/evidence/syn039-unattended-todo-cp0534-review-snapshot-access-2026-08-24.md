@@ -10,7 +10,8 @@ grant consumption and WorkGroup closure.
 - Project: `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-review-access-cp0534-001`
 - Project ID: `f707bc9a-3969-41d9-b3d5-ac852b820a8b`
 - Harness logs: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-review-access-cp0534-001\logs`
-- MCP executable: `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
+- MCP executable:
+  `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
 - Bundled distribution: `0.1.0-dev.local`, Windows x64; MCP catalog remains exactly
   ten tools. SHA-256: `DC9D5217889B7B49113A0608A094A57F02C9B39E1CB655C26CACE454ECA4F4F4`.
 - Both agents used explicit project and connection pins:

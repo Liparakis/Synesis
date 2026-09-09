@@ -25,49 +25,50 @@ import org.synesis.link.onboarding.Onboarding;
  */
 final class InitCommandTest {
 
-    private Path root;
+  private Path root;
 
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
+  private static PrintStream stream(ByteArrayOutputStream target) {
+    return new PrintStream(target, true, StandardCharsets.UTF_8);
+  }
+
+  @BeforeEach
+  void setUp() throws Exception {
+    root = Files.createTempDirectory("synesis-cli-init-");
+  }
+
+  @AfterEach
+  void tearDown() throws Exception {
+    if (root != null) {
+      try (var paths = Files.walk(root)) {
+        paths.sorted(java.util.Comparator.reverseOrder())
+            .forEach(path -> {
+              try {
+                Files.deleteIfExists(path);
+              } catch (java.io.IOException ignored) {
+                // Best-effort cleanup for the isolated fixture.
+              }
+            });
+      }
     }
+  }
 
-    @BeforeEach
-    void setUp() throws Exception {
-        root = Files.createTempDirectory("synesis-cli-init-");
-    }
+  @Test
+  void initFailsLoudlyBeforeCreatingSynesisStateOutsideGit() throws Exception {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    ByteArrayOutputStream errors = new ByteArrayOutputStream();
+    ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(errors));
+    Path profile = root.resolve("profile");
+    CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)),
+        terminal,
+        new ReadinessInspector(profile));
 
-    @AfterEach
-    void tearDown() throws Exception {
-        if (root != null) {
-            try (var paths = Files.walk(root)) {
-                paths.sorted(java.util.Comparator.reverseOrder())
-                        .forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (java.io.IOException ignored) {
-                                // Best-effort cleanup for the isolated fixture.
-                            }
-                        });
-            }
-        }
-    }
+    int exitCode = SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime);
 
-    @Test
-    void initFailsLoudlyBeforeCreatingSynesisStateOutsideGit() throws Exception {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        ByteArrayOutputStream errors = new ByteArrayOutputStream();
-        ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(errors));
-        Path profile = root.resolve("profile");
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal,
-                new ReadinessInspector(profile));
-
-        int exitCode = SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime);
-
-        assertEquals(ExitCodes.LOCAL_CONFIGURATION, exitCode);
-        assertTrue(errors.toString(StandardCharsets.UTF_8)
-                .contains("ERROR_CODE=GIT_REQUIRED"));
-        assertTrue(errors.toString(StandardCharsets.UTF_8)
-                .contains("requires a Git repository"));
-        assertFalse(Files.exists(root.resolve(".synesis")));
-    }
+    assertEquals(ExitCodes.LOCAL_CONFIGURATION, exitCode);
+    assertTrue(errors.toString(StandardCharsets.UTF_8)
+        .contains("ERROR_CODE=GIT_REQUIRED"));
+    assertTrue(errors.toString(StandardCharsets.UTF_8)
+        .contains("requires a Git repository"));
+    assertFalse(Files.exists(root.resolve(".synesis")));
+  }
 }

@@ -25,54 +25,55 @@ import java.util.Objects;
  * @param commandProcessIdentity exact child process identity evidence
  */
 public record ProjectCommandRecord(
-        String anchorId,
-        String scopeLocator,
-        String requestId,
-        String requestDigest,
-        String semanticDigest,
-        ProjectCommandPhase phase,
-        ProjectCommandTerminalResolution terminalResolution,
-        boolean outcomeKnown,
-        Integer exitCode,
-        boolean stdoutComplete,
-        boolean stderrComplete,
-        String reviewReference,
-        long revision,
-        long createdAtEpochMillis,
-        long updatedAtEpochMillis,
-        Map<String, Object> response,
-        Map<String, Object> commandProcessIdentity
+    String anchorId,
+    String scopeLocator,
+    String requestId,
+    String requestDigest,
+    String semanticDigest,
+    ProjectCommandPhase phase,
+    ProjectCommandTerminalResolution terminalResolution,
+    boolean outcomeKnown,
+    Integer exitCode,
+    boolean stdoutComplete,
+    boolean stderrComplete,
+    String reviewReference,
+    long revision,
+    long createdAtEpochMillis,
+    long updatedAtEpochMillis,
+    Map<String, Object> response,
+    Map<String, Object> commandProcessIdentity
 ) {
 
-    /**
-     * Validates durable command invariants and copies the response map.
-     */
-    public ProjectCommandRecord {
-        Objects.requireNonNull(anchorId, "anchorId");
-        Objects.requireNonNull(scopeLocator, "scopeLocator");
-        Objects.requireNonNull(requestId, "requestId");
-        Objects.requireNonNull(requestDigest, "requestDigest");
-        Objects.requireNonNull(semanticDigest, "semanticDigest");
-        Objects.requireNonNull(phase, "phase");
-        if (terminalResolution != null && phase != ProjectCommandPhase.TERMINAL) {
-            throw new IllegalArgumentException("terminal resolution requires TERMINAL phase");
-        }
-        if (phase == ProjectCommandPhase.TERMINAL && terminalResolution == null) {
-            throw new IllegalArgumentException("TERMINAL phase requires terminal resolution");
-        }
-        if (revision < 1L || createdAtEpochMillis < 0L || updatedAtEpochMillis < createdAtEpochMillis) {
-            throw new IllegalArgumentException("invalid command revision or timestamps");
-        }
-        response = response == null ? Map.of() : Map.copyOf(response);
-        commandProcessIdentity = commandProcessIdentity == null ? Map.of() : Map.copyOf(commandProcessIdentity);
+  /**
+   * Validates durable command invariants and copies the response map.
+   */
+  public ProjectCommandRecord {
+    Objects.requireNonNull(anchorId, "anchorId");
+    Objects.requireNonNull(scopeLocator, "scopeLocator");
+    Objects.requireNonNull(requestId, "requestId");
+    Objects.requireNonNull(requestDigest, "requestDigest");
+    Objects.requireNonNull(semanticDigest, "semanticDigest");
+    Objects.requireNonNull(phase, "phase");
+    if (terminalResolution != null && phase != ProjectCommandPhase.TERMINAL) {
+      throw new IllegalArgumentException("terminal resolution requires TERMINAL phase");
     }
+    if (phase == ProjectCommandPhase.TERMINAL && terminalResolution == null) {
+      throw new IllegalArgumentException("TERMINAL phase requires terminal resolution");
+    }
+    if (revision < 1L || createdAtEpochMillis < 0L || updatedAtEpochMillis < createdAtEpochMillis) {
+      throw new IllegalArgumentException("invalid command revision or timestamps");
+    }
+    response = response == null ? Map.of() : Map.copyOf(response);
+    commandProcessIdentity =
+        commandProcessIdentity == null ? Map.of() : Map.copyOf(commandProcessIdentity);
+  }
 
-    /**
-     * Returns whether this record is blocking for callers.
-     *
-     * @return true for STARTING, RUNNING, and AMBIGUOUS phases
-     */
-    public boolean blocking() {
-        return phase != ProjectCommandPhase.TERMINAL;
-    }
+  /**
+   * Returns whether this record is blocking for callers.
+   *
+   * @return true for STARTING, RUNNING, and AMBIGUOUS phases
+   */
+  public boolean blocking() {
+    return phase != ProjectCommandPhase.TERMINAL;
+  }
 }

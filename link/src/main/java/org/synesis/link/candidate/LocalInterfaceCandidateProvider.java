@@ -14,72 +14,72 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class LocalInterfaceCandidateProvider implements CandidateProvider {
 
-    private final String id;
-    private final int port;
-    private final int priority;
+  private final String id;
+  private final int port;
+  private final int priority;
 
-    /**
-     * Creates a local-interface provider for one validated UDP port.
-     *
-     * @param id       stable provider identifier
-     * @param port     advertised UDP port
-     * @param priority candidate priority
-     */
-    public LocalInterfaceCandidateProvider(String id, int port, int priority) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("provider ID is blank");
+  /**
+   * Creates a local-interface provider for one validated UDP port.
+   *
+   * @param id       stable provider identifier
+   * @param port     advertised UDP port
+   * @param priority candidate priority
+   */
+  public LocalInterfaceCandidateProvider(String id, int port, int priority) {
+    if (id == null || id.isBlank()) {
+      throw new IllegalArgumentException("provider ID is blank");
+    }
+    if (port < 1 || port > 65_535 || priority < 0) {
+      throw new IllegalArgumentException("invalid local candidate values");
+    }
+    this.id = id;
+    this.port = port;
+    this.priority = priority;
+  }
+
+  @Override
+  public String id() {
+    return id;
+  }
+
+  @Override
+  public Set<CandidateType> supportedTypes() {
+    return Set.of(CandidateType.LAN, CandidateType.IPV6);
+  }
+
+  @Override
+  public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {
+    List<Candidate> result = new ArrayList<>();
+    try {
+      Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+      while (interfaces.hasMoreElements()) {
+        NetworkInterface network = interfaces.nextElement();
+        if (cancellation.isCancelled()) {
+          break;
         }
-        if (port < 1 || port > 65_535 || priority < 0) {
-            throw new IllegalArgumentException("invalid local candidate values");
+        if (!network.isUp()) {
+          continue;
         }
-        this.id = id;
-        this.port = port;
-        this.priority = priority;
-    }
-
-    @Override
-    public String id() {
-        return id;
-    }
-
-    @Override
-    public Set<CandidateType> supportedTypes() {
-        return Set.of(CandidateType.LAN, CandidateType.IPV6);
-    }
-
-    @Override
-    public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {
-        List<Candidate> result = new ArrayList<>();
-        try {
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                NetworkInterface network = interfaces.nextElement();
-                if (cancellation.isCancelled()) {
-                    break;
-                }
-                if (!network.isUp()) {
-                    continue;
-                }
-                for (InetAddress address : java.util.Collections.list(network.getInetAddresses())) {
-                    if (cancellation.isCancelled()) {
-                        break;
-                    }
-                    if (address.isAnyLocalAddress() || address.isMulticastAddress()
-                            || address.isLoopbackAddress()) {
-                        continue;
-                    }
-                    if (address instanceof Inet6Address ipv6 && ipv6.isLinkLocalAddress()
-                            && ipv6.getScopeId() == 0) {
-                        continue;
-                    }
-                    CandidateType type = address instanceof Inet6Address ipv6 && !ipv6.isSiteLocalAddress()
-                            ? CandidateType.IPV6 : CandidateType.LAN;
-                    result.add(new Candidate(type, address, port, priority));
-                }
-            }
-            return CompletableFuture.completedFuture(result);
-        } catch (java.io.IOException exception) {
-            return CompletableFuture.failedFuture(exception);
+        for (InetAddress address : java.util.Collections.list(network.getInetAddresses())) {
+          if (cancellation.isCancelled()) {
+            break;
+          }
+          if (address.isAnyLocalAddress() || address.isMulticastAddress()
+              || address.isLoopbackAddress()) {
+            continue;
+          }
+          if (address instanceof Inet6Address ipv6 && ipv6.isLinkLocalAddress()
+              && ipv6.getScopeId() == 0) {
+            continue;
+          }
+          CandidateType type = address instanceof Inet6Address ipv6 && !ipv6.isSiteLocalAddress()
+              ? CandidateType.IPV6 : CandidateType.LAN;
+          result.add(new Candidate(type, address, port, priority));
         }
+      }
+      return CompletableFuture.completedFuture(result);
+    } catch (java.io.IOException exception) {
+      return CompletableFuture.failedFuture(exception);
     }
+  }
 }

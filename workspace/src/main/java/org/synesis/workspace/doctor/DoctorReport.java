@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Immutable diagnostic report document encapsulating findings, severity counts, and workflow recommendations.
+ * Immutable diagnostic report document encapsulating findings, severity counts, and workflow
+ * recommendations.
  *
  * @param schemaVersion             schema version (1)
  * @param reportId                  opaque report identifier
@@ -22,28 +23,28 @@ import java.util.Objects;
  * @since 1.0
  */
 public record DoctorReport(
-        int schemaVersion,
-        String reportId,
-        String projectId,
-        long timestampEpochMillis,
-        DoctorStatus overallStatus,
-        int criticalCount,
-        int errorCount,
-        int warningCount,
-        int infoCount,
-        boolean cleanupRecommended,
-        boolean reconciliationRecommended,
-        boolean repairAvailable,
-        List<DoctorFinding> findings
+    int schemaVersion,
+    String reportId,
+    String projectId,
+    long timestampEpochMillis,
+    DoctorStatus overallStatus,
+    int criticalCount,
+    int errorCount,
+    int warningCount,
+    int infoCount,
+    boolean cleanupRecommended,
+    boolean reconciliationRecommended,
+    boolean repairAvailable,
+    List<DoctorFinding> findings
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public DoctorReport {
-        Objects.requireNonNull(reportId, "reportId");
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(overallStatus, "overallStatus");
-        Objects.requireNonNull(findings, "findings");
-    }
+  /**
+   * Invariant validation.
+   */
+  public DoctorReport {
+    Objects.requireNonNull(reportId, "reportId");
+    Objects.requireNonNull(projectId, "projectId");
+    Objects.requireNonNull(overallStatus, "overallStatus");
+    Objects.requireNonNull(findings, "findings");
+  }
 }

@@ -6,83 +6,83 @@ package org.synesis.workspace.doctor;
  * @since 1.0
  */
 public enum DoctorRecommendation {
-    /**
-     * Run synesis cleanup --dry-run to inspect eligible resources.
-     */
-    RUN_CLEANUP_DRY_RUN("run_cleanup_dry_run"),
+  /**
+   * Run synesis cleanup --dry-run to inspect eligible resources.
+   */
+  RUN_CLEANUP_DRY_RUN("run_cleanup_dry_run"),
 
-    /**
-     * Prepare a cleanup plan with synesis cleanup --prepare.
-     */
-    PREPARE_CLEANUP_PLAN("prepare_cleanup_plan"),
+  /**
+   * Prepare a cleanup plan with synesis cleanup --prepare.
+   */
+  PREPARE_CLEANUP_PLAN("prepare_cleanup_plan"),
 
-    /**
-     * Prepare a reconciliation plan with synesis reconcile --prepare.
-     */
-    PREPARE_RECONCILIATION_PLAN("prepare_reconciliation_plan"),
+  /**
+   * Prepare a reconciliation plan with synesis reconcile --prepare.
+   */
+  PREPARE_RECONCILIATION_PLAN("prepare_reconciliation_plan"),
 
-    /**
-     * Review local provider configuration files manually.
-     */
-    REVIEW_PROVIDER_CONFIGURATION("review_provider_configuration"),
+  /**
+   * Review local provider configuration files manually.
+   */
+  REVIEW_PROVIDER_CONFIGURATION("review_provider_configuration"),
 
-    /**
-     * Prepare a provider configuration migration plan.
-     */
-    PREPARE_PROVIDER_MIGRATION("synesis_provider_migrate_prepare"),
+  /**
+   * Prepare a provider configuration migration plan.
+   */
+  PREPARE_PROVIDER_MIGRATION("synesis_provider_migrate_prepare"),
 
-    /**
-     * Prepare a project schema migration plan.
-     */
-    PREPARE_PROJECT_MIGRATION("synesis_migrate_prepare"),
+  /**
+   * Prepare a project schema migration plan.
+   */
+  PREPARE_PROJECT_MIGRATION("synesis_migrate_prepare"),
 
-    /**
-     * Review and resume the prepared update transaction.
-     */
-    REVIEW_UPDATE_TRANSACTION("review_update_transaction"),
+  /**
+   * Review and resume the prepared update transaction.
+   */
+  REVIEW_UPDATE_TRANSACTION("review_update_transaction"),
 
-    /**
-     * Reinstall Synesis CLI / platform distribution.
-     */
-    REINSTALL_SYNESIS("reinstall_synesis"),
+  /**
+   * Reinstall Synesis CLI / platform distribution.
+   */
+  REINSTALL_SYNESIS("reinstall_synesis"),
 
-    /**
-     * Review working directory status in control Git checkout.
-     */
-    REVIEW_CONTROL_CHECKOUT("review_control_checkout"),
+  /**
+   * Review working directory status in control Git checkout.
+   */
+  REVIEW_CONTROL_CHECKOUT("review_control_checkout"),
 
-    /**
-     * Restore missing or corrupted snapshot from backup repository.
-     */
-    RESTORE_MISSING_SNAPSHOT_FROM_BACKUP("restore_missing_snapshot_from_backup"),
+  /**
+   * Restore missing or corrupted snapshot from backup repository.
+   */
+  RESTORE_MISSING_SNAPSHOT_FROM_BACKUP("restore_missing_snapshot_from_backup"),
 
-    /**
-     * Prepare a safe repair plan with synesis repair --prepare.
-     */
-    PREPARE_REPAIR_PLAN("prepare_repair_plan"),
+  /**
+   * Prepare a safe repair plan with synesis repair --prepare.
+   */
+  PREPARE_REPAIR_PLAN("prepare_repair_plan"),
 
-    /**
-     * Manual human review required for ambiguous or critical safety state.
-     */
-    HUMAN_REVIEW_REQUIRED("human_review_required"),
+  /**
+   * Manual human review required for ambiguous or critical safety state.
+   */
+  HUMAN_REVIEW_REQUIRED("human_review_required"),
 
-    /**
-     * No action required.
-     */
-    NO_ACTION("no_action");
+  /**
+   * No action required.
+   */
+  NO_ACTION("no_action");
 
-    private final String value;
+  private final String value;
 
-    DoctorRecommendation(String value) {
-        this.value = value;
-    }
+  DoctorRecommendation(String value) {
+    this.value = value;
+  }
 
-    /**
-     * Returns stable machine-readable string value.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
+  /**
+   * Returns stable machine-readable string value.
+   *
+   * @return lowercase string representation
+   */
+  public String value() {
+    return value;
+  }
 }

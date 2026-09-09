@@ -24,38 +24,38 @@ import org.synesis.link.onboarding.OnboardingFailureCode;
  */
 final class CommandAdapterTest {
 
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
-    }
+  private static PrintStream stream(ByteArrayOutputStream target) {
+    return new PrintStream(target, true, StandardCharsets.UTF_8);
+  }
 
-    @Test
-    void statusRendererPreservesTheExactShareLink() {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        String link = "synesis://join/SYN1-exact-link";
-        new StatusRenderer(terminal).accept(new OnboardingEvent(OnboardingEventType.SHARE_LINK, link));
-        assertTrue(out.toString(StandardCharsets.UTF_8)
-                .contains("SHARE_LINK=" + link));
-        assertTrue(out.toString(StandardCharsets.UTF_8)
-                .contains("QR_RENDERED=COMPACT"));
-        assertTrue(err.toString(StandardCharsets.UTF_8)
-                .isEmpty());
-    }
+  @Test
+  void statusRendererPreservesTheExactShareLink() {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+    String link = "synesis://join/SYN1-exact-link";
+    new StatusRenderer(terminal).accept(new OnboardingEvent(OnboardingEventType.SHARE_LINK, link));
+    assertTrue(out.toString(StandardCharsets.UTF_8)
+        .contains("SHARE_LINK=" + link));
+    assertTrue(out.toString(StandardCharsets.UTF_8)
+        .contains("QR_RENDERED=COMPACT"));
+    assertTrue(err.toString(StandardCharsets.UTF_8)
+        .isEmpty());
+  }
 
-    @Test
-    void failureMappingUsesStableExitAndRedactedStderr() {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        int exit = FailureMapper.map(new OnboardingFailure(OnboardingFailureCode.INVITE_INVALID,
-                new IllegalStateException("secret link must not escape")), terminal);
-        assertEquals(ExitCodes.INVITE_INVALID, exit);
-        assertTrue(out.toString(StandardCharsets.UTF_8)
-                .contains("FAILURE=INVITE_INVALID"));
-        assertTrue(err.toString(StandardCharsets.UTF_8)
-                .contains("invalid or expired"));
-        assertFalse(err.toString(StandardCharsets.UTF_8)
-                .contains("secret link"));
-    }
+  @Test
+  void failureMappingUsesStableExitAndRedactedStderr() {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+    int exit = FailureMapper.map(new OnboardingFailure(OnboardingFailureCode.INVITE_INVALID,
+        new IllegalStateException("secret link must not escape")), terminal);
+    assertEquals(ExitCodes.INVITE_INVALID, exit);
+    assertTrue(out.toString(StandardCharsets.UTF_8)
+        .contains("FAILURE=INVITE_INVALID"));
+    assertTrue(err.toString(StandardCharsets.UTF_8)
+        .contains("invalid or expired"));
+    assertFalse(err.toString(StandardCharsets.UTF_8)
+        .contains("secret link"));
+  }
 }

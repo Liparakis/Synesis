@@ -45,247 +45,257 @@ import org.synesis.link.session.SessionCloseReason;
  */
 final class NettyQuicPeerProcess {
 
-    /**
-     * Short bounded policy used only to keep the abrupt-process integration test deterministic.
-     */
-    private static final LivenessConfiguration PROCESS_LOSS_LIVENESS = new LivenessConfiguration(
-            Duration.ofMillis(250), Duration.ofSeconds(1), Duration.ofSeconds(2), true);
+  /**
+   * Short bounded policy used only to keep the abrupt-process integration test deterministic.
+   */
+  private static final LivenessConfiguration PROCESS_LOSS_LIVENESS = new LivenessConfiguration(
+      Duration.ofMillis(250), Duration.ofSeconds(1), Duration.ofSeconds(2), true);
 
-    private NettyQuicPeerProcess() {
+  private NettyQuicPeerProcess() {
+  }
+
+  static void main(String[] arguments) throws Exception {
+    if (arguments.length != 4) {
+      throw new IllegalArgumentException("expected mode, identity-file, ready-file, result-file");
     }
+    switch (arguments[0]) {
+      case "client" ->
+          client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), true);
+      case "client-hold" ->
+          client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), false);
+      case "server" -> server(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]));
+      default -> throw new IllegalArgumentException("unknown peer mode");
+    }
+  }
 
-    static void main(String[] arguments) throws Exception {
-        if (arguments.length != 4) {
-            throw new IllegalArgumentException("expected mode, identity-file, ready-file, result-file");
+  private static void client(Path identityFile, Path serverReady, Path resultFile, boolean graceful)
+      throws Exception {
+    NodeIdentity identity = NodeIdentity.generate();
+    writeIdentity(identityFile, identity);
+    waitForFile(serverReady);
+    List<String> material = Files.readAllLines(serverReady);
+    String remoteNodeId = material.get(1);
+    byte[] remotePublicKey = Base64.getDecoder()
+        .decode(material.get(2));
+    HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
+        SynesisLink.ALPN,
+        UUID.randomUUID(), 1, 1, new byte[]{1, 2, 3, 4}, new byte[]{5, 6, 7, 8},
+        identity.nodeId(), identity.publicKeyEncoded(), remoteNodeId, remotePublicKey);
+    runClient(identity, remoteNodeId, transcript, serverReady, resultFile, graceful);
+  }
+
+  private static void runClient(NodeIdentity identity, String remoteNodeId,
+      HandshakeTranscript transcript,
+      Path serverReady, Path resultFile, boolean graceful) throws Exception {
+    MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2,
+        NioIoHandler.newFactory());
+    TestTlsMaterial tls = TestTlsMaterial.create();
+    Channel udp = null;
+    QuicChannel connection = null;
+    try {
+      QuicSslContext ssl = QuicSslContextBuilder.forClient()
+          .trustManager(InsecureTrustManagerFactory.INSTANCE)
+          .applicationProtocols(SynesisLink.ALPN)
+          .build();
+      udp = new Bootstrap().group(group)
+          .channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.clientCodec(ssl))
+          .bind(NetUtil.LOCALHOST4, 0)
+          .sync()
+          .channel();
+      int port = Integer.parseInt(Files.readAllLines(serverReady)
+          .getFirst());
+      var selectedPair = CandidatePairs.generate(
+              List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)),
+              List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)), 1)
+          .getFirst();
+      connection = QuicChannel.newBootstrap(udp)
+          .handler(new ChannelInboundHandlerAdapter())
+          .streamHandler(new ChannelInboundHandlerAdapter())
+          .remoteAddress(new InetSocketAddress(selectedPair.remote()
+              .address(),
+              selectedPair.remote()
+                  .port()))
+          .connect()
+          .sync()
+          .getNow();
+      CompletableFuture<PeerSession> session = new CompletableFuture<>();
+      HandshakeProof proof = org.synesis.link.session.SessionAuthenticator.createProof(identity,
+          transcript,
+          HandshakeRole.INITIATOR);
+      connection.createStream(QuicStreamType.BIDIRECTIONAL,
+              NettySessionHandshake.clientStreamHandler(identity, remoteNodeId,
+                  List.of(ProtocolVersion.V1),
+                  transcript, proof, new ReplayGuard(), session, PROCESS_LOSS_LIVENESS, null))
+          .sync();
+      PeerSession established = session.get(20, TimeUnit.SECONDS);
+      awaitHeartbeat(established);
+      writeResult(resultFile, established);
+      byte[] applicationPayload = new byte[]{4, 5, 6};
+      byte[] applicationResponse = established.requestApplication(applicationPayload)
+          .toCompletableFuture()
+          .get(5, TimeUnit.SECONDS);
+      if (!java.util.Arrays.equals(applicationPayload, applicationResponse)) {
+        throw new IllegalStateException("application payload did not round trip");
+      }
+      Files.writeString(resultFile,
+          "|APP|" + Base64.getEncoder()
+              .encodeToString(applicationResponse),
+          StandardOpenOption.APPEND);
+      var work = established.requestDemoWork(new DemoWorkRequest(UUID.randomUUID(),
+              DemoWorkRequest.DESCRIBE_SESSION))
+          .toCompletableFuture()
+          .get(5, TimeUnit.SECONDS);
+      Files.writeString(resultFile, "|WORK|" + work.status() + "|" + work.requestId(),
+          StandardOpenOption.APPEND);
+      waitForLine(serverReady);
+      if (graceful) {
+        established.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+            .toCompletableFuture()
+            .get(5, TimeUnit.SECONDS);
+      } else {
+        while (!Thread.currentThread()
+            .isInterrupted()) {
+          LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
         }
-        switch (arguments[0]) {
-            case "client" -> client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), true);
-            case "client-hold" -> client(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]), false);
-            case "server" -> server(Path.of(arguments[1]), Path.of(arguments[2]), Path.of(arguments[3]));
-            default -> throw new IllegalArgumentException("unknown peer mode");
-        }
+      }
+    } finally {
+      if (connection != null) {
+        connection.close()
+            .syncUninterruptibly();
+      }
+      if (udp != null) {
+        udp.close()
+            .syncUninterruptibly();
+      }
+      group.shutdownGracefully()
+          .syncUninterruptibly();
+      tls.close();
     }
+  }
 
-    private static void client(Path identityFile, Path serverReady, Path resultFile, boolean graceful)
-            throws Exception {
-        NodeIdentity identity = NodeIdentity.generate();
-        writeIdentity(identityFile, identity);
-        waitForFile(serverReady);
-        List<String> material = Files.readAllLines(serverReady);
-        String remoteNodeId = material.get(1);
-        byte[] remotePublicKey = Base64.getDecoder()
-                .decode(material.get(2));
-        HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1, SynesisLink.ALPN,
-                UUID.randomUUID(), 1, 1, new byte[]{1, 2, 3, 4}, new byte[]{5, 6, 7, 8},
-                identity.nodeId(), identity.publicKeyEncoded(), remoteNodeId, remotePublicKey);
-        runClient(identity, remoteNodeId, transcript, serverReady, resultFile, graceful);
-    }
-
-    private static void runClient(NodeIdentity identity, String remoteNodeId, HandshakeTranscript transcript,
-            Path serverReady, Path resultFile, boolean graceful) throws Exception {
-        MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        TestTlsMaterial tls = TestTlsMaterial.create();
-        Channel udp = null;
-        QuicChannel connection = null;
-        try {
-            QuicSslContext ssl = QuicSslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .applicationProtocols(SynesisLink.ALPN)
-                    .build();
-            udp = new Bootstrap().group(group)
-                    .channel(NioDatagramChannel.class)
-                    .handler(NettyQuicTransport.clientCodec(ssl))
-                    .bind(NetUtil.LOCALHOST4, 0)
-                    .sync()
-                    .channel();
-            int port = Integer.parseInt(Files.readAllLines(serverReady)
-                    .getFirst());
-            var selectedPair = CandidatePairs.generate(
-                            List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)),
-                            List.of(new Candidate(CandidateType.MANUAL, NetUtil.LOCALHOST4, port, 0)), 1)
-                    .getFirst();
-            connection = QuicChannel.newBootstrap(udp)
-                    .handler(new ChannelInboundHandlerAdapter())
-                    .streamHandler(new ChannelInboundHandlerAdapter())
-                    .remoteAddress(new InetSocketAddress(selectedPair.remote()
-                            .address(),
-                            selectedPair.remote()
-                                    .port()))
-                    .connect()
-                    .sync()
-                    .getNow();
-            CompletableFuture<PeerSession> session = new CompletableFuture<>();
-            HandshakeProof proof = org.synesis.link.session.SessionAuthenticator.createProof(identity, transcript,
-                    HandshakeRole.INITIATOR);
-            connection.createStream(QuicStreamType.BIDIRECTIONAL,
-                            NettySessionHandshake.clientStreamHandler(identity, remoteNodeId, List.of(ProtocolVersion.V1),
-                                    transcript, proof, new ReplayGuard(), session, PROCESS_LOSS_LIVENESS, null))
-                    .sync();
-            PeerSession established = session.get(20, TimeUnit.SECONDS);
-            awaitHeartbeat(established);
-            writeResult(resultFile, established);
-            byte[] applicationPayload = new byte[]{4, 5, 6};
-            byte[] applicationResponse = established.requestApplication(applicationPayload)
-                    .toCompletableFuture()
-                    .get(5, TimeUnit.SECONDS);
-            if (!java.util.Arrays.equals(applicationPayload, applicationResponse)) {
-                throw new IllegalStateException("application payload did not round trip");
-            }
-            Files.writeString(resultFile,
-                    "|APP|" + Base64.getEncoder()
-                            .encodeToString(applicationResponse),
-                    StandardOpenOption.APPEND);
-            var work = established.requestDemoWork(new DemoWorkRequest(UUID.randomUUID(),
-                            DemoWorkRequest.DESCRIBE_SESSION))
-                    .toCompletableFuture()
-                    .get(5, TimeUnit.SECONDS);
-            Files.writeString(resultFile, "|WORK|" + work.status() + "|" + work.requestId(),
-                    StandardOpenOption.APPEND);
-            waitForLine(serverReady);
-            if (graceful) {
-                established.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
-                        .toCompletableFuture()
-                        .get(5, TimeUnit.SECONDS);
-            } else {
-                while (!Thread.currentThread()
-                        .isInterrupted()) {
-                    LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+  private static void server(Path clientMaterial, Path serverReady, Path resultFile)
+      throws Exception {
+    waitForFile(clientMaterial);
+    String expectedClient = Files.readAllLines(clientMaterial)
+        .getFirst();
+    NodeIdentity identity = NodeIdentity.generate();
+    MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2,
+        NioIoHandler.newFactory());
+    TestTlsMaterial tls = TestTlsMaterial.create();
+    Channel udp = null;
+    QuicChannel connection = null;
+    try {
+      CompletableFuture<QuicChannel> accepted = new CompletableFuture<>();
+      CompletableFuture<PeerSession> session = new CompletableFuture<>();
+      QuicSslContext ssl = QuicSslContextBuilder.forServer(tls.key, null, tls.certificate)
+          .applicationProtocols(SynesisLink.ALPN)
+          .build();
+      udp = new Bootstrap().group(group)
+          .channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.serverCodec(ssl, InsecureQuicTokenHandler.INSTANCE,
+              new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelActive(ChannelHandlerContext context) {
+                  accepted.complete((QuicChannel) context.channel());
                 }
-            }
-        } finally {
-            if (connection != null) {
-                connection.close()
-                        .syncUninterruptibly();
-            }
-            if (udp != null) {
-                udp.close()
-                        .syncUninterruptibly();
-            }
-            group.shutdownGracefully()
-                    .syncUninterruptibly();
-            tls.close();
-        }
+              }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
+                  List.of(ProtocolVersion.V1), new ReplayGuard(), session,
+                  PROCESS_LOSS_LIVENESS,
+                  (_, payload) -> CompletableFuture.completedFuture(payload))))
+          .bind(NetUtil.LOCALHOST4, 0)
+          .sync()
+          .channel();
+      Files.write(serverReady,
+          List.of(Integer.toString(((java.net.InetSocketAddress) udp.localAddress()).getPort()),
+              identity.nodeId(),
+              Base64.getEncoder()
+                  .encodeToString(identity.publicKeyEncoded())));
+      PeerSession established = session.get(20, TimeUnit.SECONDS);
+      awaitHeartbeat(established);
+      writeResult(resultFile, established);
+      Files.writeString(serverReady, "LIVE_RECORDED\n", StandardOpenOption.APPEND);
+      established.terminalCompletion()
+          .toCompletableFuture()
+          .get(15, TimeUnit.SECONDS);
+      Files.writeString(resultFile, "|TERMINAL|" + established.closeReason(),
+          StandardOpenOption.APPEND);
+      connection = accepted.get(5, TimeUnit.SECONDS);
+      connection.close()
+          .sync();
+    } finally {
+      if (connection != null) {
+        connection.close()
+            .syncUninterruptibly();
+      }
+      if (udp != null) {
+        udp.close()
+            .syncUninterruptibly();
+      }
+      group.shutdownGracefully()
+          .syncUninterruptibly();
+      tls.close();
     }
+  }
 
-    private static void server(Path clientMaterial, Path serverReady, Path resultFile) throws Exception {
-        waitForFile(clientMaterial);
-        String expectedClient = Files.readAllLines(clientMaterial)
-                .getFirst();
-        NodeIdentity identity = NodeIdentity.generate();
-        MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
-        TestTlsMaterial tls = TestTlsMaterial.create();
-        Channel udp = null;
-        QuicChannel connection = null;
-        try {
-            CompletableFuture<QuicChannel> accepted = new CompletableFuture<>();
-            CompletableFuture<PeerSession> session = new CompletableFuture<>();
-            QuicSslContext ssl = QuicSslContextBuilder.forServer(tls.key, null, tls.certificate)
-                    .applicationProtocols(SynesisLink.ALPN)
-                    .build();
-            udp = new Bootstrap().group(group)
-                    .channel(NioDatagramChannel.class)
-                    .handler(NettyQuicTransport.serverCodec(ssl, InsecureQuicTokenHandler.INSTANCE,
-                            new ChannelInboundHandlerAdapter() {
-                                @Override
-                                public void channelActive(ChannelHandlerContext context) {
-                                    accepted.complete((QuicChannel) context.channel());
-                                }
-                            }, NettySessionHandshake.serverStreamHandler(identity, expectedClient,
-                                    List.of(ProtocolVersion.V1), new ReplayGuard(), session,
-                                    PROCESS_LOSS_LIVENESS,
-                                    (_, payload) -> CompletableFuture.completedFuture(payload))))
-                    .bind(NetUtil.LOCALHOST4, 0)
-                    .sync()
-                    .channel();
-            Files.write(serverReady,
-                    List.of(Integer.toString(((java.net.InetSocketAddress) udp.localAddress()).getPort()),
-                            identity.nodeId(),
-                            Base64.getEncoder()
-                                    .encodeToString(identity.publicKeyEncoded())));
-            PeerSession established = session.get(20, TimeUnit.SECONDS);
-            awaitHeartbeat(established);
-            writeResult(resultFile, established);
-            Files.writeString(serverReady, "LIVE_RECORDED\n", StandardOpenOption.APPEND);
-            established.terminalCompletion()
-                    .toCompletableFuture()
-                    .get(15, TimeUnit.SECONDS);
-            Files.writeString(resultFile, "|TERMINAL|" + established.closeReason(), StandardOpenOption.APPEND);
-            connection = accepted.get(5, TimeUnit.SECONDS);
-            connection.close()
-                    .sync();
-        } finally {
-            if (connection != null) {
-                connection.close()
-                        .syncUninterruptibly();
-            }
-            if (udp != null) {
-                udp.close()
-                        .syncUninterruptibly();
-            }
-            group.shutdownGracefully()
-                    .syncUninterruptibly();
-            tls.close();
-        }
-    }
+  private static void writeIdentity(Path file, NodeIdentity identity) throws Exception {
+    Files.write(file,
+        List.of(identity.nodeId(),
+            Base64.getEncoder()
+                .encodeToString(identity.publicKeyEncoded())));
+  }
 
-    private static void writeIdentity(Path file, NodeIdentity identity) throws Exception {
-        Files.write(file,
-                List.of(identity.nodeId(),
-                        Base64.getEncoder()
-                                .encodeToString(identity.publicKeyEncoded())));
-    }
+  private static void writeResult(Path file, PeerSession session) throws Exception {
+    Files.writeString(file, String.join("|",
+        "OK",
+        session.localNodeId(),
+        session.remoteNodeId(),
+        session.negotiatedVersion()
+            .major() + "." + session.negotiatedVersion()
+            .minor(),
+        session.sessionId()
+            .toString(),
+        Long.toString(session.localEpoch()),
+        Long.toString(session.remoteEpoch()),
+        session.livenessState()
+            .name(),
+        Long.toString(session.livenessMetrics()
+            .heartbeatSentCount()),
+        Long.toString(session.livenessMetrics()
+            .heartbeatAcknowledgedCount())));
+  }
 
-    private static void writeResult(Path file, PeerSession session) throws Exception {
-        Files.writeString(file, String.join("|",
-                "OK",
-                session.localNodeId(),
-                session.remoteNodeId(),
-                session.negotiatedVersion()
-                        .major() + "." + session.negotiatedVersion()
-                        .minor(),
-                session.sessionId()
-                        .toString(),
-                Long.toString(session.localEpoch()),
-                Long.toString(session.remoteEpoch()),
-                session.livenessState()
-                        .name(),
-                Long.toString(session.livenessMetrics()
-                        .heartbeatSentCount()),
-                Long.toString(session.livenessMetrics()
-                        .heartbeatAcknowledgedCount())));
+  private static void awaitHeartbeat(PeerSession session) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+    while (session.livenessMetrics()
+        .heartbeatAcknowledgedCount() == 0 && System.nanoTime() < deadline) {
+      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
     }
+    if (session.livenessMetrics()
+        .heartbeatAcknowledgedCount() == 0) {
+      throw new IllegalStateException("heartbeat acknowledgement did not arrive");
+    }
+  }
 
-    private static void awaitHeartbeat(PeerSession session) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
-        while (session.livenessMetrics()
-                .heartbeatAcknowledgedCount() == 0 && System.nanoTime() < deadline) {
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
-        }
-        if (session.livenessMetrics()
-                .heartbeatAcknowledgedCount() == 0) {
-            throw new IllegalStateException("heartbeat acknowledgement did not arrive");
-        }
+  private static void waitForLine(Path file) throws Exception {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+    while (System.nanoTime() < deadline) {
+      if (Files.exists(file) && Files.readAllLines(file)
+          .contains("LIVE_RECORDED")) {
+        return;
+      }
+      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
     }
+    throw new IllegalStateException("timed out waiting for LIVE_RECORDED");
+  }
 
-    private static void waitForLine(Path file) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
-        while (System.nanoTime() < deadline) {
-            if (Files.exists(file) && Files.readAllLines(file)
-                    .contains("LIVE_RECORDED")) {
-                return;
-            }
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
-        }
-        throw new IllegalStateException("timed out waiting for LIVE_RECORDED");
+  private static void waitForFile(Path file) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+    while (!Files.exists(file) && System.nanoTime() < deadline) {
+      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
     }
-
-    private static void waitForFile(Path file) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
-        while (!Files.exists(file) && System.nanoTime() < deadline) {
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
-        }
-        if (!Files.exists(file)) {
-            throw new IllegalStateException("timed out waiting for " + file.getFileName());
-        }
+    if (!Files.exists(file)) {
+      throw new IllegalStateException("timed out waiting for " + file.getFileName());
     }
+  }
 }

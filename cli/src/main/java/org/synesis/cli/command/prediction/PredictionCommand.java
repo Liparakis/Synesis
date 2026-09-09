@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "prediction", description = "Create and coordinate capability predictions.", mixinStandardHelpOptions = true)
 public final class PredictionCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the prediction command parent.
-     */
-    public PredictionCommand() {
-    }
+  /**
+   * Creates the prediction command parent.
+   */
+  public PredictionCommand() {
+  }
 
-    /**
-     * Prints child command help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints child command help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

@@ -6,23 +6,23 @@ package org.synesis.workspace.doctor;
  * @since 1.0
  */
 public enum DoctorConfidence {
-    /**
-     * Diagnostic state confirmed by exact cryptographic or filesystem evidence.
-     */
-    CONFIRMED,
+  /**
+   * Diagnostic state confirmed by exact cryptographic or filesystem evidence.
+   */
+  CONFIRMED,
 
-    /**
-     * Diagnostic state supported by strong process and lease evidence.
-     */
-    HIGH_CONFIDENCE,
+  /**
+   * Diagnostic state supported by strong process and lease evidence.
+   */
+  HIGH_CONFIDENCE,
 
-    /**
-     * Diagnostic state suspected due to incomplete evidence.
-     */
-    SUSPECTED,
+  /**
+   * Diagnostic state suspected due to incomplete evidence.
+   */
+  SUSPECTED,
 
-    /**
-     * Diagnostic state ambiguous or contradictory.
-     */
-    AMBIGUOUS
+  /**
+   * Diagnostic state ambiguous or contradictory.
+   */
+  AMBIGUOUS
 }

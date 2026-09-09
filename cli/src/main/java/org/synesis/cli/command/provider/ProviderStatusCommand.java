@@ -13,40 +13,40 @@ import picocli.CommandLine.Parameters;
 @Command(name = "status", description = "Inspect provider status.", mixinStandardHelpOptions = true)
 public final class ProviderStatusCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Parameters(index = "0", description = "Provider identifier.")
-    @SuppressWarnings({"unused", "FieldCanBeLocal"})
-    private String provider;
-    @Option(names = "--project", description = "Project directory.")
-    private String project;
+  private final CliRuntime runtime;
+  @Parameters(index = "0", description = "Provider identifier.")
+  @SuppressWarnings({"unused", "FieldCanBeLocal"})
+  private String provider;
+  @Option(names = "--project", description = "Project directory.")
+  private String project;
 
-    /**
-     * Creates the command.
-     *
-     * @param runtime composed runtime
-     */
-    public ProviderStatusCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
+  /**
+   * Creates the command.
+   *
+   * @param runtime composed runtime
+   */
+  public ProviderStatusCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
 
-    /**
-     * Inspects the provider. @return exit code
-     */
-    @Override
-    public Integer call() {
-        try {
-            var location = runtime.projectService()
-                    .require(Path.of(project == null ? "." : project));
-            var result = runtime.providerService()
-                    .status(location, provider);
-            result.values()
-                    .forEach((key, value) -> runtime.terminal()
-                            .stdout(key + "=" + value));
-            return result.exitCode();
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return 10;
-        }
+  /**
+   * Inspects the provider. @return exit code
+   */
+  @Override
+  public Integer call() {
+    try {
+      var location = runtime.projectService()
+          .require(Path.of(project == null ? "." : project));
+      var result = runtime.providerService()
+          .status(location, provider);
+      result.values()
+          .forEach((key, value) -> runtime.terminal()
+              .stdout(key + "=" + value));
+      return result.exitCode();
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("ERROR=PROJECT_NOT_CONFIGURED");
+      return 10;
     }
+  }
 }

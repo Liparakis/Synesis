@@ -380,11 +380,15 @@ Synesis managed-authority property.
 - `docs/adr/0057-reject-shared-normal-codex-home.md`
 - `docs/adr/0058-bounded-broker-thread-pin-feasibility.md`
 - `docs/adr/0059-windows-job-object-process-tree-feasibility.md`
-- `workspace/src/main/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentService.java`
-- `workspace/src/main/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentStore.java`
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentService.java`
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/continuity/ManagedAttachmentStore.java`
 - `workspace/src/main/java/org/synesis/workspace/application/provider/SessionAuthorityResolver.java`
-- `workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java`
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java`
 - `workspace/src/main/java/org/synesis/workspace/lifecycle/codex/ManagedCodexProcessLauncher.java`
-- `workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexAppServerLifecycleService.java`
+-
+`workspace/src/main/java/org/synesis/workspace/lifecycle/codex/CodexAppServerLifecycleService.java`
 - `mcp/src/main/java/org/synesis/mcp/SynesisMcpServer.java`
 - `mcp/src/main/java/org/synesis/mcp/application/McpProtocolHandler.java`

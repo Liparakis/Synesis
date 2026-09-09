@@ -8,16 +8,16 @@ import picocli.CommandLine.Command;
 @Command(name = "integration", description = "Gate prediction integration into a project.", mixinStandardHelpOptions = true)
 public final class IntegrationCommand implements Runnable {
 
-    /**
-     * Creates the integration command parent.
-     */
-    public IntegrationCommand() {
-    }
+  /**
+   * Creates the integration command parent.
+   */
+  public IntegrationCommand() {
+  }
 
-    /**
-     * Runs the parent help command.
-     */
-    @Override
-    public void run() {
-    }
+  /**
+   * Runs the parent help command.
+   */
+  @Override
+  public void run() {
+  }
 }

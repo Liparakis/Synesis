@@ -67,8 +67,10 @@ Relevant source symbols are [
 `ProjectLocation`](../../workspace/src/main/java/org/synesis/workspace/application/ProjectApplicationService.java#L615),
 [
 `Binding`](../../workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java#L1343),
-[`WorkIntent`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/WorkIntent.java#L17),
-[`Participant`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/Participant.java#L17),
+[
+`WorkIntent`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/WorkIntent.java#L17),
+[
+`Participant`](../../coordination/src/main/java/org/synesis/coordination/domain/collaboration/Participant.java#L17),
 and [
 `participantHandle`](../../workspace/src/main/java/org/synesis/workspace/application/collaboration/WorkspaceCollaborationService.java#L62).
 

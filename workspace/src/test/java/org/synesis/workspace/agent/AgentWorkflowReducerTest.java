@@ -15,171 +15,179 @@ import org.synesis.workspace.application.agent.AgentWorkflowReducer;
  */
 final class AgentWorkflowReducerTest {
 
-    /**
-     * Verifies repeated retrieval derives the same action identity and policy.
-     */
-    @Test
-    void derivesStableAtLeastOnceAction() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
-        AgentResponse input = new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING,
-                AgentNextAction.WAIT, Map.of("pending", 1, "request", "request-1"));
+  /**
+   * Verifies repeated retrieval derives the same action identity and policy.
+   */
+  @Test
+  void derivesStableAtLeastOnceAction() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    AgentResponse input = new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING,
+        AgentNextAction.WAIT, Map.of("pending", 1, "request", "request-1"));
 
-        AgentResponse first = reducer.decorate(request, input);
-        AgentResponse second = reducer.decorate(request, input);
-        Map<?, ?> firstResult = (Map<?, ?>) first.result();
-        Map<?, ?> secondResult = (Map<?, ?>) second.result();
-        assertEquals(firstResult.get("actionId"), secondResult.get("actionId"));
-        assertEquals("AT_LEAST_ONCE", firstResult.get("delivery"));
-        assertEquals(Boolean.TRUE, firstResult.get("acknowledgementRequired"));
-        Map<?, ?> workflow = (Map<?, ?>) firstResult.get("workflow");
-        assertEquals("WAIT", workflow.get("type"));
-        assertTrue((Boolean) workflow.get("retrySafe"));
-    }
+    AgentResponse first = reducer.decorate(request, input);
+    AgentResponse second = reducer.decorate(request, input);
+    Map<?, ?> firstResult = (Map<?, ?>) first.result();
+    Map<?, ?> secondResult = (Map<?, ?>) second.result();
+    assertEquals(firstResult.get("actionId"), secondResult.get("actionId"));
+    assertEquals("AT_LEAST_ONCE", firstResult.get("delivery"));
+    assertEquals(Boolean.TRUE, firstResult.get("acknowledgementRequired"));
+    Map<?, ?> workflow = (Map<?, ?>) firstResult.get("workflow");
+    assertEquals("WAIT", workflow.get("type"));
+    assertTrue((Boolean) workflow.get("retrySafe"));
+  }
 
-    /**
-     * Terminal and recovery lane states produce autonomous lifecycle actions.
-     */
-    @Test
-    void derivesCloseAndRecoverLifecycleActions() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
-        AgentResponse terminal = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, null, null,
-                        Map.of("intents", java.util.List.of(Map.of("status", "COMPLETED")))));
-        AgentResponse recovery = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, null, null,
-                        Map.of("intents", java.util.List.of(Map.of("status", "RECOVERY_HELD")))));
-        assertEquals("CLOSE", ((Map<?, ?>) ((Map<?, ?>) terminal.result()).get("workflow")).get("type"));
-        assertEquals("RECOVER", ((Map<?, ?>) ((Map<?, ?>) recovery.result()).get("workflow")).get("type"));
-    }
+  /**
+   * Terminal and recovery lane states produce autonomous lifecycle actions.
+   */
+  @Test
+  void derivesCloseAndRecoverLifecycleActions() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    AgentResponse terminal = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, null, null,
+            Map.of("intents", java.util.List.of(Map.of("status", "COMPLETED")))));
+    AgentResponse recovery = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, null, null,
+            Map.of("intents", java.util.List.of(Map.of("status", "RECOVERY_HELD")))));
+    assertEquals("CLOSE",
+        ((Map<?, ?>) ((Map<?, ?>) terminal.result()).get("workflow")).get("type"));
+    assertEquals("RECOVER",
+        ((Map<?, ?>) ((Map<?, ?>) recovery.result()).get("workflow")).get("type"));
+  }
 
-    /**
-     * Capability handoff does not fence the owner's already-authorized lane.
-     */
-    @Test
-    void capabilityOwnerMayImplementAfterRequestAcceptance() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
+  /**
+   * Capability handoff does not fence the owner's already-authorized lane.
+   */
+  @Test
+  void capabilityOwnerMayImplementAfterRequestAcceptance() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
 
-        AgentResponse ownerReview = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION,
-                        Map.of("capabilityRequestHandle", "req_123456789012", "capability", "task-tracker")));
-        Map<?, ?> reviewWorkflow = (Map<?, ?>) ((Map<?, ?>) ownerReview.result()).get("workflow");
-        assertTrue(((java.util.List<?>) reviewWorkflow.get("permittedOperations")).contains("apply_patch"));
+    AgentResponse ownerReview = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION,
+            Map.of("capabilityRequestHandle", "req_123456789012", "capability", "task-tracker")));
+    Map<?, ?> reviewWorkflow = (Map<?, ?>) ((Map<?, ?>) ownerReview.result()).get("workflow");
+    assertTrue(
+        ((java.util.List<?>) reviewWorkflow.get("permittedOperations")).contains("apply_patch"));
 
-        AgentResponse implementation = reducer.decorate(request,
-                new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE,
-                        AgentNextAction.WAIT, Map.of("capabilityRequestHandle", "req_123456789012")));
-        Map<?, ?> implementationWorkflow = (Map<?, ?>) ((Map<?, ?>) implementation.result()).get("workflow");
-        assertEquals("IMPLEMENT", implementationWorkflow.get("type"));
-        assertTrue(((java.util.List<?>) implementationWorkflow.get("permittedOperations"))
-                .contains("publish_capability_implementation"));
-    }
+    AgentResponse implementation = reducer.decorate(request,
+        new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE,
+            AgentNextAction.WAIT, Map.of("capabilityRequestHandle", "req_123456789012")));
+    Map<?, ?> implementationWorkflow = (Map<?, ?>) ((Map<?, ?>) implementation.result()).get(
+        "workflow");
+    assertEquals("IMPLEMENT", implementationWorkflow.get("type"));
+    assertTrue(((java.util.List<?>) implementationWorkflow.get("permittedOperations"))
+        .contains("publish_capability_implementation"));
+  }
 
-    /**
-     * A publication-required response recommends the existing finish lane tool.
-     */
-    @Test
-    @SuppressWarnings("ExtractMethodRecommender")
-    void snapshotPublicationUsesExistingFinishLaneTool() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
+  /**
+   * A publication-required response recommends the existing finish lane tool.
+   */
+  @Test
+  @SuppressWarnings("ExtractMethodRecommender")
+  void snapshotPublicationUsesExistingFinishLaneTool() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
 
-        AgentResponse publication = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
-                        AgentNextAction.FINISH_LANE,
-                        Map.of("snapshotPublicationRequired", true, "workGroupId", "group-1",
-                                "nextProtocolPayload", Map.of("summary", "Publish the completed immutable snapshot"))));
-        Map<?, ?> result = (Map<?, ?>) publication.result();
-        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
-        Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
+    AgentResponse publication = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
+            AgentNextAction.FINISH_LANE,
+            Map.of("snapshotPublicationRequired", true, "workGroupId", "group-1",
+                "nextProtocolPayload",
+                Map.of("summary", "Publish the completed immutable snapshot"))));
+    Map<?, ?> result = (Map<?, ?>) publication.result();
+    Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+    Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
 
-        assertEquals("PUBLISH", workflow.get("type"));
-        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("finish_lane"));
-        assertEquals("finish_lane", workflow.get("recommendedTool"));
-        assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
-    }
+    assertEquals("PUBLISH", workflow.get("type"));
+    assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("finish_lane"));
+    assertEquals("finish_lane", workflow.get("recommendedTool"));
+    assertEquals("Publish the completed immutable snapshot", arguments.get("summary"));
+  }
 
-    /**
-     * A review decision remains an explicit reviewer choice, not a guessed command.
-     */
-    @Test
-    void reviewValidationExposesChoicesWithoutProjectingAnInvalidCommand() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
-        Map<String, Object> decision = Map.of("required", true, "field", "result",
-                "allowedResults", java.util.List.of("accepted", "rejected"),
-                "rejectionReasonRequired", true);
-        AgentResponse review = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
-                        AgentNextAction.REVIEW_DECISION,
-                        Map.of("nextProtocolAction", "review_decision",
-                                "nextProtocolKind", "review_validation",
-                                "nextProtocolPayload", Map.of("grantId", "grant-1", "snapshotId", "snap-1",
-                                        "intentId", "intent-1", "claimEpoch", 1),
-                                "reviewDecision", decision)));
+  /**
+   * A review decision remains an explicit reviewer choice, not a guessed command.
+   */
+  @Test
+  void reviewValidationExposesChoicesWithoutProjectingAnInvalidCommand() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    Map<String, Object> decision = Map.of("required", true, "field", "result",
+        "allowedResults", java.util.List.of("accepted", "rejected"),
+        "rejectionReasonRequired", true);
+    AgentResponse review = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED,
+            AgentNextAction.REVIEW_DECISION,
+            Map.of("nextProtocolAction", "review_decision",
+                "nextProtocolKind", "review_validation",
+                "nextProtocolPayload", Map.of("grantId", "grant-1", "snapshotId", "snap-1",
+                    "intentId", "intent-1", "claimEpoch", 1),
+                "reviewDecision", decision)));
 
-        assertEquals(AgentNextAction.REVIEW_DECISION, review.nextAction());
-        Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) review.result()).get("workflow");
-        assertEquals("REVIEW_CONTRACT", workflow.get("type"));
-        assertEquals(decision, workflow.get("decision"));
-        assertFalse(workflow.containsKey("recommendedTool"));
-        assertFalse(workflow.containsKey("arguments"));
-        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
-    }
+    assertEquals(AgentNextAction.REVIEW_DECISION, review.nextAction());
+    Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) review.result()).get("workflow");
+    assertEquals("REVIEW_CONTRACT", workflow.get("type"));
+    assertEquals(decision, workflow.get("decision"));
+    assertFalse(workflow.containsKey("recommendedTool"));
+    assertFalse(workflow.containsKey("arguments"));
+    assertTrue(
+        ((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
+  }
 
-    /**
-     * Implementation validation exposes the provider decision without
-     * projecting a response that omits the required result field.
-     */
-    @Test
-    void implementationValidationExposesDecisionWithoutGuessingResult() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
-        Map<String, Object> decision = Map.of("required", true, "field", "result",
-                "allowedResults", java.util.List.of("accepted", "revision_required"),
-                "revisionReasonRequired", true);
-        AgentResponse validation = reducer.decorate(request,
-                new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION,
-                        Map.of("capabilityRequestHandle", "req_123456789012", "revision", 1,
-                                "reviewDecision", decision)));
+  /**
+   * Implementation validation exposes the provider decision without projecting a response that
+   * omits the required result field.
+   */
+  @Test
+  void implementationValidationExposesDecisionWithoutGuessingResult() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    Map<String, Object> decision = Map.of("required", true, "field", "result",
+        "allowedResults", java.util.List.of("accepted", "revision_required"),
+        "revisionReasonRequired", true);
+    AgentResponse validation = reducer.decorate(request,
+        new AgentResponse(AgentStatus.READY, null, AgentNextAction.VALIDATE_IMPLEMENTATION,
+            Map.of("capabilityRequestHandle", "req_123456789012", "revision", 1,
+                "reviewDecision", decision)));
 
-        Map<?, ?> result = (Map<?, ?>) validation.result();
-        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
-        assertEquals("PUBLISH", workflow.get("type"));
-        assertEquals(decision, workflow.get("decision"));
-        assertFalse(workflow.containsKey("recommendedTool"));
-        assertFalse(workflow.containsKey("arguments"));
-        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
-    }
+    Map<?, ?> result = (Map<?, ?>) validation.result();
+    Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+    assertEquals("PUBLISH", workflow.get("type"));
+    assertEquals(decision, workflow.get("decision"));
+    assertFalse(workflow.containsKey("recommendedTool"));
+    assertFalse(workflow.containsKey("arguments"));
+    assertTrue(
+        ((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
+  }
 
-    /**
-     * A missing capability exposes the contract fields without inventing an
-     * executable request whose payload is incomplete.
-     */
-    @Test
-    void missingCapabilityDoesNotRecommendUnshapedRequest() {
-        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
-        AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
-                Path.of("."), "codex", "connection-1");
-        AgentResponse missing = reducer.decorate(request,
-                new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED,
-                        AgentNextAction.REQUEST_COORDINATION,
-                        Map.of("capability", "tasktracker.domain",
-                                "requiredFields", java.util.List.of("inputs", "output",
-                                        "requiredBehavior", "acceptanceTests"))));
+  /**
+   * A missing capability exposes the contract fields without inventing an executable request whose
+   * payload is incomplete.
+   */
+  @Test
+  void missingCapabilityDoesNotRecommendUnshapedRequest() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    AgentNextActionService.NextActionRequest request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    AgentResponse missing = reducer.decorate(request,
+        new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED,
+            AgentNextAction.REQUEST_COORDINATION,
+            Map.of("capability", "tasktracker.domain",
+                "requiredFields", java.util.List.of("inputs", "output",
+                    "requiredBehavior", "acceptanceTests"))));
 
-        Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) missing.result()).get("workflow");
-        assertEquals("REVISE_SCOPE", workflow.get("type"));
-        assertFalse(workflow.containsKey("recommendedTool"));
-        assertFalse(workflow.containsKey("arguments"));
-        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("request_coordination"));
-    }
+    Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) missing.result()).get("workflow");
+    assertEquals("REVISE_SCOPE", workflow.get("type"));
+    assertFalse(workflow.containsKey("recommendedTool"));
+    assertFalse(workflow.containsKey("arguments"));
+    assertTrue(
+        ((java.util.List<?>) workflow.get("permittedOperations")).contains("request_coordination"));
+  }
 }

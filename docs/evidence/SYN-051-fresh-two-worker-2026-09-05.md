@@ -18,10 +18,10 @@ close the broader SYN-049 integration/workgroup acceptance.
   `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
 - `Selector.open()` passed; minimal `HttpServer` create/start/stop passed.
 - Produced and installed hashes matched exactly:
-    - workspace: `a7049e8b0a9c7de792038c254f1c546515de1c02757ec97834ac67be5e6863a1`
-    - MCP: `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
-    - CLI: `07f6770592f923a78f3071be39e27d8dea4dfd13b99f99acbd5a8937d98cd0bb`
-    - native MCP: `37a2db02909d434a6a8135a6326e2592ecf5f2e83c873e146e589b95a27f97ea`
+  - workspace: `a7049e8b0a9c7de792038c254f1c546515de1c02757ec97834ac67be5e6863a1`
+  - MCP: `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
+  - CLI: `07f6770592f923a78f3071be39e27d8dea4dfd13b99f99acbd5a8937d98cd0bb`
+  - native MCP: `37a2db02909d434a6a8135a6326e2592ecf5f2e83c873e146e589b95a27f97ea`
 - Target baseline: branch `main`, tracked HEAD
   `8cf929c4def2a5d900f654c5b99d9ebef8bc972e`; only pre-existing untracked
   `probe-runtime/` existed in the control checkout.

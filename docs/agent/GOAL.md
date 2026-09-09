@@ -7,28 +7,28 @@ protected profile must distinguish protection-lite from the requested
 commercial maximum profile and must classify every Seven Rings capability with
 artifact and installed-runtime evidence rather than marketing terminology.
 
-- Status: ACTIVE / protection-lite evidence complete; CLI/relay maximum adapter/signing, source-tier binding, and extracted-artifact harness implemented; commercial profile blocked
+- Status: COMPLETE FOR PROTECTION-LITE SCOPE; commercial maximum protection DEFERRED / EXTERNAL DEPENDENCY
 - Baseline: activation checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43`
-  on `master`; the scoped release commits remain local and ahead of
-  `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
-  and remains uncommitted.
-- Last implementation checkpoint: `cbecbac5` at `CP-0804`; the latest
+  on `master`; the completed local release/UI series is being closed and
+  published with the authorized final push. `CP-0758.md` is preserved as the
+  completed UI checkpoint and is included in the closeout.
+- Last implementation checkpoint: `12315694` at `CP-0820`; the latest
   availability evidence is `18da2f4b` at `CP-0807`, and the candidate-capability
   review is `4b2836a2` at `CP-0810`; the working copy also
-  contains a stable, unexplained
-  formatter-like rewrite of unrelated files outside this release slice.
-  Those files remain untouched and are not release evidence.
+  contains a repository-wide formatter/implementation rewrite. The final
+  closeout audits and includes legitimate repository changes rather than
+  silently discarding them.
 - Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
   foundations; this task extends them rather than creating a parallel release
   system. `SYN-010B` remains a separate historical aggregation task.
 - Planning basis: the user-provided maximum-protection goal, current-source
   and bundle investigation, ADR-0070, and ADR-0071's external adapter/signing
   contract.
-- Exact next action: obtain an installed, licensed, version-pinned commercial
-  protector plus its reviewed adapter/configuration and run the maximum-release
-  acceptance with injected release signing authority; until that
-  authority/tool exists, run only from a clean reviewed release checkout, keep
-  the maximum gate fail-closed, and do not invent a replacement implementation.
+- Exact next action: none for the completed free-protection scope. Future
+  commercial maximum work resumes only after an installed, licensed,
+  version-pinned protector, reviewed adapter/configuration, and release
+  signing authority are supplied; until then the maximum gate remains
+  fail-closed and no replacement implementation is permitted.
 - Required Seven Rings: Ring 1 control-flow obfuscation, Ring 2 genuine code
   virtualization, Ring 3 string/constant encryption, Ring 4 anti-VM and
   analysis-environment detection, Ring 5 protected payload/packing, Ring 6
@@ -47,8 +47,9 @@ artifact and installed-runtime evidence rather than marketing terminology.
   anti-analysis behavior, packing, or virtualization may enter the normal
   developer build or customer-visible runtime toggle surface.
 - Release boundary: no production signing keys, commercial licenses, private
-  seeds, mappings, or native symbols may be committed or shipped; no push,
-  tag, release, or remote mutation is authorized.
+  seeds, mappings, or native symbols may be committed or shipped. The current
+  closeout push is authorized; future commercial release signing remains
+  private and injected.
 
 # SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 

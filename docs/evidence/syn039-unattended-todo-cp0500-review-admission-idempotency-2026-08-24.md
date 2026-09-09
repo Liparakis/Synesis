@@ -21,7 +21,8 @@ that stop.
 - Seed commit: `8238770`
 - Harness: `C:\Users\Liparakis\Desktop\SynesisAcceptance\harness-cp0500-002`
 - Model: two independent `gpt-5.6-luna` Codex sessions
-- MCP executable: `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
+- MCP executable:
+  `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
 - MCP SHA-256: `DCB0A0747D63B2566AC900161707CC37AE359FFFD074D322DAD6A45EA9B7A876`
 - MCP startup: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, startup
   commit `bc334ac`, exactly ten tools
@@ -53,10 +54,10 @@ Participants converged on one WorkGroup:
 4. B consumed the single-use REVIEW grant
    `d531fe00-b103-3c2b-8480-3010cd59fce0` for A's intent and epoch 1.
 5. A received the exact `finish_lane` projection and succeeded:
-    - snapshot `snap_6b8ee8837a67aca57c5c28baed57a8a2`
-    - snapshot commit `ac349cbf5984033e4f308448c85337562daf8339`
-    - changed path `todo.py`
-    - integration `integrated`
+  - snapshot `snap_6b8ee8837a67aca57c5c28baed57a8a2`
+  - snapshot commit `ac349cbf5984033e4f308448c85337562daf8339`
+  - changed path `todo.py`
+  - integration `integrated`
 6. B received exact `review_validation` arguments for that snapshot and
    returned structured `ACCEPTED`; the server returned
    `workGroupStatus=ACTIVE`.

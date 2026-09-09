@@ -7,21 +7,22 @@ import java.util.Objects;
  */
 public final class WorkspaceIntegrationReadinessService {
 
-    private final IntegrationCompatibilityService compatibilityService = new IntegrationCompatibilityService();
+  private final IntegrationCompatibilityService compatibilityService = new IntegrationCompatibilityService();
 
-    /**
-     * Creates the readiness adapter.
-     */
-    public WorkspaceIntegrationReadinessService() {
-    }
+  /**
+   * Creates the readiness adapter.
+   */
+  public WorkspaceIntegrationReadinessService() {
+  }
 
-    /**
-     * Checks an immutable integration candidate.
-     *
-     * @param request explicit compatibility facts
-     * @return deterministic actionable result
-     */
-    public IntegrationCompatibilityService.CheckResult check(IntegrationCompatibilityService.CheckRequest request) {
-        return compatibilityService.check(Objects.requireNonNull(request, "request"));
-    }
+  /**
+   * Checks an immutable integration candidate.
+   *
+   * @param request explicit compatibility facts
+   * @return deterministic actionable result
+   */
+  public IntegrationCompatibilityService.CheckResult check(
+      IntegrationCompatibilityService.CheckRequest request) {
+    return compatibilityService.check(Objects.requireNonNull(request, "request"));
+  }
 }

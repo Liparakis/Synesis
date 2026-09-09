@@ -18,668 +18,694 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
 @SuppressWarnings({"DuplicatedCode", "ExtractMethodRecommender"})
 public final class CollaborationProjection {
 
-    private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
-    private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
-    private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
-    private final Map<String, ProviderSessionTerminalPayload> terminalSessions = new LinkedHashMap<>();
-    private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
-    private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
-    private boolean activated;
+  private final Map<UUID, WorkIntent> intents = new LinkedHashMap<>();
+  private final Map<UUID, CoordinationRequest> requests = new LinkedHashMap<>();
+  private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
+  private final Map<String, ProviderSessionTerminalPayload> terminalSessions = new LinkedHashMap<>();
+  private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
+  private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
+  private boolean activated;
 
-    /**
-     * Creates an empty collaboration projection.
-     */
-    public CollaborationProjection() {
+  /**
+   * Creates an empty collaboration projection.
+   */
+  public CollaborationProjection() {
+  }
+
+  private static void rejectRevoked(Participant participant) throws IOException {
+    if (participant.state() == Participant.State.REVOKED) {
+      throw new IOException("SESSION_EPOCH_FENCED");
+    }
+  }
+
+  /**
+   * Applies one collaboration event.
+   *
+   * @param event event
+   * @throws IOException malformed transition
+   */
+  public synchronized void apply(PredictionEvent event) throws IOException {
+    Objects.requireNonNull(event, "event");
+    switch (event.type()) {
+      case WORK_INTENT_ANNOUNCED -> {
+        activated = true;
+        announce(CollaborationCodec.decodeIntent(event.payload()));
+      }
+      case WORK_INTENT_RELEASED -> {
+        if (CollaborationCodec.isNoChangeCompletion(event.payload())) {
+          complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), event.sequence());
+        } else {
+          release(CollaborationCodec.decodeRelease(event.payload()));
+        }
+      }
+      case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
+      case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
+      case PARTICIPANT_HEARTBEAT -> heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()),
+          event.createdAtEpochMillis());
+      case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
+      case REPAIR_LANE_CREATED -> repair(RepairLanePayload.decode(event.payload()));
+      case COMPLETION_UNWOUND -> unwind(
+          org.synesis.coordination.domain.task.CompletionUnwoundPayload.decode(event.payload()));
+      case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED ->
+          suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
+      case RECOVERY_SNAPSHOT_HELD ->
+          recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
+      case PARTICIPANT_REVOKED -> revoked(CollaborationCodec.decodeHeartbeat(event.payload()));
+      case INBOX_ITEM_ACKNOWLEDGED ->
+          acknowledge(CollaborationCodec.decodeUuidText(event.payload()));
+      case PARTICIPANT_CANCELLED -> cancelled(CollaborationCodec.decodeHeartbeat(event.payload()));
+      case LANE_CONTINUATION_ACCEPTED ->
+          continued(CollaborationCodec.decodeContinuation(event.payload()));
+      case PARTICIPANT_DETACHED -> detached(CollaborationCodec.decodeHeartbeat(event.payload()));
+      case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
+      case PROVIDER_SESSION_TERMINALIZED -> terminalize(
+          ProviderSessionTerminalPayload.decode(event.payload()), event.sequence());
+      default -> {
+      }
+    }
+  }
+
+  /**
+   * Validates one collaboration event without mutation.
+   *
+   * @param event event
+   * @throws IOException invalid transition
+   */
+  public synchronized void validate(PredictionEvent event) throws IOException {
+    CollaborationProjection candidate = new CollaborationProjection();
+    candidate.intents.putAll(intents);
+    candidate.requests.putAll(requests);
+    candidate.noChangeCompletions.putAll(noChangeCompletions);
+    candidate.terminalSessions.putAll(terminalSessions);
+    candidate.participantHistory.putAll(participantHistory);
+    candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
+    candidate.activated = activated;
+    candidate.apply(event);
+  }
+
+  /**
+   * Returns an intent by identifier.
+   *
+   * @param id intent ID
+   * @return intent
+   */
+  public synchronized Optional<WorkIntent> intent(UUID id) {
+    return Optional.ofNullable(intents.get(id));
+  }
+
+  /**
+   * Returns all active intents.
+   *
+   * @return immutable intents
+   */
+  public synchronized List<WorkIntent> activeIntents() {
+    return List.copyOf(intents.values());
+  }
+
+  /**
+   * Returns active participant projections without connection or worktree details.
+   *
+   * @return participant projections
+   */
+  public synchronized List<Participant> participants() {
+    return List.copyOf(participantHistory.values());
+  }
+
+  /**
+   * Returns whether this project has durable collaboration enforcement enabled.
+   *
+   * @return true after the first intent event
+   */
+  public synchronized boolean activated() {
+    return activated;
+  }
+
+  /**
+   * Returns all durable coordination requests.
+   *
+   * @return requests
+   */
+  public synchronized List<CoordinationRequest> requests() {
+    return List.copyOf(requests.values());
+  }
+
+  /**
+   * Returns durable no-change completion evidence for an intent, when present.
+   *
+   * @param intentId intent identifier
+   * @return completion evidence, if the intent was explicitly completed
+   */
+  public synchronized Optional<NoChangeCompletion> noChangeCompletion(UUID intentId) {
+    return Optional.ofNullable(
+        noChangeCompletions.get(Objects.requireNonNull(intentId, "intent ID")));
+  }
+
+  /**
+   * Returns all durable no-change completion evidence.
+   *
+   * @return immutable completion evidence
+   */
+  public synchronized List<NoChangeCompletion> noChangeCompletions() {
+    return List.copyOf(noChangeCompletions.values());
+  }
+
+  /**
+   * Returns whether an exact provider session has an irreversible terminal fence.
+   *
+   * @param sessionId exact provider session identity
+   * @return true when terminalized
+   */
+  public synchronized boolean isSessionTerminal(String sessionId) {
+    return terminalSessions.containsKey(Objects.requireNonNull(sessionId, "session ID"));
+  }
+
+  /**
+   * Returns whether a participant belongs to a terminal provider session.
+   *
+   * @param participant exact participant handle
+   * @return true when fenced
+   */
+  public synchronized boolean isParticipantTerminal(String participant) {
+    return terminalSessions.values()
+        .stream()
+        .anyMatch(payload -> payload.participant()
+            .equals(Objects.requireNonNull(participant, "participant")));
+  }
+
+  /**
+   * Returns the durable terminal proof for one exact provider session.
+   *
+   * @param sessionId exact provider session identity
+   * @return terminal proof, when present
+   */
+  public synchronized Optional<ProviderSessionTerminalPayload> terminalSession(String sessionId) {
+    return Optional.ofNullable(
+        terminalSessions.get(Objects.requireNonNull(sessionId, "session ID")));
+  }
+
+  /**
+   * Returns whether an inbox item has been acknowledged.
+   *
+   * @param itemId server-issued item identifier
+   * @return true when acknowledged
+   */
+  public synchronized boolean inboxAcknowledged(UUID itemId) {
+    return acknowledgedInboxItems.contains(Objects.requireNonNull(itemId, "item ID"));
+  }
+
+  /**
+   * Resolves the internal projection key for an opaque participant handle.
+   *
+   * @param handle participant handle
+   * @return internal key, when present
+   */
+  public synchronized Optional<String> participantKey(String handle) {
+    return participantHistory.entrySet()
+        .stream()
+        .filter(entry -> entry.getKey()
+            .equals(handle) || entry.getValue()
+            .id()
+            .equals(handle))
+        .map(Map.Entry::getKey)
+        .findFirst();
+  }
+
+  /**
+   * Returns the internal recovery reference for a participant.
+   *
+   * @param handle participant handle
+   * @return opaque snapshot reference when held
+   */
+  public synchronized Optional<String> recoverySnapshotReference(String handle) {
+    return participantKey(handle).map(participantHistory::get)
+        .map(Participant::recoverySnapshotReference);
+  }
+
+  /**
+   * Returns a participant lifecycle state by opaque handle or projection key.
+   *
+   * @param handle participant handle
+   * @return lifecycle state when present
+   */
+  public synchronized Optional<Participant.State> participantState(String handle) {
+    return participantKey(handle).map(participantHistory::get)
+        .map(Participant::state);
+  }
+
+  /**
+   * Finds claims overlapping any requested selector.
+   *
+   * @param selectors selectors
+   * @return conflicts
+   */
+  public synchronized List<ClaimConflict> conflicts(List<ResourceSelector> selectors) {
+    List<ClaimConflict> result = new ArrayList<>();
+    for (WorkIntent intent : intents.values()) {
+      for (ResourceSelector existing : intent.selectors()) {
+        for (ResourceSelector requested : selectors) {
+          if (existing.overlaps(requested)) {
+            result.add(new ClaimConflict(intent.participant(),
+                intent.intentId()
+                    .toString(),
+                existing));
+          }
+        }
+      }
+    }
+    return List.copyOf(result);
+  }
+
+  private void announce(WorkIntent intent) throws IOException {
+    if (isParticipantTerminal(intent.participant())) {
+      throw new IOException("SESSION_TERMINAL");
+    }
+    Participant existing = participantHistory.get(intent.participant());
+    if (existing != null && existing.state() == Participant.State.REVOKED) {
+      throw new IOException("SESSION_EPOCH_FENCED");
+    }
+    if (intents.containsKey(intent.intentId()) || !conflicts(intent.selectors()).isEmpty()) {
+      throw new IOException("OVERLAPPING_CLAIM");
+    }
+    intents.put(intent.intentId(), intent);
+    String opaqueId = intent.participant()
+        .startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
+    participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
+        intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors(), null));
+  }
+
+  private void release(UUID id) throws IOException {
+    WorkIntent released = intents.remove(id);
+    if (released == null) {
+      throw new IOException("INTENT_NOT_FOUND");
+    }
+    Participant previous = participantHistory.get(released.participant());
+    if (previous != null) {
+      participantHistory.put(released.participant(),
+          new Participant(previous.id(), previous.provider(),
+              previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(),
+              List.of(),
+              previous.recoverySnapshotReference()));
+    }
+  }
+
+  private void repair(RepairLanePayload payload) throws IOException {
+    WorkIntent source = intents.get(payload.sourceIntentId());
+    if (source == null) {
+      throw new IOException("REPAIR_SOURCE_NOT_FOUND");
+    }
+    WorkIntent target = payload.targetIntent();
+    if (target.status() != WorkIntent.Status.ANNOUNCED) {
+      throw new IOException("REPAIR_TARGET_NOT_ANNOUNCED");
+    }
+    if (!source.projectId()
+        .equals(target.projectId())
+        || !source.workGroupId()
+        .equals(target.workGroupId())) {
+      throw new IOException("REPAIR_WORK_GROUP_MISMATCH");
+    }
+    if (!source.authorityLineageId()
+        .equals(target.authorityLineageId())) {
+      throw new IOException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
+    }
+    if (source.intentId()
+        .equals(target.intentId())
+        || source.participant()
+        .equals(target.participant())) {
+      throw new IOException("REPAIR_TARGET_MUST_BE_DISTINCT");
+    }
+    if (!source.selectors()
+        .equals(target.selectors())) {
+      throw new IOException("REPAIR_SCOPE_MISMATCH");
+    }
+    if (payload.snapshotId() != null && !payload.snapshotId()
+        .isBlank()) {
+      if (payload.expectedControlHead()
+          .isBlank()
+          || payload.sourceClaimEpoch() != source.version()
+          || payload.targetClaimEpoch() != target.version()
+          || target.version() != source.version() + 1L) {
+        throw new IOException("REPAIR_EPOCH_MISMATCH");
+      }
+    }
+    if (intents.values()
+        .stream()
+        .anyMatch(intent ->
+            !intent.intentId()
+                .equals(source.intentId())
+                && intent.participant()
+                .equals(target.participant()))) {
+      throw new IOException("REPAIR_TARGET_ALREADY_ACTIVE");
     }
 
-    private static void rejectRevoked(Participant participant) throws IOException {
-        if (participant.state() == Participant.State.REVOKED) {
-            throw new IOException("SESSION_EPOCH_FENCED");
-        }
-    }
+    // The event is validated against this projection before it is written.
+    // Removing the source and announcing the target in this one projection
+    // transition guarantees that no replayed state exposes an unowned gap.
+    release(payload.sourceIntentId());
+    announce(target);
+  }
 
-    /**
-     * Applies one collaboration event.
-     *
-     * @param event event
-     * @throws IOException malformed transition
-     */
-    public synchronized void apply(PredictionEvent event) throws IOException {
-        Objects.requireNonNull(event, "event");
-        switch (event.type()) {
-            case WORK_INTENT_ANNOUNCED -> {
-                activated = true;
-                announce(CollaborationCodec.decodeIntent(event.payload()));
-            }
-            case WORK_INTENT_RELEASED -> {
-                if (CollaborationCodec.isNoChangeCompletion(event.payload())) {
-                    complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), event.sequence());
-                } else {
-                    release(CollaborationCodec.decodeRelease(event.payload()));
-                }
-            }
-            case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
-            case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
-            case PARTICIPANT_HEARTBEAT ->
-                    heartbeat(CollaborationCodec.decodeHeartbeat(event.payload()), event.createdAtEpochMillis());
-            case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
-            case REPAIR_LANE_CREATED -> repair(RepairLanePayload.decode(event.payload()));
-            case COMPLETION_UNWOUND ->
-                    unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload.decode(event.payload()));
-            case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED ->
-                    suspended(CollaborationCodec.decodeHeartbeat(event.payload()));
-            case RECOVERY_SNAPSHOT_HELD -> recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
-            case PARTICIPANT_REVOKED -> revoked(CollaborationCodec.decodeHeartbeat(event.payload()));
-            case INBOX_ITEM_ACKNOWLEDGED -> acknowledge(CollaborationCodec.decodeUuidText(event.payload()));
-            case PARTICIPANT_CANCELLED -> cancelled(CollaborationCodec.decodeHeartbeat(event.payload()));
-            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
-            case PARTICIPANT_DETACHED -> detached(CollaborationCodec.decodeHeartbeat(event.payload()));
-            case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
-            case PROVIDER_SESSION_TERMINALIZED -> terminalize(
-                    ProviderSessionTerminalPayload.decode(event.payload()), event.sequence());
-            default -> {
-            }
-        }
+  private void unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload payload)
+      throws IOException {
+    WorkIntent replacement = payload.replacementIntent();
+    WorkIntent current = intents.get(replacement.intentId());
+    if (current == null || current.status() != WorkIntent.Status.ANNOUNCED) {
+      throw new IOException("UNWIND_SOURCE_NOT_ACTIVE");
     }
-
-    /**
-     * Validates one collaboration event without mutation.
-     *
-     * @param event event
-     * @throws IOException invalid transition
-     */
-    public synchronized void validate(PredictionEvent event) throws IOException {
-        CollaborationProjection candidate = new CollaborationProjection();
-        candidate.intents.putAll(intents);
-        candidate.requests.putAll(requests);
-        candidate.noChangeCompletions.putAll(noChangeCompletions);
-        candidate.terminalSessions.putAll(terminalSessions);
-        candidate.participantHistory.putAll(participantHistory);
-        candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
-        candidate.activated = activated;
-        candidate.apply(event);
+    if (!current.participant()
+        .equals(replacement.participant())
+        || replacement.version() <= current.version()
+        || !current.selectors()
+        .equals(replacement.selectors())) {
+      throw new IOException("UNWIND_EPOCH_OR_SCOPE_MISMATCH");
     }
-
-    /**
-     * Returns an intent by identifier.
-     *
-     * @param id intent ID
-     * @return intent
-     */
-    public synchronized Optional<WorkIntent> intent(UUID id) {
-        return Optional.ofNullable(intents.get(id));
+    intents.put(replacement.intentId(), replacement);
+    Participant previous = participantHistory.get(replacement.participant());
+    if (previous != null) {
+      participantHistory.put(replacement.participant(),
+          new Participant(previous.id(), previous.provider(),
+              replacement.goal(), Participant.State.ACTIVE, previous.lastVerifiedActivity(),
+              replacement.selectors(), previous.recoverySnapshotReference()));
     }
+  }
 
-    /**
-     * Returns all active intents.
-     *
-     * @return immutable intents
-     */
-    public synchronized List<WorkIntent> activeIntents() {
-        return List.copyOf(intents.values());
+  private void request(CoordinationRequest request) throws IOException {
+    if (isParticipantTerminal(request.requester()) || isParticipantTerminal(request.target())) {
+      throw new IOException("SESSION_TERMINAL");
     }
-
-    /**
-     * Returns active participant projections without connection or worktree details.
-     *
-     * @return participant projections
-     */
-    public synchronized List<Participant> participants() {
-        return List.copyOf(participantHistory.values());
+    if (requests.containsKey(request.requestId())) {
+      throw new IOException("REQUEST_EXISTS");
     }
-
-    /**
-     * Returns whether this project has durable collaboration enforcement enabled.
-     *
-     * @return true after the first intent event
-     */
-    public synchronized boolean activated() {
-        return activated;
+    if (!intents.containsKey(request.conflictingIntentId())) {
+      throw new IOException("INTENT_NOT_FOUND");
     }
+    requests.put(request.requestId(), request);
+  }
 
-    /**
-     * Returns all durable coordination requests.
-     *
-     * @return requests
-     */
-    public synchronized List<CoordinationRequest> requests() {
-        return List.copyOf(requests.values());
+  private void respond(CollaborationCodec.Response response) throws IOException {
+    CoordinationRequest current = requests.get(response.requestId());
+    if (current == null) {
+      throw new IOException("REQUEST_NOT_FOUND");
     }
-
-    /**
-     * Returns durable no-change completion evidence for an intent, when present.
-     *
-     * @param intentId intent identifier
-     * @return completion evidence, if the intent was explicitly completed
-     */
-    public synchronized Optional<NoChangeCompletion> noChangeCompletion(UUID intentId) {
-        return Optional.ofNullable(noChangeCompletions.get(Objects.requireNonNull(intentId, "intent ID")));
+    if (current.status() != CoordinationRequest.Status.PENDING) {
+      if (current.status() == response.status()) {
+        return;
+      }
+      throw new IOException("REQUEST_ALREADY_RESOLVED");
     }
+    requests.put(current.requestId(),
+        new CoordinationRequest(current.requestId(), current.projectId(),
+            current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
+            response.proposal()
+                .isBlank() ? current.proposal() : response.proposal(), response.status()));
+  }
 
-    /**
-     * Returns all durable no-change completion evidence.
-     *
-     * @return immutable completion evidence
-     */
-    public synchronized List<NoChangeCompletion> noChangeCompletions() {
-        return List.copyOf(noChangeCompletions.values());
+  private void review(ReviewValidationPayload validation) throws IOException {
+    if (!"REJECTED".equals(validation.result())) {
+      return;
     }
-
-    /**
-     * Returns whether an exact provider session has an irreversible terminal fence.
-     *
-     * @param sessionId exact provider session identity
-     * @return true when terminalized
-     */
-    public synchronized boolean isSessionTerminal(String sessionId) {
-        return terminalSessions.containsKey(Objects.requireNonNull(sessionId, "session ID"));
+    WorkIntent current = intents.get(validation.targetIntentId());
+    // Keep historical review records replayable when an older event log
+    // already terminalized its lane before recording the decision. New
+    // reviewed completion rejects this condition at the service boundary;
+    // an active exact lane is the only state that creates a continuation.
+    if (current == null) {
+      return;
     }
-
-    /**
-     * Returns whether a participant belongs to a terminal provider session.
-     *
-     * @param participant exact participant handle
-     * @return true when fenced
-     */
-    public synchronized boolean isParticipantTerminal(String participant) {
-        return terminalSessions.values()
-                .stream()
-                .anyMatch(payload -> payload.participant()
-                        .equals(Objects.requireNonNull(participant, "participant")));
+    if (!current.workGroupId()
+        .equals(validation.workGroupId())
+        || !current.participant()
+        .equals(validation.sourceParticipant())
+        || !current.taskId()
+        .equals(validation.taskId())
+        || current.version() != validation.claimEpoch()
+        || current.status() != WorkIntent.Status.ANNOUNCED) {
+      throw new IOException("REVIEW_TARGET_STALE");
     }
-
-    /**
-     * Returns the durable terminal proof for one exact provider session.
-     *
-     * @param sessionId exact provider session identity
-     * @return terminal proof, when present
-     */
-    public synchronized Optional<ProviderSessionTerminalPayload> terminalSession(String sessionId) {
-        return Optional.ofNullable(terminalSessions.get(Objects.requireNonNull(sessionId, "session ID")));
+    WorkIntent correction = new WorkIntent(current.intentId(), current.projectId(),
+        current.participant(),
+        current.provider(), current.taskId(), current.goal(), current.acceptance(),
+        current.baseCommit(),
+        current.selectors(), current.version() + 1L, current.workGroupId(),
+        current.authorityLineageId(), WorkIntent.Status.ANNOUNCED, current.role(),
+        current.reviewTargetSelectors(), current.knownDependencies());
+    intents.put(correction.intentId(), correction);
+    Participant participant = participantHistory.get(current.participant());
+    if (participant == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    participantHistory.put(current.participant(),
+        new Participant(participant.id(), participant.provider(),
+            correction.goal(), Participant.State.ACTIVE, participant.lastVerifiedActivity(),
+            correction.selectors(), participant.recoverySnapshotReference()));
+  }
 
-    /**
-     * Returns whether an inbox item has been acknowledged.
-     *
-     * @param itemId server-issued item identifier
-     * @return true when acknowledged
-     */
-    public synchronized boolean inboxAcknowledged(UUID itemId) {
-        return acknowledgedInboxItems.contains(Objects.requireNonNull(itemId, "item ID"));
+  private void heartbeat(String participant, long timestamp) throws IOException {
+    if (isParticipantTerminal(participant)) {
+      throw new IOException("SESSION_TERMINAL");
     }
-
-    /**
-     * Resolves the internal projection key for an opaque participant handle.
-     *
-     * @param handle participant handle
-     * @return internal key, when present
-     */
-    public synchronized Optional<String> participantKey(String handle) {
-        return participantHistory.entrySet()
-                .stream()
-                .filter(entry -> entry.getKey()
-                        .equals(handle) || entry.getValue()
-                        .id()
-                        .equals(handle))
-                .map(Map.Entry::getKey)
-                .findFirst();
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
-
-    /**
-     * Returns the internal recovery reference for a participant.
-     *
-     * @param handle participant handle
-     * @return opaque snapshot reference when held
-     */
-    public synchronized Optional<String> recoverySnapshotReference(String handle) {
-        return participantKey(handle).map(participantHistory::get)
-                .map(Participant::recoverySnapshotReference);
+    if (current.state() == Participant.State.REVOKED
+        || current.state() == Participant.State.COMPLETED
+        || current.state() == Participant.State.CANCELLED
+        || current.state() == Participant.State.DETACHED) {
+      throw new IOException("SESSION_EPOCH_FENCED");
     }
+    participantHistory.put(participant,
+        new Participant(current.id(), current.provider(), current.goal(),
+            Participant.State.ACTIVE, timestamp, current.claims()));
+  }
 
-    /**
-     * Returns a participant lifecycle state by opaque handle or projection key.
-     *
-     * @param handle participant handle
-     * @return lifecycle state when present
-     */
-    public synchronized Optional<Participant.State> participantState(String handle) {
-        return participantKey(handle).map(participantHistory::get)
-                .map(Participant::state);
+  private void handoff(CollaborationCodec.Handoff handoff) throws IOException {
+    WorkIntent current = intents.get(handoff.intentId());
+    if (current == null) {
+      throw new IOException("INTENT_NOT_FOUND");
     }
-
-    /**
-     * Finds claims overlapping any requested selector.
-     *
-     * @param selectors selectors
-     * @return conflicts
-     */
-    public synchronized List<ClaimConflict> conflicts(List<ResourceSelector> selectors) {
-        List<ClaimConflict> result = new ArrayList<>();
-        for (WorkIntent intent : intents.values()) {
-            for (ResourceSelector existing : intent.selectors()) {
-                for (ResourceSelector requested : selectors) {
-                    if (existing.overlaps(requested)) {
-                        result.add(new ClaimConflict(intent.participant(),
-                                intent.intentId()
-                                        .toString(),
-                                existing));
-                    }
-                }
-            }
-        }
-        return List.copyOf(result);
+    if (current.version() != handoff.expectedVersion()) {
+      throw new IOException("CLAIM_EPOCH_STALE");
     }
-
-    private void announce(WorkIntent intent) throws IOException {
-        if (isParticipantTerminal(intent.participant())) {
-            throw new IOException("SESSION_TERMINAL");
-        }
-        Participant existing = participantHistory.get(intent.participant());
-        if (existing != null && existing.state() == Participant.State.REVOKED) {
-            throw new IOException("SESSION_EPOCH_FENCED");
-        }
-        if (intents.containsKey(intent.intentId()) || !conflicts(intent.selectors()).isEmpty()) {
-            throw new IOException("OVERLAPPING_CLAIM");
-        }
-        intents.put(intent.intentId(), intent);
-        String opaqueId = intent.participant()
-                .startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
-        participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
-                intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors(), null));
+    Participant target = participantHistory.get(handoff.target());
+    if (target == null || target.state() != Participant.State.ACTIVE) {
+      throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
     }
-
-    private void release(UUID id) throws IOException {
-        WorkIntent released = intents.remove(id);
-        if (released == null) {
-            throw new IOException("INTENT_NOT_FOUND");
-        }
-        Participant previous = participantHistory.get(released.participant());
-        if (previous != null) {
-            participantHistory.put(released.participant(), new Participant(previous.id(), previous.provider(),
-                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of(),
-                    previous.recoverySnapshotReference()));
-        }
+    WorkIntent transferred = new WorkIntent(current.intentId(),
+        current.projectId(),
+        handoff.target(),
+        current.provider(),
+        current.taskId(),
+        current.goal(),
+        current.acceptance(),
+        current.baseCommit(),
+        current.selectors(),
+        current.version() + 1,
+        current.workGroupId(),
+        current.authorityLineageId(),
+        current.status(),
+        current.role(),
+        current.reviewTargetSelectors(),
+        current.knownDependencies());
+    intents.put(current.intentId(), transferred);
+    Participant previous = participantHistory.get(current.participant());
+    if (previous != null) {
+      participantHistory.put(current.participant(),
+          new Participant(previous.id(), previous.provider(),
+              previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(),
+              List.of()));
     }
+    participantHistory.put(handoff.target(),
+        new Participant(target.id(), target.provider(), target.goal(),
+            Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors(),
+            null));
+  }
 
-    private void repair(RepairLanePayload payload) throws IOException {
-        WorkIntent source = intents.get(payload.sourceIntentId());
-        if (source == null) {
-            throw new IOException("REPAIR_SOURCE_NOT_FOUND");
-        }
-        WorkIntent target = payload.targetIntent();
-        if (target.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new IOException("REPAIR_TARGET_NOT_ANNOUNCED");
-        }
-        if (!source.projectId()
-                .equals(target.projectId())
-                || !source.workGroupId()
-                .equals(target.workGroupId())) {
-            throw new IOException("REPAIR_WORK_GROUP_MISMATCH");
-        }
-        if (!source.authorityLineageId()
-                .equals(target.authorityLineageId())) {
-            throw new IOException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
-        }
-        if (source.intentId()
-                .equals(target.intentId())
-                || source.participant()
-                .equals(target.participant())) {
-            throw new IOException("REPAIR_TARGET_MUST_BE_DISTINCT");
-        }
-        if (!source.selectors()
-                .equals(target.selectors())) {
-            throw new IOException("REPAIR_SCOPE_MISMATCH");
-        }
-        if (payload.snapshotId() != null && !payload.snapshotId()
-                .isBlank()) {
-            if (payload.expectedControlHead()
-                    .isBlank()
-                    || payload.sourceClaimEpoch() != source.version()
-                    || payload.targetClaimEpoch() != target.version()
-                    || target.version() != source.version() + 1L) {
-                throw new IOException("REPAIR_EPOCH_MISMATCH");
-            }
-        }
-        if (intents.values()
-                .stream()
-                .anyMatch(intent ->
-                        !intent.intentId()
-                                .equals(source.intentId())
-                                && intent.participant()
-                                .equals(target.participant()))) {
-            throw new IOException("REPAIR_TARGET_ALREADY_ACTIVE");
-        }
-
-        // The event is validated against this projection before it is written.
-        // Removing the source and announcing the target in this one projection
-        // transition guarantees that no replayed state exposes an unowned gap.
-        release(payload.sourceIntentId());
-        announce(target);
+  private void suspended(String participant) throws IOException {
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    rejectRevoked(current);
+    participantHistory.put(participant,
+        new Participant(current.id(), current.provider(), current.goal(),
+            Participant.State.SUSPENDED, current.lastVerifiedActivity(), current.claims(),
+            current.recoverySnapshotReference()));
+  }
 
-    private void unwind(org.synesis.coordination.domain.task.CompletionUnwoundPayload payload) throws IOException {
-        WorkIntent replacement = payload.replacementIntent();
-        WorkIntent current = intents.get(replacement.intentId());
-        if (current == null || current.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new IOException("UNWIND_SOURCE_NOT_ACTIVE");
-        }
-        if (!current.participant()
-                .equals(replacement.participant())
-                || replacement.version() <= current.version()
-                || !current.selectors()
-                .equals(replacement.selectors())) {
-            throw new IOException("UNWIND_EPOCH_OR_SCOPE_MISMATCH");
-        }
-        intents.put(replacement.intentId(), replacement);
-        Participant previous = participantHistory.get(replacement.participant());
-        if (previous != null) {
-            participantHistory.put(replacement.participant(), new Participant(previous.id(), previous.provider(),
-                    replacement.goal(), Participant.State.ACTIVE, previous.lastVerifiedActivity(),
-                    replacement.selectors(), previous.recoverySnapshotReference()));
-        }
+  private void recoveryHeld(CollaborationCodec.Recovery recovery) throws IOException {
+    String participant = recovery.participant();
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    if (current.state() != Participant.State.SUSPENDED
+        && current.state() != Participant.State.RECOVERY_HELD) {
+      throw new IOException("RECOVERY_NOT_SUSPENDED");
+    }
+    participantHistory.put(participant,
+        new Participant(current.id(), current.provider(), current.goal(),
+            Participant.State.RECOVERY_HELD, current.lastVerifiedActivity(), current.claims(),
+            recovery.snapshotReference()));
+  }
 
-    private void request(CoordinationRequest request) throws IOException {
-        if (isParticipantTerminal(request.requester()) || isParticipantTerminal(request.target())) {
-            throw new IOException("SESSION_TERMINAL");
-        }
-        if (requests.containsKey(request.requestId())) {
-            throw new IOException("REQUEST_EXISTS");
-        }
-        if (!intents.containsKey(request.conflictingIntentId())) {
-            throw new IOException("INTENT_NOT_FOUND");
-        }
-        requests.put(request.requestId(), request);
+  private void continued(CollaborationCodec.Continuation continuation) throws IOException {
+    if (isParticipantTerminal(continuation.sourceParticipant())
+        || isParticipantTerminal(continuation.targetParticipant())) {
+      throw new IOException("SESSION_TERMINAL");
     }
+    WorkIntent source = intents.get(continuation.sourceIntentId());
+    if (source == null || !source.participant()
+        .equals(continuation.sourceParticipant())) {
+      throw new IOException("CONTINUATION_SOURCE_NOT_FOUND");
+    }
+    if (source.version() != continuation.expectedEpoch()) {
+      throw new IOException("CLAIM_EPOCH_STALE");
+    }
+    Participant sourceParticipant = participantHistory.get(continuation.sourceParticipant());
+    if (sourceParticipant == null || sourceParticipant.state() != Participant.State.RECOVERY_HELD) {
+      throw new IOException("RECOVERY_NOT_HELD");
+    }
+    WorkIntent target = continuation.targetIntent();
+    if (!target.participant()
+        .equals(continuation.targetParticipant())
+        || !target.workGroupId()
+        .equals(source.workGroupId())
+        || !target.selectors()
+        .equals(source.selectors())) {
+      throw new IOException("CONTINUATION_TARGET_INVALID");
+    }
+    if (intents.containsKey(target.intentId())) {
+      throw new IOException("CONTINUATION_TARGET_EXISTS");
+    }
+    intents.remove(source.intentId());
+    intents.put(target.intentId(), target);
+    participantHistory.put(continuation.sourceParticipant(), new Participant(sourceParticipant.id(),
+        sourceParticipant.provider(), sourceParticipant.goal(), Participant.State.DETACHED,
+        sourceParticipant.lastVerifiedActivity(), List.of(),
+        sourceParticipant.recoverySnapshotReference()));
+    String targetId = continuation.targetParticipant()
+        .startsWith("agt_")
+        ? continuation.targetParticipant() : "agt_" + continuation.targetParticipant();
+    participantHistory.put(continuation.targetParticipant(),
+        new Participant(targetId, target.provider(),
+            target.goal(), Participant.State.ACTIVE, System.currentTimeMillis(), target.selectors(),
+            null));
+  }
 
-    private void respond(CollaborationCodec.Response response) throws IOException {
-        CoordinationRequest current = requests.get(response.requestId());
-        if (current == null) {
-            throw new IOException("REQUEST_NOT_FOUND");
-        }
-        if (current.status() != CoordinationRequest.Status.PENDING) {
-            if (current.status() == response.status()) {
-                return;
-            }
-            throw new IOException("REQUEST_ALREADY_RESOLVED");
-        }
-        requests.put(current.requestId(), new CoordinationRequest(current.requestId(), current.projectId(),
-                current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
-                response.proposal()
-                        .isBlank() ? current.proposal() : response.proposal(), response.status()));
+  private void revoked(String participant) throws IOException {
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    participantHistory.put(participant, new Participant(current.id(),
+        current.provider(),
+        current.goal(),
+        Participant.State.REVOKED,
+        current.lastVerifiedActivity(),
+        List.of(),
+        current.recoverySnapshotReference()));
+    intents.entrySet()
+        .removeIf(entry -> entry.getValue()
+            .participant()
+            .equals(participant));
+  }
 
-    private void review(ReviewValidationPayload validation) throws IOException {
-        if (!"REJECTED".equals(validation.result())) {
-            return;
-        }
-        WorkIntent current = intents.get(validation.targetIntentId());
-        // Keep historical review records replayable when an older event log
-        // already terminalized its lane before recording the decision. New
-        // reviewed completion rejects this condition at the service boundary;
-        // an active exact lane is the only state that creates a continuation.
-        if (current == null) {
-            return;
-        }
-        if (!current.workGroupId()
-                .equals(validation.workGroupId())
-                || !current.participant()
-                .equals(validation.sourceParticipant())
-                || !current.taskId()
-                .equals(validation.taskId())
-                || current.version() != validation.claimEpoch()
-                || current.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new IOException("REVIEW_TARGET_STALE");
-        }
-        WorkIntent correction = new WorkIntent(current.intentId(), current.projectId(), current.participant(),
-                current.provider(), current.taskId(), current.goal(), current.acceptance(), current.baseCommit(),
-                current.selectors(), current.version() + 1L, current.workGroupId(),
-                current.authorityLineageId(), WorkIntent.Status.ANNOUNCED, current.role(),
-                current.reviewTargetSelectors(), current.knownDependencies());
-        intents.put(correction.intentId(), correction);
-        Participant participant = participantHistory.get(current.participant());
-        if (participant == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        participantHistory.put(current.participant(), new Participant(participant.id(), participant.provider(),
-                correction.goal(), Participant.State.ACTIVE, participant.lastVerifiedActivity(),
-                correction.selectors(), participant.recoverySnapshotReference()));
-    }
+  private void acknowledge(UUID itemId) {
+    acknowledgedInboxItems.add(itemId);
+  }
 
-    private void heartbeat(String participant, long timestamp) throws IOException {
-        if (isParticipantTerminal(participant)) {
-            throw new IOException("SESSION_TERMINAL");
-        }
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        if (current.state() == Participant.State.REVOKED
-                || current.state() == Participant.State.COMPLETED
-                || current.state() == Participant.State.CANCELLED
-                || current.state() == Participant.State.DETACHED) {
-            throw new IOException("SESSION_EPOCH_FENCED");
-        }
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.ACTIVE, timestamp, current.claims()));
+  private void cancelled(String participant) throws IOException {
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    rejectRevoked(current);
+    participantHistory.put(participant, new Participant(current.id(),
+        current.provider(),
+        current.goal(),
+        Participant.State.CANCELLED,
+        current.lastVerifiedActivity(),
+        List.of(),
+        current.recoverySnapshotReference()));
+    intents.entrySet()
+        .removeIf(entry -> entry.getValue()
+            .participant()
+            .equals(participant));
+  }
 
-    private void handoff(CollaborationCodec.Handoff handoff) throws IOException {
-        WorkIntent current = intents.get(handoff.intentId());
-        if (current == null) {
-            throw new IOException("INTENT_NOT_FOUND");
-        }
-        if (current.version() != handoff.expectedVersion()) {
-            throw new IOException("CLAIM_EPOCH_STALE");
-        }
-        Participant target = participantHistory.get(handoff.target());
-        if (target == null || target.state() != Participant.State.ACTIVE) {
-            throw new IOException("HANDOFF_TARGET_NOT_ACTIVE");
-        }
-        WorkIntent transferred = new WorkIntent(current.intentId(),
-                current.projectId(),
-                handoff.target(),
-                current.provider(),
-                current.taskId(),
-                current.goal(),
-                current.acceptance(),
-                current.baseCommit(),
-                current.selectors(),
-                current.version() + 1,
-                current.workGroupId(),
-                current.authorityLineageId(),
-                current.status(),
-                current.role(),
-                current.reviewTargetSelectors(),
-                current.knownDependencies());
-        intents.put(current.intentId(), transferred);
-        Participant previous = participantHistory.get(current.participant());
-        if (previous != null) {
-            participantHistory.put(current.participant(), new Participant(previous.id(), previous.provider(),
-                    previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(), List.of()));
-        }
-        participantHistory.put(handoff.target(), new Participant(target.id(), target.provider(), target.goal(),
-                Participant.State.ACTIVE, target.lastVerifiedActivity(), transferred.selectors(), null));
+  private void detached(String participant) throws IOException {
+    Participant current = participantHistory.get(participant);
+    if (current == null) {
+      throw new IOException("PARTICIPANT_NOT_FOUND");
     }
+    rejectRevoked(current);
+    participantHistory.put(participant,
+        new Participant(current.id(), current.provider(), current.goal(),
+            Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
+            current.recoverySnapshotReference()));
+    intents.entrySet()
+        .removeIf(entry -> entry.getValue()
+            .participant()
+            .equals(participant));
+  }
 
-    private void suspended(String participant) throws IOException {
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        rejectRevoked(current);
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.SUSPENDED, current.lastVerifiedActivity(), current.claims(),
-                current.recoverySnapshotReference()));
+  private void terminalize(ProviderSessionTerminalPayload payload, long eventSequence)
+      throws IOException {
+    if (payload.validatedRevision() != eventSequence - 1L) {
+      throw new IOException("TERMINAL_REVISION_STALE");
     }
+    ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionId());
+    if (previous != null) {
+      if (!previous.equals(payload)) {
+        throw new IOException("TERMINAL_SESSION_CONFLICT");
+      }
+      return;
+    }
+    if (terminalSessions.values()
+        .stream()
+        .anyMatch(existing -> existing.participant()
+            .equals(payload.participant()))) {
+      throw new IOException("TERMINAL_PARTICIPANT_CONFLICT");
+    }
+    terminalSessions.put(payload.sessionId(), payload);
+  }
 
-    private void recoveryHeld(CollaborationCodec.Recovery recovery) throws IOException {
-        String participant = recovery.participant();
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        if (current.state() != Participant.State.SUSPENDED && current.state() != Participant.State.RECOVERY_HELD) {
-            throw new IOException("RECOVERY_NOT_SUSPENDED");
-        }
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.RECOVERY_HELD, current.lastVerifiedActivity(), current.claims(),
-                recovery.snapshotReference()));
+  private void complete(NoChangeCompletion completion, long eventSequence) throws IOException {
+    NoChangeCompletion previous = noChangeCompletions.get(completion.intentId());
+    if (previous != null) {
+      if (!previous.equals(completion)) {
+        throw new IOException("NO_CHANGE_COMPLETION_CONFLICT");
+      }
+      return;
     }
-
-    private void continued(CollaborationCodec.Continuation continuation) throws IOException {
-        if (isParticipantTerminal(continuation.sourceParticipant())
-                || isParticipantTerminal(continuation.targetParticipant())) {
-            throw new IOException("SESSION_TERMINAL");
-        }
-        WorkIntent source = intents.get(continuation.sourceIntentId());
-        if (source == null || !source.participant()
-                .equals(continuation.sourceParticipant())) {
-            throw new IOException("CONTINUATION_SOURCE_NOT_FOUND");
-        }
-        if (source.version() != continuation.expectedEpoch()) {
-            throw new IOException("CLAIM_EPOCH_STALE");
-        }
-        Participant sourceParticipant = participantHistory.get(continuation.sourceParticipant());
-        if (sourceParticipant == null || sourceParticipant.state() != Participant.State.RECOVERY_HELD) {
-            throw new IOException("RECOVERY_NOT_HELD");
-        }
-        WorkIntent target = continuation.targetIntent();
-        if (!target.participant()
-                .equals(continuation.targetParticipant())
-                || !target.workGroupId()
-                .equals(source.workGroupId())
-                || !target.selectors()
-                .equals(source.selectors())) {
-            throw new IOException("CONTINUATION_TARGET_INVALID");
-        }
-        if (intents.containsKey(target.intentId())) {
-            throw new IOException("CONTINUATION_TARGET_EXISTS");
-        }
-        intents.remove(source.intentId());
-        intents.put(target.intentId(), target);
-        participantHistory.put(continuation.sourceParticipant(), new Participant(sourceParticipant.id(),
-                sourceParticipant.provider(), sourceParticipant.goal(), Participant.State.DETACHED,
-                sourceParticipant.lastVerifiedActivity(), List.of(), sourceParticipant.recoverySnapshotReference()));
-        String targetId = continuation.targetParticipant()
-                .startsWith("agt_")
-                ? continuation.targetParticipant() : "agt_" + continuation.targetParticipant();
-        participantHistory.put(continuation.targetParticipant(), new Participant(targetId, target.provider(),
-                target.goal(), Participant.State.ACTIVE, System.currentTimeMillis(), target.selectors(), null));
+    if (completion.expectedRevision() != eventSequence - 1L) {
+      throw new IOException("COMPLETION_REVISION_STALE");
     }
-
-    private void revoked(String participant) throws IOException {
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        participantHistory.put(participant, new Participant(current.id(),
-                current.provider(),
-                current.goal(),
-                Participant.State.REVOKED,
-                current.lastVerifiedActivity(),
-                List.of(),
-                current.recoverySnapshotReference()));
-        intents.entrySet()
-                .removeIf(entry -> entry.getValue()
-                        .participant()
-                        .equals(participant));
+    WorkIntent current = intents.get(completion.intentId());
+    if (current == null) {
+      throw new IOException("INTENT_NOT_FOUND");
     }
-
-    private void acknowledge(UUID itemId) {
-        acknowledgedInboxItems.add(itemId);
+    if (!current.workGroupId()
+        .equals(completion.workGroupId())
+        || !current.participant()
+        .equals(completion.participant())
+        || !current.provider()
+        .equals(completion.provider())
+        || !current.authorityLineageId()
+        .equals(completion.authorityLineageId())
+        || current.version() != completion.claimEpoch()
+        || !current.baseCommit()
+        .equals(completion.workspaceCommit())) {
+      throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
     }
-
-    private void cancelled(String participant) throws IOException {
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        rejectRevoked(current);
-        participantHistory.put(participant, new Participant(current.id(),
-                current.provider(),
-                current.goal(),
-                Participant.State.CANCELLED,
-                current.lastVerifiedActivity(),
-                List.of(),
-                current.recoverySnapshotReference()));
-        intents.entrySet()
-                .removeIf(entry -> entry.getValue()
-                        .participant()
-                        .equals(participant));
+    intents.remove(completion.intentId());
+    noChangeCompletions.put(completion.intentId(), completion);
+    Participant previousParticipant = participantHistory.get(current.participant());
+    if (previousParticipant != null) {
+      participantHistory.put(current.participant(), new Participant(previousParticipant.id(),
+          previousParticipant.provider(), previousParticipant.goal(), Participant.State.COMPLETED,
+          previousParticipant.lastVerifiedActivity(), List.of(),
+          previousParticipant.recoverySnapshotReference()));
     }
-
-    private void detached(String participant) throws IOException {
-        Participant current = participantHistory.get(participant);
-        if (current == null) {
-            throw new IOException("PARTICIPANT_NOT_FOUND");
-        }
-        rejectRevoked(current);
-        participantHistory.put(participant, new Participant(current.id(), current.provider(), current.goal(),
-                Participant.State.DETACHED, current.lastVerifiedActivity(), List.of(),
-                current.recoverySnapshotReference()));
-        intents.entrySet()
-                .removeIf(entry -> entry.getValue()
-                        .participant()
-                        .equals(participant));
-    }
-
-    private void terminalize(ProviderSessionTerminalPayload payload, long eventSequence) throws IOException {
-        if (payload.validatedRevision() != eventSequence - 1L) {
-            throw new IOException("TERMINAL_REVISION_STALE");
-        }
-        ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionId());
-        if (previous != null) {
-            if (!previous.equals(payload)) {
-                throw new IOException("TERMINAL_SESSION_CONFLICT");
-            }
-            return;
-        }
-        if (terminalSessions.values()
-                .stream()
-                .anyMatch(existing -> existing.participant()
-                        .equals(payload.participant()))) {
-            throw new IOException("TERMINAL_PARTICIPANT_CONFLICT");
-        }
-        terminalSessions.put(payload.sessionId(), payload);
-    }
-
-    private void complete(NoChangeCompletion completion, long eventSequence) throws IOException {
-        NoChangeCompletion previous = noChangeCompletions.get(completion.intentId());
-        if (previous != null) {
-            if (!previous.equals(completion)) {
-                throw new IOException("NO_CHANGE_COMPLETION_CONFLICT");
-            }
-            return;
-        }
-        if (completion.expectedRevision() != eventSequence - 1L) {
-            throw new IOException("COMPLETION_REVISION_STALE");
-        }
-        WorkIntent current = intents.get(completion.intentId());
-        if (current == null) {
-            throw new IOException("INTENT_NOT_FOUND");
-        }
-        if (!current.workGroupId()
-                .equals(completion.workGroupId())
-                || !current.participant()
-                .equals(completion.participant())
-                || !current.provider()
-                .equals(completion.provider())
-                || !current.authorityLineageId()
-                .equals(completion.authorityLineageId())
-                || current.version() != completion.claimEpoch()
-                || !current.baseCommit()
-                .equals(completion.workspaceCommit())) {
-            throw new IOException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
-        }
-        intents.remove(completion.intentId());
-        noChangeCompletions.put(completion.intentId(), completion);
-        Participant previousParticipant = participantHistory.get(current.participant());
-        if (previousParticipant != null) {
-            participantHistory.put(current.participant(), new Participant(previousParticipant.id(),
-                    previousParticipant.provider(), previousParticipant.goal(), Participant.State.COMPLETED,
-                    previousParticipant.lastVerifiedActivity(), List.of(),
-                    previousParticipant.recoverySnapshotReference()));
-        }
-    }
+  }
 }

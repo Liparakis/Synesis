@@ -74,8 +74,11 @@ version-directory layouts are migration-only.
 - **Real-agent validation**: the attempted noninteractive Codex run did not
   establish project-hook trust, so real-agent enforcement remains
   `NOT_COMPLETED`.
-- **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its guardrail (
+- **Harness Integration Scope**: Synesis enforces constraints at integration points that invoke its
+  guardrail (
   `check-action` or `hook claude`).
-- **Claude Code Adapter Scope**: Enforces supported structured file-edit tools (`Edit`, `Write`, `str_replace_editor`,
-  `write_file`, `file_edit`, `file_write`, `NotebookEdit`). It emits `UNSUPPORTED` diagnostics on stderr for raw
+- **Claude Code Adapter Scope**: Enforces supported structured file-edit tools (`Edit`, `Write`,
+  `str_replace_editor`,
+  `write_file`, `file_edit`, `file_write`, `NotebookEdit`). It emits `UNSUPPORTED` diagnostics on
+  stderr for raw
   un-parsed shell commands (`Bash`).

@@ -11,23 +11,23 @@ import java.util.HexFormat;
  */
 public final class PlanIntegrity {
 
-    private PlanIntegrity() {
-    }
+  private PlanIntegrity() {
+  }
 
-    /**
-     * Computes the SHA-256 digest of UTF-8 text.
-     *
-     * @param text canonical plan text
-     * @return lowercase hexadecimal SHA-256 digest
-     * @throws IOException if the required digest algorithm is unavailable
-     */
-    public static String sha256Utf8(String text) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of()
-                    .formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException failure) {
-            throw new IOException("SHA-256 algorithm unavailable", failure);
-        }
+  /**
+   * Computes the SHA-256 digest of UTF-8 text.
+   *
+   * @param text canonical plan text
+   * @return lowercase hexadecimal SHA-256 digest
+   * @throws IOException if the required digest algorithm is unavailable
+   */
+  public static String sha256Utf8(String text) throws IOException {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of()
+          .formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException failure) {
+      throw new IOException("SHA-256 algorithm unavailable", failure);
     }
+  }
 }

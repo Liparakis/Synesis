@@ -66,10 +66,11 @@ The source trace was:
 
 Changed:
 
-- `workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java`
-  now recognizes only paths under `__pycache__/` as this additional ephemeral
-  runtime category in both stale-cleanliness and confirmed-user-change
-  classification.
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSessionBindingService.java`
+now recognizes only paths under `__pycache__/` as this additional ephemeral
+runtime category in both stale-cleanliness and confirmed-user-change
+classification.
 - `workspace/src/test/java/org/synesis/workspace/ProviderSessionBindingServiceTest.java`
   adds deterministic coverage proving Python bytecode-only stale recovery
   preserves the session and reallocates safely, while real untracked

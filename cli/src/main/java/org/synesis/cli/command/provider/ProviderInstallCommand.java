@@ -13,44 +13,44 @@ import picocli.CommandLine.Parameters;
 @Command(name = "install", description = "Install a provider integration.", mixinStandardHelpOptions = true)
 public final class ProviderInstallCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Parameters(index = "0", description = "Provider identifier.")
-    @SuppressWarnings({"unused", "FieldCanBeLocal"})
-    private String provider;
-    @Option(names = "--project", description = "Project directory.")
-    private String project;
+  private final CliRuntime runtime;
+  @Parameters(index = "0", description = "Provider identifier.")
+  @SuppressWarnings({"unused", "FieldCanBeLocal"})
+  private String provider;
+  @Option(names = "--project", description = "Project directory.")
+  private String project;
 
-    /**
-     * Creates the command.
-     *
-     * @param runtime composed runtime
-     */
-    public ProviderInstallCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
+  /**
+   * Creates the command.
+   *
+   * @param runtime composed runtime
+   */
+  public ProviderInstallCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
 
-    /**
-     * Installs the provider. @return exit code
-     */
-    @Override
-    public Integer call() {
-        return operate(provider);
-    }
+  /**
+   * Installs the provider. @return exit code
+   */
+  @Override
+  public Integer call() {
+    return operate(provider);
+  }
 
-    private int operate(String id) {
-        try {
-            var location = runtime.projectService()
-                    .require(Path.of(project == null ? "." : project));
-            var result = runtime.providerService()
-                    .install(location, id);
-            result.values()
-                    .forEach((key, value) -> runtime.terminal()
-                            .stdout(key + "=" + value));
-            return result.exitCode();
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return 10;
-        }
+  private int operate(String id) {
+    try {
+      var location = runtime.projectService()
+          .require(Path.of(project == null ? "." : project));
+      var result = runtime.providerService()
+          .install(location, id);
+      result.values()
+          .forEach((key, value) -> runtime.terminal()
+              .stdout(key + "=" + value));
+      return result.exitCode();
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("ERROR=PROJECT_NOT_CONFIGURED");
+      return 10;
     }
+  }
 }

@@ -29,344 +29,354 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 @SuppressWarnings("TextBlockMigration")
 class SyntheticTwoProcessCollaborationTest {
 
-    @TempDir
-    Path tempDir;
+  @TempDir
+  Path tempDir;
 
-    @SuppressWarnings("FieldCanBeLocal")
-    private Path projectRoot;
-    private McpProtocolHandler requesterHandler;
-    private McpProtocolHandler ownerHandler;
-    private ProviderSessionBindingService.Binding b1;
-    private ProviderSessionBindingService.Binding b2;
+  @SuppressWarnings("FieldCanBeLocal")
+  private Path projectRoot;
+  private McpProtocolHandler requesterHandler;
+  private McpProtocolHandler ownerHandler;
+  private ProviderSessionBindingService.Binding b1;
+  private ProviderSessionBindingService.Binding b2;
 
-    private static void git(Path root, String... args) throws Exception {
-        String[] cmd = new String[args.length + 3];
-        cmd[0] = "git";
-        cmd[1] = "-C";
-        cmd[2] = root.toString();
-        System.arraycopy(args, 0, cmd, 3, args.length);
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
-                .start();
-        p.getInputStream()
-                .readAllBytes();
-        if (p.waitFor() != 0) {
-            throw new IllegalStateException("git failed");
-        }
+  private static void git(Path root, String... args) throws Exception {
+    String[] cmd = new String[args.length + 3];
+    cmd[0] = "git";
+    cmd[1] = "-C";
+    cmd[2] = root.toString();
+    System.arraycopy(args, 0, cmd, 3, args.length);
+    Process p = new ProcessBuilder(cmd).redirectErrorStream(true)
+        .start();
+    p.getInputStream()
+        .readAllBytes();
+    if (p.waitFor() != 0) {
+      throw new IllegalStateException("git failed");
+    }
+  }
+
+  private static void commitIfNeeded(Path root) throws Exception {
+    Process process = new ProcessBuilder("git", "-C", root.toString(), "status", "--porcelain")
+        .redirectErrorStream(true)
+        .start();
+    String output = new String(process.getInputStream()
+        .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    if (process.waitFor() != 0) {
+      throw new IllegalStateException("git status failed");
+    }
+    if (!output.isBlank()) {
+      git(root, "commit", "-m", "Commit agent session files");
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String extractResultField(String jsonRpcRes) {
+    Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+    Map<String, Object> result = (Map<String, Object>) map.get("result");
+    List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+    String text = (String) content.getFirst()
+        .get("text");
+    Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+    Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
+    return innerResult != null ? (String) innerResult.get("capabilityRequestHandle") : null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String extractResponseStatus(String jsonRpcRes) {
+    Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+    Map<String, Object> result = (Map<String, Object>) map.get("result");
+    List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+    String text = (String) content.getFirst()
+        .get("text");
+    Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+    return (String) parsed.get("status");
+  }
+
+  @BeforeEach
+  void setUp() throws Exception {
+    projectRoot = tempDir.resolve("synthetic-collaboration-test");
+    Files.createDirectories(projectRoot);
+
+    git(projectRoot, "init");
+    git(projectRoot, "config", "user.name", "Test User");
+    git(projectRoot, "config", "user.email", "test@example.com");
+    Files.writeString(projectRoot.resolve("README.md"),
+        "# Synthetic Two Process Collaboration Test\n");
+    Files.writeString(projectRoot.resolve("pyproject.toml"),
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n");
+    Files.createDirectories(projectRoot.resolve("tests"));
+    Files.writeString(projectRoot.resolve("tests/test_smoke.py"),
+        "def test_smoke():\n    assert True\n");
+    Files.writeString(projectRoot.resolve(".gitignore"), ".synesis/\n");
+    git(projectRoot, "add", ".");
+    git(projectRoot, "commit", "-m", "Initial commit");
+
+    ProjectApplicationService projectService = new ProjectApplicationService();
+    projectService.init(projectRoot);
+    var location = projectService.locate(projectRoot);
+    McpProviderTestSupport.install(location, "codex");
+    McpProviderTestSupport.install(location, "claude");
+    new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
+    new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
+    git(projectRoot, "add", ".");
+    commitIfNeeded(projectRoot);
+
+    location = projectService.locate(projectRoot);
+    var bindingService = new ProviderSessionBindingService();
+
+    AgentSessionService sessionService = new AgentSessionService();
+    sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+        "claude",
+        "inst-req-1",
+        null,
+        false));
+    sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
+        "codex",
+        "inst-owner-1",
+        null,
+        false));
+
+    git(projectRoot, "add", ".");
+    commitIfNeeded(projectRoot);
+
+    var bindings1 = bindingService.list(location, "claude");
+    if (!bindings1.isEmpty() && bindings1.getLast()
+        .worktreePath() != null) {
+      bindingService.verifyWorkspaceTrust(location,
+          "claude",
+          bindings1.getLast()
+              .sessionId(),
+          Path.of(bindings1.getLast()
+              .worktreePath()));
+    }
+    var bindings2 = bindingService.list(location, "codex");
+    if (!bindings2.isEmpty() && bindings2.getLast()
+        .worktreePath() != null) {
+      bindingService.verifyWorkspaceTrust(location,
+          "codex",
+          bindings2.getLast()
+              .sessionId(),
+          Path.of(bindings2.getLast()
+              .worktreePath()));
     }
 
-    private static void commitIfNeeded(Path root) throws Exception {
-        Process process = new ProcessBuilder("git", "-C", root.toString(), "status", "--porcelain")
-                .redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream()
-                .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException("git status failed");
-        }
-        if (!output.isBlank()) {
-            git(root, "commit", "-m", "Commit agent session files");
-        }
-    }
+    b1 = bindingService.find(location, "claude", "inst-req-1")
+        .orElseThrow();
+    b2 = bindingService.find(location, "codex", "inst-owner-1")
+        .orElseThrow();
 
-    @SuppressWarnings("unchecked")
-    private static String extractResultField(String jsonRpcRes) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.getFirst()
-                .get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
-        return innerResult != null ? (String) innerResult.get("capabilityRequestHandle") : null;
-    }
+    var identity = new IdentityBootstrap(location.profile()
+        .resolve("link")).loadOrCreate()
+        .identity();
+    PredictionEventStore store = new PredictionEventStore(
+        location.root()
+            .resolve(".synesis/coordination"), location.projectId());
 
-    @SuppressWarnings("unchecked")
-    private static String extractResponseStatus(String jsonRpcRes) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.getFirst()
-                .get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        return (String) parsed.get("status");
-    }
+    // 1. Task for owner (Codex)
+    UUID ownerTaskId = UUID.randomUUID();
+    org.synesis.coordination.domain.task.CoordinationTask ownerTask = new org.synesis.coordination.domain.task.CoordinationTask(
+        ownerTaskId, location.projectId(), "Product Query Task", "catalog.product-query",
+        identity.nodeId(), b2.supervisorId(), b2.workerId());
+    CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(),
+        location.projectId(),
+        ownerTaskId,
+        PredictionEventType.TASK_CREATED,
+        identity.nodeId(),
+        ownerTask.encoded(),
+        identity);
+    store.append(ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd1.encoded(),
+        identity);
 
-    @BeforeEach
-    void setUp() throws Exception {
-        projectRoot = tempDir.resolve("synthetic-collaboration-test");
-        Files.createDirectories(projectRoot);
+    org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
+        ownerTaskId, identity.nodeId(), b2.supervisorId(), b2.workerId());
+    CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(),
+        location.projectId(),
+        ownerTaskId,
+        PredictionEventType.TASK_CLAIMED,
+        identity.nodeId(),
+        claim1.encoded(),
+        identity);
+    store.append(ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd2.encoded(),
+        identity);
 
-        git(projectRoot, "init");
-        git(projectRoot, "config", "user.name", "Test User");
-        git(projectRoot, "config", "user.email", "test@example.com");
-        Files.writeString(projectRoot.resolve("README.md"), "# Synthetic Two Process Collaboration Test\n");
-        Files.writeString(projectRoot.resolve("pyproject.toml"), "[tool.pytest.ini_options]\ntestpaths = ['tests']\n");
-        Files.createDirectories(projectRoot.resolve("tests"));
-        Files.writeString(projectRoot.resolve("tests/test_smoke.py"), "def test_smoke():\n    assert True\n");
-        Files.writeString(projectRoot.resolve(".gitignore"), ".synesis/\n");
-        git(projectRoot, "add", ".");
-        git(projectRoot, "commit", "-m", "Initial commit");
+    OwnershipClaim claim2 = new OwnershipClaim(ownerTaskId,
+        "catalog.product-query",
+        identity.nodeId(),
+        b2.supervisorId(),
+        List.of("catalog"),
+        1L);
+    CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(),
+        location.projectId(),
+        ownerTaskId,
+        PredictionEventType.OWNERSHIP_CLAIMED,
+        identity.nodeId(),
+        claim2.encoded(),
+        identity);
+    store.append(ownerTaskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(),
+        cmd3.encoded(), identity);
 
-        ProjectApplicationService projectService = new ProjectApplicationService();
-        projectService.init(projectRoot);
-        var location = projectService.locate(projectRoot);
-        McpProviderTestSupport.install(location, "codex");
-        McpProviderTestSupport.install(location, "claude");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
-        new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
-        git(projectRoot, "add", ".");
-        commitIfNeeded(projectRoot);
+    // 2. Task for requester (Claude)
+    UUID reqTaskId = UUID.randomUUID();
+    org.synesis.coordination.domain.task.CoordinationTask reqTask = new org.synesis.coordination.domain.task.CoordinationTask(
+        reqTaskId, location.projectId(), "Product CLI Task", "catalog.product-cli",
+        identity.nodeId(), b1.supervisorId(), b1.workerId());
+    CoordinationCommand cmd4 = CoordinationCommand.create(UUID.randomUUID(),
+        location.projectId(),
+        reqTaskId,
+        PredictionEventType.TASK_CREATED,
+        identity.nodeId(),
+        reqTask.encoded(),
+        identity);
+    store.append(reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd4.encoded(),
+        identity);
 
-        location = projectService.locate(projectRoot);
-        var bindingService = new ProviderSessionBindingService();
+    org.synesis.coordination.domain.task.TaskClaim claim3 = new org.synesis.coordination.domain.task.TaskClaim(
+        reqTaskId, identity.nodeId(), b1.supervisorId(), b1.workerId());
+    CoordinationCommand cmd5 = CoordinationCommand.create(UUID.randomUUID(),
+        location.projectId(),
+        reqTaskId,
+        PredictionEventType.TASK_CLAIMED,
+        identity.nodeId(),
+        claim3.encoded(),
+        identity);
+    store.append(reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd5.encoded(),
+        identity);
 
-        AgentSessionService sessionService = new AgentSessionService();
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
-                "claude",
-                "inst-req-1",
-                null,
-                false));
-        sessionService.ensureSession(new AgentSessionService.SessionResolutionRequest(projectRoot,
-                "codex",
-                "inst-owner-1",
-                null,
-                false));
+    requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "claude", "inst-req-1");
+    ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
 
-        git(projectRoot, "add", ".");
-        commitIfNeeded(projectRoot);
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    collaboration.announce(projectRoot, "claude", "inst-req-1",
+        "Implement the product CLI", "Publish the CLI implementation",
+        List.of(ResourceSelector.pathExact("ProductCli.java")));
+    collaboration.announce(projectRoot, "codex", "inst-owner-1",
+        "Implement the product query service", "Publish the query implementation",
+        List.of(ResourceSelector.pathExact("ProductQuery.java")));
 
-        var bindings1 = bindingService.list(location, "claude");
-        if (!bindings1.isEmpty() && bindings1.getLast()
-                .worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location,
-                    "claude",
-                    bindings1.getLast()
-                            .sessionId(),
-                    Path.of(bindings1.getLast()
-                            .worktreePath()));
-        }
-        var bindings2 = bindingService.list(location, "codex");
-        if (!bindings2.isEmpty() && bindings2.getLast()
-                .worktreePath() != null) {
-            bindingService.verifyWorkspaceTrust(location,
-                    "codex",
-                    bindings2.getLast()
-                            .sessionId(),
-                    Path.of(bindings2.getLast()
-                            .worktreePath()));
-        }
+    String initReq =
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
+            + projectRoot.toUri()
+            .toString()
+            .replace("\\", "/") + "\"}}";
+    requesterHandler.handleMessage(initReq);
+    ownerHandler.handleMessage(initReq);
+  }
 
-        b1 = bindingService.find(location, "claude", "inst-req-1")
-                .orElseThrow();
-        b2 = bindingService.find(location, "codex", "inst-owner-1")
-                .orElseThrow();
+  @Test
+  void fullSlice3TaskCompletionAndIntegrationFlow() throws Exception {
+    // 1. Requester describes capability
+    String descJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 2,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"request_coordination\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"kind\": \"capability_request\",\n" +
+        "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
+        "      \"contract\": {\n" +
+        "        \"inputs\": \"UUID id\",\n" +
+        "        \"output\": \"Optional<Product>\",\n" +
+        "        \"requiredBehavior\": [\"Return product when found\"],\n" +
+        "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
+        "      }}\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String descRes = requesterHandler.handleMessage(descJson);
+    assertNotNull(descRes);
+    String reqHandle = extractResultField(descRes);
+    assertNotNull(reqHandle);
 
-        var identity = new IdentityBootstrap(location.profile()
-                .resolve("link")).loadOrCreate()
-                .identity();
-        PredictionEventStore store = new PredictionEventStore(
-                location.root()
-                        .resolve(".synesis/coordination"), location.projectId());
+    // 2. Owner accepts capability request
+    String acceptJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 3,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"respond_coordination\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"kind\": \"capability_response\",\n" +
+        "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle
+        + "\", \"response\": \"accept\"}\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String acceptRes = ownerHandler.handleMessage(acceptJson);
+    assertNotNull(acceptRes);
 
-        // 1. Task for owner (Codex)
-        UUID ownerTaskId = UUID.randomUUID();
-        org.synesis.coordination.domain.task.CoordinationTask ownerTask = new org.synesis.coordination.domain.task.CoordinationTask(
-                ownerTaskId, location.projectId(), "Product Query Task", "catalog.product-query",
-                identity.nodeId(), b2.supervisorId(), b2.workerId());
-        CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(),
-                location.projectId(),
-                ownerTaskId,
-                PredictionEventType.TASK_CREATED,
-                identity.nodeId(),
-                ownerTask.encoded(),
-                identity);
-        store.append(ownerTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd1.encoded(), identity);
+    // 3. Owner writes implementation code and publishes
+    Path ownerWt = Path.of(b2.worktreePath());
+    Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
+    git(ownerWt, "add", ".");
+    git(ownerWt, "commit", "-m", "Implement ProductQuery");
 
-        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(
-                ownerTaskId, identity.nodeId(), b2.supervisorId(), b2.workerId());
-        CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(),
-                location.projectId(),
-                ownerTaskId,
-                PredictionEventType.TASK_CLAIMED,
-                identity.nodeId(),
-                claim1.encoded(),
-                identity);
-        store.append(ownerTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd2.encoded(), identity);
+    String pubJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 4,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"publish_capability_implementation\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" +
+        "      \"summary\": \"Implemented product query\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String pubRes = ownerHandler.handleMessage(pubJson);
+    assertNotNull(pubRes);
 
-        OwnershipClaim claim2 = new OwnershipClaim(ownerTaskId,
-                "catalog.product-query",
-                identity.nodeId(),
-                b2.supervisorId(),
-                List.of("catalog"),
-                1L);
-        CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(),
-                location.projectId(),
-                ownerTaskId,
-                PredictionEventType.OWNERSHIP_CLAIMED,
-                identity.nodeId(),
-                claim2.encoded(),
-                identity);
-        store.append(ownerTaskId, PredictionEventType.OWNERSHIP_CLAIMED, identity.nodeId(), cmd3.encoded(), identity);
+    // 4. Requester validates implementation
+    String valJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 5,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"respond_coordination\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"kind\": \"implementation_validation\",\n" +
+        "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000003\", \"capabilityRequestHandle\": \""
+        + reqHandle + "\", \"implementationRevision\": 1, \"result\": \"accepted\"}\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String valRes = requesterHandler.handleMessage(valJson);
+    assertNotNull(valRes);
 
-        // 2. Task for requester (Claude)
-        UUID reqTaskId = UUID.randomUUID();
-        org.synesis.coordination.domain.task.CoordinationTask reqTask = new org.synesis.coordination.domain.task.CoordinationTask(
-                reqTaskId, location.projectId(), "Product CLI Task", "catalog.product-cli",
-                identity.nodeId(), b1.supervisorId(), b1.workerId());
-        CoordinationCommand cmd4 = CoordinationCommand.create(UUID.randomUUID(),
-                location.projectId(),
-                reqTaskId,
-                PredictionEventType.TASK_CREATED,
-                identity.nodeId(),
-                reqTask.encoded(),
-                identity);
-        store.append(reqTaskId, PredictionEventType.TASK_CREATED, identity.nodeId(), cmd4.encoded(), identity);
+    // 5. Owner completes task
+    String ownerCompJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 6,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"finish_lane\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"summary\": \"Product query service complete\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String ownerCompRes = ownerHandler.handleMessage(ownerCompJson);
+    assertNotNull(ownerCompRes);
 
-        org.synesis.coordination.domain.task.TaskClaim claim3 = new org.synesis.coordination.domain.task.TaskClaim(
-                reqTaskId, identity.nodeId(), b1.supervisorId(), b1.workerId());
-        CoordinationCommand cmd5 = CoordinationCommand.create(UUID.randomUUID(),
-                location.projectId(),
-                reqTaskId,
-                PredictionEventType.TASK_CLAIMED,
-                identity.nodeId(),
-                claim3.encoded(),
-                identity);
-        store.append(reqTaskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), cmd5.encoded(), identity);
+    // 6. Requester writes CLI code and completes task
+    Path reqWt = Path.of(b1.worktreePath());
+    Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
+    git(reqWt, "add", ".");
+    git(reqWt, "commit", "-m", "Implement ProductCli");
 
-        requesterHandler = new McpProtocolHandler(sessionService, projectRoot, "claude", "inst-req-1");
-        ownerHandler = new McpProtocolHandler(sessionService, projectRoot, "codex", "inst-owner-1");
-
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        collaboration.announce(projectRoot, "claude", "inst-req-1",
-                "Implement the product CLI", "Publish the CLI implementation",
-                List.of(ResourceSelector.pathExact("ProductCli.java")));
-        collaboration.announce(projectRoot, "codex", "inst-owner-1",
-                "Implement the product query service", "Publish the query implementation",
-                List.of(ResourceSelector.pathExact("ProductQuery.java")));
-
-        String initReq = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\""
-                + projectRoot.toUri()
-                .toString()
-                .replace("\\", "/") + "\"}}";
-        requesterHandler.handleMessage(initReq);
-        ownerHandler.handleMessage(initReq);
-    }
-
-    @Test
-    void fullSlice3TaskCompletionAndIntegrationFlow() throws Exception {
-        // 1. Requester describes capability
-        String descJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 2,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"request_coordination\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"kind\": \"capability_request\",\n" +
-                "      \"payload\": {\"capability\": \"catalog.product-query\",\n" +
-                "      \"contract\": {\n" +
-                "        \"inputs\": \"UUID id\",\n" +
-                "        \"output\": \"Optional<Product>\",\n" +
-                "        \"requiredBehavior\": [\"Return product when found\"],\n" +
-                "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" +
-                "      }}\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String descRes = requesterHandler.handleMessage(descJson);
-        assertNotNull(descRes);
-        String reqHandle = extractResultField(descRes);
-        assertNotNull(reqHandle);
-
-        // 2. Owner accepts capability request
-        String acceptJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 3,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"respond_coordination\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"kind\": \"capability_response\",\n" +
-                "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"accept\"}\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String acceptRes = ownerHandler.handleMessage(acceptJson);
-        assertNotNull(acceptRes);
-
-        // 3. Owner writes implementation code and publishes
-        Path ownerWt = Path.of(b2.worktreePath());
-        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
-        git(ownerWt, "add", ".");
-        git(ownerWt, "commit", "-m", "Implement ProductQuery");
-
-        String pubJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 4,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"publish_capability_implementation\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" +
-                "      \"summary\": \"Implemented product query\"\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String pubRes = ownerHandler.handleMessage(pubJson);
-        assertNotNull(pubRes);
-
-        // 4. Requester validates implementation
-        String valJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 5,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"respond_coordination\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"kind\": \"implementation_validation\",\n" +
-                "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000003\", \"capabilityRequestHandle\": \""
-                + reqHandle + "\", \"implementationRevision\": 1, \"result\": \"accepted\"}\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String valRes = requesterHandler.handleMessage(valJson);
-        assertNotNull(valRes);
-
-        // 5. Owner completes task
-        String ownerCompJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 6,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"finish_lane\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"summary\": \"Product query service complete\"\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String ownerCompRes = ownerHandler.handleMessage(ownerCompJson);
-        assertNotNull(ownerCompRes);
-
-        // 6. Requester writes CLI code and completes task
-        Path reqWt = Path.of(b1.worktreePath());
-        Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
-        git(reqWt, "add", ".");
-        git(reqWt, "commit", "-m", "Implement ProductCli");
-
-        // 6. Requester completes task and triggers integration
-        String reqCompJson = "{\n" +
-                "  \"jsonrpc\": \"2.0\",\n" +
-                "  \"id\": 7,\n" +
-                "  \"method\": \"tools/call\",\n" +
-                "  \"params\": {\n" +
-                "    \"name\": \"finish_lane\",\n" +
-                "    \"arguments\": {\n" +
-                "      \"summary\": \"Product CLI integration complete\"\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        String reqCompRes = requesterHandler.handleMessage(reqCompJson);
-        assertNotNull(reqCompRes);
-        assertEquals("completed", extractResponseStatus(reqCompRes), reqCompRes);
-    }
+    // 6. Requester completes task and triggers integration
+    String reqCompJson = "{\n" +
+        "  \"jsonrpc\": \"2.0\",\n" +
+        "  \"id\": 7,\n" +
+        "  \"method\": \"tools/call\",\n" +
+        "  \"params\": {\n" +
+        "    \"name\": \"finish_lane\",\n" +
+        "    \"arguments\": {\n" +
+        "      \"summary\": \"Product CLI integration complete\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+    String reqCompRes = requesterHandler.handleMessage(reqCompJson);
+    assertNotNull(reqCompRes);
+    assertEquals("completed", extractResponseStatus(reqCompRes), reqCompRes);
+  }
 }

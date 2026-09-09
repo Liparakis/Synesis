@@ -15,18 +15,19 @@ import java.time.Duration;
  * @param maxDiagnostics        maximum retained attempt diagnostics
  */
 public record ConnectionPolicy(int maxCandidatePairs, int maxAttempts, int maxConcurrentAttempts,
-                               Duration staggerDelay, Duration perAttemptTimeout, Duration globalRaceTimeout,
+                               Duration staggerDelay, Duration perAttemptTimeout,
+                               Duration globalRaceTimeout,
                                Duration loserCleanupTimeout, int maxDiagnostics) {
 
-    /**
-     * Validates race limits and ordered timeouts.
-     */
-    public ConnectionPolicy {
-        if (maxConcurrentAttempts < 1 || maxDiagnostics < 1
-                || maxConcurrentAttempts > maxAttempts || maxAttempts > maxCandidatePairs
-                || staggerDelay.isNegative() || perAttemptTimeout.isZero() || perAttemptTimeout.isNegative()
-                || globalRaceTimeout.compareTo(perAttemptTimeout) < 0 || loserCleanupTimeout.isNegative()) {
-            throw new IllegalArgumentException("invalid connection policy");
-        }
+  /**
+   * Validates race limits and ordered timeouts.
+   */
+  public ConnectionPolicy {
+    if (maxConcurrentAttempts < 1 || maxDiagnostics < 1
+        || maxConcurrentAttempts > maxAttempts || maxAttempts > maxCandidatePairs
+        || staggerDelay.isNegative() || perAttemptTimeout.isZero() || perAttemptTimeout.isNegative()
+        || globalRaceTimeout.compareTo(perAttemptTimeout) < 0 || loserCleanupTimeout.isNegative()) {
+      throw new IllegalArgumentException("invalid connection policy");
     }
+  }
 }

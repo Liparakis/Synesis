@@ -3,7 +3,7 @@
 - ID: SYN-009E
 - Priority: P0
 - Title: Synesis maximum-protection commercial release profile
-- Status: ACTIVE
+- Status: COMPLETE FOR PROTECTION-LITE SCOPE; COMMERCIAL MAXIMUM DEFERRED
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
   manifest, leakage, and provenance checks pass; maximum customer/private
   output rejects symbolic links before manifesting/signing and requires
@@ -68,10 +68,11 @@
   destructive anti-debug, host surveillance, customer downgrade flag, product
   protocol redesign, frontend concealment project, production key creation,
   commercial-license commit, public release, push, tag, or remote mutation.
-- Exact next action: obtain an installed, licensed, version-pinned commercial
-  protector and its reviewed adapter/configuration, inject release signing
-  authority, and run the maximum-release acceptance; absent that tool, preserve
-  the passing lite evidence and keep maximum fail-closed.
+- Exact next action: none for the completed free-protection scope. Resume the
+  deferred commercial maximum capability only after an installed, licensed,
+  version-pinned protector, reviewed adapter/configuration, and release signing
+  authority are supplied; until then preserve the passing lite evidence and
+  keep maximum fail-closed.
 
 ## SYN-053
 

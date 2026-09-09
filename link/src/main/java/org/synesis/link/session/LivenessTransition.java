@@ -17,15 +17,15 @@ import java.util.Objects;
 public record LivenessTransition(LivenessState from, LivenessState to,
                                  Duration elapsedPeerSilence) {
 
-    /**
-     * Validates an immutable transition value.
-     */
-    public LivenessTransition {
-        Objects.requireNonNull(from, "from");
-        Objects.requireNonNull(to, "to");
-        Objects.requireNonNull(elapsedPeerSilence, "elapsed peer silence");
-        if (from == to || elapsedPeerSilence.isNegative()) {
-            throw new IllegalArgumentException("invalid liveness transition");
-        }
+  /**
+   * Validates an immutable transition value.
+   */
+  public LivenessTransition {
+    Objects.requireNonNull(from, "from");
+    Objects.requireNonNull(to, "to");
+    Objects.requireNonNull(elapsedPeerSilence, "elapsed peer silence");
+    if (from == to || elapsedPeerSilence.isNegative()) {
+      throw new IllegalArgumentException("invalid liveness transition");
     }
+  }
 }

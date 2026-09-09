@@ -12,348 +12,354 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Captures the semantic staged state of a Git index separately from incidental
- * index bytes such as stat and untracked-cache metadata.
+ * Captures the semantic staged state of a Git index separately from incidental index bytes such as
+ * stat and untracked-cache metadata.
  */
 public final class SemanticIndexFingerprint {
 
-    /**
-     * Bounded output retained for complete structured index inspections.
-     */
-    private static final int INDEX_INSPECTION_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+  /**
+   * Bounded output retained for complete structured index inspections.
+   */
+  private static final int INDEX_INSPECTION_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
-    private SemanticIndexFingerprint() {
+  private SemanticIndexFingerprint() {
+  }
+
+  /**
+   * Captures the current index semantics and raw-byte digest.
+   *
+   * @param repositoryRoot repository worktree
+   * @return semantic index fingerprint
+   * @throws IOException when the index cannot be inspected
+   */
+  public static Fingerprint capture(Path repositoryRoot) throws IOException {
+    Path root = Objects.requireNonNull(repositoryRoot, "repositoryRoot")
+        .toAbsolutePath()
+        .normalize();
+    String raw = rawIndexDigest(root);
+    List<Entry> entries = parseEntries(root);
+    Map<String, List<String>> stages = new LinkedHashMap<>();
+    Map<String, String> blobs = new LinkedHashMap<>();
+    Map<String, String> modes = new LinkedHashMap<>();
+    List<String> unmerged = new ArrayList<>();
+    List<String> intentToAdd = new ArrayList<>();
+    for (Entry entry : entries) {
+      stages.computeIfAbsent(entry.path(), ignored -> new ArrayList<>())
+          .add(Integer.toString(entry.stage()));
+      blobs.put(entry.path(), entry.blob());
+      modes.put(entry.path(), entry.mode());
+      if (entry.stage() != 0 && !unmerged.contains(entry.path())) {
+        unmerged.add(entry.path());
+      }
+      if (entry.intentToAdd()) {
+        intentToAdd.add(entry.path());
+      }
+    }
+    String tree;
+    try {
+      tree = run(root);
+    } catch (IOException unmergedIndex) {
+      tree = "UNMERGED";
+    }
+    List<String> skip = flagPaths(root, 'S', 's');
+    List<String> assume = flagPaths(root, 'h', 'H');
+    boolean sparse = boolConfig(root, "index.sparse");
+    boolean split = boolConfig(root, "core.splitIndex");
+    List<String> extensions = new ArrayList<>();
+    if (sparse) {
+      extensions.add("sparse-index");
+    }
+    if (split) {
+      extensions.add("split-index");
+    }
+    return new Fingerprint(raw, tree, new ArrayList<>(stages.keySet()), blobs, modes,
+        stages, unmerged, intentToAdd, skip, assume, sparse, split, extensions);
+  }
+
+  /**
+   * Compares two captures without treating raw cache bytes as staged work.
+   *
+   * @param before transaction-start fingerprint
+   * @param after  current fingerprint
+   * @return semantic comparison result
+   */
+  public static Comparison compare(Fingerprint before, Fingerprint after) {
+    Objects.requireNonNull(before, "before");
+    Objects.requireNonNull(after, "after");
+    if (!before.relevantExtensions()
+        .equals(after.relevantExtensions())
+        || before.sparseIndexMode() != after.sparseIndexMode()
+        || before.splitIndexMode() != after.splitIndexMode()) {
+      return Comparison.INDEX_EXTENSION_UNSUPPORTED;
+    }
+    if (before.rawIndexDigest()
+        .equals(after.rawIndexDigest())) {
+      return Comparison.EXACT;
+    }
+    return before.semanticEquals(after) ? Comparison.NONSEMANTIC_REFRESH
+        : Comparison.SEMANTIC_STATE_CHANGED;
+  }
+
+  private static List<Entry> parseEntries(Path root) throws IOException {
+    String output = runIndexInspection(root, "ls-files", "--stage", "-z");
+    List<Entry> entries = new ArrayList<>();
+    List<String> intentPaths = intentToAddPaths(root);
+    for (String item : output.split("\\u0000")) {
+      if (item.isBlank()) {
+        continue;
+      }
+      int tab = item.indexOf('\t');
+      if (tab < 0) {
+        throw new IOException("INDEX_CORRUPT");
+      }
+      String[] header = item.substring(0, tab)
+          .split(" ");
+      if (header.length != 3) {
+        throw new IOException("INDEX_CORRUPT");
+      }
+      String blob = header[1];
+      int stage;
+      try {
+        stage = Integer.parseInt(header[2]);
+      } catch (NumberFormatException invalid) {
+        throw new IOException("INDEX_CORRUPT", invalid);
+      }
+      String path = item.substring(tab + 1);
+      entries.add(new Entry(path, header[0], blob, stage, intentPaths.contains(path)));
+    }
+    return List.copyOf(entries);
+  }
+
+  private static List<String> intentToAddPaths(Path root) throws IOException {
+    String output = runIndexInspection(root, "diff", "--diff-filter=A", "--name-only", "-z");
+    List<String> paths = new ArrayList<>();
+    for (String path : output.split("\\u0000")) {
+      if (!path.isBlank()) {
+        paths.add(path);
+      }
+    }
+    return List.copyOf(paths);
+  }
+
+  private static List<String> flagPaths(Path root, char... markers) throws IOException {
+    String output = runIndexInspection(root, "ls-files", "-v", "-z");
+    List<String> paths = new ArrayList<>();
+    for (String item : output.split("\\u0000")) {
+      if (item.length() < 3) {
+        continue;
+      }
+      char marker = item.charAt(0);
+      for (char candidate : markers) {
+        if (marker == candidate) {
+          paths.add(item.substring(2));
+        }
+      }
+    }
+    return List.copyOf(paths);
+  }
+
+  private static boolean boolConfig(Path root, String key) throws IOException {
+    Result result = runResult(root, "config", "--bool", "--get", key);
+    return result.exitCode() == 0 && "true".equalsIgnoreCase(result.output()
+        .trim());
+  }
+
+  private static String rawIndexDigest(Path root) throws IOException {
+    Result result = runResult(root, "rev-parse", "--git-path", "index");
+    if (result.exitCode() != 0) {
+      throw new IOException("INDEX_UNAVAILABLE");
+    }
+    Path index = root.resolve(result.output()
+            .trim())
+        .normalize();
+    if (!Files.exists(index)) {
+      // An unborn repository legitimately has no physical index yet;
+      // represent its empty semantic index deterministically.
+      return hash(new byte[0]);
+    }
+    if (!Files.isRegularFile(index)) {
+      throw new IOException("INDEX_UNAVAILABLE");
+    }
+    try {
+      return hash(Files.readAllBytes(index));
+    } catch (Exception failure) {
+      throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
+    }
+  }
+
+  private static String hash(byte[] bytes) throws IOException {
+    try {
+      return HexFormat.of()
+          .formatHex(MessageDigest.getInstance("SHA-256")
+              .digest(bytes));
+    } catch (Exception failure) {
+      throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
+    }
+  }
+
+  private static String run(Path root) throws IOException {
+    Result result = runResult(root, "write-tree");
+    if (result.exitCode() != 0) {
+      throw new IOException(result.output()
+          .isBlank() ? "GIT_COMMAND_FAILED" : result.output());
+    }
+    return result.output()
+        .trim();
+  }
+
+  private static String runIndexInspection(Path root, String... args) throws IOException {
+    GitProcessRunner.Result result = GitProcessRunner.runResult(root,
+        INDEX_INSPECTION_MAX_OUTPUT_BYTES, args);
+    if (result.exitCode() != 0) {
+      throw new IOException(result.output()
+          .isBlank() ? "GIT_COMMAND_FAILED" : result.output());
+    }
+    return result.output()
+        .trim();
+  }
+
+  private static Result runResult(Path root, String... args) throws IOException {
+    GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
+    return new Result(result.exitCode(), result.output());
+  }
+
+  /**
+   * Semantic comparison categories used by recovery decisions.
+   */
+  public enum Comparison {
+    /**
+     * Raw and semantic identity are unchanged.
+     */
+    EXACT,
+    /**
+     * Raw bytes changed but staged semantics are equivalent.
+     */
+    NONSEMANTIC_REFRESH,
+    /**
+     * Staged semantics changed and cannot be overwritten safely.
+     */
+    SEMANTIC_STATE_CHANGED,
+    /**
+     * Relevant unsupported index mode or extension changed.
+     */
+    INDEX_EXTENSION_UNSUPPORTED
+  }
+
+  /**
+   * Immutable captured index fingerprint.
+   *
+   * @param rawIndexDigest       physical index-file digest
+   * @param indexTreeId          staged tree identity
+   * @param stagedEntryPaths     staged entry paths
+   * @param stagedBlobIds        staged blob IDs by path
+   * @param entryModes           entry modes by path
+   * @param entryStages          index stages by path
+   * @param unmergedEntries      unmerged paths
+   * @param intentToAddFlags     intent-to-add paths
+   * @param skipWorktreeFlags    skip-worktree paths
+   * @param assumeUnchangedFlags assume-unchanged paths
+   * @param sparseIndexMode      whether sparse-index mode is active
+   * @param splitIndexMode       whether split-index mode is active
+   * @param relevantExtensions   relevant index-extension identities
+   */
+  public record Fingerprint(String rawIndexDigest, String indexTreeId,
+                            List<String> stagedEntryPaths,
+                            Map<String, String> stagedBlobIds, Map<String, String> entryModes,
+                            Map<String, List<String>> entryStages, List<String> unmergedEntries,
+                            List<String> intentToAddFlags, List<String> skipWorktreeFlags,
+                            List<String> assumeUnchangedFlags, boolean sparseIndexMode,
+                            boolean splitIndexMode, List<String> relevantExtensions) {
+
+    /**
+     * Copies all collections into immutable values.
+     */
+    public Fingerprint {
+      Objects.requireNonNull(rawIndexDigest, "rawIndexDigest");
+      Objects.requireNonNull(indexTreeId, "indexTreeId");
+      stagedEntryPaths = List.copyOf(stagedEntryPaths);
+      stagedBlobIds = Map.copyOf(stagedBlobIds);
+      entryModes = Map.copyOf(entryModes);
+      entryStages = entryStages.entrySet()
+          .stream()
+          .collect(java.util.stream.Collectors.toUnmodifiableMap(
+              Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
+      unmergedEntries = List.copyOf(unmergedEntries);
+      intentToAddFlags = List.copyOf(intentToAddFlags);
+      skipWorktreeFlags = List.copyOf(skipWorktreeFlags);
+      assumeUnchangedFlags = List.copyOf(assumeUnchangedFlags);
+      relevantExtensions = List.copyOf(relevantExtensions);
     }
 
     /**
-     * Captures the current index semantics and raw-byte digest.
+     * Reconstructs a fingerprint from a JSON-safe diagnostic projection.
      *
-     * @param repositoryRoot repository worktree
-     * @return semantic index fingerprint
-     * @throws IOException when the index cannot be inspected
+     * @param map serialized fingerprint
+     * @return reconstructed fingerprint
      */
-    public static Fingerprint capture(Path repositoryRoot) throws IOException {
-        Path root = Objects.requireNonNull(repositoryRoot, "repositoryRoot")
-                .toAbsolutePath()
-                .normalize();
-        String raw = rawIndexDigest(root);
-        List<Entry> entries = parseEntries(root);
-        Map<String, List<String>> stages = new LinkedHashMap<>();
-        Map<String, String> blobs = new LinkedHashMap<>();
-        Map<String, String> modes = new LinkedHashMap<>();
-        List<String> unmerged = new ArrayList<>();
-        List<String> intentToAdd = new ArrayList<>();
-        for (Entry entry : entries) {
-            stages.computeIfAbsent(entry.path(), ignored -> new ArrayList<>())
-                    .add(Integer.toString(entry.stage()));
-            blobs.put(entry.path(), entry.blob());
-            modes.put(entry.path(), entry.mode());
-            if (entry.stage() != 0 && !unmerged.contains(entry.path())) {
-                unmerged.add(entry.path());
-            }
-            if (entry.intentToAdd()) {
-                intentToAdd.add(entry.path());
-            }
-        }
-        String tree;
-        try {
-            tree = run(root);
-        } catch (IOException unmergedIndex) {
-            tree = "UNMERGED";
-        }
-        List<String> skip = flagPaths(root, 'S', 's');
-        List<String> assume = flagPaths(root, 'h', 'H');
-        boolean sparse = boolConfig(root, "index.sparse");
-        boolean split = boolConfig(root, "core.splitIndex");
-        List<String> extensions = new ArrayList<>();
-        if (sparse) {
-            extensions.add("sparse-index");
-        }
-        if (split) {
-            extensions.add("split-index");
-        }
-        return new Fingerprint(raw, tree, new ArrayList<>(stages.keySet()), blobs, modes,
-                stages, unmerged, intentToAdd, skip, assume, sparse, split, extensions);
+    @SuppressWarnings("unchecked")
+    public static Fingerprint fromMap(Map<String, Object> map) {
+      Objects.requireNonNull(map, "map");
+      return new Fingerprint(String.valueOf(map.get("rawIndexDigest")),
+          String.valueOf(map.get("indexTreeId")),
+          (List<String>) map.get("stagedEntryPaths"),
+          (Map<String, String>) map.get("stagedBlobIds"),
+          (Map<String, String>) map.get("entryModes"),
+          (Map<String, List<String>>) map.get("entryStages"),
+          (List<String>) map.get("unmergedEntries"), (List<String>) map.get("intentToAddFlags"),
+          (List<String>) map.get("skipWorktreeFlags"),
+          (List<String>) map.get("assumeUnchangedFlags"),
+          Boolean.parseBoolean(String.valueOf(map.get("sparseIndexMode"))),
+          Boolean.parseBoolean(String.valueOf(map.get("splitIndexMode"))),
+          (List<String>) map.get("relevantExtensions"));
+    }
+
+    private boolean semanticEquals(Fingerprint other) {
+      return indexTreeId.equals(other.indexTreeId)
+          && stagedEntryPaths.equals(other.stagedEntryPaths)
+          && stagedBlobIds.equals(other.stagedBlobIds)
+          && entryModes.equals(other.entryModes)
+          && entryStages.equals(other.entryStages)
+          && unmergedEntries.equals(other.unmergedEntries)
+          && intentToAddFlags.equals(other.intentToAddFlags)
+          && skipWorktreeFlags.equals(other.skipWorktreeFlags)
+          && assumeUnchangedFlags.equals(other.assumeUnchangedFlags);
     }
 
     /**
-     * Compares two captures without treating raw cache bytes as staged work.
+     * Returns a JSON-safe diagnostic projection of this fingerprint.
      *
-     * @param before transaction-start fingerprint
-     * @param after  current fingerprint
-     * @return semantic comparison result
+     * @return serialized fingerprint map
      */
-    public static Comparison compare(Fingerprint before, Fingerprint after) {
-        Objects.requireNonNull(before, "before");
-        Objects.requireNonNull(after, "after");
-        if (!before.relevantExtensions()
-                .equals(after.relevantExtensions())
-                || before.sparseIndexMode() != after.sparseIndexMode()
-                || before.splitIndexMode() != after.splitIndexMode()) {
-            return Comparison.INDEX_EXTENSION_UNSUPPORTED;
-        }
-        if (before.rawIndexDigest()
-                .equals(after.rawIndexDigest())) {
-            return Comparison.EXACT;
-        }
-        return before.semanticEquals(after) ? Comparison.NONSEMANTIC_REFRESH : Comparison.SEMANTIC_STATE_CHANGED;
+    public Map<String, Object> toMap() {
+      Map<String, Object> values = new java.util.LinkedHashMap<>();
+      values.put("rawIndexDigest", rawIndexDigest);
+      values.put("indexTreeId", indexTreeId);
+      values.put("stagedEntryPaths", stagedEntryPaths);
+      values.put("stagedBlobIds", stagedBlobIds);
+      values.put("entryModes", entryModes);
+      values.put("entryStages", entryStages);
+      values.put("unmergedEntries", unmergedEntries);
+      values.put("intentToAddFlags", intentToAddFlags);
+      values.put("skipWorktreeFlags", skipWorktreeFlags);
+      values.put("assumeUnchangedFlags", assumeUnchangedFlags);
+      values.put("sparseIndexMode", sparseIndexMode);
+      values.put("splitIndexMode", splitIndexMode);
+      values.put("relevantExtensions", relevantExtensions);
+      return Map.copyOf(values);
     }
+  }
 
-    private static List<Entry> parseEntries(Path root) throws IOException {
-        String output = runIndexInspection(root, "ls-files", "--stage", "-z");
-        List<Entry> entries = new ArrayList<>();
-        List<String> intentPaths = intentToAddPaths(root);
-        for (String item : output.split("\\u0000")) {
-            if (item.isBlank()) {
-                continue;
-            }
-            int tab = item.indexOf('\t');
-            if (tab < 0) {
-                throw new IOException("INDEX_CORRUPT");
-            }
-            String[] header = item.substring(0, tab)
-                    .split(" ");
-            if (header.length != 3) {
-                throw new IOException("INDEX_CORRUPT");
-            }
-            String blob = header[1];
-            int stage;
-            try {
-                stage = Integer.parseInt(header[2]);
-            } catch (NumberFormatException invalid) {
-                throw new IOException("INDEX_CORRUPT", invalid);
-            }
-            String path = item.substring(tab + 1);
-            entries.add(new Entry(path, header[0], blob, stage, intentPaths.contains(path)));
-        }
-        return List.copyOf(entries);
-    }
+  /**
+   * Represents one normalized index entry in a semantic fingerprint.
+   */
+  private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd) {
 
-    private static List<String> intentToAddPaths(Path root) throws IOException {
-        String output = runIndexInspection(root, "diff", "--diff-filter=A", "--name-only", "-z");
-        List<String> paths = new ArrayList<>();
-        for (String path : output.split("\\u0000")) {
-            if (!path.isBlank()) {
-                paths.add(path);
-            }
-        }
-        return List.copyOf(paths);
-    }
+  }
 
-    private static List<String> flagPaths(Path root, char... markers) throws IOException {
-        String output = runIndexInspection(root, "ls-files", "-v", "-z");
-        List<String> paths = new ArrayList<>();
-        for (String item : output.split("\\u0000")) {
-            if (item.length() < 3) {
-                continue;
-            }
-            char marker = item.charAt(0);
-            for (char candidate : markers) {
-                if (marker == candidate) {
-                    paths.add(item.substring(2));
-                }
-            }
-        }
-        return List.copyOf(paths);
-    }
+  /**
+   * Captures the bounded Git result used during fingerprint collection.
+   */
+  private record Result(int exitCode, String output) {
 
-    private static boolean boolConfig(Path root, String key) throws IOException {
-        Result result = runResult(root, "config", "--bool", "--get", key);
-        return result.exitCode() == 0 && "true".equalsIgnoreCase(result.output()
-                .trim());
-    }
-
-    private static String rawIndexDigest(Path root) throws IOException {
-        Result result = runResult(root, "rev-parse", "--git-path", "index");
-        if (result.exitCode() != 0) {
-            throw new IOException("INDEX_UNAVAILABLE");
-        }
-        Path index = root.resolve(result.output()
-                        .trim())
-                .normalize();
-        if (!Files.exists(index)) {
-            // An unborn repository legitimately has no physical index yet;
-            // represent its empty semantic index deterministically.
-            return hash(new byte[0]);
-        }
-        if (!Files.isRegularFile(index)) {
-            throw new IOException("INDEX_UNAVAILABLE");
-        }
-        try {
-            return hash(Files.readAllBytes(index));
-        } catch (Exception failure) {
-            throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
-        }
-    }
-
-    private static String hash(byte[] bytes) throws IOException {
-        try {
-            return HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256")
-                            .digest(bytes));
-        } catch (Exception failure) {
-            throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
-        }
-    }
-
-    private static String run(Path root) throws IOException {
-        Result result = runResult(root, "write-tree");
-        if (result.exitCode() != 0) {
-            throw new IOException(result.output()
-                    .isBlank() ? "GIT_COMMAND_FAILED" : result.output());
-        }
-        return result.output()
-                .trim();
-    }
-
-    private static String runIndexInspection(Path root, String... args) throws IOException {
-        GitProcessRunner.Result result = GitProcessRunner.runResult(root,
-                INDEX_INSPECTION_MAX_OUTPUT_BYTES, args);
-        if (result.exitCode() != 0) {
-            throw new IOException(result.output()
-                    .isBlank() ? "GIT_COMMAND_FAILED" : result.output());
-        }
-        return result.output()
-                .trim();
-    }
-
-    private static Result runResult(Path root, String... args) throws IOException {
-        GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
-        return new Result(result.exitCode(), result.output());
-    }
-
-    /**
-     * Semantic comparison categories used by recovery decisions.
-     */
-    public enum Comparison {
-        /**
-         * Raw and semantic identity are unchanged.
-         */
-        EXACT,
-        /**
-         * Raw bytes changed but staged semantics are equivalent.
-         */
-        NONSEMANTIC_REFRESH,
-        /**
-         * Staged semantics changed and cannot be overwritten safely.
-         */
-        SEMANTIC_STATE_CHANGED,
-        /**
-         * Relevant unsupported index mode or extension changed.
-         */
-        INDEX_EXTENSION_UNSUPPORTED
-    }
-
-    /**
-     * Immutable captured index fingerprint.
-     *
-     * @param rawIndexDigest       physical index-file digest
-     * @param indexTreeId          staged tree identity
-     * @param stagedEntryPaths     staged entry paths
-     * @param stagedBlobIds        staged blob IDs by path
-     * @param entryModes           entry modes by path
-     * @param entryStages          index stages by path
-     * @param unmergedEntries      unmerged paths
-     * @param intentToAddFlags     intent-to-add paths
-     * @param skipWorktreeFlags    skip-worktree paths
-     * @param assumeUnchangedFlags assume-unchanged paths
-     * @param sparseIndexMode      whether sparse-index mode is active
-     * @param splitIndexMode       whether split-index mode is active
-     * @param relevantExtensions   relevant index-extension identities
-     */
-    public record Fingerprint(String rawIndexDigest, String indexTreeId, List<String> stagedEntryPaths,
-                              Map<String, String> stagedBlobIds, Map<String, String> entryModes,
-                              Map<String, List<String>> entryStages, List<String> unmergedEntries,
-                              List<String> intentToAddFlags, List<String> skipWorktreeFlags,
-                              List<String> assumeUnchangedFlags, boolean sparseIndexMode,
-                              boolean splitIndexMode, List<String> relevantExtensions) {
-
-        /**
-         * Copies all collections into immutable values.
-         */
-        public Fingerprint {
-            Objects.requireNonNull(rawIndexDigest, "rawIndexDigest");
-            Objects.requireNonNull(indexTreeId, "indexTreeId");
-            stagedEntryPaths = List.copyOf(stagedEntryPaths);
-            stagedBlobIds = Map.copyOf(stagedBlobIds);
-            entryModes = Map.copyOf(entryModes);
-            entryStages = entryStages.entrySet()
-                    .stream()
-                    .collect(java.util.stream.Collectors.toUnmodifiableMap(
-                            Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
-            unmergedEntries = List.copyOf(unmergedEntries);
-            intentToAddFlags = List.copyOf(intentToAddFlags);
-            skipWorktreeFlags = List.copyOf(skipWorktreeFlags);
-            assumeUnchangedFlags = List.copyOf(assumeUnchangedFlags);
-            relevantExtensions = List.copyOf(relevantExtensions);
-        }
-
-        /**
-         * Reconstructs a fingerprint from a JSON-safe diagnostic projection.
-         *
-         * @param map serialized fingerprint
-         * @return reconstructed fingerprint
-         */
-        @SuppressWarnings("unchecked")
-        public static Fingerprint fromMap(Map<String, Object> map) {
-            Objects.requireNonNull(map, "map");
-            return new Fingerprint(String.valueOf(map.get("rawIndexDigest")), String.valueOf(map.get("indexTreeId")),
-                    (List<String>) map.get("stagedEntryPaths"), (Map<String, String>) map.get("stagedBlobIds"),
-                    (Map<String, String>) map.get("entryModes"), (Map<String, List<String>>) map.get("entryStages"),
-                    (List<String>) map.get("unmergedEntries"), (List<String>) map.get("intentToAddFlags"),
-                    (List<String>) map.get("skipWorktreeFlags"), (List<String>) map.get("assumeUnchangedFlags"),
-                    Boolean.parseBoolean(String.valueOf(map.get("sparseIndexMode"))),
-                    Boolean.parseBoolean(String.valueOf(map.get("splitIndexMode"))),
-                    (List<String>) map.get("relevantExtensions"));
-        }
-
-        private boolean semanticEquals(Fingerprint other) {
-            return indexTreeId.equals(other.indexTreeId)
-                    && stagedEntryPaths.equals(other.stagedEntryPaths)
-                    && stagedBlobIds.equals(other.stagedBlobIds)
-                    && entryModes.equals(other.entryModes)
-                    && entryStages.equals(other.entryStages)
-                    && unmergedEntries.equals(other.unmergedEntries)
-                    && intentToAddFlags.equals(other.intentToAddFlags)
-                    && skipWorktreeFlags.equals(other.skipWorktreeFlags)
-                    && assumeUnchangedFlags.equals(other.assumeUnchangedFlags);
-        }
-
-        /**
-         * Returns a JSON-safe diagnostic projection of this fingerprint.
-         *
-         * @return serialized fingerprint map
-         */
-        public Map<String, Object> toMap() {
-            Map<String, Object> values = new java.util.LinkedHashMap<>();
-            values.put("rawIndexDigest", rawIndexDigest);
-            values.put("indexTreeId", indexTreeId);
-            values.put("stagedEntryPaths", stagedEntryPaths);
-            values.put("stagedBlobIds", stagedBlobIds);
-            values.put("entryModes", entryModes);
-            values.put("entryStages", entryStages);
-            values.put("unmergedEntries", unmergedEntries);
-            values.put("intentToAddFlags", intentToAddFlags);
-            values.put("skipWorktreeFlags", skipWorktreeFlags);
-            values.put("assumeUnchangedFlags", assumeUnchangedFlags);
-            values.put("sparseIndexMode", sparseIndexMode);
-            values.put("splitIndexMode", splitIndexMode);
-            values.put("relevantExtensions", relevantExtensions);
-            return Map.copyOf(values);
-        }
-    }
-
-    /**
-     * Represents one normalized index entry in a semantic fingerprint.
-     */
-    private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd) {
-
-    }
-
-    /**
-     * Captures the bounded Git result used during fingerprint collection.
-     */
-    private record Result(int exitCode, String output) {
-
-    }
+  }
 }

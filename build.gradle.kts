@@ -6,20 +6,20 @@ plugins {
 
 val repositoryRoot = rootProject.layout.projectDirectory.asFile
 val maintainedMarkdownRoots = listOf(
-    rootProject.layout.projectDirectory.file("README.md").asFile,
-    rootProject.layout.projectDirectory.file("AGENTS.md").asFile,
-    rootProject.layout.projectDirectory.file("CONTRIBUTING.md").asFile,
-    rootProject.layout.projectDirectory.file("SECURITY.md").asFile,
-    rootProject.layout.projectDirectory.dir("docs/getting-started").asFile,
-    rootProject.layout.projectDirectory.dir("docs/providers").asFile,
-    rootProject.layout.projectDirectory.dir("docs/architecture").asFile,
-    rootProject.layout.projectDirectory.dir("docs/operations").asFile,
-    rootProject.layout.projectDirectory.dir("docs/development").asFile,
-    rootProject.layout.projectDirectory.dir("docs/installation").asFile,
-    rootProject.layout.projectDirectory.dir("docs/integration").asFile,
-    rootProject.layout.projectDirectory.dir("docs/cli").asFile,
-    rootProject.layout.projectDirectory.dir("docs/diagnostics").asFile,
-    rootProject.layout.projectDirectory.dir("docs/security").asFile
+        rootProject.layout.projectDirectory.file("README.md").asFile,
+        rootProject.layout.projectDirectory.file("AGENTS.md").asFile,
+        rootProject.layout.projectDirectory.file("CONTRIBUTING.md").asFile,
+        rootProject.layout.projectDirectory.file("SECURITY.md").asFile,
+        rootProject.layout.projectDirectory.dir("docs/getting-started").asFile,
+        rootProject.layout.projectDirectory.dir("docs/providers").asFile,
+        rootProject.layout.projectDirectory.dir("docs/architecture").asFile,
+        rootProject.layout.projectDirectory.dir("docs/operations").asFile,
+        rootProject.layout.projectDirectory.dir("docs/development").asFile,
+        rootProject.layout.projectDirectory.dir("docs/installation").asFile,
+        rootProject.layout.projectDirectory.dir("docs/integration").asFile,
+        rootProject.layout.projectDirectory.dir("docs/cli").asFile,
+        rootProject.layout.projectDirectory.dir("docs/diagnostics").asFile,
+        rootProject.layout.projectDirectory.dir("docs/security").asFile
 ).filter { it.exists() }
 
 abstract class RepositoryHygieneTask : DefaultTask() {
@@ -44,7 +44,7 @@ abstract class RepositoryHygieneTask : DefaultTask() {
         val scriptPattern = Regex("(?:scripts|install)/[A-Za-z0-9._/-]+\\.(?:ps1|cmd|bat|sh)")
         val countPattern = Regex("(?i)\\b(\\d+)\\s*[- ]?tools?\\b")
         val staleProviderPattern =
-            Regex("(?i)synesis\\s+provider\\s+(?:install|status|uninstall|migrate)\\s+claude-code\\b")
+                Regex("(?i)synesis\\s+provider\\s+(?:install|status|uninstall|migrate)\\s+claude-code\\b")
         files.forEach { file ->
             val relative = file.relativeTo(repoRoot).invariantSeparatorsPath
             val text = file.readText()
@@ -57,8 +57,8 @@ abstract class RepositoryHygieneTask : DefaultTask() {
             linkPattern.findAll(text).forEach { match ->
                 val raw = match.groupValues[1].trim().substringBefore(" ").substringBefore("\"")
                 if (raw.isBlank() || raw.startsWith("#") || raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith(
-                        "mailto:"
-                    )
+                                "mailto:"
+                        )
                 ) return@forEach
                 val target = URLDecoder.decode(raw, Charsets.UTF_8)
                 val resolved = file.parentFile.resolve(target).normalize()
@@ -76,11 +76,11 @@ abstract class RepositoryHygieneTask : DefaultTask() {
             }
         }
         val scripts = scriptsDirectory.get().asFile.listFiles()
-            ?.filter { it.isFile && it.extension in setOf("ps1", "cmd", "bat", "sh") }
-            ?.map { it.nameWithoutExtension.lowercase() } ?: emptyList()
+                ?.filter { it.isFile && it.extension in setOf("ps1", "cmd", "bat", "sh") }
+                ?.map { it.nameWithoutExtension.lowercase() } ?: emptyList()
 
         val duplicateNames =
-            scripts.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.filterNot { it == "install" }
+                scripts.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.filterNot { it == "install" }
 
         if (duplicateNames.isNotEmpty()) {
             failures += "duplicate active script entrypoints: ${duplicateNames.joinToString()}"

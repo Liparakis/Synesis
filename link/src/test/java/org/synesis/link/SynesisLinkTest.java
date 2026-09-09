@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
  */
 final class SynesisLinkTest {
 
-    @Test
-    void exposesTheV1Alpn() {
-        assertEquals("synesis-link/1", SynesisLink.ALPN);
-    }
+  @Test
+  void exposesTheV1Alpn() {
+    assertEquals("synesis-link/1", SynesisLink.ALPN);
+  }
 }

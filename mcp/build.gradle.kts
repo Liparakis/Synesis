@@ -41,15 +41,16 @@ tasks.withType<Javadoc>().configureEach {
 tasks.test {
     useJUnitPlatform()
     val forkOverride = project.findProperty("synesisTestForks")?.toString()?.toIntOrNull()
-    maxParallelForks = forkOverride ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
+    maxParallelForks = forkOverride
+            ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 }
 
 fun filesUnder(dir: File, extensions: Set<String>): List<File> =
-    if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
-    else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
+        if (dir.isDirectory) dir.walkTopDown().filter { it.isFile && it.extension in extensions }.toList()
+        else listOfNotNull(dir.takeIf { it.isFile && it.extension in extensions })
 
 fun linesContaining(dir: File, pattern: String): List<String> =
-    filesUnder(dir, setOf("java")).flatMap { file -> file.readLines().filter { it.contains(pattern) } }
+        filesUnder(dir, setOf("java")).flatMap { file -> file.readLines().filter { it.contains(pattern) } }
 
 tasks.register("formatCheck") {
     group = "verification"
@@ -82,13 +83,13 @@ tasks.register("architectureCheck") {
     val cliSource = layout.projectDirectory.dir("../cli/src/main/java").asFile
     doLast {
         val cliHits = mcpSource.walkTopDown()
-            .filter { it.isFile && it.extension == "java" }
-            .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.cli") } }
+                .filter { it.isFile && it.extension == "java" }
+                .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.cli") } }
         require(cliHits.none()) { "MCP imports CLI code: $cliHits" }
 
         val reverseHits = cliSource.walkTopDown()
-            .filter { it.isFile && it.extension == "java" }
-            .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.mcp") } }
+                .filter { it.isFile && it.extension == "java" }
+                .flatMap { file -> file.readLines().filter { it.contains("import org.synesis.mcp") } }
         require(reverseHits.none()) { "CLI imports MCP code: $reverseHits" }
     }
 }

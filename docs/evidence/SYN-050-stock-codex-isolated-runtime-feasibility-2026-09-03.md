@@ -157,9 +157,12 @@ the reason shared-process or provider-thread dynamic injection is not claimed.
 
 - Probe source:
   `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\IsolatedRuntimeInvestigation.java`.
-- Wrapper source: `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryWrapper.java`.
-- MCP source: `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryMcp.java`.
-- Report: `C:\Users\Liparakis\AppData\Local\Temp\syn050-isolated-runtime-20260903-05\isolated-runtime-report.txt`.
+- Wrapper source:
+  `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryWrapper.java`.
+- MCP source:
+  `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-01\src\BoundaryMcp.java`.
+- Report:
+  `C:\Users\Liparakis\AppData\Local\Temp\syn050-isolated-runtime-20260903-05\isolated-runtime-report.txt`.
 - Report SHA-256:
   `AF8430AE9850A3C61540FC15E469D2A64663E58C0AD20A4419329A8E69DD11A3`.
 - `ISOLATED_RUNTIME_INVESTIGATION=PASS`.

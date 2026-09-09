@@ -11,10 +11,10 @@ import java.util.List;
  */
 public record ClaimResult(boolean acquired, WorkIntent intent, List<ClaimConflict> conflicts) {
 
-    /**
-     * Validates and freezes the conflict list.
-     */
-    public ClaimResult {
-        conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
-    }
+  /**
+   * Validates and freezes the conflict list.
+   */
+  public ClaimResult {
+    conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
+  }
 }

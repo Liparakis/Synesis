@@ -5,11 +5,11 @@ package org.synesis.link.session;
  */
 public interface LivenessEventDispatcher {
 
-    /**
-     * Dispatches the given action.
-     *
-     * @param action runnable action to dispatch
-     * @return true if accepted, false if dropped
-     */
-    boolean dispatch(Runnable action);
+  /**
+   * Dispatches the given action.
+   *
+   * @param action runnable action to dispatch
+   * @return true if accepted, false if dropped
+   */
+  boolean dispatch(Runnable action);
 }

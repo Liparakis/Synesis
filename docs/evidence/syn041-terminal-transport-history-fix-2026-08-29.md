@@ -75,7 +75,8 @@ already-finalized durable state and cannot mutate it.
 Changed production files:
 
 - `workspace/src/main/java/org/synesis/workspace/lifecycle/lease/SessionLeaseService.java`
-- `workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSupervisionService.java`
+-
+`workspace/src/main/java/org/synesis/workspace/application/provider/ProviderSupervisionService.java`
 - `mcp/src/main/java/org/synesis/mcp/application/McpProtocolHandler.java`
 
 Changed tests:
@@ -96,7 +97,8 @@ asserts exact durable-record equality afterward.
 Successful serialized checks used `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:\\tmp`
 to avoid the host's default loopback/Unix-domain temporary-directory failure:
 
-- `:workspace:test --tests TerminalLeaseStateTest --tests LeaseTest --tests ProviderSessionTerminalizationServiceTest`
+-
+`:workspace:test --tests TerminalLeaseStateTest --tests LeaseTest --tests ProviderSessionTerminalizationServiceTest`
 - `:workspace:test --tests ProviderProcessSupervisorTest`
 - `:mcp:test --tests McpSyn039NoChangeCompletionTest`
 - `:mcp:test --tests McpSyn039RejectedContinuationTest`

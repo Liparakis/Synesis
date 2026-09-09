@@ -11,39 +11,39 @@ import org.synesis.workspace.provider.codex.CodexProviderIntegration;
  */
 public final class ProviderRegistry {
 
-    /**
-     * The only provider integrations currently installable by Synesis.
-     */
-    private static final List<ProviderIntegration> PROVIDERS = List.of(
-            new ClaudeCodeProviderIntegration(), new CodexProviderIntegration());
+  /**
+   * The only provider integrations currently installable by Synesis.
+   */
+  private static final List<ProviderIntegration> PROVIDERS = List.of(
+      new ClaudeCodeProviderIntegration(), new CodexProviderIntegration());
 
-    private ProviderRegistry() {
-    }
+  private ProviderRegistry() {
+  }
 
-    /**
-     * Returns the deterministic installable provider list.
-     *
-     * @return provider list
-     */
-    public static List<ProviderIntegration> providers() {
-        return PROVIDERS;
-    }
+  /**
+   * Returns the deterministic installable provider list.
+   *
+   * @return provider list
+   */
+  public static List<ProviderIntegration> providers() {
+    return PROVIDERS;
+  }
 
-    /**
-     * Finds a provider.
-     *
-     * @param id provider identifier
-     * @return matching integration, or {@code null}
-     */
-    public static ProviderIntegration find(String id) {
-        if (id == null) {
-            return null;
-        }
-        String normalized = id.toLowerCase(Locale.ROOT);
-        return PROVIDERS.stream()
-                .filter(provider -> provider.id()
-                        .equals(normalized))
-                .findFirst()
-                .orElse(null);
+  /**
+   * Finds a provider.
+   *
+   * @param id provider identifier
+   * @return matching integration, or {@code null}
+   */
+  public static ProviderIntegration find(String id) {
+    if (id == null) {
+      return null;
     }
+    String normalized = id.toLowerCase(Locale.ROOT);
+    return PROVIDERS.stream()
+        .filter(provider -> provider.id()
+            .equals(normalized))
+        .findFirst()
+        .orElse(null);
+  }
 }

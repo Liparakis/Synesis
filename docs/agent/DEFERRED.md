@@ -1,5 +1,13 @@
 # Deferred Functionality Register
 
+## Current SYN-009E disposition — 2026-09-09
+
+The free `PROTECTION_LITE` scope is complete and is being closed and pushed.
+The commercial maximum profile remains deferred / external dependency until a
+licensed, version-pinned protector adapter and production signing authority are
+available. The maximum-release gate must continue to fail closed; protection-
+lite output must never be relabeled as maximum.
+
 ## SYN-009E promotion review — 2026-09-09
 
 The explicit maximum-protection goal promotes a release-engineering task in

@@ -12,7 +12,8 @@ preparation, integration gating, requester validation, and retirement.
 
 Observed run:
 
-- Runtime root: `C:\Users\LIPARA~1\AppData\Local\Temp\synesis-script-test5-f5250393bbbc49f18a6cdb4e72209fbc`
+- Runtime root:
+  `C:\Users\LIPARA~1\AppData\Local\Temp\synesis-script-test5-f5250393bbbc49f18a6cdb4e72209fbc`
 - Project ID: `657117ce-4dde-4cb3-b18e-f0a8e9b4cd7b`
 - Task ID: `ccb98e45-4b81-41bb-b5f4-a4348e6722cf`
 - Prediction ID: `98f84dc3-3a3f-4700-8496-d2f856e681dd`
@@ -35,6 +36,7 @@ manifest after uninstalling the prior `%LOCALAPPDATA%\Synesis` root. The
 installed launcher reported `VERSION=0.1.0-dev.local`, `doctor` passed, and the
 same harness passed without source-tree classpath access:
 
-- Runtime root: `C:\Users\LIPARA~1\AppData\Local\Temp\synesis-installed-acceptance2-9349900772084212b99d05157b4bd953`
+- Runtime root:
+  `C:\Users\LIPARA~1\AppData\Local\Temp\synesis-installed-acceptance2-9349900772084212b99d05157b4bd953`
 - Project ID: `d313aa17-c0a6-4f7e-888f-586ac45d937f`
 - Final prediction ID: `d459dccf-9228-441a-845b-535ddf15e99a`

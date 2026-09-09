@@ -34,7 +34,8 @@ before constructing the immutable START envelope. The exact verified context
 was:
 
 - binding session: `session-610af205-9b89-4bfc-83cf-c79c092951a6`;
-- binding fingerprint/version: `44f7dc7a7e46a0560b161d2dd58b71152f23ead1c951a9e7e5f142616a6f7c94` / `1`;
+- binding fingerprint/version: `44f7dc7a7e46a0560b161d2dd58b71152f23ead1c951a9e7e5f142616a6f7c94` /
+  `1`;
 - participant: `agt_721a4575-543c-361c-9e12-4ec06e8685b2`;
 - WorkIntent/lane: `99827ebc-adb3-3b19-9e6e-22d145295abb`;
 - lane epoch: `1`; claim: acquired;

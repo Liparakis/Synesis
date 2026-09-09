@@ -20,70 +20,71 @@ import org.synesis.link.onboarding.Onboarding;
  */
 final class SynesisCliParsingTest {
 
-    private static Invocation invocation() throws Exception {
-        Path profile = Files.createTempDirectory("synesis-cli-parse")
-                .resolve("profile");
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        StatusRenderer renderer = new StatusRenderer(terminal);
-        return new Invocation(new CliRuntime(new Onboarding(profile, renderer), terminal,
-                new ReadinessInspector(profile)), profile, out, err);
+  private static Invocation invocation() throws Exception {
+    Path profile = Files.createTempDirectory("synesis-cli-parse")
+        .resolve("profile");
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+    StatusRenderer renderer = new StatusRenderer(terminal);
+    return new Invocation(new CliRuntime(new Onboarding(profile, renderer), terminal,
+        new ReadinessInspector(profile)), profile, out, err);
+  }
+
+  private static PrintStream stream(ByteArrayOutputStream target) {
+    return new PrintStream(target, true, StandardCharsets.UTF_8);
+  }
+
+  @Test
+  void rootAndVersionHelpSucceed() throws Exception {
+    Invocation invocation = invocation();
+    assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+    assertTrue(invocation.stdout()
+        .contains("Usage: synesis"));
+
+    Invocation version = invocation();
+    assertEquals(0, SynesisCli.execute(new String[]{"--version"}, version.runtime()));
+    assertTrue(version.stdout()
+        .contains("synesis 0.1.0-SNAPSHOT"));
+  }
+
+  @Test
+  void publicCoordinationSurfaceIsReachableFromRootHelp() throws Exception {
+    Invocation invocation = invocation();
+    assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+    String help = invocation.stdout();
+    for (String command : new String[]{"coordination", "task", "ownership", "prediction",
+        "speculation", "events", "supervisor", "integration"}) {
+      assertTrue(help.contains(command), "missing command: " + command);
     }
+  }
 
-    private static PrintStream stream(ByteArrayOutputStream target) {
-        return new PrintStream(target, true, StandardCharsets.UTF_8);
+  @Test
+  void malformedAndUnknownSyntaxReturnsUsageExit() throws Exception {
+    assertEquals(2, SynesisCli.execute(new String[]{"unknown"}, invocation().runtime()));
+    assertEquals(2, SynesisCli.execute(new String[]{"join"}, invocation().runtime()));
+    assertEquals(2,
+        SynesisCli.execute(new String[]{"host", "--expect-peer"}, invocation().runtime()));
+  }
+
+  @Test
+  void identityShowUsesTheParsedCommand() throws Exception {
+    Invocation invocation = invocation();
+    assertEquals(0, SynesisCli.execute(new String[]{"identity", "show"}, invocation.runtime()));
+    assertTrue(invocation.stdout()
+        .contains("NODE_ID=sl1-"));
+    assertTrue(Files.exists(invocation.profile()
+        .resolve("identity.bin")));
+  }
+
+  /**
+   * Holds the isolated CLI invocation resources used by parsing tests.
+   */
+  private record Invocation(CliRuntime runtime, Path profile, ByteArrayOutputStream out,
+                            ByteArrayOutputStream err) {
+
+    private String stdout() {
+      return out.toString(StandardCharsets.UTF_8);
     }
-
-    @Test
-    void rootAndVersionHelpSucceed() throws Exception {
-        Invocation invocation = invocation();
-        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
-        assertTrue(invocation.stdout()
-                .contains("Usage: synesis"));
-
-        Invocation version = invocation();
-        assertEquals(0, SynesisCli.execute(new String[]{"--version"}, version.runtime()));
-        assertTrue(version.stdout()
-                .contains("synesis 0.1.0-SNAPSHOT"));
-    }
-
-    @Test
-    void publicCoordinationSurfaceIsReachableFromRootHelp() throws Exception {
-        Invocation invocation = invocation();
-        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
-        String help = invocation.stdout();
-        for (String command : new String[]{"coordination", "task", "ownership", "prediction",
-                "speculation", "events", "supervisor", "integration"}) {
-            assertTrue(help.contains(command), "missing command: " + command);
-        }
-    }
-
-    @Test
-    void malformedAndUnknownSyntaxReturnsUsageExit() throws Exception {
-        assertEquals(2, SynesisCli.execute(new String[]{"unknown"}, invocation().runtime()));
-        assertEquals(2, SynesisCli.execute(new String[]{"join"}, invocation().runtime()));
-        assertEquals(2, SynesisCli.execute(new String[]{"host", "--expect-peer"}, invocation().runtime()));
-    }
-
-    @Test
-    void identityShowUsesTheParsedCommand() throws Exception {
-        Invocation invocation = invocation();
-        assertEquals(0, SynesisCli.execute(new String[]{"identity", "show"}, invocation.runtime()));
-        assertTrue(invocation.stdout()
-                .contains("NODE_ID=sl1-"));
-        assertTrue(Files.exists(invocation.profile()
-                .resolve("identity.bin")));
-    }
-
-    /**
-     * Holds the isolated CLI invocation resources used by parsing tests.
-     */
-    private record Invocation(CliRuntime runtime, Path profile, ByteArrayOutputStream out,
-                              ByteArrayOutputStream err) {
-
-        private String stdout() {
-            return out.toString(StandardCharsets.UTF_8);
-        }
-    }
+  }
 }

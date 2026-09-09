@@ -96,11 +96,11 @@ visible repository work only.
 
    A executed those exact arguments. Result:
 
-    - snapshot: `snap_171a6f766e26454cf60e6cebc3106f63`
-    - snapshot state: `PUBLISHED`
-    - integration state: `integrated`
-    - lane: `f78beb42-196b-3dad-b017-156121fcb891`
-    - claim epoch: `1`
+  - snapshot: `snap_171a6f766e26454cf60e6cebc3106f63`
+  - snapshot state: `PUBLISHED`
+  - integration state: `integrated`
+  - lane: `f78beb42-196b-3dad-b017-156121fcb891`
+  - claim epoch: `1`
 6. After A's integration advanced the control checkout, B executed the exact
    recovery projection:
 

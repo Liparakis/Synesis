@@ -14,10 +14,10 @@ import java.util.List;
  */
 public record AgentCapabilityResult(String capability, List<String> requiredFields) {
 
-    /**
-     * Creates an unmodifiable list of required fields.
-     */
-    public AgentCapabilityResult {
-        requiredFields = requiredFields == null ? List.of() : List.copyOf(requiredFields);
-    }
+  /**
+   * Creates an unmodifiable list of required fields.
+   */
+  public AgentCapabilityResult {
+    requiredFields = requiredFields == null ? List.of() : List.copyOf(requiredFields);
+  }
 }

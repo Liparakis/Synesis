@@ -8,9 +8,9 @@ import picocli.CommandLine.Command;
 @Command(name = "provider", description = "Manage project-local provider integrations.")
 public final class ProviderCommand {
 
-    /**
-     * Creates the parent command.
-     */
-    public ProviderCommand() {
-    }
+  /**
+   * Creates the parent command.
+   */
+  public ProviderCommand() {
+  }
 }

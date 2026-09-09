@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Immutable persisted repair plan document stored outside control repository under
- * external workspace root administration directory.
+ * Immutable persisted repair plan document stored outside control repository under external
+ * workspace root administration directory.
  *
  * @param schemaVersion           schema version (1)
  * @param planId                  opaque plan identifier
@@ -21,29 +21,29 @@ import java.util.Objects;
  * @since 1.0
  */
 public record RepairPlan(
-        int schemaVersion,
-        String planId,
-        String projectId,
-        String controlRepositoryPath,
-        String externalWorkspaceRoot,
-        long createdAtEpochMillis,
-        String doctorReportFingerprint,
-        int supportedRepairsCount,
-        int unsupportedCount,
-        String contentHash,
-        List<RepairPlanEntry> entries
+    int schemaVersion,
+    String planId,
+    String projectId,
+    String controlRepositoryPath,
+    String externalWorkspaceRoot,
+    long createdAtEpochMillis,
+    String doctorReportFingerprint,
+    int supportedRepairsCount,
+    int unsupportedCount,
+    String contentHash,
+    List<RepairPlanEntry> entries
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public RepairPlan {
-        Objects.requireNonNull(planId, "planId");
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
-        Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
-        Objects.requireNonNull(doctorReportFingerprint, "doctorReportFingerprint");
-        Objects.requireNonNull(contentHash, "contentHash");
-        Objects.requireNonNull(entries, "entries");
-    }
+  /**
+   * Invariant validation.
+   */
+  public RepairPlan {
+    Objects.requireNonNull(planId, "planId");
+    Objects.requireNonNull(projectId, "projectId");
+    Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
+    Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
+    Objects.requireNonNull(doctorReportFingerprint, "doctorReportFingerprint");
+    Objects.requireNonNull(contentHash, "contentHash");
+    Objects.requireNonNull(entries, "entries");
+  }
 }

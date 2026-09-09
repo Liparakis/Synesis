@@ -21,68 +21,68 @@ import picocli.CommandLine.Option;
 @Command(name = "show", description = "Show one task.", mixinStandardHelpOptions = true)
 public final class TaskShowCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Option(names = "--project", description = "Initialized project directory.")
-    private Path project;
-    @Option(names = "--endpoint", required = true)
-    private URI endpoint;
-    @Option(names = "--task", required = true)
-    private UUID taskId;
+  private final CliRuntime runtime;
+  @Option(names = "--project", description = "Initialized project directory.")
+  private Path project;
+  @Option(names = "--endpoint", required = true)
+  private URI endpoint;
+  @Option(names = "--task", required = true)
+  private UUID taskId;
 
-    /**
-     * Creates a task show command.
-     *
-     * @param runtime composed CLI runtime
-     */
-    public TaskShowCommand(CliRuntime runtime) {
-        this.runtime = runtime;
-    }
+  /**
+   * Creates a task show command.
+   *
+   * @param runtime composed CLI runtime
+   */
+  public TaskShowCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
 
-    /**
-     * Replays task events and prints the current claim.
-     *
-     * @return stable process exit code
-     */
-    @Override
-    public Integer call() {
-        try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            CoordinationTask task = null;
-            TaskClaim claim = null;
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
-                if (!event.predictionId()
-                        .equals(taskId)) {
-                    continue;
-                }
-                var command = CoordinationCommand.decode(event.payload());
-                if (event.type() == PredictionEventType.TASK_CREATED) {
-                    task = CoordinationTask.decode(command.payload());
-                }
-                if (event.type() == PredictionEventType.TASK_CLAIMED) {
-                    claim = TaskClaim.decode(command.payload());
-                }
-                if (event.type() == PredictionEventType.TASK_RELEASED) {
-                    claim = null;
-                }
-            }
-            if (task == null) {
-                throw new IllegalArgumentException("TASK_NOT_FOUND");
-            }
-            runtime.terminal()
-                    .stdout("TASK_ID=" + task.taskId());
-            runtime.terminal()
-                    .stdout("PROJECT_ID=" + location.projectId());
-            runtime.terminal()
-                    .stdout("TITLE=" + task.title());
-            runtime.terminal()
-                    .stdout("CAPABILITY=" + task.capability());
-            runtime.terminal()
-                    .stdout("OWNER_NODE=" + (claim == null ? "UNCLAIMED" : claim.ownerNodeId()));
-            return ExitCodes.OK;
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("TASK_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+  /**
+   * Replays task events and prints the current claim.
+   *
+   * @return stable process exit code
+   */
+  @Override
+  public Integer call() {
+    try {
+      var location = CoordinationCliSupport.project(runtime, project);
+      CoordinationTask task = null;
+      TaskClaim claim = null;
+      for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+        if (!event.predictionId()
+            .equals(taskId)) {
+          continue;
         }
+        var command = CoordinationCommand.decode(event.payload());
+        if (event.type() == PredictionEventType.TASK_CREATED) {
+          task = CoordinationTask.decode(command.payload());
+        }
+        if (event.type() == PredictionEventType.TASK_CLAIMED) {
+          claim = TaskClaim.decode(command.payload());
+        }
+        if (event.type() == PredictionEventType.TASK_RELEASED) {
+          claim = null;
+        }
+      }
+      if (task == null) {
+        throw new IllegalArgumentException("TASK_NOT_FOUND");
+      }
+      runtime.terminal()
+          .stdout("TASK_ID=" + task.taskId());
+      runtime.terminal()
+          .stdout("PROJECT_ID=" + location.projectId());
+      runtime.terminal()
+          .stdout("TITLE=" + task.title());
+      runtime.terminal()
+          .stdout("CAPABILITY=" + task.capability());
+      runtime.terminal()
+          .stdout("OWNER_NODE=" + (claim == null ? "UNCLAIMED" : claim.ownerNodeId()));
+      return ExitCodes.OK;
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("TASK_ERROR=" + failure.getMessage());
+      return ExitCodes.LOCAL_CONFIGURATION;
     }
+  }
 }

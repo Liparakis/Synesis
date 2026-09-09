@@ -16,9 +16,11 @@ chosen. The run stopped at the first unchanged projected action that failed.
 - Project ID: `6280519f-85e0-46ed-9322-8f1417e732cc`
 - Seed commit: `425a8f1 seed Todo diagnostic acceptance`
 - Managed Synesis baseline: `bb4b69b0bbde0d71e534f4a71d88fa28334deaa9`
-- MCP executable: `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
+- MCP executable:
+  `cli/build/platform-bundle/synesis-0.1.0-dev.local-windows-x64/bin/synesis-mcp.exe`
 - MCP identity: protocol `2025-06-18`, version `0.1.0-SNAPSHOT`, commit `bc334ac`, ten tools
-- No manual relay, request acceptance, snapshot publication, validation, or integration was performed.
+- No manual relay, request acceptance, snapshot publication, validation, or integration was
+  performed.
 
 Participants and claims:
 

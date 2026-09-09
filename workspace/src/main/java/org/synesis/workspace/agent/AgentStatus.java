@@ -12,74 +12,74 @@ import java.util.Locale;
  */
 public enum AgentStatus {
 
-    /**
-     * Session is initialized or workspace is active and ready.
-     */
-    READY("ready"),
+  /**
+   * Session is initialized or workspace is active and ready.
+   */
+  READY("ready"),
 
-    /**
-     * Operational action completed successfully.
-     */
-    COMPLETED("completed"),
+  /**
+   * Operational action completed successfully.
+   */
+  COMPLETED("completed"),
 
-    /**
-     * Action is blocked by policy or protected path.
-     */
-    BLOCKED("blocked"),
+  /**
+   * Action is blocked by policy or protected path.
+   */
+  BLOCKED("blocked"),
 
-    /**
-     * Action requires capability owner contract details or clarification.
-     */
-    NEEDS_CAPABILITY("needs_capability"),
+  /**
+   * Action requires capability owner contract details or clarification.
+   */
+  NEEDS_CAPABILITY("needs_capability"),
 
-    /**
-     * Action is waiting for background owner response or processing.
-     */
-    WAITING("waiting"),
+  /**
+   * Action is waiting for background owner response or processing.
+   */
+  WAITING("waiting"),
 
-    /**
-     * Workspace or session context is stale or unverified; setup refresh required.
-     */
-    RETRY_REQUIRED("retry_required"),
+  /**
+   * Workspace or session context is stale or unverified; setup refresh required.
+   */
+  RETRY_REQUIRED("retry_required"),
 
-    /**
-     * Unrecoverable safety or system failure occurred.
-     */
-    FAILED("failed");
+  /**
+   * Unrecoverable safety or system failure occurred.
+   */
+  FAILED("failed");
 
-    private final String value;
+  private final String value;
 
-    AgentStatus(String value) {
-        this.value = value;
+  AgentStatus(String value) {
+    this.value = value;
+  }
+
+  /**
+   * Parses a string into an {@link AgentStatus}.
+   *
+   * @param input string value
+   * @return matching status
+   * @throws IllegalArgumentException if unknown
+   */
+  public static AgentStatus fromValue(String input) {
+    if (input == null) {
+      throw new IllegalArgumentException("status value cannot be null");
     }
-
-    /**
-     * Parses a string into an {@link AgentStatus}.
-     *
-     * @param input string value
-     * @return matching status
-     * @throws IllegalArgumentException if unknown
-     */
-    public static AgentStatus fromValue(String input) {
-        if (input == null) {
-            throw new IllegalArgumentException("status value cannot be null");
-        }
-        String normalized = input.trim()
-                .toLowerCase(Locale.ROOT);
-        for (AgentStatus status : values()) {
-            if (status.value.equals(normalized)) {
-                return status;
-            }
-        }
-        throw new IllegalArgumentException("Unknown agent status: " + input);
+    String normalized = input.trim()
+        .toLowerCase(Locale.ROOT);
+    for (AgentStatus status : values()) {
+      if (status.value.equals(normalized)) {
+        return status;
+      }
     }
+    throw new IllegalArgumentException("Unknown agent status: " + input);
+  }
 
-    /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
+  /**
+   * Returns the stable lowercase JSON representation.
+   *
+   * @return lowercase string representation
+   */
+  public String value() {
+    return value;
+  }
 }

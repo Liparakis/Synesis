@@ -2,7 +2,8 @@
 
 Date: 2026-09-06
 Classification: **PARTIAL**
-Repository source checkout: `0901417067ca11f9a8c2f5b922bca6ba16051031` before the final evidence checkpoint
+Repository source checkout: `0901417067ca11f9a8c2f5b922bca6ba16051031` before the final evidence
+checkpoint
 Runtime source provenance: `a7697bbb5de83ced8b61b275056f9204e4467fbc`
 
 ## Scope and boundaries

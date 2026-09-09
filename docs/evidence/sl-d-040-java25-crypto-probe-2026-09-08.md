@@ -13,13 +13,13 @@ HKDF-SHA256 implementation.
 
 ## Result
 
-| Capability | Result |
-|---|---|
-| X25519 key generation | PASS |
-| Bidirectional shared-secret equality | PASS; 32 bytes |
+| Capability                              | Result                   |
+|-----------------------------------------|--------------------------|
+| X25519 key generation                   | PASS                     |
+| Bidirectional shared-secret equality    | PASS; 32 bytes           |
 | ChaCha20-Poly1305 encryption/decryption | PASS; 22-byte ciphertext |
-| Associated-data round trip | PASS |
-| `KDF.getInstance("HKDF-SHA256")` | PASS |
+| Associated-data round trip              | PASS                     |
+| `KDF.getInstance("HKDF-SHA256")`        | PASS                     |
 
 ## Boundary
 

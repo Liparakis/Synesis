@@ -130,10 +130,11 @@ lane's ACCEPT. The existing code explains the mismatch:
   reduces a null next action to `IMPLEMENT` with only visible repository
   operations. That is correct while coding remains, but leaves no executable
   handoff/publication action once B's visible work is complete.
-- `workspace/src/main/java/org/synesis/workspace/application/collaboration/ReviewValidationService.java`
-  only marks the WorkGroup `COMPLETED` when there are no active intents and no
-  available grants. B's active intent therefore correctly prevents closure;
-  the missing piece is the action that can complete that intent.
+-
+`workspace/src/main/java/org/synesis/workspace/application/collaboration/ReviewValidationService.java`
+only marks the WorkGroup `COMPLETED` when there are no active intents and no
+available grants. B's active intent therefore correctly prevents closure;
+the missing piece is the action that can complete that intent.
 
 This slice does not justify changing ownership, grant fencing, stale lease
 cleanup, detached-agent retention, Doctor behavior, or the integration engine.

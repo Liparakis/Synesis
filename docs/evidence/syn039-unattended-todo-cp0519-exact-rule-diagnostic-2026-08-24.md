@@ -93,12 +93,12 @@ Shared WorkGroup: `663cee3b-cdf3-3bf8-91cb-7e8ddcc575bf`, terminal state
    `finish_lane({"summary":"Publish the completed immutable snapshot"})`.
    A executed it successfully. The result was:
 
-    - snapshot: `snap_48423ea02f57776f0064595b971197ab`
-    - snapshot state: `PUBLISHED`
-    - lane: `e3e82daa-c076-36c0-b008-16c0973c5c9c`
-    - claim epoch: `1`
-    - integration state: `integrated`
-    - integrated commit: `2563b0cbfaf593ccaf2a395b64b003692f320411`
+  - snapshot: `snap_48423ea02f57776f0064595b971197ab`
+  - snapshot state: `PUBLISHED`
+  - lane: `e3e82daa-c076-36c0-b008-16c0973c5c9c`
+  - claim epoch: `1`
+  - integration state: `integrated`
+  - integrated commit: `2563b0cbfaf593ccaf2a395b64b003692f320411`
 
 7. B received the structured review decision projection and executed:
 

@@ -20,54 +20,55 @@ import picocli.CommandLine.Option;
 @Command(name = "mcp", description = "Launches the stdio Model Context Protocol (MCP) server")
 public final class McpCommand implements Callable<Integer> {
 
-    private final CliRuntime runtime;
-    @Option(names = {"--provider"}, description = "Provider name (default: codex)", defaultValue = "codex")
-    private String provider;
-    @Option(names = {"--project"}, description = "Project root directory")
-    private String project;
-    @Option(names = {"--connection-instance-id"}, description = "Process connection instance ID")
-    private String connectionInstanceId;
+  private final CliRuntime runtime;
+  @Option(names = {
+      "--provider"}, description = "Provider name (default: codex)", defaultValue = "codex")
+  private String provider;
+  @Option(names = {"--project"}, description = "Project root directory")
+  private String project;
+  @Option(names = {"--connection-instance-id"}, description = "Process connection instance ID")
+  private String connectionInstanceId;
 
-    /**
-     * Creates an MCP command instance.
-     *
-     * @param runtime CLI runtime environment
-     */
-    public McpCommand(CliRuntime runtime) {
-        this.runtime = runtime;
+  /**
+   * Creates an MCP command instance.
+   *
+   * @param runtime CLI runtime environment
+   */
+  public McpCommand(CliRuntime runtime) {
+    this.runtime = runtime;
+  }
+
+  @Override
+  @SuppressWarnings("ExtractMethodRecommender")
+  public Integer call() {
+    try {
+      List<String> argsList = new ArrayList<>();
+      if (provider != null && !provider.isBlank()) {
+        argsList.add("--provider");
+        argsList.add(provider);
+      }
+      if (project != null && !project.isBlank()) {
+        argsList.add("--project");
+        argsList.add(project);
+      }
+      if (connectionInstanceId != null && !connectionInstanceId.isBlank()) {
+        argsList.add("--connection-instance-id");
+        argsList.add(connectionInstanceId);
+      }
+
+      String[] args = argsList.toArray(new String[0]);
+
+      Class<?> mcpClass = Class.forName("org.synesis.mcp.SynesisMcpServer");
+      Method executeMethod = mcpClass.getMethod("execute", String[].class);
+      return (Integer) executeMethod.invoke(null, (Object) args);
+    } catch (ClassNotFoundException failure) {
+      runtime.terminal()
+          .stderr("MCP subproject is not available on classpath: " + failure.getMessage());
+      return ExitCodes.USAGE;
+    } catch (Exception failure) {
+      runtime.terminal()
+          .stderr("MCP server failed: " + failure.getMessage());
+      return ExitCodes.INTERNAL;
     }
-
-    @Override
-    @SuppressWarnings("ExtractMethodRecommender")
-    public Integer call() {
-        try {
-            List<String> argsList = new ArrayList<>();
-            if (provider != null && !provider.isBlank()) {
-                argsList.add("--provider");
-                argsList.add(provider);
-            }
-            if (project != null && !project.isBlank()) {
-                argsList.add("--project");
-                argsList.add(project);
-            }
-            if (connectionInstanceId != null && !connectionInstanceId.isBlank()) {
-                argsList.add("--connection-instance-id");
-                argsList.add(connectionInstanceId);
-            }
-
-            String[] args = argsList.toArray(new String[0]);
-
-            Class<?> mcpClass = Class.forName("org.synesis.mcp.SynesisMcpServer");
-            Method executeMethod = mcpClass.getMethod("execute", String[].class);
-            return (Integer) executeMethod.invoke(null, (Object) args);
-        } catch (ClassNotFoundException failure) {
-            runtime.terminal()
-                    .stderr("MCP subproject is not available on classpath: " + failure.getMessage());
-            return ExitCodes.USAGE;
-        } catch (Exception failure) {
-            runtime.terminal()
-                    .stderr("MCP server failed: " + failure.getMessage());
-            return ExitCodes.INTERNAL;
-        }
-    }
+  }
 }

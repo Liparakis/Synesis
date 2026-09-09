@@ -14,197 +14,199 @@ import org.synesis.workspace.provider.ProviderSupportLevel;
  */
 public final class CodexProviderIntegration implements ProviderIntegration {
 
-    /**
-     * Creates the Codex integration.
-     */
-    public CodexProviderIntegration() {
-    }
+  /**
+   * Creates the Codex integration.
+   */
+  public CodexProviderIntegration() {
+  }
 
-    private static String event(Path root, String path) {
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("command", "*** Begin Patch\n*** Update File: " + path + "\n*** End Patch");
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("hook_event_name", "PreToolUse");
-        event.put("cwd",
-                root.toAbsolutePath()
-                        .normalize()
-                        .toString());
-        event.put("tool_name", "apply_patch");
-        event.put("tool_input", input);
-        return ProviderJson.write(event);
-    }
+  private static String event(Path root, String path) {
+    Map<String, Object> input = new LinkedHashMap<>();
+    input.put("command", "*** Begin Patch\n*** Update File: " + path + "\n*** End Patch");
+    Map<String, Object> event = new LinkedHashMap<>();
+    event.put("hook_event_name", "PreToolUse");
+    event.put("cwd",
+        root.toAbsolutePath()
+            .normalize()
+            .toString());
+    event.put("tool_name", "apply_patch");
+    event.put("tool_input", input);
+    return ProviderJson.write(event);
+  }
 
-    private static boolean valid(String json) {
-        try {
-            return ProviderJson.parse(json) instanceof Map<?, ?>;
-        } catch (RuntimeException failure) {
-            return false;
-        }
+  private static boolean valid(String json) {
+    try {
+      return ProviderJson.parse(json) instanceof Map<?, ?>;
+    } catch (RuntimeException failure) {
+      return false;
     }
+  }
 
-    private static String quote(Path path) {
-        return "\"" + path.toAbsolutePath()
-                .normalize()
-                .toString()
-                .replace("\"", "\\\"") + "\"";
-    }
+  private static String quote(Path path) {
+    return "\"" + path.toAbsolutePath()
+        .normalize()
+        .toString()
+        .replace("\"", "\\\"") + "\"";
+  }
 
-    private static String windowsHookCommand(Path launcher) {
-        return "cmd.exe /d /s /c \"" + quote(launcher) + " hook codex\"";
-    }
+  private static String windowsHookCommand(Path launcher) {
+    return "cmd.exe /d /s /c \"" + quote(launcher) + " hook codex\"";
+  }
 
-    @Override
-    public String id() {
-        return "codex";
-    }
+  @Override
+  public String id() {
+    return "codex";
+  }
 
-    @Override
-    public ProviderSupportLevel supportLevel() {
-        return ProviderSupportLevel.EXPERIMENTAL;
-    }
+  @Override
+  public ProviderSupportLevel supportLevel() {
+    return ProviderSupportLevel.EXPERIMENTAL;
+  }
 
-    @Override
-    public ProviderMcpEvidenceTier mcpEvidenceTier() {
-        return ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING;
-    }
+  @Override
+  public ProviderMcpEvidenceTier mcpEvidenceTier() {
+    return ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING;
+  }
 
-    @Override
-    public Path configurationPath(Path projectRoot) {
-        return projectRoot.resolve(".codex/hooks.json");
-    }
+  @Override
+  public Path configurationPath(Path projectRoot) {
+    return projectRoot.resolve(".codex/hooks.json");
+  }
 
-    @Override
-    public Path mcpConfigurationPath(Path projectRoot) {
-        String userHome = System.getProperty("user.home");
-        if (userHome == null || userHome.isBlank()) {
-            return null;
-        }
-        return Path.of(userHome, ".codex", "config.toml");
+  @Override
+  public Path mcpConfigurationPath(Path projectRoot) {
+    String userHome = System.getProperty("user.home");
+    if (userHome == null || userHome.isBlank()) {
+      return null;
     }
+    return Path.of(userHome, ".codex", "config.toml");
+  }
 
-    /**
-     * Builds the Codex TOML MCP entry.
-     *
-     * @param launcher    stable launcher
-     * @param projectRoot ignored project root
-     * @return TOML-compatible entry values
-     */
-    @Override
-    public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
-        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher,
-                projectRoot));
-        server.remove("version");
-        return server;
-    }
+  /**
+   * Builds the Codex TOML MCP entry.
+   *
+   * @param launcher    stable launcher
+   * @param projectRoot ignored project root
+   * @return TOML-compatible entry values
+   */
+  @Override
+  public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
+    Map<String, Object> server = new LinkedHashMap<>(
+        ProviderIntegration.super.managedMcpServer(launcher,
+            projectRoot));
+    server.remove("version");
+    return server;
+  }
 
-    /**
-     * Builds Codex's documented noninteractive argv without bypassing its
-     * approval or sandbox policy.
-     *
-     * @param worktree isolated lane worktree
-     * @param prompt   initial task prompt
-     * @return direct Codex argv
-     */
-    @Override
-    public java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
-        if (worktree == null || prompt == null || prompt.isBlank()) {
-            return java.util.Optional.empty();
-        }
-        return java.util.Optional.of(List.of("codex", "exec", "--cd",
-                worktree.toAbsolutePath()
-                        .normalize()
-                        .toString(), "--json", prompt));
+  /**
+   * Builds Codex's documented noninteractive argv without bypassing its approval or sandbox
+   * policy.
+   *
+   * @param worktree isolated lane worktree
+   * @param prompt   initial task prompt
+   * @return direct Codex argv
+   */
+  @Override
+  public java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
+    if (worktree == null || prompt == null || prompt.isBlank()) {
+      return java.util.Optional.empty();
     }
+    return java.util.Optional.of(List.of("codex", "exec", "--cd",
+        worktree.toAbsolutePath()
+            .normalize()
+            .toString(), "--json", prompt));
+  }
 
-    @Override
-    public String hookGroup() {
-        return "hooks";
-    }
+  @Override
+  public String hookGroup() {
+    return "hooks";
+  }
 
-    @Override
-    public String managedHookId() {
-        return "synesis-codex";
-    }
+  @Override
+  public String managedHookId() {
+    return "synesis-codex";
+  }
 
-    @Override
-    public String matcher() {
-        return "^apply_patch$";
-    }
+  @Override
+  public String matcher() {
+    return "^apply_patch$";
+  }
 
-    @Override
-    public boolean requiresRealValidation() {
-        return true;
-    }
+  @Override
+  public boolean requiresRealValidation() {
+    return true;
+  }
 
-    @Override
-    public String trustStatus() {
-        return "REVIEW_REQUIRED";
-    }
+  @Override
+  public String trustStatus() {
+    return "REVIEW_REQUIRED";
+  }
 
-    @Override
-    public String hookCommand(Path launcher, Path profile) {
-        return quote(launcher) + " hook codex";
-    }
+  @Override
+  public String hookCommand(Path launcher, Path profile) {
+    return quote(launcher) + " hook codex";
+  }
 
-    @Override
-    public String windowsHookCommand(Path launcher, Path profile) {
-        return windowsHookCommand(launcher);
-    }
+  @Override
+  public String windowsHookCommand(Path launcher, Path profile) {
+    return windowsHookCommand(launcher);
+  }
 
-    @Override
-    public Map<String, Object> managedHook(Path launcher, Path profile) {
-        return managedHook(matcher(), null, launcher, profile);
-    }
+  @Override
+  public Map<String, Object> managedHook(Path launcher, Path profile) {
+    return managedHook(matcher(), null, launcher, profile);
+  }
 
-    @Override
-    public Map<String, Object> managedSessionHook(Path launcher, Path profile) {
-        return managedHook("startup|resume", "synesis-codex-session", launcher, profile);
-    }
+  @Override
+  public Map<String, Object> managedSessionHook(Path launcher, Path profile) {
+    return managedHook("startup|resume", "synesis-codex-session", launcher, profile);
+  }
 
-    private Map<String, Object> managedHook(String hookMatcher, String hookId, Path launcher, Path profile) {
-        Map<String, Object> hook = new LinkedHashMap<>();
-        if (hookId != null) {
-            hook.put("id", hookId);
-        }
-        hook.put("matcher", hookMatcher);
-        Map<String, Object> command = new LinkedHashMap<>();
-        command.put("type", "command");
-        command.put("command", hookCommand(launcher, profile));
-        command.put("commandWindows", windowsHookCommand(launcher));
-        hook.put("hooks", List.of(command));
-        return hook;
+  private Map<String, Object> managedHook(String hookMatcher, String hookId, Path launcher,
+      Path profile) {
+    Map<String, Object> hook = new LinkedHashMap<>();
+    if (hookId != null) {
+      hook.put("id", hookId);
     }
+    hook.put("matcher", hookMatcher);
+    Map<String, Object> command = new LinkedHashMap<>();
+    command.put("type", "command");
+    command.put("command", hookCommand(launcher, profile));
+    command.put("commandWindows", windowsHookCommand(launcher));
+    hook.put("hooks", List.of(command));
+    return hook;
+  }
 
-    @Override
-    public boolean isManagedSessionHook(Object value) {
-        return value instanceof Map<?, ?> hook && "synesis-codex-session".equals(hook.get("id"));
-    }
+  @Override
+  public boolean isManagedSessionHook(Object value) {
+    return value instanceof Map<?, ?> hook && "synesis-codex-session".equals(hook.get("id"));
+  }
 
-    @Override
-    public boolean isManagedHook(Object value) {
-        if (!(value instanceof Map<?, ?> hook) || !matcher().equals(hook.get("matcher"))) {
-            return false;
-        }
-        if (!(hook.get("hooks") instanceof List<?> handlers) || handlers.size() != 1
-                || !(handlers.getFirst() instanceof Map<?, ?> handler)) {
-            return false;
-        }
-        Object command = handler.get("command");
-        return "command".equals(handler.get("type")) && command instanceof String text
-                && text.endsWith(" hook codex");
+  @Override
+  public boolean isManagedHook(Object value) {
+    if (!(value instanceof Map<?, ?> hook) || !matcher().equals(hook.get("matcher"))) {
+      return false;
     }
+    if (!(hook.get("hooks") instanceof List<?> handlers) || handlers.size() != 1
+        || !(handlers.getFirst() instanceof Map<?, ?> handler)) {
+      return false;
+    }
+    Object command = handler.get("command");
+    return "command".equals(handler.get("type")) && command instanceof String text
+        && text.endsWith(" hook codex");
+  }
 
-    @Override
-    public SyntheticCheck syntheticCheck(Path profile, Path projectRoot) {
-        CodexHookAdapter adapter = new CodexHookAdapter();
-        String protectedEvent = event(projectRoot, "src/protected.txt");
-        String allowedEvent = event(projectRoot, "src/free.txt");
-        CodexHookAdapter.Result blocked = adapter.processJson(protectedEvent);
-        CodexHookAdapter.Result allowed = adapter.processJson(allowedEvent);
-        return new SyntheticCheck(blocked.outcome() == CodexHookAdapter.Outcome.BLOCKED,
-                allowed.outcome() == CodexHookAdapter.Outcome.ALLOWED,
-                valid(blocked.responseJson()) && allowed.responseJson()
-                        .isEmpty(),
-                blocked.responseJson(), allowed.responseJson());
-    }
+  @Override
+  public SyntheticCheck syntheticCheck(Path profile, Path projectRoot) {
+    CodexHookAdapter adapter = new CodexHookAdapter();
+    String protectedEvent = event(projectRoot, "src/protected.txt");
+    String allowedEvent = event(projectRoot, "src/free.txt");
+    CodexHookAdapter.Result blocked = adapter.processJson(protectedEvent);
+    CodexHookAdapter.Result allowed = adapter.processJson(allowedEvent);
+    return new SyntheticCheck(blocked.outcome() == CodexHookAdapter.Outcome.BLOCKED,
+        allowed.outcome() == CodexHookAdapter.Outcome.ALLOWED,
+        valid(blocked.responseJson()) && allowed.responseJson()
+            .isEmpty(),
+        blocked.responseJson(), allowed.responseJson());
+  }
 }

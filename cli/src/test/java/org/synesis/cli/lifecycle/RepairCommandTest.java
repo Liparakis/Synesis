@@ -19,29 +19,31 @@ import org.synesis.cli.terminal.ConsoleTerminal;
  */
 public class RepairCommandTest {
 
-    @Test
-    public void testRepairCliDryRunAndPrepare(@TempDir Path tempDir) {
-        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+  @Test
+  public void testRepairCliDryRunAndPrepare(@TempDir Path tempDir) {
+    ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+    ByteArrayOutputStream stderr = new ByteArrayOutputStream();
 
-        ConsoleTerminal terminal = new ConsoleTerminal(
-                new PrintStream(stdout, true, StandardCharsets.UTF_8),
-                new PrintStream(stderr, true, StandardCharsets.UTF_8)
-        );
+    ConsoleTerminal terminal = new ConsoleTerminal(
+        new PrintStream(stdout, true, StandardCharsets.UTF_8),
+        new PrintStream(stderr, true, StandardCharsets.UTF_8)
+    );
 
-        CliRuntime runtime = CliRuntime.defaults(terminal);
+    CliRuntime runtime = CliRuntime.defaults(terminal);
 
-        int exitCodeDry = SynesisCli.execute(new String[]{"repair", "--dry-run", "--project", tempDir.toString()},
-                runtime);
-        assertEquals(0, exitCodeDry);
-        assertTrue(stdout.toString()
-                .contains("REPAIR_DRY_RUN=COMPLETED"));
+    int exitCodeDry = SynesisCli.execute(
+        new String[]{"repair", "--dry-run", "--project", tempDir.toString()},
+        runtime);
+    assertEquals(0, exitCodeDry);
+    assertTrue(stdout.toString()
+        .contains("REPAIR_DRY_RUN=COMPLETED"));
 
-        stdout.reset();
-        int exitCodePrep = SynesisCli.execute(new String[]{"repair", "--prepare", "--project", tempDir.toString()},
-                runtime);
-        assertEquals(0, exitCodePrep);
-        assertTrue(stdout.toString()
-                .contains("REPAIR_RESULT=PLAN_PREPARED"));
-    }
+    stdout.reset();
+    int exitCodePrep = SynesisCli.execute(
+        new String[]{"repair", "--prepare", "--project", tempDir.toString()},
+        runtime);
+    assertEquals(0, exitCodePrep);
+    assertTrue(stdout.toString()
+        .contains("REPAIR_RESULT=PLAN_PREPARED"));
+  }
 }

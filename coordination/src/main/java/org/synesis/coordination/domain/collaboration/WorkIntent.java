@@ -23,7 +23,8 @@ import java.util.UUID;
  * @param authorityLineageId    durable authority lineage shared by authorized successor lanes
  * @param status                lifecycle status
  * @param role                  semantic role of the intent in the work group
- * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
+ * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may
+ *                              review
  * @param knownDependencies     capability identifiers this intent explicitly requires
  */
 public record WorkIntent(UUID intentId, UUID projectId, String participant,
@@ -34,288 +35,287 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant,
                          Status status, Role role, List<ResourceSelector> reviewTargetSelectors,
                          List<String> knownDependencies) {
 
+  /**
+   * Constructs a singleton work-group intent when no parent group is supplied.
+   *
+   * @param intentId    intent ID
+   * @param projectId   project ID
+   * @param participant participant
+   * @param provider    provider
+   * @param taskId      task ID
+   * @param goal        goal
+   * @param acceptance  acceptance
+   * @param baseCommit  base commit
+   * @param selectors   selectors
+   * @param version     version
+   * @param status      status
+   */
+  public WorkIntent(UUID intentId, UUID projectId, String participant,
+      String provider, UUID taskId, String goal,
+      String acceptance, String baseCommit,
+      List<ResourceSelector> selectors, long version, Status status) {
+    this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+        baseCommit, selectors, version, intentId, defaultAuthorityLineage(intentId), status,
+        Role.PRODUCER, List.of(), List.of());
+  }
+
+  /**
+   * Constructs an intent with a logical work-group and explicit authority lineage.
+   *
+   * @param intentId    intent ID
+   * @param projectId   project ID
+   * @param participant participant
+   * @param provider    provider
+   * @param taskId      task ID
+   * @param goal        goal
+   * @param acceptance  acceptance
+   * @param baseCommit  base commit
+   * @param selectors   selectors
+   * @param version     intent version
+   * @param workGroupId work-group ID
+   * @param status      lifecycle status
+   */
+  public WorkIntent(UUID intentId, UUID projectId, String participant,
+      String provider, UUID taskId, String goal,
+      String acceptance, String baseCommit,
+      List<ResourceSelector> selectors, long version,
+      UUID workGroupId, Status status) {
+    this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+        baseCommit, selectors, version, workGroupId,
+        defaultAuthorityLineage(intentId), status, Role.PRODUCER, List.of(), List.of());
+  }
+
+  /**
+   * Constructs an intent with explicit authority lineage and the default producer role.
+   *
+   * @param intentId           intent ID
+   * @param projectId          project ID
+   * @param participant        participant
+   * @param provider           provider
+   * @param taskId             task ID
+   * @param goal               goal
+   * @param acceptance         acceptance
+   * @param baseCommit         base commit
+   * @param selectors          selectors
+   * @param version            intent version
+   * @param workGroupId        work-group ID
+   * @param authorityLineageId authority lineage
+   * @param status             lifecycle status
+   */
+  public WorkIntent(UUID intentId, UUID projectId, String participant,
+      String provider, UUID taskId, String goal,
+      String acceptance, String baseCommit,
+      List<ResourceSelector> selectors, long version,
+      UUID workGroupId, UUID authorityLineageId, Status status) {
+    this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+        baseCommit, selectors, version, workGroupId, authorityLineageId, status,
+        Role.PRODUCER, List.of(), List.of());
+  }
+
+  /**
+   * Constructs an intent with an explicit semantic role and no review target selectors.
+   *
+   * @param intentId           intent ID
+   * @param projectId          project ID
+   * @param participant        participant
+   * @param provider           provider
+   * @param taskId             task ID
+   * @param goal               goal
+   * @param acceptance         acceptance
+   * @param baseCommit         base commit
+   * @param selectors          selectors
+   * @param version            intent version
+   * @param workGroupId        work-group ID
+   * @param authorityLineageId authority lineage
+   * @param status             lifecycle status
+   * @param role               semantic role
+   */
+  public WorkIntent(UUID intentId, UUID projectId, String participant,
+      String provider, UUID taskId, String goal,
+      String acceptance, String baseCommit,
+      List<ResourceSelector> selectors, long version,
+      UUID workGroupId, UUID authorityLineageId, Status status,
+      Role role) {
+    this(intentId, projectId, participant, provider, taskId, goal, acceptance,
+        baseCommit, selectors, version, workGroupId, authorityLineageId, status,
+        role, List.of(), List.of());
+  }
+
+  /**
+   * Constructs an intent with the historical review-target shape.
+   *
+   * @param intentId              intent ID
+   * @param projectId             project ID
+   * @param participant           participant
+   * @param provider              provider
+   * @param taskId                task ID
+   * @param goal                  goal
+   * @param acceptance            acceptance criteria
+   * @param baseCommit            base commit
+   * @param selectors             resource selectors
+   * @param version               intent version
+   * @param workGroupId           work-group ID
+   * @param authorityLineageId    authority lineage
+   * @param status                lifecycle status
+   * @param role                  semantic role
+   * @param reviewTargetSelectors review-target selectors
+   */
+  public WorkIntent(UUID intentId, UUID projectId, String participant,
+      String provider, UUID taskId, String goal, String acceptance, String baseCommit,
+      List<ResourceSelector> selectors, long version, UUID workGroupId, UUID authorityLineageId,
+      Status status, Role role, List<ResourceSelector> reviewTargetSelectors) {
+    this(intentId, projectId, participant, provider, taskId, goal, acceptance, baseCommit,
+        selectors, version,
+        workGroupId, authorityLineageId, status, role, reviewTargetSelectors, List.of());
+  }
+
+  /**
+   * Validates bounds and immutable collections.
+   */
+  public WorkIntent {
+    Objects.requireNonNull(intentId, "intentId");
+    Objects.requireNonNull(projectId, "projectId");
+    Objects.requireNonNull(workGroupId, "workGroupId");
+    Objects.requireNonNull(authorityLineageId, "authorityLineageId");
+    require(participant, "participant");
+    require(provider, "provider");
+    Objects.requireNonNull(taskId, "taskId");
+    require(goal, "goal");
+    require(acceptance, "acceptance");
+    require(baseCommit, "baseCommit");
+    Objects.requireNonNull(selectors, "selectors");
+    if (selectors.isEmpty() || selectors.size() > 128) {
+      throw new IllegalArgumentException("intent must contain 1..128 selectors");
+    }
+    selectors = List.copyOf(selectors);
+    if (version < 1) {
+      throw new IllegalArgumentException("intent version must be positive");
+    }
+    Objects.requireNonNull(status, "status");
+    Objects.requireNonNull(role, "role");
+    Objects.requireNonNull(reviewTargetSelectors, "reviewTargetSelectors");
+    if (reviewTargetSelectors.size() > 128) {
+      throw new IllegalArgumentException("review target selector bound");
+    }
+    reviewTargetSelectors = List.copyOf(reviewTargetSelectors);
+    Objects.requireNonNull(knownDependencies, "knownDependencies");
+    if (knownDependencies.size() > 50 || knownDependencies.stream()
+        .anyMatch(value -> value == null || value.isBlank()
+            || value.length() > 128)) {
+      throw new IllegalArgumentException("known dependency bound");
+    }
+    knownDependencies = List.copyOf(knownDependencies);
+    if (role == Role.PRODUCER && !reviewTargetSelectors.isEmpty()) {
+      throw new IllegalArgumentException("producer intent cannot declare review targets");
+    }
+  }
+
+  /**
+   * Derives a stable singleton lineage for intents replayed without an explicit lineage field.
+   *
+   * @param intentId intent identifier
+   * @return deterministic lineage identifier
+   */
+  public static UUID defaultAuthorityLineage(UUID intentId) {
+    Objects.requireNonNull(intentId, "intentId");
+    return UUID.nameUUIDFromBytes(("synesis-authority-lineage:" + intentId)
+        .getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static void require(String value, String name) {
+    Objects.requireNonNull(value, name);
+    if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > 8192) {
+      throw new IllegalArgumentException(name + " is empty or exceeds bound");
+    }
+  }
+
+  /**
+   * Intent lifecycle states.
+   */
+  public enum Status {
     /**
-     * Constructs a singleton work-group intent when no parent group is supplied.
+     * Intent owns its selectors.
+     */
+    ANNOUNCED,
+    /**
+     * Intent has released its selectors.
+     */
+    RELEASED
+  }
+
+  /**
+   * Declares the narrow semantic role used for review routing.
+   */
+  public enum Role {
+    /**
+     * Produces mutable implementation work and may publish its lane snapshot.
+     */
+    PRODUCER("producer", 1),
+    /**
+     * Reviews a producer's immutable snapshot without owning the producer's files.
+     */
+    REVIEWER("reviewer", 2);
+
+    private final String wireValue;
+    private final int wireCode;
+
+    Role(String wireValue, int wireCode) {
+      this.wireValue = wireValue;
+      this.wireCode = wireCode;
+    }
+
+    /**
+     * Parses the explicit protocol value.
      *
-     * @param intentId    intent ID
-     * @param projectId   project ID
-     * @param participant participant
-     * @param provider    provider
-     * @param taskId      task ID
-     * @param goal        goal
-     * @param acceptance  acceptance
-     * @param baseCommit  base commit
-     * @param selectors   selectors
-     * @param version     version
-     * @param status      status
+     * @param value protocol value
+     * @return semantic role
+     * @throws IllegalArgumentException for an unknown value
      */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal,
-            String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version, Status status) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, intentId, defaultAuthorityLineage(intentId), status,
-                Role.PRODUCER, List.of(), List.of());
+    public static Role fromWire(String value) {
+      Objects.requireNonNull(value, "role");
+      String normalized = value.trim()
+          .toLowerCase(java.util.Locale.ROOT);
+      for (Role role : values()) {
+        if (role.wireValue.equals(normalized)) {
+          return role;
+        }
+      }
+      throw new IllegalArgumentException("unknown work intent role: " + value);
     }
 
     /**
-     * Constructs an intent with a logical work-group and explicit authority
-     * lineage.
+     * Parses the stable binary payload code.
      *
-     * @param intentId    intent ID
-     * @param projectId   project ID
-     * @param participant participant
-     * @param provider    provider
-     * @param taskId      task ID
-     * @param goal        goal
-     * @param acceptance  acceptance
-     * @param baseCommit  base commit
-     * @param selectors   selectors
-     * @param version     intent version
-     * @param workGroupId work-group ID
-     * @param status      lifecycle status
+     * @param code binary code
+     * @return semantic role
+     * @throws IOException for an unknown code
      */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal,
-            String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version,
-            UUID workGroupId, Status status) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, workGroupId,
-                defaultAuthorityLineage(intentId), status, Role.PRODUCER, List.of(), List.of());
+    public static Role fromWireCode(int code) throws IOException {
+      for (Role role : values()) {
+        if (role.wireCode == code) {
+          return role;
+        }
+      }
+      throw new IOException("unknown work intent role code");
     }
 
     /**
-     * Constructs an intent with explicit authority lineage and the default producer role.
+     * Returns the stable protocol value.
      *
-     * @param intentId           intent ID
-     * @param projectId          project ID
-     * @param participant        participant
-     * @param provider           provider
-     * @param taskId             task ID
-     * @param goal               goal
-     * @param acceptance         acceptance
-     * @param baseCommit         base commit
-     * @param selectors          selectors
-     * @param version            intent version
-     * @param workGroupId        work-group ID
-     * @param authorityLineageId authority lineage
-     * @param status             lifecycle status
+     * @return lowercase protocol value
      */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal,
-            String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version,
-            UUID workGroupId, UUID authorityLineageId, Status status) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, workGroupId, authorityLineageId, status,
-                Role.PRODUCER, List.of(), List.of());
+    public String wireValue() {
+      return wireValue;
     }
 
     /**
-     * Constructs an intent with an explicit semantic role and no review target selectors.
+     * Returns the stable binary payload code.
      *
-     * @param intentId           intent ID
-     * @param projectId          project ID
-     * @param participant        participant
-     * @param provider           provider
-     * @param taskId             task ID
-     * @param goal               goal
-     * @param acceptance         acceptance
-     * @param baseCommit         base commit
-     * @param selectors          selectors
-     * @param version            intent version
-     * @param workGroupId        work-group ID
-     * @param authorityLineageId authority lineage
-     * @param status             lifecycle status
-     * @param role               semantic role
+     * @return binary code
      */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal,
-            String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version,
-            UUID workGroupId, UUID authorityLineageId, Status status,
-            Role role) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance,
-                baseCommit, selectors, version, workGroupId, authorityLineageId, status,
-                role, List.of(), List.of());
+    public int wireCode() {
+      return wireCode;
     }
-
-    /**
-     * Constructs an intent with the historical review-target shape.
-     *
-     * @param intentId           intent ID
-     * @param projectId          project ID
-     * @param participant        participant
-     * @param provider           provider
-     * @param taskId             task ID
-     * @param goal               goal
-     * @param acceptance         acceptance criteria
-     * @param baseCommit         base commit
-     * @param selectors          resource selectors
-     * @param version            intent version
-     * @param workGroupId        work-group ID
-     * @param authorityLineageId authority lineage
-     * @param status             lifecycle status
-     * @param role               semantic role
-     * @param reviewTargetSelectors review-target selectors
-     */
-    public WorkIntent(UUID intentId, UUID projectId, String participant,
-            String provider, UUID taskId, String goal, String acceptance, String baseCommit,
-            List<ResourceSelector> selectors, long version, UUID workGroupId, UUID authorityLineageId,
-            Status status, Role role, List<ResourceSelector> reviewTargetSelectors) {
-        this(intentId, projectId, participant, provider, taskId, goal, acceptance, baseCommit, selectors, version,
-                workGroupId, authorityLineageId, status, role, reviewTargetSelectors, List.of());
-    }
-
-    /**
-     * Validates bounds and immutable collections.
-     */
-    public WorkIntent {
-        Objects.requireNonNull(intentId, "intentId");
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(workGroupId, "workGroupId");
-        Objects.requireNonNull(authorityLineageId, "authorityLineageId");
-        require(participant, "participant");
-        require(provider, "provider");
-        Objects.requireNonNull(taskId, "taskId");
-        require(goal, "goal");
-        require(acceptance, "acceptance");
-        require(baseCommit, "baseCommit");
-        Objects.requireNonNull(selectors, "selectors");
-        if (selectors.isEmpty() || selectors.size() > 128) {
-            throw new IllegalArgumentException("intent must contain 1..128 selectors");
-        }
-        selectors = List.copyOf(selectors);
-        if (version < 1) {
-            throw new IllegalArgumentException("intent version must be positive");
-        }
-        Objects.requireNonNull(status, "status");
-        Objects.requireNonNull(role, "role");
-        Objects.requireNonNull(reviewTargetSelectors, "reviewTargetSelectors");
-        if (reviewTargetSelectors.size() > 128) {
-            throw new IllegalArgumentException("review target selector bound");
-        }
-        reviewTargetSelectors = List.copyOf(reviewTargetSelectors);
-        Objects.requireNonNull(knownDependencies, "knownDependencies");
-        if (knownDependencies.size() > 50 || knownDependencies.stream()
-                .anyMatch(value -> value == null || value.isBlank()
-                        || value.length() > 128)) {
-            throw new IllegalArgumentException("known dependency bound");
-        }
-        knownDependencies = List.copyOf(knownDependencies);
-        if (role == Role.PRODUCER && !reviewTargetSelectors.isEmpty()) {
-            throw new IllegalArgumentException("producer intent cannot declare review targets");
-        }
-    }
-
-    /**
-     * Derives a stable singleton lineage for intents replayed without an
-     * explicit lineage field.
-     *
-     * @param intentId intent identifier
-     * @return deterministic lineage identifier
-     */
-    public static UUID defaultAuthorityLineage(UUID intentId) {
-        Objects.requireNonNull(intentId, "intentId");
-        return UUID.nameUUIDFromBytes(("synesis-authority-lineage:" + intentId)
-                .getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void require(String value, String name) {
-        Objects.requireNonNull(value, name);
-        if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > 8192) {
-            throw new IllegalArgumentException(name + " is empty or exceeds bound");
-        }
-    }
-
-    /**
-     * Intent lifecycle states.
-     */
-    public enum Status {
-        /**
-         * Intent owns its selectors.
-         */
-        ANNOUNCED,
-        /**
-         * Intent has released its selectors.
-         */
-        RELEASED
-    }
-
-    /**
-     * Declares the narrow semantic role used for review routing.
-     */
-    public enum Role {
-        /**
-         * Produces mutable implementation work and may publish its lane snapshot.
-         */
-        PRODUCER("producer", 1),
-        /**
-         * Reviews a producer's immutable snapshot without owning the producer's files.
-         */
-        REVIEWER("reviewer", 2);
-
-        private final String wireValue;
-        private final int wireCode;
-
-        Role(String wireValue, int wireCode) {
-            this.wireValue = wireValue;
-            this.wireCode = wireCode;
-        }
-
-        /**
-         * Parses the explicit protocol value.
-         *
-         * @param value protocol value
-         * @return semantic role
-         * @throws IllegalArgumentException for an unknown value
-         */
-        public static Role fromWire(String value) {
-            Objects.requireNonNull(value, "role");
-            String normalized = value.trim()
-                    .toLowerCase(java.util.Locale.ROOT);
-            for (Role role : values()) {
-                if (role.wireValue.equals(normalized)) {
-                    return role;
-                }
-            }
-            throw new IllegalArgumentException("unknown work intent role: " + value);
-        }
-
-        /**
-         * Parses the stable binary payload code.
-         *
-         * @param code binary code
-         * @return semantic role
-         * @throws IOException for an unknown code
-         */
-        public static Role fromWireCode(int code) throws IOException {
-            for (Role role : values()) {
-                if (role.wireCode == code) {
-                    return role;
-                }
-            }
-            throw new IOException("unknown work intent role code");
-        }
-
-        /**
-         * Returns the stable protocol value.
-         *
-         * @return lowercase protocol value
-         */
-        public String wireValue() {
-            return wireValue;
-        }
-
-        /**
-         * Returns the stable binary payload code.
-         *
-         * @return binary code
-         */
-        public int wireCode() {
-            return wireCode;
-        }
-    }
+  }
 
 }

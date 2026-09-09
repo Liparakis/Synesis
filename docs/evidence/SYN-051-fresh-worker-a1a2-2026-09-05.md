@@ -3,7 +3,8 @@
 ## Classification
 
 **PASS-A for the requested runtime path; SYN-051 remains ACTIVE / PARTIAL
-overall because the repository-wide MCP test gate is incomplete.** One fresh lawful Worker A completed the corrected
+overall because the repository-wide MCP test gate is incomplete.** One fresh lawful Worker A
+completed the corrected
 generation-1
 managed lifecycle, one real exact-claim Codex turn, trusted persistence, a
 controlled A1 hard stop with a trusted death receipt, exact generation-2
@@ -32,14 +33,14 @@ Worker B or full SYN-049 acceptance was run.
   managed runtime path, but the broader test gate is not green.
 - The authorized rebuild/install passed with `--max-workers=1` and the
   process-local AF_UNIX workaround. Produced and installed hashes matched:
-    - workspace:
-      `7b3b5066f46140cae88a3357f0156e45cfb8b432ea1e07f6844983fe5141163a`
-    - MCP:
-      `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
-    - CLI:
-      `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467`
-    - native MCP:
-      `d24737530957fbe82ac05f3d5f43588d5357fdc8eff7377712e3151e0bc25c30`
+  - workspace:
+    `7b3b5066f46140cae88a3357f0156e45cfb8b432ea1e07f6844983fe5141163a`
+  - MCP:
+    `dddc6df0decc0530dc30d6809ded118b9cf0e801ad7238b73aa53ab90bae0bfd`
+  - CLI:
+    `438fbea4ffbf739a530233814db44b53f928f626b3b48b10c263ac6312ed2467`
+  - native MCP:
+    `d24737530957fbe82ac05f3d5f43588d5357fdc8eff7377712e3151e0bc25c30`
 - JDK: `C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin\java.exe`,
   Temurin `25+36-LTS`. The process-local property was
   `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.

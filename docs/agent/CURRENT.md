@@ -2,7 +2,12 @@
 
 ## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
-Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER, SOURCE-TIER BINDING, SHIPPED-ARTIFACT HARNESS, AND BOOTSTRAP RUNTIME-INTEGRITY SEAM PASS; COMMERCIAL MAXIMUM BLOCKED**.
+Status: **COMPLETE FOR PROTECTION-LITE SCOPE; COMMERCIAL MAXIMUM DEFERRED / EXTERNAL DEPENDENCY**.
+The free protection implementation and its release plumbing are closed for
+this stage. The commercial maximum remains intentionally unavailable until a
+licensed, version-pinned protector adapter and production signing authority
+are supplied; the maximum task continues to fail closed and is not relabeled
+as protection-lite.
 The completed installed UI slice is preserved under `CP-0758`; the current
 task extends the existing `SYN-009C`/`SYN-009D` distribution and signing
 foundations into separate developer, protection-lite, and maximum-release

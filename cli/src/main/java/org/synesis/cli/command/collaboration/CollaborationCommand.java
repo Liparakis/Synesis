@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "collaboration", description = "Announce and inspect active work claims.", mixinStandardHelpOptions = true)
 public final class CollaborationCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the collaboration command parent.
-     */
-    public CollaborationCommand() {
-    }
+  /**
+   * Creates the collaboration command parent.
+   */
+  public CollaborationCommand() {
+  }
 
-    /**
-     * Prints child command help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints child command help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

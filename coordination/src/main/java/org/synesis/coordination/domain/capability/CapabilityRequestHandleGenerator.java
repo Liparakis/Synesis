@@ -11,10 +11,10 @@ package org.synesis.coordination.domain.capability;
  */
 public interface CapabilityRequestHandleGenerator {
 
-    /**
-     * Generates a new unique capability request handle locator.
-     *
-     * @return generated request handle
-     */
-    CapabilityRequestHandle generate();
+  /**
+   * Generates a new unique capability request handle locator.
+   *
+   * @return generated request handle
+   */
+  CapabilityRequestHandle generate();
 }

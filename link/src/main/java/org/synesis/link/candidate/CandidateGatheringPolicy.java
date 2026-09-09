@@ -17,55 +17,55 @@ import java.time.Duration;
  * @param allowServerReflexive     whether server-reflexive candidates are usable
  */
 public record CandidateGatheringPolicy(
-        int maxProviders,
-        int maxCandidatesPerProvider,
-        int maxTotalCandidates,
-        Duration providerTimeout,
-        Duration totalTimeout,
-        boolean allowLoopback,
-        boolean allowPrivate,
-        boolean allowGlobalIpv6,
-        boolean allowMappedIpv4,
-        boolean allowServerReflexive) {
+    int maxProviders,
+    int maxCandidatesPerProvider,
+    int maxTotalCandidates,
+    Duration providerTimeout,
+    Duration totalTimeout,
+    boolean allowLoopback,
+    boolean allowPrivate,
+    boolean allowGlobalIpv6,
+    boolean allowMappedIpv4,
+    boolean allowServerReflexive) {
 
-    /**
-     * Validates positive bounds and ordered deadlines.
-     */
-    public CandidateGatheringPolicy {
-        if (maxProviders < 1 || maxCandidatesPerProvider < 1 || maxTotalCandidates < 1) {
-            throw new IllegalArgumentException("candidate bounds must be positive");
-        }
-        if (maxCandidatesPerProvider > maxTotalCandidates) {
-            throw new IllegalArgumentException("per-provider bound exceeds total bound");
-        }
-        if (providerTimeout.isZero() || providerTimeout.isNegative()
-                || totalTimeout.isZero() || totalTimeout.isNegative()
-                || totalTimeout.compareTo(providerTimeout) < 0) {
-            throw new IllegalArgumentException("candidate timeouts are invalid");
-        }
+  /**
+   * Validates positive bounds and ordered deadlines.
+   */
+  public CandidateGatheringPolicy {
+    if (maxProviders < 1 || maxCandidatesPerProvider < 1 || maxTotalCandidates < 1) {
+      throw new IllegalArgumentException("candidate bounds must be positive");
     }
+    if (maxCandidatesPerProvider > maxTotalCandidates) {
+      throw new IllegalArgumentException("per-provider bound exceeds total bound");
+    }
+    if (providerTimeout.isZero() || providerTimeout.isNegative()
+        || totalTimeout.isZero() || totalTimeout.isNegative()
+        || totalTimeout.compareTo(providerTimeout) < 0) {
+      throw new IllegalArgumentException("candidate timeouts are invalid");
+    }
+  }
 
-    /**
-     * Returns conservative direct-connectivity defaults with no reflexive service.
-     *
-     * @return immutable default policy
-     */
-    public static CandidateGatheringPolicy defaults() {
-        return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
-                false, true, true, true, false);
-    }
+  /**
+   * Returns conservative direct-connectivity defaults with no reflexive service.
+   *
+   * @return immutable default policy
+   */
+  public static CandidateGatheringPolicy defaults() {
+    return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
+        false, true, true, true, false);
+  }
 
-    /**
-     * Returns bounded defaults for an explicitly configured direct-traversal operation.
-     *
-     * <p>Server-reflexive candidates are accepted only when a caller supplies
-     * an actual provider, such as {@link StunCandidateProvider}; no discovery
-     * service is enabled implicitly.
-     *
-     * @return immutable traversal gathering policy
-     */
-    public static CandidateGatheringPolicy directTraversalDefaults() {
-        return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
-                false, true, true, true, true);
-    }
+  /**
+   * Returns bounded defaults for an explicitly configured direct-traversal operation.
+   *
+   * <p>Server-reflexive candidates are accepted only when a caller supplies
+   * an actual provider, such as {@link StunCandidateProvider}; no discovery service is enabled
+   * implicitly.
+   *
+   * @return immutable traversal gathering policy
+   */
+  public static CandidateGatheringPolicy directTraversalDefaults() {
+    return new CandidateGatheringPolicy(8, 16, 32, Duration.ofSeconds(2), Duration.ofSeconds(5),
+        false, true, true, true, true);
+  }
 }

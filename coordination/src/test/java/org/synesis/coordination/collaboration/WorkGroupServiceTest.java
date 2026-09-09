@@ -18,54 +18,62 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class WorkGroupServiceTest {
 
-    @Test
-    void singleUseGrantIsTargetedAndCannotReplay(@TempDir Path temp) throws Exception {
-        UUID project = UUID.randomUUID();
-        UUID groupId = UUID.randomUUID();
-        UUID intentId = UUID.randomUUID();
-        NodeIdentity identity = NodeIdentity.generate();
-        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), identity);
-        service.create(new WorkGroup(groupId, project, "parallel", "tests", 1, WorkGroup.Status.ACTIVE));
-        UUID grantId = UUID.randomUUID();
-        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 3, true));
-        service.consume(grantId, "agt-target", intentId, 3);
-        assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 3));
-        assertThrows(Exception.class, () -> service.consume(UUID.randomUUID(), "agt-target", intentId, 3));
-        assertEquals(1, new PredictionEventStore(temp, project).workGroupProjection()
-                .groups()
-                .size());
-        service.close(groupId, WorkGroup.Status.COMPLETED, 1);
-        assertEquals(WorkGroup.Status.COMPLETED, new PredictionEventStore(temp, project).workGroupProjection()
-                .group(groupId)
-                .orElseThrow()
-                .status());
-    }
+  @Test
+  void singleUseGrantIsTargetedAndCannotReplay(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID intentId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project),
+        identity);
+    service.create(
+        new WorkGroup(groupId, project, "parallel", "tests", 1, WorkGroup.Status.ACTIVE));
+    UUID grantId = UUID.randomUUID();
+    service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 3, true));
+    service.consume(grantId, "agt-target", intentId, 3);
+    assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 3));
+    assertThrows(Exception.class,
+        () -> service.consume(UUID.randomUUID(), "agt-target", intentId, 3));
+    assertEquals(1, new PredictionEventStore(temp, project).workGroupProjection()
+        .groups()
+        .size());
+    service.close(groupId, WorkGroup.Status.COMPLETED, 1);
+    assertEquals(WorkGroup.Status.COMPLETED,
+        new PredictionEventStore(temp, project).workGroupProjection()
+            .group(groupId)
+            .orElseThrow()
+            .status());
+  }
 
-    @Test
-    void revokedGrantCannotBeConsumed(@TempDir Path temp) throws Exception {
-        UUID project = UUID.randomUUID();
-        UUID groupId = UUID.randomUUID();
-        UUID intentId = UUID.randomUUID();
-        NodeIdentity identity = NodeIdentity.generate();
-        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), identity);
-        service.create(new WorkGroup(groupId, project, "delegation", "revoke", 1, WorkGroup.Status.ACTIVE));
-        UUID grantId = UUID.randomUUID();
-        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 4, true));
-        service.revoke(grantId);
-        assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 4));
-    }
+  @Test
+  void revokedGrantCannotBeConsumed(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID intentId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project),
+        identity);
+    service.create(
+        new WorkGroup(groupId, project, "delegation", "revoke", 1, WorkGroup.Status.ACTIVE));
+    UUID grantId = UUID.randomUUID();
+    service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 4, true));
+    service.revoke(grantId);
+    assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 4));
+  }
 
-    @Test
-    void grantCannotBeConsumedByWrongReviewer(@TempDir Path temp) throws Exception {
-        UUID project = UUID.randomUUID();
-        UUID groupId = UUID.randomUUID();
-        UUID intentId = UUID.randomUUID();
-        NodeIdentity identity = NodeIdentity.generate();
-        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), identity);
-        service.create(new WorkGroup(groupId, project, "review", "decision", 1, WorkGroup.Status.ACTIVE));
-        UUID grantId = UUID.randomUUID();
-        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-reviewer", 1, true));
-        assertThrows(Exception.class, () -> service.consume(grantId, "agt-other", intentId, 1));
-        service.consume(grantId, "agt-reviewer", intentId, 1);
-    }
+  @Test
+  void grantCannotBeConsumedByWrongReviewer(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID intentId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project),
+        identity);
+    service.create(
+        new WorkGroup(groupId, project, "review", "decision", 1, WorkGroup.Status.ACTIVE));
+    UUID grantId = UUID.randomUUID();
+    service.issue(new LaneGrant(grantId, groupId, intentId, "agt-reviewer", 1, true));
+    assertThrows(Exception.class, () -> service.consume(grantId, "agt-other", intentId, 1));
+    service.consume(grantId, "agt-reviewer", intentId, 1);
+  }
 }

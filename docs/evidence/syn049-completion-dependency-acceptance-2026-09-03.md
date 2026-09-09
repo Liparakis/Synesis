@@ -136,10 +136,13 @@ evidence, MCP schema/catalog, and provider guidance. The catalog remains
 exactly 10 tools. The selected source checks were:
 
 *
+
 `:coordination:test --tests org.synesis.coordination.collaboration.NoChangeCompletionTest --tests org.synesis.coordination.domain.prediction.PredictionEventWireCompatibilityTest` —
 PASS.
+
 * `:mcp-contract:test` — PASS.
 *
+
 `:workspace:test --tests org.synesis.workspace.AgentNextActionServiceTest --tests org.synesis.workspace.application.agent.ReviewAdmissionOrderIndependenceTest --tests org.synesis.workspace.application.provider.ProviderManualServiceTest` —
 PASS.
 
@@ -189,11 +192,15 @@ and `TaskRepository`) before implementing its consumer lane.
 
 ### Focused and real verification
 
-* `McpServerTest.ensureSessionCarriesExplicitDependenciesIntoDurableNextAction` — PASS against the rebuilt runtime.
+* `McpServerTest.ensureSessionCarriesExplicitDependenciesIntoDurableNextAction` — PASS against the
+  rebuilt runtime.
 * Malformed dependency input coverage — PASS.
-* Durable capability projection/restart and requester-continuation coverage — PASS in the focused source suite.
-* Real fixture: dependency preserved, `NEEDS_CAPABILITY` projected, typed request durably created, provider
-  response/publication accepted, B consumed the published contract through authorized Synesis visibility, and B's
+* Durable capability projection/restart and requester-continuation coverage — PASS in the focused
+  source suite.
+* Real fixture: dependency preserved, `NEEDS_CAPABILITY` projected, typed request durably created,
+  provider
+  response/publication accepted, B consumed the published contract through authorized Synesis
+  visibility, and B's
   implementation tests passed.
 
 ## Fresh two-worker acceptance

@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "supervisor", description = "Run and inspect a local supervisor.", mixinStandardHelpOptions = true)
 public final class SupervisorCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the supervisor command parent.
-     */
-    public SupervisorCommand() {
-    }
+  /**
+   * Creates the supervisor command parent.
+   */
+  public SupervisorCommand() {
+  }
 
-    /**
-     * Prints child command help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints child command help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

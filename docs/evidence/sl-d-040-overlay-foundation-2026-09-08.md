@@ -11,16 +11,16 @@
 
 ## Passing evidence
 
-| Check | Result |
-|---|---|
-| Link and relay main/test compilation, strict `-Xlint:all -Werror` | PASS |
-| Link and relay public/protected Javadocs, `-Xdoclint:all -Werror` | PASS |
-| `OverlayProtocolTest` | PASS; 13 found, 13 succeeded, 0 failed |
-| `RelayWireCodecTest` | PASS; 1 found, 1 succeeded, 0 failed |
-| `OverlayRelayServerTest` | PASS; 3 found, 3 succeeded, 0 failed |
-| Full `:link:check :relay:check` | PASS; 80 Link tests and 4 relay tests, 0 failures/errors |
-| Java 25 primitive compatibility probe | PASS; see `sl-d-040-java25-crypto-probe-2026-09-08.md` |
-| `git diff --check` | PASS |
+| Check                                                             | Result                                                   |
+|-------------------------------------------------------------------|----------------------------------------------------------|
+| Link and relay main/test compilation, strict `-Xlint:all -Werror` | PASS                                                     |
+| Link and relay public/protected Javadocs, `-Xdoclint:all -Werror` | PASS                                                     |
+| `OverlayProtocolTest`                                             | PASS; 13 found, 13 succeeded, 0 failed                   |
+| `RelayWireCodecTest`                                              | PASS; 1 found, 1 succeeded, 0 failed                     |
+| `OverlayRelayServerTest`                                          | PASS; 3 found, 3 succeeded, 0 failed                     |
+| Full `:link:check :relay:check`                                   | PASS; 80 Link tests and 4 relay tests, 0 failures/errors |
+| Java 25 primitive compatibility probe                             | PASS; see `sl-d-040-java25-crypto-probe-2026-09-08.md`   |
+| `git diff --check`                                                | PASS                                                     |
 
 The focused Link suite covers signed bounded membership, directional X25519/
 HKDF and ChaCha20-Poly1305 session records for both logical directions, replay

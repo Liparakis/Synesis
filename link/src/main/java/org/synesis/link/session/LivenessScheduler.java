@@ -7,12 +7,12 @@ import java.time.Duration;
  */
 public interface LivenessScheduler {
 
-    /**
-     * Schedules a runnable action to execute after the specified delay.
-     *
-     * @param action runnable action to execute
-     * @param delay  delay before execution
-     * @return handle to cancel the scheduled execution
-     */
-    Cancellable schedule(Runnable action, Duration delay);
+  /**
+   * Schedules a runnable action to execute after the specified delay.
+   *
+   * @param action runnable action to execute
+   * @param delay  delay before execution
+   * @return handle to cancel the scheduled execution
+   */
+  Cancellable schedule(Runnable action, Duration delay);
 }

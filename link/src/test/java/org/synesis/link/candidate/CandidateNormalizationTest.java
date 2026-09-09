@@ -15,52 +15,56 @@ import org.junit.jupiter.api.Test;
  */
 final class CandidateNormalizationTest {
 
-    @Test
-    void normalizationDeduplicatesMappedAddressesAndKeepsBestPriority() throws Exception {
-        Candidate first = new Candidate(CandidateType.MANUAL,
-                InetAddress.getByName("::ffff:192.0.2.10"), 4433, 20);
-        Candidate better = new Candidate(CandidateType.MANUAL,
-                InetAddress.getByName("192.0.2.10"), 4433, 5);
+  @Test
+  void normalizationDeduplicatesMappedAddressesAndKeepsBestPriority() throws Exception {
+    Candidate first = new Candidate(CandidateType.MANUAL,
+        InetAddress.getByName("::ffff:192.0.2.10"), 4433, 20);
+    Candidate better = new Candidate(CandidateType.MANUAL,
+        InetAddress.getByName("192.0.2.10"), 4433, 5);
 
-        List<Candidate> normalized = CandidateNormalizer.normalize(List.of(first, better),
-                CandidateGatheringPolicy.defaults());
+    List<Candidate> normalized = CandidateNormalizer.normalize(List.of(first, better),
+        CandidateGatheringPolicy.defaults());
 
-        assertEquals(1, normalized.size());
-        assertEquals(5,
-                normalized.getFirst()
-                        .priority());
-        assertEquals(4,
-                normalized.getFirst()
-                        .address()
-                        .getAddress().length);
-    }
+    assertEquals(1, normalized.size());
+    assertEquals(5,
+        normalized.getFirst()
+            .priority());
+    assertEquals(4,
+        normalized.getFirst()
+            .address()
+            .getAddress().length);
+  }
 
-    @Test
-    void unsafeAddressesAndRelayPairsAreRejected() throws Exception {
-        assertThrows(IllegalArgumentException.class, () -> CandidateNormalizer.normalize(List.of(
-                        new Candidate(CandidateType.MANUAL, InetAddress.getByName("0.0.0.0"), 4433, 1),
-                        new Candidate(CandidateType.MANUAL, InetAddress.getByName("224.0.0.1"), 4433, 1)),
-                CandidateGatheringPolicy.defaults()));
-        Candidate relay = new Candidate(CandidateType.RELAY, InetAddress.getByName("192.0.2.1"), 4433, 1);
-        assertEquals(0,
-                CandidateNormalizer.normalize(List.of(relay), CandidateGatheringPolicy.defaults())
-                        .size());
-    }
+  @Test
+  void unsafeAddressesAndRelayPairsAreRejected() throws Exception {
+    assertThrows(IllegalArgumentException.class, () -> CandidateNormalizer.normalize(List.of(
+            new Candidate(CandidateType.MANUAL, InetAddress.getByName("0.0.0.0"), 4433, 1),
+            new Candidate(CandidateType.MANUAL, InetAddress.getByName("224.0.0.1"), 4433, 1)),
+        CandidateGatheringPolicy.defaults()));
+    Candidate relay = new Candidate(CandidateType.RELAY, InetAddress.getByName("192.0.2.1"), 4433,
+        1);
+    assertEquals(0,
+        CandidateNormalizer.normalize(List.of(relay), CandidateGatheringPolicy.defaults())
+            .size());
+  }
 
-    @Test
-    void pairRankingAndCompatibilityAreDeterministic() throws Exception {
-        Candidate local = new Candidate(CandidateType.LAN, InetAddress.getByName("192.0.2.1"), 4433, 10);
-        Candidate remote = new Candidate(CandidateType.MANUAL, InetAddress.getByName("192.0.2.2"), 4433, 10);
-        Candidate ipv6 = new Candidate(CandidateType.IPV6, InetAddress.getByName("2001:db8::2"), 4433, 1);
-        List<CandidatePair> pairs = CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8);
+  @Test
+  void pairRankingAndCompatibilityAreDeterministic() throws Exception {
+    Candidate local = new Candidate(CandidateType.LAN, InetAddress.getByName("192.0.2.1"), 4433,
+        10);
+    Candidate remote = new Candidate(CandidateType.MANUAL, InetAddress.getByName("192.0.2.2"), 4433,
+        10);
+    Candidate ipv6 = new Candidate(CandidateType.IPV6, InetAddress.getByName("2001:db8::2"), 4433,
+        1);
+    List<CandidatePair> pairs = CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8);
 
-        assertEquals(1, pairs.size());
-        assertTrue(pairs.getFirst()
-                .identifier()
-                .startsWith("LAN/MANUAL/h"));
-        assertFalse(pairs.getFirst()
-                .identifier()
-                .contains("192.0.2.1"));
-        assertEquals(pairs, CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8));
-    }
+    assertEquals(1, pairs.size());
+    assertTrue(pairs.getFirst()
+        .identifier()
+        .startsWith("LAN/MANUAL/h"));
+    assertFalse(pairs.getFirst()
+        .identifier()
+        .contains("192.0.2.1"));
+    assertEquals(pairs, CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8));
+  }
 }

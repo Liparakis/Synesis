@@ -12,25 +12,25 @@ import org.junit.jupiter.api.Test;
  */
 class CodexAppServerProtocolSchemaTest {
 
-    @Test
-    void acceptsNumericServerRequestId() {
-        assertDoesNotThrow(() -> CodexAppServerProtocolSchema.validateFrame(Map.of(
-                "id", 0L,
-                "method", "mcpServer/elicitation/request",
-                "params", Map.of())));
-    }
+  @Test
+  void acceptsNumericServerRequestId() {
+    assertDoesNotThrow(() -> CodexAppServerProtocolSchema.validateFrame(Map.of(
+        "id", 0L,
+        "method", "mcpServer/elicitation/request",
+        "params", Map.of())));
+  }
 
-    @Test
-    void acceptsNumericResponseId() {
-        assertDoesNotThrow(() -> CodexAppServerProtocolSchema.validateFrame(Map.of(
-                "id", 0L,
-                "result", Map.of("ok", true))));
-    }
+  @Test
+  void acceptsNumericResponseId() {
+    assertDoesNotThrow(() -> CodexAppServerProtocolSchema.validateFrame(Map.of(
+        "id", 0L,
+        "result", Map.of("ok", true))));
+  }
 
-    @Test
-    void rejectsFractionalRequestId() {
-        assertThrows(IOException.class, () -> CodexAppServerProtocolSchema.validateFrame(Map.of(
-                "id", 1.5,
-                "result", Map.of())));
-    }
+  @Test
+  void rejectsFractionalRequestId() {
+    assertThrows(IOException.class, () -> CodexAppServerProtocolSchema.validateFrame(Map.of(
+        "id", 1.5,
+        "result", Map.of())));
+  }
 }

@@ -5,8 +5,8 @@ package org.synesis.link.session;
  */
 public interface Cancellable {
 
-    /**
-     * Cancels the scheduled liveness callback.
-     */
-    void cancel();
+  /**
+   * Cancels the scheduled liveness callback.
+   */
+  void cancel();
 }

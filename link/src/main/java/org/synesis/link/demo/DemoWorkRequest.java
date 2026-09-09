@@ -12,26 +12,26 @@ import java.util.UUID;
  */
 public record DemoWorkRequest(UUID requestId, String operation) {
 
-    /**
-     * The only operation implemented by the demonstration.
-     */
-    public static final String DESCRIBE_SESSION = "describe-session";
-    /**
-     * Maximum encoded operation length.
-     */
-    public static final int MAX_OPERATION_BYTES = 64;
+  /**
+   * The only operation implemented by the demonstration.
+   */
+  public static final String DESCRIBE_SESSION = "describe-session";
+  /**
+   * Maximum encoded operation length.
+   */
+  public static final int MAX_OPERATION_BYTES = 64;
 
-    /**
-     * Validates the fixed operation and bounded UTF-8 representation.
-     */
-    public DemoWorkRequest {
-        Objects.requireNonNull(requestId, "request ID");
-        Objects.requireNonNull(operation, "operation");
-        if (!DESCRIBE_SESSION.equals(operation)) {
-            throw new IllegalArgumentException("unsupported demo operation");
-        }
-        if (operation.getBytes(StandardCharsets.UTF_8).length > MAX_OPERATION_BYTES) {
-            throw new IllegalArgumentException("operation exceeds the supported bound");
-        }
+  /**
+   * Validates the fixed operation and bounded UTF-8 representation.
+   */
+  public DemoWorkRequest {
+    Objects.requireNonNull(requestId, "request ID");
+    Objects.requireNonNull(operation, "operation");
+    if (!DESCRIBE_SESSION.equals(operation)) {
+      throw new IllegalArgumentException("unsupported demo operation");
     }
+    if (operation.getBytes(StandardCharsets.UTF_8).length > MAX_OPERATION_BYTES) {
+      throw new IllegalArgumentException("operation exceeds the supported bound");
+    }
+  }
 }

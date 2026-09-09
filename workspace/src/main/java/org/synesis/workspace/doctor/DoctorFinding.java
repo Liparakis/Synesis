@@ -19,30 +19,30 @@ import java.util.Objects;
  * @since 1.0
  */
 public record DoctorFinding(
-        DoctorFindingCode code,
-        DoctorSeverity severity,
-        DoctorConfidence confidence,
-        String summary,
-        String explanation,
-        String affectedResourceType,
-        boolean repairSupported,
-        DoctorRecommendation recommendation,
-        String evidenceFingerprint,
-        Map<String, String> details
+    DoctorFindingCode code,
+    DoctorSeverity severity,
+    DoctorConfidence confidence,
+    String summary,
+    String explanation,
+    String affectedResourceType,
+    boolean repairSupported,
+    DoctorRecommendation recommendation,
+    String evidenceFingerprint,
+    Map<String, String> details
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public DoctorFinding {
-        Objects.requireNonNull(code, "code");
-        Objects.requireNonNull(severity, "severity");
-        Objects.requireNonNull(confidence, "confidence");
-        Objects.requireNonNull(summary, "summary");
-        Objects.requireNonNull(explanation, "explanation");
-        Objects.requireNonNull(affectedResourceType, "affectedResourceType");
-        Objects.requireNonNull(recommendation, "recommendation");
-        Objects.requireNonNull(evidenceFingerprint, "evidenceFingerprint");
-        Objects.requireNonNull(details, "details");
-    }
+  /**
+   * Invariant validation.
+   */
+  public DoctorFinding {
+    Objects.requireNonNull(code, "code");
+    Objects.requireNonNull(severity, "severity");
+    Objects.requireNonNull(confidence, "confidence");
+    Objects.requireNonNull(summary, "summary");
+    Objects.requireNonNull(explanation, "explanation");
+    Objects.requireNonNull(affectedResourceType, "affectedResourceType");
+    Objects.requireNonNull(recommendation, "recommendation");
+    Objects.requireNonNull(evidenceFingerprint, "evidenceFingerprint");
+    Objects.requireNonNull(details, "details");
+  }
 }

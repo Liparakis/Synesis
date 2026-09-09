@@ -5,10 +5,10 @@ package org.synesis.link.session;
  */
 public interface MonotonicClock {
 
-    /**
-     * Returns the current value of the monotonic time source, in nanoseconds.
-     *
-     * @return current monotonic time in nanoseconds
-     */
-    long nanoTime();
+  /**
+   * Returns the current value of the monotonic time source, in nanoseconds.
+   *
+   * @return current monotonic time in nanoseconds
+   */
+  long nanoTime();
 }

@@ -14,19 +14,19 @@ import java.util.Objects;
  * @since 1.0
  */
 public record LifecycleResourceFingerprint(
-        String normalizedIdentity,
-        long durableStateVersion,
-        String gitHead,
-        String gitCommonDir,
-        String cleanStatusDigest,
-        String metadataHash
+    String normalizedIdentity,
+    long durableStateVersion,
+    String gitHead,
+    String gitCommonDir,
+    String cleanStatusDigest,
+    String metadataHash
 ) {
 
-    /**
-     * Validates required component invariants.
-     */
-    public LifecycleResourceFingerprint {
-        Objects.requireNonNull(normalizedIdentity, "normalizedIdentity");
-        Objects.requireNonNull(metadataHash, "metadataHash");
-    }
+  /**
+   * Validates required component invariants.
+   */
+  public LifecycleResourceFingerprint {
+    Objects.requireNonNull(normalizedIdentity, "normalizedIdentity");
+    Objects.requireNonNull(metadataHash, "metadataHash");
+  }
 }

@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "constraint", description = "Manage typed project constraints.")
 public final class ConstraintCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the constraint parent command.
-     */
-    public ConstraintCommand() {
-    }
+  /**
+   * Creates the constraint parent command.
+   */
+  public ConstraintCommand() {
+  }
 
-    /**
-     * Prints constraint help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints constraint help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

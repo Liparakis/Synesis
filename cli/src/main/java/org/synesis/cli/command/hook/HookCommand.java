@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "hook", description = "Run a provider hook adapter.")
 public final class HookCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the hook parent command.
-     */
-    public HookCommand() {
-    }
+  /**
+   * Creates the hook parent command.
+   */
+  public HookCommand() {
+  }
 
-    /**
-     * Prints hook help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints hook help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

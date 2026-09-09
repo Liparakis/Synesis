@@ -9,16 +9,16 @@ import org.synesis.link.session.PeerSession;
  */
 public interface ConnectionAttempt {
 
-    /**
-     * Starts the attempt; completion is a winner candidate only after control readiness.
-     *
-     * @param cancellation cooperative race cancellation
-     * @return eventual authenticated session or failure
-     */
-    CompletionStage<PeerSession> connect(CandidateCancellation cancellation);
+  /**
+   * Starts the attempt; completion is a winner candidate only after control readiness.
+   *
+   * @param cancellation cooperative race cancellation
+   * @return eventual authenticated session or failure
+   */
+  CompletionStage<PeerSession> connect(CandidateCancellation cancellation);
 
-    /**
-     * Cancels and closes all resources owned solely by this attempt.
-     */
-    void cancel();
+  /**
+   * Cancels and closes all resources owned solely by this attempt.
+   */
+  void cancel();
 }

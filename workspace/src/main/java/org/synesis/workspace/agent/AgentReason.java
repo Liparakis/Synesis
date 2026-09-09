@@ -12,305 +12,304 @@ import java.util.Locale;
  */
 public enum AgentReason {
 
-    /**
-     * Target path is a protected configuration or system file.
-     */
-    PROTECTED_CONFIGURATION("protected_configuration"),
+  /**
+   * Target path is a protected configuration or system file.
+   */
+  PROTECTED_CONFIGURATION("protected_configuration"),
 
-    /**
-     * Operation is denied by active workspace policy rules.
-     */
-    POLICY_DENIED("policy_denied"),
+  /**
+   * Operation is denied by active workspace policy rules.
+   */
+  POLICY_DENIED("policy_denied"),
 
-    /**
-     * Capability is owned by another worker and requires contract specification.
-     */
-    OWNER_REQUIRED("owner_required"),
+  /**
+   * Capability is owned by another worker and requires contract specification.
+   */
+  OWNER_REQUIRED("owner_required"),
 
-    /**
-     * Workspace trust or worktree state is unverified.
-     */
-    WORKSPACE_NOT_READY("workspace_not_ready"),
+  /**
+   * Workspace trust or worktree state is unverified.
+   */
+  WORKSPACE_NOT_READY("workspace_not_ready"),
 
-    /**
-     * Provider session is unbound or missing.
-     */
-    SESSION_NOT_READY("session_not_ready"),
+  /**
+   * Provider session is unbound or missing.
+   */
+  SESSION_NOT_READY("session_not_ready"),
 
-    /**
-     * Workspace context is stale or out of sync.
-     */
-    WORKSPACE_STALE("workspace_stale"),
+  /**
+   * Workspace context is stale or out of sync.
+   */
+  WORKSPACE_STALE("workspace_stale"),
 
-    /**
-     * The agent is operating from the control checkout instead of its assigned worktree.
-     */
-    WORKSPACE_MISMATCH("workspace_mismatch"),
+  /**
+   * The agent is operating from the control checkout instead of its assigned worktree.
+   */
+  WORKSPACE_MISMATCH("workspace_mismatch"),
 
-    /**
-     * The complete Git tree fails the declared cross-platform portability policy.
-     */
-    REPOSITORY_NOT_PORTABLE("repository_not_portable"),
+  /**
+   * The complete Git tree fails the declared cross-platform portability policy.
+   */
+  REPOSITORY_NOT_PORTABLE("repository_not_portable"),
 
-    /**
-     * A modifying patch omitted the optimistic content precondition returned by a read.
-     */
-    PATCH_PRECONDITION_REQUIRED("patch_precondition_required"),
+  /**
+   * A modifying patch omitted the optimistic content precondition returned by a read.
+   */
+  PATCH_PRECONDITION_REQUIRED("patch_precondition_required"),
 
-    /**
-     * Target file content differs from the revision supplied by the agent.
-     */
-    FILE_REVISION_STALE("file_revision_stale"),
+  /**
+   * Target file content differs from the revision supplied by the agent.
+   */
+  FILE_REVISION_STALE("file_revision_stale"),
 
-    /**
-     * The requested edit context no longer applies to the target file.
-     */
-    PATCH_CONTEXT_MISMATCH("patch_context_mismatch"),
+  /**
+   * The requested edit context no longer applies to the target file.
+   */
+  PATCH_CONTEXT_MISMATCH("patch_context_mismatch"),
 
-    /**
-     * The assigned worker generation changed and must be re-established.
-     */
-    WORKSPACE_GENERATION_CHANGED("workspace_generation_changed"),
+  /**
+   * The assigned worker generation changed and must be re-established.
+   */
+  WORKSPACE_GENERATION_CHANGED("workspace_generation_changed"),
 
-    /**
-     * Mutation of a mixed-line-ending file requires explicit review.
-     */
-    MIXED_LINE_ENDINGS_REQUIRES_REVIEW("mixed_line_endings_require_review"),
+  /**
+   * Mutation of a mixed-line-ending file requires explicit review.
+   */
+  MIXED_LINE_ENDINGS_REQUIRES_REVIEW("mixed_line_endings_require_review"),
 
-    /**
-     * Requested path or target specification is invalid.
-     */
-    INVALID_PATH("invalid_path"),
+  /**
+   * Requested path or target specification is invalid.
+   */
+  INVALID_PATH("invalid_path"),
 
-    /**
-     * Hook interception is required but missing or synthetic.
-     */
-    INTERCEPTION_REQUIRED("interception_required"),
+  /**
+   * Hook interception is required but missing or synthetic.
+   */
+  INTERCEPTION_REQUIRED("interception_required"),
 
-    /**
-     * Provider configuration ownership is tracked, malformed, or ambiguous.
-     */
-    PROVIDER_CONFIGURATION_CONFLICT("provider_configuration_conflict"),
+  /**
+   * Provider configuration ownership is tracked, malformed, or ambiguous.
+   */
+  PROVIDER_CONFIGURATION_CONFLICT("provider_configuration_conflict"),
 
-    /**
-     * The selected provider integration has not been installed and verified
-     * for this project.
-     */
-    PROVIDER_INTEGRATION_REQUIRED("provider_integration_required"),
+  /**
+   * The selected provider integration has not been installed and verified for this project.
+   */
+  PROVIDER_INTEGRATION_REQUIRED("provider_integration_required"),
 
-    /**
-     * Response from capability owner is pending.
-     */
-    OWNER_RESPONSE_PENDING("owner_response_pending"),
+  /**
+   * Response from capability owner is pending.
+   */
+  OWNER_RESPONSE_PENDING("owner_response_pending"),
 
-    /**
-     * An internal system or safety failure occurred.
-     */
-    INTERNAL_FAILURE("internal_failure"),
+  /**
+   * An internal system or safety failure occurred.
+   */
+  INTERNAL_FAILURE("internal_failure"),
 
-    /**
-     * Project command failed with a non-zero exit code.
-     */
-    COMMAND_FAILED("command_failed"),
+  /**
+   * Project command failed with a non-zero exit code.
+   */
+  COMMAND_FAILED("command_failed"),
 
-    /**
-     * Project command execution exceeded the maximum allowed time limit.
-     */
-    COMMAND_TIMEOUT("command_timeout"),
+  /**
+   * Project command execution exceeded the maximum allowed time limit.
+   */
+  COMMAND_TIMEOUT("command_timeout"),
 
-    /**
-     * The configured command executable could not be found.
-     */
-    COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
+  /**
+   * The configured command executable could not be found.
+   */
+  COMMAND_EXECUTABLE_NOT_FOUND("command_executable_not_found"),
 
-    /**
-     * The configured command working directory failed lane policy.
-     */
-    COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
+  /**
+   * The configured command working directory failed lane policy.
+   */
+  COMMAND_WORKING_DIRECTORY_INVALID("command_working_directory_invalid"),
 
-    /**
-     * The configured command could not be started because of permissions.
-     */
-    COMMAND_PERMISSION_DENIED("command_permission_denied"),
+  /**
+   * The configured command could not be started because of permissions.
+   */
+  COMMAND_PERMISSION_DENIED("command_permission_denied"),
 
-    /**
-     * The configured command could not be started for another concrete reason.
-     */
-    COMMAND_START_FAILED("command_start_failed"),
+  /**
+   * The configured command could not be started for another concrete reason.
+   */
+  COMMAND_START_FAILED("command_start_failed"),
 
-    /**
-     * The command caller cancelled execution.
-     */
-    COMMAND_CANCELLED("command_cancelled"),
+  /**
+   * The command caller cancelled execution.
+   */
+  COMMAND_CANCELLED("command_cancelled"),
 
-    /**
-     * The command process tree terminated before normal completion.
-     */
-    COMMAND_TERMINATED("command_terminated"),
+  /**
+   * The command process tree terminated before normal completion.
+   */
+  COMMAND_TERMINATED("command_terminated"),
 
-    /**
-     * A repeated typed request carried a different semantic digest.
-     */
-    COMMAND_IDEMPOTENCY_CONFLICT("command_idempotency_conflict"),
+  /**
+   * A repeated typed request carried a different semantic digest.
+   */
+  COMMAND_IDEMPOTENCY_CONFLICT("command_idempotency_conflict"),
 
-    /**
-     * A durable command remains unresolved and blocks a new launch.
-     */
-    COMMAND_AMBIGUOUS("command_ambiguous"),
+  /**
+   * A durable command remains unresolved and blocks a new launch.
+   */
+  COMMAND_AMBIGUOUS("command_ambiguous"),
 
-    /**
-     * The live process anchor has reached its bounded request-ID capacity.
-     */
-    COMMAND_CAPACITY_EXCEEDED("command_capacity_exceeded"),
+  /**
+   * The live process anchor has reached its bounded request-ID capacity.
+   */
+  COMMAND_CAPACITY_EXCEEDED("command_capacity_exceeded"),
 
-    /**
-     * Durable command state uses an unsupported or corrupt format.
-     */
-    COMMAND_FORMAT_UNSUPPORTED("command_format_unsupported"),
+  /**
+   * Durable command state uses an unsupported or corrupt format.
+   */
+  COMMAND_FORMAT_UNSUPPORTED("command_format_unsupported"),
 
-    /**
-     * Authority changed during the lease release/reacquire admission gap.
-     */
-    COMMAND_ADMISSION_STALE("command_admission_stale"),
+  /**
+   * Authority changed during the lease release/reacquire admission gap.
+   */
+  COMMAND_ADMISSION_STALE("command_admission_stale"),
 
-    /**
-     * Requested tool or command adapter is not available or supported for this project.
-     */
-    TOOL_UNAVAILABLE("tool_unavailable"),
+  /**
+   * Requested tool or command adapter is not available or supported for this project.
+   */
+  TOOL_UNAVAILABLE("tool_unavailable"),
 
-    /**
-     * Dependency or speculative assumption has been invalidated.
-     */
-    DEPENDENCY_INVALIDATED("dependency_invalidated"),
+  /**
+   * Dependency or speculative assumption has been invalidated.
+   */
+  DEPENDENCY_INVALIDATED("dependency_invalidated"),
 
-    /**
-     * Request from another worker requiring owner response.
-     */
-    OWNER_REQUEST_PENDING("owner_request_pending"),
+  /**
+   * Request from another worker requiring owner response.
+   */
+  OWNER_REQUEST_PENDING("owner_request_pending"),
 
-    /**
-     * Implementation is available and validation is required.
-     */
-    VALIDATION_REQUIRED("validation_required"),
+  /**
+   * Implementation is available and validation is required.
+   */
+  VALIDATION_REQUIRED("validation_required"),
 
-    /**
-     * Target capability request was not found.
-     */
-    REQUEST_NOT_FOUND("request_not_found"),
+  /**
+   * Target capability request was not found.
+   */
+  REQUEST_NOT_FOUND("request_not_found"),
 
-    /**
-     * Capability request or revision state is stale.
-     */
-    STALE_REQUEST("stale_request"),
+  /**
+   * Capability request or revision state is stale.
+   */
+  STALE_REQUEST("stale_request"),
 
-    /**
-     * Capability request was rejected by the owner.
-     */
-    CAPABILITY_REJECTED("capability_rejected"),
+  /**
+   * Capability request was rejected by the owner.
+   */
+  CAPABILITY_REJECTED("capability_rejected"),
 
-    /**
-     * Contract revision is required by the owner.
-     */
-    REVISION_REQUIRED("revision_required"),
+  /**
+   * Contract revision is required by the owner.
+   */
+  REVISION_REQUIRED("revision_required"),
 
-    /**
-     * Implementation snapshot is not yet published or available.
-     */
-    IMPLEMENTATION_UNAVAILABLE("implementation_unavailable"),
+  /**
+   * Implementation snapshot is not yet published or available.
+   */
+  IMPLEMENTATION_UNAVAILABLE("implementation_unavailable"),
 
-    /**
-     * Requester validation of the implementation snapshot failed.
-     */
-    VALIDATION_FAILED("validation_failed"),
+  /**
+   * Requester validation of the implementation snapshot failed.
+   */
+  VALIDATION_FAILED("validation_failed"),
 
-    /**
-     * Task completion blocked by unresolved capability or task dependencies.
-     */
-    UNRESOLVED_DEPENDENCY("unresolved_dependency"),
+  /**
+   * Task completion blocked by unresolved capability or task dependencies.
+   */
+  UNRESOLVED_DEPENDENCY("unresolved_dependency"),
 
-    /**
-     * Capability publication or resolution does not match its durable authority lineage.
-     */
-    CAPABILITY_LINEAGE_MISMATCH("capability_lineage_mismatch"),
+  /**
+   * Capability publication or resolution does not match its durable authority lineage.
+   */
+  CAPABILITY_LINEAGE_MISMATCH("capability_lineage_mismatch"),
 
-    /**
-     * The publisher is no longer the active authority for the capability lineage.
-     */
-    CAPABILITY_PUBLISHER_STALE("capability_publisher_stale"),
+  /**
+   * The publisher is no longer the active authority for the capability lineage.
+   */
+  CAPABILITY_PUBLISHER_STALE("capability_publisher_stale"),
 
-    /**
-     * Task is not ready for completion due to active validation or unverified state.
-     */
-    TASK_NOT_READY("task_not_ready"),
+  /**
+   * Task is not ready for completion due to active validation or unverified state.
+   */
+  TASK_NOT_READY("task_not_ready"),
 
-    /**
-     * Immutable task snapshot created and waiting for dependent tasks to complete integration.
-     */
-    INTEGRATION_PENDING("integration_pending"),
+  /**
+   * Immutable task snapshot created and waiting for dependent tasks to complete integration.
+   */
+  INTEGRATION_PENDING("integration_pending"),
 
-    /**
-     * A consumed review grant requires the implementation lane to publish its snapshot.
-     */
-    SNAPSHOT_PUBLICATION_REQUIRED("snapshot_publication_required"),
+  /**
+   * A consumed review grant requires the implementation lane to publish its snapshot.
+   */
+  SNAPSHOT_PUBLICATION_REQUIRED("snapshot_publication_required"),
 
-    /**
-     * Integration attempt encountered git merge conflict.
-     */
-    INTEGRATION_CONFLICT("integration_conflict"),
+  /**
+   * Integration attempt encountered git merge conflict.
+   */
+  INTEGRATION_CONFLICT("integration_conflict"),
 
-    /**
-     * Integration attempt failed build or test gate.
-     */
-    INTEGRATION_FAILED("integration_failed"),
+  /**
+   * Integration attempt failed build or test gate.
+   */
+  INTEGRATION_FAILED("integration_failed"),
 
-    /**
-     * Control branch moved during integration attempt; retry required.
-     */
-    INTEGRATION_STALE("integration_stale"),
+  /**
+   * Control branch moved during integration attempt; retry required.
+   */
+  INTEGRATION_STALE("integration_stale"),
 
-    /**
-     * Mutation requires an announced intent and owned resource claim.
-     */
-    COORDINATION_INTENT_REQUIRED("coordination_intent_required"),
+  /**
+   * Mutation requires an announced intent and owned resource claim.
+   */
+  COORDINATION_INTENT_REQUIRED("coordination_intent_required"),
 
-    /**
-     * Mutation overlaps another participant's active resource claim.
-     */
-    OVERLAPPING_CLAIM("overlapping_claim");
+  /**
+   * Mutation overlaps another participant's active resource claim.
+   */
+  OVERLAPPING_CLAIM("overlapping_claim");
 
-    private final String value;
+  private final String value;
 
-    AgentReason(String value) {
-        this.value = value;
+  AgentReason(String value) {
+    this.value = value;
+  }
+
+  /**
+   * Parses a string into an {@link AgentReason}.
+   *
+   * @param input string value
+   * @return matching reason
+   * @throws IllegalArgumentException if unknown
+   */
+  public static AgentReason fromValue(String input) {
+    if (input == null) {
+      throw new IllegalArgumentException("reason value cannot be null");
     }
-
-    /**
-     * Parses a string into an {@link AgentReason}.
-     *
-     * @param input string value
-     * @return matching reason
-     * @throws IllegalArgumentException if unknown
-     */
-    public static AgentReason fromValue(String input) {
-        if (input == null) {
-            throw new IllegalArgumentException("reason value cannot be null");
-        }
-        String normalized = input.trim()
-                .toLowerCase(Locale.ROOT);
-        for (AgentReason reason : values()) {
-            if (reason.value.equals(normalized)) {
-                return reason;
-            }
-        }
-        throw new IllegalArgumentException("Unknown agent reason: " + input);
+    String normalized = input.trim()
+        .toLowerCase(Locale.ROOT);
+    for (AgentReason reason : values()) {
+      if (reason.value.equals(normalized)) {
+        return reason;
+      }
     }
+    throw new IllegalArgumentException("Unknown agent reason: " + input);
+  }
 
-    /**
-     * Returns the stable lowercase JSON representation.
-     *
-     * @return lowercase string representation
-     */
-    public String value() {
-        return value;
-    }
+  /**
+   * Returns the stable lowercase JSON representation.
+   *
+   * @return lowercase string representation
+   */
+  public String value() {
+    return value;
+  }
 }

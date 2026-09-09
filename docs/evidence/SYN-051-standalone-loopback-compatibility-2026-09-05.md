@@ -211,7 +211,8 @@ All six suite manifests have identical original source and class SHA-256.
 | `run_probe.py`          | `d7b93e06d9e14f72882ae6dafb387d7cf4b7271470b20bff440a5ff545882b33` |
 | `run_unix.py`           | `4473ae5d4f114df2a091e4426dbc9ccdf1567ecf9992235a5303d83105fd2f4a` |
 
-Raw evidence: [complete command/result/trace transcript](SYN-051-standalone-loopback-compatibility-2026-09-05-raw.txt).
+Raw
+evidence: [complete command/result/trace transcript](SYN-051-standalone-loopback-compatibility-2026-09-05-raw.txt).
 Diagnostics remain at `C:\t\synesis-loopback-probe` for inspection.
 Repository changes are documentation/evidence/checkpoint only. No production
 test suite or managed runtime acceptance was run; neither is needed to claim

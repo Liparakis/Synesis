@@ -28,6 +28,7 @@ export interface ProviderSnapshot {
 export interface SelectorSnapshot {
   type?: string;
   value?: string;
+
   [key: string]: unknown;
 }
 
@@ -313,7 +314,7 @@ export function parseSseBlock(block: string): ServerEvent | null {
     if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
   }
   if (data.length === 0) return null;
-  return { type, id, data: JSON.parse(data.join("\n")) as Record<string, unknown> };
+  return {type, id, data: JSON.parse(data.join("\n")) as Record<string, unknown>};
 }
 
 async function readError(response: Response): Promise<ControlPlaneError> {
@@ -336,8 +337,8 @@ export class ControlPlaneClient {
   async startSession(bootstrapToken: string): Promise<Snapshot> {
     const response = await fetch(`${API_PREFIX}/session`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bootstrapToken }),
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({bootstrapToken}),
     });
     if (!response.ok) throw await readError(response);
     const credentials = (await response.json()) as { sessionToken: string; csrfToken: string };
@@ -352,19 +353,19 @@ export class ControlPlaneClient {
   }
 
   async invite(expectedPeer?: string): Promise<InviteResponse> {
-    return this.command<InviteResponse>("invite", expectedPeer ? { expectedPeer } : {});
+    return this.command<InviteResponse>("invite", expectedPeer ? {expectedPeer} : {});
   }
 
   async join(inviteUri: string): Promise<JoinResponse> {
-    return this.command<JoinResponse>("join", { inviteUri });
+    return this.command<JoinResponse>("join", {inviteUri});
   }
 
   async answer(operationId: string, answerUri: string): Promise<OperationResponse> {
-    return this.command<OperationResponse>("answer", { operationId, answerUri });
+    return this.command<OperationResponse>("answer", {operationId, answerUri});
   }
 
   async connect(operationId: string): Promise<OperationResponse> {
-    return this.command<OperationResponse>("connect", { operationId });
+    return this.command<OperationResponse>("connect", {operationId});
   }
 
   startEvents(handlers: {
@@ -380,7 +381,7 @@ export class ControlPlaneClient {
         controller = new AbortController();
         try {
           const response = await fetch(`${API_PREFIX}/events`, {
-            headers: { Accept: "text/event-stream", "X-Synesis-Control-Session": this.sessionToken },
+            headers: {Accept: "text/event-stream", "X-Synesis-Control-Session": this.sessionToken},
             signal: controller.signal,
           });
           if (!response.ok || !response.body) throw await readError(response);
@@ -414,7 +415,7 @@ export class ControlPlaneClient {
   private async command<T>(name: string, body: Record<string, string>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken },
+      headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},
       body: JSON.stringify(body),
     });
     return (await response.json()) as T;
@@ -423,7 +424,7 @@ export class ControlPlaneClient {
   private async request(url: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("X-Synesis-Control-Session", this.sessionToken);
-    const response = await fetch(url, { ...init, headers });
+    const response = await fetch(url, {...init, headers});
     if (!response.ok) throw await readError(response);
     return response;
   }
@@ -434,8 +435,8 @@ async function consumeSse(stream: ReadableStream<Uint8Array>, onEvent: (event: S
   const decoder = new TextDecoder();
   let buffer = "";
   while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
+    const {done, value} = await reader.read();
+    buffer += decoder.decode(value, {stream: !done});
     let separator = buffer.indexOf("\n\n");
     while (separator >= 0) {
       const block = buffer.slice(0, separator);

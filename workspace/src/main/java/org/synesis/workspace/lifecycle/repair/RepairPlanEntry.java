@@ -20,28 +20,28 @@ import org.synesis.workspace.doctor.DoctorFindingCode;
  * @since 1.0
  */
 public record RepairPlanEntry(
-        int schemaVersion,
-        String entryId,
-        DoctorFindingCode findingCode,
-        RepairAction action,
-        String targetPath,
-        String targetFingerprint,
-        boolean executable,
-        List<String> reasons,
-        String summary,
-        boolean backupRequired
+    int schemaVersion,
+    String entryId,
+    DoctorFindingCode findingCode,
+    RepairAction action,
+    String targetPath,
+    String targetFingerprint,
+    boolean executable,
+    List<String> reasons,
+    String summary,
+    boolean backupRequired
 ) {
 
-    /**
-     * Invariant validation.
-     */
-    public RepairPlanEntry {
-        Objects.requireNonNull(entryId, "entryId");
-        Objects.requireNonNull(findingCode, "findingCode");
-        Objects.requireNonNull(action, "action");
-        Objects.requireNonNull(targetPath, "targetPath");
-        Objects.requireNonNull(targetFingerprint, "targetFingerprint");
-        Objects.requireNonNull(reasons, "reasons");
-        Objects.requireNonNull(summary, "summary");
-    }
+  /**
+   * Invariant validation.
+   */
+  public RepairPlanEntry {
+    Objects.requireNonNull(entryId, "entryId");
+    Objects.requireNonNull(findingCode, "findingCode");
+    Objects.requireNonNull(action, "action");
+    Objects.requireNonNull(targetPath, "targetPath");
+    Objects.requireNonNull(targetFingerprint, "targetFingerprint");
+    Objects.requireNonNull(reasons, "reasons");
+    Objects.requireNonNull(summary, "summary");
+  }
 }

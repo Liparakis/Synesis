@@ -5,8 +5,8 @@ package org.synesis.cli.terminal;
  */
 interface QrRenderer {
 
-    /**
-     * @param link exact share link @return rendered QR
-     */
-    String render(String link);
+  /**
+   * @param link exact share link @return rendered QR
+   */
+  String render(String link);
 }

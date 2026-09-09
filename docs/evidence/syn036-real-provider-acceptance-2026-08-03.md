@@ -62,7 +62,8 @@ guarantees, and it is not evidence of native-hook maturity.
 
 After the provider attempt, the repository passed:
 
-- sequential `./gradlew.bat check --no-daemon --max-workers=1 --no-parallel --dependency-verification=strict`;
+- sequential
+  `./gradlew.bat check --no-daemon --max-workers=1 --no-parallel --dependency-verification=strict`;
 - `:mcp:check`, including the two-process collaboration regressions;
 - focused SYN-036 baseline, reset, portability, lineage, integration, repair,
   and provider-session tests;

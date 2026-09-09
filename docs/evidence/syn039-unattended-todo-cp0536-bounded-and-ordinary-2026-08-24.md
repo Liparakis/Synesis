@@ -22,10 +22,11 @@ The fix is limited to two existing-model guards:
 - `coordination/src/main/java/org/synesis/coordination/application/WorkIntentService.java`
   now rejects an explicit intent whose existing WorkGroup is not `ACTIVE`,
   with `WORK_GROUP_NOT_ACTIVE`, before appending the intent event.
-- `workspace/src/main/java/org/synesis/workspace/application/collaboration/WorkspaceCollaborationService.java`
-  continues to converge on an existing active WorkGroup, but allocates a new
-  group when the canonical default group is terminal and no active group is
-  available. Explicit requests for a terminal group still fail closed.
+-
+`workspace/src/main/java/org/synesis/workspace/application/collaboration/WorkspaceCollaborationService.java`
+continues to converge on an existing active WorkGroup, but allocates a new
+group when the canonical default group is terminal and no active group is
+available. Explicit requests for a terminal group still fail closed.
 
 Deterministic coverage is in
 `coordination/src/test/java/org/synesis/coordination/collaboration/WorkIntentServiceTest.java`
@@ -167,18 +168,25 @@ a reason to alter production lifecycle semantics.
 `:workspace:test --tests org.synesis.workspace.MultiChatLogicalWorkspaceTest --tests org.synesis.workspace.AgentNextActionServiceTest`:
 PASS
 
-- `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS, 15 tests; the known Git child-process wait
+- `:mcp:test --tests org.synesis.mcp.application.McpSyn039SliceTest`: PASS, 15 tests; the known Git
+  child-process wait
   was observed during fixture setup but the suite completed
 - `:coordination:javadoc :workspace:javadoc :mcp:javadoc`: PASS
 - `:cli:platformBundle --rerun-tasks`: PASS; current bundle rebuilt
 - `scripts/agent-validate-fixtures.ps1`: PASS
 - `scripts/agent-resume.ps1`: PASS; exactly one active SYN-039 task
-- `scripts/agent-doctor.ps1`: structural checks PASS; one warning for documented external absolute paths
+- `scripts/agent-doctor.ps1`: structural checks PASS; one warning for documented external absolute
+  paths
 - `go vet ./...` in `bootstrap`: PASS
-- `go test ./...` in `bootstrap`: FAIL with the three known migration failures in `main_test.go` lines 132, 201, and
+- `go test ./...` in `bootstrap`: FAIL with the three known migration failures in `main_test.go`
+  lines 132, 201, and
   288 (`update migrations not prepared`)
 - `git diff --check`: PASS for the tracked working-tree diff
-- Full `.\gradlew.bat check --no-daemon`: FAIL at the pre-existing `:link:formatCheck` trailing-whitespace list. After
-  removing this evidence file's Markdown hard-break spaces, `:link:formatCheck` still fails only on the previously
-  recorded checkpoint/evidence files; CP-0536 is no longer in the list. The run also reproduced the known Git subprocess
-  wait in `McpServerTest.setUp` through `ManagedBaselineTransactionService.synchronizeRealIndex` and `GitProcessRunner`.
+- Full `.\gradlew.bat check --no-daemon`: FAIL at the pre-existing `:link:formatCheck`
+  trailing-whitespace list. After
+  removing this evidence file's Markdown hard-break spaces, `:link:formatCheck` still fails only on
+  the previously
+  recorded checkpoint/evidence files; CP-0536 is no longer in the list. The run also reproduced the
+  known Git subprocess
+  wait in `McpServerTest.setUp` through `ManagedBaselineTransactionService.synchronizeRealIndex` and
+  `GitProcessRunner`.

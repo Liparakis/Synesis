@@ -13,16 +13,16 @@ import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
  */
 class ImplementationPublicationTest {
 
-    @Test
-    void isIdempotentPublicationReturnsTrueForIdenticalCommitSha() {
-        ImplementationSnapshotService service = new ImplementationSnapshotService();
-        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+  @Test
+  void isIdempotentPublicationReturnsTrueForIdenticalCommitSha() {
+    ImplementationSnapshotService service = new ImplementationSnapshotService();
+    CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
 
-        ImplementationRevisionRecord record = new ImplementationRevisionRecord(
-                handle, 1, "base123", "commit456",
-                List.of("file.txt"), "summary", 1000L);
+    ImplementationRevisionRecord record = new ImplementationRevisionRecord(
+        handle, 1, "base123", "commit456",
+        List.of("file.txt"), "summary", 1000L);
 
-        assertTrue(service.isIdempotentPublication(record, "commit456"));
-        assertFalse(service.isIdempotentPublication(record, "commit789"));
-    }
+    assertTrue(service.isIdempotentPublication(record, "commit456"));
+    assertFalse(service.isIdempotentPublication(record, "commit789"));
+  }
 }

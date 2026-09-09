@@ -10,14 +10,14 @@ package org.synesis.link;
  */
 public final class SynesisLink {
 
-    /**
-     * The ALPN identifier negotiated by Synesis Link v1.
-     *
-     * <p>This is a protocol identifier, not a connectivity guarantee. It is
-     * immutable and safe to log.
-     */
-    public static final String ALPN = "synesis-link/1";
+  /**
+   * The ALPN identifier negotiated by Synesis Link v1.
+   *
+   * <p>This is a protocol identifier, not a connectivity guarantee. It is
+   * immutable and safe to log.
+   */
+  public static final String ALPN = "synesis-link/1";
 
-    private SynesisLink() {
-    }
+  private SynesisLink() {
+  }
 }

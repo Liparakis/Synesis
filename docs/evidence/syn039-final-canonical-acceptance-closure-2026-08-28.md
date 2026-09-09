@@ -65,7 +65,8 @@ orchestrator, relay, or new SYN milestone was introduced.
 ## Closure staging boundary
 
 Category A, accepted SYN-039 production implementation: the modified
-coordination domain/application files, `mcp-contract/src/main/java/org/synesis/mcp/contract/McpToolCatalog.java`,
+coordination domain/application files,
+`mcp-contract/src/main/java/org/synesis/mcp/contract/McpToolCatalog.java`,
 `mcp/src/main/java/org/synesis/mcp/application/McpProtocolHandler.java`, the
 modified workspace agent/collaboration/integration/provider/task/readiness
 files, and the new `NoChangeCompletion.java` and

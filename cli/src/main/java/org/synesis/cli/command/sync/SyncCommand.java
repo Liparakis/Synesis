@@ -10,22 +10,22 @@ import picocli.CommandLine.Spec;
 @Command(name = "sync", description = "Synchronize a configured project.")
 public final class SyncCommand implements Runnable {
 
-    @Spec
-    private CommandSpec spec;
+  @Spec
+  private CommandSpec spec;
 
-    /**
-     * Creates the sync parent command.
-     */
-    public SyncCommand() {
-    }
+  /**
+   * Creates the sync parent command.
+   */
+  public SyncCommand() {
+  }
 
-    /**
-     * Prints sync help.
-     */
-    @Override
-    public void run() {
-        spec.commandLine()
-                .usage(spec.commandLine()
-                        .getOut());
-    }
+  /**
+   * Prints sync help.
+   */
+  @Override
+  public void run() {
+    spec.commandLine()
+        .usage(spec.commandLine()
+            .getOut());
+  }
 }

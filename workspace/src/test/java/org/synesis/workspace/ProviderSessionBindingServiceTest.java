@@ -24,441 +24,442 @@ import org.synesis.workspace.application.provider.continuity.ProviderContinuityM
 @SuppressWarnings("MultipleOccurrences")
 final class ProviderSessionBindingServiceTest {
 
-    private static void git(Path root, String... arguments) throws Exception {
-        org.synesis.workspace.test.TestGit.run(root, arguments);
+  private static void git(Path root, String... arguments) throws Exception {
+    org.synesis.workspace.test.TestGit.run(root, arguments);
+  }
+
+  private static String gitHead(Path root) throws Exception {
+    Process process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
+        .redirectErrorStream(true)
+        .start();
+    String output = new String(process.getInputStream()
+        .readAllBytes()).trim();
+    if (process.waitFor() != 0) {
+      throw new IllegalStateException(output);
     }
+    return output;
+  }
 
-    private static String gitHead(Path root) throws Exception {
-        Process process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
-                .redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream()
-                .readAllBytes()).trim();
-        if (process.waitFor() != 0) {
-            throw new IllegalStateException(output);
-        }
-        return output;
+  @Test
+  void bindsAndResumesByExplicitProviderInstanceWithoutChangingProjectIdentity() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-binding-");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    String projectId = location.projectId()
+        .toString();
+    String nodeId = new ProjectApplicationService().init(root)
+        .identity()
+        .nodeId();
+    ProviderSessionBindingService service = new ProviderSessionBindingService();
+
+    var first = service.ensure(location, "codex", "chat-a");
+    var resumed = service.ensure(location, "codex", "chat-a");
+    var second = service.ensure(location, "codex", "chat-b");
+    var otherProvider = service.ensure(location, "claude", "chat-a");
+
+    assertEquals(projectId,
+        first.binding()
+            .projectId());
+    assertEquals(nodeId,
+        first.binding()
+            .nodeId());
+    assertEquals(first.binding()
+            .sessionId(),
+        resumed.binding()
+            .sessionId());
+    assertEquals(first.binding()
+            .supervisorId(),
+        resumed.binding()
+            .supervisorId());
+    assertNotEquals(first.binding()
+            .sessionId(),
+        second.binding()
+            .sessionId());
+    assertNotEquals(first.binding()
+            .sessionId(),
+        otherProvider.binding()
+            .sessionId());
+    assertEquals("WORKSPACE_UNVERIFIED",
+        first.binding()
+            .providerTrustState());
+    try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
+      assertEquals(3, paths.count());
     }
+  }
 
-    @Test
-    void bindsAndResumesByExplicitProviderInstanceWithoutChangingProjectIdentity() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-binding-");
-        ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
-                .location();
-        String projectId = location.projectId()
-                .toString();
-        String nodeId = new ProjectApplicationService().init(root)
-                .identity()
-                .nodeId();
-        ProviderSessionBindingService service = new ProviderSessionBindingService();
+  @Test
+  void authorityResolverRejectsAProviderSiblingAndUnknownConnection() throws Exception {
+    Path root = Files.createTempDirectory("synesis-exact-authority-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    var service = new ProviderSessionBindingService();
+    service.ensure(location, "codex", "chat-a");
+    service.ensure(location, "codex", "chat-b");
 
-        var first = service.ensure(location, "codex", "chat-a");
-        var resumed = service.ensure(location, "codex", "chat-a");
-        var second = service.ensure(location, "codex", "chat-b");
-        var otherProvider = service.ensure(location, "claude", "chat-a");
+    var resolver = new SessionAuthorityResolver(service);
+    var first = resolver.resolve(location, "codex", "chat-a");
+    assertEquals("codex", first.provider());
+    assertEquals("BOUND", first.status());
+    assertThrows(IllegalStateException.class,
+        () -> resolver.resolve(location, "codex", "chat-c"));
+  }
 
-        assertEquals(projectId,
-                first.binding()
-                        .projectId());
-        assertEquals(nodeId,
-                first.binding()
-                        .nodeId());
-        assertEquals(first.binding()
-                        .sessionId(),
-                resumed.binding()
-                        .sessionId());
-        assertEquals(first.binding()
-                        .supervisorId(),
-                resumed.binding()
-                        .supervisorId());
-        assertNotEquals(first.binding()
-                        .sessionId(),
-                second.binding()
-                        .sessionId());
-        assertNotEquals(first.binding()
-                        .sessionId(),
-                otherProvider.binding()
-                        .sessionId());
-        assertEquals("WORKSPACE_UNVERIFIED",
-                first.binding()
-                        .providerTrustState());
-        try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
-            assertEquals(3, paths.count());
-        }
+  @Test
+  void fallbackEvidenceIsExplicitlyMarkedAndDoesNotClaimChatIdentity() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-fallback-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    var result = new ProviderSessionBindingService().ensure(location, "codex", null);
+
+    assertTrue(result.fallbackEvidence());
+    assertTrue(Files.exists(root.resolve(".synesis/local/providers/codex.bootstrap-key")));
+  }
+
+  @Test
+  void resolvesTheExactConnectionInsteadOfTheNewestProviderBinding() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-exact-connection-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "connection-a")
+        .binding();
+    var second = service.ensure(location, "codex", "connection-b")
+        .binding();
+
+    assertEquals(first.sessionId(),
+        service.find(location, "codex", "connection-a")
+            .orElseThrow()
+            .sessionId());
+    assertEquals(second.sessionId(),
+        service.find(location, "codex", "connection-b")
+            .orElseThrow()
+            .sessionId());
+    assertTrue(service.find(location, "codex", "connection-missing")
+        .isEmpty());
+  }
+
+  @Test
+  void reallocatesAStaleCleanWorkerAndBlocksAStaleDirtyWorker() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-recovery-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "recovery@example.invalid");
+    git(root, "config", "user.name", "Recovery Test");
+    git(root, "commit", "-m", "baseline");
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "recovery-clean")
+        .binding();
+    Path cleanWorker = Path.of(first.worktreePath());
+    Files.writeString(cleanWorker.resolve("README.md"), "advanced\n");
+    git(cleanWorker, "add", "README.md");
+    git(cleanWorker, "commit", "-m", "unexpected worker advance");
+    var recovered = service.ensure(location, "codex", "recovery-clean")
+        .binding();
+    assertNotEquals(first.sessionId(), recovered.sessionId());
+    assertNotEquals(first.worktreePath(), recovered.worktreePath());
+
+    var dirty = service.ensure(location, "codex", "recovery-dirty")
+        .binding();
+    Path dirtyWorktree = Path.of(dirty.worktreePath());
+    Files.writeString(dirtyWorktree
+        .resolve("README.md"), "dirty\n");
+    git(dirtyWorktree, "add", "README.md");
+    git(dirtyWorktree, "commit", "-m", "worker change");
+    Files.writeString(dirtyWorktree
+        .resolve("README.md"), "dirty again\n");
+    assertThrows(ProviderSessionBindingService.BindingException.class,
+        () -> service.ensure(location, "codex", "recovery-dirty"));
+    assertTrue(Files.exists(dirtyWorktree));
+  }
+
+  @Test
+  void preservesSessionIdentityWhenOnlyTheControlCheckoutAdvanced() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-control-advance-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "control@example.invalid");
+    git(root, "config", "user.name", "Control Test");
+    git(root, "commit", "-m", "baseline");
+
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "reviewer-recovery")
+        .binding();
+    String originalSession = first.sessionId();
+    String originalWorktree = first.worktreePath();
+    Files.writeString(root.resolve("README.md"), "integrated control state\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrated snapshot");
+
+    var recovered = service.ensure(location, "codex", "reviewer-recovery")
+        .binding();
+
+    assertEquals(originalSession, recovered.sessionId());
+    assertNotEquals(originalWorktree, recovered.worktreePath());
+    assertEquals(gitHead(root), recovered.baseCommit());
+    assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
+        .verified());
+  }
+
+  @Test
+  void preservesLiveManagedWorktreeWhenOnlyTheControlCheckoutAdvanced() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-managed-control-advance-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "managed-control@example.invalid");
+    git(root, "config", "user.name", "Managed Control Test");
+    git(root, "commit", "-m", "baseline");
+
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "managed-control-advance")
+        .binding();
+    ManagedAttachmentService.storeFor(location, first.sessionId())
+        .write(
+            new ManagedAttachmentRecord(1,
+                location.projectId()
+                    .toString(),
+                "codex",
+                ProviderContinuityMode.MANAGED_CONTINUITY,
+                first.sessionId(),
+                "thread-managed",
+                1,
+                "a".repeat(64),
+                "normal-provider-home",
+                ManagedAttachmentRecord.Status.ACTIVE,
+                1,
+                System.currentTimeMillis()));
+    var attachment = ManagedAttachmentService.storeFor(location, first.sessionId())
+        .read()
+        .orElseThrow();
+    assertEquals(first.projectId(), attachment.projectId());
+    assertEquals(first.sessionId(), attachment.bindingSessionId());
+    assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, attachment.mode());
+    assertEquals(ManagedAttachmentRecord.Status.ACTIVE, attachment.status());
+    Files.writeString(root.resolve("README.md"), "integrated control state\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrated snapshot");
+
+    var retained = service.ensure(location, "codex", "managed-control-advance")
+        .binding();
+
+    assertEquals(first.sessionId(), retained.sessionId(), () -> first + " retained=" + retained);
+    assertEquals(first.worktreePath(), retained.worktreePath());
+    assertEquals(first.baseCommit(), retained.baseCommit());
+  }
+
+  @Test
+  void treatsPythonBytecodeCacheAsEphemeralDuringStaleSessionRecovery() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-python-cache-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "python-cache@example.invalid");
+    git(root, "config", "user.name", "Python Cache Test");
+    git(root, "commit", "-m", "baseline");
+
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "python-cache-recovery")
+        .binding();
+    Path firstWorktree = Path.of(first.worktreePath());
+    Files.createDirectories(firstWorktree
+        .resolve("__pycache__"));
+    Files.write(firstWorktree
+            .resolve("__pycache__/test_todo.cpython-313.pyc"),
+        new byte[]{0x42, 0x43, 0x48});
+
+    Files.writeString(root.resolve("README.md"), "integrated control state\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrated snapshot");
+
+    var recovered = service.ensure(location, "codex", "python-cache-recovery")
+        .binding();
+
+    assertEquals(first.sessionId(), recovered.sessionId());
+    assertNotEquals(first.worktreePath(), recovered.worktreePath());
+    assertEquals(gitHead(root), recovered.baseCommit());
+    assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
+        .verified());
+  }
+
+  @Test
+  void staleRecoveryStillBlocksRealUntrackedUserContent() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-untracked-user-content-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "untracked-content@example.invalid");
+    git(root, "config", "user.name", "Untracked Content Test");
+    git(root, "commit", "-m", "baseline");
+
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "untracked-content-recovery")
+        .binding();
+    Path worker = Path.of(first.worktreePath());
+    Files.writeString(worker.resolve("reviewer-notes.txt"), "legitimate user content\n");
+
+    Files.writeString(root.resolve("README.md"), "integrated control state\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrated snapshot");
+
+    assertThrows(ProviderSessionBindingService.BindingException.class,
+        () -> service.ensure(location, "codex", "untracked-content-recovery"));
+    assertTrue(Files.exists(worker.resolve("reviewer-notes.txt")));
+  }
+
+  @Test
+  void preservesSessionIdentityWhenACleanWorkerAlreadyContainsTheAdvancedControlHead()
+      throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-advanced-clean-worker-");
+    git(root, "init");
+    git(root, "config", "user.email", "advanced-worker@example.invalid");
+    git(root, "config", "user.name", "Advanced Worker Test");
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "baseline");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "advanced-clean-worker")
+        .binding();
+    String originalSession = first.sessionId();
+    String originalWorktree = first.worktreePath();
+
+    Files.writeString(root.resolve("README.md"), "control advanced\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "advance control");
+    git(Path.of(originalWorktree), "merge", "--ff-only", "master");
+
+    var recovered = service.ensure(location, "codex", "advanced-clean-worker")
+        .binding();
+
+    assertEquals(originalSession, recovered.sessionId());
+    assertNotEquals(originalWorktree, recovered.worktreePath());
+    assertEquals(gitHead(root), recovered.baseCommit());
+    assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
+        .verified());
+  }
+
+  @Test
+  void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-worktree-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "proof\n");
+    git(root, "init");
+    git(root, "config", "user.email", "synesis-test@example.invalid");
+    git(root, "config", "user.name", "Synesis Test");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "initial");
+
+    var service = new ProviderSessionBindingService();
+    var binding = service.ensure(location, "codex", "chat-worktree")
+        .binding();
+    Path bindingWorktree = Path.of(binding.worktreePath());
+    var second = service.ensure(location, "codex", "chat-worktree-2")
+        .binding();
+    assertNotEquals(root.toAbsolutePath()
+        .normalize()
+        .toString(), binding.worktreePath());
+    assertTrue(Files.isDirectory(bindingWorktree));
+    assertNotEquals(binding.worktreePath(), second.worktreePath());
+    assertNotEquals(binding.branch(), second.branch());
+    assertTrue(binding.baseCommit()
+        .matches("[0-9a-f]{40}"));
+    var check = new ProviderSessionBindingService().verifyWorkspace(location, binding,
+        bindingWorktree);
+    assertTrue(check.verified(), check::code);
+    assertEquals("CONTROL_CHECKOUT_MUTATION_DENIED",
+        service.verifyWorkspace(location, binding, root)
+            .code());
+    git(root, "worktree", "remove", "--force", binding.worktreePath());
+    assertEquals("WORKSPACE_TRANSITION_REQUIRED", service.verifyWorkspace(location, binding,
+            bindingWorktree)
+        .code());
+  }
+
+  @Test
+  void malformedBindingFailsClosedWithoutReplacingProjectIdentity() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-malformed-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Path binding = root.resolve(".synesis/local/sessions/codex-bad.json");
+    Files.createDirectories(binding.getParent());
+    Files.writeString(binding, "{broken");
+
+    assertThrows(ProviderSessionBindingService.BindingException.class,
+        () -> new ProviderSessionBindingService().list(location, "codex"));
+    assertTrue(Files.exists(location.profile()
+        .resolve("link/identity.bin")));
+  }
+
+  @Test
+  void hookResolvesControlSessionFromAssignedWorktreeMarker() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-routing-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    String peer = new IdentityBootstrap(location.profile()
+        .resolve("link")).loadOrCreate()
+        .identity()
+        .nodeId();
+    new ProjectConfig(location.projectId(), java.util.Set.of(peer)).save(location.profile()
+        .resolve("project.conf"));
+    var binding = new ProviderSessionBindingService().ensure(location, "codex", "routing-session")
+        .binding();
+    String event = "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"routing-session\","
+        + "\"cwd\":\"" + binding.worktreePath()
+        .replace("\\", "\\\\")
+        + "\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"command\":\"*** Begin Patch\\n*** Add File: src/free.txt\\n*** End Patch\"}}";
+
+    var result = new HookApplicationService().codex(
+        new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    assertEquals("ALLOWED", result.outcome(), result.responseJson() + " " + result.humanReason());
+    assertTrue(result.humanReason()
+        .contains("SESSION_ID=" + binding.sessionId()));
+    assertTrue(Files.notExists(root.resolve("src/free.txt")));
+  }
+
+  @Test
+  void codexHookBootstrapsProjectSessionBeforePolicyEvaluation() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-codex-hook-");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    String peer = new IdentityBootstrap(location.profile()
+        .resolve("link")).loadOrCreate()
+        .identity()
+        .nodeId();
+    ProjectConfig config = new ProjectConfig(location.projectId(), java.util.Set.of(peer));
+    config.save(location.profile()
+        .resolve("project.conf"));
+    String event = "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"codex-chat-a\","
+        + "\"cwd\":\"" + root.toString()
+        .replace("\\", "\\\\")
+        + "\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"command\":\"*** Begin Patch\\n*** Update File: src/free.txt\\n*** End Patch\"}}";
+
+    HookApplicationService.HookExecutionResult result = new HookApplicationService().codex(
+        new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    assertEquals("INVALID_INPUT", result.outcome());
+    assertTrue(result.responseJson()
+        .contains("GIT_HEAD_UNAVAILABLE"));
+    try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
+      assertTrue(paths.findAny()
+          .isPresent());
     }
-
-    @Test
-    void authorityResolverRejectsAProviderSiblingAndUnknownConnection() throws Exception {
-        Path root = Files.createTempDirectory("synesis-exact-authority-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        var service = new ProviderSessionBindingService();
-        service.ensure(location, "codex", "chat-a");
-        service.ensure(location, "codex", "chat-b");
-
-        var resolver = new SessionAuthorityResolver(service);
-        var first = resolver.resolve(location, "codex", "chat-a");
-        assertEquals("codex", first.provider());
-        assertEquals("BOUND", first.status());
-        assertThrows(IllegalStateException.class,
-                () -> resolver.resolve(location, "codex", "chat-c"));
-    }
-
-    @Test
-    void fallbackEvidenceIsExplicitlyMarkedAndDoesNotClaimChatIdentity() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-fallback-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        var result = new ProviderSessionBindingService().ensure(location, "codex", null);
-
-        assertTrue(result.fallbackEvidence());
-        assertTrue(Files.exists(root.resolve(".synesis/local/providers/codex.bootstrap-key")));
-    }
-
-    @Test
-    void resolvesTheExactConnectionInsteadOfTheNewestProviderBinding() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-exact-connection-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "connection-a")
-                .binding();
-        var second = service.ensure(location, "codex", "connection-b")
-                .binding();
-
-        assertEquals(first.sessionId(),
-                service.find(location, "codex", "connection-a")
-                        .orElseThrow()
-                        .sessionId());
-        assertEquals(second.sessionId(),
-                service.find(location, "codex", "connection-b")
-                        .orElseThrow()
-                        .sessionId());
-        assertTrue(service.find(location, "codex", "connection-missing")
-                .isEmpty());
-    }
-
-    @Test
-    void reallocatesAStaleCleanWorkerAndBlocksAStaleDirtyWorker() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-recovery-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "config", "user.email", "recovery@example.invalid");
-        git(root, "config", "user.name", "Recovery Test");
-        git(root, "commit", "-m", "baseline");
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "recovery-clean")
-                .binding();
-        Path cleanWorker = Path.of(first.worktreePath());
-        Files.writeString(cleanWorker.resolve("README.md"), "advanced\n");
-        git(cleanWorker, "add", "README.md");
-        git(cleanWorker, "commit", "-m", "unexpected worker advance");
-        var recovered = service.ensure(location, "codex", "recovery-clean")
-                .binding();
-        assertNotEquals(first.sessionId(), recovered.sessionId());
-        assertNotEquals(first.worktreePath(), recovered.worktreePath());
-
-        var dirty = service.ensure(location, "codex", "recovery-dirty")
-                .binding();
-        Path dirtyWorktree = Path.of(dirty.worktreePath());
-        Files.writeString(dirtyWorktree
-                .resolve("README.md"), "dirty\n");
-        git(dirtyWorktree, "add", "README.md");
-        git(dirtyWorktree, "commit", "-m", "worker change");
-        Files.writeString(dirtyWorktree
-                .resolve("README.md"), "dirty again\n");
-        assertThrows(ProviderSessionBindingService.BindingException.class,
-                () -> service.ensure(location, "codex", "recovery-dirty"));
-        assertTrue(Files.exists(dirtyWorktree));
-    }
-
-    @Test
-    void preservesSessionIdentityWhenOnlyTheControlCheckoutAdvanced() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-control-advance-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "config", "user.email", "control@example.invalid");
-        git(root, "config", "user.name", "Control Test");
-        git(root, "commit", "-m", "baseline");
-
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "reviewer-recovery")
-                .binding();
-        String originalSession = first.sessionId();
-        String originalWorktree = first.worktreePath();
-        Files.writeString(root.resolve("README.md"), "integrated control state\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "integrated snapshot");
-
-        var recovered = service.ensure(location, "codex", "reviewer-recovery")
-                .binding();
-
-        assertEquals(originalSession, recovered.sessionId());
-        assertNotEquals(originalWorktree, recovered.worktreePath());
-        assertEquals(gitHead(root), recovered.baseCommit());
-        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
-                .verified());
-    }
-
-    @Test
-    void preservesLiveManagedWorktreeWhenOnlyTheControlCheckoutAdvanced() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-managed-control-advance-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "config", "user.email", "managed-control@example.invalid");
-        git(root, "config", "user.name", "Managed Control Test");
-        git(root, "commit", "-m", "baseline");
-
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "managed-control-advance")
-                .binding();
-        ManagedAttachmentService.storeFor(location, first.sessionId())
-                .write(
-                        new ManagedAttachmentRecord(1,
-                                location.projectId()
-                                        .toString(),
-                                "codex",
-                                ProviderContinuityMode.MANAGED_CONTINUITY,
-                                first.sessionId(),
-                                "thread-managed",
-                                1,
-                                "a".repeat(64),
-                                "normal-provider-home",
-                                ManagedAttachmentRecord.Status.ACTIVE,
-                                1,
-                                System.currentTimeMillis()));
-        var attachment = ManagedAttachmentService.storeFor(location, first.sessionId())
-                .read()
-                .orElseThrow();
-        assertEquals(first.projectId(), attachment.projectId());
-        assertEquals(first.sessionId(), attachment.bindingSessionId());
-        assertEquals(ProviderContinuityMode.MANAGED_CONTINUITY, attachment.mode());
-        assertEquals(ManagedAttachmentRecord.Status.ACTIVE, attachment.status());
-        Files.writeString(root.resolve("README.md"), "integrated control state\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "integrated snapshot");
-
-        var retained = service.ensure(location, "codex", "managed-control-advance")
-                .binding();
-
-        assertEquals(first.sessionId(), retained.sessionId(), () -> first + " retained=" + retained);
-        assertEquals(first.worktreePath(), retained.worktreePath());
-        assertEquals(first.baseCommit(), retained.baseCommit());
-    }
-
-    @Test
-    void treatsPythonBytecodeCacheAsEphemeralDuringStaleSessionRecovery() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-python-cache-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "config", "user.email", "python-cache@example.invalid");
-        git(root, "config", "user.name", "Python Cache Test");
-        git(root, "commit", "-m", "baseline");
-
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "python-cache-recovery")
-                .binding();
-        Path firstWorktree = Path.of(first.worktreePath());
-        Files.createDirectories(firstWorktree
-                .resolve("__pycache__"));
-        Files.write(firstWorktree
-                        .resolve("__pycache__/test_todo.cpython-313.pyc"),
-                new byte[]{0x42, 0x43, 0x48});
-
-        Files.writeString(root.resolve("README.md"), "integrated control state\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "integrated snapshot");
-
-        var recovered = service.ensure(location, "codex", "python-cache-recovery")
-                .binding();
-
-        assertEquals(first.sessionId(), recovered.sessionId());
-        assertNotEquals(first.worktreePath(), recovered.worktreePath());
-        assertEquals(gitHead(root), recovered.baseCommit());
-        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
-                .verified());
-    }
-
-    @Test
-    void staleRecoveryStillBlocksRealUntrackedUserContent() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-untracked-user-content-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "config", "user.email", "untracked-content@example.invalid");
-        git(root, "config", "user.name", "Untracked Content Test");
-        git(root, "commit", "-m", "baseline");
-
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "untracked-content-recovery")
-                .binding();
-        Path worker = Path.of(first.worktreePath());
-        Files.writeString(worker.resolve("reviewer-notes.txt"), "legitimate user content\n");
-
-        Files.writeString(root.resolve("README.md"), "integrated control state\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "integrated snapshot");
-
-        assertThrows(ProviderSessionBindingService.BindingException.class,
-                () -> service.ensure(location, "codex", "untracked-content-recovery"));
-        assertTrue(Files.exists(worker.resolve("reviewer-notes.txt")));
-    }
-
-    @Test
-    void preservesSessionIdentityWhenACleanWorkerAlreadyContainsTheAdvancedControlHead() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-advanced-clean-worker-");
-        git(root, "init");
-        git(root, "config", "user.email", "advanced-worker@example.invalid");
-        git(root, "config", "user.name", "Advanced Worker Test");
-        Files.writeString(root.resolve("README.md"), "baseline\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "baseline");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-
-        var service = new ProviderSessionBindingService();
-        var first = service.ensure(location, "codex", "advanced-clean-worker")
-                .binding();
-        String originalSession = first.sessionId();
-        String originalWorktree = first.worktreePath();
-
-        Files.writeString(root.resolve("README.md"), "control advanced\n");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "advance control");
-        git(Path.of(originalWorktree), "merge", "--ff-only", "master");
-
-        var recovered = service.ensure(location, "codex", "advanced-clean-worker")
-                .binding();
-
-        assertEquals(originalSession, recovered.sessionId());
-        assertNotEquals(originalWorktree, recovered.worktreePath());
-        assertEquals(gitHead(root), recovered.baseCommit());
-        assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
-                .verified());
-    }
-
-    @Test
-    void allocatesDistinctWorktreeOnlyForACommittedGitProject() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-worktree-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Files.writeString(root.resolve("README.md"), "proof\n");
-        git(root, "init");
-        git(root, "config", "user.email", "synesis-test@example.invalid");
-        git(root, "config", "user.name", "Synesis Test");
-        git(root, "add", "README.md");
-        git(root, "commit", "-m", "initial");
-
-        var service = new ProviderSessionBindingService();
-        var binding = service.ensure(location, "codex", "chat-worktree")
-                .binding();
-        Path bindingWorktree = Path.of(binding.worktreePath());
-        var second = service.ensure(location, "codex", "chat-worktree-2")
-                .binding();
-        assertNotEquals(root.toAbsolutePath()
-                .normalize()
-                .toString(), binding.worktreePath());
-        assertTrue(Files.isDirectory(bindingWorktree));
-        assertNotEquals(binding.worktreePath(), second.worktreePath());
-        assertNotEquals(binding.branch(), second.branch());
-        assertTrue(binding.baseCommit()
-                .matches("[0-9a-f]{40}"));
-        var check = new ProviderSessionBindingService().verifyWorkspace(location, binding,
-                bindingWorktree);
-        assertTrue(check.verified(), check::code);
-        assertEquals("CONTROL_CHECKOUT_MUTATION_DENIED",
-                service.verifyWorkspace(location, binding, root)
-                        .code());
-        git(root, "worktree", "remove", "--force", binding.worktreePath());
-        assertEquals("WORKSPACE_TRANSITION_REQUIRED", service.verifyWorkspace(location, binding,
-                        bindingWorktree)
-                .code());
-    }
-
-    @Test
-    void malformedBindingFailsClosedWithoutReplacingProjectIdentity() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-malformed-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        Path binding = root.resolve(".synesis/local/sessions/codex-bad.json");
-        Files.createDirectories(binding.getParent());
-        Files.writeString(binding, "{broken");
-
-        assertThrows(ProviderSessionBindingService.BindingException.class,
-                () -> new ProviderSessionBindingService().list(location, "codex"));
-        assertTrue(Files.exists(location.profile()
-                .resolve("link/identity.bin")));
-    }
-
-    @Test
-    void hookResolvesControlSessionFromAssignedWorktreeMarker() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-routing-");
-        git(root, "init");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        String peer = new IdentityBootstrap(location.profile()
-                .resolve("link")).loadOrCreate()
-                .identity()
-                .nodeId();
-        new ProjectConfig(location.projectId(), java.util.Set.of(peer)).save(location.profile()
-                .resolve("project.conf"));
-        var binding = new ProviderSessionBindingService().ensure(location, "codex", "routing-session")
-                .binding();
-        String event = "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"routing-session\","
-                + "\"cwd\":\"" + binding.worktreePath()
-                .replace("\\", "\\\\")
-                + "\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"command\":\"*** Begin Patch\\n*** Add File: src/free.txt\\n*** End Patch\"}}";
-
-        var result = new HookApplicationService().codex(
-                new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-
-        assertEquals("ALLOWED", result.outcome(), result.responseJson() + " " + result.humanReason());
-        assertTrue(result.humanReason()
-                .contains("SESSION_ID=" + binding.sessionId()));
-        assertTrue(Files.notExists(root.resolve("src/free.txt")));
-    }
-
-    @Test
-    void codexHookBootstrapsProjectSessionBeforePolicyEvaluation() throws Exception {
-        Path root = Files.createTempDirectory("synesis-session-codex-hook-");
-        var location = new ProjectApplicationService().init(root)
-                .location();
-        String peer = new IdentityBootstrap(location.profile()
-                .resolve("link")).loadOrCreate()
-                .identity()
-                .nodeId();
-        ProjectConfig config = new ProjectConfig(location.projectId(), java.util.Set.of(peer));
-        config.save(location.profile()
-                .resolve("project.conf"));
-        String event = "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"codex-chat-a\","
-                + "\"cwd\":\"" + root.toString()
-                .replace("\\", "\\\\")
-                + "\",\"tool_name\":\"apply_patch\",\"tool_input\":{\"command\":\"*** Begin Patch\\n*** Update File: src/free.txt\\n*** End Patch\"}}";
-
-        HookApplicationService.HookExecutionResult result = new HookApplicationService().codex(
-                new java.io.ByteArrayInputStream(event.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-
-        assertEquals("INVALID_INPUT", result.outcome());
-        assertTrue(result.responseJson()
-                .contains("GIT_HEAD_UNAVAILABLE"));
-        try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
-            assertTrue(paths.findAny()
-                    .isPresent());
-        }
-    }
+  }
 
 }

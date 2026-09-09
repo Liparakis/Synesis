@@ -68,13 +68,13 @@ selects one next physical hop and asks that peer to forward an opaque envelope.
 
 ### Ownership and boundaries
 
-| Boundary | Owner | Responsibility | Must not own |
-|---|---|---|---|
-| Project membership | project-facing authority/record module | signed membership, keys, admission, revocation | sockets or route choice |
-| Link adjacency | `link` | QUIC, handshake, liveness, direct session identity | project membership |
-| Project overlay | `link` or a tightly coupled Link overlay package | topology view, route selection, hop policy, forwarding | provider credentials or generic proxying |
-| E2E session/envelope | Link security layer | key agreement, AEAD, replay window, destination binding | transit plaintext |
-| Organization relay | separately operated relay process | authenticated live envelope forwarding and quotas | project authority, durable mailbox, plaintext |
+| Boundary             | Owner                                            | Responsibility                                          | Must not own                                  |
+|----------------------|--------------------------------------------------|---------------------------------------------------------|-----------------------------------------------|
+| Project membership   | project-facing authority/record module           | signed membership, keys, admission, revocation          | sockets or route choice                       |
+| Link adjacency       | `link`                                           | QUIC, handshake, liveness, direct session identity      | project membership                            |
+| Project overlay      | `link` or a tightly coupled Link overlay package | topology view, route selection, hop policy, forwarding  | provider credentials or generic proxying      |
+| E2E session/envelope | Link security layer                              | key agreement, AEAD, replay window, destination binding | transit plaintext                             |
+| Organization relay   | separately operated relay process                | authenticated live envelope forwarding and quotas       | project authority, durable mailbox, plaintext |
 
 The relay boundary is justified only because it has a distinct operator,
 privilege scope, failure domain, and deployment lifecycle. It must share no
@@ -212,14 +212,14 @@ reachable, return `NO_ROUTE` or the repository-equivalent diagnostic.
 
 ## Evidence ledger and unresolved decisions
 
-| Claim | Class | Effect |
-|---|---|---|
-| `PeerSession` is a direct authenticated adjacency | VERIFIED | preserve it; add an overlay above it |
-| Current project membership is a local allowlist | VERIFIED | membership authority is a prerequisite |
-| Transit must not decrypt application payloads | USER-STATED / SECURITY INVARIANT | E2E envelope precedes forwarding |
-| Java 25 exposes compatible X25519, HKDF-SHA256, and ChaCha20-Poly1305 APIs | VERIFIED | use the recorded probe as the implementation baseline |
-| Ring plus bounded shortcuts is the best topology | ASSUMED | validate with 6–8 node route/failure tests |
-| One relay process meets organization load | REQUIRES-MEASUREMENT | run representative concurrency/backpressure test |
+| Claim                                                                      | Class                            | Effect                                                |
+|----------------------------------------------------------------------------|----------------------------------|-------------------------------------------------------|
+| `PeerSession` is a direct authenticated adjacency                          | VERIFIED                         | preserve it; add an overlay above it                  |
+| Current project membership is a local allowlist                            | VERIFIED                         | membership authority is a prerequisite                |
+| Transit must not decrypt application payloads                              | USER-STATED / SECURITY INVARIANT | E2E envelope precedes forwarding                      |
+| Java 25 exposes compatible X25519, HKDF-SHA256, and ChaCha20-Poly1305 APIs | VERIFIED                         | use the recorded probe as the implementation baseline |
+| Ring plus bounded shortcuts is the best topology                           | ASSUMED                          | validate with 6–8 node route/failure tests            |
+| One relay process meets organization load                                  | REQUIRES-MEASUREMENT             | run representative concurrency/backpressure test      |
 
 Unknowns that affect trust or wire compatibility are architecture-changing;
 they cannot be hidden behind a placeholder implementation. Performance

@@ -19,35 +19,38 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class ContractServiceTest {
 
-    @Test
-    void supersessionMarksConsumersReplanRequiredAndRejectsStaleBinding(@TempDir Path temp) throws Exception {
-        UUID project = UUID.randomUUID(), contractId = UUID.randomUUID(), intentId = UUID.randomUUID();
-        NodeIdentity identity = NodeIdentity.generate();
-        ContractService service = new ContractService(new PredictionEventStore(temp, project), identity);
-        ContractRecord first = service.publish(contractId,
-                "agt-owner",
-                "TaskTracker API v1",
-                List.of("src/task_tracker.py"));
-        service.bind(intentId, "agt-consumer", contractId, first.revision());
-        ContractRecord second = service.publish(contractId,
-                "agt-owner",
-                "TaskTracker API v2",
-                List.of("src/task_tracker.py"));
-        assertEquals(2, second.revision());
-        assertEquals(ContractDependency.State.REPLAN_REQUIRED,
-                service.dependencies()
-                        .getFirst()
-                        .state());
-        assertThrows(java.io.IOException.class, () -> service.bind(UUID.randomUUID(), "agt-consumer", contractId, 1));
-        PredictionEventStore replay = new PredictionEventStore(temp, project);
-        assertEquals(2,
-                replay.contractProjection()
-                        .contract(contractId)
-                        .revision());
-        assertEquals(ContractDependency.State.REPLAN_REQUIRED,
-                replay.contractProjection()
-                        .dependencies()
-                        .getFirst()
-                        .state());
-    }
+  @Test
+  void supersessionMarksConsumersReplanRequiredAndRejectsStaleBinding(@TempDir Path temp)
+      throws Exception {
+    UUID project = UUID.randomUUID(), contractId = UUID.randomUUID(), intentId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    ContractService service = new ContractService(new PredictionEventStore(temp, project),
+        identity);
+    ContractRecord first = service.publish(contractId,
+        "agt-owner",
+        "TaskTracker API v1",
+        List.of("src/task_tracker.py"));
+    service.bind(intentId, "agt-consumer", contractId, first.revision());
+    ContractRecord second = service.publish(contractId,
+        "agt-owner",
+        "TaskTracker API v2",
+        List.of("src/task_tracker.py"));
+    assertEquals(2, second.revision());
+    assertEquals(ContractDependency.State.REPLAN_REQUIRED,
+        service.dependencies()
+            .getFirst()
+            .state());
+    assertThrows(java.io.IOException.class,
+        () -> service.bind(UUID.randomUUID(), "agt-consumer", contractId, 1));
+    PredictionEventStore replay = new PredictionEventStore(temp, project);
+    assertEquals(2,
+        replay.contractProjection()
+            .contract(contractId)
+            .revision());
+    assertEquals(ContractDependency.State.REPLAN_REQUIRED,
+        replay.contractProjection()
+            .dependencies()
+            .getFirst()
+            .state());
+  }
 }
