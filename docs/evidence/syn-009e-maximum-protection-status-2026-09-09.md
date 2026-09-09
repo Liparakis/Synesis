@@ -114,6 +114,11 @@ private native-file leakage without modifying third-party binaries.
   `-trimpath` metadata is present.
 - Linux ELF64 and macOS arm64 Mach-O parser fixtures: parser PASS only; they
   are not customer release evidence.
+- The local relay install contains third-party Netty QUIC native content but
+  no Synesis-owned native binary; the maximum contract therefore requires a
+  private third-party-native audit and uses `nativeSymbolsScope=not-applicable`
+  for relay instead of requiring fabricated Synesis symbols. See
+  `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
 - Actual Linux/macOS/ARM64 maximum archives, third-party native inspection,
   Authenticode/Apple signing, and notarization: OPEN.
 
@@ -125,11 +130,12 @@ Evidence: `docs/evidence/syn-009e-native-hardening-2026-09-09.md` and
 The maximum Gradle seams require an executable version-pinned external
 adapter, private configuration, explicit release ID/seed, a clean checkout,
 all six ring records, non-empty diversification/ring evidence, non-empty
-mapping/retrace outputs, native-symbol material, and a customer/private
-boundary. Results must echo the source, seed, lockfile snapshot, Java/Gradle/
-Node/npm/Go toolchains, protector configuration, Tier 0–3 inventory, keep-rule
-inventory, and acceptance-procedure digests. The CLI also rejects a
-`GITHUB_SHA` that does not equal local `HEAD`.
+mapping/retrace outputs, owned native-symbol material where the component owns
+native launchers, a private audit of shipped third-party native dependencies,
+and a customer/private boundary. Results must echo the source, seed, lockfile
+snapshot, Java/Gradle/Node/npm/Go toolchains, protector configuration, Tier
+0–3 inventory, keep-rule inventory, and acceptance-procedure digests. The CLI
+also rejects a `GITHUB_SHA` that does not equal local `HEAD`.
 
 The existing bootstrap signer then creates and verifies the detached Ed25519
 manifest against its embedded trust root. Production signing keys are injected
@@ -196,9 +202,10 @@ SourceFile metadata remains an open commercial leakage decision. No commercial
 secret, mapping, seed, production signing key, or private recovery file was
 committed.
 
-Private retrace, mapping, native-symbol recovery, and ring evidence are
-contracted and fail closed, but no positive licensed adapter output exists to
-exercise retrace acceptance.
+Private retrace, mapping, owned native-symbol recovery where applicable,
+third-party native audit, and ring evidence are contracted and fail closed, but
+no positive licensed adapter output exists to exercise retrace or native
+acceptance.
 
 ## Commits and final boundary
 

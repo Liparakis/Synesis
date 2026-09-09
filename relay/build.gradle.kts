@@ -554,6 +554,7 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
                 "acceptanceProcedureSha256" to relayMaximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "nativeSymbolsScopePolicy" to "owned-or-not-applicable",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
                 "gradleVersion" to requestedProvenance.getValue("gradleVersion"),
@@ -628,6 +629,14 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
             val parentPath = normalized(parent)
             return childPath == parentPath || childPath.startsWith("$parentPath${File.separator}")
         }
+        val nativeSymbolsScope = resultValue("nativeSymbolsScope")
+        require(nativeSymbolsScope in setOf("owned", "not-applicable")) {
+            "Maximum relay nativeSymbolsScope must be owned or not-applicable"
+        }
+        val thirdPartyNativeAudit = project.file(resultValue("thirdPartyNativeAudit"))
+        require(isUnder(thirdPartyNativeAudit, privateDirectory) && thirdPartyNativeAudit.isFile && thirdPartyNativeAudit.length() > 0L) {
+            "Maximum relay third-party native audit is missing or outside the private boundary"
+        }
 
         require(samePath(resultValue("bundleDirectory"), outputBundle)) {
             "Maximum relay protector wrote its bundle outside the requested output boundary"
@@ -666,20 +675,27 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         }
         val retraceFile = project.file(resultValue("retraceFile"))
         val mappingFile = project.file(resultValue("mappingFile"))
-        val nativeSymbolsDirectory = project.file(resultValue("nativeSymbolsDirectory"))
         require(isUnder(retraceFile, privateDirectory) && retraceFile.isFile && retraceFile.length() > 0L) {
             "Maximum relay private retrace output is missing or outside the private boundary"
         }
         require(isUnder(mappingFile, privateDirectory) && mappingFile.isFile && mappingFile.length() > 0L) {
             "Maximum relay private mapping output is missing or outside the private boundary"
         }
-        require(isUnder(nativeSymbolsDirectory, privateDirectory) && nativeSymbolsDirectory.isDirectory) {
-            "Maximum relay native symbols are missing or outside the private boundary"
+        val nativeSymbolsLocation = resultValue("nativeSymbolsDirectory")
+        if (nativeSymbolsScope == "owned") {
+            val nativeSymbolsDirectory = project.file(nativeSymbolsLocation)
+            require(isUnder(nativeSymbolsDirectory, privateDirectory) && nativeSymbolsDirectory.isDirectory) {
+                "Maximum relay owned native symbols are missing or outside the private boundary"
+            }
+            val nativeSymbolCount = Files.walk(nativeSymbolsDirectory.toPath()).use { paths ->
+                paths.filter { Files.isRegularFile(it) }.count()
+            }
+            require(nativeSymbolCount > 0L) { "Maximum relay owned native symbols directory is empty" }
+        } else {
+            require(nativeSymbolsLocation == "not-applicable") {
+                "Maximum relay result must not claim a native-symbol directory when its native scope is not-applicable"
+            }
         }
-        val nativeSymbolCount = Files.walk(nativeSymbolsDirectory.toPath()).use { paths ->
-            paths.filter { Files.isRegularFile(it) }.count()
-        }
-        require(nativeSymbolCount > 0L) { "Maximum relay native symbols directory is empty" }
 
         require(outputBundle.resolve("PROTECTION_PROFILE").run { isFile && readText().trim() == "maximum-release" }) {
             "Maximum relay output is missing PROTECTION_PROFILE=maximum-release"
@@ -743,9 +759,12 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedureSha256" to relayMaximumSha256(acceptanceProcedure),
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
+                "nativeSymbolsScope" to resultValue("nativeSymbolsScope"),
                 "privateRetraceFile" to resultValue("retraceFile"),
                 "privateMappingFile" to resultValue("mappingFile"),
-                "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
+                "privateNativeSymbolsDirectory" to if (nativeSymbolsScope == "owned") nativeSymbolsLocation else "not-applicable",
+                "privateThirdPartyNativeAudit" to thirdPartyNativeAudit.absolutePath,
+                "privateThirdPartyNativeAuditSha256" to relayMaximumSha256(thirdPartyNativeAudit),
                 "artifactManifest" to relayMaximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to relayMaximumSha256(relayMaximumReleaseArtifactManifest.get().asFile),
             ) + privateEvidenceProperties,

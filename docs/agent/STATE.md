@@ -4,7 +4,11 @@ The release-only maximum boundary now has a versioned external protector
 adapter contract for both the CLI and standalone relay. The two
 `maximumReleasePrepare` tasks require a real executable adapter, private
 configuration, explicit release ID/seed, all six ring evidence records,
-private mapping/retrace/native symbols, and a separated customer bundle. Each
+private mapping/retrace, component-scoped native recovery/audit, and a
+separated customer bundle. CLI-owned native launchers require private symbols;
+relay's current distribution has no Synesis-owned native binary and therefore
+uses an explicit not-applicable owned-symbol scope plus a third-party audit.
+Each
 candidate task archives the protected output, invokes the existing bootstrap
 manifest signer with an injected key, and verifies the detached signature
 against the public key embedded in `bootstrap/main.go`.
@@ -129,8 +133,10 @@ private records or canonical manifests are available.
 The CLI source-commit path now verifies any supplied `GITHUB_SHA` against local
 `HEAD`; mismatched CI metadata fails closed.
 Maximum preparation also rejects empty ring/diversification evidence,
-empty mapping/retrace outputs, and empty native-symbol directories, then hashes
-the accepted private evidence into the release record.
+empty mapping/retrace outputs, and empty owned native-symbol directories, then
+hashes the accepted private evidence and third-party-native audit into the
+release record. The comparison harness applies the same component-scoped
+native recovery rule before comparing records.
 The comparison harness requires the final signed-integrity fields and checks
 those private hashes before accepting diversification or reproducibility input.
 The consolidated maximum status report records every required final-report
@@ -141,6 +147,26 @@ reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files
 is stable and remains outside the slice; it must not be staged or treated as
 release evidence.
+
+## 2026-09-09 — SYN-009E component-scoped native recovery gate
+
+Read-only inspection of the current relay install found Netty QUIC native
+content inside third-party JARs but no Synesis-owned relay native binary. The
+maximum adapter contract now requires `nativeSymbolsScope=owned` and private
+symbols for CLI-owned launchers, while relay must report
+`nativeSymbolsScope=not-applicable`, keep its native-symbol location as
+`not-applicable`, and provide a non-empty private audit of shipped
+third-party native dependencies. Both components require that audit and its
+hash; the provenance comparison verifies the same scope and private audit.
+
+The focused PowerShell parser check passed, and `:cli:tasks :relay:tasks`
+passed with the documented process-local
+`-Djdk.net.unixdomain.tmpdir=C:\\t\\synesis-loopback-probe` workaround. A
+plain Gradle invocation still fails before project evaluation with
+`Unable to establish loopback connection`; this remains host evidence, not a
+release pass. No commercial adapter or signed maximum record exists.
+
+Evidence: `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
 
 ## Immediate next action
 

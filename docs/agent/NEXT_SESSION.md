@@ -66,10 +66,13 @@ disposable install, exercises the installed stable-launcher and packaged
   developer/lite output as release evidence.
 - The CLI and relay maximum request/private records now capture lockfile
   digest/count, Gradle/Java/Node/npm/Go versions, configuration SHA-256, seed,
-  private mapping/retrace/native recovery paths, and post-signing public-key
-  provenance. The helpers were syntax/evaluation checked through `:cli:tasks
-  :relay:tasks`; execute the fields only in a clean licensed maximum release
-  and verify the private record against the final manifest/signature.
+  component-scoped native recovery (owned CLI symbols or relay's explicit
+  not-applicable owned-symbol scope), third-party-native audit, private
+  mapping/retrace paths, and post-signing public-key provenance. The helpers
+  were syntax/evaluation checked through `:cli:tasks :relay:tasks`; execute the
+  fields only in a clean licensed maximum release and verify the private record
+  against the final manifest/signature. The scope inspection is recorded in
+  `docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
 - The release-to-release harness is
   `scripts/maximum-release-provenance-comparison.ps1`. Run it in both
   `Diversification` and `Reproducibility` modes against two clean licensed

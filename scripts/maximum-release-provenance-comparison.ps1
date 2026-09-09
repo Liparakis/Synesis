@@ -177,10 +177,28 @@ function ReadPrivateRelease([string]$Path, [string]$Label)
     Require (IsUnder $recoveryPath $privateRoot) "$Label $recovery escapes the private release directory"
     Require ((Get-Item -LiteralPath $recoveryPath).Length -gt 0) "$Label $recovery is empty"
   }
-  $nativeSymbolsPath = ResolvePrivateDirectory (RequiredValue $properties 'privateNativeSymbolsDirectory') "$Label native symbols"
-  Require (IsUnder $nativeSymbolsPath $privateRoot) "$Label native symbols escape the private release directory"
-  $nativeSymbolCount = @(Get-ChildItem -LiteralPath $nativeSymbolsPath -Recurse -File).Count
-  Require ($nativeSymbolCount -gt 0) "$Label native symbols are empty"
+  $nativeSymbolsScope = RequiredValue $properties 'nativeSymbolsScope'
+  Require ($nativeSymbolsScope -in @('owned', 'not-applicable')) (
+    "$Label nativeSymbolsScope is unsupported: $nativeSymbolsScope")
+  $nativeSymbolsLocation = RequiredValue $properties 'privateNativeSymbolsDirectory'
+  if ($nativeSymbolsScope -eq 'owned')
+  {
+    $nativeSymbolsPath = ResolvePrivateDirectory $nativeSymbolsLocation "$Label native symbols"
+    Require (IsUnder $nativeSymbolsPath $privateRoot) "$Label native symbols escape the private release directory"
+    $nativeSymbolCount = @(Get-ChildItem -LiteralPath $nativeSymbolsPath -Recurse -File).Count
+    Require ($nativeSymbolCount -gt 0) "$Label native symbols are empty"
+  }
+  else
+  {
+    Require ($Component -eq 'relay' -and $nativeSymbolsLocation -eq 'not-applicable') (
+      "$Label not-applicable native symbols are only valid for the relay without Synesis-owned native binaries")
+  }
+  $thirdPartyNativeAuditPath = ResolvePrivateFile (RequiredValue $properties 'privateThirdPartyNativeAudit') (
+    "$Label third-party native audit")
+  Require (IsUnder $thirdPartyNativeAuditPath $privateRoot) "$Label third-party native audit escapes the private release directory"
+  Require ((Get-Item -LiteralPath $thirdPartyNativeAuditPath).Length -gt 0) "$Label third-party native audit is empty"
+  Require ((Sha256 $thirdPartyNativeAuditPath) -eq (RequiredValue $properties 'privateThirdPartyNativeAuditSha256').ToLowerInvariant()) (
+    "$Label third-party native audit hash does not match release-record.properties")
   return [ordered]@{
     label = $Label
     fileName = [IO.Path]::GetFileName($recordPath)
@@ -231,7 +249,8 @@ $sharedFields = @(
   'nodeVersion',
   'npmVersion',
   'nativeToolchain',
-  'commercialRings'
+  'commercialRings',
+  'nativeSymbolsScope'
 )
 
 try

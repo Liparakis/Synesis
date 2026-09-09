@@ -6347,3 +6347,23 @@ Verification:
 Exact continuation: obtain the licensed protector/adapter/configuration and
 release signing authority, then run the maximum artifact and installed-runtime
 acceptance. Keep maximum claims blocked until those outputs exist.
+## 2026-09-09 — SYN-009E component-scoped native recovery gate
+
+Inspected the current relay install and found third-party Netty QUIC native
+content inside dependency JARs but no Synesis-owned relay native binary. Tightened
+the CLI/relay maximum adapter and provenance-comparison contracts so owned
+native symbols are required only for components that own native launchers, while
+both components require a private third-party-native audit and hash. Added the
+relay native-scope evidence note and updated the maximum report, adapter docs,
+state, next-session instructions, and test matrix.
+
+The PowerShell comparison script parsed successfully. The first Gradle task
+listing exposed a helper-ordering defect in the new checks; moving the checks
+after the local `isUnder` helper fixed it. The bounded retry passed
+`:cli:tasks :relay:tasks` with the documented process-local loopback workaround.
+The unmodified invocation remains host-blocked before project evaluation. No
+commercial adapter, signed maximum artifact, or remote mutation was used.
+
+Exact next action: run the checkpoint script, inspect only the intended release
+diff, commit this scoped contract/evidence slice, and keep the commercial
+maximum gate fail-closed.

@@ -95,8 +95,11 @@ path pass, but no commercial maximum records are available for a positive run.
 The CLI release task also rejects a non-matching `GITHUB_SHA` instead of
 allowing CI metadata to override the actual checkout commit.
 Both maximum tasks now require non-empty private evidence for every ring and
-diversification, non-empty mapping/retrace files, and at least one native
-symbol file; their hashes are retained only in the private release record.
+diversification, non-empty mapping/retrace files, and component-scoped native
+recovery: CLI-owned symbols plus a third-party-native audit, or relay's
+explicit not-applicable owned-symbol scope plus that audit. Their hashes are
+retained only in the private release record. The relay scope is evidenced in
+`docs/evidence/syn-009e-relay-native-scope-2026-09-09.md`.
 The release-to-release comparison now verifies those private hashes and the
 final signed-integrity fields before comparing two records.
 The consolidated evidence report is
@@ -148,8 +151,8 @@ resuming after a stop.
 Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
 The release-only CLI and relay tasks now require an explicit licensed adapter,
 version-pinned private configuration, release ID/seed, six ring evidence
-records, diversification, private mapping/retrace/native symbols, and separated
-customer/private output. It now also binds the request/result to the current
+records, diversification, private mapping/retrace, component-scoped native
+recovery/audit, and separated customer/private output. It now also binds the request/result to the current
 Tier 0–3 source inventory, keep-rule inventory, and acceptance procedure,
 requires a clean reviewed release checkout, creates a private artifact
 manifest, archives the candidate, signs through the existing bootstrap signer,

@@ -62,6 +62,8 @@ the six vendor-transformation ring names:
 
 ```text
 requiredRings=controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug
+nativeSymbolsScope=owned (cli)
+nativeSymbolsScopePolicy=owned-or-not-applicable (relay)
 ```
 
 The signed-integrity layer is deliberately not an adapter-reported ring. The
@@ -134,7 +136,9 @@ bundleDirectory=<the requested outputBundle>
 privateDirectory=<the requested privateDirectory>
 retraceFile=<file below privateDirectory>
 mappingFile=<file below privateDirectory>
-nativeSymbolsDirectory=<directory below privateDirectory>
+nativeSymbolsScope=owned (cli) or owned/not-applicable (relay, based on the shipped output)
+nativeSymbolsDirectory=<directory below privateDirectory, required only when nativeSymbolsScope=owned; otherwise not-applicable>
+thirdPartyNativeAudit=<non-empty audit file below privateDirectory for every shipped native dependency>
 evidence.controlFlow=<file below privateDirectory>
 evidence.virtualization=<file below privateDirectory>
 evidence.strings=<file below privateDirectory>
@@ -146,8 +150,10 @@ evidence.antiDebug=<file below privateDirectory>
 The adapter result therefore proves the six vendor transformation classes,
 release diversification, and non-empty private evidence for each of those
 claims. The Gradle task hashes every private ring/diversification evidence
-file into `release-record.properties`, and requires non-empty mapping, retrace,
-and native-symbol recovery material. The signed-integrity layer is proved by
+file into `release-record.properties`, and requires non-empty mapping and
+retrace material, owned native-symbol recovery when the component owns native
+launchers, and a third-party-native audit for shipped dependency binaries. The
+signed-integrity layer is proved by
 the later Gradle/bootstrap manifest verification and is recorded separately in
 the private release record.
 
@@ -166,7 +172,10 @@ never copied into the customer bundle.
 The Gradle gate additionally requires the protected profile marker, the
 customer CLI/runtime/native launcher files for `cli`, or the protected relay
 launcher/application JARs for `relay`, with no mappings/seeds/private records,
-and a private SHA-256 manifest of every bundle file. A result property is not
+and a private SHA-256 manifest of every bundle file. For relay, Netty QUIC
+native JARs are third-party inputs: they remain unmodified and are covered by
+the private audit rather than by a fabricated Synesis native-symbol directory.
+A result property is not
 itself proof that a ring is real: the evidence files and the later shipped
 artifact/installed-runtime acceptance must demonstrate the vendor's actual
 transformation and safe behavior. In particular, renaming is not accepted as
@@ -183,8 +192,8 @@ with different release IDs/seeds, and in `Reproducibility` mode with the same
 release ID/seed and otherwise identical provenance. The harness compares the
 canonical private artifact manifests, not ZIP timestamps, and emits only
 manifest hashes plus one-way seed fingerprints. Store its evidence outside the
-customer bundle and keep the full mapping/retrace/native recovery material in
-the private release directory.
+customer bundle and keep the full mapping/retrace/native recovery and
+third-party-native audit material in the private release directory.
 
 ## Signing and private recovery
 
@@ -193,9 +202,9 @@ per-platform release manifest, invokes the existing
 `bootstrap/cmd/sign-manifest` signer, and verifies the detached Ed25519
 signature against the public key embedded in `bootstrap/main.go`. The
 candidate archive, manifest, and signature are the only customer-facing
-outputs. Mappings, retrace information, native symbols, ring evidence,
-configuration, seed, and provenance remain under the private release
-directory.
+outputs. Mappings, retrace information, owned native symbols when applicable,
+third-party-native audit, ring evidence, configuration, seed, and provenance
+remain under the private release directory.
 
 The current task is a release seam, not maximum-profile acceptance. Acceptance
 still requires inspection of the exact protected artifact and installed CLI,

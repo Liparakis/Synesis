@@ -1086,6 +1086,7 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedure" to acceptanceProcedure.absolutePath,
                 "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "nativeSymbolsScope" to "owned",
                 "lockfileCount" to requestedProvenance.getValue("lockfileCount"),
                 "lockfilesSha256" to requestedProvenance.getValue("lockfilesSha256"),
                 "gradleVersion" to requestedProvenance.getValue("gradleVersion"),
@@ -1151,6 +1152,9 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
             "Maximum protector version must be pinned in the private result"
         }
+        require(resultValue("nativeSymbolsScope") == "owned") {
+            "Maximum CLI release must report nativeSymbolsScope=owned for its Synesis-owned native launchers"
+        }
 
         fun normalized(path: File): String = path.toPath().toAbsolutePath().normalize().toString()
         fun samePath(actual: String, expected: File): Boolean =
@@ -1159,6 +1163,10 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
             val childPath = normalized(child)
             val parentPath = normalized(parent)
             return childPath == parentPath || childPath.startsWith("$parentPath${File.separator}")
+        }
+        val thirdPartyNativeAudit = project.file(resultValue("thirdPartyNativeAudit"))
+        require(isUnder(thirdPartyNativeAudit, privateDirectory) && thirdPartyNativeAudit.isFile && thirdPartyNativeAudit.length() > 0L) {
+            "Maximum CLI third-party native audit is missing or outside the private boundary"
         }
 
         require(samePath(resultValue("bundleDirectory"), outputBundle)) {
@@ -1290,9 +1298,12 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
                 "acceptanceProcedureSha256" to maximumSha256(acceptanceProcedure),
                 "commercialRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
                 "diversification" to resultValue("diversification"),
+                "nativeSymbolsScope" to resultValue("nativeSymbolsScope"),
                 "privateRetraceFile" to resultValue("retraceFile"),
                 "privateMappingFile" to resultValue("mappingFile"),
                 "privateNativeSymbolsDirectory" to resultValue("nativeSymbolsDirectory"),
+                "privateThirdPartyNativeAudit" to thirdPartyNativeAudit.absolutePath,
+                "privateThirdPartyNativeAuditSha256" to maximumSha256(thirdPartyNativeAudit),
                 "artifactManifest" to maximumReleaseArtifactManifest.get().asFile.name,
                 "artifactManifestSha256" to maximumSha256(maximumReleaseArtifactManifest.get().asFile),
             ) + privateEvidenceProperties,
