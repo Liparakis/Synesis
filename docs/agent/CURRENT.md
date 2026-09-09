@@ -2,16 +2,20 @@
 
 ## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
-Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM BLOCKED**.
+Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER SEAM PASS; COMMERCIAL MAXIMUM BLOCKED**.
 The completed installed UI slice is preserved under `CP-0758`; the current
 task extends the existing `SYN-009C`/`SYN-009D` distribution and signing
 foundations into separate developer, protection-lite, and maximum-release
-profiles. No commercial Seven Rings capability is claimed until its actual
-protector output is installed and exercised.
+profiles. A versioned external-protector request/result contract now feeds the
+release-only maximum task, which validates private evidence and signs/verifies
+the candidate through the existing bootstrap boundary. No commercial Seven
+Rings capability is claimed until its actual protector output is installed and
+exercised.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
-  the working tree now contains this scoped release slice, preserved
+  local release commits now end at `ad6f9cbc5c36586830d3b70476be194b47a18e2c`,
+  and the working tree contains this scoped follow-up, preserved
   `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,
@@ -24,9 +28,10 @@ protector output is installed and exercised.
 ## Immediate next action
 
 To advance `SYN-009E` beyond `PARTIAL`, obtain an installed, licensed,
-version-pinned commercial protector integration and run the maximum-release
-acceptance. Until that external tool is available, preserve the passing lite
-evidence and keep the maximum gate fail-closed. Use
+version-pinned commercial protector and its reviewed adapter/configuration,
+inject the release signing authority, and run the maximum-release acceptance.
+Until that external tool is available, preserve the passing lite evidence and
+keep the maximum gate fail-closed. Use
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before
 resuming after a stop.
 
@@ -45,6 +50,39 @@ resuming after a stop.
   release, or remote mutation.
 - Record `developer`, `protection-lite`, and `maximum-release` separately in
   every result; unavailable commercial execution remains a blocker.
+
+## Work completed
+
+Added the provider-agnostic maximum-protector adapter contract and ADR-0071.
+The release-only CLI task now requires an explicit licensed adapter,
+version-pinned private configuration, release ID/seed, six ring evidence
+records, diversification, private retrace/native symbols, and separated
+customer/private output. It creates a private artifact manifest, archives the
+candidate, signs through the existing bootstrap signer, and verifies the
+detached signature against the embedded bootstrap public key. Extended the
+signer with explicit manifest/signature paths and added a focused regression
+test. No commercial protection capability is claimed.
+
+## Verification
+
+- `:cli:bundleSmokeTest --dependency-verification=strict --no-configuration-cache`
+  passed under the documented process-local Windows Gradle workaround.
+- `:cli:maximumRelease --no-configuration-cache` reached
+  `maximumReleasePrepare` and failed closed as designed because no adapter is
+  configured.
+- `go test ./cmd/sign-manifest` passed, including explicit-path signing.
+- `git diff --check` passed for the scoped changes; `agent-resume.ps1` and the
+  deferred validator passed.
+
+## Current failures
+
+No licensed commercial protector, adapter, private configuration, or release
+signing authority is installed. The full `go test ./...` run remains
+incomplete because three existing bootstrap update/migration tests fail with
+`update migrations not prepared`; the signer and MCP subpackages pass. The
+maximum profile and all commercial Seven Rings remain blocked. Preserved
+`CP-0758`, `.editorconfig`, and unrelated relay source changes remain
+untouched.
 
 ## SYN-053 first installed Synesis browser UI — completed current scope — 2026-09-08
 

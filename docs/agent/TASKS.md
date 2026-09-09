@@ -5,9 +5,10 @@
 - Title: Synesis maximum-protection commercial release profile
 - Status: ACTIVE
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
-  manifest, leakage, and provenance checks pass; maximum profile integration
-  remains blocked; no Seven Rings claim is accepted without shipped-artifact
-  evidence.
+  manifest, leakage, and provenance checks pass; the external maximum-
+  protector adapter and existing bootstrap-signing seam are implemented but
+  commercial execution remains blocked; no Seven Rings claim is accepted
+  without shipped-artifact evidence.
 - Purpose: Extend the existing `SYN-009C` distribution and `SYN-009D` stable
   installation foundations with separate `developer`, `protection-lite`, and
   `maximum-release` packaging profiles. The developer profile stays readable;
@@ -33,7 +34,7 @@
   provenance, immutable-artifact verification, release diversification, and
   private retrace evidence. Missing commercial tooling is an explicit blocker,
   not a passing substitute.
-- Required documentation: ADR-0070, protection profile/tool capability
+- Required documentation: ADR-0070, ADR-0071, protection profile/tool capability
   matrix, keep-rule and contract inventory, protected acceptance procedure,
   signing/provenance/retrace guidance, performance/size evidence, and durable
   state/checkpoint updates including `docs/agent/DEFERRED.md`.
@@ -48,8 +49,9 @@
   protocol redesign, frontend concealment project, production key creation,
   commercial-license commit, public release, push, tag, or remote mutation.
 - Exact next action: obtain an installed, licensed, version-pinned commercial
-  protector integration and run the maximum-release acceptance; absent that
-  tool, preserve the passing lite evidence and keep maximum fail-closed.
+  protector and its reviewed adapter/configuration, inject release signing
+  authority, and run the maximum-release acceptance; absent that tool, preserve
+  the passing lite evidence and keep maximum fail-closed.
 
 ## SYN-053
 

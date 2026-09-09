@@ -5,7 +5,10 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.security.KeyFactory
 import java.security.MessageDigest
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -58,6 +61,52 @@ val protectionLiteUsage = protectionLitePrivateDirectory.map { it.file("usage.tx
 val protectionLiteArtifactManifest = protectionLitePrivateDirectory.map { it.file("artifact-manifest.txt") }
 val protectionLiteProvenance = protectionLitePrivateDirectory.map { it.file("provenance.json") }
 val protectionLiteRules = layout.projectDirectory.file("src/release/proguard/protection-lite.pro")
+val maximumProtector = providers.gradleProperty("synesisMaximumProtector")
+    .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_PROTECTOR").orElse(""))
+val maximumProtectorConfig = providers.gradleProperty("synesisMaximumConfig")
+    .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_CONFIG").orElse(""))
+val maximumReleaseDirectory = layout.buildDirectory.dir("maximum-release")
+val maximumReleaseBundleDirectory = maximumReleaseDirectory.map { it.dir("bundle") }
+val maximumReleasePrivateDirectory = maximumReleaseDirectory.map { it.dir("private") }
+val maximumReleaseRequest = maximumReleaseDirectory.map { it.file("request.properties") }
+val maximumReleaseResult = maximumReleaseDirectory.map { it.file("result.properties") }
+val maximumReleaseArtifactManifest = maximumReleasePrivateDirectory.map { it.file("artifact-manifest.txt") }
+val maximumReleaseManifest = maximumReleaseDirectory.map { it.file("manifest.json") }
+val maximumReleaseSignature = maximumReleaseDirectory.map { it.file("manifest.json.sig") }
+
+fun writeMaximumProperties(file: File, values: Map<String, String>) {
+    val properties = Properties()
+    values.forEach { (key, value) -> properties.setProperty(key, value) }
+    file.parentFile.mkdirs()
+    file.outputStream().use { properties.store(it, "Synesis maximum-release adapter contract") }
+}
+
+fun readMaximumProperties(file: File): Properties {
+    require(file.isFile) { "Maximum-release adapter result is missing: $file" }
+    return Properties().also { properties -> file.inputStream().use(properties::load) }
+}
+
+fun maximumProperty(properties: Properties, key: String): String = properties.getProperty(key)?.trim().orEmpty()
+
+fun maximumSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(8192)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun maximumHexDecode(value: String): ByteArray {
+    require(value.length % 2 == 0 && value.matches(Regex("[0-9a-fA-F]+"))) {
+        "Expected an even-length hexadecimal value"
+    }
+    return ByteArray(value.length / 2) { index -> value.substring(index * 2, index * 2 + 2).toInt(16).toByte() }
+}
 
 abstract class GenerateBuildInfoTask : DefaultTask() {
     @get:OutputDirectory
@@ -841,18 +890,360 @@ val protectionLiteIntegrityCheck = tasks.register("protectionLiteIntegrityCheck"
     }
 }
 
+val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
+    group = "distribution"
+    description = "Invokes the supplied licensed maximum-protection adapter and validates its private evidence contract."
+    notCompatibleWithConfigurationCache(
+        "Maximum protection invokes a release-environment adapter and inspects customer/private output boundaries."
+    )
+    dependsOn(platformBundle)
+    inputs.dir(platformBundleDirectory)
+    outputs.dir(maximumReleaseBundleDirectory)
+    outputs.dir(maximumReleasePrivateDirectory)
+    doLast {
+        val protectorValue = maximumProtector.get().trim()
+        require(protectorValue.isNotBlank()) {
+            "Maximum release is blocked: set -PsynesisMaximumProtector or SYNESIS_MAXIMUM_PROTECTOR " +
+                    "to a licensed, version-pinned protector adapter; protection-lite is not a substitute."
+        }
+        val configValue = maximumProtectorConfig.get().trim()
+        require(configValue.isNotBlank()) {
+            "Maximum release is blocked: set -PsynesisMaximumConfig or SYNESIS_MAXIMUM_CONFIG " +
+                    "to the private, version-pinned protector configuration."
+        }
+        val protectorFile = project.file(protectorValue).absoluteFile
+        val configFile = project.file(configValue).absoluteFile
+        require(protectorFile.isFile) { "Maximum protector adapter is not a file: $protectorFile" }
+        require(configFile.isFile) { "Maximum protector configuration is not a file: $configFile" }
+
+        val releaseId = protectionReleaseId.get().trim()
+        val seed = protectionSeed.get().trim()
+        require(releaseId.isNotBlank() && !releaseId.equals("local", ignoreCase = true)) {
+            "Maximum release requires an explicit non-local release ID (-PsynesisReleaseId or SYNESIS_RELEASE_ID)."
+        }
+        require(seed.isNotBlank() && !seed.equals("UNSET", ignoreCase = true)) {
+            "Maximum release requires a release-specific protection seed (-PsynesisProtectionSeed or SYNESIS_PROTECTION_SEED)."
+        }
+
+        fun gitValue(vararg arguments: String): String {
+            val process = ProcessBuilder(listOf("git") + arguments.toList())
+                .directory(rootProject.layout.projectDirectory.asFile)
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.PIPE)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            require(process.waitFor() == 0) {
+                "Unable to read Git provenance (${arguments.joinToString(" ")}): $output"
+            }
+            return output
+        }
+
+        val sourceCommit = githubSha.get().trim().takeIf { it.isNotBlank() && it != "UNKNOWN" }
+            ?: gitValue("rev-parse", "HEAD")
+        val dirtyTree = gitValue("status", "--porcelain", "--untracked-files=all").isNotBlank()
+        val inputBundle = platformBundleDirectory.get().asFile.absoluteFile
+        val root = maximumReleaseDirectory.get().asFile
+        delete(root)
+        val outputBundle = maximumReleaseBundleDirectory.get().asFile.absoluteFile
+        val privateDirectory = maximumReleasePrivateDirectory.get().asFile.absoluteFile
+        outputBundle.mkdirs()
+        privateDirectory.mkdirs()
+        val requestFile = maximumReleaseRequest.get().asFile.absoluteFile
+        val resultFile = maximumReleaseResult.get().asFile.absoluteFile
+        writeMaximumProperties(
+            requestFile,
+            linkedMapOf(
+                "schema" to "1",
+                "profile" to "maximum-release",
+                "component" to "cli",
+                "releaseId" to releaseId,
+                "version" to bundleVersion.get(),
+                "platform" to bundlePlatform.get(),
+                "sourceCommit" to sourceCommit,
+                "dirtyTree" to dirtyTree.toString(),
+                "seed" to seed,
+                "inputBundle" to inputBundle.path,
+                "outputBundle" to outputBundle.path,
+                "privateDirectory" to privateDirectory.path,
+                "configuration" to configFile.path,
+                "requiredRings" to "controlFlow,virtualization,strings,analysisEnvironment,protectedPayload,antiDebug",
+                "invocation" to "The adapter must invoke the selected commercial protector; this task does not implement protection.",
+            ),
+        )
+
+        val command = if (isWindows && protectorFile.extension.lowercase(Locale.ROOT) in setOf("cmd", "bat")) {
+            listOf("cmd.exe", "/d", "/c", protectorFile.absolutePath, "--synesis-request", requestFile.absolutePath)
+        } else {
+            listOf(protectorFile.absolutePath, "--synesis-request", requestFile.absolutePath)
+        }
+        val process = ProcessBuilder(command)
+            .directory(root)
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0) {
+            "Maximum protector adapter failed with exit code $exitCode; adapter output was discarded to avoid leaking release secrets."
+        }
+
+        val result = readMaximumProperties(resultFile)
+        fun resultValue(key: String): String = maximumProperty(result, key)
+
+        require(resultValue("schema") == "1") { "Maximum protector result schema must be 1" }
+        require(resultValue("status") == "success") { "Maximum protector result did not report success" }
+        require(resultValue("profile") == "maximum-release") { "Maximum protector result profile is not maximum-release" }
+        require(resultValue("component") == "cli") { "Maximum protector result component is not cli" }
+        require(resultValue("protectorName").isNotBlank()) { "Maximum protector name is missing from the private result" }
+        require(resultValue("protectorVersion").isNotBlank() && resultValue("protectorVersion") != "unknown") {
+            "Maximum protector version must be pinned in the private result"
+        }
+
+        fun normalized(path: File): String = path.toPath().toAbsolutePath().normalize().toString()
+        fun samePath(actual: String, expected: File): Boolean =
+            normalized(project.file(actual)).equals(normalized(expected), ignoreCase = isWindows)
+        fun isUnder(child: File, parent: File): Boolean {
+            val childPath = normalized(child)
+            val parentPath = normalized(parent)
+            return childPath == parentPath || childPath.startsWith("$parentPath${File.separator}")
+        }
+
+        require(samePath(resultValue("bundleDirectory"), outputBundle)) {
+            "Maximum protector wrote its bundle outside the requested output boundary"
+        }
+        require(samePath(resultValue("privateDirectory"), privateDirectory)) {
+            "Maximum protector wrote private records outside the requested private boundary"
+        }
+        require(outputBundle.isDirectory) { "Maximum protector did not produce the customer bundle: $outputBundle" }
+        require(privateDirectory.isDirectory) { "Maximum protector did not produce private release records: $privateDirectory" }
+        require(!isUnder(privateDirectory, outputBundle)) { "Private release records overlap the customer bundle" }
+
+        listOf(
+            "controlFlow",
+            "virtualization",
+            "strings",
+            "analysisEnvironment",
+            "protectedPayload",
+            "antiDebug",
+        ).forEach { ring ->
+            require(resultValue("ring.$ring") == "verified") {
+                "Maximum protector did not verify the required ring: $ring"
+            }
+            val evidence = project.file(resultValue("evidence.$ring"))
+            require(isUnder(evidence, privateDirectory) && evidence.isFile) {
+                "Maximum protector evidence for $ring is missing or outside the private boundary"
+            }
+        }
+        require(resultValue("diversification") == "verified") {
+            "Maximum protector did not verify release diversification"
+        }
+        require(resultValue("retraceFile").isNotBlank()) { "Private JVM retrace output is missing" }
+        require(resultValue("nativeSymbolsDirectory").isNotBlank()) { "Private native symbols output is missing" }
+        require(isUnder(project.file(resultValue("retraceFile")), privateDirectory)) {
+            "Private retrace output escapes the private boundary"
+        }
+        require(isUnder(project.file(resultValue("nativeSymbolsDirectory")), privateDirectory)) {
+            "Private native symbols escape the private boundary"
+        }
+        require(project.file(resultValue("retraceFile")).isFile) { "Private retrace output is not a file" }
+        require(project.file(resultValue("nativeSymbolsDirectory")).isDirectory) {
+            "Private native symbols output is not a directory"
+        }
+
+        val profileMarker = outputBundle.resolve("PROTECTION_PROFILE")
+        require(profileMarker.isFile && profileMarker.readText().trim() == "maximum-release") {
+            "Maximum protector output is missing PROTECTION_PROFILE=maximum-release"
+        }
+        listOf(
+            "VERSION",
+            "manifest.json",
+            "app/synesis-cli.jar",
+            "runtime/bin/${if (isWindows) "java.exe" else "java"}",
+            "bin/${if (isWindows) "synesis.cmd" else "synesis"}",
+            "bin/${if (isWindows) "synesis-installer.exe" else "synesis-installer"}",
+            "bin/${if (isWindows) "synesis-mcp.exe" else "synesis-mcp"}",
+        ).forEach { relative ->
+            require(outputBundle.resolve(relative.replace('/', File.separatorChar)).isFile) {
+                "Maximum customer bundle is missing required file: $relative"
+            }
+        }
+        val forbidden = setOf("mapping.txt", "seeds.txt", "usage.txt", "provenance.json", "artifact-manifest.txt")
+        Files.walk(outputBundle.toPath()).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.forEach { path ->
+                val name = path.fileName.toString().lowercase(Locale.ROOT)
+                require(
+                    name !in forbidden && !name.endsWith(".sourcemap") && !name.endsWith(".pdb") &&
+                            !name.endsWith(".dSYM".lowercase(Locale.ROOT)) && !name.endsWith(".map")
+                ) { "Maximum customer bundle contains private/source material: $path" }
+            }
+        }
+
+        val manifestLines = Files.walk(outputBundle.toPath()).use { paths ->
+            paths
+                .filter { Files.isRegularFile(it) }
+                .map { path ->
+                    val relative = outputBundle.toPath().relativize(path).toString()
+                        .replace(File.separatorChar, '/')
+                    "$relative\t${maximumSha256(path.toFile())}"
+                }
+                .sorted()
+                .toList()
+        }
+        maximumReleaseArtifactManifest.get().asFile.writeText(
+            "# SYNESIS_MAXIMUM_RELEASE_MANIFEST_V1\n" + manifestLines.joinToString("\n", postfix = "\n")
+        )
+        writeMaximumProperties(
+            privateDirectory.resolve("release-record.properties"),
+            linkedMapOf(
+                "schema" to "1",
+                "profile" to "maximum-release",
+                "component" to "cli",
+                "releaseId" to releaseId,
+                "sourceCommit" to sourceCommit,
+                "dirtyTree" to dirtyTree.toString(),
+                "protectorName" to resultValue("protectorName"),
+                "protectorVersion" to resultValue("protectorVersion"),
+                "configuration" to configFile.absolutePath,
+                "seed" to seed,
+                "artifactManifest" to maximumReleaseArtifactManifest.get().asFile.name,
+                "artifactManifestSha256" to maximumSha256(maximumReleaseArtifactManifest.get().asFile),
+            ),
+        )
+    }
+}
+
+val maximumReleaseArchiveTask = tasks.register<Zip>("maximumReleaseArchive") {
+    group = "distribution"
+    description = "Archives the externally protected maximum-release CLI bundle."
+    dependsOn(maximumReleasePrepare)
+    archiveFileName.set("synesis-${bundleVersion.get()}-${bundlePlatform.get()}-maximum-release.zip")
+    destinationDirectory.set(maximumReleaseDirectory)
+    from(maximumReleaseBundleDirectory) {
+        into("synesis-${bundleVersion.get()}-${bundlePlatform.get()}-maximum-release")
+    }
+}
+
+val maximumReleaseManifestTask = tasks.register("maximumReleaseManifest") {
+    group = "distribution"
+    description = "Creates the canonical signed-release manifest for the protected CLI candidate."
+    dependsOn(maximumReleaseArchiveTask)
+    outputs.file(maximumReleaseManifest)
+    doLast {
+        fun json(value: String): String = value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+
+        val keyId = project.providers.gradleProperty("synesisSigningKeyId")
+            .orElse(project.providers.environmentVariable("SYNESIS_MANIFEST_SIGNING_KEY_ID")).orNull?.trim().orEmpty()
+        require(keyId.isNotBlank()) {
+            "Maximum release requires SYNESIS_MANIFEST_SIGNING_KEY_ID (or -PsynesisSigningKeyId); no signing key is generated here."
+        }
+        val publishedAt = project.providers.gradleProperty("synesisPublishedAt")
+            .orElse(project.providers.environmentVariable("SYNESIS_RELEASE_PUBLISHED_AT")).orNull?.trim().orEmpty()
+        require(publishedAt.isNotBlank()) {
+            "Maximum release requires SYNESIS_RELEASE_PUBLISHED_AT (or -PsynesisPublishedAt) for reproducible release metadata."
+        }
+        val minimumBootstrapVersion = project.providers.gradleProperty("synesisMinimumBootstrapVersion")
+            .orElse(project.providers.environmentVariable("SYNESIS_MINIMUM_BOOTSTRAP_VERSION"))
+            .orElse("0.1.0-dev.local").get()
+        val archive = maximumReleaseArchiveTask.get().archiveFile.get().asFile
+        maximumReleaseManifest.get().asFile.writeText(
+            """{
+  "schemaVersion": 1,
+  "channel": "maximum-release",
+  "version": "${json(bundleVersion.get())}",
+  "publishedAt": "${json(publishedAt)}",
+  "minimumBootstrapVersion": "${json(minimumBootstrapVersion)}",
+  "developmentOnly": false,
+  "signingKeyId": "${json(keyId)}",
+  "releaseId": "${json(protectionReleaseId.get())}",
+  "artifacts": {
+    "${json(bundlePlatform.get())}": {
+      "url": "${json(archive.name)}",
+      "sha256": "${maximumSha256(archive)}",
+      "size": ${archive.length()}
+    }
+  }
+}
+""".trimIndent() + "\n"
+        )
+    }
+}
+
+val maximumReleaseSignTask = tasks.register("maximumReleaseSign") {
+    group = "distribution"
+    description = "Signs the maximum-release manifest with the existing bootstrap signer and an injected CI secret."
+    dependsOn(maximumReleaseManifestTask)
+    outputs.file(maximumReleaseSignature)
+    doLast {
+        require(!System.getenv("SYNESIS_MANIFEST_PRIVATE_KEY_B64").isNullOrBlank()) {
+            "Maximum release requires SYNESIS_MANIFEST_PRIVATE_KEY_B64; production signing keys are injected, never generated or committed."
+        }
+        val command = listOf(
+            "go", "run", "./cmd/sign-manifest",
+            "--manifest", maximumReleaseManifest.get().asFile.absolutePath,
+            "--signature", maximumReleaseSignature.get().asFile.absolutePath,
+        )
+        val process = ProcessBuilder(command)
+            .directory(rootProject.file("bootstrap"))
+            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val exitCode = process.waitFor()
+        require(exitCode == 0 && maximumReleaseSignature.get().asFile.isFile) {
+            "Existing bootstrap manifest signer failed with exit code $exitCode"
+        }
+    }
+}
+
 tasks.register("maximumRelease") {
     group = "distribution"
-    description = "Fails closed until a licensed maximum-profile protector is configured."
+    description = "Builds, signs, and verifies a licensed maximum-release CLI candidate; fails closed without every release authority."
+    dependsOn(maximumReleaseSignTask)
+    notCompatibleWithConfigurationCache(
+        "Maximum release verifies an injected signature against the bootstrap trust root."
+    )
     doLast {
-        val tool = providers.gradleProperty("synesisMaximumProtector")
-            .orElse(providers.environmentVariable("SYNESIS_MAXIMUM_PROTECTOR")).orNull
-        require(!tool.isNullOrBlank()) {
-            "Maximum release is blocked: set -PsynesisMaximumProtector or SYNESIS_MAXIMUM_PROTECTOR " +
-                    "to a licensed, version-pinned protector integration; protection-lite is not a substitute."
+        val bootstrapSource = rootProject.file("bootstrap/main.go").readText()
+        val publicKeyHex = Regex("""manifestPublicKeyHex\s*=\s*\"([0-9a-fA-F]+)\"""")
+            .find(bootstrapSource)?.groupValues?.get(1)
+            ?: error("Embedded bootstrap manifest public key is missing")
+        val publicKeyBytes = maximumHexDecode(publicKeyHex)
+        require(publicKeyBytes.size == 32) { "Embedded bootstrap manifest public key must be 32 bytes" }
+        val x509Prefix = byteArrayOf(
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+        )
+        val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(
+            X509EncodedKeySpec(x509Prefix + publicKeyBytes)
+        )
+        val signatureText = maximumReleaseSignature.get().asFile.readText().trim()
+        val signatureBytes = try {
+            Base64.getDecoder().decode(signatureText)
+        } catch (exception: IllegalArgumentException) {
+            throw GradleException("Maximum-release detached signature is not valid base64", exception)
         }
-        throw GradleException(
-            "Maximum release integration is not enabled for '$tool'; no commercial protector is installed in this checkout."
+        val verifier = Signature.getInstance("Ed25519")
+        verifier.initVerify(publicKey)
+        val manifestBytes = maximumReleaseManifest.get().asFile.readBytes()
+        verifier.update(manifestBytes)
+        require(verifier.verify(signatureBytes)) {
+            "Maximum-release manifest signature does not verify against bootstrap/main.go trust root"
+        }
+        require(maximumReleaseManifest.get().asFile.readText().contains("\"developmentOnly\": false")) {
+            "Maximum-release manifest must not be marked development-only"
+        }
+
+        val record = maximumReleasePrivateDirectory.get().asFile.resolve("release-record.properties")
+        val properties = readMaximumProperties(record)
+        properties.setProperty("manifest", maximumReleaseManifest.get().asFile.name)
+        properties.setProperty("manifestSha256", maximumSha256(maximumReleaseManifest.get().asFile))
+        properties.setProperty("signature", maximumReleaseSignature.get().asFile.name)
+        properties.setProperty("signatureSha256", maximumSha256(maximumReleaseSignature.get().asFile))
+        properties.setProperty("signedAgainstBootstrapKey", "true")
+        record.outputStream().use { properties.store(it, "Synesis maximum-release private record") }
+        logger.lifecycle(
+            "Maximum-release candidate verified: ${maximumReleaseArchiveTask.get().archiveFile.get().asFile.absolutePath}"
         )
     }
 }

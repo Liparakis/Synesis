@@ -8,3 +8,12 @@ corresponding public key in `bootstrap/main.go`.
 The checked-in key is a development placeholder and must be replaced with the
 project's protected public key before a public release. Authenticode, Apple
 Developer ID signing, and notarization are not implemented.
+
+The existing signer preserves its default `manifest.json` and
+`manifest.json.sig` paths and also accepts explicit `--manifest` and
+`--signature` paths. The release-only maximum task uses those explicit paths
+inside `build/maximum-release/`, then verifies the detached signature against
+the public key compiled into `bootstrap/main.go`. This does not create a key,
+replace the trust root, or make the commercial protection rings pass; the
+private key remains an injected CI secret and the current local key is not a
+production release authority.

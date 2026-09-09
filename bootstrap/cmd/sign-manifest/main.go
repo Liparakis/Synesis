@@ -8,25 +8,29 @@ package main
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 )
 
 const (
-	privateKeyEnvVar = "SYNESIS_MANIFEST_PRIVATE_KEY_B64"
-	manifestPath     = "manifest.json"
-	signaturePath    = "manifest.json.sig"
+	privateKeyEnvVar     = "SYNESIS_MANIFEST_PRIVATE_KEY_B64"
+	defaultManifestPath  = "manifest.json"
+	defaultSignaturePath = "manifest.json.sig"
 )
 
 func main() {
-	if err := run(); err != nil {
+	manifestPath := flag.String("manifest", defaultManifestPath, "manifest path")
+	signaturePath := flag.String("signature", defaultSignaturePath, "detached signature path")
+	flag.Parse()
+	if err := run(*manifestPath, *signaturePath); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // run signs manifestPath and writes the result to signaturePath.
-func run() error {
+func run(manifestPath, signaturePath string) error {
 	key, err := loadPrivateKey()
 	if err != nil {
 		return err

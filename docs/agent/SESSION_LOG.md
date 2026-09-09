@@ -5913,3 +5913,36 @@ command. UI commits remain local until separately authorized.
 
 Exact next action: create the `web-ui` module and resource-packaging seam, then
 add static serving and browser startup while preserving server-owned state.
+## 2026-09-09 — SYN-009E external maximum-protector adapter seam
+
+The referenced maximum-protection goal was reread in full before continuing.
+The host has no `dasho`, Zelix/KlassMaster, yGuard, R8, or maximum-protector
+environment/configuration. The existing protection-lite result therefore
+remains a baseline and the six commercial rings remain blocked.
+
+Added ADR-0071 and a release-only CLI adapter contract. The maximum task now
+requires a real version-pinned adapter and private configuration, explicit
+release identity/seed, all six ring evidence files, release diversification,
+private retrace/native symbols, and a customer/private output boundary. It
+creates a private immutable artifact manifest, archives the candidate, invokes
+the existing Go bootstrap signer with an injected CI key, and verifies the
+detached signature against the compiled bootstrap public key. No custom
+obfuscator, VM, packer, hostile anti-debugger, or alternate trust system was
+introduced.
+
+Verification:
+
+- `:cli:maximumRelease` under the documented process-local Gradle workaround
+  reached `:cli:maximumReleasePrepare` and failed closed because no adapter was
+  supplied.
+- `go test ./cmd/sign-manifest` passed, including the explicit-path signer
+  regression test.
+- A full `go test ./...` run remains incomplete: three existing bootstrap
+  update/migration tests fail with `update migrations not prepared`; the signer
+  and MCP subpackages pass.
+- No push, tag, release, reset, or change to the preserved `CP-0758` or
+  unrelated relay work occurred.
+
+Exact continuation: obtain the licensed protector/adapter/configuration and
+release signing authority, then run the maximum artifact and installed-runtime
+acceptance. Keep maximum claims blocked until those outputs exist.

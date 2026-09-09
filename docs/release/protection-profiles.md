@@ -8,7 +8,7 @@ silently obfuscated.
 | --- | --- | --- |
 | `developer` | normal development, tests, diagnosis, and ordinary artifacts | available and unchanged |
 | `protection-lite` | compatibility, keep-rule, artifact, and bounded runtime acceptance | implemented with ProGuard 7.10.0; not a maximum security claim |
-| `maximum-release` | commercial customer release with all verified Seven Rings | fail-closed until an installed, licensed, version-pinned protector integration is supplied |
+| `maximum-release` | commercial customer release with all verified Seven Rings | adapter/signing seam implemented; fail-closed until an installed, licensed, version-pinned protector integration is supplied and exercised |
 
 ## Commands
 
@@ -29,9 +29,22 @@ developer build.
   '-PsynesisJmods=C:\path\to\jdk\jmods' `
   --dependency-verification=strict --no-configuration-cache
 
-# Maximum release intentionally stops until the commercial integration exists.
-.\gradlew.bat :cli:maximumRelease -PsynesisMaximumProtector=<licensed-integration>
+# Maximum release requires the external adapter, private configuration,
+# release-specific seed/identity, and injected signing authority.
+.\gradlew.bat :cli:maximumRelease `
+  '-PsynesisMaximumProtector=C:\private\bin\synesis-maximum-adapter.exe' `
+  '-PsynesisMaximumConfig=C:\private\config\maximum.properties' `
+  '-PsynesisReleaseId=1.0.0-windows-x64-r001' `
+  '-PsynesisProtectionSeed=<release-specific-secret>' `
+  '-PsynesisSigningKeyId=<key-id>' `
+  '-PsynesisPublishedAt=<fixed-rfc3339-time>' `
+  --dependency-verification=strict --no-configuration-cache
 ```
+
+The adapter request/result schema and private-evidence requirements are
+documented in [maximum-protector-adapter.md](maximum-protector-adapter.md).
+No adapter, commercial configuration, release seed, or signing secret is
+provided in this checkout, so this command remains expected to fail closed.
 
 The CLI lite output is under `cli/build/protection-lite/`; the standalone
 relay lite output is under `relay/build/protection-lite/`:
@@ -52,5 +65,8 @@ investigation only. Release CI must provide a matching, approved Java library
 image rather than silently relying on a developer machine.
 
 `maximum-release` is not an alias for lite. It must fail closed when the
-licensed protector, its configuration, private recovery records, final
-manifest/signature, and post-protection acceptance evidence are absent.
+licensed protector adapter, its configuration, private recovery records, final
+manifest/signature, and post-protection acceptance evidence are absent. The
+Gradle seam signs the candidate through the existing bootstrap signer and
+verifies the compiled bootstrap trust root; it does not make the commercial
+ring claims without the later artifact and installed-runtime acceptance.

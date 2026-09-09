@@ -40,18 +40,22 @@ The current run passed this gate for the Windows x64 bundle. Its result is
 The following must be separately evidenced before a customer release can be
 called maximum:
 
-1. all seven requested protection rings on the exact JVM/native/UI/relay
+1. a licensed, version-pinned adapter must produce the exact JVM/native/UI/relay
+   inputs, all six commercial ring evidence records, private retrace/native
+   symbols, a release-specific transformation seed, and a customer/private
+   boundary that passes the Gradle adapter gate;
+2. all seven requested protection rings on the exact JVM/native/UI/relay
    inputs, with genuine virtualization and protected loading demonstrated by
    the selected commercial tool;
-2. relay and overlay/Link acceptance from the protected artifacts, including
+3. relay and overlay/Link acceptance from the protected artifacts, including
    provider-boundary behavior;
-3. tamper detection/refusal for the signed immutable payload and protected
+4. tamper detection/refusal for the signed immutable payload and protected
    loader;
-4. private JVM retrace, native symbol recovery, release diversification, and
+5. private JVM retrace, native symbol recovery, release diversification, and
    leakage scans;
-5. performance, startup, memory, and archive-size comparisons against the
+6. performance, startup, memory, and archive-size comparisons against the
    developer baseline; and
-6. final manifest/signature, installer/doctor verification, normal-host,
+7. final manifest/signature, installer/doctor verification, normal-host,
    legitimate-VM, CI, debugger/instrumentation, and failure-safety evidence.
 
 No missing maximum gate is replaced by a passing lite smoke test.

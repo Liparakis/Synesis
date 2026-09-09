@@ -10,6 +10,8 @@
 | Protected relay archive | transformed entrypoint reaches guarded argument parser | PASS bounded | `:relay:protectionLiteSmokeTest`; full protected relay socket gate remains open |
 | Protected manifest/leakage | private manifest, no source/maps/private records, UI resource retained | PASS | `:cli:protectionLiteIntegrityCheck` |
 | Lite provenance | source/dirty state, tool, library image, rules/seed/artifact/archive hashes | PASS | private `provenance.json` outside bundle |
+| Maximum adapter contract | versioned external request/result, six ring evidence paths, private retrace/native symbols, bundle separation | PASS seam / NOT EXECUTED | `docs/release/maximum-protector-adapter.md`; no licensed adapter installed |
+| Maximum candidate signing | existing bootstrap signer with injected key; detached signature verified against embedded trust root | NOT EXECUTED / BLOCKED | requires protected adapter output and release signing authority |
 | Maximum profile | licensed commercial protector exercised | BLOCKED | no commercial protector/license installed |
 | Ring 1 control flow | material transformation beyond renaming | BLOCKED | lite renaming is not control-flow protection |
 | Ring 2 virtualization | genuine virtual execution output | BLOCKED | requires selected commercial capability |
@@ -24,8 +26,9 @@
 | Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |
 
 Exact next action: obtain an installed, licensed, version-pinned commercial
-protector integration and run the maximum-release acceptance; keep all
-commercial-only rows explicitly blocked until that tool is exercised.
+protector and its reviewed adapter/configuration, inject release signing
+authority, and run the maximum-release acceptance; keep all commercial-only
+rows explicitly blocked until that tool is exercised.
 
 ## SYN-053 installed browser UI — acceptance — 2026-09-08
 

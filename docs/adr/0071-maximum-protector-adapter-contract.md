@@ -1,0 +1,75 @@
+# ADR-0071: External maximum-protector adapter and signed candidate gate
+
+- Status: Accepted for `SYN-009E`; execution remains blocked without licensed
+  tooling and release signing authority
+- Date: 2026-09-09
+- Scope: maximum-release Gradle boundary and existing bootstrap manifest signer
+
+## Context
+
+ADR-0070 separates the readable developer build, the open-source
+`protection-lite` baseline, and the commercial `maximum-release` profile. The
+repository has no DashO, Zelix, or equivalent commercial protector installed.
+Leaving only an unconditional placeholder task makes the intended release
+boundary underspecified, but embedding a fake protector or inventing a
+home-grown virtual machine would make the security claim worse.
+
+The existing bootstrap signer and detached manifest trust root are the
+authoritative distribution boundary. A maximum candidate must be produced by a
+real licensed protector, retain private recovery material, and be signed only
+after the protected archive is final.
+
+## Decision
+
+Add one explicit provider-agnostic adapter contract to the release-only Gradle
+pipeline. The adapter is an external executable owned by the release
+environment and receives a versioned request file. It must return a protected
+CLI bundle, private evidence, exact protector identity/version, all six
+commercial ring statuses, diversification status, retrace data, and native
+symbols. The Gradle gate validates path separation, required customer files,
+private-material leakage, and a private immutable artifact manifest. It never
+converts the adapter's assertions into public marketing claims without the
+separate artifact and installed-runtime acceptance.
+
+The final candidate task then:
+
+1. writes a reproducible per-platform release manifest;
+2. calls the existing `bootstrap/cmd/sign-manifest` implementation with an
+   injected `SYNESIS_MANIFEST_PRIVATE_KEY_B64` secret; and
+3. verifies the detached signature against the public key compiled into the
+   bootstrapper.
+
+The adapter request, result, configuration, seed, mappings, retrace data,
+native symbols, ring evidence, manifest, and signature are kept outside the
+customer archive except for the signed manifest and detached signature that
+the existing distribution flow needs. Adapter output is discarded from normal
+logs to reduce accidental disclosure.
+
+The signer now accepts explicit manifest and signature paths while preserving
+its existing defaults. This lets the release task sign a build-directory
+candidate without mutating the source checkout or creating a second signing
+implementation.
+
+## Consequences
+
+- A real commercial integration can be supplied without changing the normal
+  developer build or pretending that ProGuard is maximum protection.
+- Missing protector, configuration, explicit release ID/seed, signing key,
+  ring evidence, or signature causes a fail-closed result.
+- The adapter contract is intentionally vendor-neutral; a release engineer
+  still must write or obtain the vendor-specific wrapper and review its exact
+  configuration.
+- Signing the per-platform candidate does not replace the required aggregate
+  release workflow or the protected installed-runtime acceptance.
+- The current checkout remains `PARTIAL` because no licensed adapter has been
+  exercised.
+
+## Rejected alternatives
+
+- Treating the protection-lite ProGuard output as the maximum profile.
+- Implementing a repository-owned virtual machine, packer, anti-debugger, or
+  VM detector to fill unavailable commercial capabilities.
+- Passing arbitrary shell fragments to Gradle or printing adapter output that
+  may contain license or private recovery data.
+- Creating a second installer signing root instead of reusing the bootstrap
+  signer and trust boundary.

@@ -20,6 +20,12 @@ invocation, protected artifact inspection, normal-host and legitimate-VM
 acceptance, debugger/instrumentation safety checks, tamper behavior, private
 retrace, and performance/size measurements.
 
+The repository now has a provider-agnostic maximum-protector adapter and
+signed-candidate seam documented in
+[maximum-protector-adapter.md](maximum-protector-adapter.md). That seam only
+validates the contract and keeps the maximum task fail-closed; it does not
+change any `UNVERIFIED` commercial row to `PASS`.
+
 The open-source lite result does not satisfy Rings 1, 2, 4, 5, or 6. It
 provides only a bounded shrinking/renaming compatibility baseline and private
 mapping material. Ring 7 remains only a release-foundation partial until the

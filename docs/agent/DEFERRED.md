@@ -5,7 +5,8 @@
 The explicit maximum-protection goal promotes a release-engineering task in
 the existing `SYN-009C`/`SYN-009D` distribution lineage. It does not promote a
 new runtime service, protocol, provider, or frontend architecture. ADR-0070
-selects additive release-only profiles over the current Gradle platform bundle,
+and ADR-0071 select additive release-only profiles and an external commercial
+adapter over the current Gradle platform bundle,
 Go bootstrap integrity, stable installation, native launcher, relay
 distribution, and packaged UI seams.
 
@@ -19,7 +20,10 @@ output is exercised. Open-source renaming/shrinking is not a substitute.
 This task must not introduce a home-grown VM or packer, destructive
 anti-debugging, host surveillance, a customer downgrade flag, production keys,
 commercial credentials, public release, push, tag, or remote mutation. The
-deferred register remains part of every release/security checkpoint.
+deferred register remains part of every release/security checkpoint. The
+adapter/signing seam is now present, but its commercial execution and all ring
+evidence remain deferred until the licensed tool and release signing authority
+are supplied.
 
 ## SYN-053 promotion review — 2026-09-08
 

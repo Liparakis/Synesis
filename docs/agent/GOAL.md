@@ -7,17 +7,20 @@ protected profile must distinguish protection-lite from the requested
 commercial maximum profile and must classify every Seven Rings capability with
 artifact and installed-runtime evidence rather than marketing terminology.
 
-- Status: ACTIVE / protection-lite evidence complete; maximum profile blocked
-- Baseline: actual checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43` on
-  `master`, synchronized with `origin/master`; `CP-0758.md` is preserved as
-  the completed UI checkpoint and remains uncommitted.
+- Status: ACTIVE / protection-lite evidence complete; maximum adapter/signing seam implemented; commercial profile blocked
+- Baseline: activation checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43`
+  on `master`; the scoped release slice is now at local `ad6f9cbc5c36586830d3b70476be194b47a18e2c`, two commits ahead of
+  `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
+  and remains uncommitted.
 - Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
   foundations; this task extends them rather than creating a parallel release
   system. `SYN-010B` remains a separate historical aggregation task.
 - Planning basis: the user-provided maximum-protection goal, current-source
-  and bundle investigation, and ADR-0070.
+  and bundle investigation, ADR-0070, and ADR-0071's external adapter/signing
+  contract.
 - Exact next action: obtain an installed, licensed, version-pinned commercial
-  protector integration and run the maximum-release acceptance; until that
+  protector plus its reviewed adapter/configuration and run the maximum-release
+  acceptance with injected release signing authority; until that
   authority/tool exists, keep the maximum gate fail-closed and do not invent
   a replacement implementation.
 - Required rings: control-flow hardening, genuine virtualization, runtime
@@ -25,8 +28,9 @@ artifact and installed-runtime evidence rather than marketing terminology.
   payload packaging, safe anti-debug/instrumentation handling, and signed
   integrity/diversification/private retrace.
 - Honest boundary: ProGuard 7.10.0 transformation is only `PROTECTION_LITE`;
-  commercial rings remain `BLOCKED` until a licensed protector is installed
-  and its shipped output is exercised.
+  the provider-agnostic maximum adapter and existing bootstrap-signer seam are
+  release plumbing, not ring evidence. Commercial rings remain `BLOCKED` until
+  a licensed protector is installed and its shipped output is exercised.
 - Developer boundary: no protection transforms, anti-debug behavior, packing,
   or virtualization may enter the normal developer build or customer-visible
   runtime toggle surface.

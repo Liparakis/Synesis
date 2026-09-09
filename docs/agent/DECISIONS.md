@@ -2,6 +2,11 @@
 
 Product decisions are indexed in ADRs under `docs/adr/`.
 
+- ADR-0071: External maximum-protector adapter and signed candidate gate —
+  accepted for `SYN-009E`; a versioned release-environment adapter supplies
+  real commercial protection and private evidence, while the existing
+  bootstrap signer and trust root remain the only release-signing boundary.
+
 - ADR-0070: Synesis maximum-protection commercial release profile — accepted
   for `SYN-009E`; readable developer builds remain separate from opt-in
   protection-lite and licensed maximum-release packaging, the existing

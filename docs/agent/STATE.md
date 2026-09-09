@@ -1,3 +1,33 @@
+## 2026-09-09 — SYN-009E maximum-protection adapter/signing seam — current
+
+The release-only maximum boundary now has a versioned external protector
+adapter contract. `:cli:maximumReleasePrepare` requires a real executable
+adapter, private configuration, explicit release ID/seed, all six ring evidence
+records, private retrace/native symbols, and a separated customer bundle. The
+final CLI candidate task archives the protected output, invokes the existing
+bootstrap manifest signer with an injected key, and verifies the detached
+signature against the public key embedded in `bootstrap/main.go`.
+
+This is release plumbing, not commercial protection evidence. No DashO, Zelix,
+or equivalent licensed adapter/configuration/signing authority is installed on
+this host. The maximum task was rerun and failed closed at
+`maximumReleasePrepare`; `protection-lite` remains the only passing protected
+profile. The explicit signer-path regression test passes; the full bootstrap
+Go suite remains incomplete because three pre-existing update/migration tests
+fail at `update migrations not prepared`.
+
+The scoped source changes remain local at `ad6f9cbc5c36586830d3b70476be194b47a18e2c`;
+no push, tag, release, reset, or mutation of the preserved UI checkpoint or
+unrelated relay edits occurred.
+
+## Immediate next action
+
+Obtain an installed, licensed, version-pinned commercial protector and its
+reviewed adapter/configuration, inject the release signing authority, then run
+the maximum-release artifact and installed-runtime acceptance. Until that
+external state exists, preserve the passing lite evidence and keep maximum
+claims blocked.
+
 ## 2026-09-09 — SYN-009E maximum-protection release task activation
 
 The completed installed browser UI task is closed for its current scope after
