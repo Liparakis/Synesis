@@ -53,6 +53,8 @@ Synesis artifact. No vendor documentation is treated as local ring evidence.
 The capability matrix is in
 `docs/release/protector-capability-matrix.md`; the documentation-only review is
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
+The current callable-tool and release-input probe is recorded in
+`docs/evidence/syn-009e-commercial-tool-availability-2026-09-09.md`.
 
 ## Tier 0–3 scope
 
@@ -273,6 +275,8 @@ release-hardening work:
 - `cbecbac5` — added packaged frontend static-content leakage acceptance for
   external runtime URLs, source-map/development references, and Vite/local
   markers.
+- `caaa0427` — refreshed current-source Tier 0–3 path/signature and
+  compatibility-boundary evidence; no commercial transformation was claimed.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

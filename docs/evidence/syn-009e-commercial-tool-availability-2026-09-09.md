@@ -7,11 +7,15 @@ does not claim that a vendor installer can never exist elsewhere; it records
 that no callable, configured commercial maximum path is available to this
 checkout.
 
+This snapshot was rechecked during the current SYN-009E continuation after
+the source-scope audit. It records the release environment as it exists now;
+it does not infer availability from older checkpoints.
+
 ## Repository state
 
-- HEAD: `edfd155f9aacca02fc6b5b9866a33693a985746b`
+- HEAD: `caaa0427cef92b03c5026c8b4a15feb17debb13a`
 - Branch: `master`
-- Checkpoint: `CP-0796`
+- Checkpoint: `CP-0806`
 - Remote mutation: none
 
 ## Callable tool probe
