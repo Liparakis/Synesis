@@ -1,10 +1,9 @@
 # SYN-009E protection-lite baseline.
-# This file is intentionally conservative: it is a compatibility/audit
-# profile, not the commercial maximum profile. It must never be used to claim
+# This file is a free compatibility/hardening profile, not the commercial
+# maximum profile. Standard ProGuard optimization and mixed-case renaming may
+# reduce recoverable structure, but they must never be used to claim
 # virtualization, protected packing, anti-VM, or anti-debugging.
 
--dontoptimize
--dontusemixedcaseclassnames
 -dontnote
 -keepdirectories
 
@@ -20,7 +19,7 @@
 # Picocli discovers annotated fields and command metadata reflectively. Keep
 # only the annotated members and metadata; command implementation classes are
 # otherwise eligible for shrinking/renaming through ordinary reachability.
--keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,RuntimeVisibleParameterAnnotations,RuntimeInvisibleParameterAnnotations,AnnotationDefault,InnerClasses,EnclosingMethod,Signature,Exceptions,MethodParameters,SourceFile,LineNumberTable
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,RuntimeVisibleParameterAnnotations,RuntimeInvisibleParameterAnnotations,AnnotationDefault,InnerClasses,EnclosingMethod,Signature,Exceptions,MethodParameters
 -keepclassmembers,includedescriptorclasses class * {
     @picocli.CommandLine$Option <fields>;
     @picocli.CommandLine$Parameters <fields>;
@@ -37,9 +36,9 @@
     <init>(...);
 }
 
-# Keep source locations useful for private retrace while removing repository
-# path disclosure from the protected artifact.
--renamesourcefileattribute SourceFile
+# Do not retain source-file or line-number attributes in the customer-facing
+# lite artifact. The private mapping remains available for name recovery, but
+# source-location metadata is intentionally not shipped.
 
 # The current workstation has a Java 25 runtime image but no Java 25 JMOD
 # directory. The release task accepts an explicit compatible JMOD source (the

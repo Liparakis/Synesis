@@ -1,3 +1,33 @@
+## 2026-09-09 — SYN-009E free protection-lite hardening
+
+Strengthened the free protection-lite rules for CLI and standalone relay by
+enabling standard ProGuard optimization and mixed-case renaming and removing
+`SourceFile`/`LineNumberTable` retention from the application rules. The
+compatibility keep rules and Java verification remain in place; no home-grown
+virtualization, packer, anti-VM, anti-debug, or anti-instrumentation behavior
+was added.
+
+Verification passed:
+
+- CLI `protectionLiteBundleSmokeTest`, `protectionLiteIntegrityCheck`, and
+  `protectionLiteProvenance`;
+- relay `protectionLiteSmokeTest` and `protectionLiteProvenance`;
+- the maximum acceptance rejection of the lite marker;
+- archive-only reverse-engineering comparison; and
+- five-sample developer/lite profile comparison.
+
+The current lite CLI archive is `45,711,321` bytes / `68,673,953` extracted
+bytes, with `630.098 ms` median startup and `84,520,960` bytes best-effort
+aggregate process-tree working set. The developer comparison is
+`46,504,281` / `69,542,917` / `629.620 ms` / `108,498,944` bytes. Lite
+source-metadata signals decreased by 849 classes but remain present. Both
+comparison results remain `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no Seven Ring
+or commercial maximum claim changed.
+
+Exact next action: checkpoint and commit this free hardening/evidence slice,
+then keep the maximum gate fail-closed until a licensed protector and release
+signing authority are supplied.
+
 ## 2026-09-09 — SYN-009E bounded profile memory evidence
 
 Refined `scripts/release-profile-comparison.ps1` so Windows samples poll the

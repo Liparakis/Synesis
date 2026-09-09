@@ -220,13 +220,15 @@ The current five-sample Windows x64 CLI comparison recorded:
 
 | Profile | Archive | Extracted | Median cold startup | Max aggregate process-tree working set* |
 |---|---:|---:|---:|---:|
-| developer | 46,504,281 bytes | 69,542,917 bytes | 973.955 ms | 103,034,880 bytes |
-| protection-lite | 45,911,491 bytes | 68,870,411 bytes | 794.654 ms | 104,062,976 bytes |
+| developer | 46,504,281 bytes | 69,542,917 bytes | 629.620 ms | 108,498,944 bytes |
+| protection-lite | 45,711,321 bytes | 68,673,953 bytes | 630.098 ms | 84,520,960 bytes |
 | maximum-release | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED |
 
 *The working-set values are Windows `PROCESS_TREE_WORKING_SET_BEST_EFFORT`
 samples: an aggregate of the live launcher tree, not unique physical memory;
-monitor overhead is not controlled. The extracted acceptance harness now
+monitor overhead is not controlled. The free lite optimizer, mixed-case
+renaming, and source/line metadata hardening are baseline-only measures, not
+commercial transformation evidence. The extracted acceptance harness now
 records bounded `durationMs` values for provider/doctor, Link onboarding, UI
 smoke, authenticated control-plane HTTP/SSE, and relay forwarding, but no
 commercial maximum run has populated those fields. Route-selection
@@ -235,10 +237,11 @@ transformation overhead remain open. The profile timings and memory values are
 baseline evidence only, not a performance win or release-acceptance claim.
 
 The archive-only static comparison found zero source-map/private-file entries
-in developer/lite archives and recorded lite renaming/package changes, but
-SourceFile metadata remains in most classes. CFR/Procyon/jd-cli were not
-available, so selected-method decompiler inspection is NOT RUN. No maximum
-static comparison exists.
+in developer/lite archives and recorded free-lite optimization,
+mixed-case-renaming, and package changes. Source-metadata signals fell by 849
+classes in lite, but SourceFile/.java metadata remains in many classes. CFR/
+Procyon/jd-cli were not available, so selected-method decompiler inspection is
+NOT RUN. No maximum static comparison exists.
 
 AV/EDR and false-positive checks were not run; signed reputable commercial
 output and bounded platform-security checks remain release gates.

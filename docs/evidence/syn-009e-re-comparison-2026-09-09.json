@@ -258,14 +258,14 @@
                      "protection-lite":  {
                                              "profile":  "protection-lite",
                                              "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
-                                             "archiveSha256":  "9a89ab8a8ff0d39b8bb139ef187517ddd6d9d277e580226378b2479277d90df0",
-                                             "archiveBytes":  45911491,
+                                             "archiveSha256":  "236cec027bfaadf21e219d103ee8f5443f4fcaca7d474e4175d31567f7d2369b",
+                                             "archiveBytes":  45711321,
                                              "extractedFiles":  191,
-                                             "extractedBytes":  68870411,
+                                             "extractedBytes":  68673953,
                                              "nestedArchives":  14,
-                                             "nestedEntries":  3276,
-                                             "classEntries":  3161,
-                                             "internalClassEntries":  770,
+                                             "nestedEntries":  3271,
+                                             "classEntries":  3156,
+                                             "internalClassEntries":  765,
                                              "internalPackagePrefixes":  [
                                                                              "org/synesis/a",
                                                                              "org/synesis/b",
@@ -274,11 +274,11 @@
                                                                              "org/synesis/coordination",
                                                                              "org/synesis/mcp"
                                                                          ],
-                                             "architectureTermHitClassCount":  584,
+                                             "architectureTermHitClassCount":  581,
                                              "architectureTermClassCounts":  {
                                                                                  "authority":  34,
                                                                                  "claim":  69,
-                                                                                 "coordination":  188,
+                                                                                 "coordination":  187,
                                                                                  "provider":  209,
                                                                                  "continuity":  8,
                                                                                  "membership":  14,
@@ -288,15 +288,15 @@
                                                                                  "relay":  14,
                                                                                  "onboarding":  4,
                                                                                  "workspace":  54,
-                                                                                 "diagnostic":  36,
+                                                                                 "diagnostic":  35,
                                                                                  "peer":  76,
                                                                                  "session":  173,
                                                                                  "reconciliation":  18,
                                                                                  "integration":  53,
                                                                                  "ownership":  29,
-                                                                                 "capability":  60,
+                                                                                 "capability":  59,
                                                                                  "protection":  7,
-                                                                                 "manifest":  10
+                                                                                 "manifest":  8
                                                                              },
                                              "architectureClassSamples":  [
                                                                               {
@@ -374,12 +374,6 @@
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/a.class",
-                                                                                  "hits":  [
-                                                                                               "capability"
-                                                                                           ]
-                                                                              },
-                                                                              {
                                                                                   "name":  "app/synesis-cli.jar::org/synesis/a/d/b$a.class",
                                                                                   "hits":  [
                                                                                                "peer",
@@ -427,12 +421,19 @@
                                                                                   "hits":  [
                                                                                                "route"
                                                                                            ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/f.class",
+                                                                                  "hits":  [
+                                                                                               "membership",
+                                                                                               "peer"
+                                                                                           ]
                                                                               }
                                                                           ],
-                                             "sourceMetadataClassCount":  3158,
+                                             "sourceMetadataClassCount":  2395,
                                              "localPathSignalClassCount":  3,
                                              "sourceSignalClassCounts":  {
-                                                                             "source-file-attribute":  3158,
+                                                                             "source-file-attribute":  2388,
                                                                              "java-filename":  2387,
                                                                              "kotlin-filename":  1,
                                                                              "scala-filename":  0,
@@ -484,15 +485,15 @@
                                                                                "from":  "developer",
                                                                                "to":  "protection-lite",
                                                                                "fromValue":  46504281,
-                                                                               "toValue":  45911491,
-                                                                               "delta":  -592790
+                                                                               "toValue":  45711321,
+                                                                               "delta":  -792960
                                                                            },
                                                           "extractedBytes":  {
                                                                                  "from":  "developer",
                                                                                  "to":  "protection-lite",
                                                                                  "fromValue":  69542917,
-                                                                                 "toValue":  68870411,
-                                                                                 "delta":  -672506
+                                                                                 "toValue":  68673953,
+                                                                                 "delta":  -868964
                                                                              },
                                                           "extractedFiles":  {
                                                                                  "from":  "developer",
@@ -505,29 +506,29 @@
                                                                                "from":  "developer",
                                                                                "to":  "protection-lite",
                                                                                "fromValue":  3247,
-                                                                               "toValue":  3161,
-                                                                               "delta":  -86
+                                                                               "toValue":  3156,
+                                                                               "delta":  -91
                                                                            },
                                                           "internalClassEntries":  {
                                                                                        "from":  "developer",
                                                                                        "to":  "protection-lite",
                                                                                        "fromValue":  856,
-                                                                                       "toValue":  770,
-                                                                                       "delta":  -86
+                                                                                       "toValue":  765,
+                                                                                       "delta":  -91
                                                                                    },
                                                           "architectureTermHitClassCount":  {
                                                                                                 "from":  "developer",
                                                                                                 "to":  "protection-lite",
                                                                                                 "fromValue":  967,
-                                                                                                "toValue":  584,
-                                                                                                "delta":  -383
+                                                                                                "toValue":  581,
+                                                                                                "delta":  -386
                                                                                             },
                                                           "sourceMetadataClassCount":  {
                                                                                            "from":  "developer",
                                                                                            "to":  "protection-lite",
                                                                                            "fromValue":  3244,
-                                                                                           "toValue":  3158,
-                                                                                           "delta":  -86
+                                                                                           "toValue":  2395,
+                                                                                           "delta":  -849
                                                                                        },
                                                           "localPathSignalClassCount":  {
                                                                                             "from":  "developer",

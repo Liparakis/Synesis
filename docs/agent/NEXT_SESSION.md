@@ -62,8 +62,12 @@ disposable install, exercises the installed stable-launcher and packaged
   `docs/evidence/syn-009e-profile-comparison-2026-09-09.json` and is explicitly
   partial until a licensed maximum ZIP is supplied. The Windows wrapper now
   records best-effort aggregate launcher-process-tree working sets, marked
-  `PROCESS_TREE_WORKING_SET_BEST_EFFORT`; this is not unique physical memory,
-  and the cold startup/memory values must not be reported as a performance win.
+  `PROCESS_TREE_WORKING_SET_BEST_EFFORT`; the current developer/lite values are
+  108,498,944 and 84,520,960 bytes, respectively. This is not unique physical
+  memory, and the cold startup/memory values must not be reported as a
+  performance win. The free lite rules now also enable standard ProGuard
+  optimization and mixed-case renaming and reduce source/line metadata; this
+  remains below the commercial Seven Rings.
   The extracted acceptance harness now records bounded `durationMs` values for
   provider/doctor, Link, UI, authenticated control-plane HTTP/SSE, and relay
   forwarding; unique physical-memory measurement, route microbenchmarks, and
@@ -79,7 +83,8 @@ disposable install, exercises the installed stable-launcher and packaged
   `scripts/release-reverse-engineering-comparison.ps1`, with current
   developer/lite CLI evidence in
   `docs/evidence/syn-009e-re-comparison-2026-09-09.md`. It found no file-level
-  private/source/map entries but found class SourceFile/`.java` metadata; do
+  private/source/map entries and recorded a 849-class reduction in
+  source-metadata signals, but class SourceFile/`.java` metadata remains; do
   not call the lite leakage audit complete. Supply a licensed maximum archive
   and run selected-method static inspection before closing this gate.
 - The archive-only native audit is

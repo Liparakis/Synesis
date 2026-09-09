@@ -16,11 +16,11 @@ the current protection-lite distribution:
 
 | Profile | Archive bytes | Extracted bytes | Files | Median cold startup |
 |---|---:|---:|---:|---:|
-| developer | 46,504,281 | 69,542,917 | 197 | 715.513 ms |
-| protection-lite | 45,911,491 | 68,870,411 | 191 | 685.841 ms |
+| developer | 46,504,281 | 69,542,917 | 197 | 629.620 ms |
+| protection-lite | 45,711,321 | 68,673,953 | 191 | 630.098 ms |
 
-The archive delta is `-592,790` bytes and the extracted-size delta is
-`-672,506` bytes for this lite run. The startup difference is not a
+The archive delta is `-792,960` bytes and the extracted-size delta is
+`-868,964` bytes for this lite run. The startup difference is `+0.478 ms`, not a
 performance-win claim: this is a small, non-isolated cold-process sample and
 does not cover UI latency, snapshot latency, Link establishment, route
 selection, relay throughput, or provider lifecycle.
@@ -32,8 +32,11 @@ values are a measurement seam for the eventual maximum archive, not current
 developer/lite results; peak memory, route microbenchmarks, commercial
 transformation overhead, and AV/EDR impact remain open.
 
-The wrapper-level Windows process did not expose a reliable peak working-set
-value, so memory is recorded as `NOT_AVAILABLE`; no memory claim is made.
+The Windows harness recorded the best-effort aggregate launcher process-tree
+working-set scope as `PROCESS_TREE_WORKING_SET_BEST_EFFORT`: developer peaked
+at `108,498,944` bytes and protection-lite at `84,520,960` bytes, a numeric
+delta of `-23,977,984` bytes. This is not unique physical memory, because
+monitor overhead and process scheduling were not controlled.
 
 The JSON result is
 `docs/evidence/syn-009e-profile-comparison-2026-09-09.json` with status

@@ -1,5 +1,34 @@
 # SYN-009E protection-lite evidence — 2026-09-09
 
+## 2026-09-09 free-hardening follow-up
+
+The free protection-lite rules were tightened without adding a commercial
+protector: standard ProGuard optimization and mixed-case renaming are enabled,
+and `SourceFile`/`LineNumberTable` retention was removed from the CLI and relay
+application rules. The compatibility keep rules and Java verification remain
+in place.
+
+Verification passed for the CLI bundle smoke, integrity, and provenance tasks,
+and for the standalone relay smoke and provenance tasks, using ProGuard
+7.10.0. The independent maximum-release acceptance correctly rejected the
+candidate with `Candidate profile marker is not maximum-release: protection-lite`.
+
+The refreshed CLI candidate is `45,711,321` archive bytes and `68,673,953`
+extracted bytes, with archive SHA-256
+`236cec027bfaadf21e219d103ee8f5443f4fcaca7d474e4175d31567f7d2369b`. The
+archive-only comparison recorded `3,156` class entries, `765` internal class
+entries, `581` architecture-term-hit classes, and `2,395` source-metadata
+classes; source-metadata signals fell by `849` versus the developer archive,
+but were not eliminated. The five-sample profile comparison recorded a
+`630.098 ms` median startup and `84,520,960` bytes maximum aggregate
+process-tree working set for lite versus `629.620 ms` and `108,498,944` for
+developer. These are bounded baseline measurements, not performance or
+physical-memory claims.
+
+This remains compatibility/artifact hardening only. It does not claim string
+encryption, control-flow obfuscation, virtualization, protected packing,
+anti-VM, anti-debugging, anti-instrumentation, or commercial maximum release.
+
 ## Baseline
 
 - checkout at the start of this slice: `8a5d0901b4859c9a504f7fc7009def23177f1d43`;

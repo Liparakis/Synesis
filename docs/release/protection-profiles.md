@@ -7,7 +7,7 @@ silently obfuscated.
 | Profile | Intended use | Current status |
 | --- | --- | --- |
 | `developer` | normal development, tests, diagnosis, and ordinary artifacts | available and unchanged |
-| `protection-lite` | compatibility, keep-rule, artifact, and bounded runtime acceptance | implemented with ProGuard 7.10.0; not a maximum security claim |
+| `protection-lite` | compatibility, keep-rule, artifact, and bounded runtime acceptance | implemented with ProGuard 7.10.0, standard optimization, mixed-case renaming, and reduced source/line metadata; not a maximum security claim |
 | `maximum-release` | commercial customer release with all verified Seven Rings | adapter/signing seam implemented; fail-closed until an installed, licensed, version-pinned protector integration is supplied and exercised |
 
 ## Commands
@@ -73,6 +73,13 @@ relay lite output is under `relay/build/protection-lite/`:
   hash; the maximum private record additionally binds the complete lockfile
   snapshot, Gradle/Java/Node/native toolchains, protector configuration digest,
   release seed, and signing/public-key provenance.
+
+The current free hardening also enables standard ProGuard optimization and
+mixed-case renaming, and stops retaining source-file and line-number
+attributes in the transformed application rules. The archive comparison shows
+fewer internal classes and fewer source-metadata signals, but metadata remains
+in dependency/application entries and no Seven Ring is promoted by this
+profile.
 
 The current local run used ProGuard 7.10.0 with Java 25 as the execution
 runtime and an explicit Java 21 JMOD directory as the analysis library image.
