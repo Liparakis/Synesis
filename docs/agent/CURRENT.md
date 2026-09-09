@@ -19,6 +19,10 @@ only extracted customer archives, rejects lite/profile and private-material
 leakage, optionally verifies the private artifact manifest, and records
 private JSON evidence. It keeps full relay authentication/forwarding as an
 explicit open gate.
+The protector capability matrix now also records the required Java/Gradle,
+compatibility, reproducibility, recovery, performance, licensing, and
+anti-analysis evaluation dimensions without converting any commercial
+candidate to an unverified pass.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;

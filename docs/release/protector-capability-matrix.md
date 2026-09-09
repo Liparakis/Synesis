@@ -14,6 +14,35 @@ not claim the capability.
 | [DashO](https://support.preemptive.com/hc/en-us) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 | [Zelix KlassMaster](https://www.zelix.com/klassmaster/docs/obfuscateOptions.html) | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | commercial evaluation candidate; no license/tool in checkout |
 
+## Required evaluation dimensions
+
+The ring table above is the claim boundary. The following dimensions are the
+minimum evaluation record for selecting DashO or Zelix; an `UNVERIFIED`
+commercial cell cannot be converted to `PASS` by documentation alone.
+
+| Dimension | ProGuard 7.10.0 local result | yGuard | R8 | DashO | Zelix KlassMaster |
+| --- | --- | --- | --- | --- | --- |
+| Java 25 input/runtime | `PASS` for the bounded lite run; the analysis JMOD fallback is recorded | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Gradle and non-interactive CI invocation | `PASS` for protection-lite tasks | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Shrinking, renaming, package layout, metadata | `PASS` for protection-lite | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| String and constant protection | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Control-flow transformation | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Genuine code virtualization | `BLOCKED` | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` |
+| Protected loading or payload packing | `BLOCKED` | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` |
+| Anti-debug and anti-instrumentation | `BLOCKED` | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` |
+| Safe analysis-environment policy and legitimate-VM behavior | `BLOCKED` | `BLOCKED` | `BLOCKED` | `UNVERIFIED` | `UNVERIFIED` |
+| Seeded diversification and reproducibility | `UNVERIFIED` for the lite baseline | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Mapping/retrace and private recovery | `PASS` for a private lite mapping; retrace recovery is not executed | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| JNI, reflection, ServiceLoader, Netty/native compatibility | `PASS` only for the bounded CLI/relay lite checks | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| Performance, memory, and archive-size impact | `PASS` for bounded lite measurements only | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+| License automation and CI secret boundary | open-source dependency is integrated; commercial licensing is not applicable | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` | `UNVERIFIED` |
+
+For a commercial candidate, the missing cells require the exact licensed
+version, vendor configuration, non-interactive invocation, shipped artifact,
+ordinary static inspection, normal-host/legitimate-VM/debugger tests, and
+private recovery evidence. The matrix intentionally does not select a vendor
+before that evaluation.
+
 The commercial candidates remain candidates, not evidence. A future maximum
 release entry requires the exact licensed version, non-interactive Gradle/CI
 invocation, protected artifact inspection, normal-host and legitimate-VM

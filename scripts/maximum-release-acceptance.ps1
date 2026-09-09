@@ -305,7 +305,7 @@ try
     $mcpError = $mcpErrorTask.GetAwaiter().GetResult()
     Require ($mcpProcess.ExitCode -eq 0) "Maximum shipped MCP process failed: $mcpOutput`n$mcpError"
     Require ($mcpOutput -match 'protocolVersion' -and $mcpOutput -match 'ensure_session' -and $mcpOutput -match 'ready') 'Maximum shipped MCP protocol smoke was incomplete'
-    RecordCheck 'mcp-link-boundary' 'PASS' 'Shipped MCP initialize, tools/list, and ensure_session exchange completed'
+    RecordCheck 'mcp-boundary' 'PASS' 'Shipped MCP initialize, tools/list, and ensure_session exchange completed; native Link/overlay acceptance remains separate'
   }
   else
   {

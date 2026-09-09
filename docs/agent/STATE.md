@@ -26,6 +26,12 @@ launcher until a real protected relay authentication/forwarding scenario is
 available. A probe against both existing lite archives failed closed on the
 profile marker, so no lite output was promoted to maximum.
 
+The protector matrix now enumerates the required Java 25/Gradle, transformation,
+virtualization, protected-loading, anti-analysis, compatibility, seeded
+reproducibility, private recovery, performance, and licensing dimensions for
+each candidate. Commercial rows remain `UNVERIFIED` until an exact licensed
+version produces and survives shipped-artifact acceptance.
+
 This is release plumbing, not commercial protection evidence. No DashO, Zelix,
 or equivalent licensed adapter/configuration/signing authority is installed on
 this host. The CLI and relay maximum tasks were rerun and failed closed at

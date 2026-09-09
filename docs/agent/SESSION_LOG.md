@@ -15,6 +15,12 @@ rejected on their `protection-lite` marker. No commercial ring was promoted,
 and no source checkout or customer artifact was modified. The script's help /
 parse path and profile-boundary failures passed as expected.
 
+Expanded `docs/release/protector-capability-matrix.md` with the required
+Java/Gradle, compatibility, seeded-reproducibility, private-recovery,
+performance, licensing, and anti-analysis dimensions for every candidate.
+Commercial entries remain `UNVERIFIED`; no vendor was selected without an
+installed licensed artifact.
+
 Exact next action: obtain an installed, licensed, version-pinned commercial
 protector and reviewed adapter/configuration, produce a real maximum archive
 from a clean release checkout, then run this harness plus the full protected
