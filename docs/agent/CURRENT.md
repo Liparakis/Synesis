@@ -69,13 +69,13 @@ AV/EDR impact explicitly open.
 The first-party DashO/Zelix documentation pre-screen is now recorded
 separately from artifact evidence. It narrows the next licensed evaluation:
 DashO documents Java 25/26 bytecode support, scoped control-flow/string
-transforms, Gradle/CLI integration, and runtime protection; Zelix documents
-Java 26 bytecode handling, flow/string/constant transforms, Gradle scripting,
-and reproducibility guidance. Neither reviewed candidate establishes genuine
-virtual execution or protected payload loading in the evidence set, so Rings 2
-and 5 remain blocked. Rings 1, 3, 4, and 6 also require shipped commercial
-evidence; the profile remains partial until all six commercial rings and Ring 7
-are exercised.
+transforms, Gradle/CLI integration, and runtime debug/tamper checks; Zelix
+documents Java 26 bytecode handling, flow/string/constant transforms, Gradle
+scripting, and reproducibility guidance. Neither reviewed candidate establishes
+genuine virtual execution, protected payload loading, or the required
+Synesis-safe Java anti-VM policy. DashO is therefore the first licensed
+candidate to evaluate for Rings 1, 3, and bounded Ring 6 behavior, while all
+commercial ring claims remain unverified until shipped output is exercised.
 
 The archive-only static reverse-engineering comparison is now implemented in
 scripts/release-reverse-engineering-comparison.ps1. Its current developer

@@ -96,11 +96,12 @@ still required for the three-profile comparison.
 A first-party documentation pre-screen now distinguishes vendor-described
 features from Synesis evidence. DashO's reviewed documentation supports a
 credible Java 25/Gradle evaluation path with scoped control-flow,
-string-encryption, and runtime-protection features. Zelix's reviewed
+string-encryption, and runtime debug/tamper-check features. Zelix's reviewed
 documentation supports Java 26 bytecode handling, flow/string/constant
-transforms, scripting, and reproducibility guidance. Neither reviewed set
-establishes genuine JVM virtualization or protected payload loading, so no
-Ring 1–6 capability status changed; the matrix and evidence are in
+transforms, scripting, and reproducibility guidance. The fresh first-party
+recheck still establishes neither genuine JVM virtualization, protected payload
+loading, nor a Synesis-safe Java anti-VM policy, so no Ring 1–6 capability
+status changed; the matrix and evidence are in
 `docs/release/protector-capability-matrix.md` and
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.
 

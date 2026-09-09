@@ -50,6 +50,15 @@ first-party documentation pre-screen. Neither is selected as the maximum
 protector because neither is installed, licensed, or exercised against a
 Synesis artifact. No vendor documentation is treated as local ring evidence.
 
+The current first-party recheck sharpens that choice: DashO documents
+control-flow, string encryption, and runtime debug/tamper checks, while Zelix
+documents flow/string/constant protection and reproducible output. The reviewed
+pages still do not establish genuine JVM virtualization, protected payload
+loading, or the Synesis-safe Java anti-VM/anti-instrumentation behavior needed
+for Rings 2, 4, and 5. DashO is the first licensed candidate to evaluate for
+Rings 1, 3, and bounded Ring 6 behavior; this is a selection priority, not a
+pass.
+
 The capability matrix is in
 `docs/release/protector-capability-matrix.md`; the documentation-only review is
 `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`.

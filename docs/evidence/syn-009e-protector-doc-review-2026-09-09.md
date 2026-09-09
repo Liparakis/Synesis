@@ -8,6 +8,29 @@ Ring, or convert any `UNVERIFIED` matrix cell to `PASS`. A licensed tool,
 version-pinned configuration, protected Synesis artifact, and shipped-artifact
 acceptance are still required.
 
+## Current first-party recheck
+
+A fresh review of the vendors' current official pages sharpens the candidate
+boundary but does not produce Synesis artifact evidence. DashO's current
+protection overview documents control-flow and string-encryption transforms,
+and lists runtime tamper/debug checks; its control-flow and string-encryption
+guides describe scoped transforms and runtime decryption, with explicit
+performance/compatibility costs. Zelix KlassMaster 26's current documentation
+documents flow obfuscation, string/integer/long encryption, reference
+obfuscation, and reproducible output. These are candidate capabilities only:
+the reviewed pages do not establish genuine JVM virtual execution, a protected
+customer-payload loader, or a Synesis-safe Java anti-VM/anti-instrumentation
+policy.
+
+Current pages reviewed:
+
+- [DashO protection overview](https://support.preemptive.com/hc/en-us/articles/32019567664401-Understanding-Protection)
+- [DashO control-flow guide](https://support.preemptive.com/hc/en-us/articles/32019801944081-Control-Flow-Obfuscation)
+- [DashO string-encryption guide](https://support.preemptive.com/hc/en-us/articles/32020004710033-String-Encryption)
+- [DashO Java Gradle integration](https://support.preemptive.com/hc/en-us/articles/32032198737297-Gradle-Plugins-for-Java-Overview)
+- [Zelix obfuscation overview](https://www.zelix.com/klassmaster/docs/toolsObfuscate.html)
+- [Zelix reproducible-output tutorial](https://www.zelix.com/klassmaster/docs/tutorials/reproducibleOutputTutorial.html)
+
 ## DashO
 
 The current PreEmptive changelog records Java 25 bytecode/JEP support in DashO
@@ -54,10 +77,14 @@ retrace remain unexecuted.
 
 DashO is a credible first candidate for a licensed Java 25/Gradle evaluation
 because the reviewed changelog explicitly records Java 25 bytecode support and
-the product documents control-flow, string encryption, and runtime protection.
+the product documents control-flow, string encryption, and runtime protection
+including debug/tamper checks. That makes it the first candidate to evaluate
+for Rings 1, 3, and a bounded Ring 6 behavior, not evidence that those rings
+work safely for Synesis.
 Zelix remains a credible flow/string/constant/reproducibility candidate with
 documented Java 26 bytecode handling. Neither candidate is selected as the
 maximum protector, and neither documentation set supplies evidence for Ring 2
-virtualization or Ring 5 protected loading. The maximum adapter must therefore
-remain fail-closed until a licensed candidate proves every required ring and
-the shipped artifact survives Synesis acceptance.
+virtualization or Ring 5 protected loading; the reviewed pages also do not
+establish the required Synesis-safe Ring 4 policy. The maximum adapter must
+therefore remain fail-closed until a licensed candidate proves every required
+ring and the shipped artifact survives Synesis acceptance.
