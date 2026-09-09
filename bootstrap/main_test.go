@@ -544,6 +544,41 @@ func TestNativeRealBundleInstallation(t *testing.T) {
 	}
 }
 
+func TestMaximumProfileIsRecordedAndStableLauncherEmitsIntegrityGate(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	archive := writeBundleArchiveWithProfile(t, root, "0.1.0", "maximum-release")
+	manifest := writeDevelopmentManifest(t, root, "0.1.0", archive)
+	installRoot := filepath.Join(root, "install")
+	if err := runInstall("install", []string{"--manifest", fileURL(manifest), "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pointer, _, err := readPointer(paths, paths.current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pointer == nil || pointer.ProtectionProfile != "maximum-release" {
+		t.Fatalf("maximum protection profile was not recorded in the active pointer: %#v", pointer)
+	}
+	launcherPath := filepath.Join(paths.bin, "synesis-launcher.ps1")
+	if runtime.GOOS != "windows" {
+		launcherPath = paths.launcher
+	}
+	launcher, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"maximum-release", "doctor", "--install-dir"} {
+		if !strings.Contains(string(launcher), required) {
+			t.Fatalf("stable launcher missing maximum runtime integrity gate %q", required)
+		}
+	}
+}
+
 func TestRejectsInvalidSignatureAndArtifactMismatch(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -632,6 +667,10 @@ func commandExitCode(err error) int {
 }
 
 func writeBundleArchive(t *testing.T, root, version string) string {
+	return writeBundleArchiveWithProfile(t, root, version, "")
+}
+
+func writeBundleArchiveWithProfile(t *testing.T, root, version, profile string) string {
 	t.Helper()
 	path := filepath.Join(root, "bundle-"+version+".zip")
 	file, err := os.Create(path)
@@ -645,6 +684,9 @@ func writeBundleArchive(t *testing.T, root, version string) string {
 		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" echo DOCTOR=PASS\r\r\n"), 0o644)
 	} else {
 		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then echo DOCTOR=PASS; fi\n"), 0o755)
+	}
+	if profile != "" {
+		addZipFile(t, writer, "PROTECTION_PROFILE", []byte(profile+"\n"), 0o644)
 	}
 	addZipFile(t, writer, filepath.ToSlash(filepath.Join("bin", mcpLauncherName())), []byte("MCP_LAUNCHER="+version+"\n"), 0o755)
 	if err := writer.Close(); err != nil {

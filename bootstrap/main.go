@@ -73,12 +73,13 @@ type installPaths struct {
 // activePointer is the atomically replaced pointer to the currently active
 // verified payload.
 type activePointer struct {
-	SchemaVersion    int    `json:"schemaVersion"`
-	Version          string `json:"version"`
-	PayloadDirectory string `json:"payloadDirectory"`
-	ManifestHash     string `json:"manifestHash"`
-	ActivatedAt      string `json:"activatedAt"`
-	PreviousVersion  string `json:"previousVersion,omitempty"`
+	SchemaVersion     int    `json:"schemaVersion"`
+	Version           string `json:"version"`
+	PayloadDirectory  string `json:"payloadDirectory"`
+	ManifestHash      string `json:"manifestHash"`
+	ProtectionProfile string `json:"protectionProfile,omitempty"`
+	ActivatedAt       string `json:"activatedAt"`
+	PreviousVersion   string `json:"previousVersion,omitempty"`
 }
 
 // updatePlan records the verified inputs and migration state for a resumable
@@ -387,6 +388,7 @@ func runInstall(operation string, args []string) error {
 	prepare := flags.Bool("prepare", false, "prepare an immutable update plan")
 	execute := flags.Bool("execute", false, "execute a prepared update plan")
 	acceptance := flags.Bool("acceptance", false, "use the explicitly configured local acceptance trust root")
+	skipPathUpdate := flags.Bool("skip-path-update", false, "do not modify the user PATH (disposable acceptance only)")
 	planID := flags.String("plan", "", "prepared update plan ID")
 	rollback := flags.Bool("rollback", false, "roll back the last successful update")
 	if err := flags.Parse(args); err != nil {
@@ -424,7 +426,7 @@ func runInstall(operation string, args []string) error {
 			fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
 			return nil
 		}
-		if err := activateVersioned(paths, m, manifestData, archive, operation, nil); err != nil {
+		if err := activateVersioned(paths, m, manifestData, archive, operation, nil, !*skipPathUpdate); err != nil {
 			return err
 		}
 		fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -467,7 +469,7 @@ func runInstall(operation string, args []string) error {
 		fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
 		return nil
 	}
-	if err := activateVersioned(paths, m, data, archive, "install", nil); err != nil {
+	if err := activateVersioned(paths, m, data, archive, "install", nil, !*skipPathUpdate); err != nil {
 		return err
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -482,6 +484,7 @@ func runRepair(args []string) error {
 	flags := flag.NewFlagSet("repair", flag.ContinueOnError)
 	bundlePath := flags.String("bundle", "", "local bundle directory or archive")
 	installDir := flags.String("install-dir", "", "installation root")
+	skipPathUpdate := flags.Bool("skip-path-update", false, "do not modify the user PATH (disposable acceptance only)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -503,7 +506,7 @@ func runRepair(args []string) error {
 	if !fileExists(paths.root) {
 		return errors.New("no Synesis installation found to repair")
 	}
-	if err := activateVersioned(paths, m, manifestData, archive, "repair", nil); err != nil {
+	if err := activateVersioned(paths, m, manifestData, archive, "repair", nil, !*skipPathUpdate); err != nil {
 		return err
 	}
 	fmt.Printf("REPAIR_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -1135,7 +1138,7 @@ func executeUpdatePlan(paths installPaths, id string) error {
 		return errors.New("project migration unsupported")
 	}
 	_ = appendUpdateTransactionState(paths, id, "MIGRATIONS_PREPARED", "")
-	if err := activateVersioned(paths, m, manifestData, archive, "execute", &plan); err != nil {
+	if err := activateVersioned(paths, m, manifestData, archive, "execute", &plan, true); err != nil {
 		_ = appendUpdateTransactionState(paths, id, "FAILED_RESTORED", "update_migration_failed")
 		return err
 	}
@@ -1143,7 +1146,7 @@ func executeUpdatePlan(paths installPaths, id string) error {
 	return atomicWrite(filepath.Join(paths.executions, id+".json"), []byte(fmt.Sprintf("{\"planId\":%q,\"result\":\"SUCCESS\"}\n", id)))
 }
 
-func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan) (err error) {
+func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan, updatePath bool) (err error) {
 	release, err := acquireUpdateLock(paths, operation)
 	if err != nil {
 		return err
@@ -1219,6 +1222,10 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	if err != nil {
 		return err
 	}
+	protectionProfile, err := readProtectionProfile(target)
+	if err != nil {
+		return err
+	}
 	if err := syncStableMcpLauncher(paths, target); err != nil {
 		return err
 	}
@@ -1238,7 +1245,14 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 			return err
 		}
 	}
-	pointer := activePointer{SchemaVersion: 1, Version: m.Version, PayloadDirectory: token, ManifestHash: digest(payloadManifest), ActivatedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	pointer := activePointer{
+		SchemaVersion:     1,
+		Version:           m.Version,
+		PayloadDirectory:  token,
+		ManifestHash:      digest(payloadManifest),
+		ProtectionProfile: protectionProfile,
+		ActivatedAt:       time.Now().UTC().Format(time.RFC3339Nano),
+	}
 	if previous != nil {
 		pointer.PreviousVersion = previous.Version
 	}
@@ -1254,8 +1268,10 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	}
 	// Remove only the obsolete text pointer after the new pointer is durable.
 	_ = os.Remove(filepath.Join(paths.root, "current"))
-	if err := pathUpdater(paths, true); err != nil {
-		return err
+	if updatePath {
+		if err := pathUpdater(paths, true); err != nil {
+			return err
+		}
 	}
 	if migrationPlan != nil {
 		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "INSTALLED_SMOKE_TEST_PASSED", "")
@@ -1324,6 +1340,23 @@ func writePayloadManifest(bundle, version string, sourceManifest []byte) error {
 	return os.WriteFile(filepath.Join(bundle, "manifest.json"), data, 0o444)
 }
 
+func readProtectionProfile(bundle string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(bundle, "PROTECTION_PROFILE"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	profile := strings.TrimSpace(string(data))
+	switch profile {
+	case "", "protection-lite", "maximum-release":
+		return profile, nil
+	default:
+		return "", fmt.Errorf("unsupported protection profile: %s", profile)
+	}
+}
+
 func makePayloadImmutable(bundle string) error {
 	return filepath.Walk(bundle, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -1390,6 +1423,17 @@ if (-not (Test-Path -LiteralPath $m)) { exit 1 }
 $sha256 = [Security.Cryptography.SHA256]::Create()
 try { $manifestHash = [BitConverter]::ToString($sha256.ComputeHash([IO.File]::ReadAllBytes($m))).Replace('-', '').ToLowerInvariant() } finally { $sha256.Dispose() }
 if ($manifestHash -ne $p.manifestHash) { exit 1 }
+$profile = [string]$p.protectionProfile
+$profilePath = Join-Path $r 'PROTECTION_PROFILE'
+if ($profile -ne 'maximum-release' -and (Test-Path -LiteralPath $profilePath)) {
+try { $profile = (Get-Content -Raw -LiteralPath $profilePath).Trim() } catch { exit 1 }
+}
+if ($profile -eq 'maximum-release') {
+$doctor = Join-Path $r 'bin\synesis-installer.exe'
+if (-not (Test-Path -LiteralPath $doctor)) { exit 1 }
+& $doctor doctor --install-dir $root
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 $e = Join-Path $r 'bin\synesis.cmd'
 if (-not (Test-Path -LiteralPath $e)) { exit 1 }
 & cmd.exe /d /c call $e @ForwardArgs
@@ -1400,7 +1444,7 @@ exit $LASTEXITCODE
 		}
 		return atomicWrite(paths.launcher, []byte("@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0synesis-launcher.ps1\" %*\r\nexit /b %ERRORLEVEL%\r\n"))
 	}
-	if err := atomicWrite(paths.launcher, []byte("#!/bin/sh\nset -eu\nr=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\np=\"$(sed -n 's/.*\"payloadDirectory\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\ncase \"$p\" in (''|*..*|*/*|*\\\\*) exit 1;; esac\ne=\"$r/versions/$p/bin/synesis\"\nexec \"$e\" \"$@\"\n")); err != nil {
+	if err := atomicWrite(paths.launcher, []byte("#!/bin/sh\nset -eu\nr=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)\"\np=\"$(sed -n 's/.*\"payloadDirectory\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\ncase \"$p\" in (''|*..*|*/*|*\\\\*) exit 1;; esac\nprofile=\"$(sed -n 's/.*\"protectionProfile\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$r/current.json\")\"\nprofilePath=\"$r/versions/$p/PROTECTION_PROFILE\"\nif [ \"$profile\" != maximum-release ] && [ -f \"$profilePath\" ]; then profile=\"$(sed -n '1{s/[[:space:]]*$//;p;}' \"$profilePath\")\"; fi\nif [ \"$profile\" = maximum-release ]; then\n  doctor=\"$r/versions/$p/bin/synesis-installer\"\n  [ -x \"$doctor\" ] || exit 1\n  if ! \"$doctor\" doctor --install-dir \"$r\" >/dev/null; then exit 1; fi\nfi\ne=\"$r/versions/$p/bin/synesis\"\nexec \"$e\" \"$@\"\n")); err != nil {
 		return err
 	}
 	return os.Chmod(paths.launcher, 0o755)

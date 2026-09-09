@@ -25,7 +25,7 @@
 | Ring 6 anti-debug/instrumentation | safe detect/refuse behavior under controlled tests | BLOCKED | requires selected protector/runtime capability |
 | Ring 7 integrity/diversification/retrace | signed protected manifest, seed/provenance, private maps | PARTIAL | private manifest/provenance pass; signed/diversified/retrace install blocked |
 | Installed acceptance | CLI/UI/control plane/Link/provider/native; overlay/relay bounded | PARTIAL | CLI archive pass; relay parser pass; full protected overlay/relay socket gate open |
-| Tamper acceptance | owned immutable payload detects edits; mutable state does not false-positive | PARTIAL | digest-difference check only; signed installer refusal not run |
+| Tamper acceptance | owned immutable payload detects edits; mutable state does not false-positive | PARTIAL | bootstrap gate focused-tested and disposable marker-only runtime probe refused an edited payload while mutable Link state passed; commercial maximum artifact not run |
 | Leakage audit | strings, source maps, mappings, paths, symbols, secrets | PASS lite boundary | archive excludes private/source material; commercial leakage audit open |
 | Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |
 

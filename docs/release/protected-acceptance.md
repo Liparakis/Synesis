@@ -66,6 +66,24 @@ under the private acceptance directory. The relay authentication/forwarding
 scenario remains an explicit open gate until a real protected relay socket test
 is run; a parser smoke is not promoted to full relay acceptance.
 
+For the CLI component, the harness also installs the extracted candidate into
+a second disposable root with the explicit `--skip-path-update` acceptance
+flag. It then launches the installed stable wrapper, edits one file inside the
+installed immutable version, and requires the wrapper to refuse to start. The
+file is restored before the harness adds disposable mutable `Link` state and
+requires a normal start. This exercises the bootstrap-owned runtime gate
+without changing the operator's PATH; it remains unexecuted until a real
+licensed maximum archive is available.
+
+For an installed CLI candidate, the stable bootstrap launcher carries the
+profile into the active pointer and invokes the existing versioned installer
+doctor before starting a `maximum-release` payload. That doctor hashes the
+complete immutable payload manifest. The generated gate is covered by the
+bootstrap test and recorded in
+`docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; it is not a
+runtime acceptance result until a real licensed maximum archive is installed,
+tampered, and restored in a disposable environment.
+
 The following must be separately evidenced before a customer release can be
 called maximum:
 

@@ -25,8 +25,13 @@ current release-hardening task in the existing `SYN-009*` lineage.
   skeleton is `docs/release/maximum-protector-config.template.properties`.
 - The extracted-candidate harness is
   `scripts/maximum-release-acceptance.ps1`; it must be run only after a real
-  maximum archive exists, and its relay authentication/forwarding gate remains
-  open until a protected socket scenario passes.
+  maximum archive exists. Its CLI path uses `--skip-path-update` for a
+  disposable install, exercises the installed stable-launcher integrity gate,
+  and keeps the relay authentication/forwarding gate open until a protected
+  socket scenario passes.
+- The bootstrap runtime-integrity seam is recorded in
+  `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
+  marker-only disposable probe is not commercial maximum evidence.
 - The latest local source commits are unpublished; no push occurred. The full
   bootstrap Go suite is currently incomplete because three update/migration
   tests fail with `update migrations not prepared`; the signer subpackage

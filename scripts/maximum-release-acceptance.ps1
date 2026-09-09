@@ -306,6 +306,74 @@ try
     Require ($installerVersion.Output -match 'SYNESIS_BOOTSTRAP_VERSION=') 'Maximum native installer version output is invalid'
     RecordCheck 'native-installer' 'PASS' $installerVersion.Output.Trim()
 
+    $installRoot = Join-Path $tempRoot 'installed-cli'
+    $installResult = InvokeCaptured $installer @(
+      'install',
+      '--bundle', $bundleRoot,
+      '--install-dir', $installRoot,
+      '--skip-path-update'
+    ) 0 'maximum CLI disposable install'
+    Require ($installResult.Output -match 'INSTALL_RESULT=SUCCESS') 'Maximum CLI disposable install did not report success'
+    $script:launcherPath = Join-Path $installRoot 'bin\synesis.cmd'
+    if (-not (Test-Path -LiteralPath $script:launcherPath -PathType Leaf))
+    {
+      $script:launcherPath = Join-Path $installRoot 'bin/synesis'
+    }
+    Require (Test-Path -LiteralPath $script:launcherPath -PathType Leaf) 'Maximum installed stable launcher is missing'
+    EnsureExecutable $script:launcherPath
+    $installedVersion = InvokeBundle @('version') 'maximum installed CLI version'
+    Require ($installedVersion.Output -match 'SYNESIS_VERSION=') 'Maximum installed CLI version output is invalid'
+    RecordCheck 'installed-cli-launcher' 'PASS' 'Disposable installation used --skip-path-update and the stable launcher reached the protected payload'
+
+    $pointerPath = Join-Path $installRoot 'current.json'
+    $pointer = Get-Content -Raw -LiteralPath $pointerPath | ConvertFrom-Json
+    $payloadRoot = Join-Path (Join-Path $installRoot 'versions') $pointer.payloadDirectory
+    $tamperCandidates = @(Get-ChildItem -LiteralPath $payloadRoot -Recurse -File -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -notin @('manifest.json', 'PROTECTION_PROFILE') -and $_.Length -gt 0 } |
+      Sort-Object FullName |
+      Select-Object -First 1)
+    Require ($tamperCandidates.Count -eq 1) 'Installed maximum payload has no disposable tamper candidate'
+    $tamperPath = $tamperCandidates[0].FullName
+    $tamperOriginal = [IO.File]::ReadAllBytes($tamperPath)
+    try
+    {
+      if ($script:maximumAcceptanceIsWindows)
+      {
+        & attrib -R $tamperPath
+        Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $tamperPath"
+      }
+      else
+      {
+        & chmod u+w -- $tamperPath
+        Require ($LASTEXITCODE -eq 0) "Could not make the disposable payload file writable: $tamperPath"
+      }
+      $tampered = [byte[]]::new($tamperOriginal.Length + 1)
+      [Array]::Copy($tamperOriginal, $tampered, $tamperOriginal.Length)
+      $tampered[$tamperOriginal.Length] = [byte]0xA5
+      [IO.File]::WriteAllBytes($tamperPath, $tampered)
+      $tamperResult = InvokeBundle @('version') 'maximum launcher after immutable-payload tamper' 1
+      Require ($tamperResult.ExitCode -ne 0) 'Maximum stable launcher accepted an edited immutable payload'
+      RecordCheck 'runtime-tamper-refusal' 'PASS' "Stable launcher refused an edited payload file: $($tamperPath.Substring($payloadRoot.Length + 1))"
+    }
+    finally
+    {
+      [IO.File]::WriteAllBytes($tamperPath, $tamperOriginal)
+      if ($script:maximumAcceptanceIsWindows)
+      {
+        & attrib +R $tamperPath
+      }
+      else
+      {
+        & chmod u-w -- $tamperPath
+      }
+    }
+
+    $mutableState = Join-Path $installRoot 'Link\acceptance-state.txt'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $mutableState) | Out-Null
+    Set-Content -LiteralPath $mutableState -Value 'mutable acceptance state'
+    [void](InvokeBundle @('version') 'maximum launcher with mutable installation state')
+    RecordCheck 'mutable-state-no-false-positive' 'PASS' 'Stable launcher continued after mutable install state was added outside the immutable payload'
+
     $nativeMcpName = if ($script:maximumAcceptanceIsWindows) { 'synesis-mcp.exe' } else { 'synesis-mcp' }
     $nativeMcp = Join-Path $bundleRoot "bin/$nativeMcpName"
     Require (Test-Path -LiteralPath $nativeMcp -PathType Leaf) 'Maximum native MCP launcher is missing'
