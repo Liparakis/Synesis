@@ -848,6 +848,109 @@ function FindFrontendAsset([string]$PayloadRoot)
   return $null
 }
 
+function FindFrontendIndex([string]$PayloadRoot)
+{
+  $jars = @(Get-ChildItem -LiteralPath $PayloadRoot -Recurse -File -Filter '*.jar' -ErrorAction SilentlyContinue |
+    Sort-Object FullName)
+  foreach ($jar in $jars)
+  {
+    $zip = $null
+    try
+    {
+      $zip = [IO.Compression.ZipFile]::OpenRead($jar.FullName)
+      $entry = @($zip.Entries |
+        Where-Object {
+          -not $_.FullName.EndsWith('/') -and
+          $_.FullName -match '(?i)^web-ui/index\.html$'
+        } |
+        Sort-Object FullName |
+        Select-Object -First 1)
+      if ($entry.Count -eq 1)
+      {
+        return [pscustomobject]@{
+          ArchivePath = $jar.FullName
+          EntryName = $entry[0].FullName
+        }
+      }
+    }
+    catch
+    {
+      # A protected third-party JAR may not be a readable ZIP; keep looking.
+    }
+    finally
+    {
+      if ($null -ne $zip) { $zip.Dispose() }
+    }
+  }
+  return $null
+}
+
+function FindFrontendStaticViolation([string]$ArchivePath, [string]$IndexEntryName)
+{
+  $zip = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
+  try
+  {
+    $entries = @($zip.Entries |
+      Where-Object {
+        -not $_.FullName.EndsWith('/') -and
+        ($_.FullName -eq $IndexEntryName -or
+          $_.FullName -match '(?i)^web-ui/assets/.+\.(js|css)$')
+      } |
+      Sort-Object FullName)
+    foreach ($entry in $entries)
+    {
+      $input = $null
+      $reader = $null
+      try
+      {
+        $input = $entry.Open()
+        $reader = [IO.StreamReader]::new($input, [Text.Encoding]::UTF8, $true)
+        $text = $reader.ReadToEnd()
+        if ($entry.FullName -eq $IndexEntryName -and
+          $text -match '(?is)<(?:script|link)\b[^>]*(?:src|href)\s*=\s*["'']https?://')
+        {
+          return [pscustomobject]@{
+            EntryName = $entry.FullName
+            Reason = 'external runtime script or stylesheet URL'
+          }
+        }
+        if ($text -match '(?is)sourceMappingURL|sourceURL|\.map(?:["''\s>])')
+        {
+          return [pscustomobject]@{
+            EntryName = $entry.FullName
+            Reason = 'source-map or development source reference'
+          }
+        }
+        if ($entry.FullName -eq $IndexEntryName -and
+          $text -match '(?is)@vite/client|(?:src|href)\s*=\s*["''][^"'']*/src/|(?:localhost|127\.0\.0\.1)(?::\d+)?')
+        {
+          return [pscustomobject]@{
+            EntryName = $entry.FullName
+            Reason = 'Vite or local development marker'
+          }
+        }
+      }
+      catch
+      {
+        return [pscustomobject]@{
+          EntryName = $entry.FullName
+          Reason = "unreadable packaged frontend entry: $($_.Exception.Message)"
+        }
+      }
+      finally
+      {
+        if ($null -ne $reader) { $reader.Dispose() }
+        if ($null -ne $input) { $input.Dispose() }
+      }
+    }
+  }
+  finally
+  {
+    $zip.Dispose()
+  }
+  return $null
+}
+
 function ReadZipEntryBytes([string]$ArchivePath, [string]$EntryName)
 {
   $zip = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
@@ -1106,6 +1209,14 @@ try
       [IO.File]::WriteAllBytes($tamperPath, $tamperOriginal)
       RestoreDisposablePayloadFileMode $tamperPath
     }
+
+    $frontendIndex = FindFrontendIndex $payloadRoot
+    Require ($null -ne $frontendIndex) 'Installed maximum payload contains no packaged web-ui/index.html for static frontend acceptance'
+    $frontendStaticViolation = FindFrontendStaticViolation $frontendIndex.ArchivePath $frontendIndex.EntryName
+    Require ($null -eq $frontendStaticViolation) (
+      "Packaged frontend static-content check failed for $($frontendStaticViolation.EntryName): $($frontendStaticViolation.Reason)"
+    )
+    RecordCheck 'frontend-static-leakage' 'PASS' 'Packaged web-ui index and JavaScript/CSS entries use same-origin built assets with no external runtime URL, source-map reference, or development marker'
 
     $frontendAsset = FindFrontendAsset $payloadRoot
     Require ($null -ne $frontendAsset) 'Installed maximum payload contains no packaged web-ui asset for targeted tamper acceptance'

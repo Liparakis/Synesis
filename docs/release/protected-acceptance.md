@@ -216,11 +216,16 @@ local shipped CLI/Link serialization, authentication, native QUIC/PeerSession,
 and onboarding evidence; it does not prove Internet NAT traversal, multi-peer
 overlay routing, or relay forwarding.
 
-The CLI path also targets one packaged `web-ui` JavaScript or CSS entry inside
-the installed JAR. It edits that entry in a disposable copy, requires the
-stable launcher to refuse the changed immutable payload, and restores the
-original JAR byte-for-byte before continuing. This is separate from the
-generic first-file tamper check and from mutable `Link` state.
+The CLI path first locates the packaged `web-ui/index.html` and all packaged
+JavaScript/CSS assets inside the installed JAR. It rejects external runtime
+`script`/`link` URLs, source-map or `sourceURL` references, and Vite/local
+development markers before continuing. This records the
+`frontend-static-leakage` check against the shipped artifact, rather than
+against the source checkout. It then targets one packaged `web-ui` JavaScript
+or CSS entry inside the installed JAR, edits that entry in a disposable copy,
+requires the stable launcher to refuse the changed immutable payload, and
+restores the original JAR byte-for-byte before continuing. This is separate
+from the generic first-file tamper check and from mutable `Link` state.
 
 For the CLI component, the harness also installs the extracted candidate into
 a second disposable root with the explicit `--skip-path-update` acceptance
