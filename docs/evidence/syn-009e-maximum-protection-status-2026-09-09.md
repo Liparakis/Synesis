@@ -218,17 +218,21 @@ adapter output.
 
 The current five-sample Windows x64 CLI comparison recorded:
 
-| Profile | Archive | Extracted | Median cold startup |
-|---|---:|---:|---:|
-| developer | 46,504,281 bytes | 69,542,917 bytes | 715.513 ms |
-| protection-lite | 45,911,491 bytes | 68,870,411 bytes | 685.841 ms |
-| maximum-release | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED |
+| Profile | Archive | Extracted | Median cold startup | Max aggregate process-tree working set* |
+|---|---:|---:|---:|---:|
+| developer | 46,504,281 bytes | 69,542,917 bytes | 973.955 ms | 103,034,880 bytes |
+| protection-lite | 45,911,491 bytes | 68,870,411 bytes | 794.654 ms | 104,062,976 bytes |
+| maximum-release | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED | NOT SUPPLIED |
 
-Peak memory was unavailable from the wrapper. The extracted acceptance harness
-now records bounded `durationMs` values for provider/doctor, Link onboarding,
-UI smoke, authenticated control-plane HTTP/SSE, and relay forwarding, but no
+*The working-set values are Windows `PROCESS_TREE_WORKING_SET_BEST_EFFORT`
+samples: an aggregate of the live launcher tree, not unique physical memory;
+monitor overhead is not controlled. The extracted acceptance harness now
+records bounded `durationMs` values for provider/doctor, Link onboarding, UI
+smoke, authenticated control-plane HTTP/SSE, and relay forwarding, but no
 commercial maximum run has populated those fields. Route-selection
-microbenchmarks, relay throughput, and transformation overhead remain open.
+microbenchmarks, relay throughput, unique physical-memory measurement, and
+transformation overhead remain open. The profile timings and memory values are
+baseline evidence only, not a performance win or release-acceptance claim.
 
 The archive-only static comparison found zero source-map/private-file entries
 in developer/lite archives and recorded lite renaming/package changes, but

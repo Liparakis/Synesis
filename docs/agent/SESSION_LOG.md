@@ -1,3 +1,29 @@
+## 2026-09-09 — SYN-009E bounded profile memory evidence
+
+Refined `scripts/release-profile-comparison.ps1` so Windows samples poll the
+live launcher process tree at a bounded 100 ms interval and label the result
+`PROCESS_TREE_WORKING_SET_BEST_EFFORT`. The harness now emits numeric-only
+memory deltas when both profiles expose values and omits the comparison when a
+profile remains `NOT_AVAILABLE`; it does not claim unique physical memory.
+
+The five-sample Windows x64 CLI developer/protection-lite rerun recorded:
+developer `46,504,281` archive bytes, `69,542,917` extracted bytes,
+`973.955 ms` median startup, and `103,034,880` maximum aggregate working-set
+bytes; protection-lite `45,911,491`, `68,870,411`, `794.654 ms`, and
+`104,062,976` bytes. The result remains
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; timings and memory are baseline-only,
+and unique physical memory, route microbenchmarks, commercial transformation
+overhead, and AV/EDR remain open.
+
+Verification: corrected PowerShell AST parse, deferred-register validation,
+scoped diff check, and the bounded five-sample comparison passed; the expected
+partial exit reflects the absent licensed maximum archive. No commercial
+protector, signing authority, push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain the installed, licensed, version-pinned commercial
+protector and release-signing authority, then run the maximum adapter and full
+shipped-artifact acceptance from a clean reviewed checkout.
+
 ## 2026-09-09 — SYN-009E exact brief taxonomy reconciliation
 
 Reread the newly referenced brief at

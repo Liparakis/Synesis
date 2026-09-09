@@ -196,6 +196,60 @@ function WindowsQuote([string]$Value)
   return '"' + $Value + '"'
 }
 
+function ProcessTreeWorkingSetBytes([Diagnostics.Process]$RootProcess)
+{
+  $processIds = [Collections.Generic.HashSet[int]]::new()
+  [void]$processIds.Add($RootProcess.Id)
+  if ($env:OS -eq 'Windows_NT')
+  {
+    try
+    {
+      $childrenByParent = @{}
+      foreach ($candidate in @(Get-CimInstance Win32_Process -ErrorAction Stop))
+      {
+        $parentId = [int]$candidate.ParentProcessId
+        $childId = [int]$candidate.ProcessId
+        if (-not $childrenByParent.ContainsKey($parentId))
+        {
+          $childrenByParent[$parentId] = [Collections.Generic.List[int]]::new()
+        }
+        [void]$childrenByParent[$parentId].Add($childId)
+      }
+      $pending = [Collections.Generic.Queue[int]]::new()
+      $pending.Enqueue($RootProcess.Id)
+      while ($pending.Count -gt 0)
+      {
+        $parentId = $pending.Dequeue()
+        if (-not $childrenByParent.ContainsKey($parentId)) { continue }
+        foreach ($childId in $childrenByParent[$parentId])
+        {
+          if ($processIds.Add($childId)) { $pending.Enqueue($childId) }
+        }
+      }
+    }
+    catch
+    {
+      # Fall back to the root launcher when process-tree inspection is not
+      # available on the host. The result remains explicitly best-effort.
+    }
+  }
+
+  $total = [long]0
+  foreach ($processId in $processIds)
+  {
+    try
+    {
+      $candidate = Get-Process -Id $processId -ErrorAction Stop
+      $candidate.Refresh()
+      $workingSet = [long]$candidate.WorkingSet64
+      if ($workingSet -gt 0) { $total += $workingSet }
+    }
+    catch { }
+  }
+  if ($total -gt 0) { return $total }
+  return $null
+}
+
 function InvokeProfileSample([string]$Launcher, [string[]]$Arguments, [string]$Label)
 {
   $startInfo = [Diagnostics.ProcessStartInfo]::new()
@@ -227,19 +281,31 @@ function InvokeProfileSample([string]$Launcher, [string[]]$Arguments, [string]$L
   $stdoutTask = $process.StandardOutput.ReadToEndAsync()
   $stderrTask = $process.StandardError.ReadToEndAsync()
   $process.StandardInput.Close()
-  if (-not $process.WaitForExit(30000))
+  $peak = $null
+  while (-not $process.HasExited)
   {
-    try { $process.Kill($true) } catch { }
-    throw "$Label exceeded the 30s comparison timeout"
+    $candidatePeak = ProcessTreeWorkingSetBytes $process
+    if ($null -ne $candidatePeak -and ($null -eq $peak -or $candidatePeak -gt $peak))
+    {
+      $peak = $candidatePeak
+    }
+    if ($clock.Elapsed.TotalSeconds -ge 30)
+    {
+      try { $process.Kill($true) } catch { }
+      throw "$Label exceeded the 30s comparison timeout"
+    }
+    Start-Sleep -Milliseconds 100
   }
+  [void]$process.WaitForExit()
   $clock.Stop()
   $stdout = $stdoutTask.GetAwaiter().GetResult()
   $stderr = $stderrTask.GetAwaiter().GetResult()
   $output = ($stdout + "`n" + $stderr).Trim()
-  $peak = $null
   try {
+    $candidatePeak = ProcessTreeWorkingSetBytes $process
+    if ($null -ne $candidatePeak -and ($null -eq $peak -or $candidatePeak -gt $peak)) { $peak = $candidatePeak }
     $candidatePeak = [long]$process.PeakWorkingSet64
-    if ($candidatePeak -gt 0) { $peak = $candidatePeak }
+    if ($candidatePeak -gt 0 -and ($null -eq $peak -or $candidatePeak -gt $peak)) { $peak = $candidatePeak }
   } catch { }
   $exitCode = $process.ExitCode
   $process.Dispose()
@@ -257,6 +323,11 @@ function InvokeProfileSample([string]$Launcher, [string[]]$Arguments, [string]$L
     durationMs = [math]::Round($clock.Elapsed.TotalMilliseconds, 3)
     exitCode = $exitCode
     peakWorkingSetBytes = $peak
+    memoryScope = if ($env:OS -eq 'Windows_NT') {
+      'PROCESS_TREE_WORKING_SET_BEST_EFFORT'
+    } else {
+      'LAUNCHER_PROCESS_WORKING_SET_BEST_EFFORT'
+    }
   }
 }
 
@@ -322,6 +393,23 @@ function AddDelta([string]$Name, [object]$Left, [object]$Right, [string]$Propert
   }
 }
 
+function AddNumericDelta([string]$Name, [object]$Left, [object]$Right, [string]$Property)
+{
+  if ($null -eq $Left -or $null -eq $Right) { return }
+  $leftValue = $Left[$Property]
+  $rightValue = $Right[$Property]
+  if ($null -eq $leftValue -or $null -eq $rightValue) { return }
+  if ($leftValue -is [string] -or $rightValue -is [string]) { return }
+  $result.comparison[$Name] = [ordered]@{
+    from = $Left.profile
+    to = $Right.profile
+    property = $Property
+    fromValue = $leftValue
+    toValue = $rightValue
+    delta = $rightValue - $leftValue
+  }
+}
+
 try
 {
   $result.profiles['developer'] = MeasureProfile 'developer' $DeveloperArchive 'developer'
@@ -334,11 +422,13 @@ try
   AddDelta 'developerToLiteArchiveBytes' $result.profiles['developer'] $result.profiles['protection-lite'] 'archiveBytes'
   AddDelta 'developerToLiteExtractedBytes' $result.profiles['developer'] $result.profiles['protection-lite'] 'extractedBytes'
   AddDelta 'developerToLiteMedianStartupMs' $result.profiles['developer'] $result.profiles['protection-lite'] 'medianStartupMs'
+  AddNumericDelta 'developerToLiteMaxPeakWorkingSetBytes' $result.profiles['developer'] $result.profiles['protection-lite'] 'maxPeakWorkingSetBytes'
   if ($result.profiles.Contains('maximum-release'))
   {
     AddDelta 'liteToMaximumArchiveBytes' $result.profiles['protection-lite'] $result.profiles['maximum-release'] 'archiveBytes'
     AddDelta 'liteToMaximumExtractedBytes' $result.profiles['protection-lite'] $result.profiles['maximum-release'] 'extractedBytes'
     AddDelta 'liteToMaximumMedianStartupMs' $result.profiles['protection-lite'] $result.profiles['maximum-release'] 'medianStartupMs'
+    AddNumericDelta 'liteToMaximumMaxPeakWorkingSetBytes' $result.profiles['protection-lite'] $result.profiles['maximum-release'] 'maxPeakWorkingSetBytes'
     $result.status = 'PASS_MEASURED_ALL_SUPPLIED_PROFILES'
   }
   else

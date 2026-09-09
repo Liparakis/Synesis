@@ -59,12 +59,14 @@ disposable install, exercises the installed stable-launcher and packaged
   `scripts/release-profile-comparison.ps1`. It has a current five-sample CLI
   developer/protection-lite result in
   `docs/evidence/syn-009e-profile-comparison-2026-09-09.json` and is explicitly
-  partial until a licensed maximum ZIP is supplied. The current wrapper cannot
-  expose reliable peak memory, and the cold startup delta must not be reported
-  as a performance win. The extracted acceptance harness now records bounded
-  `durationMs` values for provider/doctor, Link, UI, authenticated control-plane
-  HTTP/SSE, and relay forwarding; route microbenchmarks and transformation
-  overhead remain open.
+  partial until a licensed maximum ZIP is supplied. The Windows wrapper now
+  records best-effort aggregate launcher-process-tree working sets, marked
+  `PROCESS_TREE_WORKING_SET_BEST_EFFORT`; this is not unique physical memory,
+  and the cold startup/memory values must not be reported as a performance win.
+  The extracted acceptance harness now records bounded `durationMs` values for
+  provider/doctor, Link, UI, authenticated control-plane HTTP/SSE, and relay
+  forwarding; unique physical-memory measurement, route microbenchmarks, and
+  transformation overhead remain open.
 - The documentation-only commercial pre-screen is in
   `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`. DashO is the
   first Java 25/Gradle candidate for Rings 1, 3, and bounded Ring 6; Zelix

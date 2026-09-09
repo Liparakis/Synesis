@@ -11,9 +11,10 @@
   maximum-protector adapter and existing bootstrap-signing seam are implemented
   but commercial execution remains blocked. The reusable profile comparison
   harness has recorded five cold CLI developer/protection-lite samples and
-  archive/extracted sizes, with status
-  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; wrapper memory is unavailable and
-  the small non-isolated startup delta is not a performance claim. The rebuilt
+  archive/extracted sizes plus best-effort aggregate launcher-process-tree
+  working sets, with status `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the
+  Windows memory signal is not unique physical memory and the non-isolated
+  startup/memory values are not performance claims. The rebuilt
   synthetic installed CLI probe also passes signed local Link invitation,
   authenticated PeerSession, and project synchronization; the relay
   shipped-artifact observer also covers authenticated forwarding and bounded

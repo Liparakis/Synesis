@@ -55,10 +55,13 @@ Run the profile comparison only against extracted customer-style archives:
 
 The harness validates each profile marker, records archive and extracted-tree
 size, and takes bounded cold-process `version` (CLI) or guarded-parser (relay)
-samples. It records memory only when the wrapper exposes a reliable peak
-working-set value; `NOT_AVAILABLE` is an honest result, not zero memory. The
-maximum archive is optional for preparatory developer/lite runs, but omission
-produces `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED` and cannot satisfy the final
+samples. On Windows it also records a best-effort aggregate working set for
+the live launcher process tree with each sample marked
+`PROCESS_TREE_WORKING_SET_BEST_EFFORT`; this is not unique physical-memory
+measurement, and monitor overhead is not controlled. On hosts where no value
+is exposed, `NOT_AVAILABLE` is an honest result, not zero memory. The maximum
+archive is optional for preparatory developer/lite runs, but omission produces
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED` and cannot satisfy the final
 maximum-release comparison. These measurements do not replace UI, snapshot,
 Link, route, relay-throughput, provider, AV/EDR, or commercial transformation
 acceptance.
@@ -66,10 +69,10 @@ acceptance.
 The extracted acceptance harness also writes a `performance` object with
 `status=BOUNDARY_TIMINGS_ONLY` and per-check `durationMs` values for the
 shipped provider/doctor, Link onboarding, UI smoke, authenticated control-plane
-HTTP/SSE, and relay forwarding checks. Peak memory, route-selection
-microbenchmarks, commercial transformation overhead, and AV/EDR impact remain
-explicitly open; absent values are not interpreted as zero or as a release
-claim.
+HTTP/SSE, and relay forwarding checks. Unique physical-memory measurement,
+route-selection microbenchmarks, commercial transformation overhead, and
+AV/EDR impact remain explicitly open; the profile harness's aggregate
+best-effort working-set signal is not interpreted as a release claim.
 
 ## Maximum release reproducibility and diversification
 

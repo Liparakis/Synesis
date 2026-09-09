@@ -62,20 +62,22 @@ The relay observer is shipped-protocol evidence only; it does not promote a
 synthetic or protection-lite archive to commercial maximum evidence.
 
 The reusable `scripts/release-profile-comparison.ps1` harness now records
-customer-archive SHA-256, archive/extracted size, and bounded cold launcher
-samples for developer, protection-lite, and (when supplied) maximum-release
-profiles. The current five-sample CLI run measured developer at 46,504,281
-archive bytes / 69,542,917 extracted bytes / 715.513 ms median startup and
-protection-lite at 45,911,491 / 68,870,411 / 685.841 ms. Its result is
-`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the small non-isolated startup delta
-is not a performance claim, wrapper peak memory is `NOT_AVAILABLE`, and UI,
-route, Link, relay, provider, AV/EDR, and commercial maximum measurements
+customer-archive SHA-256, archive/extracted size, bounded cold launcher
+samples, and a best-effort aggregate launcher-process-tree working set for
+developer, protection-lite, and (when supplied) maximum-release profiles. The
+current five-sample CLI run measured developer at 46,504,281 archive bytes /
+69,542,917 extracted bytes / 973.955 ms median startup / 103,034,880-byte
+maximum aggregate working set and protection-lite at 45,911,491 /
+68,870,411 / 794.654 ms / 104,062,976 bytes. Its result is
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the non-isolated timings and aggregate
+working-set values are not performance or unique-physical-memory claims, and
+UI, route, Link, relay, provider, AV/EDR, and commercial maximum measurements
 remain open.
 The extracted acceptance harness now also records a `performance` object with
 bounded per-check `durationMs` values for provider/doctor, Link onboarding, UI
 smoke, authenticated control-plane HTTP/SSE, and relay forwarding. It leaves
-peak memory, route microbenchmarks, commercial transformation overhead, and
-AV/EDR impact explicitly open.
+unique physical memory, route microbenchmarks, commercial transformation
+overhead, and AV/EDR impact explicitly open.
 
 The first-party DashO/Zelix/Virbox documentation pre-screen is now recorded
 separately from artifact evidence. It narrows the next licensed evaluation:
@@ -221,6 +223,14 @@ keeps native signing separate and records the maximum archive, non-Windows
 formats, ARM64, third-party native inputs, and clean release provenance as
 open.
 
+Refined `scripts/release-profile-comparison.ps1` to sample Windows launcher
+process-tree working sets at a bounded interval, label the aggregate signal
+explicitly, and emit memory deltas only when both compared values are numeric.
+The current five-sample developer/protection-lite run is recorded in the
+profile-comparison evidence JSON; it remains partial because the licensed
+maximum archive is absent, and the aggregate signal is not unique physical
+memory or a performance claim.
+
 ## Verification
 
 - `:cli:bundleSmokeTest --dependency-verification=strict --no-configuration-cache`
@@ -266,10 +276,11 @@ open.
   not commercial maximum evidence.
 - `scripts/release-profile-comparison.ps1` parsed and ran five cold CLI
   developer/protection-lite samples against extracted ZIPs, recording archive
-  and extracted sizes plus SHA-256 identities. It exited with
-  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no memory or performance-win claim
-  is made from the non-isolated sample, and broader UI/route/Link/relay/
-  provider timing remains open.
+  and extracted sizes, SHA-256 identities, and best-effort aggregate
+  launcher-process-tree working sets. It exited with
+  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no performance or unique-physical-
+  memory claim is made from the non-isolated sample, and broader UI/route/
+  Link/relay/provider timing remains open.
 - The first-party commercial protector documentation pre-screen was recorded
   in `docs/evidence/syn-009e-protector-doc-review-2026-09-09.md`; it refines
   candidate selection without changing any commercial row to `PASS` or

@@ -6,7 +6,7 @@
     "runtime":  {
                     "os":  "Microsoft Windows NT 10.0.26200.0",
                     "processArchitecture":  "x64",
-                    "jdkUnixDomainTempDirectory":  "NOT_SUPPLIED",
+                    "jdkUnixDomainTempDirectory":  "C:\\t\\synesis-loopback-probe",
                     "scope":  "PROCESS_LOCAL_ONLY; NOT_SHIPPED_LAUNCHER_CONFIGURATION"
                 },
     "profiles":  {
@@ -20,33 +20,38 @@
                                        "launcherSmoke":  "version",
                                        "samples":  [
                                                        {
-                                                           "durationMs":  707.187,
+                                                           "durationMs":  1007.808,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  null
+                                                           "peakWorkingSetBytes":  91557888,
+                                                           "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  715.513,
+                                                           "durationMs":  784.208,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  null
+                                                           "peakWorkingSetBytes":  98635776,
+                                                           "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  719.529,
+                                                           "durationMs":  786.806,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  null
+                                                           "peakWorkingSetBytes":  103034880,
+                                                           "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  728.394,
+                                                           "durationMs":  997.556,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  null
+                                                           "peakWorkingSetBytes":  95047680,
+                                                           "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  712.576,
+                                                           "durationMs":  973.955,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  null
+                                                           "peakWorkingSetBytes":  95748096,
+                                                           "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        }
                                                    ],
-                                       "medianStartupMs":  715.513,
-                                       "maxPeakWorkingSetBytes":  "NOT_AVAILABLE"
+                                       "medianStartupMs":  973.955,
+                                       "maxPeakWorkingSetBytes":  103034880
                                    },
                      "protection-lite":  {
                                              "profile":  "protection-lite",
@@ -58,33 +63,38 @@
                                              "launcherSmoke":  "version",
                                              "samples":  [
                                                              {
-                                                                 "durationMs":  742.819,
+                                                                 "durationMs":  794.654,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  null
+                                                                 "peakWorkingSetBytes":  99880960,
+                                                                 "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  670.558,
+                                                                 "durationMs":  799.966,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  null
+                                                                 "peakWorkingSetBytes":  104062976,
+                                                                 "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  685.841,
+                                                                 "durationMs":  1025.53,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  null
+                                                                 "peakWorkingSetBytes":  95346688,
+                                                                 "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  651.547,
+                                                                 "durationMs":  734.795,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  null
+                                                                 "peakWorkingSetBytes":  98353152,
+                                                                 "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  708.453,
+                                                                 "durationMs":  754.05,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  null
+                                                                 "peakWorkingSetBytes":  98926592,
+                                                                 "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              }
                                                          ],
-                                             "medianStartupMs":  685.841,
-                                             "maxPeakWorkingSetBytes":  "NOT_AVAILABLE"
+                                             "medianStartupMs":  794.654,
+                                             "maxPeakWorkingSetBytes":  104062976
                                          }
                  },
     "comparison":  {
@@ -108,10 +118,18 @@
                                                               "from":  "developer",
                                                               "to":  "protection-lite",
                                                               "property":  "medianStartupMs",
-                                                              "fromValue":  715.513,
-                                                              "toValue":  685.841,
-                                                              "delta":  -29.672000000000025
-                                                          }
+                                                              "fromValue":  973.955,
+                                                              "toValue":  794.654,
+                                                              "delta":  -179.30100000000004
+                                                          },
+                       "developerToLiteMaxPeakWorkingSetBytes":  {
+                                                                     "from":  "developer",
+                                                                     "to":  "protection-lite",
+                                                                     "property":  "maxPeakWorkingSetBytes",
+                                                                     "fromValue":  103034880,
+                                                                     "toValue":  104062976,
+                                                                     "delta":  1028096
+                                                                 }
                    },
     "status":  "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED",
     "openGate":  "Supply a licensed maximum-release archive to measure and compare the commercial profile."

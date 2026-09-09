@@ -98,14 +98,16 @@ the rebuilt platform bundle also cover the corrected Windows stable-launcher
 argument-forwarding path.
 
 The reusable `scripts/release-profile-comparison.ps1` harness was added for
-customer-style ZIPs. Its current five-sample CLI run measured developer at
-46,504,281 archive bytes, 69,542,917 extracted bytes, and 715.513 ms median
-cold startup; protection-lite measured 45,911,491, 68,870,411, and 685.841 ms.
-The JSON result is explicitly
-`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the small non-isolated startup delta
-is not a performance-win claim, wrapper peak memory is `NOT_AVAILABLE`, and
-UI/route/Link/relay/provider timing remains open. A real maximum archive is
-still required for the three-profile comparison.
+customer-style ZIPs. Its current five-sample Windows x64 CLI run measured
+developer at 46,504,281 archive bytes, 69,542,917 extracted bytes, 973.955 ms
+median cold startup, and 103,034,880 bytes maximum aggregate launcher-process-
+tree working set; protection-lite measured 45,911,491, 68,870,411, 794.654 ms,
+and 104,062,976 bytes. Each memory sample is marked
+`PROCESS_TREE_WORKING_SET_BEST_EFFORT`; it is not unique physical memory, and
+the non-isolated timings/memory values are not a performance-win claim. The
+JSON result is explicitly `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; UI/route/
+Link/relay/provider timing remains open. A real maximum archive is still
+required for the three-profile comparison.
 
 A first-party documentation pre-screen now distinguishes vendor-described
 features from Synesis evidence. DashO's reviewed documentation supports a
