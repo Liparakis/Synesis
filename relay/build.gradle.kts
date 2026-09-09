@@ -177,6 +177,16 @@ fun relayMaximumNativeAuditValue(file: File, key: String): String {
     return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
 }
 
+fun rejectRelayMaximumSymlinks(root: File, label: String) {
+    if (!root.exists()) return
+    val symbolicLink = Files.walk(root.toPath()).use { paths ->
+        paths.filter { Files.isSymbolicLink(it) }.findFirst().orElse(null)
+    }
+    require(symbolicLink == null) {
+        "$label contains an unsupported symbolic link: $symbolicLink"
+    }
+}
+
 private val releaseLockfileNames = setOf(
     "gradle.lockfile",
     "settings-gradle.lockfile",
@@ -655,6 +665,8 @@ val relayMaximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(outputBundle.isDirectory) { "Maximum relay protector did not produce the customer bundle: $outputBundle" }
         require(privateDirectory.isDirectory) { "Maximum relay protector did not produce private records: $privateDirectory" }
         require(!isUnder(privateDirectory, outputBundle)) { "Private relay records overlap the customer bundle" }
+        rejectRelayMaximumSymlinks(outputBundle, "Maximum relay customer bundle")
+        rejectRelayMaximumSymlinks(privateDirectory, "Maximum relay private release directory")
 
         val privateRingEvidence = linkedMapOf<String, Pair<File, String>>()
         listOf(

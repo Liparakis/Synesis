@@ -6388,3 +6388,24 @@ commercial adapter, signed maximum artifact, or remote mutation was used.
 Exact next action: run the checkpoint script, inspect only the intended release
 diff, commit this scoped contract/evidence slice, and keep the commercial
 maximum gate fail-closed.
+## 2026-09-09 — SYN-009E maximum output-boundary symlink gate
+
+The current maximum adapter contract used lexical containment checks for the
+customer and private output roots but did not reject symbolic links inside
+those roots. Added fail-closed symlink scans to both CLI and standalone-relay
+maximum Gradle tasks before artifact manifesting or signing, and documented the
+boundary in ADR-0071 and the adapter procedure. This prevents an adapter or
+configuration from redirecting a private record outside the requested private
+root while appearing lexically contained.
+
+`git diff --check` passed for the scoped files and
+`:cli:tasks :relay:tasks --no-configuration-cache --no-daemon --max-workers=1`
+configured successfully with the documented process-local Windows loopback
+workaround. A read-only release-environment probe found no callable DashO,
+Zelix/KlassMaster, or external maximum adapter and no configured signing
+authority; those inputs remain the exact external blocker. No commercial
+artifact, key, or remote mutation was used.
+
+Exact next action: commit this symlink-boundary slice after the scoped state and
+evidence updates, then preserve the maximum gate until a licensed protector,
+adapter, and signing authority are supplied.

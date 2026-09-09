@@ -109,6 +109,16 @@ fun maximumNativeAuditValue(file: File, key: String): String {
     return pattern.find(file.readText())?.groupValues?.get(1).orEmpty()
 }
 
+fun rejectMaximumSymlinks(root: File, label: String) {
+    if (!root.exists()) return
+    val symbolicLink = Files.walk(root.toPath()).use { paths ->
+        paths.filter { Files.isSymbolicLink(it) }.findFirst().orElse(null)
+    }
+    require(symbolicLink == null) {
+        "$label contains an unsupported symbolic link: $symbolicLink"
+    }
+}
+
 private val releaseLockfileNames = setOf(
     "gradle.lockfile",
     "settings-gradle.lockfile",
@@ -1186,6 +1196,8 @@ val maximumReleasePrepare = tasks.register("maximumReleasePrepare") {
         require(outputBundle.isDirectory) { "Maximum protector did not produce the customer bundle: $outputBundle" }
         require(privateDirectory.isDirectory) { "Maximum protector did not produce private release records: $privateDirectory" }
         require(!isUnder(privateDirectory, outputBundle)) { "Private release records overlap the customer bundle" }
+        rejectMaximumSymlinks(outputBundle, "Maximum customer bundle")
+        rejectMaximumSymlinks(privateDirectory, "Maximum private release directory")
 
         val privateRingEvidence = linkedMapOf<String, Pair<File, String>>()
         listOf(

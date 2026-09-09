@@ -12,8 +12,9 @@ artifact and installed-runtime evidence rather than marketing terminology.
   on `master`; the scoped release commits remain local and ahead of
   `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
   and remains uncommitted.
-- Current local HEAD: `5626187`; the working copy also contains a stable,
-  unexplained formatter-like rewrite of 1,532 files outside this release slice.
+- Current local HEAD: `bc37137f6ca8d26e21686bed08b93d9b0c5adaae` at checkpoint
+  `CP-0794`; the working copy also contains a stable, unexplained
+  formatter-like rewrite of unrelated files outside this release slice.
   Those files remain untouched and are not release evidence.
 - Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
   foundations; this task extends them rather than creating a parallel release

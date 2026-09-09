@@ -13,6 +13,9 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
+- Latest verified local HEAD is `bc37137f6ca8d26e21686bed08b93d9b0c5adaae`
+  at checkpoint `CP-0794`; the post-archive native-audit and output-boundary
+  gates are committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
   checkout and must run from a reviewed clean release commit.
@@ -152,6 +155,12 @@ forbidden from the customer archive.
 records, verifies private recovery/evidence hashes, and provides separate
 diversification and reproducibility modes. No positive commercial pair exists.
 
+The maximum CLI and relay tasks also reject symbolic links anywhere in the
+adapter-produced customer bundle or private release directory before creating
+the artifact manifest or signing. This prevents a lexical containment bypass;
+the gate is configured and syntax-checked but has not run against a commercial
+adapter output.
+
 ## Artifact size, performance, and reverse-engineering evidence
 
 The current five-sample Windows x64 CLI comparison recorded:
@@ -221,6 +230,7 @@ release-hardening work:
   gate for CLI/relay maximum records;
 - `f59f02b2` — post-archive native hardening/signing audit gate before manifest
   creation and private evidence hashing;
+- `bc37137f` — recorded the post-archive native-audit gate in the status report;
 - `35e8bf6b` — release provenance comparison;
 - `9de90337` — complete adapter provenance echo binding;
 - `18092671` — CLI source-commit verification;

@@ -189,6 +189,10 @@ launcher/application JARs for `relay`, with no mappings/seeds/private records,
 and a private SHA-256 manifest of every bundle file. For relay, Netty QUIC
 native JARs are third-party inputs: they remain unmodified and are covered by
 the private audit rather than by a fabricated Synesis native-symbol directory.
+A returned customer bundle and private release directory must contain no
+symbolic links. The Gradle boundary rejects them before manifesting or signing
+so lexical containment checks cannot be redirected outside the requested
+roots.
 A result property is not
 itself proof that a ring is real: the evidence files and the later shipped
 artifact/installed-runtime acceptance must demonstrate the vendor's actual

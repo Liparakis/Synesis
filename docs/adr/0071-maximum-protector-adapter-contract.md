@@ -53,6 +53,13 @@ digest. The maximum tasks reject a dirty source checkout so a protected
 release cannot be presented as reproducible while silently including local
 developer edits.
 
+The customer bundle and private release directory are also required to be
+symlink-free. The Gradle gate rejects symbolic links after the adapter returns,
+before it walks either tree to create manifests or inspect private-material
+leakage. This keeps the lexical path-boundary checks from being bypassed by an
+adapter or configuration that resolves a file outside the requested output
+root.
+
 The signer now accepts explicit manifest and signature paths while preserving
 its existing defaults. This lets the release task sign a build-directory
 candidate without mutating the source checkout or creating a second signing
@@ -68,6 +75,9 @@ implementation.
 - Missing protector, configuration, explicit release ID/seed, signing key,
   ring evidence, inventory binding, clean release checkout, or signature
   causes a fail-closed result.
+- A symbolic link in the customer or private output tree fails the release
+  before manifesting or signing; the adapter must emit ordinary files and
+  directories within the requested roots.
 - The adapter contract is intentionally vendor-neutral; a release engineer
   still must write or obtain the vendor-specific wrapper and review its exact
   configuration.

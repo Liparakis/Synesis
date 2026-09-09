@@ -152,6 +152,16 @@ the provenance comparison verifies the status and hash. The task requires a
 reviewed developer archive through `SYNESIS_DEVELOPER_ARCHIVE` or
 `-PsynesisDeveloperArchive`.
 
+At checkpoint `CP-0794`, the maximum CLI and relay boundaries also reject any
+symbolic link found in the adapter-produced customer bundle or private release
+directory before manifesting, leakage inspection, or signing. This closes the
+lexical path-boundary bypass where a symlink could resolve outside the
+requested root. The Gradle task graphs configured successfully with the
+process-local loopback workaround. The current release environment has no
+callable DashO, Zelix/KlassMaster, or external maximum adapter on `PATH`, and
+has no configured maximum-release or signing inputs; no commercial artifact was
+run or claimed.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files
