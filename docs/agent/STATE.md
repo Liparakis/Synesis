@@ -70,6 +70,16 @@ Go suite passes after its disposable migration fixtures isolate the developer's
 the rebuilt platform bundle also cover the corrected Windows stable-launcher
 argument-forwarding path.
 
+The reusable `scripts/release-profile-comparison.ps1` harness was added for
+customer-style ZIPs. Its current five-sample CLI run measured developer at
+46,504,281 archive bytes, 69,542,917 extracted bytes, and 715.513 ms median
+cold startup; protection-lite measured 45,911,491, 68,870,411, and 685.841 ms.
+The JSON result is explicitly
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the small non-isolated startup delta
+is not a performance-win claim, wrapper peak memory is `NOT_AVAILABLE`, and
+UI/route/Link/relay/provider timing remains open. A real maximum archive is
+still required for the three-profile comparison.
+
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits
 occurred. An unexplained formatter-like rewrite of 1,532 other tracked files

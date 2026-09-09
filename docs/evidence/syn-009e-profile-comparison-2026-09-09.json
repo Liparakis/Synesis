@@ -1,0 +1,118 @@
+﻿{
+    "schema":  1,
+    "component":  "cli",
+    "samplesPerProfile":  5,
+    "measurement":  "COLD_PROCESS_LAUNCH; BOUNDED_PROFILE_SMOKE_ONLY",
+    "runtime":  {
+                    "os":  "Microsoft Windows NT 10.0.26200.0",
+                    "processArchitecture":  "x64",
+                    "jdkUnixDomainTempDirectory":  "NOT_SUPPLIED",
+                    "scope":  "PROCESS_LOCAL_ONLY; NOT_SHIPPED_LAUNCHER_CONFIGURATION"
+                },
+    "profiles":  {
+                     "developer":  {
+                                       "profile":  "developer",
+                                       "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\distributions\\synesis-0.1.0-dev.local-windows-x64.zip",
+                                       "archiveSha256":  "33f5cf0be281d7bae5242ba397836ca2d377114727b0e2a642cb49eb62e1723d",
+                                       "archiveBytes":  46504281,
+                                       "extractedFiles":  197,
+                                       "extractedBytes":  69542917,
+                                       "launcherSmoke":  "version",
+                                       "samples":  [
+                                                       {
+                                                           "durationMs":  707.187,
+                                                           "exitCode":  0,
+                                                           "peakWorkingSetBytes":  null
+                                                       },
+                                                       {
+                                                           "durationMs":  715.513,
+                                                           "exitCode":  0,
+                                                           "peakWorkingSetBytes":  null
+                                                       },
+                                                       {
+                                                           "durationMs":  719.529,
+                                                           "exitCode":  0,
+                                                           "peakWorkingSetBytes":  null
+                                                       },
+                                                       {
+                                                           "durationMs":  728.394,
+                                                           "exitCode":  0,
+                                                           "peakWorkingSetBytes":  null
+                                                       },
+                                                       {
+                                                           "durationMs":  712.576,
+                                                           "exitCode":  0,
+                                                           "peakWorkingSetBytes":  null
+                                                       }
+                                                   ],
+                                       "medianStartupMs":  715.513,
+                                       "maxPeakWorkingSetBytes":  "NOT_AVAILABLE"
+                                   },
+                     "protection-lite":  {
+                                             "profile":  "protection-lite",
+                                             "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
+                                             "archiveSha256":  "9a89ab8a8ff0d39b8bb139ef187517ddd6d9d277e580226378b2479277d90df0",
+                                             "archiveBytes":  45911491,
+                                             "extractedFiles":  191,
+                                             "extractedBytes":  68870411,
+                                             "launcherSmoke":  "version",
+                                             "samples":  [
+                                                             {
+                                                                 "durationMs":  742.819,
+                                                                 "exitCode":  0,
+                                                                 "peakWorkingSetBytes":  null
+                                                             },
+                                                             {
+                                                                 "durationMs":  670.558,
+                                                                 "exitCode":  0,
+                                                                 "peakWorkingSetBytes":  null
+                                                             },
+                                                             {
+                                                                 "durationMs":  685.841,
+                                                                 "exitCode":  0,
+                                                                 "peakWorkingSetBytes":  null
+                                                             },
+                                                             {
+                                                                 "durationMs":  651.547,
+                                                                 "exitCode":  0,
+                                                                 "peakWorkingSetBytes":  null
+                                                             },
+                                                             {
+                                                                 "durationMs":  708.453,
+                                                                 "exitCode":  0,
+                                                                 "peakWorkingSetBytes":  null
+                                                             }
+                                                         ],
+                                             "medianStartupMs":  685.841,
+                                             "maxPeakWorkingSetBytes":  "NOT_AVAILABLE"
+                                         }
+                 },
+    "comparison":  {
+                       "developerToLiteArchiveBytes":  {
+                                                           "from":  "developer",
+                                                           "to":  "protection-lite",
+                                                           "property":  "archiveBytes",
+                                                           "fromValue":  46504281,
+                                                           "toValue":  45911491,
+                                                           "delta":  -592790
+                                                       },
+                       "developerToLiteExtractedBytes":  {
+                                                             "from":  "developer",
+                                                             "to":  "protection-lite",
+                                                             "property":  "extractedBytes",
+                                                             "fromValue":  69542917,
+                                                             "toValue":  68870411,
+                                                             "delta":  -672506
+                                                         },
+                       "developerToLiteMedianStartupMs":  {
+                                                              "from":  "developer",
+                                                              "to":  "protection-lite",
+                                                              "property":  "medianStartupMs",
+                                                              "fromValue":  715.513,
+                                                              "toValue":  685.841,
+                                                              "delta":  -29.672000000000025
+                                                          }
+                   },
+    "status":  "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED",
+    "openGate":  "Supply a licensed maximum-release archive to measure and compare the commercial profile."
+}

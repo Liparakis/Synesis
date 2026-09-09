@@ -1,3 +1,30 @@
+## 2026-09-09 — SYN-009E release-profile comparison harness
+
+Added `scripts/release-profile-comparison.ps1` to compare extracted customer
+archives for the developer, protection-lite, and optional maximum-release
+profiles. The harness validates profile markers, records archive SHA-256 and
+archive/extracted sizes, and runs bounded cold CLI `version` or relay parser
+samples. It isolates runtime configuration and reports wrapper memory as
+`NOT_AVAILABLE` when no reliable peak is exposed; it never treats a missing
+maximum archive as a pass.
+
+The current five-sample Windows x64 CLI run recorded developer at
+46,504,281 archive bytes, 69,542,917 extracted bytes, and 715.513 ms median
+startup; protection-lite recorded 45,911,491, 68,870,411, and 685.841 ms.
+The result is `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`. The small,
+non-isolated startup delta is not a performance claim, memory is unavailable,
+and UI/route/Link/relay/provider timing remains open.
+
+Verification: PowerShell AST parsing passed; the comparison run completed with
+the expected exit code 2 for the missing maximum archive; JSON and human
+evidence were written; no commercial ring was promoted. No production key,
+license, push, tag, release, or remote mutation occurred.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, inject release signing
+authority, then run the complete profile comparison and maximum acceptance
+against the actual maximum archives.
+
 ## 2026-09-09 — SYN-009E extracted relay socket acceptance
 
 Closed the parser-only relay gap in the maximum-release harness without

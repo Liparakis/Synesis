@@ -42,6 +42,17 @@ JDK/workspace overrides remain process-local only.
 The relay observer is shipped-protocol evidence only; it does not promote a
 synthetic or protection-lite archive to commercial maximum evidence.
 
+The reusable `scripts/release-profile-comparison.ps1` harness now records
+customer-archive SHA-256, archive/extracted size, and bounded cold launcher
+samples for developer, protection-lite, and (when supplied) maximum-release
+profiles. The current five-sample CLI run measured developer at 46,504,281
+archive bytes / 69,542,917 extracted bytes / 715.513 ms median startup and
+protection-lite at 45,911,491 / 68,870,411 / 685.841 ms. Its result is
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the small non-isolated startup delta
+is not a performance claim, wrapper peak memory is `NOT_AVAILABLE`, and UI,
+route, Link, relay, provider, AV/EDR, and commercial maximum measurements
+remain open.
+
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
   local release commits remain unpublished, and the working tree contains this
@@ -132,6 +143,12 @@ commercial protection capability is claimed.
   the disposable marker-only runtime probe refused an edited immutable payload
   and passed after mutable `Link` state was added. This is bootstrap evidence,
   not commercial maximum evidence.
+- `scripts/release-profile-comparison.ps1` parsed and ran five cold CLI
+  developer/protection-lite samples against extracted ZIPs, recording archive
+  and extracted sizes plus SHA-256 identities. It exited with
+  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no memory or performance-win claim
+  is made from the non-isolated sample, and broader UI/route/Link/relay/
+  provider timing remains open.
 - `go test ./...` in `bootstrap` now passes after the test fixture helper
   isolated `HOME`/`USERPROFILE` from the developer's real provider state.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.

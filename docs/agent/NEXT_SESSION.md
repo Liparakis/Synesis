@@ -32,6 +32,13 @@ disposable install, exercises the installed stable-launcher and packaged
   test-only `:relay:relayArtifactAcceptanceClient` observer for authenticated
   bidirectional forwarding and bounded shutdown. Its JDK/workspace
   compatibility overrides are process-local only.
+- The reusable profile comparison harness is
+  `scripts/release-profile-comparison.ps1`. It has a current five-sample CLI
+  developer/protection-lite result in
+  `docs/evidence/syn-009e-profile-comparison-2026-09-09.json` and is explicitly
+  partial until a licensed maximum ZIP is supplied. The current wrapper cannot
+  expose reliable peak memory, and the cold startup delta must not be reported
+  as a performance win.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

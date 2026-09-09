@@ -27,7 +27,7 @@
 | Installed acceptance | CLI/UI/control plane/Link/provider/native; extracted relay startup/auth/forward/shutdown | PARTIAL | CLI synthetic archive pass including live authenticated HTTP/SSE and signed local Link invitation/authenticated PeerSession/project sync; relay external observer pass against extracted launcher; Internet/NAT, configured multi-peer overlay, and commercial maximum archive remain open |
 | Tamper acceptance | owned immutable payload detects edits; mutable state does not false-positive | PARTIAL | bootstrap gate focused-tested; rebuilt synthetic marker-only installed probe refused edited JVM/frontend payloads while mutable Link state passed; commercial maximum artifact not run |
 | Leakage audit | strings, source maps, mappings, paths, symbols, secrets | PASS lite boundary | archive excludes private/source material; commercial leakage audit open |
-| Performance/size | startup, UI, route, Link, relay, provider, memory, artifacts | PARTIAL | artifact sizes captured; timed comparison still pending |
+| Performance/size | developer/lite/maximum archive size, extracted size, cold launcher startup, memory | PARTIAL / HARNESS IMPLEMENTED | `scripts/release-profile-comparison.ps1`, `docs/evidence/syn-009e-profile-comparison-2026-09-09.md`; current CLI developer/lite run recorded, maximum archive absent, wrapper peak memory unavailable, UI/route/Link/relay/provider timing still open |
 
 Exact next action: obtain an installed, licensed, version-pinned commercial
 protector and its reviewed adapter/configuration, inject release signing

@@ -7,12 +7,16 @@
 - Verification: `PROTECTION_LITE` CLI/relay archive acceptance, private
   manifest, leakage, and provenance checks pass; the external CLI/relay
   maximum-protector adapter and existing bootstrap-signing seam are implemented
-  but commercial execution remains blocked. The rebuilt synthetic installed
-  CLI probe also passes signed local Link invitation, authenticated PeerSession,
-  and project synchronization; the relay shipped-artifact observer also covers
-  authenticated forwarding and bounded shutdown. No Seven Rings claim is
-  accepted without shipped-artifact evidence from a real commercial maximum
-  build.
+  but commercial execution remains blocked. The reusable profile comparison
+  harness has recorded five cold CLI developer/protection-lite samples and
+  archive/extracted sizes, with status
+  `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; wrapper memory is unavailable and
+  the small non-isolated startup delta is not a performance claim. The rebuilt
+  synthetic installed CLI probe also passes signed local Link invitation,
+  authenticated PeerSession, and project synchronization; the relay
+  shipped-artifact observer also covers authenticated forwarding and bounded
+  shutdown. No Seven Rings claim is accepted without shipped-artifact evidence
+  from a real commercial maximum build.
 - Purpose: Extend the existing `SYN-009C` distribution and `SYN-009D` stable
   installation foundations with separate `developer`, `protection-lite`, and
   `maximum-release` packaging profiles. The developer profile stays readable;

@@ -40,6 +40,29 @@ commercial maximum evidence.
 The current run passed this gate for the Windows x64 bundle. Its result is
 `protection-lite`, not `maximum-release`.
 
+## Profile size and startup comparison
+
+Run the profile comparison only against extracted customer-style archives:
+
+```powershell
+.\scripts\release-profile-comparison.ps1 `
+  -Component cli `
+  -DeveloperArchive .\cli\build\distributions\synesis-<version>-<platform>.zip `
+  -ProtectionLiteArchive .\cli\build\protection-lite\synesis-<version>-<platform>-protection-lite.zip `
+  -MaximumArchive .\cli\build\maximum-release\synesis-<version>-<platform>-maximum-release.zip `
+  -EvidenceFile .\build\release-profile-comparison\cli\profile-comparison.json
+```
+
+The harness validates each profile marker, records archive and extracted-tree
+size, and takes bounded cold-process `version` (CLI) or guarded-parser (relay)
+samples. It records memory only when the wrapper exposes a reliable peak
+working-set value; `NOT_AVAILABLE` is an honest result, not zero memory. The
+maximum archive is optional for preparatory developer/lite runs, but omission
+produces `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED` and cannot satisfy the final
+maximum-release comparison. These measurements do not replace UI, snapshot,
+Link, route, relay-throughput, provider, AV/EDR, or commercial transformation
+acceptance.
+
 ## Maximum-release gates still required
 
 After a licensed adapter has produced and signed a candidate, run the
