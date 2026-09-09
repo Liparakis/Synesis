@@ -13,9 +13,11 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified local HEAD is `da934163`; checkpoint `CP-0800`; the
-  post-archive native-audit, output-boundary, structured private-retrace,
-  taxonomy, and acceptance-timing slices are committed locally.
+- Latest verified implementation slice is `da934163`, checkpointed as
+  `CP-0800`; the later durable-state commit only records that checkpoint and
+  the current report metadata. The post-archive native-audit, output-boundary,
+  structured private-retrace, taxonomy, and acceptance-timing slices are
+  committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
   checkout and must run from a reviewed clean release commit.
