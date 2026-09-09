@@ -18,13 +18,14 @@ reduction, native hardening, and stable-contract compatibility are now clearly
 supporting distribution gates rather than ring substitutes. No commercial
 capability or maximum artifact was claimed.
 
-Verification: exact brief reread/hash, scoped taxonomy search, and subsequent
-PowerShell/Gradle documentation boundary checks remain required before commit.
-No push, tag, release, or remote mutation occurred.
+Verification: exact brief reread/hash, scoped taxonomy search, PowerShell AST,
+ring-binding smoke, scoped diff check, and checkpoint passed. Commit `4ae2fe4f`
+records the correction; no push, tag, release, or remote mutation occurred.
 
-Exact next action: complete scoped syntax/diff checks, checkpoint, and commit
-this taxonomy correction; then obtain the licensed commercial protector and
-release-signing authority before any maximum execution claim.
+Exact next action: obtain the licensed commercial protector and release-signing
+authority before any maximum execution claim; keep the overlay multi-peer/E2E
+gate open because the current installed runtime has no configured signed
+membership source.
 
 ## 2026-09-09 — SYN-009E Seven Ring alignment and acceptance timing seam
 

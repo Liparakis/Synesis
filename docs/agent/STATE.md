@@ -160,8 +160,9 @@ the provenance comparison verifies the status and hash. The task requires a
 reviewed developer archive through `SYNESIS_DEVELOPER_ARCHIVE` or
 `-PsynesisDeveloperArchive`.
 
-The committed prep slice `da934163`, checkpointed at `CP-0800`, records that the maximum CLI and
-relay boundaries also reject any
+The committed prep slice `4ae2fe4f`, checkpointed at `CP-0802`, records the
+current brief's exact Ring 1–7 taxonomy and the release-record binding for the
+six mandatory commercial classes. The maximum CLI and relay boundaries also reject any
 symbolic link found in the adapter-produced customer bundle or private release
 directory before manifesting, leakage inspection, or signing. This closes the
 lexical path-boundary bypass where a symlink could resolve outside the

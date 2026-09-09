@@ -125,9 +125,10 @@ synthetic or protection-lite evidence.
   local release commits remain unpublished, and the working tree contains this
   scoped follow-up, preserved
   `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
-- Last implementation commit: `da934163`; checkpoint `CP-0800`; the
+- Last implementation commit: `4ae2fe4f`; checkpoint `CP-0802`; the
   post-archive native-audit, symlink-boundary, structured private-retrace,
-  Seven Ring taxonomy, and bounded acceptance-timing changes are committed.
+  exact-brief Seven Ring taxonomy, and bounded acceptance-timing changes are
+  committed.
   No push has occurred.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go
   bootstrap signed-manifest/payload verification, stable flat installation,

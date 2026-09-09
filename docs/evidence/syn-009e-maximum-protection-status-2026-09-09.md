@@ -15,10 +15,9 @@ claim that a commercial maximum artifact exists.
 - Active task: `SYN-009E`, the existing maximum-protection release/security
   lineage.
 - `CP-0758.md` remains preserved and is not modified by this work.
-- Latest verified implementation slice is `da934163`, checkpointed as
-  `CP-0800`; the later durable-state commit only records that checkpoint and
-  the current report metadata. The post-archive native-audit, output-boundary,
-  structured private-retrace, taxonomy, and acceptance-timing slices are
+- Latest verified implementation slice is `4ae2fe4f`, checkpointed as
+  `CP-0802`; the post-archive native-audit, output-boundary, structured
+  private-retrace, exact-brief taxonomy, and acceptance-timing slices are
   committed locally.
 - The checkout contains unrelated pre-existing working-tree changes; no staged
   changes or reset were used. The maximum Gradle tasks reject such a dirty
@@ -257,6 +256,9 @@ release-hardening work:
   exact mapping and trace hashes.
 - `da934163` — added bounded acceptance timing fields; the current taxonomy
   reconciliation is recorded in this continuation.
+- `4ae2fe4f` — reconciled the release contract and durable evidence to the
+  exact current brief's Ring 1–7 taxonomy and bound the provenance comparator
+  to the six mandatory commercial classes.
 
 At report preparation, the branch remains local and unpublished, `CP-0758`
 is preserved, unrelated working-tree edits remain outside the release slice,

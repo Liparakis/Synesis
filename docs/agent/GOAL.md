@@ -12,8 +12,8 @@ artifact and installed-runtime evidence rather than marketing terminology.
   on `master`; the scoped release commits remain local and ahead of
   `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
   and remains uncommitted.
-- Last implementation checkpoint: `edfd155f9aacca02fc6b5b9866a33693a985746b`
-  at `CP-0796`; the working copy also contains a stable, unexplained
+- Last implementation checkpoint: `4ae2fe4f` at `CP-0802`; the working copy also
+  contains a stable, unexplained
   formatter-like rewrite of unrelated files outside this release slice.
   Those files remain untouched and are not release evidence.
 - Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
