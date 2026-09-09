@@ -14,7 +14,7 @@ exercised.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
-  local release commits now end at `ad6f9cbc5c36586830d3b70476be194b47a18e2c`,
+  local release commits now end at `29b0971`,
   and the working tree contains this scoped follow-up, preserved
   `CP-0758`, and unrelated pre-existing local work that remains uncommitted.
 - Existing release seams: Gradle platform bundles and jlink runtime, Go

@@ -16,7 +16,7 @@ profile. The explicit signer-path regression test passes; the full bootstrap
 Go suite remains incomplete because three pre-existing update/migration tests
 fail at `update migrations not prepared`.
 
-The scoped source changes remain local at `ad6f9cbc5c36586830d3b70476be194b47a18e2c`;
+The scoped source changes remain local at `29b0971`;
 no push, tag, release, reset, or mutation of the preserved UI checkpoint or
 unrelated relay edits occurred.
 

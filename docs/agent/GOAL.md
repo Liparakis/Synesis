@@ -9,8 +9,8 @@ artifact and installed-runtime evidence rather than marketing terminology.
 
 - Status: ACTIVE / protection-lite evidence complete; maximum adapter/signing seam implemented; commercial profile blocked
 - Baseline: activation checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43`
-  on `master`; the scoped release slice is now at local `ad6f9cbc5c36586830d3b70476be194b47a18e2c`, two commits ahead of
-  `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
+  on `master`; the scoped release slice is now at local `29b0971`, three
+  commits ahead of `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
   and remains uncommitted.
 - Lineage: `SYN-009C` and `SYN-009D` are the existing distribution/install
   foundations; this task extends them rather than creating a parallel release

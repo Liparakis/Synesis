@@ -19,7 +19,7 @@ current release-hardening task in the existing `SYN-009*` lineage.
 - The provider-agnostic adapter contract is in
   `docs/release/maximum-protector-adapter.md`; ADR-0071 records why it is only
   a release seam and not evidence of the commercial rings.
-- The latest local source commit is `ad6f9cbc`; no push occurred. The full
+- The latest local source commit is `29b0971`; no push occurred. The full
   bootstrap Go suite is currently incomplete because three update/migration
   tests fail with `update migrations not prepared`; the signer subpackage
   passes.
