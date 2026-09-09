@@ -16,6 +16,16 @@ adapter and require the result to echo the release identity, source commit,
 and inventory digest. A vendor-neutral private configuration skeleton records
 the six required commercial rings and the legitimate-VM/fail-safe policy.
 
+The independent `scripts/maximum-release-acceptance.ps1` harness now runs
+against extracted customer archives only. It enforces the maximum profile
+marker, rejects mappings/source/private material, optionally verifies the
+private per-file artifact manifest, and records private JSON evidence. Its CLI
+path covers the shipped launcher, UI/control-plane, provider, native, and MCP
+boundaries; its relay path is deliberately limited to the shipped guarded
+launcher until a real protected relay authentication/forwarding scenario is
+available. A probe against both existing lite archives failed closed on the
+profile marker, so no lite output was promoted to maximum.
+
 This is release plumbing, not commercial protection evidence. No DashO, Zelix,
 or equivalent licensed adapter/configuration/signing authority is installed on
 this host. The CLI and relay maximum tasks were rerun and failed closed at

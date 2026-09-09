@@ -86,3 +86,9 @@ rather than being silently included in provenance. The
 Gradle seam signs the candidate through the existing bootstrap signer and
 verifies the compiled bootstrap trust root; it does not make the commercial
 ring claims without the later artifact and installed-runtime acceptance.
+
+The post-build archive boundary is exercised by
+`scripts/maximum-release-acceptance.ps1`. It is intentionally separate from
+the Gradle adapter: a successful adapter invocation alone cannot claim that
+the shipped archive starts, serves its packaged UI/control plane, preserves
+provider/MCP/native boundaries, or passes relay acceptance.

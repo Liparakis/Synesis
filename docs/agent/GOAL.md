@@ -7,7 +7,7 @@ protected profile must distinguish protection-lite from the requested
 commercial maximum profile and must classify every Seven Rings capability with
 artifact and installed-runtime evidence rather than marketing terminology.
 
-- Status: ACTIVE / protection-lite evidence complete; CLI/relay maximum adapter/signing and source-tier binding implemented; commercial profile blocked
+- Status: ACTIVE / protection-lite evidence complete; CLI/relay maximum adapter/signing, source-tier binding, and extracted-artifact harness implemented; commercial profile blocked
 - Baseline: activation checkout `8a5d0901b4859c9a504f7fc7009def23177f1d43`
   on `master`; the scoped release commits remain local and ahead of
   `origin/master`. `CP-0758.md` is preserved as the completed UI checkpoint
@@ -34,7 +34,9 @@ artifact and installed-runtime evidence rather than marketing terminology.
   the provider-agnostic CLI/relay maximum adapter and existing bootstrap-
   signer seam are release plumbing, not ring evidence. Commercial rings remain
   `BLOCKED` until a licensed protector is installed and its shipped output is
-  exercised.
+  exercised. The independent acceptance harness rejects lite artifacts and
+  leaves relay authentication/forwarding explicitly open until real protected
+  socket evidence exists.
 - Developer boundary: no protection transforms, anti-debug behavior, packing,
   or virtualization may enter the normal developer build or customer-visible
   runtime toggle surface.

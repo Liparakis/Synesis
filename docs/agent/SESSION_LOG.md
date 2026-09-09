@@ -1,3 +1,25 @@
+## 2026-09-09 — SYN-009E extracted maximum-release acceptance harness
+
+Added `scripts/maximum-release-acceptance.ps1` so maximum acceptance is
+performed against an extracted customer archive rather than source classes or
+a Gradle output directory. The harness requires the `maximum-release` marker,
+rejects mappings/source/private material, optionally verifies the private
+per-file SHA-256 manifest, and records JSON evidence outside the customer
+bundle. CLI acceptance covers the shipped launcher, UI/control-plane,
+provider, native installer/MCP, disposable Git project, and MCP protocol
+boundaries. Relay acceptance intentionally remains a guarded-launcher check;
+full protected relay authentication/forwarding is still open.
+
+Both existing protection-lite archives were used as negative probes and were
+rejected on their `protection-lite` marker. No commercial ring was promoted,
+and no source checkout or customer artifact was modified. The script's help /
+parse path and profile-boundary failures passed as expected.
+
+Exact next action: obtain an installed, licensed, version-pinned commercial
+protector and reviewed adapter/configuration, produce a real maximum archive
+from a clean release checkout, then run this harness plus the full protected
+relay/Link/overlay/tamper/retrace/performance acceptance.
+
 ## 2026-09-09 — SYN-009E source-tier binding and clean-release gate
 
 The maximum CLI and standalone-relay adapter requests now carry the current

@@ -23,6 +23,10 @@ current release-hardening task in the existing `SYN-009*` lineage.
 - The current-source Tier 0–3 boundary is in
   `docs/release/protection-tier-inventory.md`; the vendor-neutral config
   skeleton is `docs/release/maximum-protector-config.template.properties`.
+- The extracted-candidate harness is
+  `scripts/maximum-release-acceptance.ps1`; it must be run only after a real
+  maximum archive exists, and its relay authentication/forwarding gate remains
+  open until a protected socket scenario passes.
 - The latest local source commits are unpublished; no push occurred. The full
   bootstrap Go suite is currently incomplete because three update/migration
   tests fail with `update migrations not prepared`; the signer subpackage

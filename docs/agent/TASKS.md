@@ -41,7 +41,8 @@
   signing/provenance/retrace guidance, performance/size evidence, and durable
   state/checkpoint updates including `docs/agent/DEFERRED.md`.
 - Required tests: normal bundle regression; protection-lite build and mapping
-  checks; protected installed CLI/UI/control-plane acceptance; Link/overlay/
+  checks; extracted maximum-release acceptance harness; protected installed
+  CLI/UI/control-plane acceptance; Link/overlay/
   relay/provider/native smoke where configured; protected artifact manifest and
   tamper checks; mutable-state negative check; static string/metadata/source
   map audits; retrace; performance/size comparison; and commercial-tool

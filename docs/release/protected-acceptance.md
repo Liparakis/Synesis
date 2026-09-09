@@ -37,6 +37,31 @@ The current run passed this gate for the Windows x64 bundle. Its result is
 
 ## Maximum-release gates still required
 
+After a licensed adapter has produced and signed a candidate, run the
+independent shipped-artifact harness against the archive rather than against
+source classes:
+
+```powershell
+.\scripts\maximum-release-acceptance.ps1 `
+  -Component cli `
+  -Archive .\cli\build\maximum-release\synesis-<version>-<platform>-maximum-release.zip `
+  -ArtifactManifest .\cli\build\maximum-release\private\artifact-manifest.txt
+
+.\scripts\maximum-release-acceptance.ps1 `
+  -Component relay `
+  -Archive .\relay\build\maximum-release\synesis-relay-<version>-<platform>-maximum-release.zip `
+  -ArtifactManifest .\relay\build\maximum-release\private\artifact-manifest.txt
+```
+
+The harness extracts only to a disposable directory, requires the
+`maximum-release` marker, rejects source/private material, optionally verifies
+the private per-file SHA-256 manifest, and exercises the shipped CLI/native
+launcher/UI/control-plane/provider/MCP boundaries or the relay guarded
+launcher boundary. It records JSON evidence under the private acceptance
+directory. The relay authentication/forwarding scenario remains an explicit
+open gate until a real protected relay socket test is run; a parser smoke is
+not promoted to full relay acceptance.
+
 The following must be separately evidenced before a customer release can be
 called maximum:
 

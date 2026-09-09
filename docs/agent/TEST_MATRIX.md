@@ -13,6 +13,7 @@
 | Lite provenance | source/dirty state, tool, library image, rules/seed/artifact/archive hashes | PASS | private `provenance.json` outside bundle |
 | Maximum adapter contract | versioned external request/result, six ring evidence paths, private retrace/native symbols, bundle separation | PASS seam / NOT EXECUTED | `docs/release/maximum-protector-adapter.md`; no licensed adapter installed |
 | Maximum relay adapter contract | same six-ring/private-output gate for standalone relay | PASS seam / NOT EXECUTED | `:relay:maximumReleasePrepare`; no licensed adapter installed |
+| Maximum shipped-artifact harness | extracted maximum marker/leakage/manifest plus CLI or relay launcher checks | IMPLEMENTED / NOT EXECUTED | `scripts/maximum-release-acceptance.ps1`; protection-lite probe correctly rejected |
 | Maximum candidate signing | existing bootstrap signer with injected key; detached signature verified against embedded trust root | NOT EXECUTED / BLOCKED | requires protected adapter output and release signing authority |
 | Maximum profile | licensed commercial protector exercised | BLOCKED | no commercial protector/license installed |
 | Ring 1 control flow | material transformation beyond renaming | BLOCKED | lite renaming is not control-flow protection |

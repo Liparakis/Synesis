@@ -2,7 +2,7 @@
 
 ## SYN-009E Synesis maximum-protection commercial release profile — implementation and acceptance gate — 2026-09-09
 
-Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER SEAM AND SOURCE-TIER BINDING PASS; COMMERCIAL MAXIMUM BLOCKED**.
+Status: **ACTIVE / PROTECTION-LITE ACCEPTANCE PASS; MAXIMUM ADAPTER, SOURCE-TIER BINDING, AND SHIPPED-ARTIFACT HARNESS PASS; COMMERCIAL MAXIMUM BLOCKED**.
 The completed installed UI slice is preserved under `CP-0758`; the current
 task extends the existing `SYN-009C`/`SYN-009D` distribution and signing
 foundations into separate developer, protection-lite, and maximum-release
@@ -14,6 +14,11 @@ protector output is installed and exercised.
 The current-source Tier 0–3 inventory and vendor-neutral adapter configuration
 skeleton are now explicit; maximum tasks reject dirty release checkouts and
 bind adapter results to the inventory digest.
+An independent `scripts/maximum-release-acceptance.ps1` harness now exercises
+only extracted customer archives, rejects lite/profile and private-material
+leakage, optionally verifies the private artifact manifest, and records
+private JSON evidence. It keeps full relay authentication/forwarding as an
+explicit open gate.
 
 - Task ID: SYN-009E
 - Activation HEAD: `8a5d0901b4859c9a504f7fc7009def23177f1d43` on `master`;
@@ -80,6 +85,8 @@ commercial protection capability is claimed.
   configured; the relay protection-lite smoke still passes with explicit JMODs.
 - The maximum tasks compile after source-tier binding; both still fail closed
   before adapter invocation because no licensed adapter is configured.
+- The shipped-artifact harness rejects both existing protection-lite archives
+  as non-maximum, proving the profile boundary without mislabeling lite output.
 - `go test ./cmd/sign-manifest` passed, including explicit-path signing.
 - `git diff --check` passed for the scoped changes; `agent-resume.ps1` and the
   deferred validator passed.
