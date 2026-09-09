@@ -117,9 +117,14 @@ toolchain versions, configuration digest, release seed/identity, and later
 detached-signature/public-key provenance; the adapter must also produce a
 private mapping file alongside retrace/native recovery material. The maximum
 task fails closed when Node, npm, or Go provenance is unavailable. Gradle task
-evaluation passed with the
-documented process-local loopback workaround; no commercial maximum execution
-or signed record exists yet.
+evaluation passed with the documented process-local loopback workaround; no
+commercial maximum execution or signed record exists yet.
+
+The release-to-release provenance comparison harness is implemented and
+syntax-checked. Its missing-record path returns
+`PARTIAL_MAXIMUM_RECORDS_NOT_SUPPLIED`; positive diversification and
+reproducibility comparisons remain unexecuted because no licensed maximum
+private records or canonical manifests are available.
 
 The scoped source changes remain local and unpublished; no push, tag, release,
 reset, or mutation of the preserved UI checkpoint or unrelated relay edits

@@ -1,3 +1,24 @@
+## 2026-09-09 — SYN-009E release provenance comparison seam
+
+Added `scripts/maximum-release-provenance-comparison.ps1` to close the gap
+between an adapter's declarative `diversification=verified` result and the
+required release-to-release evidence. The harness verifies the two private
+records' clean maximum profile, exact shared source/toolchain/protector/config
+provenance, and each canonical artifact-manifest hash. Diversification mode
+requires distinct release IDs, seeds, and manifest hashes; reproducibility mode
+requires identical release IDs, seeds, and manifest hashes. It compares
+canonical manifests rather than ZIP timestamps and emits only hashes and
+one-way seed fingerprints.
+
+The script parsed cleanly and its missing-record invocation returned
+`PARTIAL_MAXIMUM_RECORDS_NOT_SUPPLIED` with exit code 2. No licensed maximum
+records or artifacts exist locally, so no positive diversification or
+reproducibility claim was made.
+
+Exact next action: run both comparison modes for CLI and relay after the
+licensed adapter produces two clean private release records per mode, then
+complete the shipped-artifact and signing acceptance.
+
 ## 2026-09-09 — SYN-009E private mapping boundary
 
 Tightened both CLI and standalone-relay maximum-release adapter tasks so a

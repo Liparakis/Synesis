@@ -153,6 +153,19 @@ transformation and safe behavior. In particular, renaming is not accepted as
 control-flow protection, compression is not accepted as packing, and a VM-name
 check is not accepted as a complete analysis policy.
 
+## Release-to-release provenance comparison
+
+The adapter's `diversification=verified` result is necessary but does not by
+itself prove that two protected outputs differ or that repeated inputs
+reproduce. After two clean licensed releases exist, run
+`scripts/maximum-release-provenance-comparison.ps1` in `Diversification` mode
+with different release IDs/seeds, and in `Reproducibility` mode with the same
+release ID/seed and otherwise identical provenance. The harness compares the
+canonical private artifact manifests, not ZIP timestamps, and emits only
+manifest hashes plus one-way seed fingerprints. Store its evidence outside the
+customer bundle and keep the full mapping/retrace/native recovery material in
+the private release directory.
+
 ## Signing and private recovery
 
 After each adapter output is validated, Gradle creates a per-component,

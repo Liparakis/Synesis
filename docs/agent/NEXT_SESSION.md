@@ -70,6 +70,11 @@ disposable install, exercises the installed stable-launcher and packaged
   provenance. The helpers were syntax/evaluation checked through `:cli:tasks
   :relay:tasks`; execute the fields only in a clean licensed maximum release
   and verify the private record against the final manifest/signature.
+- The release-to-release harness is
+  `scripts/maximum-release-provenance-comparison.ps1`. Run it in both
+  `Diversification` and `Reproducibility` modes against two clean licensed
+  maximum private records; the current missing-record result is partial and
+  no positive commercial comparison exists.
 - The bootstrap runtime-integrity seam is recorded in
   `docs/evidence/syn-009e-runtime-integrity-gate-2026-09-09.md`; the current
   marker-only disposable probe is not commercial maximum evidence.

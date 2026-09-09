@@ -63,6 +63,32 @@ maximum-release comparison. These measurements do not replace UI, snapshot,
 Link, route, relay-throughput, provider, AV/EDR, or commercial transformation
 acceptance.
 
+## Maximum release reproducibility and diversification
+
+The profile-size comparison above does not establish release diversification
+or reproducibility. Once two licensed maximum private records exist, compare
+their canonical artifact manifests with:
+
+```powershell
+.\scripts\maximum-release-provenance-comparison.ps1 `
+  -Component cli `
+  -Mode Diversification `
+  -FirstRecord .\private\release-1.0\release-record.properties `
+  -SecondRecord .\private\release-1.1\release-record.properties
+
+.\scripts\maximum-release-provenance-comparison.ps1 `
+  -Component cli `
+  -Mode Reproducibility `
+  -FirstRecord .\private\repro-a\release-record.properties `
+  -SecondRecord .\private\repro-b\release-record.properties
+```
+
+Diversification requires equal source/toolchain/protector/configuration
+provenance but distinct release IDs, seeds, and canonical manifest hashes.
+Reproducibility requires equal provenance, release ID, seed, and manifest hash.
+The harness does not expose private recovery material and does not compare ZIP
+container timestamps.
+
 ## Static reverse-engineering comparison
 
 Run the archive-only comparison against customer-style ZIPs:
