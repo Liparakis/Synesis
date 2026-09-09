@@ -9,4 +9,5 @@
 -keepclassmembers class * {
     native <methods>;
 }
+-repackageclasses org.synesis.p
 -dontwarn javax.crypto.**

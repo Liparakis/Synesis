@@ -16,11 +16,11 @@ the current protection-lite distribution:
 
 | Profile | Archive bytes | Extracted bytes | Files | Median cold startup |
 |---|---:|---:|---:|---:|
-| developer | 46,504,281 | 69,542,917 | 197 | 629.620 ms |
-| protection-lite | 45,711,321 | 68,673,953 | 191 | 630.098 ms |
+| developer | 46,504,281 | 69,542,917 | 197 | 675.523 ms |
+| protection-lite | 45,705,419 | 68,661,707 | 191 | 642.855 ms |
 
-The archive delta is `-792,960` bytes and the extracted-size delta is
-`-868,964` bytes for this lite run. The startup difference is `+0.478 ms`, not a
+The archive delta is `-798,862` bytes and the extracted-size delta is
+`-881,210` bytes for this lite run. The startup difference is `-32.668 ms`, not a
 performance-win claim: this is a small, non-isolated cold-process sample and
 does not cover UI latency, snapshot latency, Link establishment, route
 selection, relay throughput, or provider lifecycle.
@@ -34,8 +34,8 @@ transformation overhead, and AV/EDR impact remain open.
 
 The Windows harness recorded the best-effort aggregate launcher process-tree
 working-set scope as `PROCESS_TREE_WORKING_SET_BEST_EFFORT`: developer peaked
-at `108,498,944` bytes and protection-lite at `84,520,960` bytes, a numeric
-delta of `-23,977,984` bytes. This is not unique physical memory, because
+at `107,982,848` bytes and protection-lite at `89,432,064` bytes, a numeric
+delta of `-18,550,784` bytes. This is not unique physical memory, because
 monitor overhead and process scheduling were not controlled.
 
 The JSON result is

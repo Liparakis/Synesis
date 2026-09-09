@@ -36,6 +36,11 @@
     <init>(...);
 }
 
+# Repackage transformed implementation classes into one neutral namespace.
+# Explicitly kept entrypoints and runtime contracts remain stable; this reduces
+# recoverable module/package structure without claiming control-flow protection.
+-repackageclasses org.synesis.p
+
 # Do not retain source-file or line-number attributes in the customer-facing
 # lite artifact. The private mapping remains available for name recovery, but
 # source-location metadata is intentionally not shipped.

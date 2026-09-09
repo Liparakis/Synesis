@@ -14,13 +14,13 @@ archives. No licensed maximum archive was supplied:
 | Profile | Archive bytes | Extracted bytes | Class entries | Internal classes | Static architecture-term hit classes | Source-file metadata classes | Private/source/map entries |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | developer | 46,504,281 | 69,542,917 | 3,247 | 856 | 967 | 3,244 | 0 |
-| protection-lite | 45,711,321 | 68,673,953 | 3,156 | 765 | 581 | 2,395 | 0 |
+| protection-lite | 45,705,419 | 68,661,707 | 3,156 | 765 | 549 | 2,395 | 0 |
 
 The free-hardening rerun enabled standard ProGuard optimization and mixed-case
 renaming and stopped retaining source/line attributes in the application
-rules. The lite archive retained six internal package prefixes and introduced
-obfuscated org/synesis/a, org/synesis/b, and org/synesis/c prefixes in the
-scanned class entries. This is a static signal change, not proof of
+rules. The transformed implementation classes were repackaged under
+`org/synesis/p`; explicitly kept entrypoints remained stable. Architecture-term
+hits fell to 549 classes, but this is a static signal change, not proof of
 control-flow protection, virtualization, packing, or reduced decompiler
 readability.
 

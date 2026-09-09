@@ -1,3 +1,25 @@
+## 2026-09-09 — SYN-009E free package-repackaging hardening
+
+Extended the free protection-lite CLI and relay rules with ProGuard
+`-repackageclasses org.synesis.p`. The real CLI smoke passed through version,
+help, UI, provider, MCP, native launcher, and project lifecycle checks; relay
+smoke and provenance also passed. Two stale integrity assertions that expected
+the previous `org.synesis.cli.a.a`/`org/synesis/a` shape were updated to verify
+the intentional `org.synesis.p` namespace instead. The maximum-release harness
+still rejected the candidate by its `protection-lite` marker.
+
+The refreshed CLI candidate is `45,705,419` archive bytes / `68,661,707`
+extracted bytes. The archive-only comparison recorded 549
+architecture-term-hit classes, 2,395 source-metadata classes, and an added
+`org/synesis/p` package namespace; source-metadata reduction remains 849
+classes versus developer. The five-sample comparison recorded developer/lite
+startup of `675.523` / `642.855 ms` and best-effort process-tree working sets
+of `107,982,848` / `89,432,064` bytes. Both comparisons remain
+`PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; no commercial ring changed.
+
+Exact next action: commit and checkpoint this package-repackaging slice, then
+continue preserving the maximum gate until licensed commercial tooling exists.
+
 ## 2026-09-09 — SYN-009E free protection-lite hardening
 
 Strengthened the free protection-lite rules for CLI and standalone relay by

@@ -16,8 +16,9 @@
   Windows memory signal is not unique physical memory and the non-isolated
   startup/memory values are not performance claims. The rebuilt
   protection-lite rules additionally enable standard optimization, mixed-case
-  renaming, and reduced source/line metadata retention; these remain free
-  hardening measures rather than Seven Ring capabilities. The rebuilt
+  renaming, package repackaging under `org.synesis.p`, and reduced source/line
+  metadata retention; these remain free hardening measures rather than Seven
+  Ring capabilities. The rebuilt
   synthetic installed CLI probe also passes signed local Link invitation,
   authenticated PeerSession, and project synchronization; the relay
   shipped-artifact observer also covers authenticated forwarding and bounded

@@ -30,6 +30,30 @@ This remains compatibility/artifact hardening only. It does not claim string
 encryption, control-flow obfuscation, virtualization, protected packing,
 anti-VM, anti-debugging, anti-instrumentation, or commercial maximum release.
 
+## 2026-09-09 package-repackaging follow-up
+
+The CLI and relay lite rules now use ProGuard `-repackageclasses org.synesis.p`
+for transformed implementation classes. CLI smoke, integrity, provenance, and
+relay smoke/provenance all pass after updating the integrity assertions to the
+new neutral namespace. The independent maximum-release acceptance still
+rejects the candidate by its `protection-lite` marker.
+
+The refreshed CLI candidate is `45,705,419` archive bytes and `68,661,707`
+extracted bytes, with archive SHA-256
+`5708559ced80366b466b4878a8ea456e63acad9266e0e0442fcf8e8eca0c10c4`. The
+static comparison now records `549` architecture-term-hit classes, down from
+`967` in developer, and records `org/synesis/p` as the added transformed
+package namespace. Source-metadata signals remain at `2,395` classes, or 849
+fewer than developer, and are not eliminated. The five-sample comparison
+recorded `642.855 ms` lite startup and `89,432,064` bytes best-effort aggregate
+process-tree working set versus `675.523 ms` and `107,982,848` for developer.
+These are bounded baseline measurements, not performance or physical-memory
+claims.
+
+This is still free package/structure hardening only. It does not claim
+control-flow protection, virtualization, string encryption, protected packing,
+anti-VM, anti-debugging, or anti-instrumentation.
+
 ## Baseline
 
 - checkout at the start of this slice: `8a5d0901b4859c9a504f7fc7009def23177f1d43`;

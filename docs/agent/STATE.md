@@ -99,15 +99,15 @@ argument-forwarding path.
 
 The reusable `scripts/release-profile-comparison.ps1` harness was added for
 customer-style ZIPs. Its current five-sample Windows x64 CLI run measured
-developer at 46,504,281 archive bytes, 69,542,917 extracted bytes, 629.620 ms
-median cold startup, and 108,498,944 bytes maximum aggregate launcher-process-
-tree working set; protection-lite measured 45,711,321, 68,673,953, 630.098 ms,
-and 84,520,960 bytes. Each memory sample is marked
+developer at 46,504,281 archive bytes, 69,542,917 extracted bytes, 675.523 ms
+median cold startup, and 107,982,848 bytes maximum aggregate launcher-process-
+tree working set; protection-lite measured 45,705,419, 68,661,707, 642.855 ms,
+and 89,432,064 bytes. Each memory sample is marked
 `PROCESS_TREE_WORKING_SET_BEST_EFFORT`; it is not unique physical memory, and
 the non-isolated timings/memory values are not a performance-win claim. The
-free lite rules now enable standard ProGuard optimization and mixed-case
-renaming and remove source/line attribute retention from the transformed
-application rules. The JSON result is explicitly
+free lite rules now enable standard ProGuard optimization, mixed-case renaming,
+package repackaging under `org.synesis.p`, and remove source/line attribute
+retention from the transformed application rules. The JSON result is explicitly
 `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; UI/route/Link/relay/provider timing
 remains open. A real maximum archive is still required for the three-profile
 comparison.

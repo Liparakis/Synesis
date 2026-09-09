@@ -22,8 +22,10 @@ its complete input set.
 The free protection-lite configuration enables standard ProGuard optimization
 and mixed-case renaming, and removes `SourceFile`/`LineNumberTable` retention
 from transformed classes where the compatibility rules permit it. These are
-useful structure- and metadata-reduction measures, but they do not claim
-string encryption, control-flow obfuscation, virtualization, packing, anti-VM,
-anti-debugging, or anti-instrumentation. Java verification is retained;
-`-dontpreverify` is not used because it produced a real `VerifyError` in the
-staged Java 25 runtime.
+useful structure- and metadata-reduction measures. The CLI and relay also
+repackage transformed implementation classes under `org.synesis.p`; explicitly
+kept entrypoints and runtime contracts remain stable. These measures do not
+claim string encryption, control-flow obfuscation, virtualization, packing,
+anti-VM, anti-debugging, or anti-instrumentation. Java verification is
+retained; `-dontpreverify` is not used because it produced a real `VerifyError`
+in the staged Java 25 runtime.

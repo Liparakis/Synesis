@@ -258,27 +258,25 @@
                      "protection-lite":  {
                                              "profile":  "protection-lite",
                                              "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
-                                             "archiveSha256":  "236cec027bfaadf21e219d103ee8f5443f4fcaca7d474e4175d31567f7d2369b",
-                                             "archiveBytes":  45711321,
+                                             "archiveSha256":  "5708559ced80366b466b4878a8ea456e63acad9266e0e0442fcf8e8eca0c10c4",
+                                             "archiveBytes":  45705419,
                                              "extractedFiles":  191,
-                                             "extractedBytes":  68673953,
+                                             "extractedBytes":  68661707,
                                              "nestedArchives":  14,
                                              "nestedEntries":  3271,
                                              "classEntries":  3156,
                                              "internalClassEntries":  765,
                                              "internalPackagePrefixes":  [
-                                                                             "org/synesis/a",
-                                                                             "org/synesis/b",
-                                                                             "org/synesis/c",
                                                                              "org/synesis/cli",
                                                                              "org/synesis/coordination",
-                                                                             "org/synesis/mcp"
+                                                                             "org/synesis/mcp",
+                                                                             "org/synesis/p"
                                                                          ],
-                                             "architectureTermHitClassCount":  581,
+                                             "architectureTermHitClassCount":  549,
                                              "architectureTermClassCounts":  {
                                                                                  "authority":  34,
                                                                                  "claim":  69,
-                                                                                 "coordination":  187,
+                                                                                 "coordination":  110,
                                                                                  "provider":  209,
                                                                                  "continuity":  8,
                                                                                  "membership":  14,
@@ -300,114 +298,114 @@
                                                                              },
                                              "architectureClassSamples":  [
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/d.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bL.class",
                                                                                   "hits":  [
                                                                                                "provider"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/f.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bN.class",
                                                                                   "hits":  [
                                                                                                "provider"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/g.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bO.class",
                                                                                   "hits":  [
                                                                                                "diagnostic"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/h.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bP.class",
                                                                                   "hits":  [
                                                                                                "relay"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/j.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bR.class",
                                                                                   "hits":  [
                                                                                                "relay"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/l.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bT.class",
                                                                                   "hits":  [
                                                                                                "provider",
                                                                                                "diagnostic"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/o.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/bW.class",
                                                                                   "hits":  [
                                                                                                "relay"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/s.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/ca.class",
                                                                                   "hits":  [
                                                                                                "diagnostic"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/t.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cb.class",
                                                                                   "hits":  [
                                                                                                "diagnostic",
                                                                                                "session"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/u.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cc.class",
                                                                                   "hits":  [
                                                                                                "provider"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/a/y.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cg.class",
                                                                                   "hits":  [
                                                                                                "session"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/b/b.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/ci.class",
                                                                                   "hits":  [
                                                                                                "session"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b$a.class",
-                                                                                  "hits":  [
-                                                                                               "peer",
-                                                                                               "session"
-                                                                                           ]
-                                                                              },
-                                                                              {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b$b.class",
-                                                                                  "hits":  [
-                                                                                               "session"
-                                                                                           ]
-                                                                              },
-                                                                              {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/b.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cp$a.class",
                                                                                   "hits":  [
                                                                                                "peer",
                                                                                                "session"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/d/d.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cp$b.class",
+                                                                                  "hits":  [
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cp.class",
                                                                                   "hits":  [
                                                                                                "peer",
                                                                                                "session"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/a.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cr.class",
+                                                                                  "hits":  [
+                                                                                               "peer",
+                                                                                               "session"
+                                                                                           ]
+                                                                              },
+                                                                              {
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cu.class",
                                                                                   "hits":  [
                                                                                                "overlay"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/c.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cw.class",
                                                                                   "hits":  [
                                                                                                "membership",
                                                                                                "overlay",
@@ -417,13 +415,13 @@
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/d$a.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cx$a.class",
                                                                                   "hits":  [
                                                                                                "route"
                                                                                            ]
                                                                               },
                                                                               {
-                                                                                  "name":  "app/synesis-cli.jar::org/synesis/a/e/f.class",
+                                                                                  "name":  "app/synesis-cli.jar::org/synesis/p/cz.class",
                                                                                   "hits":  [
                                                                                                "membership",
                                                                                                "peer"
@@ -452,26 +450,26 @@
                                              "serviceLoaderEntryCount":  2,
                                              "classAnalysisSkipped":  0,
                                              "internalClassSamples":  [
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/a.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/b.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/c.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/d$a.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/d.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/e.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/f.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/g.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/h.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/i.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/j.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/k.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/l.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/m.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/n$a.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/n.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/o.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/p.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/q.class",
-                                                                          "app/synesis-cli.jar::org/synesis/a/a/r.class"
+                                                                          "app/synesis-cli.jar::org/synesis/p/bI.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bJ.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bK.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bL$a.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bL.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bM.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bN.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bO.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bP.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bQ.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bR.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bS.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bT.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bU.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bV$a.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bV.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bW.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bX.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bY.class",
+                                                                          "app/synesis-cli.jar::org/synesis/p/bZ.class"
                                                                       ],
                                              "staticInspection":  {
                                                                       "decompiler":  "NOT_RUN",
@@ -485,15 +483,15 @@
                                                                                "from":  "developer",
                                                                                "to":  "protection-lite",
                                                                                "fromValue":  46504281,
-                                                                               "toValue":  45711321,
-                                                                               "delta":  -792960
+                                                                               "toValue":  45705419,
+                                                                               "delta":  -798862
                                                                            },
                                                           "extractedBytes":  {
                                                                                  "from":  "developer",
                                                                                  "to":  "protection-lite",
                                                                                  "fromValue":  69542917,
-                                                                                 "toValue":  68673953,
-                                                                                 "delta":  -868964
+                                                                                 "toValue":  68661707,
+                                                                                 "delta":  -881210
                                                                              },
                                                           "extractedFiles":  {
                                                                                  "from":  "developer",
@@ -520,8 +518,8 @@
                                                                                                 "from":  "developer",
                                                                                                 "to":  "protection-lite",
                                                                                                 "fromValue":  967,
-                                                                                                "toValue":  581,
-                                                                                                "delta":  -386
+                                                                                                "toValue":  549,
+                                                                                                "delta":  -418
                                                                                             },
                                                           "sourceMetadataClassCount":  {
                                                                                            "from":  "developer",
@@ -572,9 +570,7 @@
                                                                                                             "org/synesis/mcp"
                                                                                                         ],
                                                                                            "added":  [
-                                                                                                         "org/synesis/a",
-                                                                                                         "org/synesis/b",
-                                                                                                         "org/synesis/c"
+                                                                                                         "org/synesis/p"
                                                                                                      ]
                                                                                        }
                                                       }

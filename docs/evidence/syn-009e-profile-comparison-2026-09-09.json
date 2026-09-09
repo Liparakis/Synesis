@@ -20,81 +20,81 @@
                                        "launcherSmoke":  "version",
                                        "samples":  [
                                                        {
-                                                           "durationMs":  600.706,
+                                                           "durationMs":  618.202,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  108498944,
+                                                           "peakWorkingSetBytes":  107982848,
                                                            "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  635.874,
+                                                           "durationMs":  700.662,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  82432000,
+                                                           "peakWorkingSetBytes":  86446080,
                                                            "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  629.62,
+                                                           "durationMs":  495.555,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  81760256,
+                                                           "peakWorkingSetBytes":  90976256,
                                                            "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  609.778,
+                                                           "durationMs":  697.498,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  81567744,
+                                                           "peakWorkingSetBytes":  86568960,
                                                            "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        },
                                                        {
-                                                           "durationMs":  630.023,
+                                                           "durationMs":  675.523,
                                                            "exitCode":  0,
-                                                           "peakWorkingSetBytes":  81252352,
+                                                           "peakWorkingSetBytes":  84578304,
                                                            "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                        }
                                                    ],
-                                       "medianStartupMs":  629.62,
-                                       "maxPeakWorkingSetBytes":  108498944
+                                       "medianStartupMs":  675.523,
+                                       "maxPeakWorkingSetBytes":  107982848
                                    },
                      "protection-lite":  {
                                              "profile":  "protection-lite",
                                              "archive":  "C:\\Users\\Liparakis\\Desktop\\Synesis\\cli\\build\\protection-lite\\synesis-0.1.0-dev.local-windows-x64-protection-lite.zip",
-                                             "archiveSha256":  "236cec027bfaadf21e219d103ee8f5443f4fcaca7d474e4175d31567f7d2369b",
-                                             "archiveBytes":  45711321,
+                                             "archiveSha256":  "5708559ced80366b466b4878a8ea456e63acad9266e0e0442fcf8e8eca0c10c4",
+                                             "archiveBytes":  45705419,
                                              "extractedFiles":  191,
-                                             "extractedBytes":  68673953,
+                                             "extractedBytes":  68661707,
                                              "launcherSmoke":  "version",
                                              "samples":  [
                                                              {
-                                                                 "durationMs":  626.482,
+                                                                 "durationMs":  485.37,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  81244160,
+                                                                 "peakWorkingSetBytes":  86732800,
                                                                  "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  636.758,
+                                                                 "durationMs":  684.225,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  84520960,
+                                                                 "peakWorkingSetBytes":  89432064,
                                                                  "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  629.597,
+                                                                 "durationMs":  664.079,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  82206720,
+                                                                 "peakWorkingSetBytes":  87867392,
                                                                  "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  635.975,
+                                                                 "durationMs":  642.855,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  83341312,
+                                                                 "peakWorkingSetBytes":  81121280,
                                                                  "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              },
                                                              {
-                                                                 "durationMs":  630.098,
+                                                                 "durationMs":  483.942,
                                                                  "exitCode":  0,
-                                                                 "peakWorkingSetBytes":  82636800,
+                                                                 "peakWorkingSetBytes":  88666112,
                                                                  "memoryScope":  "PROCESS_TREE_WORKING_SET_BEST_EFFORT"
                                                              }
                                                          ],
-                                             "medianStartupMs":  630.098,
-                                             "maxPeakWorkingSetBytes":  84520960
+                                             "medianStartupMs":  642.855,
+                                             "maxPeakWorkingSetBytes":  89432064
                                          }
                  },
     "comparison":  {
@@ -103,32 +103,32 @@
                                                            "to":  "protection-lite",
                                                            "property":  "archiveBytes",
                                                            "fromValue":  46504281,
-                                                           "toValue":  45711321,
-                                                           "delta":  -792960
+                                                           "toValue":  45705419,
+                                                           "delta":  -798862
                                                        },
                        "developerToLiteExtractedBytes":  {
                                                              "from":  "developer",
                                                              "to":  "protection-lite",
                                                              "property":  "extractedBytes",
                                                              "fromValue":  69542917,
-                                                             "toValue":  68673953,
-                                                             "delta":  -868964
+                                                             "toValue":  68661707,
+                                                             "delta":  -881210
                                                          },
                        "developerToLiteMedianStartupMs":  {
                                                               "from":  "developer",
                                                               "to":  "protection-lite",
                                                               "property":  "medianStartupMs",
-                                                              "fromValue":  629.62,
-                                                              "toValue":  630.098,
-                                                              "delta":  0.4779999999999518
+                                                              "fromValue":  675.523,
+                                                              "toValue":  642.855,
+                                                              "delta":  -32.668000000000006
                                                           },
                        "developerToLiteMaxPeakWorkingSetBytes":  {
                                                                      "from":  "developer",
                                                                      "to":  "protection-lite",
                                                                      "property":  "maxPeakWorkingSetBytes",
-                                                                     "fromValue":  108498944,
-                                                                     "toValue":  84520960,
-                                                                     "delta":  -23977984
+                                                                     "fromValue":  107982848,
+                                                                     "toValue":  89432064,
+                                                                     "delta":  -18550784
                                                                  }
                    },
     "status":  "PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED",

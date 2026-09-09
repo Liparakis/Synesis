@@ -76,8 +76,10 @@ relay lite output is under `relay/build/protection-lite/`:
 
 The current free hardening also enables standard ProGuard optimization and
 mixed-case renaming, and stops retaining source-file and line-number
-attributes in the transformed application rules. The archive comparison shows
-fewer internal classes and fewer source-metadata signals, but metadata remains
+attributes in the transformed application rules. It repackages transformed
+implementation classes under `org.synesis.p` while preserving explicitly kept
+entrypoints. The archive comparison shows fewer internal classes, fewer
+architecture-term hits, and fewer source-metadata signals, but metadata remains
 in dependency/application entries and no Seven Ring is promoted by this
 profile.
 

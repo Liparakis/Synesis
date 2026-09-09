@@ -66,12 +66,12 @@ customer-archive SHA-256, archive/extracted size, bounded cold launcher
 samples, and a best-effort aggregate launcher-process-tree working set for
 developer, protection-lite, and (when supplied) maximum-release profiles. The
 current five-sample CLI run measured developer at 46,504,281 archive bytes /
-69,542,917 extracted bytes / 629.620 ms median startup / 108,498,944-byte
-maximum aggregate working set and protection-lite at 45,711,321 /
-68,673,953 / 630.098 ms / 84,520,960 bytes. The free lite rules now also
-enable standard ProGuard optimization and mixed-case renaming and remove
-source/line attribute retention from the transformed application rules. Its
-result is
+69,542,917 extracted bytes / 675.523 ms median startup / 107,982,848-byte
+maximum aggregate working set and protection-lite at 45,705,419 /
+68,661,707 / 642.855 ms / 89,432,064 bytes. The free lite rules now also
+enable standard ProGuard optimization, mixed-case renaming, package
+repackaging under `org.synesis.p`, and removal of source/line attribute
+retention from the transformed application rules. Its result is
 `PARTIAL_MAXIMUM_ARCHIVE_NOT_SUPPLIED`; the non-isolated timings and aggregate
 working-set values are not performance or unique-physical-memory claims, and
 UI, route, Link, relay, provider, AV/EDR, and commercial maximum measurements
@@ -99,10 +99,10 @@ Ring 4/6 behavior are also unverified.
 The archive-only static reverse-engineering comparison is now implemented in
 scripts/release-reverse-engineering-comparison.ps1. Its current developer
 versus protection-lite CLI run found no file-level private/source/map entries,
-and the free hardening reduced source-metadata signals by 849 classes, but
-metadata remains in many classes; it is recorded as partial and does not claim
-improved decompiler resistance. A real maximum archive and selected-method
-inspection remain required.
+and the free hardening reduced source-metadata signals by 849 classes and
+architecture-term-hit classes to 549, but metadata remains in many classes; it
+is recorded as partial and does not claim improved decompiler resistance. A
+real maximum archive and selected-method inspection remain required.
 
 The archive-only native hardening audit is now implemented in
 scripts/release-native-hardening-audit.ps1. The current Windows x64
@@ -171,7 +171,8 @@ synthetic or protection-lite evidence.
   native launcher/installer, packaged frontend resources, and relay's separate
   application distribution.
 - Protection boundary: developer builds remain readable; protection-lite is an
-  explicit release-engineering profile with free optimizer/metadata hardening;
+  explicit release-engineering profile with free optimizer/package/metadata
+  hardening;
   maximum-release is gated on licensed commercial tooling and must not expose
   a runtime downgrade switch.
 

@@ -982,8 +982,8 @@ val protectionLiteIntegrityCheck = tasks.register("protectionLiteIntegrityCheck"
         require(mapping.contains("org.synesis.cli.SynesisCli -> org.synesis.cli.SynesisCli:")) {
             "Protected CLI entrypoint is absent from the private mapping"
         }
-        require(mapping.contains("org.synesis.cli.bootstrap.CliRuntime -> org.synesis.cli.a.a:")) {
-            "Expected transformed CLI implementation is absent from the private mapping"
+        require(mapping.contains("org.synesis.cli.bootstrap.CliRuntime -> org.synesis.p.")) {
+            "Expected repackaged CLI implementation is absent from the private mapping"
         }
         ZipFile(protectionLiteArchive.get().archiveFile.get().asFile).use { zip ->
             val names = zip.entries().asSequence().map { it.name }.toList()
@@ -1000,8 +1000,8 @@ val protectionLiteIntegrityCheck = tasks.register("protectionLiteIntegrityCheck"
             require(jar.entries().asSequence().any { it.name == "web-ui/index.html" }) {
                 "Packaged UI resource is absent from the protected CLI payload"
             }
-            require(jar.entries().asSequence().any { it.name.startsWith("org/synesis/a/") && it.name.endsWith(".class") }) {
-                "Protected CLI payload contains no renamed implementation class"
+            require(jar.entries().asSequence().any { it.name.startsWith("org/synesis/p/") && it.name.endsWith(".class") }) {
+                "Protected CLI payload contains no repackaged implementation class"
             }
         }
 
