@@ -61,7 +61,14 @@ export function App() {
   const [connection, setConnection] = useState<"CONNECTING" | "LIVE" | "DEGRADED" | "OFFLINE">("CONNECTING");
   const [message, setMessage] = useState("Connecting to the local control plane");
   const clientRef = useRef<ControlPlaneClient | null>(null);
-  const mockMode = import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1";
+  const [mockRequested] = useState(() => import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1");
+  const mockMode = import.meta.env.DEV && mockRequested;
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(parseRoute());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     if (mockMode) {
@@ -134,8 +141,9 @@ export function App() {
 
   const navigate = (next: Route) => {
     const path = routePath(next);
+    const browserPath = mockMode ? path + "?mock=1" : path;
     if (typeof window !== "undefined" && window.location.pathname !== path) {
-      window.history.pushState(null, "", path);
+      window.history.pushState(null, "", browserPath);
     }
     setRoute(parseRoute(path));
   };
@@ -153,7 +161,7 @@ export function App() {
       <header className="site-header">
         <div className="site-header-left">
           <button className="brand-button" type="button" onClick={() => navigate({kind: "projects"})} aria-label="Open Projects registry">
-            <span className="brand-mark" aria-hidden="true"><span/><span/><span/></span>
+            <img className="brand-logo" src="/synesis-logo.png" alt="" aria-hidden="true" />
             <span className="brand-name">Synesis</span>
           </button>
           <span className="site-header-spacer" aria-hidden="true"/>
@@ -179,9 +187,10 @@ export function App() {
           </div>
         ) : (
           <div className="page-frame">
-            <ProjectBreadcrumb projectName={snapshot.project?.name ?? "Project"} view={route.view} onProjects={() => navigate({kind: "projects"})}/>
+            <div className="project-resource-header">
             <ProjectHeader snapshot={snapshot} title={snapshot.project?.name ?? "Project"} onBack={() => navigate({kind: "projects"})}/>
             <ProjectTabs view={route.view} onNavigate={(view) => navigate({kind: "project", projectId: snapshot.project!.id, view})}/>
+            </div>
             {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={(view) => navigate({kind: "project", projectId: snapshot.project!.id, view})}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
@@ -227,7 +236,7 @@ export function ProjectsView({snapshot, onOpenProject, onOpenNetwork}: {snapshot
           <div className="project-list panel" role="list" aria-label="Known projects">
             <div className="project-list-header" aria-hidden="true"><span>Project</span><span>State</span><span>Action</span></div>
             {filteredProjects.map((project) => (
-              <article className="project-row" key={project.id + project.path} role="listitem">
+              <div className="project-row" key={project.id + project.path} role="listitem">
                 <div className="project-row-main">
                   {onOpenProject ? <button className="registry-project-link" type="button" onClick={() => onOpenProject(project)}>{project.name}</button> : <strong className="registry-project-name">{project.name}</strong>}
                   <div className="project-row-meta">
@@ -245,7 +254,7 @@ export function ProjectsView({snapshot, onOpenProject, onOpenNetwork}: {snapshot
                       ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>View details <ChevronRight size={14}/></button>
                       : <span className="muted">{project.status === "LIVE" ? "Runtime not attached" : "Registry detail"}</span>}
                 </div>
-              </article>
+              </div>
             ))}
           </div>
         )}
@@ -273,12 +282,14 @@ function ConnectionsRail({snapshot, onOpenNetwork}: {snapshot: Snapshot; onOpenN
               const route = snapshot.network.routes.find((item) => item.destinationNodeId === peer.nodeId);
               const connected = peer.usable && peer.authenticated;
               return (
-                <div className="connection-row" key={peer.nodeId + peer.sessionId} role="button" tabIndex={0} aria-label={`View connection details for ${peer.nodeId}`} onClick={() => setConnectionTarget({peer, route: route ?? null, memberStatus: snapshot.network.overlay.members.find((item) => item.nodeId === peer.nodeId)?.status ?? "UNKNOWN"})} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setConnectionTarget({peer, route: route ?? null, memberStatus: snapshot.network.overlay.members.find((item) => item.nodeId === peer.nodeId)?.status ?? "UNKNOWN"}); } }}>
-                  <div className="connection-peer">
+                <div className="connection-row" key={peer.nodeId + peer.sessionId}>
+                  <button className="connection-detail-button" type="button" aria-label={`View connection details for ${peer.nodeId}`} onClick={() => setConnectionTarget({peer, route: route ?? null, memberStatus: snapshot.network.overlay.members.find((item) => item.nodeId === peer.nodeId)?.status ?? "UNKNOWN"})}>
+                  <span className="connection-peer">
                     <strong>{peer.nodeId}</strong>
                     <span className="mono">{route?.kind ?? "No route projected"}</span>
-                  </div>
+                  </span>
                   <span className={cx("connection-status", connected ? "is-connected" : "is-unreachable")}><span className="status-dot"/>{peer.liveness || (connected ? "CONNECTED" : "UNREACHABLE")}</span>
+                  </button>
                   <div className="connection-actions">
                     {onOpenNetwork && <button className="text-action" type="button" onClick={(event) => { event.stopPropagation(); onOpenNetwork(); }}>View network <ChevronRight size={14}/></button>}
                     <button className="icon-button connection-delete-button" type="button" aria-label={`Terminate connection to ${peer.nodeId}`} title="Terminate connection" onClick={(event) => { event.stopPropagation(); setTerminationTarget({peer, routeKind: route?.kind ?? "UNKNOWN"}); }}><Trash2 size={15}/></button>
@@ -299,12 +310,9 @@ export function ProjectHeader({snapshot, title, onBack}: {snapshot: Snapshot; ti
   const project = snapshot.project;
   return (
     <section className="project-header project-overview-header" aria-label="Project identity">
+      <button className="project-back-link" type="button" aria-label="Back to projects" onClick={onBack}><ArrowLeft size={15} aria-hidden="true"/>Projects</button>
       <div className="project-overview-grid">
         <div className="project-header-title">
-          <button className="button button-secondary project-header-back" type="button" onClick={onBack}>
-            <ArrowLeft size={16} aria-hidden="true"/>
-            <span className="sr-only">Back to projects</span>
-          </button>
           <h1>{title}</h1>
           <StatusBadge value={project ? snapshot.runtime.status : "UNAVAILABLE"}/>
         </div>
@@ -312,12 +320,12 @@ export function ProjectHeader({snapshot, title, onBack}: {snapshot: Snapshot; ti
           <div className="project-overview-meta-item">
             <Copy size={16} aria-hidden="true"/>
             <span className="project-overview-meta-label">Project ID</span>
-            <strong className="mono">{project?.id ?? "—"}</strong>
+            <strong className="mono" title={project?.id}>{project?.id ?? "—"}</strong>
           </div>
           <div className="project-overview-meta-item">
             <FolderOpen size={16} aria-hidden="true"/>
             <span className="project-overview-meta-label">Local path</span>
-            <strong className="mono">{project?.path ?? "—"}</strong>
+            <strong className="mono" title={project?.path}>{project?.path ?? "—"}</strong>
           </div>
         </div>
       </div>
@@ -325,20 +333,7 @@ export function ProjectHeader({snapshot, title, onBack}: {snapshot: Snapshot; ti
   );
 }
 
-function ProjectBreadcrumb({projectName, view, onProjects}: {projectName: string; view: Exclude<View, "projects">; onProjects(): void}) {
-  const label = projectTabs.find((tab) => tab.id === view)?.label ?? "Overview";
-  return (
-    <nav className="breadcrumb-bar" aria-label="Breadcrumb">
-      <button className="breadcrumb-link" type="button" onClick={onProjects}>Projects</button>
-      <ChevronRight size={14} aria-hidden="true"/>
-      <span>{projectName}</span>
-      <ChevronRight size={14} aria-hidden="true"/>
-      <strong aria-current="page">{label}</strong>
-    </nav>
-  );
-}
-
-function RegistryProjectView({project, onBack}: {project: KnownProjectSnapshot | null; onBack(): void}) {
+export function RegistryProjectView({project, onBack}: {project: KnownProjectSnapshot | null; onBack(): void}) {
   const title = project ? project.name : "Project not found";
   const status = project?.status ?? "UNAVAILABLE";
   const detail = status === "INACTIVE"
@@ -359,9 +354,15 @@ function RegistryProjectView({project, onBack}: {project: KnownProjectSnapshot |
       </nav>
       <section className="registry-project panel">
         <div className="registry-project-heading">
-          <div>
+          <div className="registry-project-title">
+            <button className="button button-secondary project-header-back registry-project-back" type="button" onClick={onBack}>
+              <ArrowLeft size={16} aria-hidden="true"/>
+              <span className="sr-only">Back to projects</span>
+            </button>
+            <div>
             <p className="eyebrow">Known project</p>
             <h1>{title}</h1>
+            </div>
           </div>
           <StatusBadge value={status}/>
         </div>
@@ -665,7 +666,7 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; client
             <div className="network-state-row"><span>Overlay State <StatusBadge value={network.overlay.status}/></span><span className="header-meta-divider"/><span>Relay State <StatusBadge value={network.relay.status}/></span></div>
           </section>
           <section className="data-table-wrap panel table-panel">
-            <table className="data-table"><thead><tr><th>Peer ID</th><th>Route</th><th>Membership State</th><th>Connection Status</th><th aria-label="Actions"/></tr></thead>
+            <table className="data-table"><thead><tr><th>Peer ID</th><th>Route</th><th>Membership State</th><th>Connection Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>{network.peers.length === 0 ? <TableEmpty colSpan={5} text="No physical peers are projected."/> : network.peers.map((peer) => {
                 const route = network.routes.find((item) => item.destinationNodeId === peer.nodeId);
                 const member = network.overlay.members.find((item) => item.nodeId === peer.nodeId);
@@ -751,15 +752,15 @@ export function DiagnosticsView({diagnostics}: {diagnostics: Snapshot["diagnosti
           <span>{formatDiagnosticDate(diagnostics.timestampEpochMillis)}</span>
         </div>
         <div className="diagnostics-counts" aria-label="Diagnostic severity counts">
-          <span>Critical <strong className="tone-bad">{diagnostics.criticalCount}</strong></span>
-          <span>Errors <strong className="tone-bad">{diagnostics.errorCount}</strong></span>
-          <span>Warnings <strong className="tone-warn">{diagnostics.warningCount}</strong></span>
+          <span>Critical <strong className={cx(diagnostics.criticalCount > 0 && "tone-bad")}>{diagnostics.criticalCount}</strong></span>
+          <span>Errors <strong className={cx(diagnostics.errorCount > 0 && "tone-bad")}>{diagnostics.errorCount}</strong></span>
+          <span>Warnings <strong className={cx(diagnostics.warningCount > 0 && "tone-warn")}>{diagnostics.warningCount}</strong></span>
           <span>Info <strong>{diagnostics.infoCount}</strong></span>
         </div>
       </section>
       <section className="data-table-wrap panel table-panel">
         <table className="data-table diagnostics-table"><thead><tr><th>Severity</th><th>Finding</th><th>Confidence</th><th>Component</th><th>Recommendation</th></tr></thead>
-          <tbody>{diagnostics.findings.length === 0 ? <TableEmpty colSpan={5} text="No findings require attention."/> : diagnostics.findings.map((finding) => <tr key={finding.code} className={cx(selected?.code === finding.code && "is-selected")} tabIndex={0} aria-selected={selected?.code === finding.code} onClick={() => setSelectedCode(finding.code)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedCode(finding.code); } }}><td><StatusBadge value={finding.severity} label={formatDiagnosticValue(finding.severity)}/></td><td>{finding.summary}</td><td className="mono">{finding.confidence}</td><td>{finding.affectedResourceType}</td><td className="table-cell-wrap">{formatDiagnosticValue(finding.recommendation)}</td></tr>)}</tbody>
+          <tbody>{diagnostics.findings.length === 0 ? <TableEmpty colSpan={5} text="No findings require attention."/> : diagnostics.findings.map((finding) => <tr key={finding.code} className={cx(selected?.code === finding.code && "is-selected")} tabIndex={0} aria-selected={selected?.code === finding.code} onClick={() => setSelectedCode(finding.code)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedCode(finding.code); } }}><td><StatusBadge value={finding.severity} label={formatDiagnosticValue(finding.severity)}/></td><td>{finding.summary}</td><td className="mono">{formatDiagnosticValue(finding.confidence)}</td><td>{finding.affectedResourceType}</td><td className="table-cell-wrap">{formatDiagnosticValue(finding.recommendation)}</td></tr>)}</tbody>
         </table>
       </section>
       {selected && (
@@ -812,7 +813,7 @@ function FindingInspector({finding, index, total, onClose, onNavigate}: {finding
 }
 
 function ConnectionScreen({state, message}: {state: string; message: string}) {
-  return <main className="connection-screen"><section className="connection-card panel"><span className="brand-mark brand-mark-large" aria-hidden="true"><span/><span/><span/></span><p className="eyebrow">Synesis local control plane</p><h1>Connecting to project state</h1><StatusBadge value={state}/><p>{message}</p><div className="loading-line" aria-hidden="true"/></section></main>;
+  return <main className="connection-screen"><section className="connection-card panel"><img className="brand-logo brand-logo-large" src="/synesis-logo.png" alt="" aria-hidden="true"/><p className="eyebrow">Synesis local control plane</p><h1>Connecting to project state</h1><StatusBadge value={state}/><p>{message}</p><div className="loading-line" aria-hidden="true"/></section></main>;
 }
 
 function StatusBadge({value, large, label}: {value: string; large?: boolean; label?: string}) {
@@ -917,6 +918,12 @@ function formatDiagnosticValue(value: string | undefined) {
   const normalized = (value || "").trim().replaceAll("-", "_").toUpperCase();
   const labels: Record<string, string> = {
     CONFIRMED: "Confirmed",
+    CRITICAL: "Critical",
+    DEGRADED: "Degraded",
+    ERROR: "Error",
+    INFO: "Info",
+    WARNING: "Warning",
+    WARN: "Warning",
     HEALTHY: "Healthy",
     NO_ACTION: "No action required",
     NOT_AVAILABLE: "Not available",

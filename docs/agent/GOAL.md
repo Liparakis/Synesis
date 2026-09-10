@@ -1,44 +1,20 @@
-# SYN-055 screenshot-led Synesis browser UI rebuild — activated 2026-09-09
+# SYN-055 final browser artistic-direction pass — 2026-09-10
 
-Rebuild and polish the installed Synesis browser UI using the attached
-screenshots as the visual design authority and the current repository's
-control-plane read model as the semantic authority. Make the actual product
-hierarchy explicit: Synesis installation, Projects registry, selected project,
-then Overview, Agents, Coordination, Network, and Diagnostics. Keep the real
-session, CSRF, SSE, Link onboarding, project registry, participant,
-coordination, network, and Doctor boundaries intact.
+Polish the six current browser screens using the latest pasted brief as visual
+authority and current code as semantic authority. Preserve product structure,
+available actions, real data, and authenticated backend boundaries.
 
-- Status: ACTIVE / installation-level Projects rail and live project Overview
-  slices implemented and latest bundle verified;
-- authenticated browser smoke passes at the available narrow viewport;
-- 2560x1440 and narrower screenshot comparison remains pending
-- Exact next action: repeat the authenticated UI screenshot pass at 2560x1440
-- and a narrower browser width when a browser surface with viewport controls is
-- available; keep code and package unchanged unless that pass finds a defect.
-- Architecture basis: accepted ADR-0069 installed browser UI architecture;
-  no architecture change is authorized by this goal.
-- Visual boundary: screenshots control presentation; they do not provide
-  product data, backend semantics, or permission to invent fields/actions.
-- Semantic boundary: the current authenticated `/api/v1` snapshot, SSE, and
-  onboarding contract remains authoritative for all content and mutations.
-- Hierarchy boundary: `/projects` is the global home and lists only the known
-  project registry. A live project uses `/projects/<id>/<view>` and exposes
-  only the five project-local tabs. Inactive, unavailable, and identity-
-  mismatch entries remain truthful registry detail pages with no invented
-  runtime, repair, or project-switch action.
-- Installation boundary: the global home may show only derived registry
-  counts, API version, local runtime connection state, and peer projections
-  authoritative for the current runtime. No browser-owned disconnect action is
-  implied without a real authority-safe adapter.
-- Shell boundary: the global top bar contains only the Synesis brand; the
-  runtime-connected indicator is not shown there. Scoped connection state may
-  remain in the installation rail.
-- Scope boundary: this slice redesigns only the project Overview among
-  project-internal pages; Agents, Coordination, Network, and Diagnostics keep
-  their existing compositions in this slice.
-- Scope exclusions: no backend endpoint or read-model redesign, new authority
-  behavior, project-switching protocol, production fixtures, cloud surface,
-  native GUI, push, tag, release, or remote mutation.
+- Status: ACTIVE administrative review record; requested visual slice complete.
+- Result: neutral colors, comfortable typography, restrained semantic color,
+  unified project header and tabs, quiet runtime dot/text, consistent controls,
+  1480px simple-page and 1760px dense-page caps, responsive technical tables.
+- PASS: frontend gates, local distribution, real authenticated six-screen
+  screenshots at 2560x1440, 1920x1080, 1280x800, populated-state stress check,
+  automated accessibility scans and packaged asset identity.
+- Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+- Supersedes earlier no-indicator and uncapped-width requests; no new
+  product behavior, architecture, authority, endpoint, or fixture is introduced.
+- Exact next action: review the completed diff with `git diff -- web-ui/src/app/App.tsx web-ui/src/styles.css docs/evidence/SYN-055-art-direction-2026-09-10.md`.
 
 # SYN-054 persistent known-project discovery — activated 2026-09-09
 

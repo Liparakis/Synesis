@@ -1,68 +1,29 @@
 ## SYN-055
 
-### Screenshot-led Synesis browser UI rebuild — activated 2026-09-09
+### Final Synesis browser artistic-direction pass — 2026-09-10
 
 - Status: ACTIVE
-- Evidence state: hierarchy, global registry, installation rail, and project
-  Overview visual-refinement slices implemented; frontend gates and latest
-  Windows bundle pass; authenticated browser smoke is recorded at the
-  available narrow viewport; wide viewport screenshots remain pending
-- Purpose: rebuild the installed browser UI around the attached screenshots'
-  restrained engineering-console layout while making the actual product
-  hierarchy explicit: installation, Projects registry, selected project, then
-  project-local views.
-- Visual authority: the screenshots govern layout, hierarchy, density, color,
-  typography, tables, tabs, inspectors, and responsive presentation.
-- Semantic authority: the existing authenticated snapshot/SSE/onboarding
-  contract and its Java read model govern every rendered field and action.
-- Scope: the existing `web-ui` React/TypeScript source, shared visual
-  primitives, view composition, browser tests, and focused visual/packaged
-  verification. The six required surfaces are Projects, Overview, Agents,
-  Coordination, Network, and Diagnostics.
-- Required behavior: keep real session/bootstrap/CSRF/SSE behavior, real Link
-  onboarding, truthful empty and `UNCONFIGURED` states, and responsive
-  desktop/laptop presentation. Global home is the known-project registry;
-  project navigation is URL-based and project-local. Render no demo data and
-  do not derive state that the backend does not define.
-- Hierarchy boundary: remove fake global dashboard/account/integration
-  navigation. Live project tabs are shown only when the current control-plane
-  session actually serves that project. Inactive, unavailable, and identity-
-  mismatch entries show registry truth without invented start, fix, or switch
-  actions.
-- Shell refinement: the top-bar runtime indicator, Live connection control,
-  and burger navigation control are removed; project-level status badges and
-  the installation rail's connection state remain authoritative.
-- Installation home: add only truthful installation counts, API version,
-  local connection state, and current-runtime peer projections to a compact
-  right rail; do not imply global peer aggregation or add browser-owned
-  disconnect behavior.
-- Project Overview: align the live project header, status metrics,
-  Coordination panel, Network panel, and authority boundary note to the
-  attached reference while deriving every value from the current snapshot.
-- Acceptance: frontend typecheck, lint, tests, production build, packaged
-  static-resource verification, URL/routing checks, installed authenticated
-  UI smoke, and visual inspection of Projects, live Overview, inactive state,
-  Agents, Coordination, Network, and Diagnostics against the attached
-  references. Existing control-plane and packaging behavior must remain
-  unchanged.
-- Scope exclusions: no new backend endpoint, authority-bearing behavior,
-  control-plane semantic change, project switching protocol, fake fixture in
-  production, cloud surface, native GUI, push, tag, release, or remote
-  mutation. No ADR is required unless the implementation changes the accepted
-  installed-UI architecture.
- - Exact next action: repeat the authenticated UI screenshot pass at 2560x1440
-   and a narrower browser width when a browser surface with viewport controls is
-   available; do not change product code unless that pass finds a defect.
-
-#### 2026-09-10 Projects page refinement slice
-
-Implemented the bounded global Projects-page UI slice: project search, a
-Connections-only right rail, per-connection View network actions, and red-bin
-termination popups on the global rail and project Network table. The popup’s
-final action remains disabled because termination is not exposed by the
-current backend contract. Sticky page and registry headers are scoped to the
-Projects route. The development mock now has 14 projects and 8 peers for
-scrollability checks. No backend capability was invented.
+- Evidence state: requested final visual slice verified complete; this remains
+  the sole administrative review task.
+- Purpose: refine the current Projects, Overview, Agents, Coordination,
+  Network, and Diagnostics presentation without redesigning the product.
+- Visual authority: latest pasted brief; neutral near-black, comfortable
+  typography, quiet semantic state, consistent components, compact technical
+  tables, and responsive page-specific content caps.
+- Superseded decisions: restore an understated runtime dot/text indicator;
+  replace uncapped desktop widths with 1480px simple / 1760px dense page caps.
+- Semantic authority: existing snapshot/session/SSE/onboarding contract.
+  Keep all actual data, actions, route destinations, and modal inspectors.
+- Scope: web-ui/src/app/App.tsx, web-ui/src/styles.css, frontend quality gates,
+  local packaged runtime verification, screenshots, and durable evidence.
+- Acceptance: PASS frontend typecheck/lint/12 tests/build, packaged resource
+  equality, authenticated UI smoke, all six screens at 2560x1440, 1920x1080,
+  1280x800, zero document overflow, and real/populated accessibility scans.
+- Evidence: PASS `docs/evidence/SYN-055-art-direction-2026-09-10.md`; build/ui-art-direction artifacts.
+- Exclusions: no backend/DTO/authority change, new functionality, fixture data
+  in production, architecture/deferred promotion, global installation,
+  publication, commit, push, tag, release, or remote mutation.
+- Exact next action: review the completed diff using `git diff -- web-ui/src/app/App.tsx web-ui/src/styles.css docs/evidence/SYN-055-art-direction-2026-09-10.md`.
 
 ## SYN-054
 

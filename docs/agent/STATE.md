@@ -1,3 +1,13 @@
+## 2026-09-10 — SYN-055 final visual slice verified
+
+The final artistic-direction pass is complete for the requested six screens.
+Frontend gates (12 tests), packaged resources, actual authenticated runtime,
+18 requested screen/viewport combinations, and separate populated fixture
+checks pass. Automated axe scans report no violations on all six screens in
+both state sets. No backend or global installation change. `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+
+Immediate next action: review the completed diff with `git diff -- web-ui/src/app/App.tsx web-ui/src/styles.css docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+
 ## 2026-09-10 — SYN-055 Diagnostics status-label polish checkpoint
 
 Finalized Diagnostics status handling so real `HEALTHY`/`OK` values render as
@@ -4512,3 +4522,50 @@ selection.
 
 Verification: typecheck, lint, 12 tests, production build, diff check, and
 live Network row interaction passed.
+
+## 2026-09-10 — SYN-055 supplied logo asset
+
+The header and connection screen now use the user-supplied
+`web-ui/public/synesis-logo.png` asset instead of the generated CSS mark.
+The live Projects preview loaded the asset successfully. Typecheck, lint,
+12 tests, production build, and diff check pass.
+
+## 2026-09-10 — SYN-055 registry detail back control
+
+All known-project detail states now expose the shared icon-only Back to
+projects control. Regression coverage includes INACTIVE, UNAVAILABLE, and
+IDENTITY_MISMATCH states. Typecheck, lint, 15 tests, production build, and
+diff check pass; live mock verification confirmed the control on Vector mesh.
+
+## 2026-09-10 — Consistent project view width and browser history
+
+Coordination and Network now share the standard project content width used by
+Overview, Agents, and Diagnostics. Project tab changes use `pushState`, retain
+the Vite mock query, and respond to browser `popstate` events.
+
+Verification: typecheck, lint, 15 tests, production build, diff check, and
+live mock Back/Forward navigation passed.
+
+## 2026-09-10 — Coordination table scrollbar removal
+
+Coordination record tables no longer force a nested horizontal scroll region;
+long values wrap within the existing panel.
+
+Verification: typecheck, lint, 15 tests, production build, diff check, and
+live mock Coordination inspection passed.
+
+## 2026-09-10 — Coordination nested scrollbar correction
+
+The Coordination tab strip and record tables no longer create a nested
+scrollbar; long values wrap within the existing panel.
+
+Verification: typecheck, lint, 15 tests, production build, diff check, and
+live mock screenshot inspection passed.
+
+## 2026-09-10 — Global runtime indicator removal
+
+The global header no longer renders the Runtime connected/reconnecting/offline
+indicator. Runtime state remains used by the connection screen.
+
+Verification: typecheck, lint, 15 tests, production build, and diff check
+passed; live preview was unavailable because the local Vite server was stopped.

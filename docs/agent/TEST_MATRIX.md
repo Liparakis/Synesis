@@ -1,3 +1,17 @@
+## SYN-055 final artistic direction — 2026-09-10
+
+| Check | Result |
+|---|---|
+| :web-ui:check / :cli:installDist | PASS, 12 tests, lint, typecheck, build |
+| Authenticated packaged UI, six screens x three widths | PASS, 18 captures, no document overflow |
+| Existing populated development fixture | PASS, 18 captures, no page errors |
+| Six-screen axe checks, real + fixture | PASS, zero violations |
+| Search miss / inactive detail / inspector Enter-Escape | PASS |
+| Packaged HTML/JS/CSS SHA-256 vs dist | PASS, no mock asset |
+| Backend suite / fresh Windows installer / global install | Not part of this slice |
+
+Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+
 ## SYN-055 screenshot-led browser UI rebuild — activation — 2026-09-09
 
 | Area | Check | Result | Evidence |
@@ -1519,4 +1533,57 @@ SYN-054 product-code work is required.
 | Network row detail | Clicking a peer row opens Connection detail with projected route/session data | PASS focused test and live browser interaction |
 | Global row detail | Clicking a Connections rail row opens the same detail surface | PASS source review and live mock interaction |
 | Action isolation | Clicking the red-bin button opens termination confirmation without row selection | PASS source review and prior live interaction |
+| Frontend gates | Typecheck, lint, 12 tests, production build, and diff check | PASS |
+
+## SYN-055 consistent project view width and browser history — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Shared content width | Coordination and Network use the same standard width as the other project views | PASS source review |
+| History entries | Project/tab navigation updates browser history and preserves mock mode | PASS live mock URL checks |
+| Browser Back | Back returns from Agents to Overview and renders Overview | PASS live mock browser |
+| Browser Forward | Forward returns to Agents and renders Agents | PASS live mock browser |
+| Frontend gates | Typecheck, lint, 15 tests, production build, and diff check | PASS |
+
+## SYN-055 global runtime indicator removal — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Global header | Runtime connected indicator is absent | PASS source review |
+| Runtime behavior | Connection state remains available to the connection screen | PASS source review |
+| Frontend gates | Typecheck, lint, 15 tests, production build, and diff check | PASS |
+
+## SYN-055 Coordination nested scrollbar correction — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Tab strip | Coordination records tabs do not show a nested scrollbar | PASS live mock screenshot |
+| Record tables | Claims and related tables wrap long values inside the panel | PASS live mock screenshot |
+| Frontend gates | Typecheck, lint, 15 tests, production build, and diff check | PASS |
+
+## SYN-055 Coordination table scrollbar removal — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Coordination records | Claims, Tasks, Capabilities, and Ownership fit the panel without a nested horizontal scrollbar | PASS source review and live mock inspection |
+| Long values | IDs and selectors wrap within cells | PASS source review |
+| Frontend gates | Typecheck, lint, 15 tests, production build, and diff check | PASS |
+
+## SYN-055 registry detail back control — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Inactive project | Icon-only Back to projects control is present | PASS focused test and live mock interaction |
+| Unavailable project | Icon-only Back to projects control is present | PASS focused test |
+| Identity mismatch | Icon-only Back to projects control is present | PASS focused test |
+| Accessible label | Arrow button retains the Back to projects accessible name | PASS focused test and live accessibility tree |
+| Frontend gates | Typecheck, lint, 15 tests, production build, and diff check | PASS |
+
+## SYN-055 supplied logo asset — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Header asset | Supplied Synesis logo loads in the global header | PASS live mock browser screenshot |
+| Connecting asset | Supplied logo replaces the generated mark in the connection screen | PASS source review |
+| Brand accessibility | Existing accessible Synesis label and navigation remain present | PASS source review and live accessibility tree |
 | Frontend gates | Typecheck, lint, 12 tests, production build, and diff check | PASS |

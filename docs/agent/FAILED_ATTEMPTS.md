@@ -1,3 +1,13 @@
+## 2026-09-10 — SYN-055 visual verification setup, resolved
+
+Default Java UI startup hit the known loopback error; the documented temporary
+directory/JVM property workaround passed. Gradle npmCi hit a running Vite
+esbuild file lock; stopping the owned preview server let the locked install
+and gates pass. An expired initial UI bootstrap was replaced by a fresh
+runtime/session. Accessible markup findings were fixed and rescanned.
+These are resolved; do not weaken authentication or change global JVM settings.
+Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+
 ## 2026-09-05 — SYN-051 focused Gradle test stalls
 
 - The command-local build-JVM workaround passed Gradle startup and clean

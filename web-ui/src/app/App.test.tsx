@@ -1,6 +1,6 @@
 import {render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {AgentsView, DiagnosticsView, NetworkView, ProjectHeader, ProjectsView} from "./App";
+import {AgentsView, DiagnosticsView, NetworkView, ProjectHeader, ProjectsView, RegistryProjectView} from "./App";
 import {parseRoute, routePath} from "./routes";
 import type {AgentSnapshot, Snapshot} from "../api/controlPlane";
 import {vi} from "vitest";
@@ -193,6 +193,17 @@ describe("truthful product states", () => {
     expect(screen.getByRole("heading", {name: "Test"})).toBeInTheDocument();
     expect(screen.getByText("Project ID")).toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Back to projects"}));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["INACTIVE", "UNAVAILABLE", "IDENTITY_MISMATCH"] as const)("provides an icon-only Projects back button for %s registry projects", async (status) => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    render(<RegistryProjectView project={{id: "proj_detail", name: "Detail project", path: "C:\\projects\\detail", createdAt: "2026-09-10T00:00:00Z", firstObservedAt: "2026-09-10T00:00:00Z", lastObservedAt: "2026-09-10T00:00:00Z", status}} onBack={onBack}/>);
+
+    const back = screen.getByRole("button", {name: "Back to projects"});
+    expect(back).toBeInTheDocument();
+    await user.click(back);
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 });

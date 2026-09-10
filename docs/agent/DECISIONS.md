@@ -1,3 +1,11 @@
+## 2026-09-10 — SYN-055 visual direction
+
+The current explicit brief supersedes the older hidden runtime indicator and
+uncapped desktop width. Use a quiet dot/text reachability indicator, bounded
+page-specific widths, and one resource header. These are presentation changes
+within ADR-0069; no new architecture ADR or deferred capability is needed.
+Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+
 # Decisions / ADR Index
 
 Product decisions are indexed in ADRs under `docs/adr/`.

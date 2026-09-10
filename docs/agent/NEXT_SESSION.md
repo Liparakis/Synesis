@@ -1,3 +1,16 @@
+# 2026-09-10 — SYN-055 final artistic-direction closeout
+
+- Status: requested visual slice complete; sole active administrative record.
+- Exact next code action: review the completed diff with `git diff -- web-ui/src/app/App.tsx web-ui/src/styles.css docs/evidence/SYN-055-art-direction-2026-09-10.md`; preserve
+  the verified code unless the user asks for a specific follow-up.
+- Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
+- No further screenshot pass is pending for 2560x1440, 1920x1080, or 1280x800.
+- Global installed version was not replaced. The local rebuilt distribution
+  is cli/build/install/synesis. No commit/push/publication was requested.
+- Resume command: powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1
+
+The entries below are historical and do not override this closeout.
+
 ## 2026-09-10 — SYN-055 project Overview refinement checkpoint
 
 The live project Overview composition now matches the attached reference
@@ -3153,6 +3166,31 @@ keep code and package unchanged unless that pass finds a defect.
 
 Required continuation command:
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-10 — Consistent project view width and browser history
+
+The project tabs use one shared content width. In Vite mock mode, tab and
+project navigation preserve `?mock=1`, and browser Back/Forward restores the
+corresponding route.
+
+Exact next action: inspect the four project views at
+`http://127.0.0.1:5173/projects/proj_test/overview?mock=1` and keep the latest
+frontend changes uncommitted unless the user requests publication.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-10 — Supplied logo asset
+
+The current frontend header uses `web-ui/public/synesis-logo.png`, copied from
+`C:\Users\Liparakis\Downloads\SynesisLogo.png`. Continue visual QA from the
+running Vite server; no reinstall is needed.
+
+## 2026-09-10 — Registry detail back control
+
+The icon-only Back to projects button is now present on every known-project
+detail state, including unreachable, unavailable, and identity-mismatch
+projects. Continue visual QA from `http://127.0.0.1:5173/projects?mock=1`.
 ## 2026-09-10 — SYN-055 Diagnostics console refinement checkpoint
 
 Diagnostics now presents a compact status/report summary, dense findings table,
