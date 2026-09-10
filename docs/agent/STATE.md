@@ -1,3 +1,164 @@
+## 2026-09-10 — SYN-055 Diagnostics status-label polish checkpoint
+
+Finalized Diagnostics status handling so real `HEALTHY`/`OK` values render as
+Healthy and degraded/error Doctor states still receive emphasis even when
+individual counts are zero. Backend enums remain unchanged. Focused gates and
+the final Windows package build pass.
+
+Immediate next action: repeat the authenticated screenshot pass at 2560x1440
+and a narrower browser width when a viewport-capable browser surface is
+available; do not change product code unless that pass finds a defect.
+
+## 2026-09-10 — SYN-055 Diagnostics console refinement checkpoint
+
+Refined Diagnostics around the existing Doctor snapshot: removed the
+repetitive Findings report card, added a compact overall-status/report/timing/
+severity summary, kept the findings table immediately below it, and made the
+detail inspector selection-driven. Raw backend values remain unchanged;
+user-facing labels polish safe enum values and repair availability is text-only
+with no invented action.
+
+Frontend gates and the forced Windows package build pass. Immediate next
+action remains the authenticated screenshot pass at 2560x1440 and a narrower
+width when a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 shared project header checkpoint
+
+Applied the Overview-style project header to Agents, Coordination, Network,
+and Diagnostics as well as Overview. Every project tab now shares the same
+title/status row, labeled Project ID and Local path metadata, wide-screen
+spacing, and no extra project context block. Tab-specific content remains
+unchanged.
+
+Frontend gates and the forced Windows package build pass. Immediate next
+action remains the authenticated screenshot pass at 2560x1440 and a narrower
+width when a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 Overview authority note removal checkpoint
+
+Removed the Authority boundary strip from the Overview page as requested. The
+Network view retains its own authority note because it documents that view's
+read-only projection semantics. Frontend gates and the forced Windows package
+build pass; latest hashes are recorded in the evidence file.
+
+Immediate next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; do not change product code unless that pass finds a defect.
+
+## 2026-09-10 — SYN-055 wide Overview scaling and tab strip checkpoint
+
+Removed the desktop content max-width that made the Overview appear undersized
+on the user's 1440p monitor. The page now uses the available wide-screen
+canvas, while the tab strip keeps horizontal overflow for narrow screens and
+hides the visible scrollbar. Frontend gates, packaging, and the latest artifact
+hashes pass.
+
+Immediate next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; do not change product code unless that pass finds a defect.
+
+## 2026-09-10 — SYN-055 Overview header spacing checkpoint
+
+Removed the project context text block from the Overview header's top-right
+area and corrected the Local path icon inset so it no longer touches the
+vertical divider. The full-width horizontal header and snapshot-backed status
+sections remain unchanged. The top bar still contains only the Synesis brand.
+
+Frontend typecheck, lint, 6 tests, production build, forced Windows package
+build, and authenticated packaged-browser smoke pass. Latest package hashes
+are recorded in the evidence file. Immediate next action remains the
+authenticated Overview screenshot pass at 2560x1440 and a narrower width when
+a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 project Overview refinement checkpoint
+
+The live project Overview now follows the attached reference composition:
+project identity metadata and context sit above the five project status
+metrics, with Coordination and Network panels below and an explicit
+read-only authority boundary note. Providers, runtime participants,
+WorkGroups, authenticated peers, Doctor status, and network counts remain
+derived from the current snapshot; no screenshot-only data or actions were
+added. The top-bar burger and Live controls remain removed.
+
+Frontend typecheck, lint, 6 tests, production build, and the forced Windows
+package build pass. The fresh installed narrow-browser smoke authenticated
+the rebuilt package and confirmed the registry, Installation / Connections
+rail, and top bar without the runtime-connected indicator. Direct deep-linking from a fresh browser
+session cannot be counted as Overview smoke because the one-time bootstrap
+token is consumed by the entry session; the route remains covered by source
+and routing checks. 2560x1440 and narrower screenshot comparison remains
+pending because the current browser surface has no viewport control.
+
+Immediate next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; do not change product code unless that pass finds a defect.
+
+## 2026-09-10 — SYN-055 installation-level Projects rail checkpoint
+
+The global Projects home now uses the requested desktop composition: a primary
+registry list and a compact Installation / Connections rail. The rail renders
+only derived known/live/unavailable/identity-mismatch counts, API version,
+current runtime connectivity, and current-runtime peer projections. The
+browser remains truthful about the absence of a Disconnect adapter. Project-
+internal pages were not changed by this slice.
+
+Frontend verification is green with 6 tests, the forced Windows package build
+passed, and the fresh installed narrow-browser smoke confirmed the rail and
+quiet runtime indicator. 2560x1440 and narrower responsive screenshot
+comparison remains pending because the current browser surface has no
+viewport control.
+
+Immediate next action: repeat the authenticated Projects screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; do not change product code unless that pass finds a defect.
+
+## 2026-09-09 — SYN-055 global Projects visual refinement checkpoint
+
+The global Projects registry now uses a larger, intentional list hierarchy:
+project name first, truthful identity/path metadata below, state as the scan
+anchor, and understated contextual actions. Non-live entries show concise
+registry explanations; the responsive layout stacks rows without inventing
+runtime controls or dashboard metrics. Frontend gates and the forced Windows
+bundle rebuild pass. The fresh installed distribution authenticated in the
+available narrow browser viewport and showed 2 known projects with 1 live.
+
+Latest artifacts and hashes are recorded in
+docs/evidence/syn-055-browser-ui-rebuild-2026-09-09.md. Desktop/laptop
+viewport comparison remains pending because the available browser surface
+does not expose viewport controls.
+
+Immediate next action: repeat the authenticated Projects screenshot pass at
+1440x900 and a narrow laptop viewport when a viewport-capable browser surface
+is available; do not change product code unless that pass finds a defect.
+
+## 2026-09-09 — SYN-055 screenshot-led browser UI rebuild activation
+
+The explicit screenshot-led browser UI request opens `SYN-055` as the sole
+active task after `SYN-054` completed its bounded discovery slice. The work
+is confined to the accepted install-bundled `web-ui` architecture: visual
+composition, shared primitives, truthful read-only projections, existing Link
+onboarding controls, and focused frontend/packaged verification. Screenshots
+control presentation only; the current control-plane snapshot, SSE, and
+onboarding contract remain authoritative for data and actions.
+
+The first focused frontend slice is complete, and the follow-up hierarchy
+slice is implemented. The browser now uses /projects as the registry home,
+History API routes for the current live project, and truth-only registry
+detail pages for inactive, unavailable, and identity-mismatch entries.
+Frontend typecheck, lint, five tests, and production build pass. The latest
+Windows installer and ZIP rebuild pass, and the embedded web UI JAR hash
+matches the source JAR. Authenticated browser smoke exercised the registry,
+live Overview, all five project tabs, and an INACTIVE detail at the available
+narrow viewport.
+The default-environment repository Gradle web check remains blocked before
+task execution by the host loopback failure. The current in-app browser has
+no viewport control for the requested 1440x900 and narrow-laptop screenshot
+comparison.
+
+Immediate next action: repeat the authenticated UI screenshot pass at
+1440x900 and a narrow laptop viewport when a browser surface with viewport
+controls is available; keep code and package unchanged unless a defect is found.
+
 ## 2026-09-09 — SYN-009E free protection closeout
 
 The current executable protection stage is complete for `PROTECTION_LITE`.
@@ -4238,3 +4399,116 @@ SYN-054 regression.
 Immediate next action: preserve the verified SYN-054 state; no further
 product-code work is required for this goal. Commit or publication requires
 explicit authorization.
+
+## 2026-09-10 — SYN-055 modal Diagnostics inspector
+
+Replaced the Diagnostics right-side inspector with a centered modal popup.
+Finding selection keeps the table visible underneath; the modal adds close,
+Escape, backdrop dismissal, keyboard arrow navigation, and visible previous /
+next buttons with disabled states at list boundaries. Added a focused UI test
+covering open, forward navigation, boundary disabling, and Escape close.
+
+Frontend typecheck, lint, 7 tests, production build, forced runnable-installer
+build, and `git diff --check` pass. Exact screenshot comparison remains
+pending because the current browser surface has no viewport override.
+
+Immediate next action: preserve CP-0841 and use the packaged artifact for the
+next viewport-capable visual pass; no further product-code work is required
+unless that pass finds a defect.
+
+## 2026-09-10 — SYN-055 project header navigation
+
+Moved the live project name/status into the right-side metadata rail and added
+a visible Back to projects button where the title previously appeared. The
+button uses the existing route callback to return to the global Projects home;
+no browser-history behavior or backend state was introduced. The shared
+breadcrumb remains unchanged.
+
+Frontend typecheck, lint, 8 tests, production build, forced runnable-installer
+build, and `git diff --check` pass.
+
+Immediate next action: preserve CP-0842 and perform the pending authenticated
+viewport screenshot pass when a viewport-capable browser is available.
+
+## 2026-09-10 — SYN-055 icon-only back control
+
+Removed the visible Back to projects text from the project-header button while
+keeping the back arrow, 44px hit target, route callback, and screen-reader
+label. The project identity label/name arrangement remains unchanged.
+
+Frontend typecheck, lint, 8 tests, production build, forced runnable-installer
+build, and `git diff --check` pass.
+
+Immediate next action: preserve CP-0843 and perform the pending authenticated
+viewport screenshot pass when a viewport-capable browser is available.
+
+## 2026-09-10 — SYN-055 header layout correction
+
+Corrected the prior header interpretation. The project name and runtime status
+are restored to the original left-side title treatment. The right rail is
+restored to only Project ID and Local path. The icon-only back-arrow button
+remains beside the title and still routes to Projects.
+
+Frontend typecheck, lint, 8 tests, production build, forced runnable-installer
+build, and `git diff --check` pass.
+
+Immediate next action: preserve CP-0844 and perform the pending authenticated
+viewport screenshot pass when a viewport-capable browser is available.
+
+## 2026-09-10 — SYN-055 local mock-data development mode
+
+Added `web-ui/src/dev/mockSnapshot.ts` and a Vite-only `?mock=1` startup path.
+The fixture covers the shared project shell plus Overview, Agents,
+Coordination, Network, and Diagnostics states. The mock path skips the real
+bootstrap/control-plane session only when `import.meta.env.DEV` is true; normal
+and production behavior remain backend-backed.
+
+`npm run dev` starts the local hot-reload server. Live browser smoke confirmed
+the Overview and Diagnostics routes render from the fixture without reinstall.
+Frontend typecheck, lint, and 8 tests pass.
+
+Immediate next action: iterate on UI at
+`http://127.0.0.1:5173/projects/proj_test/overview?mock=1`.
+
+## 2026-09-10 — SYN-055 detail popup refinement
+
+Agents, Coordination, and Network no longer render persistent right-side
+inspectors. Their existing projected details are available through modal
+popups, and the Network page no longer renders the Authority boundary note.
+Frontend typecheck, lint, 9 tests, production build, and diff check pass.
+
+Immediate next action: use the running Vite mock server to inspect popup
+states and continue frontend-only iteration without reinstalling the bundle.
+
+## 2026-09-10 — SYN-055 Projects page refinement
+
+The Projects route now filters the real known-project projection, keeps only a
+sticky Connections rail, adds per-peer View network actions, and shows a
+disabled Terminate end control with the unsupported backend boundary made
+explicit. Typecheck, lint, 11 tests, production build, and diff check pass.
+
+Immediate next action: perform the scroll-state check on the Projects route
+and keep frontend iteration on the Vite mock server.
+
+## 2026-09-10 — SYN-055 connection termination popup and mock scroll slice
+
+The global Connections rail and project Network table now expose red bin
+buttons that open a shared termination confirmation popup. DIRECT and
+PEER_TRANSIT routes show the projected dependency-loss warning; RELAY routes
+do not. The final Terminate end control is disabled because no backend
+termination command exists. The `?mock=1` fixture now contains 14 known
+projects and 8 network peers.
+
+Verification: typecheck, lint, 11 tests, production build, diff check, and
+live mock browser checks on Projects and Network passed.
+
+## 2026-09-10 — SYN-055 Network row detail refinement
+
+Removed the standalone Server-selected routes widget. Network peer rows and
+global Connections rows are now keyboard- and pointer-activatable and open a
+Connection detail popup backed by the existing peer, route, membership, and
+health projections. Red-bin termination actions remain isolated from row
+selection.
+
+Verification: typecheck, lint, 12 tests, production build, diff check, and
+live Network row interaction passed.

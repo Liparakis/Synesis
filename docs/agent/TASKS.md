@@ -1,8 +1,75 @@
+## SYN-055
+
+### Screenshot-led Synesis browser UI rebuild — activated 2026-09-09
+
+- Status: ACTIVE
+- Evidence state: hierarchy, global registry, installation rail, and project
+  Overview visual-refinement slices implemented; frontend gates and latest
+  Windows bundle pass; authenticated browser smoke is recorded at the
+  available narrow viewport; wide viewport screenshots remain pending
+- Purpose: rebuild the installed browser UI around the attached screenshots'
+  restrained engineering-console layout while making the actual product
+  hierarchy explicit: installation, Projects registry, selected project, then
+  project-local views.
+- Visual authority: the screenshots govern layout, hierarchy, density, color,
+  typography, tables, tabs, inspectors, and responsive presentation.
+- Semantic authority: the existing authenticated snapshot/SSE/onboarding
+  contract and its Java read model govern every rendered field and action.
+- Scope: the existing `web-ui` React/TypeScript source, shared visual
+  primitives, view composition, browser tests, and focused visual/packaged
+  verification. The six required surfaces are Projects, Overview, Agents,
+  Coordination, Network, and Diagnostics.
+- Required behavior: keep real session/bootstrap/CSRF/SSE behavior, real Link
+  onboarding, truthful empty and `UNCONFIGURED` states, and responsive
+  desktop/laptop presentation. Global home is the known-project registry;
+  project navigation is URL-based and project-local. Render no demo data and
+  do not derive state that the backend does not define.
+- Hierarchy boundary: remove fake global dashboard/account/integration
+  navigation. Live project tabs are shown only when the current control-plane
+  session actually serves that project. Inactive, unavailable, and identity-
+  mismatch entries show registry truth without invented start, fix, or switch
+  actions.
+- Shell refinement: the top-bar runtime indicator, Live connection control,
+  and burger navigation control are removed; project-level status badges and
+  the installation rail's connection state remain authoritative.
+- Installation home: add only truthful installation counts, API version,
+  local connection state, and current-runtime peer projections to a compact
+  right rail; do not imply global peer aggregation or add browser-owned
+  disconnect behavior.
+- Project Overview: align the live project header, status metrics,
+  Coordination panel, Network panel, and authority boundary note to the
+  attached reference while deriving every value from the current snapshot.
+- Acceptance: frontend typecheck, lint, tests, production build, packaged
+  static-resource verification, URL/routing checks, installed authenticated
+  UI smoke, and visual inspection of Projects, live Overview, inactive state,
+  Agents, Coordination, Network, and Diagnostics against the attached
+  references. Existing control-plane and packaging behavior must remain
+  unchanged.
+- Scope exclusions: no new backend endpoint, authority-bearing behavior,
+  control-plane semantic change, project switching protocol, fake fixture in
+  production, cloud surface, native GUI, push, tag, release, or remote
+  mutation. No ADR is required unless the implementation changes the accepted
+  installed-UI architecture.
+ - Exact next action: repeat the authenticated UI screenshot pass at 2560x1440
+   and a narrower browser width when a browser surface with viewport controls is
+   available; do not change product code unless that pass finds a defect.
+
+#### 2026-09-10 Projects page refinement slice
+
+Implemented the bounded global Projects-page UI slice: project search, a
+Connections-only right rail, per-connection View network actions, and red-bin
+termination popups on the global rail and project Network table. The popup’s
+final action remains disabled because termination is not exposed by the
+current backend contract. Sticky page and registry headers are scoped to the
+Projects route. The development mock now has 14 projects and 8 peers for
+scrollability checks. No backend capability was invented.
+
 ## SYN-054
 
 ### Persistent known-project discovery — activated 2026-09-09
 
-- Status: ACTIVE
+- Status: COMPLETE FOR CURRENT SCOPE; implementation and lifecycle evidence
+  complete; unrelated baseline regressions documented
 - Evidence status: implementation and lifecycle evidence complete; unrelated baseline regressions documented
 - Purpose: persist the minimum discovery metadata for valid Synesis projects
   encountered through normal Synesis use, while preserving project-local

@@ -1,3 +1,30 @@
+## SYN-055 screenshot-led browser UI rebuild — activation — 2026-09-09
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Task boundary | `SYN-055` sole active task; `SYN-054` complete for scope | PASS | durable task/state files |
+| Visual source | attached screens control layout and hierarchy only | PASS | user-provided references |
+| Semantic source | current authenticated snapshot/SSE/onboarding contract | PASS baseline | ADR-0069 and control-plane read model |
+| Frontend gates | typecheck, lint, tests, production build | PASS — 2 files, 6 tests | web-ui gates; docs/evidence/syn-055-browser-ui-rebuild-2026-09-09.md |
+| Installation Projects rail | derived registry counts, API version, current-runtime scope, rail connection state | PASS focused source/browser | authenticated installed narrow smoke; wide screenshot pending |
+| Project Overview visual refinement | identity header, status metrics, Coordination, Network, authority boundary | PASS focused source/build | snapshot-backed source, route checks, latest packaged UI; viewport screenshot pending |
+| Project Overview header cleanup | remove top-right project context; inset Local path icon from divider | PASS focused source/browser | fresh packaged smoke and latest build; viewport screenshot pending |
+| Wide Overview scaling and tabs | use wide monitor canvas; hide tab scrollbar while preserving overflow | PASS focused source/build | latest packaged UI and responsive CSS; viewport screenshot pending |
+| Overview authority note | remove Overview-only Authority boundary strip; retain Network note | PASS focused source/build | latest packaged UI; viewport screenshot pending |
+| Shared project header | Overview-style header reused by all five project tabs | PASS focused source/build | latest packaged UI and route composition; viewport screenshot pending |
+| Diagnostics console refinement | compact summary, dense findings table, selection inspector, no invented repair action | PASS focused source/build | latest packaged UI and Doctor snapshot fields; viewport screenshot pending |
+| Diagnostics status semantics | HEALTHY/OK polish; degraded/error emphasis from real status | PASS focused source/build | latest packaged UI; backend enums unchanged |
+| Global Projects visual refinement | larger registry hierarchy, truthful summary/state notes, responsive rows, no invented widgets | PASS focused source/build | web-ui source and production build; desktop viewport comparison pending |
+| Global hierarchy | `/projects` registry home; no fake dashboard/profile/integration nav | PASS | authenticated browser smoke and current source |
+| Project routing | live project `/projects/<id>/<view>` with five project-local tabs | PASS | route tests and authenticated browser smoke |
+| Registry truth states | inactive, unavailable, and identity-mismatch detail without invented runtime/fix actions | PASS for inactive; unavailable/mismatch are source-backed branches | route implementation; inactive browser smoke |
+| Packaged follow-up bundle | latest installer/ZIP contains current UI JAR and route/assets | PASS | SHA-256 and nested-archive inspection |
+| Authenticated browser smoke | registry, Installation / Connections rail, top bar without runtime indicator | PASS — available narrow viewport | fresh local distribution and in-app browser; deep-link Overview smoke remains pending |
+| Wide/narrow screenshot comparison | 2560x1440 and narrower browser width | PENDING | current in-app browser has no viewport control |
+| Repository web check | :web-ui:check --no-daemon in default environment | BLOCKED before task execution | host could not establish Gradle loopback connection |
+| Packaged static bundle | :cli:runnableInstaller --rerun-tasks with documented command-local workaround | PASS | installer/ZIP; embedded UI hash matched |
+| Installed UI | authenticated snapshot/SSE, six screens, desktop/laptop visual inspection | PENDING | browser surface unavailable; installed verification remains next action |
+
 ## SYN-009E maximum-protection release profile — current gate — 2026-09-09
 
 | Area | Check | Result | Evidence / boundary |
@@ -1403,3 +1430,93 @@ with pytest 5/5; Doctor DEGRADED with six warnings, zero errors, zero critical f
 
 Exact next action: preserve the verified discovery checks; no further
 SYN-054 product-code work is required.
+
+## SYN-055 Diagnostics modal inspector — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Modal selection | Selecting a finding opens a dialog while the table remains the underlying page | PASS focused UI test |
+| Boundary navigation | Previous is disabled for the first finding and Next is disabled for the last | PASS focused UI test |
+| In-place navigation | Next changes the selected finding without leaving the dialog | PASS focused UI test |
+| Escape dismissal | Escape closes the dialog | PASS focused UI test |
+| Backend boundary | Doctor findings and repair availability remain snapshot-backed; no repair action added | PASS source review |
+| Frontend gates | Typecheck, lint, 7 tests, production build, and diff check | PASS |
+
+## SYN-055 project header navigation — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Project identity placement | Project name/status render in the right metadata rail with ID and Local path | PASS focused UI test/source review |
+| Back navigation | Back to projects invokes the Projects-home route callback | PASS focused UI test |
+| Existing hierarchy | Breadcrumb remains available for project location context | PASS source review |
+| Frontend gates | Typecheck, lint, 8 tests, production build, and diff check | PASS |
+
+## SYN-055 icon-only back control — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Visible control | Back button shows only the arrow icon | PASS source review |
+| Accessible control | Screen-reader label remains Back to projects | PASS focused UI test |
+| Hit target | Icon button remains 44px square | PASS source review |
+| Frontend gates | Typecheck, lint, 8 tests, production build, and diff check | PASS |
+
+## SYN-055 header layout correction — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Original title treatment | Project name and runtime status remain on the left | PASS focused UI test/source review |
+| Metadata rail | Right rail contains only Project ID and Local path | PASS source review |
+| Back control | Icon-only arrow remains beside the title and routes to Projects | PASS focused UI test |
+| Frontend gates | Typecheck, lint, 8 tests, production build, and diff check | PASS |
+
+## SYN-055 local mock-data development mode — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Mock startup | Vite dev server loads without a bootstrap token when `?mock=1` is present | PASS live browser smoke |
+| Overview fixture | `/projects/proj_test/overview?mock=1` renders project, metrics, coordination, and network data | PASS live browser smoke |
+| Diagnostics fixture | `/projects/proj_test/diagnostics?mock=1` renders findings table from local fixture data | PASS live browser smoke |
+| Production boundary | Mock mode is gated by `import.meta.env.DEV`; normal runtime path remains unchanged | PASS source review |
+| Frontend gates | Typecheck, lint, 8 tests | PASS |
+
+## SYN-055 detail popup refinement — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Network initial layout | No persistent Membership/Relay right rail and no Authority boundary note | PASS live browser smoke and screenshot |
+| Network details | Membership and Relay detail open in modal popups and close cleanly | PASS live browser interaction |
+| Agent details | Selecting an agent opens a modal and close control removes it | PASS focused test and live browser interaction |
+| Coordination details | View details opens a modal with projected claim data | PASS live browser interaction |
+| Frontend gates | Typecheck, lint, 9 tests, production build, and diff check | PASS |
+
+## SYN-055 Projects page refinement — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Project search | Search filters by name, identity, path, and status | PASS focused test and live mock interaction |
+| Connections rail | Installation card is absent and Connections is the only right-side panel | PASS live mock accessibility tree and screenshot |
+| Per-peer navigation | Every projected connection has View network | PASS live mock accessibility tree |
+| Terminate end boundary | Terminate end is visible but disabled because no backend command exists | PASS source review and live mock accessibility tree |
+| Sticky top | Projects header and registry heading use route-scoped sticky positioning | PASS CSS/source review |
+| Frontend gates | Typecheck, lint, 11 tests, production build, and diff check | PASS |
+
+## SYN-055 connection termination popup and mock scroll slice — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Global connection popup | Red bin opens confirmation from the Projects Connections rail | PASS live mock browser interaction |
+| Network connection popup | Red bin opens confirmation from each Network peer row | PASS live mock browser interaction |
+| Route-specific warning | DIRECT/PEER_TRANSIT show dependency-loss copy; RELAY omits it | PASS live mock browser interaction |
+| Backend boundary | Terminate end remains disabled because no terminate command is projected | PASS source review and live accessibility tree |
+| Scroll fixture | Mock mode renders 14 projects and 8 peers | PASS live mock accessibility tree |
+| Frontend gates | Typecheck, lint, 11 tests, production build, and diff check | PASS |
+
+## SYN-055 Network row detail refinement — 2026-09-10
+
+| Check | Required evidence | Status |
+|---|---|---|
+| Route widget removal | Network does not render the standalone Server-selected routes section | PASS live mock accessibility tree |
+| Network row detail | Clicking a peer row opens Connection detail with projected route/session data | PASS focused test and live browser interaction |
+| Global row detail | Clicking a Connections rail row opens the same detail surface | PASS source review and live mock interaction |
+| Action isolation | Clicking the red-bin button opens termination confirmation without row selection | PASS source review and prior live interaction |
+| Frontend gates | Typecheck, lint, 12 tests, production build, and diff check | PASS |

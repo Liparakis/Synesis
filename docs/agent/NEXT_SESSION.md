@@ -1,3 +1,139 @@
+## 2026-09-10 — SYN-055 project Overview refinement checkpoint
+
+The live project Overview composition now matches the attached reference
+direction: identity header, status metric band, Coordination and Network
+panels, and authority boundary note. The header's project context block was
+removed from the top-right and the Local path icon was inset from its divider.
+The global top bar contains only the
+Synesis brand; the runtime-connected indicator is not shown there. All values
+remain snapshot-backed and no new backend or browser-owned authority was
+added. Frontend gates, packaged bundle verification, and the fresh installed
+narrow-browser registry smoke pass. The current browser surface has no viewport
+override, so the exact
+2560x1440 and narrower screenshot pass remains open.
+
+Exact next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; keep code and package unchanged unless that pass finds a defect.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-10 — Connection termination popup and mock scroll slice
+
+Continue from the live Vite server at:
+
+- `http://127.0.0.1:5173/projects?mock=1`
+- `http://127.0.0.1:5173/projects/proj_test/network?mock=1`
+
+The global Connections rail and project Network table now use red-bin
+termination popups. DIRECT and PEER_TRANSIT show the dependency-loss warning;
+RELAY routes do not. The final action stays disabled because the current
+backend exposes no terminate-connection command. Mock mode contains 14
+projects and 8 peers for scrollability testing. Do not reinstall for
+frontend-only changes.
+
+## 2026-09-10 — Network row detail refinement
+
+The Network page no longer renders the standalone Server-selected routes
+widget. Clicking or keyboard-activating a peer row opens Connection detail;
+the red-bin button still opens termination confirmation without selecting the
+row. Continue from the running mock URL:
+`http://127.0.0.1:5173/projects/proj_test/network?mock=1`.
+
+## 2026-09-10 — Detail popup refinement
+
+Continue from the next checkpoint with the Vite dev server and mock route:
+`http://127.0.0.1:5173/projects/proj_test/network?mock=1`.
+Verify the Membership, Relay detail, Agent Detail, and Coordination detail
+popups at the current browser size before any package rebuild. Frontend-only
+changes do not require reinstalling the Windows bundle.
+
+## 2026-09-10 — SYN-055 project header navigation checkpoint
+
+Project name and runtime status now live in the right-side project metadata
+rail. A Back to projects button occupies the former title position and routes
+to the global Projects registry. The existing breadcrumb remains visible.
+
+Exact next action: run the authenticated project-header screenshot pass at a
+viewport-capable browser width; otherwise preserve the package unchanged.
+
+## 2026-09-10 — SYN-055 local mock-data development mode checkpoint
+
+Use the Vite hot-reload server for frontend iteration; no reinstall is needed:
+
+`cd C:\Users\Liparakis\Desktop\Synesis\web-ui`
+`npm run dev`
+
+Open:
+`http://127.0.0.1:5173/projects/proj_test/overview?mock=1`
+
+The mock fixture is development-only. The default URL and packaged runtime
+still use the real local control plane.
+
+Exact next action: continue UI iteration through the mock URL before rebuilding
+the Windows package.
+
+## 2026-09-10 — SYN-055 header layout correction checkpoint
+
+Project name/status are back on the left in their original position. The right
+rail contains only Project ID and Local path. The icon-only back arrow remains
+beside the title with its accessible Projects label.
+
+Exact next action: run the authenticated project-header screenshot pass at a
+viewport-capable browser width; otherwise preserve the package unchanged.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-10 — SYN-055 icon-only back control checkpoint
+
+The project header now shows only a back arrow in the new left-side button;
+there is no visible button text. The accessible label still identifies it as
+Back to projects, and the project identity arrangement remains unchanged.
+
+Exact next action: run the authenticated project-header screenshot pass at a
+viewport-capable browser width; otherwise preserve the package unchanged.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-10 — SYN-055 modal Diagnostics inspector checkpoint
+
+The Diagnostics detail view is now a modal popup with visible Previous and
+Next arrow buttons, native disabled states at the first and last finding,
+keyboard arrow support, Escape close, and backdrop dismissal. The table stays
+full width behind the popup. Doctor data and repair availability remain
+unchanged.
+
+Exact next action: run the authenticated Diagnostics screenshot pass at a
+viewport-capable browser width; otherwise preserve the package unchanged.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
+## 2026-09-09 — SYN-055 screenshot-led browser UI rebuild activation
+
+`SYN-055` is now the sole active task. `SYN-054` is complete for its bounded
+known-project discovery scope; its explicit UI-redesign exclusion is closed by
+opening this separate frontend task. Preserve the accepted ADR-0069
+same-origin static UI, typed snapshot/SSE client, bootstrap/session/CSRF
+boundary, and real Link onboarding. Use the attached screenshots for visual
+layout and hierarchy only; never copy their invented data or semantics.
+
+- Exact next action: repeat the authenticated UI screenshot pass at
+  2560x1440 and a narrower browser width when a browser surface with viewport
+  controls is available. The hierarchy, global registry refinement, and
+  installation-rail slices, frontend gates, latest bundle,
+  and authenticated narrow-viewport smoke are complete; keep code unchanged
+  unless the remaining visual pass finds a defect.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+
 ## 2026-09-09 — SYN-009E protection closeout
 
 The free protection stage is complete and has been reconciled for closeout.
@@ -2974,6 +3110,59 @@ discovery regression.
 Exact next action: preserve the verified implementation; no further
 product-code work is required for SYN-054. Commit or publication requires
 explicit authorization.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-10 — SYN-055 wide Overview scaling and tab strip checkpoint
+
+The Overview now uses the available desktop width instead of the previous
+1560px cap, and the project tabs no longer show a scrollbar while retaining
+narrow-screen horizontal access. The latest Windows bundle and focused checks
+pass. Exact screenshot comparison remains pending because the current browser
+surface has no viewport override.
+
+Exact next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; keep code and package unchanged unless that pass finds a defect.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-10 — SYN-055 Overview authority note removal checkpoint
+
+The Authority boundary strip is removed from Overview. The Network view keeps
+its scoped authority note. The latest Windows bundle and focused checks pass;
+the current browser surface still has no viewport override for exact screenshot
+comparison.
+
+Exact next action: repeat the authenticated Overview screenshot pass at
+2560x1440 and a narrower browser width when a viewport-capable browser surface
+is available; keep code and package unchanged unless that pass finds a defect.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-10 — SYN-055 shared project header checkpoint
+
+Agents, Coordination, Network, and Diagnostics now use the same styled project
+header as Overview: title/status on the left and labeled Project ID / Local
+path metadata on the right. Tab-specific content and actions are unchanged.
+The latest Windows bundle and focused checks pass.
+
+Exact next action: repeat the authenticated screenshot pass at 2560x1440 and a
+narrower browser width when a viewport-capable browser surface is available;
+keep code and package unchanged unless that pass finds a defect.
+
+Required continuation command:
+`powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`
+## 2026-09-10 — SYN-055 Diagnostics console refinement checkpoint
+
+Diagnostics now presents a compact status/report summary, dense findings table,
+and selection-driven detail inspector. Healthy state is visually quiet; actual
+findings carry the emphasis. No new Doctor data, repair action, or backend
+semantics were added. The latest Windows bundle and focused checks pass.
+
+Exact next action: repeat the authenticated screenshot pass at 2560x1440 and a
+narrower browser width when a viewport-capable browser surface is available;
+keep code and package unchanged unless that pass finds a defect.
 
 Required continuation command:
 `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`

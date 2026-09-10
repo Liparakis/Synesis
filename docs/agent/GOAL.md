@@ -1,3 +1,45 @@
+# SYN-055 screenshot-led Synesis browser UI rebuild — activated 2026-09-09
+
+Rebuild and polish the installed Synesis browser UI using the attached
+screenshots as the visual design authority and the current repository's
+control-plane read model as the semantic authority. Make the actual product
+hierarchy explicit: Synesis installation, Projects registry, selected project,
+then Overview, Agents, Coordination, Network, and Diagnostics. Keep the real
+session, CSRF, SSE, Link onboarding, project registry, participant,
+coordination, network, and Doctor boundaries intact.
+
+- Status: ACTIVE / installation-level Projects rail and live project Overview
+  slices implemented and latest bundle verified;
+- authenticated browser smoke passes at the available narrow viewport;
+- 2560x1440 and narrower screenshot comparison remains pending
+- Exact next action: repeat the authenticated UI screenshot pass at 2560x1440
+- and a narrower browser width when a browser surface with viewport controls is
+- available; keep code and package unchanged unless that pass finds a defect.
+- Architecture basis: accepted ADR-0069 installed browser UI architecture;
+  no architecture change is authorized by this goal.
+- Visual boundary: screenshots control presentation; they do not provide
+  product data, backend semantics, or permission to invent fields/actions.
+- Semantic boundary: the current authenticated `/api/v1` snapshot, SSE, and
+  onboarding contract remains authoritative for all content and mutations.
+- Hierarchy boundary: `/projects` is the global home and lists only the known
+  project registry. A live project uses `/projects/<id>/<view>` and exposes
+  only the five project-local tabs. Inactive, unavailable, and identity-
+  mismatch entries remain truthful registry detail pages with no invented
+  runtime, repair, or project-switch action.
+- Installation boundary: the global home may show only derived registry
+  counts, API version, local runtime connection state, and peer projections
+  authoritative for the current runtime. No browser-owned disconnect action is
+  implied without a real authority-safe adapter.
+- Shell boundary: the global top bar contains only the Synesis brand; the
+  runtime-connected indicator is not shown there. Scoped connection state may
+  remain in the installation rail.
+- Scope boundary: this slice redesigns only the project Overview among
+  project-internal pages; Agents, Coordination, Network, and Diagnostics keep
+  their existing compositions in this slice.
+- Scope exclusions: no backend endpoint or read-model redesign, new authority
+  behavior, project-switching protocol, production fixtures, cloud surface,
+  native GUI, push, tag, release, or remote mutation.
+
 # SYN-054 persistent known-project discovery — activated 2026-09-09
 
 Add the smallest event-driven local discovery index needed for Synesis to
@@ -8,8 +50,8 @@ existing project identity, CLI/UI, MCP startup, and application-state seams;
 do not add a daemon, filesystem crawler, new MCP tool, global coordination
 authority, runtime auto-start, or project relocation workflow.
 
-- Status: ACTIVE / implementation and lifecycle evidence complete; unrelated
-  baseline regressions documented
+- Status: COMPLETE FOR CURRENT SCOPE; implementation and lifecycle evidence
+  complete; unrelated baseline regressions documented
 - Exact next action: preserve the verified state; no further product-code work
   is required for this goal. Any commit or publication is separately
   authorized.

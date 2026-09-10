@@ -32,6 +32,7 @@ export interface ProviderSnapshot {
 }
 
 export interface SelectorSnapshot {
+  kind?: string;
   type?: string;
   value?: string;
 

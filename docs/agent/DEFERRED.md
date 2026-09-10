@@ -1,5 +1,22 @@
 # Deferred Functionality Register
 
+## SYN-055 promotion review — 2026-09-09
+
+The explicit screenshot-led UI request promotes a bounded frontend polish
+task over the already accepted installed browser UI. It does not promote a
+new backend, project-switching protocol, authority model, network capability,
+provider behavior, or browser-owned coordination logic. ADR-0069 remains the
+architecture boundary: one install-bundled static frontend, one same-origin
+loopback server, one typed snapshot/SSE client, and existing onboarding
+commands.
+
+Promotion requires six real-data surfaces, shared visual primitives, truthful
+empty/unconfigured/security states, preserved session/SSE/onboarding behavior,
+frontend quality gates, packaged static verification, and installed UI smoke.
+The screenshots are visual authority only; their example records, metrics,
+actions, and relationships are not product truth. No new deferred capability
+is introduced, and no production fixture or remote mutation is authorized.
+
 ## Current SYN-009E disposition — 2026-09-09
 
 The free `PROTECTION_LITE` scope is complete and is being closed and pushed.

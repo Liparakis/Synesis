@@ -1,3 +1,63 @@
+## 2026-09-09 — SYN-055 screenshot-led browser UI rebuild activation
+
+The user requested a rebuild and polish of the installed Synesis browser UI
+from six attached reference screens. The current repository was re-read first:
+the frontend is a React/Vite static bundle over the existing authenticated
+loopback control plane, and the backend already exposes the required real
+project, participant, WorkGroup, claim, task, capability, ownership, Link,
+overlay/relay, and Doctor fields. The existing UI is semantically connected
+but visually card-heavy and blue-toned, unlike the requested black/graphite
+table-first console.
+
+Opened `SYN-055` as the sole active task because `SYN-054` explicitly excludes
+UI redesign and its implementation/lifecycle evidence is complete. No backend
+or architecture change is authorized. The focused implementation slice is
+complete; focused frontend verification passes. The exact next action is
+packaged static-resource and installed authenticated UI verification, including
+desktop/laptop visual inspection of all six surfaces.
+
+## 2026-09-09 — SYN-055 focused frontend implementation slice
+
+Replaced the blue-toned card-heavy frontend composition with a shared
+black/graphite project shell and six repository-backed surfaces: Projects,
+Overview, Agents, Coordination, Network, and Diagnostics. Added dense tables,
+selected-row inspectors, WorkGroup/coordination tabs, Link onboarding controls,
+truthful empty and UNCONFIGURED states, responsive table overflow, visible
+focus treatment, and reduced-motion handling. Kept the existing authenticated
+bootstrap/session/CSRF/SSE client and did not add backend semantics.
+
+Focused web checks passed: typecheck, lint, 2 Vitest files / 4 tests, and Vite
+production build. The new evidence is
+docs/evidence/syn-055-browser-ui-rebuild-2026-09-09.md. The repository
+Gradle web check stopped before task execution on
+java.io.IOException: Unable to establish loopback connection. The desktop CUA
+session exposed no browser surface, so installed-package and live viewport
+visual verification remain pending. No push, tag, release, backend change, or
+remote mutation occurred.
+
+Exact next action: run installed authenticated UI verification, including
+desktop/laptop visual inspection of all six surfaces, on a host with a browser
+surface.
+
+## 2026-09-09 — SYN-055 packaged bundle verification
+
+Built the current Windows self-extracting installer with the documented
+command-local TEMP/TMP and jdk.net.unixdomain.tmpdir workaround. The forced
+rebuild executed all 27 packaging tasks and produced both the runnable
+installer and platform ZIP. The current web-ui JAR SHA-256 matched the copy in
+the platform bundle, and the bundle contained web-ui/index.html plus the
+current hashed JavaScript and CSS assets. Installation and PATH were not
+changed.
+
+Installer: cli/build/distributions/synesis-windows-x64.exe
+SHA-256: AC15B08BC099C151ACE86ED8BB5AB3CECD746EA2F143E8D4816D876B872D3E72
+ZIP: cli/build/distributions/synesis-0.1.0-dev.local-windows-x64.zip
+SHA-256: 1969E79F17CA203C2B71FBB0E53E413512D6B2E85A949A9A2F9FC1266BE82F3
+
+Exact next action: run installed authenticated UI verification, including
+desktop/laptop visual inspection of all six surfaces, on a host with a browser
+surface.
+
 ## 2026-09-09 — SYN-009E protection-lite closeout reconciliation
 
 Closed the current executable protection stage for the free scope. The CLI
@@ -6716,3 +6776,255 @@ reproduced before the SYN-054 working-tree changes, so the remaining broad red
 result is recorded as a pre-existing regression condition rather than a
 discovery-layer failure. The temporary worktree and disposable project
 fixture were removed. No commit or publication was made.
+
+## 2026-09-09 — SYN-055 hierarchy redesign follow-up
+
+The user supplied a second, explicit redesign brief after the first focused
+UI slice. It makes the product hierarchy authoritative: `/projects` is the
+known-project registry home, a selected live project owns the five project
+tabs, and non-live registry states must remain truthful without invented
+runtime, repair, or switching actions. The task ledger was updated before
+production edits. The next implementation slice is limited to frontend
+composition, History API routing, and focused verification; no backend
+endpoint or control-plane semantic change is authorized.
+
+The hierarchy slice is implemented. The UI normalizes the global route to
+/projects, uses /projects/<id>/<view> for the current live project, removes
+fake global/profile/integration navigation, and renders truth-only registry
+detail pages for non-live states. The first bootstrap attempt exposed a route
+normalization ordering defect; it was fixed so the one-time bootstrap hash is
+consumed before the URL is normalized.
+
+Final focused gates passed: typecheck, lint, production build, and Vitest
+(2 files, 5 tests). The forced Windows runnable installer rebuild passed with
+the process-local JDK loopback workaround. An authenticated browser smoke
+against the fresh local distribution exercised the registry, live Overview,
+Agents, Coordination, Network, Diagnostics, and an INACTIVE registry detail.
+The available in-app browser had no viewport override, so the 1440x900 and
+narrow-laptop screenshot comparison remains pending. No commit, push, tag,
+release publication, backend change, or PATH change was made.
+
+## 2026-09-09 — SYN-055 global Projects visual refinement and package
+
+Refined the global /projects page into a larger, restrained registry list:
+Projects heading and installation subtitle, derived known/live summary,
+project-first rows, secondary identity/path metadata, truthful non-live notes,
+and responsive stacked rows. No fake dashboard content or unsupported actions
+were introduced.
+
+Frontend typecheck, lint, tests (5), and production build passed. The forced
+Windows runnable installer rebuild passed with the documented local JDK
+loopback workaround. The source and embedded UI JAR hashes match; the latest
+installer and ZIP hashes and paths are recorded in the SYN-055 evidence file.
+An authenticated narrow-viewport smoke confirmed the refined registry content
+against the fresh installed distribution. Desktop/laptop viewport comparison
+remains pending because the available browser has no viewport controls.
+
+## 2026-09-10 — SYN-055 shell control removal and repackaging
+
+Removed the top-bar Live connection control and burger navigation control,
+including their unused mobile navigation state and styles. Project-level
+registry status badges remain because they represent authoritative state.
+Typecheck, lint, five tests, production build, and the forced Windows
+runnable-installer package build passed. The latest artifact hashes are
+recorded in the SYN-055 evidence file. No backend, PATH, commit, push, tag,
+or release publication was made.
+
+## 2026-09-10 — SYN-055 project Overview refinement
+
+Refined the live project Overview around the newly supplied reference: a
+quiet runtime shell, breadcrumb-ready project identity header, snapshot-backed
+status metrics for Providers, Participants, Active WorkGroups, Authenticated
+Peers, and Doctor, plus Coordination and Network panels and an explicit
+authority boundary note. Removed the old project header strip for this view
+without changing control-plane semantics or adding screenshot-only fields.
+
+Typecheck, lint, 6 tests, production build, and the forced Windows
+runnable-installer build passed. A fresh packaged installed-browser session
+authenticated and confirmed the registry, Installation / Connections rail,
+and quiet runtime indicator; exact Overview screenshot comparison remains
+pending because the available browser has no viewport controls. No backend,
+PATH, commit, push, tag, or release publication was made.
+
+## 2026-09-10 — SYN-055 installation-level Projects rail
+
+The latest pasted brief narrowed this slice to the global Projects home and
+explicitly excluded project-internal redesign. Added the two-column desktop
+registry plus compact Installation / Connections rail, using only real
+registry counts, API version, current runtime connectivity, and current
+runtime peer/session projections. Added the quiet runtime-connected indicator
+while keeping the top bar free of hamburger, profile, duplicate Projects, and
+Live pill controls. No browser-owned disconnect action was added because the
+authority-safe adapter does not exist.
+
+Added a focused rail test; frontend checks now pass with 6 tests. The forced
+Windows runnable-installer package and authenticated installed narrow smoke
+pass. Wide 2560x1440 and narrower viewport screenshots remain pending because
+the available browser surface exposes no viewport override. No backend, PATH,
+commit, push, tag, or release publication was made.
+## 2026-09-10 — SYN-055 full-window Overview refinement and top-bar cleanup
+
+Updated the Overview header to follow the supplied full-window reference:
+full-width desktop canvas, horizontal project identity metadata, labeled
+Project ID and Local path fields, and project context aligned in the same
+header row. Removed the runtime-connected indicator from the global top bar as
+requested; the installation rail may still show its scoped connection state.
+
+Typecheck, lint, 6 tests, production build, forced Windows runnable-installer
+build, and authenticated packaged-browser smoke passed. The smoke confirmed
+the top bar ends at the Synesis brand and contains no runtime-connected text.
+The browser surface still has no viewport override for exact 2560x1440
+comparison. No backend, PATH, commit, push, tag, or release publication was
+made.
+## 2026-09-10 — SYN-055 Overview header cleanup and repackaging
+
+Removed the project context text block from the Overview header's top-right
+area and corrected the Local path icon spacing so it clears the vertical
+divider. Rebuilt the full Windows package with the latest frontend assets.
+
+Typecheck, lint, 6 tests, production build, forced runnable-installer build,
+and authenticated packaged-browser smoke passed. The top bar remains limited
+to the Synesis brand; the scoped Installation rail connection state is
+unchanged. No backend, PATH, commit, push, tag, or release publication was
+made.
+## 2026-09-10 — SYN-055 wide Overview scaling and tab strip cleanup
+
+Removed the 1560px desktop content cap so the Overview scales up across the
+user's wide monitor instead of sitting undersized in the center. Hid the
+project tab strip scrollbar while retaining horizontal scrolling for narrow
+screens.
+
+Typecheck, lint, 6 tests, production build, forced Windows runnable-installer
+build, and packaged-browser smoke passed. No backend, PATH, commit, push, tag,
+or release publication was made.
+## 2026-09-10 — SYN-055 Overview authority note removal and repackaging
+
+Removed the Authority boundary strip from the Overview page. Kept the same
+note on Network because it explains that view's read-only projection boundary.
+Rebuilt the Windows installer and ZIP with the latest UI.
+
+Typecheck, lint, 6 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+
+## 2026-09-10 — Projects page refinement
+
+### Connection termination popup and mock scroll slice
+
+Replaced the disabled per-connection text action with red-bin buttons and a
+shared confirmation popup on the global Connections rail and project Network
+table. The popup warns about dependent-member connectivity only for direct and
+peer-transit routes. Expanded `?mock=1` to 14 projects and 8 peers. Typecheck,
+lint, 11 tests, production build, diff check, and live browser interaction
+passed. No backend, package, or installer change was made.
+
+## 2026-09-10 — Network row detail refinement
+
+Removed the standalone Server-selected routes widget. Network peer rows and
+global Connections rows now open a shared Connection detail popup on click or
+keyboard activation, using the existing projected route, membership, health,
+and session data. The red-bin action remains isolated. Typecheck, lint, 12
+tests, production build, diff check, and live browser interaction passed.
+
+Added project search, removed the Installation right rail, kept Connections as
+the only right-side panel, and added per-connection View network controls. A
+disabled Terminate end button is shown honestly because the current
+control-plane contract exposes no safe terminate-connection operation. Scoped
+sticky positioning was added for the Projects route. Live mock search and
+layout checks passed; typecheck, lint, 11 tests, production build, and diff
+check passed. No backend or installer change was made.
+
+## 2026-09-10 — Detail popup refinement
+
+Replaced the Agents, Coordination, and Network right-side inspectors with
+on-demand modal popups. Removed the Network Authority boundary note. Added a
+focused Agents popup regression test and verified the Network, Agents, and
+Coordination flows in the live mock browser tabs. Typecheck, lint, 9 tests,
+production build, and `git diff --check` passed. No installer rebuild or
+backend change was made.
+## 2026-09-10 — SYN-055 shared project header styling and repackaging
+
+Standardized Agents, Coordination, Network, and Diagnostics on the same styled
+project header used by Overview: title/status treatment, labeled Project ID and
+Local path metadata, wide-screen spacing, and no project context block. Kept
+each tab's existing content and actions unchanged.
+
+Typecheck, lint, 6 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+## 2026-09-10 — SYN-055 Diagnostics console refinement and repackaging
+
+Reworked Diagnostics into a professional infrastructure-console composition:
+compact overall status/report/timestamp/severity summary, immediate dense
+findings table, and a detail inspector opened by selecting a finding. Healthy
+state is compressed; warning/error findings retain emphasis. Kept the Doctor
+snapshot as the only source of data and did not add a Repair action when repair
+is unsupported.
+
+Typecheck, lint, 6 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+## 2026-09-10 — SYN-055 Diagnostics status-label polish and final package
+
+Polished safe Doctor status labels so HEALTHY and OK render as Healthy, while
+degraded/error overall states remain visually emphasized even with zero detail
+counts. Backend values and repair availability semantics remain unchanged.
+
+Final typecheck, lint, 6 tests, production build, forced runnable-installer
+build, and packaged verification passed. No backend, PATH, commit, push, tag,
+or release publication was made.
+
+## 2026-09-10 — SYN-055 modal Diagnostics inspector and package
+
+Moved the Diagnostics finding inspector into a modal popup. Added visible
+previous/next arrows with disabled boundary states, keyboard arrow navigation,
+Escape close, backdrop dismissal, and focus on the close control. Added a
+focused interaction test. The underlying table remains full width and all
+Doctor data and repair semantics remain unchanged.
+
+Typecheck, lint, 7 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+
+## 2026-09-10 — SYN-055 project header navigation and package
+
+Moved the project name/status into the right-side metadata rail and replaced
+the former left title position with a Back to projects button. The button
+returns to the global Projects registry through the existing route callback;
+the breadcrumb remains for orientation. Added focused coverage for placement
+and callback behavior.
+
+Typecheck, lint, 8 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+
+## 2026-09-10 — SYN-055 local mock-data development mode
+
+Added a Vite development-only fake-data mode so frontend work can be tested
+through hot reload without reinstalling the Windows bundle. The fixture covers
+the project shell and all five project views; `?mock=1` bypasses bootstrap only
+in development mode. Live browser smoke passed for Overview and Diagnostics.
+
+Typecheck, lint, and 8 tests passed. No installer rebuild, backend change,
+PATH change, commit, push, tag, or release publication was made for this
+development harness slice.
+
+## 2026-09-10 — SYN-055 header layout correction and package
+
+Restored the project name/status to the original left-side header position and
+restored the right rail to Project ID and Local path only. Kept the new
+icon-only back arrow beside the title. Rebuilt the package after the correction.
+
+Typecheck, lint, 8 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.
+
+## 2026-09-10 — SYN-055 icon-only back control and package
+
+Removed the visible label from the project-header back button. It now shows
+only the arrow icon while preserving the Projects-home route and accessible
+label. The project name/status placement remains unchanged.
+
+Typecheck, lint, 8 tests, production build, forced runnable-installer build,
+and packaged verification passed. No backend, PATH, commit, push, tag, or
+release publication was made.

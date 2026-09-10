@@ -1,9 +1,107 @@
 # Current Task
 
-## SYN-054 Persistent known-project discovery — implementation and lifecycle-evidence gate — 2026-09-09
+## SYN-055 Screenshot-led Synesis browser UI rebuild — 2026-09-09
+
+- Task ID: SYN-055
+- Status: **ACTIVE**.
+- Evidence state: hierarchy, global registry refinement, installation-rail,
+  and project Overview slices are implemented; frontend gates and the latest
+  Windows bundle pass.
+  Authenticated browser smoke covers the registry, installation rail, live
+  Overview, Agents, Coordination, Network,
+  Diagnostics, and an INACTIVE registry detail at the available narrow
+  viewport. Wide viewport screenshots remain pending.
+- User intent: rebuild and polish the installed Synesis browser UI using the
+  attached screenshots as visual authority and the current repository as
+  semantic authority.
+- Scope: `web-ui` source, tests, shared UI primitives, and focused packaged /
+  installed verification. Keep the accepted same-origin authenticated
+  control-plane architecture and do not add backend semantics.
+- Required surfaces: Projects registry, project Overview, Agents,
+  Coordination, Network, and Diagnostics.
+- Required truth boundary: render only fields from the current snapshot DTO;
+  never ship screenshot example data, unsupported metrics, inferred routes,
+  fake actions, or a browser-owned coordination decision.
+- Required visual direction: near-black graphite surfaces, thin borders,
+  compact table-first layout, Projects-first hierarchy, URL-based
+  project-local tabs, selected rows, right-side inspectors, semantic status
+  colors, and restrained responsive behavior.
+- Required route truth: `/projects` is the registry home. Only the current
+  live project may render live project tabs from the current snapshot;
+  inactive, unavailable, and identity-mismatch entries must not receive fake
+  runtime actions or fabricated live data.
+## Work completed
+
+The first focused frontend implementation replaced the blue-toned card-heavy
+composition with a black/graphite project shell and six snapshot-backed
+surfaces. The follow-up slice now makes /projects the registry home, adds
+History API routes for live project views, removes fake global/profile
+navigation, and renders explicit inactive/unavailable/identity-mismatch
+registry detail states without invented actions. The global registry was then
+refined into a larger Projects list with truthful derived summary, project
+hierarchy, state notes, and responsive row stacking. The latest frontend gates
+and forced Windows bundle rebuild pass. The top-bar Live connection control and
+burger navigation control were removed as requested; project registry status
+badges remain because they represent authoritative project state. An
+installation rail now shows only derived registry counts, API version, current
+ runtime connection scope, and a truthful network link. The global top bar
+ now contains only the Synesis brand; its runtime-connected indicator was
+ removed on request. The live project Overview now uses the reference
+ composition for its header, status metrics,
+ Coordination and Network panels, and authority boundary note, while keeping
+ values snapshot-backed. The latest refinement removes the Overview header's
+ top-right project context block and adds inset between the Local path icon
+ and its divider. No browser-owned
+disconnect action was added because no authority-safe adapter exists. An
+ authenticated browser smoke exercised
+the real registry, live project routes, all five tabs, and an inactive
+registry entry.
+The latest visual pass removes the desktop content max-width so the Overview
+scales across wide monitors and hides the tab strip scrollbar without removing
+its narrow-screen overflow behavior.
+The Overview-only Authority boundary strip is now removed per the latest user
+request; the Network view retains its scoped authority note.
+All five project tabs now reuse the same Overview-style project identity
+header, including title/status treatment and labeled ID/path metadata.
+Diagnostics now uses a compact status/report band, a dense findings table, and
+a selection-driven detail inspector. Healthy state is compressed; findings
+retain severity emphasis and real repair availability without a Repair action.
+
+## Verification
+
+| Command / check | Result | Evidence |
+|---|---|---|
+| `npm run typecheck` | PASS | web-ui gate |
+| `npm run lint` | PASS | web-ui gate |
+| `npm run test` | PASS — 2 files, 6 tests | web-ui gate, including route parsing and installation rail scope |
+| `npm run build` | PASS | web-ui production bundle |
+| `:cli:runnableInstaller --rerun-tasks --no-daemon --no-configuration-cache` with documented command-local workaround | PASS | latest Windows installer and ZIP; embedded UI hash matched |
+| Packaged UI resources | PASS | web-ui/index.html, route asset, and current JS/CSS assets in platform bundle |
+| URL/routing and hierarchy smoke | PASS | /projects, live project five-tab routes, and non-live detail route |
+| `:web-ui:check --no-daemon` in default environment | BLOCKED before task execution | Gradle loopback failure |
+| Authenticated browser smoke | PASS — narrow viewport | real project registry, installation rail, top bar without runtime indicator, live Overview, Agents, Coordination, Network, Diagnostics, and INACTIVE detail |
+| 2560x1440 / narrower browser screenshot pass | PENDING | current in-app browser exposes no viewport control |
+
+## Current failures
+
+The default-environment repository Gradle web check is blocked before task
+execution by java.io.IOException: Unable to establish loopback connection; the
+documented command-local workaround allowed the packaging task to pass. The
+default desktop viewport controls are unavailable in the current in-app
+browser, so the requested 2560x1440 and narrower-width screenshot comparison
+remains pending. Authenticated browser smoke passed against the freshly
+rebuilt local distribution.
+
+## Immediate next action
+
+Repeat the authenticated UI screenshot pass at 2560x1440 and a narrower
+browser width when a browser surface with viewport controls is available; keep the
+current code and package unchanged unless that pass finds a defect.
+
+## Historical task — SYN-054 Persistent known-project discovery — implementation and lifecycle-evidence gate — 2026-09-09
 
 - Task ID: SYN-054
-Status: **ACTIVE / implementation and lifecycle evidence complete; unrelated baseline regressions documented**.
+Status: **COMPLETE FOR CURRENT SCOPE; implementation and lifecycle evidence complete; unrelated baseline regressions documented**.
 
 The current slice adds a persistent event-driven index of initialized Synesis
 projects legitimately encountered through existing init, UI/runtime, and MCP
@@ -4898,3 +4996,103 @@ Exact next action: preserve CP-0478, assess the hidden metadata path contract,
 and only rerun a diagnostic after the initial agent inspection uses valid
 repository operations. Do not modify production lifecycle code, push, or
 create SYN-040.
+
+## 2026-09-10 — SYN-055 modal Diagnostics inspector
+
+The Diagnostics finding inspector is now a modal popup rather than a right-side
+grid panel. It preserves the underlying findings table, supports close,
+Escape, backdrop dismissal, and left/right navigation. Previous and next
+controls remain visible and are natively disabled at the ends of the finding
+list. The Doctor data model and repair semantics are unchanged.
+
+Exact next action: preserve the verified modal behavior and package; perform a
+viewport screenshot pass only when a viewport-capable browser surface is
+available. Do not add repair actions or backend changes.
+
+## 2026-09-10 — SYN-055 project header navigation
+
+The shared live-project header now places the project name and runtime status
+in the right metadata rail beside Project ID and Local path. The left side now
+contains a visible Back to projects button that returns to the Projects home.
+The breadcrumb remains for location context.
+
+Exact next action: preserve the packaged header navigation and run a viewport
+screenshot pass when a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 icon-only back control
+
+The project header keeps the project name/status in the right metadata rail and
+now uses only a back-arrow icon in the left control. The visible button text
+was removed; its accessible label remains `Back to projects`.
+
+Exact next action: preserve CP-0843 and run the pending viewport screenshot
+pass when a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 header layout correction
+
+Restored the project name and runtime status to their original left-side
+position. The right metadata rail again contains only Project ID and Local
+path. The new back control remains an icon-only arrow beside the title.
+
+Exact next action: preserve CP-0844 and run the pending viewport screenshot
+pass when a viewport-capable browser surface is available.
+
+## 2026-09-10 — SYN-055 local mock-data development mode
+
+Added an explicit Vite development-only `?mock=1` mode backed by a local
+snapshot fixture. It bypasses bootstrap/control-plane startup only in Vite
+development mode, exposes realistic project/agent/coordination/network/
+diagnostics data, and leaves the normal runtime path unchanged.
+
+Live smoke passed at `/projects/proj_test/overview?mock=1` and
+`/projects/proj_test/diagnostics?mock=1`.
+
+Exact next action: use `npm run dev` in `web-ui` for UI iteration; do not
+reinstall the Windows bundle for frontend-only changes.
+
+## 2026-09-10 — SYN-055 detail popup refinement
+
+Removed the always-visible right-side detail rails from Agents, Coordination,
+and Network. Agent rows now open an Agent Detail popup; Coordination exposes a
+View details popup; Network exposes Membership and Relay detail popups. The
+Network Authority boundary note was removed as requested. All popup content
+continues to use the existing snapshot model.
+
+Exact next action: continue UI iteration against the running mock server at
+`http://127.0.0.1:5173/projects/proj_test/network?mock=1`.
+
+## 2026-09-10 — SYN-055 Projects page refinement
+
+The global Projects page now has client-side project search across name,
+identity, path, and status. The right rail contains only Connections. Each
+projected connection has its own View network control and a visibly disabled
+Terminate end control because no terminate-connection command exists in the
+current control-plane contract. The page header and registry heading are
+sticky on the Projects route when the page scrolls.
+
+Exact next action: preserve CP-0848 and continue browser QA at
+`http://127.0.0.1:5173/projects?mock=1`.
+
+## 2026-09-10 — SYN-055 connection termination popup and mock scroll slice
+
+Replaced the per-connection disabled text action with a red bin icon on both
+the global Connections rail and the project Network peer table. The icon opens
+a confirmation popup with the requested peer-to-peer dependency warning for
+DIRECT and PEER_TRANSIT routes; relay routes do not receive that warning. The
+confirm action remains disabled because the current control-plane contract has
+no terminate-connection command. Expanded the development-only mock registry
+to 14 projects and 8 peers for scrollability checks.
+
+Exact next action: preserve the running Vite mock server and use the two mock
+URLs in the final handoff; no reinstall is required for this frontend slice.
+
+## 2026-09-10 — SYN-055 Network row detail refinement
+
+Removed the standalone Server-selected routes widget from Network. Clicking
+any peer row now opens a Connection detail popup with the projected route,
+path, membership, health, authentication, usability, and session data. The
+global Connections rail uses the same row-detail behavior; termination icons
+remain separate actions.
+
+Exact next action: preserve CP-0849 and continue frontend QA on the running
+mock server.
