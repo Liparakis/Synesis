@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.synesis.link.candidate.CandidateDescriptor;
@@ -53,12 +54,17 @@ public final class TraversalAnswer {
   public static final int MAX_LINK_CHARS = 49_152;
 
   private static final int MAGIC = 0x534C4132;
-  private static final int FORMAT_VERSION = 1;
+  /** Legacy SLA2 answer format. */
+  public static final int FORMAT_VERSION_V1 = 1;
+  /** SLA2 answer format carrying the copied signed return target. */
+  public static final int FORMAT_VERSION_V2 = 2;
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
 
   private final ProtocolVersion protocolVersion;
+  private final int formatVersion;
+  private final ReturnTarget returnTarget;
   private final UUID sessionId;
   private final byte[] offerDigest;
   private final String initiatorNodeId;
@@ -71,9 +77,21 @@ public final class TraversalAnswer {
   private final byte[] unsigned;
   private final byte[] signature;
 
-  private TraversalAnswer(ProtocolVersion protocolVersion, UUID sessionId, byte[] offerDigest,
+  private TraversalAnswer(int formatVersion, ProtocolVersion protocolVersion,
+      ReturnTarget returnTarget, UUID sessionId, byte[] offerDigest,
       String initiatorNodeId, String responderNodeId, byte[] responderPublicKey, Instant issuedAt,
       Instant expiresAt, byte[] answerNonce, byte[] descriptor, byte[] signature) {
+    if (formatVersion != FORMAT_VERSION_V1 && formatVersion != FORMAT_VERSION_V2) {
+      throw new IllegalArgumentException("unsupported traversal answer format");
+    }
+    if (formatVersion == FORMAT_VERSION_V2 && returnTarget == null) {
+      throw new IllegalArgumentException("v2 traversal answer requires a return target");
+    }
+    if (formatVersion == FORMAT_VERSION_V1 && returnTarget != null) {
+      throw new IllegalArgumentException("v1 traversal answer cannot carry a return target");
+    }
+    this.formatVersion = formatVersion;
+    this.returnTarget = returnTarget;
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.sessionId = Objects.requireNonNull(sessionId, "session ID");
     this.offerDigest = exactBytes(offerDigest, TraversalOffer.DIGEST_BYTES, "offer digest");
@@ -121,11 +139,14 @@ public final class TraversalAnswer {
         || !descriptor.verify()) {
       throw new IllegalArgumentException("answer is not bound to the offer and responder identity");
     }
-    TraversalAnswer unsigned = new TraversalAnswer(offer.protocolVersion(), offer.sessionId(),
-        offer.digest(),
+    int formatVersion = offer.formatVersion();
+    ReturnTarget returnTarget = offer.returnTarget().orElse(null);
+    TraversalAnswer unsigned = new TraversalAnswer(formatVersion, offer.protocolVersion(),
+        returnTarget, offer.sessionId(), offer.digest(),
         offer.initiatorNodeId(), responder.nodeId(), responder.publicKeyEncoded(), offer.issuedAt(),
         offer.expiresAt(), answerNonce, descriptor.encoded(), new byte[]{1});
-    return new TraversalAnswer(unsigned.protocolVersion, unsigned.sessionId, unsigned.offerDigest,
+    return new TraversalAnswer(unsigned.formatVersion, unsigned.protocolVersion,
+        unsigned.returnTarget, unsigned.sessionId, unsigned.offerDigest,
         unsigned.initiatorNodeId, unsigned.responderNodeId, unsigned.responderPublicKey,
         unsigned.issuedAt, unsigned.expiresAt, unsigned.answerNonce, unsigned.descriptor,
         responder.sign(unsigned.unsigned));
@@ -144,11 +165,16 @@ public final class TraversalAnswer {
       throw new IOException("answer exceeds supported bound");
     }
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
-      if (input.readInt() != MAGIC || input.readUnsignedByte() != FORMAT_VERSION) {
+      if (input.readInt() != MAGIC) {
+        throw new IOException("unsupported traversal answer format");
+      }
+      int format = input.readUnsignedByte();
+      if (format != FORMAT_VERSION_V1 && format != FORMAT_VERSION_V2) {
         throw new IOException("unsupported traversal answer format");
       }
       ProtocolVersion version = new ProtocolVersion(input.readUnsignedByte(),
           input.readUnsignedByte());
+      ReturnTarget target = format == FORMAT_VERSION_V2 ? ReturnTarget.read(input) : null;
       UUID session = new UUID(input.readLong(), input.readLong());
       byte[] offer = readExactBytes(input, TraversalOffer.DIGEST_BYTES);
       String initiator = readText(input, MAX_NODE_ID_BYTES);
@@ -162,8 +188,8 @@ public final class TraversalAnswer {
       if (input.available() != 0) {
         throw new IOException("trailing answer bytes");
       }
-      TraversalAnswer value = new TraversalAnswer(version, session, offer, initiator, responder,
-          publicKey, issued, expires, nonce, descriptor, signature);
+      TraversalAnswer value = new TraversalAnswer(format, version, target, session, offer,
+          initiator, responder, publicKey, issued, expires, nonce, descriptor, signature);
       if (!Arrays.equals(encoded, value.encoded())) {
         throw new IOException("non-canonical traversal answer");
       }
@@ -270,6 +296,8 @@ public final class TraversalAnswer {
     Objects.requireNonNull(allowedClockSkew, "allowed clock skew");
     Objects.requireNonNull(offer, "offer");
     if (allowedClockSkew.isNegative() || !sessionId.equals(offer.sessionId())
+        || formatVersion != offer.formatVersion()
+        || !Objects.equals(returnTarget, offer.returnTarget().orElse(null))
         || !initiatorNodeId.equals(offer.initiatorNodeId())
         || !Arrays.equals(offerDigest, offer.digest())
         || !offer.verifyAt(now, allowedClockSkew, responderNodeId)
@@ -321,6 +349,24 @@ public final class TraversalAnswer {
    */
   public ProtocolVersion protocolVersion() {
     return protocolVersion;
+  }
+
+  /**
+   * Returns the explicit outer signed-answer format.
+   *
+   * @return signed-answer format
+   */
+  public int formatVersion() {
+    return formatVersion;
+  }
+
+  /**
+   * Returns the copied signed v2 return target, or empty for v1.
+   *
+   * @return optional return target
+   */
+  public Optional<ReturnTarget> returnTarget() {
+    return Optional.ofNullable(returnTarget);
   }
 
   /**
@@ -418,9 +464,12 @@ public final class TraversalAnswer {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
         output.writeInt(MAGIC);
-        output.writeByte(FORMAT_VERSION);
+        output.writeByte(formatVersion);
         output.writeByte(protocolVersion.major());
         output.writeByte(protocolVersion.minor());
+        if (formatVersion == FORMAT_VERSION_V2) {
+          returnTarget.write(output);
+        }
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
         writeBytes(output, offerDigest);

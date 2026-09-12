@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.synesis.link.candidate.CandidateDescriptor;
 
@@ -40,14 +41,28 @@ public final class TraversalInvitation {
   public static final int MAX_LINK_CHARS = 65_536;
 
   private static final int MAGIC = 0x534C4F31;
-  private static final int FORMAT_VERSION = 1;
+  /** Legacy SLO1 wrapper format. */
+  public static final int FORMAT_VERSION_V1 = 1;
+  /** SLO1 wrapper format carrying a v2 signed offer. */
+  public static final int FORMAT_VERSION_V2 = 2;
 
+  private final int formatVersion;
   private final SessionInvitation invitation;
   private final TraversalOffer offer;
 
-  private TraversalInvitation(SessionInvitation invitation, TraversalOffer offer) {
+  private TraversalInvitation(int formatVersion, SessionInvitation invitation, TraversalOffer offer) {
+    if (formatVersion != FORMAT_VERSION_V1 && formatVersion != FORMAT_VERSION_V2) {
+      throw new IllegalArgumentException("unsupported SLO1 format");
+    }
     this.invitation = Objects.requireNonNull(invitation, "invitation");
     this.offer = Objects.requireNonNull(offer, "offer");
+    if ((formatVersion == FORMAT_VERSION_V1
+        && offer.formatVersion() != TraversalOffer.FORMAT_VERSION_V1)
+        || (formatVersion == FORMAT_VERSION_V2
+        && offer.formatVersion() != TraversalOffer.FORMAT_VERSION_V2)) {
+      throw new IllegalArgumentException("SLO1 wrapper and offer format mismatch");
+    }
+    this.formatVersion = formatVersion;
     if (!invitation.sessionId().equals(offer.sessionId())) {
       throw new IllegalArgumentException("SLO1 session mismatch");
     }
@@ -74,7 +89,22 @@ public final class TraversalInvitation {
    * @return immutable link payload
    */
   public static TraversalInvitation create(SessionInvitation invitation, TraversalOffer offer) {
-    TraversalInvitation value = new TraversalInvitation(invitation, offer);
+    TraversalInvitation value = new TraversalInvitation(FORMAT_VERSION_V1, invitation, offer);
+    if (value.encoded().length > MAX_BYTES) {
+      throw new IllegalArgumentException("SLO1 exceeds supported bound");
+    }
+    return value;
+  }
+
+  /**
+   * Creates an explicit v2 SLO1 payload with a signed return target.
+   *
+   * @param invitation existing signed v1 host invitation
+   * @param offer      signed v2 host offer bound to the invitation
+   * @return immutable v2 SLO1 payload
+   */
+  public static TraversalInvitation createV2(SessionInvitation invitation, TraversalOffer offer) {
+    TraversalInvitation value = new TraversalInvitation(FORMAT_VERSION_V2, invitation, offer);
     if (value.encoded().length > MAX_BYTES) {
       throw new IllegalArgumentException("SLO1 exceeds supported bound");
     }
@@ -94,7 +124,11 @@ public final class TraversalInvitation {
       throw new IOException("SLO1 exceeds supported bound");
     }
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
-      if (input.readInt() != MAGIC || input.readUnsignedByte() != FORMAT_VERSION) {
+      if (input.readInt() != MAGIC) {
+        throw new IOException("unsupported SLO1 format");
+      }
+      int format = input.readUnsignedByte();
+      if (format != FORMAT_VERSION_V1 && format != FORMAT_VERSION_V2) {
         throw new IOException("unsupported SLO1 format");
       }
       byte[] invitationBytes = readBytes(input, SessionInvitation.MAX_BYTES);
@@ -102,8 +136,8 @@ public final class TraversalInvitation {
       if (input.available() != 0) {
         throw new IOException("trailing SLO1 bytes");
       }
-      TraversalInvitation value = new TraversalInvitation(SessionInvitation.decode(invitationBytes),
-          TraversalOffer.decode(offerBytes));
+      TraversalInvitation value = new TraversalInvitation(format,
+          SessionInvitation.decode(invitationBytes), TraversalOffer.decode(offerBytes));
       if (!Arrays.equals(encoded, value.encoded())) {
         throw new IOException("non-canonical SLO1 payload");
       }
@@ -188,12 +222,30 @@ public final class TraversalInvitation {
   }
 
   /**
+   * Returns the explicit outer SLO1 format.
+   *
+   * @return SLO1 format
+   */
+  public int formatVersion() {
+    return formatVersion;
+  }
+
+  /**
    * Returns the embedded signed traversal offer.
    *
    * @return the embedded signed traversal offer
    */
   public TraversalOffer offer() {
     return offer;
+  }
+
+  /**
+   * Returns the signed v2 return target, or empty for v1.
+   *
+   * @return optional return target
+   */
+  public Optional<ReturnTarget> returnTarget() {
+    return offer.returnTarget();
   }
 
   /**
@@ -206,7 +258,7 @@ public final class TraversalInvitation {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
         output.writeInt(MAGIC);
-        output.writeByte(FORMAT_VERSION);
+        output.writeByte(formatVersion);
         writeBytes(output, invitation.encoded());
         writeBytes(output, offer.encoded());
       }

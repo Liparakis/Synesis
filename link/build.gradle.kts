@@ -20,11 +20,19 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-val nativeQuicClassifier = when {
+val hostNativeQuicClassifier = when {
     OperatingSystem.current().isWindows -> "windows-x86_64"
     OperatingSystem.current().isMacOsX -> "osx-x86_64"
     OperatingSystem.current().isLinux -> "linux-x86_64"
     else -> null
+}
+val nativeQuicClassifier = providers.gradleProperty("synesisNativeQuicClassifier")
+    .orElse(hostNativeQuicClassifier ?: "")
+    .get()
+    .ifBlank { null }
+require(nativeQuicClassifier == null || nativeQuicClassifier in setOf(
+    "linux-x86_64", "osx-x86_64", "windows-x86_64")) {
+  "Unsupported Synesis native QUIC classifier: $nativeQuicClassifier"
 }
 nativeQuicClassifier?.let {
     dependencies.add("runtimeOnly", "io.netty:netty-codec-native-quic:${libs.versions.netty.get()}:$it")

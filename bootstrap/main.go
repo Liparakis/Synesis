@@ -67,7 +67,7 @@ type manifest struct {
 
 // installPaths is the resolved on-disk layout for one installation root.
 type installPaths struct {
-	root, bin, launcher, rollback, versions, current, previous, admin, lock, plans, executions string
+	root, bin, launcher, activation, rollback, versions, current, previous, admin, lock, plans, executions string
 }
 
 // activePointer is the atomically replaced pointer to the currently active
@@ -168,6 +168,25 @@ func main() {
 		}
 	case "uninstall":
 		if err := runUninstall(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
+	case "register-protocol":
+		if err := runRegisterProtocol(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
+	case "unregister-protocol":
+		if err := runUnregisterProtocol(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
+	case "activate":
+		if err := runActivation(os.Args[2:]); err != nil {
+			var exitError *exec.ExitError
+			if errors.As(err, &exitError) {
+				os.Exit(exitError.ExitCode())
+			}
 			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
 			os.Exit(1)
 		}
@@ -316,7 +335,9 @@ func restoreBundlePermissions(bundle string) error {
 	return nil
 }
 
-func usage() { fmt.Println("synesis-installer [install|repair|uninstall|doctor|version]") }
+func usage() {
+	fmt.Println("synesis-installer [install|repair|uninstall|register-protocol|unregister-protocol|doctor|version]")
+}
 
 // runInstallerMenu provides the double-click entry point shipped in every
 // platform bundle. It deliberately operates only on the bundle containing the
@@ -693,7 +714,8 @@ func installationPaths(explicit string) (installPaths, error) {
 	bin := filepath.Join(root, "bin")
 	admin := filepath.Join(root, "admin")
 	return installPaths{
-		root: root, bin: bin, launcher: filepath.Join(bin, launcherName), rollback: root + ".rollback",
+		root: root, bin: bin, launcher: filepath.Join(bin, launcherName),
+		activation: filepath.Join(bin, "synesis-activate.exe"), rollback: root + ".rollback",
 		versions: filepath.Join(root, "versions"), current: filepath.Join(root, "current.json"),
 		previous: filepath.Join(root, "previous.json"), admin: admin,
 		lock: filepath.Join(admin, "update-lock.json"), plans: filepath.Join(admin, "update-plans"),
@@ -1232,6 +1254,9 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 	if err := writeStableLauncher(paths); err != nil {
 		return err
 	}
+	if err := syncStableActivationLauncher(paths, target); err != nil {
+		return err
+	}
 	if migrationPlan != nil {
 		restoreMigrations, err = executePreparedMigrations(paths, *migrationPlan)
 		if err != nil {
@@ -1481,6 +1506,24 @@ func syncStableMcpLauncher(paths installPaths, payload string) error {
 	}
 	if runtime.GOOS != "windows" {
 		return os.Chmod(target, 0o755)
+	}
+	return nil
+}
+
+// syncStableActivationLauncher copies the native, argv-safe activation helper
+// to the stable installation boundary. It is registered instead of the
+// versioned Java launcher so updates cannot leave a stale protocol target.
+func syncStableActivationLauncher(paths installPaths, payload string) error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	source := filepath.Join(payload, "bin", "synesis-installer.exe")
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return fmt.Errorf("read bundled activation helper: %w", err)
+	}
+	if err := atomicWrite(paths.activation, data); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1882,6 +1925,12 @@ func validateBundle(bundle string) error {
 	if info, err := os.Stat(mcpLauncher); err != nil || !info.Mode().IsRegular() {
 		return errors.New("bundle missing MCP launcher")
 	}
+	if runtime.GOOS == "windows" {
+		installer := filepath.Join(bundle, "bin", "synesis-installer.exe")
+		if info, err := os.Stat(installer); err != nil || !info.Mode().IsRegular() {
+			return errors.New("bundle missing native activation helper")
+		}
+	}
 	return runBundleVersion(bundle)
 }
 
@@ -1978,6 +2027,11 @@ func runUninstall(args []string) error {
 	}
 	if filepath.Base(paths.root) != "Synesis" && *installDir == "" {
 		return errors.New("refusing unexpected installation root")
+	}
+	if runtime.GOOS == "windows" {
+		if err := unregisterProtocol(paths); err != nil {
+			return err
+		}
 	}
 	if err := pathUpdater(paths, false); err != nil {
 		return err

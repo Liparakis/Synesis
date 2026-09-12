@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.synesis.link.candidate.CandidateDescriptor;
@@ -52,12 +53,17 @@ public final class TraversalOffer {
   public static final Duration DEFAULT_CLOCK_SKEW = Duration.ofMinutes(2);
 
   private static final int MAGIC = 0x534C4F31;
-  private static final int FORMAT_VERSION = 1;
+  /** The legacy signed offer format. */
+  public static final int FORMAT_VERSION_V1 = 1;
+  /** The signed offer format carrying a mandatory return target. */
+  public static final int FORMAT_VERSION_V2 = 2;
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
 
   private final ProtocolVersion protocolVersion;
+  private final int formatVersion;
+  private final ReturnTarget returnTarget;
   private final UUID sessionId;
   private final String initiatorNodeId;
   private final byte[] initiatorPublicKey;
@@ -70,10 +76,22 @@ public final class TraversalOffer {
   private final byte[] unsigned;
   private final byte[] signature;
 
-  private TraversalOffer(ProtocolVersion protocolVersion, UUID sessionId, String initiatorNodeId,
+  private TraversalOffer(int formatVersion, ProtocolVersion protocolVersion, ReturnTarget returnTarget,
+      UUID sessionId, String initiatorNodeId,
       byte[] initiatorPublicKey, String expectedResponderNodeId, byte[] invitationDigest,
       Instant issuedAt, Instant expiresAt, byte[] attemptNonce, byte[] descriptor,
       byte[] signature) {
+    if (formatVersion != FORMAT_VERSION_V1 && formatVersion != FORMAT_VERSION_V2) {
+      throw new IllegalArgumentException("unsupported traversal offer format");
+    }
+    if (formatVersion == FORMAT_VERSION_V2 && returnTarget == null) {
+      throw new IllegalArgumentException("v2 traversal offer requires a return target");
+    }
+    if (formatVersion == FORMAT_VERSION_V1 && returnTarget != null) {
+      throw new IllegalArgumentException("v1 traversal offer cannot carry a return target");
+    }
+    this.formatVersion = formatVersion;
+    this.returnTarget = returnTarget;
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.sessionId = Objects.requireNonNull(sessionId, "session ID");
     this.initiatorNodeId = boundedText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
@@ -129,14 +147,57 @@ public final class TraversalOffer {
         .truncatedTo(ChronoUnit.SECONDS);
     Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
         .truncatedTo(ChronoUnit.SECONDS);
-    TraversalOffer unsigned = new TraversalOffer(ProtocolVersion.V1, sessionId, initiator.nodeId(),
+    TraversalOffer unsigned = new TraversalOffer(FORMAT_VERSION_V1, ProtocolVersion.V1, null,
+        sessionId, initiator.nodeId(),
         initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest, canonicalIssuedAt,
         canonicalExpiresAt,
         attemptNonce, descriptor.encoded(), new byte[]{1});
-    return new TraversalOffer(unsigned.protocolVersion, sessionId, initiator.nodeId(),
+    return new TraversalOffer(FORMAT_VERSION_V1, unsigned.protocolVersion, null, sessionId,
+        initiator.nodeId(),
         initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest, canonicalIssuedAt,
         canonicalExpiresAt,
         attemptNonce, descriptor.encoded(), initiator.sign(unsigned.unsigned));
+  }
+
+  /**
+   * Creates a signed v2 offer with a mandatory stable host project target.
+   *
+   * @param initiator               signing durable initiator identity
+   * @param expectedResponderNodeId optional expected durable responder ID; {@code null} permits any
+   * @param sessionId               fresh Link session ID
+   * @param invitationDigest        SHA-256 digest binding the admission invitation
+   * @param issuedAt                inclusive validity start
+   * @param expiresAt               exclusive validity end
+   * @param attemptNonce            fresh exchange nonce
+   * @param descriptor              signed initiator candidate descriptor
+   * @param returnTarget            stable host project routing target
+   * @return signed v2 offer
+   * @throws GeneralSecurityException if signing or descriptor verification fails
+   */
+  public static TraversalOffer createV2(NodeIdentity initiator, String expectedResponderNodeId,
+      UUID sessionId, byte[] invitationDigest, Instant issuedAt, Instant expiresAt,
+      byte[] attemptNonce, CandidateDescriptor descriptor, ReturnTarget returnTarget)
+      throws GeneralSecurityException {
+    Objects.requireNonNull(initiator, "initiator identity");
+    Objects.requireNonNull(descriptor, "candidate descriptor");
+    Objects.requireNonNull(returnTarget, "return target");
+    if (!initiator.nodeId().equals(descriptor.nodeId())
+        || !Arrays.equals(initiator.publicKeyEncoded(), descriptor.publicKeyEncoded())
+        || !descriptor.verify()) {
+      throw new IllegalArgumentException("descriptor is not bound to initiator identity");
+    }
+    Instant canonicalIssuedAt = Objects.requireNonNull(issuedAt, "issued at")
+        .truncatedTo(ChronoUnit.SECONDS);
+    Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
+        .truncatedTo(ChronoUnit.SECONDS);
+    TraversalOffer unsigned = new TraversalOffer(FORMAT_VERSION_V2, ProtocolVersion.V1,
+        returnTarget, sessionId, initiator.nodeId(), initiator.publicKeyEncoded(),
+        expectedResponderNodeId, invitationDigest, canonicalIssuedAt, canonicalExpiresAt,
+        attemptNonce, descriptor.encoded(), new byte[]{1});
+    return new TraversalOffer(FORMAT_VERSION_V2, ProtocolVersion.V1, returnTarget, sessionId,
+        initiator.nodeId(), initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest,
+        canonicalIssuedAt, canonicalExpiresAt, attemptNonce, descriptor.encoded(),
+        initiator.sign(unsigned.unsigned));
   }
 
   /**
@@ -152,11 +213,16 @@ public final class TraversalOffer {
       throw new IOException("offer exceeds supported bound");
     }
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
-      if (input.readInt() != MAGIC || input.readUnsignedByte() != FORMAT_VERSION) {
+      if (input.readInt() != MAGIC) {
+        throw new IOException("unsupported traversal offer format");
+      }
+      int format = input.readUnsignedByte();
+      if (format != FORMAT_VERSION_V1 && format != FORMAT_VERSION_V2) {
         throw new IOException("unsupported traversal offer format");
       }
       ProtocolVersion version = new ProtocolVersion(input.readUnsignedByte(),
           input.readUnsignedByte());
+      ReturnTarget target = format == FORMAT_VERSION_V2 ? ReturnTarget.read(input) : null;
       UUID session = new UUID(input.readLong(), input.readLong());
       String initiator = readText(input, MAX_NODE_ID_BYTES);
       byte[] publicKey = readBytes(input, MAX_KEY_BYTES);
@@ -170,8 +236,8 @@ public final class TraversalOffer {
       if (input.available() != 0) {
         throw new IOException("trailing offer bytes");
       }
-      TraversalOffer value = new TraversalOffer(version, session, initiator, publicKey, responder,
-          invitation, issued, expires, nonce, descriptor, signature);
+      TraversalOffer value = new TraversalOffer(format, version, target, session, initiator,
+          publicKey, responder, invitation, issued, expires, nonce, descriptor, signature);
       if (!Arrays.equals(encoded, value.encoded())) {
         throw new IOException("non-canonical traversal offer");
       }
@@ -314,6 +380,24 @@ public final class TraversalOffer {
   }
 
   /**
+   * Returns the explicit outer signed-offer format.
+   *
+   * @return signed-offer format
+   */
+  public int formatVersion() {
+    return formatVersion;
+  }
+
+  /**
+   * Returns the v2 return target, or empty for an explicit v1 offer.
+   *
+   * @return optional signed return target
+   */
+  public Optional<ReturnTarget> returnTarget() {
+    return Optional.ofNullable(returnTarget);
+  }
+
+  /**
    * Returns the Link session ID.
    *
    * @return Link session ID
@@ -417,9 +501,12 @@ public final class TraversalOffer {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
         output.writeInt(MAGIC);
-        output.writeByte(FORMAT_VERSION);
+        output.writeByte(formatVersion);
         output.writeByte(protocolVersion.major());
         output.writeByte(protocolVersion.minor());
+        if (formatVersion == FORMAT_VERSION_V2) {
+          returnTarget.write(output);
+        }
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
         writeText(output, initiatorNodeId);

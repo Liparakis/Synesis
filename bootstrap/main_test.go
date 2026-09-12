@@ -710,6 +710,7 @@ func writeBundleArchiveWithProfile(t *testing.T, root, version, profile string) 
 	addZipFile(t, writer, "VERSION", []byte(version+"\n"), 0o644)
 	if runtime.GOOS == "windows" {
 		addZipFile(t, writer, "bin/synesis.cmd", []byte("@echo off\r\nif \"%1\"==\"version\" echo SYNESIS_VERSION="+version+"\r\nif \"%1\"==\"doctor\" echo DOCTOR=PASS\r\r\nif \"%1\"==\"echo-arg\" echo ARG=%2\r\n"), 0o644)
+		addZipFile(t, writer, "bin/synesis-installer.exe", []byte("activation-helper-fixture"), 0o644)
 	} else {
 		addZipFile(t, writer, "bin/synesis", []byte("#!/bin/sh\nif [ \"$1\" = version ]; then echo SYNESIS_VERSION="+version+"; fi\nif [ \"$1\" = doctor ]; then echo DOCTOR=PASS; fi\n"), 0o755)
 	}

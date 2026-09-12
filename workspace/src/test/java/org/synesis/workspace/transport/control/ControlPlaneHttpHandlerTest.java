@@ -119,6 +119,58 @@ class ControlPlaneHttpHandlerTest {
   }
 
   @Test
+  void authenticatedSelectionRouteExposesSafeCandidatesAndAcceptsOnlyIds() throws Exception {
+    UUID selectionId = UUID.randomUUID();
+    UUID selectedProjectId = UUID.randomUUID();
+    AtomicReference<UUID> selected = new AtomicReference<>();
+    try (Fixture fixture = new Fixture("selection", false, null,
+        new ControlPlaneHttpHandler.SelectionGateway() {
+          @Override
+          public Map<String, Object> describe(UUID requested) {
+            assertEquals(selectionId, requested);
+            return Map.of("ok", true, "state", "PROJECT_SELECTION_REQUIRED",
+                "selectionId", selectionId.toString(), "expiresAt", Instant.now().plusSeconds(60).toString(),
+                "projects", List.of(Map.of("projectId", selectedProjectId.toString(),
+                    "displayName", "Safe name")));
+          }
+
+          @Override
+          public Map<String, Object> select(UUID requestedSelection, UUID requestedProject) {
+            assertEquals(selectionId, requestedSelection);
+            selected.set(requestedProject);
+            return Map.of("ok", true, "state", "DISPATCHED");
+          }
+        })) {
+      Map<String, Object> credentials = login(fixture);
+      String session = (String) credentials.get("sessionToken");
+      String csrf = (String) credentials.get("csrfToken");
+      HttpResponse<String> projection = fixture.client.send(request(fixture,
+              "/api/v1/selection/" + selectionId).header(ControlPlaneHttpHandler.SESSION_HEADER,
+                  session).GET().build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, projection.statusCode());
+      assertTrue(projection.body().contains("Safe name"));
+      assertFalse(projection.body().contains("synesis://"));
+
+      HttpResponse<String> withoutCsrf = fixture.client.send(jsonRequest(fixture,
+              "/api/v1/commands/select-project").header(ControlPlaneHttpHandler.SESSION_HEADER,
+                  session).POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+                      "selectionId", selectionId.toString(), "projectId", selectedProjectId.toString(),
+                      "uri", "synesis://join/raw-must-not-be-used")))).build(),
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(403, withoutCsrf.statusCode());
+
+      HttpResponse<String> selectedResponse = fixture.client.send(jsonRequest(fixture,
+              "/api/v1/commands/select-project").header(ControlPlaneHttpHandler.SESSION_HEADER,
+                  session).header(ControlPlaneHttpHandler.CSRF_HEADER, csrf)
+          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+              "selectionId", selectionId.toString(), "projectId", selectedProjectId.toString())))).build(),
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, selectedResponse.statusCode());
+      assertEquals(selectedProjectId, selected.get());
+    }
+  }
+
+  @Test
   void snapshotExposesDurableProjectStateThroughHttp() throws Exception {
     try (Fixture fixture = new Fixture("durable-project", true)) {
       Map<String, Object> credentials = login(fixture);
@@ -398,6 +450,91 @@ class ControlPlaneHttpHandlerTest {
     }
   }
 
+  @Test
+  @Timeout(90)
+  void runtimeCommandDeepLinkUsesExistingJoinAndAnswerAuthority() throws Exception {
+    try (Fixture host = new Fixture("deep-link-host"); Fixture join = new Fixture("deep-link-join")) {
+      Map<String, Object> hostCredentials = login(host);
+      HttpResponse<String> invitation = host.client.send(
+          jsonRequest(host, "/api/v1/commands/invite")
+              .header(ControlPlaneHttpHandler.SESSION_HEADER,
+                  (String) hostCredentials.get("sessionToken"))
+              .header(ControlPlaneHttpHandler.CSRF_HEADER,
+                  (String) hostCredentials.get("csrfToken"))
+              .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of())))
+              .build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(201, invitation.statusCode());
+      Map<String, Object> invitationBody = object(invitation.body());
+
+      HttpResponse<String> unauthorized = join.client.send(
+          jsonRequest(join, "/api/v1/commands/deep-link")
+              .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, "wrong")
+              .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+                  "uri", invitationBody.get("inviteUri")))))
+              .build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(401, unauthorized.statusCode());
+
+      HttpResponse<String> malformed = join.client.send(
+          jsonRequest(join, "/api/v1/commands/deep-link")
+              .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER,
+                  join.handler.runtimeCommandToken())
+              .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+                  "uri", "synesis://join/SLO1-invalid")))).build(),
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(400, malformed.statusCode());
+      assertTrue(malformed.body().contains("INVITE_INVALID"));
+
+      HttpResponse<String> joinResult = join.client.send(
+          jsonRequest(join, "/api/v1/commands/deep-link")
+              .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER,
+                  join.handler.runtimeCommandToken())
+              .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+                  "uri", invitationBody.get("inviteUri")))))
+              .build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(201, joinResult.statusCode());
+      Map<String, Object> joinBody = object(joinResult.body());
+
+      Map<String, Object> joinCredentials = login(join);
+      HttpResponse<String> pendingSnapshot = join.client.send(
+          request(join, "/api/v1/snapshot")
+              .header(ControlPlaneHttpHandler.SESSION_HEADER,
+                  (String) joinCredentials.get("sessionToken"))
+              .GET().build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, pendingSnapshot.statusCode());
+      Map<String, Object> snapshot = object(pendingSnapshot.body());
+      Map<?, ?> onboarding = (Map<?, ?>) snapshot.get("onboarding");
+      List<?> pendingJoins = (List<?>) onboarding.get("pendingJoins");
+      assertEquals(1, pendingJoins.size());
+      Map<?, ?> pendingJoin = (Map<?, ?>) pendingJoins.getFirst();
+      assertEquals(joinBody.get("operationId"), pendingJoin.get("operationId"));
+      assertEquals("WAITING_FOR_CONNECT", pendingJoin.get("state"));
+
+      HttpRequest answerRequest = jsonRequest(host, "/api/v1/commands/deep-link")
+          .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER,
+              host.handler.runtimeCommandToken())
+          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+              "uri", joinBody.get("answerUri"))))).build();
+      HttpRequest connectRequest = jsonRequest(join, "/api/v1/commands/connect")
+          .header(ControlPlaneHttpHandler.SESSION_HEADER,
+              (String) joinCredentials.get("sessionToken"))
+          .header(ControlPlaneHttpHandler.CSRF_HEADER,
+              (String) joinCredentials.get("csrfToken"))
+          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
+              "operationId", joinBody.get("operationId"))))).build();
+      CompletableFuture<HttpResponse<String>> hostResult = host.client.sendAsync(answerRequest,
+          HttpResponse.BodyHandlers.ofString());
+      CompletableFuture<HttpResponse<String>> joinConnection = join.client.sendAsync(connectRequest,
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, hostResult.get(60, TimeUnit.SECONDS).statusCode());
+      assertEquals(200, joinConnection.get(60, TimeUnit.SECONDS).statusCode());
+
+      HttpResponse<String> replay = host.client.send(answerRequest,
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(404, replay.statusCode());
+      assertTrue(replay.body().contains("OPERATION_NOT_FOUND"));
+    }
+  }
+
   private HttpRequest.Builder request(String path) {
     return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + serverPort() + path));
   }
@@ -470,11 +607,18 @@ class ControlPlaneHttpHandlerTest {
     }
 
     private Fixture(String name, boolean seedProject) throws Exception {
-      this(name, seedProject, null);
+      this(name, seedProject, null, null);
     }
 
     private Fixture(String name, boolean seedProject,
         java.util.function.Supplier<ControlPlaneReadModel.NetworkSnapshot> network)
+        throws Exception {
+      this(name, seedProject, network, null);
+    }
+
+    private Fixture(String name, boolean seedProject,
+        java.util.function.Supplier<ControlPlaneReadModel.NetworkSnapshot> network,
+        ControlPlaneHttpHandler.SelectionGateway selectionGateway)
         throws Exception {
       Path root = temp.resolve(name);
       Path synesis = root.resolve(".synesis");
@@ -497,7 +641,10 @@ class ControlPlaneHttpHandlerTest {
           new ProviderApplicationService(), new DoctorService())
           : new ControlPlaneReadModel(location, coordination,
               new ProviderApplicationService(), new DoctorService(), network);
-      handler = new ControlPlaneHttpHandler(readModel, coordination, onboarding, eventHub);
+      handler = selectionGateway == null
+          ? new ControlPlaneHttpHandler(readModel, coordination, onboarding, eventHub)
+          : new ControlPlaneHttpHandler(readModel, coordination, onboarding, eventHub,
+              selectionGateway);
       server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null,
           handler);
       activeServer = server;

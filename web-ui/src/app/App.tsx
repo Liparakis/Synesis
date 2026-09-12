@@ -27,7 +27,10 @@ import {
   type KnownProjectSnapshot,
   type NetworkPeerSnapshot,
   type NetworkSnapshot,
+  type ProjectSelection,
   type Snapshot,
+  clearSelectionId,
+  selectionIdFromLocation,
 } from "../api/controlPlane";
 import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "./routes";
 
@@ -55,11 +58,22 @@ function registryProjects(snapshot: Snapshot) {
   return snapshot.knownProjects?.length ? snapshot.knownProjects : snapshot.project ? [asLiveRegistryProject(snapshot.project)] : [];
 }
 
+function projectSelectionMessage(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code : "";
+  if (code === "SELECTION_EXPIRED") return "This invitation selection expired. Open the invitation again.";
+  if (code === "SELECTION_CONSUMED") return "This invitation was already routed.";
+  if (code === "PROJECT_UNAVAILABLE") return "That project is no longer available. Choose another project.";
+  return error instanceof Error ? error.message : "Project selection is unavailable.";
+}
+
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute());
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [connection, setConnection] = useState<"CONNECTING" | "LIVE" | "DEGRADED" | "OFFLINE">("CONNECTING");
   const [message, setMessage] = useState("Connecting to the local control plane");
+  const [selection, setSelection] = useState<ProjectSelection | null>(null);
+  const [selectionError, setSelectionError] = useState<Error | null>(null);
   const clientRef = useRef<ControlPlaneClient | null>(null);
   const [mockRequested] = useState(() => import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1");
   const mockMode = import.meta.env.DEV && mockRequested;
@@ -98,12 +112,21 @@ export function App() {
           }
           throw new Error("Open Synesis with the supported synesis ui command.");
         }
+        const pendingSelectionId = selectionIdFromLocation();
         if (typeof window !== "undefined" && window.location.pathname === "/") {
-          window.history.replaceState(null, "", "/projects");
+          const suffix = pendingSelectionId ? `#selectionId=${encodeURIComponent(pendingSelectionId)}` : "";
+          window.history.replaceState(null, "", `/projects${suffix}`);
         }
         const initial = await client.startSession(bootstrap);
         if (disposed) return;
         setSnapshot(initial);
+        if (pendingSelectionId) {
+          try {
+            setSelection(await client.projectSelection(pendingSelectionId));
+          } catch (error) {
+            setSelectionError(new Error(projectSelectionMessage(error)));
+          }
+        }
         setConnection("LIVE");
         setMessage("Live local state");
         stopEvents = client.startEvents({
@@ -116,6 +139,15 @@ export function App() {
             if (event.type === "refresh_required") {
               setConnection("DEGRADED");
               setMessage("Resynchronizing authoritative state");
+            } else if (event.type === "link.updated") {
+              void client.snapshot().then((next) => {
+                if (disposed) return;
+                setSnapshot(next);
+                setConnection("LIVE");
+                setMessage("Live local state");
+              }).catch(() => {
+                // The event stream remains authoritative if a refresh races shutdown.
+              });
             }
           },
           onError: (error) => {
@@ -194,13 +226,67 @@ export function App() {
             {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={(view) => navigate({kind: "project", projectId: snapshot.project!.id, view})}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
-            {route.view === "network" && <NetworkView network={snapshot.network} client={clientRef.current}/>}
+            {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} client={clientRef.current}/>}
             {route.view === "diagnostics" && <DiagnosticsView diagnostics={snapshot.diagnostics}/>}
           </div>
         )}
       </main>
+      {selection && <ProjectSelectionView
+        selection={selection}
+        client={clientRef.current}
+        onCompleted={() => { clearSelectionId(); setSelection(null); }}
+        onError={(error) => setSelectionError(error)}
+      />}
+      {selectionError && !selection && <div className="selection-toast" role="alert">{selectionError.message}</div>}
     </div>
   );
+}
+
+export function ProjectSelectionView({selection, client, onCompleted, onError}: {
+  selection: ProjectSelection;
+  client: ControlPlaneClient | null;
+  onCompleted(): void;
+  onError(error: Error): void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const choose = async (projectId: string) => {
+    if (!client || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await client.selectProject(selection.selectionId, projectId);
+      onCompleted();
+    } catch (error) {
+      const failure = error instanceof Error ? error : new Error("Project selection failed.");
+      setMessage(projectSelectionMessage(error));
+      onError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="selection-backdrop" role="presentation">
+    <section className="selection-dialog panel" role="dialog" aria-modal="true" aria-labelledby="selection-title">
+      <p className="eyebrow">Local invitation routing</p>
+      <h1 id="selection-title">Choose project for invitation</h1>
+      <p className="muted">Select the local project that should receive this invitation.</p>
+      <div className="selection-list" role="list" aria-label="Eligible projects">
+        {selection.projects.map((project) => <button
+          className="selection-project"
+          key={project.projectId}
+          type="button"
+          disabled={busy}
+          onClick={() => void choose(project.projectId)}
+        >
+          <span>{project.displayName}</span>
+          <span className="mono selection-project-id">{project.projectId}</span>
+        </button>)}
+      </div>
+      {message && <p className="selection-error" role="alert">{message}</p>}
+    </section>
+  </div>;
 }
 
 export function ProjectsView({snapshot, onOpenProject, onOpenNetwork}: {snapshot: Snapshot; onOpenProject?: (project: KnownProjectSnapshot) => void; onOpenNetwork?: () => void}) {
@@ -611,7 +697,7 @@ function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; ta
   );
 }
 
-export function NetworkView({network, client}: {network: NetworkSnapshot; client: ControlPlaneClient | null}) {
+export function NetworkView({network, onboarding = {pendingJoins: []}, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; client: ControlPlaneClient | null}) {
   const [invite, setInvite] = useState("");
   const [joinUri, setJoinUri] = useState("");
   const [joinResult, setJoinResult] = useState("");
@@ -643,12 +729,23 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; client
       setActionMessage(error instanceof Error ? error.message : "Join failed.");
     } finally { setBusy(false); }
   };
+  const connectJoin = async () => {
+    if (!client || onboarding.pendingJoins.length === 0) return;
+    setBusy(true);
+    try {
+      await client.connect(onboarding.pendingJoins[0].operationId);
+      setActionMessage("Pending join connected through the local Link runtime.");
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Join connection failed.");
+    } finally { setBusy(false); }
+  };
+  const pendingJoin = onboarding.pendingJoins[0];
 
   return (
     <div className="view-stack">
       <section className="network-toolbar">
         <div><p className="eyebrow">Project connectivity</p><h2>Link Onboarding</h2></div>
-        <div className="toolbar-actions"><button className="button button-secondary" type="button" onClick={() => setDetail("membership")}><Network size={16}/> Membership</button><button className="button button-secondary" type="button" onClick={() => setDetail("relay")}><Link2 size={16}/> Relay detail</button><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={16}/> Create Invitation</button><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={16}/> Join from Invitation</button></div>
+        <div className="toolbar-actions"><button className="button button-secondary" type="button" onClick={() => setDetail("membership")}><Network size={16}/> Membership</button><button className="button button-secondary" type="button" onClick={() => setDetail("relay")}><Link2 size={16}/> Relay detail</button><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={16}/> Create Invitation</button><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={16}/> Join from Invitation</button>{pendingJoin && <button className="button button-primary" type="button" disabled={busy || !client} onClick={() => void connectJoin()}><Check size={16}/> Complete Join</button>}</div>
       </section>
       <section className="onboarding-panel panel">
         <div className="onboarding-grid">

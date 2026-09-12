@@ -3,8 +3,10 @@ package org.synesis.cli;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
+import org.synesis.cli.command.DaemonCommand;
 import org.synesis.cli.command.HelpCommand;
 import org.synesis.cli.command.McpCommand;
+import org.synesis.cli.command.OpenCommand;
 import org.synesis.cli.command.RootCommand;
 import org.synesis.cli.command.VersionPlaceholderCommand;
 import org.synesis.cli.command.collaboration.CollaborationAcknowledgeCommand;
@@ -103,6 +105,8 @@ public final class SynesisCli {
         .get("identity");
     identity.addSubcommand("show", new IdentityShowCommand(runtime));
     command.addSubcommand("doctor", new DoctorCommand(runtime));
+    command.addSubcommand("daemon", new DaemonCommand());
+    command.addSubcommand("open", new OpenCommand(runtime));
     command.addSubcommand("migrate", new MigrateCommand(runtime));
     command.addSubcommand("cleanup", new CleanupCommand(runtime));
     command.addSubcommand("reconcile",

@@ -210,6 +210,7 @@ export interface Snapshot {
   tasks: TaskSnapshot[];
   ownerships: OwnershipSnapshot[];
   network: NetworkSnapshot;
+  onboarding?: OnboardingSnapshot;
   diagnostics: DiagnosticsSnapshot;
 }
 
@@ -237,6 +238,29 @@ export interface OperationResponse {
   state: string;
 }
 
+export interface ProjectSelectionProject {
+  projectId: string;
+  displayName: string;
+}
+
+export interface ProjectSelection {
+  apiVersion?: string;
+  state: "PROJECT_SELECTION_REQUIRED";
+  selectionId: string;
+  expiresAt: string;
+  projects: ProjectSelectionProject[];
+}
+
+export interface PendingJoinSnapshot {
+  operationId: string;
+  state: string;
+  expiresAt: string;
+}
+
+export interface OnboardingSnapshot {
+  pendingJoins: PendingJoinSnapshot[];
+}
+
 export interface ServerEvent {
   type: string;
   id: string;
@@ -262,9 +286,20 @@ export function consumeBootstrapToken(): string | null {
   const params = new URLSearchParams(raw);
   const token = params.get("bootstrap");
   if (token) {
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    const selectionId = params.get("selectionId");
+    const suffix = selectionId ? `#selectionId=${encodeURIComponent(selectionId)}` : "";
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${suffix}`);
   }
   return token;
+}
+
+export function selectionIdFromLocation(): string | null {
+  const raw = window.location.hash.replace(/^#/, "");
+  return new URLSearchParams(raw).get("selectionId");
+}
+
+export function clearSelectionId(): void {
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
 export function normalizeSnapshot(input: Snapshot): Snapshot {
@@ -281,6 +316,9 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
     capabilities: input.capabilities ?? [],
     tasks: input.tasks ?? [],
     ownerships: input.ownerships ?? [],
+    onboarding: {
+      pendingJoins: input.onboarding?.pendingJoins ?? [],
+    },
     network: {
       status: network.status ?? "UNCONFIGURED",
       peers: network.peers ?? [],
@@ -375,6 +413,15 @@ export class ControlPlaneClient {
 
   async connect(operationId: string): Promise<OperationResponse> {
     return this.command<OperationResponse>("connect", {operationId});
+  }
+
+  async projectSelection(selectionId: string): Promise<ProjectSelection> {
+    const response = await this.request(`${API_PREFIX}/selection/${encodeURIComponent(selectionId)}`);
+    return (await response.json()) as ProjectSelection;
+  }
+
+  async selectProject(selectionId: string, projectId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("select-project", {selectionId, projectId});
   }
 
   startEvents(handlers: {

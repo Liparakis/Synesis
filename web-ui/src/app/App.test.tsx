@@ -1,8 +1,8 @@
 import {render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {AgentsView, DiagnosticsView, NetworkView, ProjectHeader, ProjectsView, RegistryProjectView} from "./App";
+import {AgentsView, DiagnosticsView, NetworkView, ProjectHeader, ProjectSelectionView, ProjectsView, RegistryProjectView} from "./App";
 import {parseRoute, routePath} from "./routes";
-import type {AgentSnapshot, Snapshot} from "../api/controlPlane";
+import {ControlPlaneClient, type AgentSnapshot, type ProjectSelection, type Snapshot} from "../api/controlPlane";
 import {vi} from "vitest";
 
 const emptySnapshot = {
@@ -59,6 +59,46 @@ const diagnostics = {
 } as Snapshot["diagnostics"];
 
 describe("truthful product states", () => {
+  it("requires an explicit eligible-project choice and posts only that choice", async () => {
+    const user = userEvent.setup();
+    const selectProject = vi.fn().mockResolvedValue({ok: true, state: "DISPATCHED"});
+    const client = {selectProject} as unknown as ControlPlaneClient;
+    const selection = {
+      state: "PROJECT_SELECTION_REQUIRED",
+      selectionId: "selection-1",
+      expiresAt: "2026-09-12T00:02:00Z",
+      projects: [
+        {projectId: "project-a", displayName: "Alpha"},
+        {projectId: "project-b", displayName: "Beta"},
+      ],
+    } as ProjectSelection;
+    const onCompleted = vi.fn();
+
+    render(<ProjectSelectionView selection={selection} client={client} onCompleted={onCompleted} onError={vi.fn()}/>);
+    expect(screen.getByRole("heading", {name: "Choose project for invitation"})).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(selectProject).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", {name: /Beta/}));
+    expect(selectProject).toHaveBeenCalledWith("selection-1", "project-b");
+    expect(onCompleted).toHaveBeenCalledOnce();
+  });
+
+  it("disables every candidate while a selection is in flight", async () => {
+    const user = userEvent.setup();
+    const selectProject = vi.fn().mockImplementation(() => new Promise<Record<string, unknown>>(() => undefined));
+    const selection = {
+      state: "PROJECT_SELECTION_REQUIRED",
+      selectionId: "selection-1",
+      expiresAt: "2026-09-12T00:02:00Z",
+      projects: [{projectId: "project-a", displayName: "Alpha"}, {projectId: "project-b", displayName: "Beta"}],
+    } as ProjectSelection;
+
+    render(<ProjectSelectionView selection={selection} client={{selectProject} as unknown as ControlPlaneClient} onCompleted={vi.fn()} onError={vi.fn()}/>);
+    await user.click(screen.getByRole("button", {name: /Alpha/}));
+    expect(screen.getAllByRole("button").every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  });
+
   it("shows an empty projects state instead of demo content", () => {
     render(<ProjectsView snapshot={emptySnapshot}/>);
     expect(screen.getByText("No projects yet")).toBeInTheDocument();
@@ -154,6 +194,25 @@ describe("truthful product states", () => {
 
     await user.click(screen.getByRole("button", {name: "Close connection detail"}));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("connects a runtime-projected pending join through the existing client command", async () => {
+    const user = userEvent.setup();
+    const connect = vi.fn().mockResolvedValue({apiVersion: "v1", operationId: "join-op", state: "CONNECTED"});
+    const client = {connect} as unknown as ControlPlaneClient;
+    const network = {
+      status: "UNCONFIGURED",
+      peers: [],
+      routes: [],
+      overlay: {status: "UNCONFIGURED", authorityNodeId: "", revision: 0, memberCount: 0, expiresAt: "", members: [], directEdges: [], desiredEdges: []},
+      relay: {status: "DISABLED", localAddress: "", activeConnections: 0, configured: false, connected: false, relayIdentity: "", authorized: false, activeRouteUsage: 0},
+    } as unknown as Snapshot["network"];
+
+    render(<NetworkView network={network} client={client} onboarding={{pendingJoins: [{operationId: "join-op", state: "WAITING_FOR_CONNECT", expiresAt: "2026-09-11T02:00:00Z"}]}}/>);
+
+    await user.click(screen.getByRole("button", {name: "Complete Join"}));
+    expect(connect).toHaveBeenCalledWith("join-op");
+    expect(screen.getByText("Pending join connected through the local Link runtime.")).toBeInTheDocument();
   });
 
   it("uses Projects as the global route and parses project-local views", () => {

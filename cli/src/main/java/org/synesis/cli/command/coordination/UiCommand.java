@@ -2,7 +2,9 @@ package org.synesis.cli.command.coordination;
 
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
+import java.util.Map;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.daemon.DaemonClient;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -44,6 +46,21 @@ public final class UiCommand implements Callable<Integer> {
    */
   @Override
   public Integer call() {
+    if (durationSeconds <= 0) {
+      try {
+        Map<String, Object> response = DaemonClient.request(runtime, "OPEN_UI", project, null,
+            !noBrowser);
+        if (Boolean.TRUE.equals(response.get("browserOpened"))) {
+          runtime.terminal().stdout("SYNESIS_UI_OPENED");
+        } else if ("BROWSER_OPEN_FAILED".equals(response.get("state"))) {
+          runtime.terminal().stdout("SYNESIS_UI_OPEN_FAILED");
+        }
+        return 0;
+      } catch (java.io.IOException failure) {
+        runtime.terminal().stderr("SYNESIS_DAEMON_ERROR=" + failure.getMessage());
+        return org.synesis.cli.exit.ExitCodes.LOCAL_CONFIGURATION;
+      }
+    }
     return CoordinationServerLauncher.run(runtime, project, data, identity, host, port,
         durationSeconds,
         true, !noBrowser);

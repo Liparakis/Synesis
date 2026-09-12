@@ -28,6 +28,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -54,6 +55,8 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
    * CSRF header required for mutations.
    */
   public static final String CSRF_HEADER = "X-Synesis-Control-CSRF";
+  /** Header used by the owning local runtime for non-browser transport commands. */
+  public static final String RUNTIME_COMMAND_HEADER = "X-Synesis-Control-Command";
 
   private static final int MAX_BODY_BYTES = 128 * 1024;
   private static final int MAX_PENDING_OPERATIONS = 16;
@@ -66,7 +69,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
   private final CoordinationService coordination;
   private final ControlPlaneLinkOperations linkOperations;
   private final ControlPlaneEventHub eventHub;
+  private final SelectionGateway selectionGateway;
   private final String bootstrapToken = token();
+  private final String runtimeCommandToken = token();
   private final Instant bootstrapExpiresAt = Instant.now().plus(BOOTSTRAP_LIFETIME);
   private final Object operationLock = new Object();
   private final Object onboardingLock = new Object();
@@ -92,6 +97,21 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
   }
 
   /**
+   * Creates a local control-plane handler with Link onboarding and daemon selection.
+   *
+   * @param readModel         explicit public-safe read model
+   * @param coordination      durable coordination service
+   * @param onboarding        Link-owned onboarding facade
+   * @param eventHub          bounded onboarding event hub
+   * @param selectionGateway  authenticated local daemon selection bridge
+   */
+  public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination,
+      Onboarding onboarding, ControlPlaneEventHub eventHub, SelectionGateway selectionGateway) {
+    this(readModel, coordination, new OnboardingControlPlaneOperations(onboarding), eventHub,
+        selectionGateway);
+  }
+
+  /**
    * Creates a local control-plane handler with an explicit Link operation owner.
    *
    * @param readModel      explicit public-safe read model
@@ -101,10 +121,68 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
    */
   public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination,
       ControlPlaneLinkOperations linkOperations, ControlPlaneEventHub eventHub) {
+    this(readModel, coordination, linkOperations, eventHub, SelectionGateway.UNAVAILABLE);
+  }
+
+  /**
+   * Creates a control-plane handler with the optional authenticated daemon-selection bridge.
+   *
+   * @param readModel         explicit public-safe read model
+   * @param coordination      durable coordination service
+   * @param linkOperations    supported Link operation owner
+   * @param eventHub          bounded onboarding event hub
+   * @param selectionGateway  authenticated local daemon selection bridge
+   */
+  public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination,
+      ControlPlaneLinkOperations linkOperations, ControlPlaneEventHub eventHub,
+      SelectionGateway selectionGateway) {
     this.readModel = java.util.Objects.requireNonNull(readModel, "read model");
     this.coordination = java.util.Objects.requireNonNull(coordination, "coordination");
     this.linkOperations = java.util.Objects.requireNonNull(linkOperations, "link operations");
     this.eventHub = java.util.Objects.requireNonNull(eventHub, "event hub");
+    this.selectionGateway = java.util.Objects.requireNonNull(selectionGateway,
+        "selection gateway");
+  }
+
+  /**
+   * Authenticated bridge to the installation daemon's bounded project-selection state.
+   */
+  @FunctionalInterface
+  public interface SelectionGateway {
+
+    /** Gateway that fails closed when no installation daemon owns this runtime. */
+    SelectionGateway UNAVAILABLE = new SelectionGateway() {
+      @Override
+      public Map<String, Object> describe(UUID selectionId) throws IOException {
+        throw new IOException("daemon_unavailable");
+      }
+
+      @Override
+      public Map<String, Object> select(UUID selectionId, UUID projectId) throws IOException {
+        throw new IOException("daemon_unavailable");
+      }
+    };
+
+    /**
+     * Reads a safe pending selection projection.
+     *
+     * @param selectionId pending selection identifier
+     * @return daemon result without the original invitation
+     * @throws IOException when the local daemon cannot be reached
+     */
+    Map<String, Object> describe(UUID selectionId) throws IOException;
+
+    /**
+     * Claims a project without accepting a raw invitation from the browser.
+     *
+     * @param selectionId pending selection identifier
+     * @param projectId selected project identifier
+     * @return daemon routing result
+     * @throws IOException when the local daemon cannot be reached
+     */
+    default Map<String, Object> select(UUID selectionId, UUID projectId) throws IOException {
+      throw new IOException("selection is unsupported");
+    }
   }
 
   private static String path(URI uri) throws ApiFailure {
@@ -383,6 +461,19 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
   }
 
   /**
+   * Returns the runtime-owned command token for the local installation shell.
+   *
+   * <p>This credential is not a browser session and cannot read snapshots or
+   * create arbitrary commands. It is accepted only by the narrow deep-link
+   * handoff route.</p>
+   *
+   * @return high-entropy runtime command token
+   */
+  public String runtimeCommandToken() {
+    return runtimeCommandToken;
+  }
+
+  /**
    * Handles one versioned control-plane request.
    *
    * @param exchange HTTP exchange
@@ -390,6 +481,10 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
    */
   @Override
   public void handle(HttpExchange exchange) throws IOException {
+    handleRequest(exchange);
+  }
+
+  private void handleRequest(HttpExchange exchange) throws IOException {
     if (closed.get()) {
       sendError(exchange, 503, "SERVER_CLOSED", "control plane is closed");
       return;
@@ -413,6 +508,13 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         createSession(exchange);
         return;
       }
+      if (path.equals(API_PREFIX + "/commands/deep-link")) {
+        requireMethod(exchange, "POST");
+        authenticateRuntimeCommand(exchange);
+        requireJson(exchange);
+        deepLink(exchange, readObject(exchange));
+        return;
+      }
       boolean mutation = path.startsWith(API_PREFIX + "/commands/");
       authenticate(exchange, mutation);
       if (path.equals(API_PREFIX + "/events")) {
@@ -425,9 +527,14 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         command(exchange, path.substring((API_PREFIX + "/commands/").length()));
         return;
       }
+      if (path.startsWith(API_PREFIX + "/selection/")) {
+        requireMethod(exchange, "GET");
+        selection(exchange, path.substring((API_PREFIX + "/selection/").length()));
+        return;
+      }
       if (path.equals(API_PREFIX + "/snapshot")) {
         requireMethod(exchange, "GET");
-        sendJson(exchange, 200, readModel.snapshot());
+        sendJson(exchange, 200, snapshot());
         return;
       }
       if (path.equals(API_PREFIX + "/diagnostics")) {
@@ -514,6 +621,13 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     }
   }
 
+  private void authenticateRuntimeCommand(HttpExchange exchange) throws ApiFailure {
+    if (!constantEquals(runtimeCommandToken,
+        exchange.getRequestHeaders().getFirst(RUNTIME_COMMAND_HEADER))) {
+      throw failure(401, "RUNTIME_COMMAND_REQUIRED", "a valid runtime command is required");
+    }
+  }
+
   private Map<String, Object> health() {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("apiVersion", "v1");
@@ -521,6 +635,25 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     result.put("loopbackOnly", true);
     result.put("projectId", readModel.projectId().toString());
     result.put("headSequence", coordination.headSequence());
+    return result;
+  }
+
+  private Map<String, Object> snapshot() {
+    Map<String, Object> result = new LinkedHashMap<>(readModel.snapshot());
+    List<Map<String, Object>> pendingJoins = new ArrayList<>();
+    synchronized (operationLock) {
+      for (String operationId : joins.keySet()) {
+        Instant expiresAt = operationExpiry.get(operationId);
+        if (expiresAt == null) {
+          continue;
+        }
+        pendingJoins.add(Map.of(
+            "operationId", operationId,
+            "state", "WAITING_FOR_CONNECT",
+            "expiresAt", expiresAt.toString()));
+      }
+    }
+    result.put("onboarding", Map.of("pendingJoins", pendingJoins));
     return result;
   }
 
@@ -533,8 +666,120 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
       case "answer" -> answer(exchange, body);
       case "connect" -> connect(exchange, body);
       case "cancel" -> cancel(exchange, body);
+      case "select-project" -> selectProject(exchange, body);
       default -> throw failure(404, "NOT_FOUND", "control-plane command not found");
     }
+  }
+
+  private void selection(HttpExchange exchange, String rawSelectionId)
+      throws IOException, ApiFailure {
+    UUID selectionId = uuid(rawSelectionId, "selectionId");
+    Map<String, Object> result = daemonSelection(() -> selectionGateway.describe(selectionId));
+    if (Boolean.FALSE.equals(result.get("ok"))) {
+      throw selectionFailure(result);
+    }
+    sendJson(exchange, 200, result);
+  }
+
+  private void selectProject(HttpExchange exchange, Map<String, Object> body)
+      throws IOException, ApiFailure {
+    UUID selectionId = uuid(text(body, "selectionId", true, 64), "selectionId");
+    UUID projectId = uuid(text(body, "projectId", true, 64), "projectId");
+    Map<String, Object> result = daemonSelection(
+        () -> selectionGateway.select(selectionId, projectId));
+    if (Boolean.FALSE.equals(result.get("ok"))) {
+      throw selectionFailure(result);
+    }
+    sendJson(exchange, 200, result);
+  }
+
+  private static Map<String, Object> daemonSelection(SelectionCall call) throws ApiFailure {
+    try {
+      return call.run();
+    } catch (IOException unavailable) {
+      throw failure(503, "SELECTION_UNAVAILABLE", "local project selection is unavailable");
+    }
+  }
+
+  private static ApiFailure selectionFailure(Map<String, Object> result) {
+    String code = String.valueOf(result.getOrDefault("error", "SELECTION_FAILED"));
+    int status = switch (code) {
+      case "SELECTION_UNKNOWN" -> 404;
+      case "SELECTION_EXPIRED" -> 410;
+      case "SELECTION_CONSUMED", "PROJECT_NOT_ELIGIBLE", "PROJECT_UNAVAILABLE" -> 409;
+      default -> 400;
+    };
+    return failure(status, code, "project selection cannot be completed");
+  }
+
+  private static UUID uuid(String value, String field) throws ApiFailure {
+    try {
+      return UUID.fromString(value);
+    } catch (IllegalArgumentException malformed) {
+      throw failure(400, "" + field.toUpperCase() + "_INVALID", field + " is invalid");
+    }
+  }
+
+  @FunctionalInterface
+  private interface SelectionCall {
+    Map<String, Object> run() throws IOException;
+  }
+
+  private void deepLink(HttpExchange exchange, Map<String, Object> body)
+      throws IOException, ApiFailure {
+    String link = text(body, "uri", true, 65_536);
+    URI parsed;
+    try {
+      parsed = URI.create(link);
+    } catch (IllegalArgumentException malformed) {
+      throw failure(400, "URI_INVALID", "deep-link URI is invalid");
+    }
+    if (!"synesis".equals(parsed.getScheme()) || parsed.getHost() == null) {
+      throw failure(400, "URI_UNSUPPORTED", "deep-link URI is not a supported Synesis link");
+    }
+    if ("join".equals(parsed.getHost())) {
+      join(exchange, Map.of("inviteUri", link));
+      return;
+    }
+    if ("answer".equals(parsed.getHost())) {
+      TraversalAnswer answer = parseAnswer(link);
+      String operationId = matchingHostOperation(answer);
+      answer(exchange, Map.of("operationId", operationId, "answerUri", link));
+      return;
+    }
+    throw failure(400, "URI_UNSUPPORTED", "deep-link action is not supported");
+  }
+
+  private static TraversalAnswer parseAnswer(String link) throws ApiFailure {
+    try {
+      return TraversalAnswer.fromShareLink(link);
+    } catch (IOException | IllegalArgumentException invalid) {
+      throw failure(400, "ANSWER_INVALID", "answer link is invalid");
+    }
+  }
+
+  private String matchingHostOperation(TraversalAnswer answer) throws ApiFailure {
+    List<String> matches = new ArrayList<>();
+    synchronized (operationLock) {
+      for (Map.Entry<String, ControlPlaneLinkOperations.PendingHost> entry : hosts.entrySet()) {
+        try {
+          TraversalInvitation invitation =
+              TraversalInvitation.fromShareLink(entry.getValue().invitationLink());
+          if (invitation.invitation().sessionId().equals(answer.sessionId())) {
+            matches.add(entry.getKey());
+          }
+        } catch (IOException | IllegalArgumentException invalidStoredInvitation) {
+          // A malformed retained handle cannot become a routing oracle.
+        }
+      }
+    }
+    if (matches.isEmpty()) {
+      throw failure(404, "OPERATION_NOT_FOUND", "answer does not match a pending host operation");
+    }
+    if (matches.size() != 1) {
+      throw failure(409, "OPERATION_AMBIGUOUS", "answer matches multiple host operations");
+    }
+    return matches.getFirst();
   }
 
   private void invite(HttpExchange exchange, Map<String, Object> body)
@@ -601,9 +846,10 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     ControlPlaneLinkOperations.PendingHost prepared = beginHost(operationId);
     boolean retain = false;
     try {
-      synchronized (onboardingLock) {
-        prepared.importAnswer(answer);
-      }
+      // The retained host handle owns its bounded wait. Do not serialize it
+      // with a join handle: the Link handshake requires both sides to run at
+      // the same time when they are hosted by this runtime.
+      prepared.importAnswer(answer);
       retain = prepared.retainsSession();
       sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
     } catch (OnboardingFailure failure) {
@@ -619,9 +865,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     ControlPlaneLinkOperations.PendingJoin prepared = beginJoin(operationId);
     boolean retain = false;
     try {
-      synchronized (onboardingLock) {
-        prepared.connect();
-      }
+      // The retained join handle owns its bounded candidate race. It must be
+      // able to overlap a host answer operation in the same runtime.
+      prepared.connect();
       retain = prepared.retainsSession();
       sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
     } catch (OnboardingFailure failure) {
@@ -796,7 +1042,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("apiVersion", "v1");
     event.put("headSequence", coordination.headSequence());
-    event.put("snapshot", readModel.snapshot());
+    event.put("snapshot", snapshot());
     return event;
   }
 

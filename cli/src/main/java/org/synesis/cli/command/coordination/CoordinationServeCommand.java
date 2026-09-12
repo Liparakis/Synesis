@@ -26,6 +26,8 @@ public final class CoordinationServeCommand implements Callable<Integer> {
   private int port;
   @Option(names = "--duration-seconds", defaultValue = "0")
   private int durationSeconds;
+  @Option(names = "--parent-pid", defaultValue = "-1", hidden = true)
+  private long parentPid;
 
   /**
    * Creates a server command.
@@ -45,6 +47,6 @@ public final class CoordinationServeCommand implements Callable<Integer> {
   public Integer call() {
     return CoordinationServerLauncher.run(runtime, project, data, identity, host, port,
         durationSeconds,
-        false, false);
+        false, false, parentPid);
   }
 }
