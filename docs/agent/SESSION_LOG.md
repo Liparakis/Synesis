@@ -1,3 +1,160 @@
+## 2026-09-12 — SYN-057 installed acceptance and current-scope closure
+
+Rebuilt the canonical installed distribution and completed a fresh D:-backed
+two-project acceptance. A real installed SLO1 opened the authenticated
+browser picker with exactly project-a/project-b; clicking project-b submitted
+only `selectionId` and `projectId`, closed the picker after successful daemon
+dispatch, and started the selected project-b runtime. Replaying the consumed
+selection through authenticated daemon IPC returned `SELECTION_CONSUMED` for
+both inspection and claim.
+
+The installed browser run exposed and fixed one concrete deployment defect in
+the bootstrap fragment transition: changing `/` to `/projects` could discard
+the pending `selectionId`. The fix preserves the fragment and was verified in
+the rebuilt installed browser run. Frontend gates passed; focused Gradle
+verification passed for `:link:check`, daemon tests, and
+`ControlPlaneHttpHandlerTest`. The aggregate workspace suite still has
+unrelated existing failures in capability, workspace-mutation, and
+provider-session tests; no unrelated repair was attempted.
+
+SYN-057 is complete for its current authorized scope. No commit or push was
+made. Evidence: `docs/evidence/SYN-057-selection-control-surface-2026-09-12.md`.
+
+Exact next action: preserve the current boundary; activate a successor before
+any further feature work.
+
+## 2026-09-12 — SYN-057 authenticated project-selection control surface
+
+Added the narrow authenticated browser/control-plane surface for ambiguous
+SLO1 routing. The daemon now exposes safe selection metadata and an ID-only
+claim operation through the existing session/CSRF control plane; the raw
+invitation remains daemon-local and is dispatched only after a one-shot claim.
+The browser picker has no default, disables duplicate submissions, clears on
+success, and reports stale/expired/unavailable selection errors without
+persisting a project choice.
+
+Frontend typecheck, lint, production build, and 18 Vitest tests passed.
+Focused daemon protocol/store/routing tests passed 11/11 through the local
+JUnit Platform launcher. Changed Java production and HTTP-test sources compile
+directly. Gradle and HTTP fixture execution remain blocked before server/test
+startup by the environment's inability to establish a loopback connection.
+
+Evidence: `docs/evidence/SYN-057-selection-control-surface-2026-09-12.md`.
+
+Exact next action: rerun full Gradle verification and authenticated browser
+acceptance when local loopback startup is available. No commit or push was
+made.
+
+## 2026-09-11 — SYN-057 first daemon routing implementation
+
+Implemented the approved first routing seam. SLA2 v2 now resolves the signed
+host project UUID through `KnownProjectRegistry`, starts or reuses exactly that
+project runtime, and dispatches the untouched original URI. SLA2 v1 retains
+zero/one/multiple live-runtime behavior. SLO1 now uses only known eligible
+local registry entries and creates bounded invitation-bound one-shot selection
+contexts for ambiguity; no dispatch occurs before a valid selection.
+
+Focused manual compilation passed and eight daemon tests passed, including
+two-project target-only routing, unknown-target rejection, selection binding,
+expiry/capacity, and concurrency. Gradle compile was attempted with and
+without a daemon but failed before compilation because the environment could
+not establish a loopback connection. No commit or push was made.
+
+Evidence: `docs/evidence/SYN-057-routing-implementation-2026-09-11.md`.
+
+Exact next action: rerun normal Gradle verification when loopback startup is
+available, then inspect any source-level failures before broadening scope.
+
+## 2026-09-11 — SYN-057 routing protocol design proposal
+
+The architecture-only slice reconstructed the exact v1 SLO1/SLA2 contracts,
+fixed-field canonical encoding, signature coverage, parser/version behavior,
+and existing tamper/replay tests. It proposes two separate concerns: local
+ephemeral recipient selection for SLO1, and a future signed v2 SLA2 return
+target containing the host project's stable UUID plus the existing session
+binding. No production protocol or daemon code changed.
+
+ADR-0074 and the detailed design evidence record the compatibility matrix,
+restart/move semantics, threat model, failure vocabulary, authority ownership,
+acceptance criteria, and pre-implementation tests. The design is NEEDS
+OPERATOR DECISION on UUID wire disclosure, the ephemeral selection surface,
+and the explicit no-runtime-continuity promise after runtime restart.
+
+Exact next action: obtain those decisions before creating a protocol
+implementation slice. Preserve current fail-closed routing meanwhile.
+
+## 2026-09-11 — SYN-057 target-identity reconstruction and protocol gap
+
+The required discovery slice is complete. `KnownProjectRegistry` contains
+validated local project metadata only; daemon runtime endpoints and liveness
+are process-local; and `OPEN_URI` currently has only a bounded URI plus a local
+browser preference. SLO1/SLA2 carry signed Link/session and peer identities,
+but no destination project/runtime identity. The safe architecture is
+classification E, with only runtime-local post-parse operation matching.
+
+No production routing or protocol change was made. Broadcasting capability-
+bearing links, testing every runtime, choosing by registry order/port/PID, or
+adding an unsigned `projectId` would violate the task boundary. Evidence:
+`docs/evidence/SYN-057-deterministic-runtime-routing-2026-09-11.md`.
+
+That protocol-design action is now recorded in ADR-0074 and the SYN-057
+routing design evidence.
+
+## 2026-09-11 — SYN-057 activation and discovery boundary
+
+The operator explicitly authorized SYN-057 — Deterministic Multi-Project
+Runtime Selection and Deep-Link Routing. The administrative active marker moved
+from completed-current-scope SYN-056 to SYN-057. No production routing change
+has started. The first slice is identity/trust and pre-dispatch target
+reconstruction; routing implementation is forbidden until the safe resolver
+architecture is established. SYN-056 remains semantically complete and its
+membership boundary is not reopened.
+
+That discovery action is now complete; the result and protocol gap are recorded
+in the SYN-057 evidence file.
+
+## 2026-09-11 — SYN-056 closure and next-task discovery
+
+SYN-056 is complete for its authoritative daemon-shell scope. The final audit
+classified `UNCONFIGURED` / `UNKNOWN` after physical `CONNECTED` as intentional
+because the CLI has no signed membership authority source or approval action.
+No production code changed in that continuation, no r6 run was made, and no
+authoritative successor existed at that point. `SL-D-040` remains complete for
+its current scope; its remaining membership-authority capability is unrelated
+to SYN-057.
+
+## 2026-09-11 — SYN-056 Linux fallback and r5 browser-mediated acceptance
+
+Added the narrow Linux `xdg-open` direct-argv fallback after confirming the
+modern image's Java AWT browse path was unavailable. Focused opener tests and
+the Linux-targeted installed distribution passed. The fresh r4 gate proved
+real installed `synesis ui` browser launch, bootstrap consumption, session
+exchange, and live UI rendering.
+
+The fresh D:-backed r5 A/B run then proved distinct persisted identities,
+browser-created SLO1, daemon B `OPEN_URI` -> `WAITING_FOR_CONNECT`, shipped B
+Complete Join, browser-created SLA2, daemon A `OPEN_URI` -> `CONNECTED`, live
+distinct peer identities/liveness, and safe terminal SLA2 replay rejection.
+The overlay stayed `UNCONFIGURED` and membership `UNKNOWN`, so no durable
+signed-membership mutation or exactly-once durable onboarding is claimed.
+R5 containers and network were removed; evidence remains on D:. No commit or
+push.
+
+Exact next action: create the checkpoint and audit SYN-056's remaining
+durable-membership criteria.
+
+## 2026-09-11 — SYN-056 Docker retry-3 transport boundary
+
+Fresh retry-3 resources were staged under D: with a Linux-targeted installed
+distribution. A and B reported distinct durable node IDs; both daemons owned
+healthy runtimes. B's daemon `OPEN_URI` projection reached
+`WAITING_FOR_CONNECT`. The installed A/B CLI path then proved peer connection,
+identity verification, control readiness, liveness, successful work, and
+clean session closure across the bridge. The image could not open a browser
+through Java AWT, so browser Complete Join/ANSWER and durable exactly-once or
+replay are not claimed. The r3 containers, network, and image were removed;
+Docker Desktop WSL data and evidence remain on D:. No commit or push.
+
 ## 2026-09-10 — SYN-055 final artistic direction completed
 
 Implemented bounded typography, surfaces, page caps, resource-header hierarchy,
@@ -168,7 +325,7 @@ shipped-artifact acceptance from a clean reviewed checkout.
 ## 2026-09-09 — SYN-009E exact brief taxonomy reconciliation
 
 Reread the newly referenced brief at
-`C:\Users\Liparakis\.codex\attachments\3aa44bec-cbc3-45bc-a38b-c9ed3be9ee98\pasted-text-1.txt`;
+`local Codex metadata or attachment`;
 its SHA-256 is
 `B5D067ABC48D9B78B9CFABDE06E04A7C82E236D7B9944CD9077A49955EEE458C`.
 This brief defines Ring 1 control-flow obfuscation, Ring 2 genuine code
@@ -197,7 +354,7 @@ membership source.
 ## 2026-09-09 — SYN-009E Seven Ring alignment and acceptance timing seam
 
 Reread the exact referenced brief at
-`C:\Users\Liparakis\.codex\attachments\6839f961-2ec7-4927-81e1-54412fed9434\pasted-text-1.txt`;
+`local Codex metadata or attachment`;
 its SHA-256 is
 `74E92E54E6A0846885E99461128492AD6E56C6D7CE41542F43E94D25404ED404`.
 The source-backed Tier 3 inventory was corrected to use the actual capability
@@ -573,8 +730,8 @@ Synthetic marker-only maximum archive evidence:
   payload tamper, packaged frontend tamper, mutable `Link` state, provider
   lifecycle, native MCP, and MCP wire framing passed;
 - process-local compatibility rerun using
-  `-JdkUnixDomainTempDirectory C:\t\synesis-loopback-probe` and
-  `-LocalAppDataOverride C:\t\synesis-maximum-harness-runtime-override-15`:
+  `-JdkUnixDomainTempDirectory temporary workspace` and
+  `-LocalAppDataOverride temporary workspace`:
   UI reached `COORDINATION_SERVE_READY`, MCP reached `ensure_session=ready`,
   and the result was `PASS_WITH_EXPLICIT_OPEN_GATES`.
 
@@ -956,7 +1113,7 @@ The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
 Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
 fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
 The smaller direct UNIX socket test fails in inherited/expanded user TEMP
-and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+and passes in temporary workspace. With only the diagnostic JVM's
 jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
 passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
 AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
@@ -1123,7 +1280,7 @@ only.
   command/args/env/cwd; local launch clears the parent environment and creates
   standard piped stdio only.
 - Ran the disposable probe at
-  `C:\Users\Liparakis\AppData\Local\Temp\syn050-child-boundary-20260903-05`.
+  `local temporary workspace`.
   It passed one-process/two-thread routing, two concurrent dedicated A/B
   processes, wrong-thread rejection, A1→A2 exact-thread resume, fresh child
   launch, and B continuity while A restarted. Each wrapper/child saw static
@@ -1345,7 +1502,7 @@ only.
   `33A75B968C97AA90DC3106776797B0291AA0C6CA9A3F3713095FE029E31A1924`.
 - Excluded two malformed controller launches before MCP startup. Ran exactly
   one actual authenticated Codex lifecycle in fresh fixture
-  `C:\t\syn041-final-terminal-seal-20260828-001`.
+  `temporary workspace`.
 - Real Codex completed the required protocol and `finish_lane` with
   `terminalSession=true`; event sequence 7 is
   `PROVIDER_SESSION_TERMINALIZED`; claims and WorkGroup completed. Native
@@ -2380,7 +2537,7 @@ only.
   explicit `accepted` / `rejected` choices, without recommending an incomplete
   response command. Focused MCP/workspace tests and the rebuilt bundle pass.
 - Fresh CP-0510 project
-  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0510-001` reached
+  `.Acceptance\syn039-cp0510-001` reached
   WorkGroup `ba7d9344-fa33-3564-832d-b68222c93296`, exact REVIEW admission,
   grant consumption, snapshot `snap_9b3fae1c10ee7f69f381d035d77d211b`, and
   integration.
@@ -2514,7 +2671,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0501 producer-polling diagnostic
 
-- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0501-002`
+- Fresh project `.Acceptance\syn039-cp0501-002`
   used the current bundled MCP (`0.1.0-SNAPSHOT`, protocol `2025-06-18`,
   commit `bc334ac`, ten tools) and two independent GPT-5.6 Luna sessions.
   Both reached distinct `ready / isolated` bindings and converged on
@@ -2535,7 +2692,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0500 REVIEW admission idempotency diagnostic
 
-- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0500-002`
+- Fresh project `.Acceptance\syn039-cp0500-002`
   used the rebuilt bundled MCP and two independent GPT-5.6 Luna sessions.
   Both reached ten-tool `ready / isolated` sessions with disjoint claims and
   one WorkGroup `4c0005dc-4358-32b5-922a-3cf554cfb54d`.
@@ -2555,7 +2712,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0499 post-fix bounded diagnostic
 
-- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0499-003`
+- Fresh project `.Acceptance\syn039-cp0499-003`
   used the current bundled MCP and two independent GPT-5.6 Luna sessions.
   Both agents preflighted exactly ten tools and distinct `ready / isolated`
   bindings on the same project root, with disjoint `todo.py` and
@@ -2579,7 +2736,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0498 completed-review continuity diagnostic
 
-- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0498-001`
+- Fresh project `.Acceptance\syn039-cp0498-001`
   used the current bundled MCP and two independent GPT-5.6 Luna sessions.
   Both agents reached the same pinned project, ten tools, and distinct
   ready/isolated bindings. WorkGroup
@@ -2599,7 +2756,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0494 post-fix review-projection diagnostic
 
-- Fresh project `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0494-001`
+- Fresh project `.Acceptance\syn039-cp0494-001`
   used external harness `harness-cp0494-001`, the rebuilt current bundled MCP,
   and two independent GPT-5.6 Luna sessions. The project ID was
   `03dad00b-fbb4-4500-aa9a-22f91c7d7494`; both agents used the same pinned
@@ -2632,7 +2789,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0489 role-order diagnostic
 
-- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0489-001`
+- Fresh fixture `.Acceptance\syn039-cp0489-001`
   used an external harness and the current bundled MCP (`0.1.0-SNAPSHOT`,
   SHA-256 `8F17CF71691F407093D607C0BB947924BDAC05951CA3A84BB98EBFAEFE6704C7`).
   Project ID was `bceaf899-f1a3-4a65-8538-4f303a072e5d`; the control checkout
@@ -2667,7 +2824,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0485 clean-harness exact-rule diagnostic
 
-- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0485-001`
+- Fresh fixture `.Acceptance\syn039-cp0485-001`
   used a harness outside the project, a clean control checkout, and the
   rebuilt bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
   `27D6BE820B82A8C8CED3966DF9DD2A0AEE1FC897659F46462D8B7166D46CF7E3`). Both
@@ -2698,7 +2855,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0483 active-reviewer projection diagnostic
 
-- Fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0483-001`
+- Fresh fixture `.Acceptance\syn039-cp0483-001`
   used the current bundled MCP (`0.1.0-SNAPSHOT`, SHA-256
   `9064A9A96B0DD09595409E886214C5C2F35D4778B221ABB77DCE60D6161B576E`) and
   two independent GPT-5.6 Luna sessions. Both reached `ready / isolated` on
@@ -2790,14 +2947,14 @@ only.
   manual/catalog tests. Rebuilt the bundled MCP successfully; no lifecycle
   semantics or hidden-path protection changed.
 - CP-0479 diagnostic fixture
-  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-001` reached
+  `.Acceptance\syn039-cp0479-001` reached
   WorkGroup `6e69d6f1-75b7-352b-a582-13a2a0a011cb`, review requests and grants,
   snapshot `snap_701ed39a6a23b972bc5d723a4cbd630a`, and integrated control
   commit `24ed805`. The owner first chose unprojected `finish_lane` and got
   `task_not_ready / retry`; a later retry integrated. No structured reviewer
   ACCEPT/REJECT decision was captured, and three worktrees remained.
 - The required ordinary second run used fresh fixture
-  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0479-002` without
+  `.Acceptance\syn039-cp0479-002` without
   diagnostic lifecycle instructions. The agents did not form one shared
   WorkGroup. They published separate snapshots
   `snap_694e9a6456a6a9469c65fa7ab817b7d4` and
@@ -2814,7 +2971,7 @@ only.
 
 # 2026-08-24 — SYN-039 CP-0478 exact-action protocol diagnostic
 
-- Created fresh fixture `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0478-001`
+- Created fresh fixture `.Acceptance\syn039-cp0478-001`
   with project `72b38176-c65c-47a6-942e-cf91eee4348f`, baseline `25bd256`,
   and managed baseline `7ee03be`.
 - Both independent agents used the current bundled MCP
@@ -2871,7 +3028,7 @@ only.
 # 2026-08-24 — SYN-039 CP-0476 harness preflight
 
 - Created fresh fixture
-  `C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-cp0476-20260824-001`
+  `local temporary workspace`
   with project ID `c6fe0862-b75a-4e9f-8d9a-6c0e9aa0ea43`; the fixture remained
   clean at managed baseline `b6165ec686a1df3518ccc8ffa0567e8ec9bd4df0`.
 - Explicit control connections using the repository-bundled MCP
@@ -2963,7 +3120,7 @@ only.
   Javadoc, static analysis, hygiene, and launcher stages, then was bounded and
   stopped without an emitted test failure.
 - Exact unattended rerun fixture:
-  `C:\Users\Liparakis\AppData\Local\Temp\syn039-unattended-todo-slice-20260822`.
+  `local temporary workspace`.
   Review request `0c85ee01-5841-4a6b-896e-789815a378d8` was accepted and grant
   `79ef69cd-55bc-3925-a179-ff272cc94d12` was issued. Snapshot
   `snap_3e673171518792f078f394bf5dab7cd5` integrated into clean control commit
@@ -4241,7 +4398,7 @@ Append-only operational history.
 
 - Built the current source as `0.1.0-dev.16` with the Windows platform bundle
   task and installed it under
-  `C:\Users\Liparakis\AppData\Local\Synesis\versions\0.1.0-dev.16`.
+  `local user data`.
 - Switched the local `current` pointer from `0.1.0-dev.15` to `0.1.0-dev.16`;
   the previous version directory was preserved.
 - Installed launcher verification passed: `synesis version` reports
@@ -4310,7 +4467,7 @@ Append-only operational history.
   under the stable root using the local development manifest. The stable
   launcher reports `0.1.0-dev.17`.
 - Reinstalled the Antigravity provider into
-  `C:\Users\Liparakis\Desktop\SynesisTestProject` and invoked its wrapper
+  `.TestProject` and invoked its wrapper
   from outside the project root. Result: one compact protected-scope deny
   JSON line on stdout, exit `0`, bounded diagnostic on stderr, and the
   protected-file hash unchanged.
@@ -5218,7 +5375,7 @@ Append-only operational history.
 - Ran `scripts/agent-resume.ps1`; repository was clean on `master`, active
   task was SYN-039, and CP-0461 was current. No production code was changed.
 - Created disposable fixture
-  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-baseline-20260822`
+  `local temporary workspace`
   with baseline commit `f0c0f99`, then initialized Synesis. Raw Codex JSONL
   captures are retained under the fixture's `baseline-logs` directory.
 - Launched two ordinary concurrent Codex sessions without manual relay. Agent
@@ -5258,7 +5415,7 @@ Append-only operational history.
   reviewer next-action fixtures. `git diff --check` passed.
 - Rebuilt `:cli:installDist` successfully and launched two ordinary Codex
   sessions without manual relay in disposable fixture
-  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-review-20260822-4`.
+  `local temporary workspace`.
   Agent B discovered `REVIEW_ADMISSION_REQUIRED`, submitted the projected
   join request, received grant
   `2f248cda-272e-3a3f-bf9c-92d871198670`, and consumed it. The next action was
@@ -5290,7 +5447,7 @@ Append-only operational history.
 - Three fresh ordinary two-session Todo reruns were launched with no manual
   relay or protocol intervention. They all stopped before grant consumption at
   the existing owner REVIEW request. The final fixture
-  `C:\Users\LIPARA~1\AppData\Local\Temp\syn039-unattended-todo-publication-20260822-112743-lf3`
+  `local temporary workspace`
   exposed `owner_request_pending`, `respond_coordination`, and request
   `4998d76b-fe4b-4d08-b627-103ed21d4122`; the owner did not accept it. This is
   the current provider-side blocker, not evidence against the new post-grant
@@ -5405,7 +5562,7 @@ Append-only operational history.
   another lifecycle action. Added deterministic manual/generated-contract
   assertions.
 - Ran fresh external-harness project
-  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0486-001` with two
+  `.Acceptance\syn039-cp0486-001` with two
   current-bundle GPT-5.6 Luna sessions. Both reached `ready / isolated`, held
   disjoint claims, and converged on WorkGroup
   `9527b8ec-0971-3f33-995c-ac0833d506c7`.
@@ -5457,7 +5614,7 @@ Append-only operational history.
   The reviewer now keeps its participant/session identity when only the
   control checkout advances and receives a fresh isolated recovery worktree.
 - Ran fresh project
-  `C:\Users\Liparakis\Desktop\SynesisAcceptance\syn039-cp0497-001` with two
+  `.Acceptance\syn039-cp0497-001` with two
   independent GPT-5.6 Luna sessions and the repository-built MCP. Both
   reached ready/isolated preflight with the same project and ten tools.
 - The run reached WorkGroup
@@ -5671,7 +5828,7 @@ Append-only operational history.
   exact tool catalog, strict Javadocs, official bundle/smoke, deferred
   validation, and fresh packaged provider-independent acceptance passed.
 - Packaged acceptance used fixture
-  `C:\t\syn041-packaged-cp0567-20260829-002`, terminated tracked Java PID
+  `temporary workspace`, terminated tracked Java PID
   2572, received `SESSION_TERMINAL` on a separate probe, and ended with the
   raw lease `TERMINAL_DISCONNECTED`; Doctor had no stale or ambiguous finding.
 - The full process-heavy MCP selections timed out and remain incomplete. No
@@ -5690,7 +5847,7 @@ not run Codex or close SYN-041.
 
 - Rebuilt the official bundle from the current checkout and ran exactly one
   authenticated Codex lifecycle in fresh fixture
-  `C:\t\syn041-final-20260829-001`.
+  `temporary workspace`.
 - Direct native parentage was observed: Codex PID 24824 -> MCP PID 22700 ->
   bundled Java PID 25532. Codex completed task-bearing ensure, read,
   get-next-action, exact projected no-change finish, and `terminalSession=true`.
@@ -6010,7 +6167,7 @@ not run Codex or close SYN-041.
   the existing durable capability request/publication path. No dependency
   production edit was justified or made.
 - Fresh fixture:
-  `C:\Users\Liparakis\Desktop\SynesisTaskTrackerRealAcceptance-20260903-08`;
+  `.TaskTrackerRealAcceptance-20260903-08`;
   baseline `17db31357e44b54180f1692ac5dd52ed44776cd2`; project
   `48ec29de-3433-4b10-8074-fbb49a0b524c`. Worker A made three substantive
   slices with ordinary `IMPLEMENT` after each, refreshed a stale projected
@@ -6118,7 +6275,7 @@ not run Codex or close SYN-041.
 
 - Completed the bounded provider-only alternative investigation from starting
   HEAD `b84d041cd066a2f6d9e8f13b6ff093fac5a3a869` using `codex-cli 0.145.0`.
-  Dedicated A1/B1 App Servers shared the normal `C:\Users\Liparakis\.codex`
+  Dedicated A1/B1 App Servers shared the normal `local Codex metadata or attachment`
   home, created distinct threads, delivered distinct process-private proof
   digests, and completed concurrent authenticated model turns.
 - Codex accepted launch-local dotted `--config` overrides for the disposable
@@ -7038,3 +7195,345 @@ label. The project name/status placement remains unchanged.
 Typecheck, lint, 8 tests, production build, forced runnable-installer build,
 and packaged verification passed. No backend, PATH, commit, push, tag, or
 release publication was made.
+## 2026-09-10 — SYN-056 first installed daemon shell
+
+Promoted the explicit installed-product goal to `SYN-056` and recorded
+ADR-0073. Added the first thin `cli`-module daemon slice: one per-user lock,
+atomic endpoint state, bounded authenticated loopback IPC, existing runtime
+launch/reuse and health checks, browser opening, `synesis ui` attachment, and a
+parent-PID runtime cleanup guard. TDD red/green protocol-lock checks, strict
+Javadocs, installed distribution build, disposable reuse/auth/bounds/browser/
+crash-relaunch smoke, and a five-second idle resource sample passed.
+
+The bounded `OPEN_URI` entrypoint currently shape-checks supported `synesis://`
+classes only; it does not yet dispatch into Link onboarding. OS registration and
+cross-project SPA runtime selection remain deferred. Evidence:
+`docs/evidence/SYN-056-installed-daemon-2026-09-10.md`.
+## 2026-09-10 — SYN-056 runtime-owned deep-link handoff
+
+Added a runtime-owned command credential and narrow control-plane deep-link
+adapter. The daemon forwards only a bounded URI and routes only when exactly one
+reachable runtime is present. Focused owner/daemon tests pass. Installed smoke
+proved a real signed join invitation traversed the installed daemon into the
+existing Link join operation, produced an answer URI, rejected two-runtime
+ambiguity, and rejected malformed HTTPS input. No commit, push, or remote
+mutation occurred. The next action is installed answer-path evidence and
+classification of the two broader CLI failures.
+## 2026-09-11 — SYN-056 installed answer-path audit
+
+Re-read the continuation brief, ADR-0073, current evidence, checkpoint
+CP-0864, task state, and production handoff code. Rebuilt `:cli:installDist`;
+daemon tests, focused Link/deep-link tests, and CLI/workspace Javadocs passed.
+The installed distribution was started against a disposable Git project and a
+real answer-shaped `OPEN_URI` request returned `URI_REJECTED` with authority
+code `ANSWER_INVALID`. This exercises installed dispatch and the existing
+answer parser without creating a mutation.
+
+The positive installed ANSWER flow remains PARTIAL: the daemon-managed host
+operation can only be created through the browser's one-time bootstrap, which
+is intentionally not returned by daemon IPC. Adding bootstrap disclosure or a
+daemon-owned invite command would violate ADR-0073, so neither was added. The
+two broader CLI failures reproduce as previously recorded and remain outside
+this slice. All temporary Java processes were stopped and disposable roots
+removed. No commit, push, or global installation mutation occurred.
+
+The follow-up browser-mediated run exercised the shipped UI bootstrap and
+Network/Create Invitation path on a real disposable runtime. Its signed SLO1
+invitation was submitted through the installed daemon, producing
+`WAITING_FOR_CONNECT` and a real signed SLA2 answer. Sending that exact answer
+through the daemon returned `URI_REJECTED` / `OPERATION_NOT_FOUND`, correctly
+because the daemon selected the join runtime while the pending host operation
+belonged to the separate browser runtime. The daemon-managed host-bootstrap
+positive case remains the sole unproven acceptance item; no authority boundary
+was weakened.
+## 2026-09-11 — SYN-056 same-runtime lifecycle boundary
+
+Rebuilt the installed distribution with the canonical `:cli:installDist`
+path. From a fresh empty Git project, installed `synesis ui --project ...`
+started exactly one daemon and one child runtime. The browser consumed that
+runtime's one-time bootstrap, exchanged `/api/v1/session`, opened Network, and
+created a real signed invitation through the shipped Create Invitation action.
+
+The daemon submitted the exact invitation to the same sole live runtime and
+received `WAITING_FOR_CONNECT` plus a real answer URI. The exact answer reached
+the same runtime-owned Link operation but returned `REQUEST_REJECTED` because
+the existing operation waits for join-side `connect`; the exact replay was
+refused as `OPERATION_BUSY`. Public health stayed at `headSequence=0`, so no
+durable mutation occurred. This replaces the previous wrong-runtime
+`OPERATION_NOT_FOUND` explanation with the actual remaining completion-surface
+boundary. No production code changed.
+
+Focused daemon/control-plane/Link tests, CLI/workspace Javadocs, and
+`:cli:installDist` passed. The disposable browser, daemon, runtime, and root
+were cleaned up. SYN-056 remains ACTIVE / PARTIAL.
+
+## 2026-09-11 — SYN-056 existing CONNECT seam exposed
+
+Completed the required source classification before editing. Production CONNECT
+already existed in `ControlPlaneLinkOperations.PendingJoin`, the authenticated
+runtime HTTP route, and `ControlPlaneClient`; only a runtime projection/action
+for daemon-created pending joins was missing. Added pending-join metadata to the
+authenticated snapshot, refresh on `link.updated`, and the minimal Network
+`Complete Join` action. Narrowed the handler's onboarding lock so blocking host
+answer and join connect calls can overlap while handle creation remains
+serialized.
+
+Frontend typecheck/lint/tests, focused workspace control-plane/owner/Link tests,
+and canonical `:cli:installDist` passed. Installed browser evidence proved the
+conditional action appears after daemon JOIN and invokes the existing CONNECT
+route. A clean installed completion attempt still timed out during the same-
+runtime Link handoff with `headSequence=0`; no successful durable answer or
+replay proof is claimed. SYN-056 remains ACTIVE / PARTIAL. No commit or push.
+
+## 2026-09-11 — SYN-056 same-runtime Link trace
+
+## 2026-09-11 — SYN-056 Docker acceptance capability stop
+
+The operator-aborted Windows two-identity setup was inspected and not reused.
+Its exact disposable root was quarantined, and no matching Synesis acceptance
+process remained. Docker client 29.2.1 and Compose 5.0.2 are present with the
+Linux context selected, but Docker Desktop's Linux engine is unavailable at
+the `dockerDesktopLinuxEngine` named pipe. The requested Docker acceptance
+therefore stopped before any container, network, identity, candidate, or
+browser work. This is not counted as a product failure. No production code,
+Link identity behavior, daemon exposure, or authority boundary changed.
+
+SYN-056 remains ACTIVE / PARTIAL. Next action: after the engine is available,
+create a fresh D:-backed harness and rerun the installed two-identity flow.
+
+The direct Link reproduction used two retained handles with one persisted
+identity and started host ANSWER and join CONNECT concurrently. Both calls
+entered the race: host emitted `ANSWER_VERIFIED` and `TRAVERSAL_STARTED`, and
+join emitted `TRAVERSAL_STARTED`. The first candidate reached the responder,
+which rejected the handshake as `IDENTITY_PROOF_INVALID`; later candidates
+timed out. No `CONTROL_READY`, `PEER_CONNECTED`, or durable event occurred.
+
+This classifies the blocker as fail-closed self-identity/topology, not a
+serial HTTP executor, shared operation future, lock-order inversion, or missed
+wakeup. The broad handler lock remains narrowed only to permit independent
+retained handles to overlap. No Link identity check, timeout, daemon IPC, or
+operation authority was changed. SYN-056 remains ACTIVE / PARTIAL.
+
+## 2026-09-11 — SYN-056 Docker retry
+
+Docker briefly became usable. A fresh D:-backed two-identity harness started
+the installed daemon and project runtimes, proved authenticated status,
+non-loopback bridge candidate advertisement, and distinct project identities.
+The run found and fixed the daemon's trailing-slash runtime health probe bug.
+The browser path then hit missing libXi.so.6/libXtst.so.6 in the temporary
+image; Docker Desktop image export failed with storage I/O, and its Linux
+engine remained unavailable after restart. No positive cross-container
+handshake or durable acceptance is claimed. Repository evidence was updated;
+no commit or push occurred.
+## 2026-09-11 — SYN-056 Docker retry-2 acceptance
+
+Fresh D:-backed Docker containers proved distinct installed identities,
+daemon/runtime status, bridge candidates, cross-container UDP reachability,
+and the real browser bootstrap/session path. Both control-plane pages loaded;
+host A reached Network. Its shipped Create Invitation mutation remained
+pending without an SLO1 URI, so the two-identity JOIN/ANSWER/CONNECTED and
+durability/replay acceptance remains partial. Containers and the private
+bridge were removed; evidence remains under the D:-backed root and the
+installed acceptance evidence document. No commit or push.
+## 2026-09-11 — SYN-056 HOST-A invitation trace and SLO1 proof
+
+Fresh D:-backed Docker HOST-A browser tracing proved the initial pending action
+was an `UnsatisfiedLinkError` from missing Linux Netty QUIC native packaging in
+the Windows-built installDist. The failed trace stopped in SSL context build
+after authentication and Link entry; no listener, SLO1, or HTTP response
+existed. Added a validated cross-target classifier selector, rebuilt with
+`-PsynesisNativeQuicClassifier=linux-x86_64`, restarted the disposable daemon,
+and reran the actual shipped browser action. Trace
+`0a82ad6c-d807-4bb0-9247-22630b25058e` reached one listener candidate, SLO1
+serialization, host registration, Link return, HTTP 201 completion, and a
+browser-visible invitation URI. Temporary trace code was removed. SYN-056
+remains ACTIVE / PARTIAL; JOIN-side and durability/replay work remains out of
+scope for this slice.
+## 2026-09-11 — SYN-056 HOST-A invitation trace and SLO1 proof
+
+Fresh D:-backed Docker HOST-A browser tracing proved the initial pending action
+was an `UnsatisfiedLinkError` from missing Linux Netty QUIC native packaging in
+the Windows-built installDist. The failed trace stopped in SSL context build
+after authentication and Link entry; no listener, SLO1, or HTTP response
+existed. Added a validated cross-target classifier selector, rebuilt with
+`-PsynesisNativeQuicClassifier=linux-x86_64`, restarted the disposable daemon,
+and reran the actual shipped browser action. Trace
+`0a82ad6c-d807-4bb0-9247-22630b25058e` reached one listener candidate, SLO1
+serialization, host registration, Link return, HTTP 201 completion, and a
+browser-visible invitation URI. Temporary trace code was removed. SYN-056
+remains ACTIVE / PARTIAL; JOIN-side and durability/replay work remains out of
+scope for this slice.
+## 2026-09-11 — SYN-056 distinct-peer Docker attempt
+
+Built `:cli:installDist` with `-PsynesisNativeQuicClassifier=linux-x86_64`
+and staged it under `external acceptance workspace`.
+Created two fresh Linux containers on `syn056-distinct-peer-r2`, with
+`JAVA_TOOL_OPTIONS=-Duser.home=/synesis-home` and D:-backed A/B homes and
+projects. Installed `synesis init` produced distinct project/node identities;
+both `synesis ui --no-browser` paths started one daemon-managed runtime and
+authenticated `STATUS` returned RUNNING. Docker then returned 502 from the
+Linux engine for a container archive probe, after which `docker version` no
+longer completed. No Link operation was attempted after that failure; cleanup
+remains pending engine recovery.
+## 2026-09-11 — SYN-056 r4 browser opener environment blocker
+
+Built a fresh D:-backed r4 image with Google Chrome 153, Xvfb, `xdg-open`,
+GIO, and Selenium. Generic `xdg-open` launched Chrome, but the shipped
+installed `synesis ui` smoke returned `SYNESIS_UI_OPEN_FAILED`; Java reported
+`Desktop.isDesktopSupported=true` and `Desktop.Action.BROWSE=false`. The JDK
+Linux XDesktopPeer expects legacy GNOME VFS symbols absent from the modern
+base image. No Link operation, browser bypass, or production workaround was
+run. SYN-056 remains ACTIVE / PARTIAL; the r4 evidence is retained on D:.
+## 2026-09-11 — SYN-056 post-CONNECTED membership semantics audit
+
+Read-only source and task audit classified the r5 `UNCONFIGURED` / `UNKNOWN`
+result as intentional. `CONNECTED` retains an authenticated physical Link
+session; `LinkRuntimeOwner` requires an explicitly supplied verified signed
+membership snapshot for overlay membership and the CLI supplies none. No
+production membership mutation API or shipped browser approval/configuration
+action exists. `WORK_RESULT=OK` is demo application work, not authorization.
+The exposed `headSequence` is the coordination event-store sequence; Link
+onboarding does not append it. Classification E: membership authority is
+outside SYN-056. No production code changed and no r6 run was performed.
+SYN-056 is complete for its authoritative current scope; the registry remains
+ACTIVE solely to preserve the one-active-task invariant.
+
+## 2026-09-11 — prior r4/r5 browser portability slice
+## 2026-09-11 — SYN-056 closure and next-task discovery
+
+SYN-056 is complete for its authoritative daemon-shell scope. The final audit
+classified `UNCONFIGURED` / `UNKNOWN` after physical `CONNECTED` as intentional
+because the CLI has no signed membership authority source or approval action.
+No production code changed in this continuation, no r6 run was made, and no
+authoritative successor task is currently activated. `SL-D-040` is already
+complete for its current scope; its remaining membership-authority capability
+requires a separate explicit activation trigger. The repository remains on
+the single active administrative SYN-056 task until an operator activates an
+existing next task.
+
+## 2026-09-11 — SYN-056 Linux fallback and r5 browser-mediated acceptance
+## 2026-09-11 — SYN-057 protocol v2 serialization and binding implementation
+
+The operator approved ADR-0074 decisions and authorized a protocol-only slice.
+Added explicit v2 formats for the SLO1 wrapper and signed traversal offer, plus
+the SLA2 answer format. A fixed binary ReturnTarget contains format 1 and the
+stable host project UUID. The target is inside host/responder signature input;
+the offer invitation digest and session ID retain exact-chain binding, and the
+answer verifier requires target equality with the offer. SessionInvitation v1,
+inner Link ProtocolVersion.V1, daemon routing, local project selection,
+persistent selected-project state, and runtime-restart semantics were not
+changed.
+
+Added focused v2 tests for canonical round trips, target tampering, target
+format/truncation/trailing/future-version rejection, downgrade rejection,
+cross-invitation/offer transplant, cross-project target mismatch, and v1
+compatibility. Evidence is recorded in
+`docs/evidence/SYN-057-routing-protocol-v2-2026-09-11.md`.
+
+Exact next action: preserve CP-0892 and begin daemon resolver work only as a
+separate approved slice; do not broaden this protocol implementation.
+## 2026-09-12 — SYN-057 closure reconciled and SYN-058 activated
+
+Reconciled SYN-057 as COMPLETE FOR CURRENT SCOPE using CP-0904, ADR-0074, and
+the installed selection evidence. The authoritative task registry contains no
+successor after SYN-057, so the operator-authorized SYN-058 task was created
+and activated. Discovery found an existing authenticated daemon start/reuse
+seam in `DaemonClient.request`, but no stable CLI OPEN_URI command or native
+protocol registration. The Go bootstrap is the lifecycle owner for the stable
+installed launcher, making it the narrow registration owner for Windows.
+
+No production code has changed in SYN-058 yet. The next action is a
+transition checkpoint followed by the independently tested Java activation
+command. No commit or push was made.
+## 2026-09-12 — SYN-058 first implementation slice verified
+
+Added the short-lived Java `open` activation command and exact-arity/forwarding
+tests. Added a stable native Windows activation helper to the Go-installed
+layout; it reads the active pointer and invokes the active Java CLI directly
+with one URI argument, without a shell. Added explicit per-user HKCU protocol
+registration with ownership markers, idempotent repair, refusal to overwrite an
+unowned key, and ownership-checked unregister/uninstall behavior.
+
+Forced Windows platform packaging, installed into a disposable D:-backed
+root, registered the handler, and proved real OS activation, daemon
+start/reuse, repeated activation, and near-simultaneous activation. The
+handler was unregistered after acceptance. Focused Java/bootstrap tests,
+Javadocs, `:cli:installDist`, `:link:check`, deferred validation, and diff
+checks passed. The full CLI check retained unrelated
+`CodexHookProcessTest`/`WorkspaceCliTest` failures; no repair was attempted.
+
+SYN-058 remains ACTIVE pending positive installed SLO1 picker and SLA2 v2 OS
+activation evidence. No commit or push was made.
+## 2026-09-12 — SYN-058 Windows composition and closure acceptance
+
+The Windows native activation composition was exercised from a disposable
+D:-backed installed product. Two fresh known projects were restricted into an
+isolated registry view, then the original registry was restored byte-for-byte.
+A real installed SLO1 reached `PROJECT_SELECTION_REQUIRED`; the authenticated
+shipped picker showed exactly both projects with no default, selected project B
+once, and the selected runtime returned `WAITING_FOR_CONNECT`. Selection replay
+returned `SELECTION_CONSUMED`. A signed SLA2 v2 answer opened through the same
+Windows handler routed by signed `ReturnTarget.projectId` to project A, where
+runtime authority returned `URI_REJECTED / OPERATION_NOT_FOUND`; project B was
+not the target. Registration was removed after acceptance and all verified
+D:-backed daemon/runtime processes were stopped.
+
+Focused native, daemon, Link, frontend, installer, and deferred-register gates
+passed. The pre-existing aggregate CLI/workspace/capability/provider failures
+remain unrelated and were not repaired. SYN-058 is COMPLETE FOR CURRENT SCOPE;
+Linux/macOS registration and login/reboot autostart remain deferred.
+## 2026-09-12 — Release-boundary / repository-integration review
+
+Performed a read-only review of the complete intentionally dirty SYN-056 ->
+SYN-057 -> SYN-058 worktree. Inventory: 108 changed paths relative to HEAD,
+comprising 26 tracked modifications, 82 additions, and no deletions. Product
+source/tests, ADRs, evidence, and checkpoints were classified; no unexplained
+product source, tracked binary, private key, full capability-bearing link, or
+temporary production diagnostic was found. The final architecture preserves
+OS activation -> short-lived opener -> authenticated daemon -> deterministic
+local routing -> project runtime -> Link/project authority.
+
+Focused Go, Gradle/Link/CLI/workspace/Javadoc, frontend, deferred-register,
+resume, and diff checks passed with the documented Windows loopback setting.
+The known aggregate CLI/workspace/provider failures remain unrelated; the
+aggregate CLI probe was stopped after entering its known long-running fixture
+phase. No source fix, feature task, commit, or push was performed.
+
+The review is NOT READY TO COMMIT solely because durable historical
+agent/evidence documents contain absolute user-specific and D:-backed
+acceptance paths. The exact next action is a deliberate publication-staging
+decision to approve or redact those paths without discarding historical
+evidence. No SYN-059 was created.
+
+## 2026-09-12 — Publication-hygiene / redaction pass
+
+Completed the authorized documentation-only publication pass for the
+SYN-056 -> SYN-057 -> SYN-058 roadmap. The pre-redaction scan covered 68
+changed Markdown files and recorded 59 user-name, 22 Docker-root, 42
+acceptance-root, and 65 broader Windows-user-root hits. Repository-internal
+absolute paths were converted to relative paths; external acceptance roots,
+Docker storage references, temporary roots, and local metadata were generalized
+to non-clickable descriptions. The source/test audit found no specified
+workstation-path literals.
+
+Post-redaction searches for user identities, absolute Windows paths, D: roots,
+Docker/acceptance roots, file URIs, Unix home paths, private-key markers, and
+full capability-bearing URIs returned zero. Markdown link checks, semantic
+sanity checks, generated-artifact/secret checks, `git diff --check`, deferred
+validation, and resume validation passed. The known unrelated aggregate CLI,
+workspace, capability, and provider failures remain unchanged.
+
+The current worktree is 101 changed paths relative to HEAD: 27 tracked
+modifications, 74 additions, and no deletions. Latest checkpoint: CP-0909.md.
+The final authorized test-fixture cleanup generalized the three test-only
+user-specific literals to a deterministic synthetic Windows path. The focused
+bootstrap suite passed, no production code changed, and publication readiness
+is now READY TO COMMIT. Canonical inventory: 26 modified tracked files, 0
+staged, 85 untracked files, 0 deleted, 111 unique paths. No staging, commit,
+push, feature work, or SYN-059 was performed.
+
+The eventual four-commit recommendation remains an ordered stack rather than
+independent cherry-picks: SYN-056 foundation, SYN-057 routing/selection,
+SYN-058 native Windows activation, and docs/evidence. A two-commit complete
+product-chain-plus-docs alternative is safer if independent cherry-picks are
+required.

@@ -8,6 +8,38 @@ Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
 
 # Deferred Functionality Register
 
+## SYN-057 promotion review — 2026-09-11
+
+The operator explicitly promotes deterministic multi-project runtime selection
+and deep-link routing as SYN-057. The promotion covers the narrowly bounded
+resolver now implemented: signed v2 target lookup through
+`KnownProjectRegistry` and ephemeral local SLO1 selection. It does not promote
+an unsigned `projectId`, selected-project persistence, filesystem crawling,
+runtime broadcast, OS protocol registration, membership authority, controlled-
+NAT, or hosted coordination.
+
+The architecture and implementation evidence are recorded in ADR-0074 and the
+SYN-057 routing evidence. Runtime-restart operation continuity remains outside
+this promotion.
+
+## SYN-056 promotion review — 2026-09-10
+
+The explicit installed-product goal promotes a bounded installation shell over
+the existing project-local control plane. ADR-0073 selects one `cli`-module
+daemon with authenticated loopback IPC and existing runtime launch/reuse. It
+does not promote a second HTTP control plane, global project authority,
+filesystem crawling, peer aggregation, privileged startup, OS URI registration,
+or duplicate Link parsing/verification. Installer registration and a later
+cross-project runtime-selection adapter remain deferred until their existing
+seams are verified.
+
+The r5 post-CONNECTED audit does not promote membership authority. The CLI
+intentionally supplies no signed membership snapshot; physical Link
+authentication therefore remains distinct from project membership and the
+overlay remains `UNCONFIGURED`. Any membership creation, approval, revocation,
+or persistence lifecycle requires a separately activated authority task under
+SL-D-040 and must not be added to SYN-056 or the daemon.
+
 ## SYN-055 promotion review — 2026-09-09
 
 The explicit screenshot-led UI request promotes a bounded frontend polish

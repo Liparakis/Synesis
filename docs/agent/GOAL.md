@@ -1,10 +1,99 @@
+# SYN-057 deterministic multi-project runtime selection and deep-link routing — activated 2026-09-11
+
+## Task boundary
+
+SYN-057 is explicitly authorized. SYN-056 is complete for its current scope
+and is not reopened. The goal is deterministic local routing across known
+project runtimes without moving coordination, Link, or membership authority
+into the daemon.
+
+The discovery and architecture slices reconstruct the identity hierarchy,
+trust classification, daemon project/runtime discovery, endpoint liveness,
+and pre-dispatch information. The operator approved the versioned targeting
+contract. The current slice implements protocol v2 serialization/binding,
+deterministic SLA2 target routing, and bounded ephemeral SLO1 selection.
+
+## Exact next action
+
+ADR-0074 and
+`docs/evidence/SYN-057-routing-protocol-design-2026-09-11.md` record the
+approved stable UUID, ephemeral local SLO1 selection, and no-runtime-restart-
+continuity decisions. Routing evidence is recorded in
+`docs/evidence/SYN-057-routing-implementation-2026-09-11.md`. The next action
+is normal Gradle verification after the local loopback startup failure is
+resolved; preserve v1 and all runtime authority boundaries.
+
+## 2026-09-11 — prior SYN-056 installed local daemon shell goal
+
+## 2026-09-11 final post-CONNECTED semantics audit
+
+The authoritative daemon-shell criteria are complete for current scope. Fresh
+r4/r5 evidence proves installed browser bootstrap, browser-mediated SLO1,
+daemon JOIN/ANSWER, Complete Join, distinct authenticated peers, `CONNECTED`,
+live liveness, and terminal replay rejection. The CLI overlay remaining
+`UNCONFIGURED` / `UNKNOWN` is intentional: ADR-0068 requires an explicitly
+supplied verified signed membership snapshot, and the CLI has no membership
+authority source or shipped approval/configuration action. `WORK_RESULT=OK`
+is demo application work only; Link onboarding does not mutate coordination
+events or `headSequence`. Classification E: membership authority is outside
+SYN-056 and remains deferred. No r6 run or production repair is justified.
+
+This historical SYN-056 goal is superseded by the explicitly authorized
+SYN-057 task above. Membership authority remains outside both this routing
+slice and the completed SYN-056 scope.
+
+## 2026-09-11 distinct-peer acceptance attempt
+
+The fresh D:-backed A/B setup and Linux-targeted installed distribution passed
+through distinct persisted identities and one healthy daemon-managed runtime on
+each side. Docker Engine storage/API failure blocked the browser bootstrap
+before SLO1, so SYN-056 remains ACTIVE / PARTIAL and no peer completion claim
+is made.
+
+## 2026-09-11 HOST-A invitation result
+
+The installed HOST-A invitation boundary is proven: a corrected Linux-targeted
+distribution creates and returns a real SLO1 URI through the shipped browser.
+The Docker hang was caused by a platform-native packaging mismatch, not a peer
+wait, candidate deadlock, or response handoff failure. SYN-056 remains ACTIVE /
+PARTIAL until the separate distinct-peer JOIN, ANSWER, durable completion, and
+replay acceptance is proven.
+
+Build the smallest production-correct per-user Synesis local daemon as a thin
+installation shell around existing project runtimes. Keep project coordination,
+browser security, Link onboarding, and `KnownProjectRegistry` at their existing
+authority boundaries. Implement only singleton lifecycle, authenticated local
+IPC, runtime launch/reuse and truthful health discovery, secure browser opening,
+the shared `synesis ui` path, and a bounded deep-link handler entrypoint.
+
+- Status: ACTIVE; architecture recorded in ADR-0073.
+- Current slice: existing production CONNECT is now exposed through the
+  smallest runtime/browser seam: pending-join metadata in the authenticated
+  snapshot and a `Complete Join` action that calls the existing client command.
+  A fresh installed run proves the action is projected after daemon JOIN and
+  invokes the existing runtime route; clean installed self-runtime
+  CONNECT/ANSWER completion still times out before durable mutation.
+- Status remains ACTIVE / PARTIAL. No daemon CONNECT IPC or daemon-owned Link
+  state was added. Trace evidence shows the same-runtime case reaches both
+  Link operations but fails closed when both roles use one persisted node
+  identity: the responder reports `IDENTITY_PROOF_INVALID`, then candidate
+  deadlines expire. No durable transition occurs.
+- Exact next action: preserve this identity boundary and, if positive installed
+  completion is required, exercise two distinct durable peer runtimes with
+  concurrent host ANSWER and join CONNECT. Do not add bootstrap/session
+  disclosure, operation copying, daemon-owned invitation authority, or weaker
+  Link checks.
+- Exclusions: second HTTP control plane, global project authority, filesystem
+  crawling, peer aggregation, privileged service, installer redesign, OS URI
+  registration, and duplicate SLO1/SLA2 validation.
+
 # SYN-055 final browser artistic-direction pass — 2026-09-10
 
 Polish the six current browser screens using the latest pasted brief as visual
 authority and current code as semantic authority. Preserve product structure,
 available actions, real data, and authenticated backend boundaries.
 
-- Status: ACTIVE administrative review record; requested visual slice complete.
+- Status: COMPLETE FOR CURRENT SCOPE; superseded by SYN-056.
 - Result: neutral colors, comfortable typography, restrained semantic color,
   unified project header and tabs, quiet runtime dot/text, consistent controls,
   1480px simple-page and 1760px dense-page caps, responsive technical tables.
@@ -224,7 +313,7 @@ The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
 Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
 fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
 The smaller direct UNIX socket test fails in inherited/expanded user TEMP
-and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+and passes in temporary workspace. With only the diagnostic JVM's
 jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
 passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
 AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.

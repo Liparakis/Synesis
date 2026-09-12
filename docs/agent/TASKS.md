@@ -1,10 +1,252 @@
+## Final publication-blocker cleanup — 2026-09-12
+
+- Status: COMPLETE as a read-only review; no new task created.
+- Result: the SYN-056 -> SYN-057 -> SYN-058 product chain is architecturally
+  coherent and focused-verified. No temporary production tracing, private
+  keys, full capability-bearing links, Docker-specific production behavior,
+  or unexplained source files were found.
+- Publication hygiene: COMPLETE. The three test-only Windows fixture
+  literals were generalized to a deterministic synthetic Windows install path
+  with spaces; no production code changed. Changed-file path, privacy, secret,
+  artifact, and link scans are clean.
+- Final result: READY TO COMMIT. Canonical inventory is 26 modified tracked
+  files, 0 staged, 85 untracked files, 0 deleted, and 111 unique paths.
+- Exact next action: stage only the classified roadmap files if publication is
+  desired; do not create SYN-059 or reopen SYN-056/SYN-057/SYN-058.
+
+## SYN-058
+
+### Native Deep-Link Registration and Installed Activation — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-056 complete for its current scope; SYN-057 complete for
+  its current scope.
+- Primary goal: clicking or opening a supported `synesis://` URI through the
+  operating system activates the installed Synesis product and delivers the
+  exact URI once into the existing authenticated daemon `OPEN_URI` pipeline.
+- First implementation slice: add or reuse one stable short-lived installed
+  activation entrypoint; accept exactly one supported `synesis://` URI; start
+  or reuse the per-user daemon; forward the URI unchanged to `OPEN_URI`; exit
+  with a deterministic result; and add per-user native registration on the
+  primary supported installed platform.
+- Platform scope: Windows is the primary installed platform for this slice,
+  based on the repository's native bootstrap and current acceptance host.
+  Linux and macOS artifacts exist but native scheme registration is deferred
+  until their installed packaging and acceptance boundaries are explicitly
+  activated.
+- Registration ownership: the installer owns registration, repair/update
+  keeps the stable native activation helper current, and uninstall removes
+  only a registration proven to be Synesis-owned. Daemon startup must not
+  mutate OS registration.
+- Security boundary: the launcher treats the OS URI as untrusted input,
+  passes it as one process argument, delegates validation and routing to the
+  existing daemon, and does not parse Link semantics, choose a project,
+  persist a project preference, invoke a shell command, or expose credentials.
+- Explicit non-goals: hosted relay, selected-project persistence, membership
+  changes, Link protocol changes, routing redesign, browser UI redesign,
+  login autostart, arbitrary URL handling, and new URI semantics.
+- Acceptance criteria: prove exact SLO1/SLA2 forwarding, malformed/HTTPS
+  rejection, daemon start/reuse and concurrent activation behavior, bounded
+  handler exit, argument-injection resistance, idempotent isolated per-user
+  Windows registration, safe update/uninstall behavior, real OS-level
+  activation, reuse of the existing `PROJECT_SELECTION_REQUIRED` flow, and
+  preservation of SLA2 v2 routing. Evidence must distinguish focused tests
+  from unrelated aggregate workspace failures.
+- Transition evidence: the current activation reconstruction and ownership
+  decision are recorded in ADR-0075 and the SYN-058 transition checkpoint.
+- Closure evidence: the installed Windows composition acceptance is recorded in
+  `docs/evidence/SYN-058-native-deep-link-activation-2026-09-12.md`. Linux/
+  macOS registration and login/reboot autostart remain explicitly deferred.
+
+## SYN-057
+
+### Deterministic Multi-Project Runtime Selection and Deep-Link Routing — activated 2026-09-11
+
+- Status: COMPLETE
+- Current-scope result: COMPLETE FOR CURRENT SCOPE. SYN-058 is now the sole
+  active successor; SYN-057 is not reopened.
+- Dependency: SYN-056 complete for its current scope.
+- Architectural goal: make the per-user daemon a deterministic local router
+  across known project runtimes while preserving each project runtime as the
+  coordination and Link authority.
+- First implementation slice: reconstruct the identity hierarchy, daemon
+  discovery/runtime endpoint state, and pre-dispatch deep-link target data;
+  classify trust and determine whether a safe resolver is possible before
+  changing routing behavior.
+- Current-slice result: reconstruction is complete. Current SLO1/SLA2 links
+  contain no trustworthy destination project/runtime identity before dispatch;
+  the safe classification is E, with only runtime-local post-parse operation
+  matching. No resolver or protocol change is justified.
+- Architecture result: the operator approved the separate local SLO1
+  recipient-selection contract and signed v2 SLA2 return target using the host
+  project's stable UUID plus the existing session binding. ADR-0074 is
+  accepted. The current implementation slice includes Link protocol v2
+  serialization/binding, deterministic SLA2 target resolution, and bounded
+  ephemeral local SLO1 selection. The follow-on control-surface slice adds an
+  authenticated local picker without persistent route state or raw-link
+  browser exposure.
+- Acceptance criteria: define the authoritative target information and trust
+  boundary; preserve fail-closed `TARGET`, `UNRESOLVED`, `AMBIGUOUS`,
+  `STALE`, and `INVALID` behavior; implement only the smallest deterministic
+  multi-project resolver seam supported by current data; prove two-project
+  correct-target-only dispatch and fail-closed unknown, malformed, stale,
+  duplicate, and ambiguous cases; keep Link verification in
+  `ControlPlaneLinkOperations`; add no daemon-owned coordination or
+  membership authority; and keep OS protocol registration, controlled-NAT,
+  hosted control-plane, and broad UI redesign out of scope.
+- Explicit non-goals: filesystem project crawling, broadcast routing,
+  testing a capability-bearing link against every runtime, spoofable or
+  model-controlled routing hints, persistent selected-project state, protocol
+  changes without a proven gap, OS `synesis://`
+  registration, membership authority, controlled-NAT work, and hosted
+  coordination.
+- Current acceptance result: the rebuilt installed distribution passed a fresh
+  D:-backed two-project SLO1 browser picker flow. The authenticated picker
+  displayed exactly project-a/project-b, submitted only selection/project IDs,
+  dispatched the retained invitation to selected project-b, and rejected
+  selection replay with `SELECTION_CONSUMED`. Focused SLA2 v2 routing,
+  `:link:check`, daemon tests, control-plane HTTP tests, and frontend gates
+  passed. The aggregate workspace suite still has unrelated existing failures;
+  do not repair them under SYN-057.
+- Exact next action: preserve the completed current-scope boundary. Do not add
+  runtime-restart continuity, persistent selection state, daemon coordination
+  authority, or broader UI behavior.
+
+## SYN-056
+
+### Linux browser fallback and r5 acceptance — 2026-09-11
+
+- Result: COMPLETE FOR CURRENT SCOPE. The task registry retains one `ACTIVE`
+  task by contract; SYN-056 is not blocked by signed membership.
+- Current-scope result: COMPLETE FOR CURRENT SCOPE. The task registry retains
+  one `ACTIVE` task by contract; SYN-056 is not blocked by signed membership.
+- Production change: preserve Java AWT Desktop browse; on Linux only, use
+  direct-argv `xdg-open` when AWT browse is unavailable or fails. URI
+  validation, bootstrap/session semantics, and bounded failure mapping are
+  unchanged.
+- Focused opener tests, installed Linux distribution, and r4 browser gate
+  passed. R4 evidence is under
+  `external acceptance evidence`.
+- Fresh r5 browser-mediated acceptance passed real SLO1, daemon B
+  `WAITING_FOR_CONNECT`, Complete Join, real SLA2, daemon A `CONNECTED`,
+  distinct peer verification, live liveness, and terminal replay rejection.
+- R5 overlay remained `UNCONFIGURED` with `UNKNOWN` membership and no durable
+  signed-membership mutation. The final authority audit classifies this as
+  explicitly outside SYN-056: the CLI has no signed membership source or
+  shipped approval/configuration action, and `CONNECTED` is the intended
+  physical-session endpoint in the unconfigured CLI mode. Evidence is under
+  `external acceptance evidence`.
+- Closure disposition: all non-deferred SYN-056 criteria have concrete r4/r5
+  evidence. Do not add membership mutation, daemon authority, or a browser
+  approval action to this task. A separately activated membership-authority
+  task is required before changing the signed-membership boundary.
+- Exact next action: preserve this completed current-scope boundary and activate
+  a separate membership-authority task only if its explicit trigger is met.
+
+### R4 browser opener environment blocker — 2026-09-11
+
+- Status: ACTIVE / PARTIAL; no Link operation was started.
+- R4 contains Chrome, Xvfb, `xdg-open`, GIO, and Selenium on D:, but the
+  shipped installed `synesis ui` smoke returned `SYNESIS_UI_OPEN_FAILED`.
+- Root cause: Java reports `Desktop.Action.BROWSE=false`; its Linux
+  XDesktopPeer expects legacy GNOME VFS symbols absent from the modern image.
+- Exact next action: obtain a supported non-Synesis-specific Linux browser
+  environment or explicit supported-platform direction before resuming Link.
+
+### Distinct-peer Docker retry-3 — 2026-09-11
+
+- Status: ACTIVE / PARTIAL; installed distinct-peer transport boundary passed.
+- Fresh D:-backed A/B runtimes reported distinct durable node IDs. Daemon B
+  `OPEN_URI` reached `WAITING_FOR_CONNECT`; the installed transport reached
+  peer verification, control readiness, liveness, successful work, and clean
+  close.
+- The image could not use Java AWT browser opening, so browser Complete Join,
+  browser ANSWER, durable exactly-once onboarding, and replay remain
+  unproven.
+- Exact next action: exercise only that remaining browser-mediated completion
+  slice with a supported opener. Do not add daemon CONNECT IPC, copy operation
+  state, or weaken Link identity/replay checks.
+
+### Distinct-peer Docker attempt — 2026-09-11
+
+- Status: ACTIVE / PARTIAL; setup and distinct persisted identities passed,
+  Link onboarding did not start.
+- Evidence: fresh D:-backed root `distinct-peer-r2`, Linux-targeted installed
+  distribution, distinct project/node IDs, one healthy daemon-managed runtime
+  per container, and bridge addresses `172.18.0.2` / `172.18.0.3`.
+- Blocker: Docker Linux engine returned `502 Bad Gateway` for a container
+  archive operation and then stopped answering bounded version checks.
+- Exact next action: recover Docker, verify the exact disposable resources,
+  and resume the shipped browser-mediated A invitation step. No production
+  repair is justified by this infrastructure failure.
+
+### HOST-A invitation trace — 2026-09-11
+
+- Status: ACTIVE / PARTIAL; HOST-A SLO1 is proven, later peer completion is not.
+- Root cause: the Linux Docker runtime was launched from a Windows-built
+  installDist without the Linux Netty QUIC native artifact; SSL context
+  construction raised `UnsatisfiedLinkError` and no HTTP response was written.
+- Repair: retain host-native default selection and add the validated
+  `synesisNativeQuicClassifier` cross-target build selector.
+- Evidence: trace `0a82ad6c-d807-4bb0-9247-22630b25058e`, SLO1 digest
+  `4c150464d844c4d9275027b84463c870f51c8655a918c2fe7d0799a4784354c6`,
+  listener port `40697`, candidate count `1`, HTTP `201`.
+- Exact next action: focused verification, checkpoint, cleanup, then the
+  distinct-peer JOIN slice. Do not add daemon CONNECT IPC or weaken Link checks.
+
+### Installed local daemon shell — activated 2026-09-10
+
+- Status: COMPLETE FOR CURRENT SCOPE; superseded by explicitly authorized SYN-057
+- Current-scope disposition: COMPLETE FOR CURRENT SCOPE. This `ACTIVE` marker
+  is retained only because the repository requires one active task; it does
+  not represent an open SYN-056 implementation gap.
+- Next-task disposition: SYN-057 is now explicitly authorized and active for
+  deterministic multi-project runtime selection and deep-link routing.
+- Purpose: add the smallest per-user installation daemon needed to make the
+  existing browser UI reusable without moving project authority out of project
+  runtimes.
+- Architecture: ADR-0073; a thin `cli`-module daemon owns singleton lifecycle,
+  authenticated local IPC, runtime launch/reuse, health validation, browser
+  opening, and bounded URI handoff. Existing `CoordinationServerLauncher`,
+  `ControlPlaneHttpHandler`, `KnownProjectRegistry`, and Link onboarding remain
+  authoritative at their current boundaries.
+- Scope: daemon endpoint/lock/IPC, runtime process discovery and cleanup,
+  `synesis ui` integration, stable daemon entrypoint, focused tests, installed
+  disposable smoke evidence, resource measurements, and durable documentation.
+- Acceptance: second launch reuses one daemon; crash/stale endpoint recovery;
+  malformed and oversized IPC fail closed; existing one-time browser bootstrap
+  and session security remain intact; known-project persistence and LIVE versus
+  INACTIVE semantics remain truthful; existing CLI/MCP observation remains
+  intact; `synesis ui` uses the daemon path; valid join/answer deep links are
+  forwarded through the project-owned onboarding adapter; zero/multiple runtime
+  selection fails closed; clean shutdown and bounded resource measurements are
+  recorded.
+- Explicit exclusions: project authority or coordination state in the daemon,
+  filesystem crawling, a second HTTP control plane, global peer aggregation,
+  shell passthrough, privileged services, installer redesign, OS URI
+  registration, and Link parsing/verification duplication.
+- Required documentation: ADR-0073, security/failure behavior, acceptance
+  evidence, and deferred-capability review.
+- Current slice: existing production CONNECT is exposed by authenticated
+  runtime snapshot projection plus a minimal `Complete Join` browser action.
+  The handler permits independent host-answer and join-connect Link handles to
+  overlap. Frontend/workspace focused checks, the installed distribution build,
+  and fresh r4/r5 evidence pass through distinct-peer `CONNECTED` and terminal
+  replay rejection. The post-CONNECTED audit confirms that no durable
+  membership mutation is expected in the unconfigured CLI mode.
+- Exact next action: preserve the completed current-scope boundary and activate
+  a separate signed-membership-authority task only after its explicit contract
+  and trigger exist. Do not add CONNECT IPC, automatic membership-on-CONNECTED,
+  bootstrap/session disclosure, daemon-owned invitation authority, operation
+  copying, or weaker Link checks.
+
 ## SYN-055
 
 ### Final Synesis browser artistic-direction pass — 2026-09-10
 
-- Status: ACTIVE
-- Evidence state: requested final visual slice verified complete; this remains
-  the sole administrative review task.
+- Status: COMPLETE FOR CURRENT SCOPE; administrative review superseded by SYN-056
+- Evidence state: requested final visual slice verified complete; retained as
+  historical evidence under the now-active SYN-056 task.
 - Purpose: refine the current Projects, Overview, Agents, Coordination,
   Network, and Diagnostics presentation without redesigning the product.
 - Visual authority: latest pasted brief; neutral near-black, comfortable
@@ -383,7 +625,7 @@ The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
 Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
 fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
 The smaller direct UNIX socket test fails in inherited/expanded user TEMP
-and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+and passes in temporary workspace. With only the diagnostic JVM's
 jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
 passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
 AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
@@ -883,7 +1125,7 @@ preserve the fixture and do not redesign review/Doctor under SYN-049.
   only after SYN-049 completes its independent completion/dependency fixes;
   do not restart or mutate this fixture.
 - Evidence: the fresh fixture at
-  `C:\Users\Liparakis\Documents\Codex\2026-09-02\kogmawcollabsmoke`
+  `local user document`
   initialized Git and Synesis and launched exactly two worker tasks, but both
   were blocked at `provider_integration_required` while their MCP context
   reported `codex=NOT_INSTALLED`. The control checkout reported metadata,
@@ -4264,7 +4506,7 @@ checkpoint. Use `CANCELLED` only for a deliberate permanent scope decision.
   and NEXT_SESSION.md.
 - Completion evidence: `docs/evidence/syn039-final-canonical-acceptance-closure-2026-08-28.md`;
   `docs/agent/checkpoints/CP-0547.md`; official bundle provenance and final
-  verification under `C:/t/syn039-final-harness-20260828-001`.
+  verification under `temporary workspace`.
 - Closure: `SYN-039 ACCEPTED` on 2026-08-28. The final reviewer-first
   two-agent run proved disjoint producer/reviewer roles, immutable rejected
   S1, same-lineage correction, fresh G2 authority, accepted-only S2

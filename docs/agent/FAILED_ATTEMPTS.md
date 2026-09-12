@@ -1,3 +1,76 @@
+## 2026-09-11 — SYN-057 protocol-gap discovery
+
+The first SYN-057 slice intentionally made no implementation attempt. Source
+reconstruction found no trustworthy destination project/runtime identity in
+current SLO1/SLA2 or the daemon `OPEN_URI` request. The safe result is
+classification E; no resolver, Link parser duplication, unsigned project
+field, runtime broadcast, or protocol edit was introduced.
+
+Next action: obtain an explicit signed recipient-targeting contract or a
+separately authorized protocol task before resuming production work.
+
+## 2026-09-11 — SYN-057 activation and discovery boundary
+
+No failed implementation attempt existed at activation. The operator explicitly
+authorized SYN-057 and moved the sole active marker from completed-current-
+scope SYN-056. Production routing remains untouched until the identity/trust,
+daemon discovery, and pre-dispatch deep-link target model is reconstructed.
+
+## 2026-09-11 — SYN-056 closure and next-task discovery
+
+The completed SYN-056 scope was re-audited without reopening implementation.
+No authoritative `SYN-057`/`SYN-058` successor exists, and `SL-D-040` is
+already complete for its current scope rather than an unactivated follow-on.
+The remaining membership-authority capability requires a separate explicit
+activation trigger and remains outside SYN-057. No production change was made
+in that continuation; SYN-057 is now explicitly active.
+
+## 2026-09-11 — SYN-056 r4/r5 browser portability slice
+
+The first fallback launch attempt used Java `ProcessBuilder.Redirect.DISCARD`
+for child stdin, which is invalid (`Redirect invalid for reading: WRITE`). It
+was corrected to a valid pipe; no shell or URI concatenation was introduced.
+The next browser probe initially depended on the image's broken Selenium
+Manager and then on Chrome's rejected WebSocket origin; the acceptance probe
+was moved to the already-local Chrome DevTools endpoint with no production
+impact. The final r4 gate passed.
+
+The first r5 container attempt omitted `-Duser.home=/synesis-home`, placing
+daemon state in the disposable container layer; no protocol result from that
+attempt was counted. Both peers were restarted with Java user-home pinned to
+their D: mounts before the accepted r5 run.
+
+The accepted r5 run reached physical live peer transport but left overlay
+membership unconfigured and produced no durable signed-membership mutation.
+This is a product acceptance boundary, not a reason to weaken Link authority
+or add daemon CONNECT IPC.
+
+## 2026-09-11 — SYN-056 retry-3 browser-opener boundary
+
+The D:-backed retry-3 harness reached positive distinct-peer installed Link
+transport: peer verification, control readiness, liveness, successful work,
+and clean close. The daemon B `OPEN_URI` operation reached
+`WAITING_FOR_CONNECT`. Java AWT in the disposable image reported
+`Desktop.isDesktopSupported=false`, so the browser Complete-Join/ANSWER path
+was not exercised. This is an image capability limitation, not permission to
+add daemon CONNECT IPC, expose bootstrap material, copy operation state, or
+weaken identity checks.
+
+## 2026-09-11 — SYN-056 browser-mediated answer boundary
+
+The shipped browser UI consumed the existing fragment bootstrap, exchanged a
+session, and created a real signed SLO1 invitation through the Network/Create
+Invitation action. An installed daemon-managed join runtime accepted that
+invitation and produced a real signed SLA2 answer. Sending that exact answer
+through the same daemon correctly returned `URI_REJECTED` with authority code
+`OPERATION_NOT_FOUND`, because the pending host operation belonged to the
+separate browser runtime rather than the daemon-owned join runtime.
+
+This narrows the remaining evidence gap to creating the host operation through
+the browser bootstrap of the daemon-managed host runtime. Do not add bootstrap
+disclosure through IPC or daemon-owned invitation semantics merely to force a
+positive result.
+
 ## 2026-09-10 — SYN-055 visual verification setup, resolved
 
 Default Java UI startup hit the known loopback error; the documented temporary
@@ -22,7 +95,7 @@ Evidence: `docs/evidence/SYN-051-build-jvm-provenance-2026-09-05.md`.
 ## 2026-09-05 — SYN-051 clean-build loopback stop
 
 - JDK25 process-local selector and minimal IPv4/IPv6 HTTP preflight passed with
-  `-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe`.
+  `-Djdk.net.unixdomain.tmpdir=temporary workspace`.
 - The required clean `:cli:installDist` attempt independently failed in the
   Gradle/JDK process before task execution with `Unable to establish loopback
   connection`.
@@ -38,7 +111,7 @@ The bounded investigation is COMPLETE; SYN-051 remains ACTIVE / PARTIAL.
 Both Temurin 25+36 and 21.0.11+10 pass Pipe.open() and IPv4/IPv6 TCP, but
 fail Selector.open() and HttpServer creation with an AF_UNIX connect error.
 The smaller direct UNIX socket test fails in inherited/expanded user TEMP
-and passes in C:\t\synesis-loopback-probe. With only the diagnostic JVM's
+and passes in temporary workspace. With only the diagnostic JVM's
 jdk.net.unixdomain.tmpdir set to that directory, the unchanged full probe
 passes 13/13 on BOTH JDKs. Classification: temporary-path-dependent Windows
 AF_UNIX boundary, not JDK25-specific, not IPv4/IPv6, not host-wide TCP failure.
@@ -57,6 +130,39 @@ launch or reuse a
 lane in this slice.
 
 # Failed Attempts
+
+## 2026-09-11 — SYN-056 same-runtime positive ANSWER completion
+
+This was not a runtime-ownership failure. A fresh installed `synesis ui`
+run proved that the browser bootstrap, invitation creation, daemon JOIN, and
+daemon ANSWER all targeted one runtime. JOIN returned `WAITING_FOR_CONNECT`
+and a real answer URI.
+
+The exact answer reached the authoritative pending Link operation but could
+not finish because the existing `ControlPlaneLinkOperations` answer flow
+waits for a join-side `connect` command. The daemon exposes only bounded
+`OPEN_URI` handoff and intentionally has no CONNECT operation; the shipped
+browser UI has no control for a daemon-created pending join. A repeated exact
+answer was rejected as `OPERATION_BUSY`, and public `headSequence` stayed zero.
+
+Do not repeat this by adding CONNECT IPC, disclosing bootstrap/session tokens,
+copying pending operations, scanning runtimes, or weakening Link checks. The
+focused owner test remains the positive answer/replay evidence; the installed
+positive transition is PARTIAL pending a separately authorized completion
+seam.
+
+## 2026-09-11 — SYN-056 positive installed ANSWER setup boundary
+
+The installed daemon was started successfully and an answer-shaped
+`OPEN_URI` reached the runtime-owned route, returning the existing
+`ANSWER_INVALID` authority code for a malformed answer. A positive answer could
+not be produced in the current headless acceptance surface because creating the
+required host operation requires the runtime's one-time browser bootstrap.
+`OPEN_PROJECT` intentionally returns only the runtime endpoint, so the daemon
+does not leak the bootstrap or create a second invite authority. Classification:
+environmental acceptance-evidence gap, not a daemon/Link implementation
+failure. Do not add a bootstrap-disclosure IPC field or daemon-owned invite
+operation merely to make this harness green.
 
 ## 2026-09-05 — SYN-051 real-runtime loopback host creation
 
@@ -900,3 +1006,151 @@ Every isolated invocation passed. Subsequent bounded aggregate runs passed for
 the in-scope MCP classes after their long-running Git/provider fixtures
 completed. Explicit two-process and older SYN-039 classes remain unrun by
 scope.
+## 2026-09-10 — SYN-056 daemon installed-smoke defects
+
+- The first installed daemon attempt used `ProcessBuilder.Redirect.DISCARD` for
+  child stdin; Windows rejected it with `Redirect_invalid_for_reading_WRITE`.
+  The runtime now uses the platform null device for stdin.
+- The first `--no-browser` response reported `SYNESIS_UI_OPENED` because the
+  response conflated runtime readiness with browser-opened state. The response
+  now reports those separately.
+- Force-stopping the daemon initially left its project runtime alive, causing a
+  replacement daemon to hit the existing project-host lock. The daemon-owned
+  runtime now receives a parent PID and exits when that owner disappears; the
+  relaunch smoke then observed zero orphan runtimes.
+## 2026-09-10 — SYN-056 installed deep-link smoke cleanup and gate classification
+
+- The first disposable smoke helper treated the batch launcher PID as the Java
+  runtime PID; later inspection found only exact temporary-root Java children.
+  Those validated PIDs were stopped and verified absent.
+- Generated Git object files in the disposable roots were temporarily
+  read-only, so exact-root cleanup required clearing attributes before deletion.
+  No user project or repository data was targeted.
+- The process-local `JAVA_TOOL_OPTIONS` workaround contaminated one generated
+  child-process output with its diagnostic prefix. Rerunning the two broader CLI
+  failures with `GRADLE_OPTS` and no `JAVA_TOOL_OPTIONS` reproduced both, so the
+  failures remain outside the SYN-056 daemon/Link slice.
+
+## 2026-09-11 — SYN-056 CONNECT seam installed completion remains open
+
+## 2026-09-11 — SYN-056 operator-aborted Windows fixture / Docker unavailable
+
+- The Windows two-identity setup was manually interrupted by the operator
+  while creating a disposable fixture. It is not a product failure and was
+  not resumed; the exact partial root was quarantined after process cleanup.
+- Docker client 29.2.1 and Compose 5.0.2 were present, but the selected
+  `desktop-linux` engine could not be opened. The required Docker acceptance
+  was stopped before container creation, so no candidate or cross-container
+  result is claimed.
+- Do not fall back to same-identity testing or alter Link semantics. Resume
+  only with a fresh D:-backed Docker root after the Linux engine is available.
+
+- Source review found CONNECT already existed in Link, the authenticated
+  runtime route, and the browser client. The minimal missing seam was added as
+  pending-join snapshot metadata plus the existing Network `Complete Join`
+  action; no daemon CONNECT IPC or secret disclosure was added.
+- The handler's process-wide onboarding lock was incorrectly held across the
+  blocking host-answer and join-connect calls. It was narrowed to handle
+  creation so independent retained Link handles can overlap.
+- A fresh installed browser run proved daemon JOIN, `WAITING_FOR_CONNECT`, the
+  conditional UI action, and client CONNECT invocation. The subsequent daemon
+  ANSWER request still timed out at the runtime handoff with `headSequence=0`;
+  the positive durable completion and replay proof remain unverified.
+- Do not repeat browser/UI work without new evidence. The direct trace now
+  classifies the existing self-host/self-join result: both operations overlap,
+  the same persisted identity is rejected as `IDENTITY_PROOF_INVALID`, and
+  later candidate attempts time out. Do not weaken identity checks; a positive
+installed completion requires two distinct durable peer runtimes.
+
+## 2026-09-11 — SYN-056 Docker retry / engine storage failure
+
+- The fresh Docker harness proved installed daemon startup, authenticated
+  status, bridge candidate advertisement, and distinct project identity
+  initialization. It did not complete the two-identity Link acceptance.
+- The daemon runtime ready endpoint had a trailing slash; appending the health
+  route without normalization produced a double slash and caused a healthy
+  runtime to be discarded. This was fixed minimally and covered by a focused
+  test.
+- The disposable Linux image was missing Java AWT's libXi.so.6 and
+  libXtst.so.6. The attempted image rebuild then failed with Docker Desktop
+  storage I/O, and the restarted Linux engine remained unavailable. Do not
+  classify this as a Link or browser-product failure, and do not bypass the
+  daemon/browser boundary to obtain bootstrap material.
+## 2026-09-11 — Docker retry-2 invitation mutation remains pending
+
+The fresh two-container installed harness and real browser bootstrap path
+worked through the A Network view, but the shipped Create Invitation action
+did not return an SLO1 URI. The runtime stayed healthy and a bounded thread
+diagnostic showed no active Link host operation. Do not treat this as
+permission to add daemon CONNECT IPC, expose bootstrap/session material,
+copy Link operation state, or weaken identity checks. The exact acceptance
+remains ACTIVE / PARTIAL.
+## 2026-09-11 — SYN-056 Docker invitation trace classification
+
+The initial HOST-A browser hang was reproduced with the shipped UI and traced
+without changing Link behavior. A Windows-built installDist mounted in Linux
+contained only the Windows Netty QUIC native jar. `QuicSslContextBuilder.build`
+raised `UnsatisfiedLinkError` (`FileNotFoundException` for the Linux native
+resource), and the uncaught `Error` terminated the HTTP worker before a
+response. A Linux-targeted rebuild initially still inherited the old daemon's
+captured Windows classpath; restarting the disposable daemon corrected that
+false-negative. The corrected run returned SLO1 and HTTP 201. Do not classify
+this as a Docker candidate deadlock or inflate timeouts.
+## 2026-09-11 — SYN-056 Docker invitation trace classification
+
+The initial HOST-A browser hang was reproduced with the shipped UI and traced
+without changing Link behavior. A Windows-built installDist mounted in Linux
+contained only the Windows Netty QUIC native jar. `QuicSslContextBuilder.build`
+raised `UnsatisfiedLinkError` (`FileNotFoundException` for the Linux native
+resource), and the uncaught `Error` terminated the HTTP worker before a
+response. A Linux-targeted rebuild initially still inherited the old daemon's
+captured Windows classpath; restarting the disposable daemon corrected that
+false-negative. The corrected run returned SLO1 and HTTP 201. Do not classify
+this as a Docker candidate deadlock or inflate timeouts.
+## 2026-09-11 — SYN-056 distinct-peer Docker engine I/O blocker
+
+The fresh D:-backed two-identity setup succeeded through installed project
+initialization and daemon/runtime readiness. A read-only `docker cp` probe then
+returned `502 Bad Gateway` from the Linux engine, and bounded `docker version`
+calls stopped completing. This prevents browser bootstrap, invitation, and
+cleanup verification. It is an environment failure; no production or Link
+change was made and no positive onboarding result is claimed.
+## 2026-09-11 — SYN-056 r4 browser opener environment blocker
+
+R4 installed Chrome 153, Xvfb, `xdg-open`, GIO, and Selenium under the
+D:-backed acceptance root. Generic `xdg-open` launched Chrome, but the real
+installed `synesis ui` smoke returned `SYNESIS_UI_OPEN_FAILED` because Java
+reported `Desktop.Action.BROWSE=false`. The JDK Linux XDesktopPeer expects
+legacy GNOME VFS symbols absent from the modern image. No Link operation or
+production workaround was attempted. Do not add a Synesis browser bridge;
+obtain a supported environment or explicit product-platform direction first.
+## 2026-09-11 — SYN-056 durable-membership assumption rejected
+
+The r5 `CONNECTED` result was initially recorded as partial because the
+overlay remained `UNCONFIGURED` / `UNKNOWN`. A read-only audit of ADR-0066,
+ADR-0068, the overlay protocol, `LinkRuntimeOwner`, `ControlPlaneHttpHandler`,
+and the authoritative SYN-056 task criteria showed that this interpretation
+was wrong: no signed membership authority is supplied by the CLI, and no
+product action exists to exercise. Do not repair this by auto-mutating
+membership on `CONNECTED` or by adding daemon/browser authority. The correct
+classification is E, outside SYN-056 scope.
+
+## 2026-09-11 — historical r4/r5 browser portability issues
+## 2026-09-11 — SYN-056 closure and next-task discovery
+
+The completed SYN-056 scope was re-audited without reopening implementation.
+No authoritative `SYN-057`/`SYN-058` successor exists, and `SL-D-040` is
+already complete for its current scope rather than an unactivated follow-on.
+The remaining membership-authority capability requires a separate explicit
+activation trigger. No production change or task activation was made.
+
+## 2026-09-11 — SYN-056 r4/r5 browser portability slice
+## 2026-09-11 — SYN-057 architecture-only routing design
+
+The architecture slice made no production implementation attempt. It
+reconstructed current SLO1/SLA2 wire/version/signature behavior and proposed
+ephemeral local SLO1 selection plus a signed v2 SLA2 host return target. The
+proposal is intentionally pending operator decisions; no protocol or daemon
+behavior changed.
+
+## 2026-09-11 — SYN-057 protocol-gap discovery
