@@ -201,7 +201,7 @@ public final class Onboarding {
         CompletableFuture<PeerSession> result = new CompletableFuture<>();
         QuicChannel.newBootstrap(udp)
             .handler(new ChannelInboundHandlerAdapter())
-            .streamHandler(new ChannelInboundHandlerAdapter())
+            .streamHandler(NettySessionHandshake.clientApplicationStreamHandler())
             .remoteAddress(new InetSocketAddress(pair.remote()
                 .address(),
                 pair.remote()

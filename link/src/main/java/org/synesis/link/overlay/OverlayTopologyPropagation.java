@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Propagates signed topology advertisements over currently authenticated direct project peers with
@@ -111,23 +112,41 @@ public final class OverlayTopologyPropagation {
 
   private CompletionStage<Void> sendToPeers(OverlayTopologyPropagationFrame frame,
       String excludedPeer) {
-    List<CompletableFuture<Void>> sends = new ArrayList<>();
+    List<PeerTransport> transports = new ArrayList<>();
     for (var entry : peers.snapshot().entrySet()) {
       if (entry.getKey().equals(excludedPeer) || !membership.current().allows(entry.getKey())) {
         continue;
       }
-      try {
-        CompletionStage<Void> send = entry.getValue().send(frame);
-        if (send == null) {
-          return CompletableFuture.failedFuture(
-              new IllegalStateException("topology peer transport returned no completion"));
-        }
-        sends.add(send.toCompletableFuture());
-      } catch (RuntimeException failure) {
-        return CompletableFuture.failedFuture(failure);
-      }
+      transports.add(entry.getValue());
     }
-    return CompletableFuture.allOf(sends.toArray(CompletableFuture[]::new));
+    AtomicReference<Throwable> firstFailure = new AtomicReference<>();
+    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
+    for (PeerTransport transport : transports) {
+      sequence = sequence.thenCompose(ignored -> {
+        try {
+          CompletionStage<Void> send = transport.send(frame);
+          if (send == null) {
+            firstFailure.compareAndSet(null,
+                new IllegalStateException("topology peer transport returned no completion"));
+            return CompletableFuture.<Void>completedFuture(null);
+          }
+          return send.handle((value, failure) -> {
+            if (failure != null) {
+              firstFailure.compareAndSet(null, failure);
+            }
+            return (Void) null;
+          }).toCompletableFuture();
+        } catch (RuntimeException failure) {
+          firstFailure.compareAndSet(null, failure);
+          return CompletableFuture.<Void>completedFuture(null);
+        }
+      });
+    }
+    return sequence.thenCompose(ignored -> {
+      Throwable failure = firstFailure.get();
+      return failure == null ? CompletableFuture.<Void>completedFuture(null)
+          : CompletableFuture.failedFuture(failure);
+    });
   }
 
   /**

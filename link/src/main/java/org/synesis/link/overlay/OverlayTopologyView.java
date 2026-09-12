@@ -125,6 +125,19 @@ public final class OverlayTopologyView {
   }
 
   /**
+   * Withdraws the local read-model advertisement for one physically stale origin.
+   *
+   * <p>This removes only cached topology state. It does not change signed project membership or
+   * revoke the origin's identity.
+   *
+   * @param originNodeId node whose cached advertisement is stale
+   * @return {@code true} when an advertisement was removed
+   */
+  public synchronized boolean removeOrigin(String originNodeId) {
+    return advertisements.remove(Objects.requireNonNull(originNodeId, "origin node ID")) != null;
+  }
+
+  /**
    * Builds the currently advertised directed adjacency graph.
    *
    * @param now current time

@@ -1,3 +1,25 @@
+## 2026-09-13 — SL-D-040 Checkpoint 2 native multi-peer seam
+
+Checkpoint 2 keeps the accepted overlay architecture above direct
+`PeerSession` bindings. The native QUIC adapter now gives each accepted QUIC
+connection one responder handshake state, gives authenticated clients a
+safe handler for peer-initiated application streams, and retains the existing
+bounded application-stream protocol. Overlay topology publication is
+transition-driven and propagation is sequential across the current direct
+peer snapshot to avoid a publication storm; neither change creates a new
+route or membership authority.
+
+Physical loss removes the exact direct binding and its local topology
+advertisement from route inputs, while signed membership remains unchanged.
+There is no distributed tombstone, session resumption, path migration, relay
+redesign, UI/SSE projection, or process/VM harness in this checkpoint. ADR-0077
+records the architecture seam and its consequences.
+
+## ADR index update
+
+- ADR-0077: Native multi-peer QUIC stream state and bounded overlay convergence
+  — accepted for SL-D-040 Checkpoint 2.
+
 ## 2026-09-10 — SYN-055 visual direction
 
 The current explicit brief supersedes the older hidden runtime indicator and

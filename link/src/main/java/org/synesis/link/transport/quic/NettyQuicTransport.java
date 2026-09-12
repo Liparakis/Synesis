@@ -15,6 +15,8 @@ import io.netty.handler.codec.quic.QuicTokenHandler;
  */
 public final class NettyQuicTransport {
 
+  private static final int INITIAL_MAX_BIDIRECTIONAL_STREAMS = 64;
+
   private NettyQuicTransport() {
   }
 
@@ -37,7 +39,7 @@ public final class NettyQuicTransport {
         .initialMaxData(1_048_576)
         .initialMaxStreamDataBidirectionalLocal(262_144)
         .initialMaxStreamDataBidirectionalRemote(262_144)
-        .initialMaxStreamsBidirectional(16)
+        .initialMaxStreamsBidirectional(INITIAL_MAX_BIDIRECTIONAL_STREAMS)
         .build();
   }
 
@@ -53,7 +55,7 @@ public final class NettyQuicTransport {
         .initialMaxData(1_048_576)
         .initialMaxStreamDataBidirectionalLocal(262_144)
         .initialMaxStreamDataBidirectionalRemote(262_144)
-        .initialMaxStreamsBidirectional(16)
+        .initialMaxStreamsBidirectional(INITIAL_MAX_BIDIRECTIONAL_STREAMS)
         .build();
   }
 

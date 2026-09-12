@@ -1,3 +1,61 @@
+# 2026-09-13 — SL-D-040 bounded multi-node overlay convergence
+
+- Task ID: SL-D-040
+- Checkpoint: 2
+- Starting HEAD: `f26fb03cc03eec56e2275b01bd07b53df56ad154`
+- Status: COMPLETE FOR CURRENT SCOPE; SL-D-040 remains active for the next
+  explicitly scoped VM checkpoint
+- Durable checkpoint: `CP-0934.md`
+- Deferred-register review: SL-D-040 is promoted; SL-D-035 remains paused for
+  physical traversal evidence. No new capability was invented or activated.
+
+## Work completed
+
+Derived the minimum non-full-mesh population from
+`OverlayTopologyPolicy`: full mesh is used through three members, and six is
+the first population with an intentionally non-direct valid pair. The native
+QUIC acceptance now creates six authenticated endpoints, observes the exact
+four-degree/12-edge target graph, sends an E2E-encrypted logical payload over a
+normal peer-transit route, abruptly kills the selected transit node, proves
+local adjacency and route withdrawal, observes bounded automatic retry and
+alternate delivery, then rejoins the same signed identity without duplicate
+bindings. Deterministic reconciler tests cover bounded concurrent missing
+edges, reciprocal ownership, backoff suppression, duplicate admission, stale
+terminal callbacks, and stable convergence publication.
+
+Production changes are limited to the existing seams: per-QUIC-connection
+responder handshake state, authenticated client application-stream handling,
+the existing bounded stream budget, transition-only topology publication,
+sequential bounded topology propagation, and local stale-origin read-model
+withdrawal. Signed membership and route/relay precedence remain unchanged.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| `OverlayReconcilerTest` and `OverlayProtocolTest` | PASS |
+| `OverlayGraphQuicTest` | PASS; six native QUIC endpoints, graph/transit/failure/rejoin |
+| `NettyQuicLoopbackTest` | PASS; existing Link loopback and separate-JVM regression |
+| `:link:check` | PASS; format, compile, static analysis, Javadocs, 96 tests |
+| Detailed evidence | `docs/evidence/sl-d-040-overlay-convergence-2026-09-13.md` |
+
+## Current failures
+
+No code or focused-test failure remains. Gradle could not start in the
+inherited Windows environment without the command-local JDK loopback temporary
+directory workaround; all reported passes used that bounded workaround. The
+six-node graph acceptance is multi-endpoint native QUIC in one JVM, not six
+independent OS processes. Existing separate-JVM Link coverage is retained, but
+Checkpoint 3 should extend process isolation in the VM matrix. Existing UI/SSE
+projections do not expose this overlay topology read model, so browser live
+projection behavior is not claimed or changed. Physical NAT/Internet traversal
+is still the separate SL-D-035 evidence gate.
+
+## Immediate next action
+
+After the local commit, begin Checkpoint 3 by defining the isolated local-VM
+topology/churn matrix and environment prerequisites; do not implement it now.
+
 # 2026-09-12 — SL-D-036 automatic overlay adjacency reconciliation
 
 - Task ID: SL-D-036

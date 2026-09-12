@@ -64,6 +64,8 @@ public final class OverlayReconciler implements AutoCloseable {
   private final Set<String> connecting = new HashSet<>();
   private final Set<PeerSession> observedSessions = java.util.Collections.newSetFromMap(
       new java.util.IdentityHashMap<>());
+  private Set<String> lastDesiredNeighbors = Set.of();
+  private boolean previouslyConverged;
   private boolean closed;
 
   /**
@@ -161,6 +163,10 @@ public final class OverlayReconciler implements AutoCloseable {
     OverlayMembershipSnapshot current = membership.current();
     Instant now = clock.instant();
     Set<String> desired = desiredNeighbors(current);
+    if (!desired.equals(lastDesiredNeighbors)) {
+      lastDesiredNeighbors = desired;
+      previouslyConverged = false;
+    }
     observeExistingBindings();
     retireInvalidBindings(current, desired);
     cancelIrrelevantRetries(current, desired);
@@ -190,10 +196,13 @@ public final class OverlayReconciler implements AutoCloseable {
       startConnection(peerNodeId);
       available--;
     }
-    if (isConvergedLocked(desired)) {
+    boolean converged = isConvergedLocked(desired);
+    if (converged && !previouslyConverged) {
       emit(new OverlayReconciliationEvent(OverlayReconciliationEvent.Type.TOPOLOGY_CONVERGED,
           null, "desired local adjacencies are live"));
+      publishAdjacency();
     }
+    previouslyConverged = converged;
   }
 
   /**

@@ -1,3 +1,24 @@
+## SL-D-040 Checkpoint 2 — bounded multi-node overlay convergence — 2026-09-13
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Policy derivation | `OverlayTopologyPolicy` source and deterministic assertions | PASS | Full mesh through N=3; N=6 first intentional non-direct pair; `MAX_DEGREE=4` |
+| Target graph | Six-member expected edge count/degrees/missing opposite pairs | PASS | 12 undirected edges; all six degrees 4; no bootstrap star |
+| Physical overlay | `OverlayGraphQuicTest` native QUIC endpoints | PASS | Six authenticated endpoints; observed edges equal target; stable after rejoin |
+| Peer transit | Normal route selection and actual router delivery | PASS | Non-direct source/destination selected `PEER_TRANSIT`; no forced path |
+| E2E confidentiality | Transit observation and destination decrypt | PASS | Transit saw opaque envelope bytes and held no endpoint E2E session; destination decrypted |
+| Abrupt failure | Meaningful selected transit endpoint crash | PASS | Transport/server/event-loop shutdown without graceful session close |
+| Withdrawal/reconcile | Terminal loss, route withdrawal, alternate delivery, bounded retry | PASS | Structured `ADJACENCY_LOST` + `ROUTE_WITHDRAWN`; one deterministic retry owner; alternate delivery succeeds |
+| Rejoin | Same identity re-authentication and graph restoration | PASS | `RECONNECT_AUTHENTICATED`; exact six-member graph and degree bound restored; no duplicate bindings |
+| Churn safety | `OverlayReconcilerTest` bounded/concurrent/duplicate/stale/stable cases | PASS | Missing edges, reciprocal ownership, backoff return, duplicate completion, stale callback, stable tick publication |
+| Route preference | Direct, peer transit, relay, unreachable | PASS | `OverlayProtocolTest` preserves the existing order |
+| Regression | `NettyQuicLoopbackTest` | PASS | Existing native Link and separate-JVM boundary regression |
+| Module gates | `:link:check` | PASS | Format, compile, static analysis, Javadocs, 96 tests |
+| UI/SSE | Existing projection availability | NOT APPLICABLE | No existing browser/SSE overlay-topology projection; no redesign or projection mutation |
+| Physical traversal | NAT/Internet/VM | DEFERRED | SL-D-035 and Checkpoint 3 boundaries remain unchanged |
+
+Evidence: `docs/evidence/sl-d-040-overlay-convergence-2026-09-13.md`.
+
 ## SYN-066 Windows JDK loopback bootstrap compatibility — 2026-09-12
 
 | Check | Result |

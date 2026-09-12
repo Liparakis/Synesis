@@ -32,6 +32,25 @@ was made.
 Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE; no
 authoritative successor is defined.
 
+## 2026-09-13 — SL-D-040 Checkpoint 2 bounded overlay convergence
+
+Continued from `f26fb03c` and verified the source-defined six-member threshold
+for the first intentionally non-full-mesh graph. The native six-endpoint
+acceptance converged to the exact 12-edge, degree-four policy graph, delivered
+an E2E-encrypted peer-transit payload, abruptly lost the selected transit node,
+withdrew stale local adjacency/route inputs, reconciled bounded retry and
+alternate delivery, and restored the same identity without duplicate bindings.
+Deterministic reconciler churn tests and the existing separate-JVM Link
+regression passed. The full `:link:check` passed with 96 tests. The evidence
+and ADR record the one-JVM graph-test boundary, local-only stale-origin
+withdrawal semantics, absent UI/SSE projection, and Checkpoint 3 VM/process
+isolation as the exact next scope. No push or Synesis metadata mutation was
+performed.
+
+Exact next action: after the local commit, begin Checkpoint 3 by defining the
+isolated local-VM topology/churn matrix and environment prerequisites; do not
+implement it in this continuation.
+
 ## 2026-09-12 — SYN-064 actionable Projects preview
 
 Corrected the development preview after user feedback exposed that the Add and

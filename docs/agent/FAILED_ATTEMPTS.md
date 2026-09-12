@@ -1,3 +1,32 @@
+## 2026-09-13 — SL-D-040 Checkpoint 2 native acceptance corrections
+
+The first six-endpoint native-QUIC attempt did not converge because the
+server connection handler was non-sharable and accepted only one incoming
+QUIC child. Making the existing connection observer explicitly sharable
+resolved that transport-lifecycle defect without changing topology policy.
+
+The first topology-flood attempt then exhausted the native bidirectional
+stream budget and could deadlock by waiting for propagation from inside an
+inbound application handler. The acceptance harness now responds immediately
+after handing a signed advertisement to the existing receiver, and the
+production propagation seam sends to the direct-peer snapshot sequentially.
+The native codec retains the same bounded application protocol with a larger
+connection stream allowance so bounded control/application exchanges do not
+fail from the test's six-node fanout.
+
+A client-state optimization initially reused the state of a previous client
+control stream and caused the existing duplicate-control regression to time
+out. It was corrected so each initiator control stream retains its own
+completion state while the authenticated state is separately retained only
+for peer-initiated application streams. The responder factory is now
+connection-scoped and synchronized so later streams do not allocate discarded
+completion futures.
+
+The native graph acceptance is intentionally not presented as six independent
+OS processes: it uses six endpoints in one JVM. Existing separate-JVM Link
+coverage remains green; process-isolated multi-node churn is deferred to the
+next VM checkpoint rather than silently claimed here.
+
 ## 2026-09-11 — SYN-057 protocol-gap discovery
 
 The first SYN-057 slice intentionally made no implementation attempt. Source

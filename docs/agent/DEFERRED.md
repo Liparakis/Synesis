@@ -378,11 +378,14 @@ ranking is implied.
 **Status:** DEFERRED / PROMOTED TO ACTIVE TASK
 **Priority:** Current
 **Area:** Link overlay networking and project delivery
-**Current verified capability:** Authenticated direct Link adjacencies, durable Ed25519 node identities, bounded control/application streams, and local/two-process direct evidence.
-**Missing capability:** Authenticated project membership authority; opaque E2E logical envelopes; bounded deterministic topology; peer-transit forwarding; route selection; optional self-hosted live relay; replay/loop/queue controls; and read models suitable for a future adapter.
-**Reason deferred:** The current Link layer is one-hop and signing-only, while the project model has only a local peer allowlist. E2E crypto compatibility, membership authority, wire contracts, transit policy, and relay operations require one coherent security/design task.
+**Current verified capability:** Authenticated direct Link adjacencies, durable Ed25519 node identities, bounded control/application streams, signed project membership, opaque E2E logical envelopes, bounded deterministic topology, peer-transit forwarding, route selection, replay/loop/queue controls, and native six-endpoint convergence/failure/rejoin evidence.
+**Missing capability:** Optional self-hosted live relay operations beyond the existing bounded relay seam; distributed stale-topology tombstones; browser/SSE overlay projection; isolated VM/process multi-node churn; and physical NAT/Internet traversal.
+**Reason deferred:** The remaining overlay capabilities are staged behind
+separate evidence gates: self-hosted relay operations, globally unambiguous
+stale-topology withdrawal, browser projection, isolated VM/process churn, and
+physical traversal each have distinct operational and security boundaries.
 **Activation trigger:** Explicit requirement for project messages to reach members through direct, peer-transit, or organization-relay paths without exposing application plaintext to transit infrastructure.
-**Evidence required before planning:** Current-source and planning re-investigation, membership/trust model, ADR-0066, Java 25 crypto compatibility probe, bounded envelope/key-agreement vectors, and explicit owners/contracts for the overlay and relay.
-**Public-claims impact:** Synesis may claim only the route classes and confidentiality boundaries demonstrated by evidence. It must not claim metadata anonymity, generic proxying, offline delivery, universal reachability, TURN compatibility, or reconnect.
-**Related documents:** `docs/adr/0066-distributed-project-overlay-proposal.md`, `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/operations/NETWORK_VALIDATION_MATRIX.md`
-**Last reviewed:** 2026-09-08
+**Evidence required before planning:** The Checkpoint 2 baseline is recorded in the source, ADR-0066/0077, the overlay protocol, and the dated evidence file. Any remaining capability requires its own explicit task, acceptance criteria, and evidence before implementation.
+**Public-claims impact:** Synesis may claim only the route classes, endpoint confidentiality, bounded topology, and local recovery demonstrated by evidence. It must not claim metadata anonymity, generic proxying, offline delivery, universal reachability, TURN/Internet traversal, global stale-topology tombstones, or VM/process-isolated churn.
+**Related documents:** `docs/adr/0066-distributed-project-overlay-proposal.md`, `docs/adr/0077-native-multi-peer-quic-overlay-convergence.md`, `docs/protocol/SYNESIS_OVERLAY_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/operations/NETWORK_VALIDATION_MATRIX.md`
+**Last reviewed:** 2026-09-13

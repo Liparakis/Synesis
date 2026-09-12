@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -171,19 +172,215 @@ final class OverlayReconcilerTest {
     peers.bind(stablePeer.nodeId(), session(stableLocal.nodeId(), stablePeer));
     StubScheduler scheduler = new StubScheduler();
     AtomicInteger attempts = new AtomicInteger();
+    AtomicInteger publications = new AtomicInteger();
     OverlayReconciler reconciler = new OverlayReconciler(stableLocal.nodeId(),
         new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), peers,
         Map.of(stablePeer.nodeId(), descriptor(stablePeer)), ignored -> {
           attempts.incrementAndGet();
           return CompletableFuture.completedFuture(session(stableLocal.nodeId(), stablePeer));
-        }, OverlayReconciliationPolicy.DEFAULT, Clock.fixed(NOW, ZoneOffset.UTC), scheduler, null,
-        null);
+        }, OverlayReconciliationPolicy.DEFAULT, Clock.fixed(NOW, ZoneOffset.UTC), scheduler,
+        ignored -> publications.incrementAndGet(), null);
     try (reconciler) {
       reconciler.start();
+      reconciler.reconcile();
+      reconciler.reconcile();
       assertTrue(reconciler.isConverged());
       assertEquals(0, attempts.get());
       assertEquals(0, scheduler.pending());
+      assertEquals(1, publications.get(), "stable convergence must not republish on every tick");
     }
+  }
+
+  @Test
+  void limitsConcurrentMissingEdgesAndAdmitsEachOwnedEdgeOnce() throws Exception {
+    List<NodeIdentity> identities = new ArrayList<>();
+    for (int index = 0; index < 4; index++) {
+      identities.add(NodeIdentity.generate());
+    }
+    identities.sort(java.util.Comparator.comparing(NodeIdentity::nodeId));
+    NodeIdentity local = identities.getFirst();
+    NodeIdentity[] remoteIdentities = identities.subList(1, identities.size())
+        .toArray(NodeIdentity[]::new);
+    OverlayMembershipSnapshot snapshot = membership(local, remoteIdentities);
+    OverlayPeerRegistry<PeerSession> peers = new OverlayPeerRegistry<>();
+    Map<String, CandidateDescriptor> descriptors = new HashMap<>();
+    Map<String, CompletableFuture<PeerSession>> pending = new HashMap<>();
+    for (NodeIdentity remote : remoteIdentities) {
+      descriptors.put(remote.nodeId(), descriptor(remote));
+    }
+    AtomicInteger attempts = new AtomicInteger();
+    StubScheduler scheduler = new StubScheduler();
+    OverlayReconciler reconciler = new OverlayReconciler(local.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), peers, descriptors,
+        candidate -> {
+          attempts.incrementAndGet();
+          CompletableFuture<PeerSession> result = new CompletableFuture<>();
+          pending.put(candidate.nodeId(), result);
+          return result;
+        }, new OverlayReconciliationPolicy(Duration.ofMillis(10), Duration.ofMillis(40), 2),
+        Clock.fixed(NOW, ZoneOffset.UTC), scheduler, null, null);
+    try (reconciler) {
+      reconciler.start();
+      assertEquals(2, attempts.get(), "connector concurrency must be bounded");
+      assertEquals(2, pending.size());
+
+      String firstPeer = pending.keySet().iterator().next();
+      pending.get(firstPeer).complete(session(local.nodeId(), identity(firstPeer, remoteIdentities)));
+      assertEquals(3, attempts.get(), "one completion should release one owned slot");
+
+      for (CompletableFuture<PeerSession> result : List.copyOf(pending.values())) {
+        if (!result.isDone()) {
+          String peerNodeId = pending.entrySet().stream()
+              .filter(entry -> entry.getValue() == result)
+              .map(Map.Entry::getKey)
+              .findFirst()
+              .orElseThrow();
+          result.complete(session(local.nodeId(), identity(peerNodeId, remoteIdentities)));
+        }
+      }
+      assertTrue(reconciler.isConverged());
+      assertEquals(3, attempts.get(), "already-correct edges must not be retried");
+    }
+  }
+
+  @Test
+  void reciprocalReconcilersHaveOneDeterministicConnectionOwner() throws Exception {
+    NodeIdentity first = NodeIdentity.generate();
+    NodeIdentity second = NodeIdentity.generate();
+    if (first.nodeId().compareTo(second.nodeId()) > 0) {
+      NodeIdentity swap = first;
+      first = second;
+      second = swap;
+    }
+    OverlayMembershipSnapshot snapshot = membership(first, second);
+    OverlayPeerRegistry<PeerSession> firstPeers = new OverlayPeerRegistry<>();
+    OverlayPeerRegistry<PeerSession> secondPeers = new OverlayPeerRegistry<>();
+    StubScheduler firstScheduler = new StubScheduler();
+    StubScheduler secondScheduler = new StubScheduler();
+    AtomicInteger firstAttempts = new AtomicInteger();
+    AtomicInteger secondAttempts = new AtomicInteger();
+    OverlayReconciler firstReconciler = new OverlayReconciler(first.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), firstPeers,
+        Map.of(second.nodeId(), descriptor(second)), ignored -> {
+          firstAttempts.incrementAndGet();
+          return new CompletableFuture<>();
+        }, OverlayReconciliationPolicy.DEFAULT, Clock.fixed(NOW, ZoneOffset.UTC), firstScheduler,
+        null, null);
+    OverlayReconciler secondReconciler = new OverlayReconciler(second.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), secondPeers,
+        Map.of(first.nodeId(), descriptor(first)), ignored -> {
+          secondAttempts.incrementAndGet();
+          return new CompletableFuture<>();
+        }, OverlayReconciliationPolicy.DEFAULT, Clock.fixed(NOW, ZoneOffset.UTC), secondScheduler,
+        null, null);
+    try (firstReconciler; secondReconciler) {
+      firstReconciler.start();
+      secondReconciler.start();
+      assertEquals(1, firstAttempts.get());
+      assertEquals(0, secondAttempts.get(), "larger member must not initiate the reciprocal edge");
+    }
+  }
+
+  @Test
+  void livePeerReturningDuringBackoffSuppressesAnotherAttempt() throws Exception {
+    NodeIdentity local = NodeIdentity.generate();
+    NodeIdentity peer = NodeIdentity.generate();
+    if (local.nodeId().compareTo(peer.nodeId()) > 0) {
+      NodeIdentity swap = local;
+      local = peer;
+      peer = swap;
+    }
+    OverlayMembershipSnapshot snapshot = membership(local, peer);
+    OverlayPeerRegistry<PeerSession> peers = new OverlayPeerRegistry<>();
+    StubScheduler scheduler = new StubScheduler();
+    AtomicInteger attempts = new AtomicInteger();
+    OverlayReconciler reconciler = new OverlayReconciler(local.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), peers,
+        Map.of(peer.nodeId(), descriptor(peer)), ignored -> {
+          attempts.incrementAndGet();
+          return CompletableFuture.failedFuture(new IllegalStateException("temporarily offline"));
+        }, new OverlayReconciliationPolicy(Duration.ofMillis(10), Duration.ofMillis(25), 1),
+        Clock.fixed(NOW, ZoneOffset.UTC), scheduler, null, null);
+    try (reconciler) {
+      reconciler.start();
+      assertEquals(1, attempts.get());
+      peers.bind(peer.nodeId(), session(local.nodeId(), peer));
+      scheduler.runNext();
+      assertTrue(reconciler.isConverged());
+      assertEquals(1, attempts.get(), "backoff must not reconnect an already-live peer");
+    }
+  }
+
+  @Test
+  void duplicateAuthenticatedCompletionCannotReplaceExistingBinding() throws Exception {
+    NodeIdentity local = NodeIdentity.generate();
+    NodeIdentity peer = NodeIdentity.generate();
+    if (local.nodeId().compareTo(peer.nodeId()) > 0) {
+      NodeIdentity swap = local;
+      local = peer;
+      peer = swap;
+    }
+    OverlayMembershipSnapshot snapshot = membership(local, peer);
+    OverlayPeerRegistry<PeerSession> peers = new OverlayPeerRegistry<>();
+    StubScheduler scheduler = new StubScheduler();
+    StubBinding incumbentBinding = new StubBinding();
+    StubBinding duplicateBinding = new StubBinding();
+    PeerSession incumbent = session(local.nodeId(), peer, incumbentBinding);
+    PeerSession duplicate = session(local.nodeId(), peer, duplicateBinding);
+    CompletableFuture<PeerSession> pending = new CompletableFuture<>();
+    AtomicInteger attempts = new AtomicInteger();
+    OverlayReconciler reconciler = new OverlayReconciler(local.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), peers,
+        Map.of(peer.nodeId(), descriptor(peer)), ignored -> {
+          attempts.incrementAndGet();
+          return pending;
+        }, new OverlayReconciliationPolicy(Duration.ofMillis(10), Duration.ofMillis(25), 1),
+        Clock.fixed(NOW, ZoneOffset.UTC), scheduler, null, null);
+    try (reconciler) {
+      reconciler.start();
+      peers.bind(peer.nodeId(), incumbent);
+      pending.complete(duplicate);
+      assertTrue(duplicateBinding.isTerminated(), "losing duplicate must be closed");
+      assertEquals(incumbent, peers.binding(peer.nodeId()));
+      scheduler.runNext();
+      assertTrue(reconciler.isConverged());
+      assertEquals(1, attempts.get());
+    }
+  }
+
+  @Test
+  void staleTerminalCallbackCannotRemoveAReplacementBinding() throws Exception {
+    NodeIdentity local = NodeIdentity.generate();
+    NodeIdentity peer = NodeIdentity.generate();
+    if (local.nodeId().compareTo(peer.nodeId()) > 0) {
+      NodeIdentity swap = local;
+      local = peer;
+      peer = swap;
+    }
+    OverlayMembershipSnapshot snapshot = membership(local, peer);
+    OverlayPeerRegistry<PeerSession> peers = new OverlayPeerRegistry<>();
+    StubBinding firstBinding = new StubBinding();
+    PeerSession first = session(local.nodeId(), peer, firstBinding);
+    peers.bind(peer.nodeId(), first);
+    OverlayReconciler reconciler = new OverlayReconciler(local.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyPolicy(), peers,
+        Map.of(peer.nodeId(), descriptor(peer)), ignored -> new CompletableFuture<>(),
+        OverlayReconciliationPolicy.DEFAULT, Clock.fixed(NOW, ZoneOffset.UTC),
+        new StubScheduler(), null, null);
+    StubBinding replacementBinding = new StubBinding();
+    PeerSession replacement = session(local.nodeId(), peer, replacementBinding);
+    try (reconciler) {
+      reconciler.start();
+      assertTrue(peers.unbindIfSame(peer.nodeId(), first));
+      assertTrue(peers.bindIfAbsent(peer.nodeId(), replacement));
+      firstBinding.terminate();
+      assertEquals(replacement, peers.binding(peer.nodeId()));
+    }
+  }
+
+  private static NodeIdentity identity(String nodeId, NodeIdentity[] identities) {
+    return Arrays.stream(identities).filter(identity -> identity.nodeId().equals(nodeId)).findFirst()
+        .orElseThrow();
   }
 
   private static final class StubBinding implements PeerSession.ControlBinding {
@@ -240,6 +437,10 @@ final class OverlayReconcilerTest {
             LivenessState.FAILED, Duration.ZERO);
         listeners.forEach(listener -> listener.onTransition(transition));
       }
+    }
+
+    private boolean isTerminated() {
+      return terminal.isDone();
     }
   }
 

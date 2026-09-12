@@ -1,3 +1,42 @@
+# 2026-09-13 — SL-D-040 Checkpoint 2 bounded multi-node overlay convergence
+
+## Task boundary
+
+Continue from `f26fb03c` (Heal overlay adjacency after Link loss) and verify
+the next existing `SL-D-040` overlay milestone. Checkpoint 1 established local
+authenticated adjacency recovery; this checkpoint establishes that the
+existing bounded topology policy is realized by native QUIC sessions, supports
+opaque peer transit, withdraws routes after meaningful physical loss, and
+returns to a stable graph after rejoin.
+
+- Task ID: SL-D-040
+- Checkpoint: 2
+- Status: ACTIVE; Checkpoint 2 is complete for its current scope
+- Authority: signed membership remains the membership source; physical loss
+  never revokes a member
+- Exclusions: VM/NAT/Internet traversal, long soak or randomized chaos,
+  session resumption, QUIC path migration, installer/daemon/UI redesign,
+  Claude integration, hosted relay, and source `.synesis` mutation
+
+## Exact next action
+
+After the local commit, begin Checkpoint 3 by defining the isolated local-VM
+topology/churn matrix and environment prerequisites. Do not implement VM
+testing or broaden production overlay behavior in this checkpoint.
+
+## Checkpoint 2 result
+
+Source inspection derives full mesh through three members and a sorted circular
+`+/-1`/`+/-2` policy above that threshold, with maximum intended degree four.
+Therefore six members is the smallest population with an intentionally
+non-direct valid pair. Deterministic tests and a native six-endpoint QUIC
+acceptance prove the target graph, peer transit, E2E opaque transit, abrupt
+transit loss, local route withdrawal, automatic bounded reconciliation,
+alternate delivery, and same-identity rejoin. The acceptance is one JVM with
+six native QUIC endpoints; the existing separate-JVM Link regression remains
+the process-boundary evidence. No UI/SSE overlay projection exists to verify,
+so no UI change was made.
+
 # SYN-057 deterministic multi-project runtime selection and deep-link routing — activated 2026-09-11
 
 ## Task boundary
@@ -549,7 +588,7 @@ lane in this slice.
 - Networking implementation: authenticated QUIC sessions, bounded control path, application liveness, bounded direct
   candidate selection, demo-only application request/result exchange, and signed single-use terminal invitations
 - Wider Synesis capabilities: out of scope; SYN-038 is the explicitly tasked Codex-only lifecycle slice
-- Goal revision: 26
+- Goal revision: 27
 - Status: active
 - Goal status: Make two ordinary Synesis-aware coding agents complete one shared repository task unattended through the
   existing workgroup, review, handoff, validation, integration, cleanup, and diagnostics boundaries. SYN-039 is now

@@ -698,20 +698,32 @@
 
 ### Distributed project overlay, routed envelopes, and self-hosted relay — activated 2026-09-08
 
-- Status: COMPLETE FOR CURRENT SCOPE
-- Verification: PASS FOR CURRENT SCOPE; configured local acceptance passes with a
-  process-local loopback workaround, while the inherited environment remains
-  blocked before Gradle startup and physical traversal is unrun.
+- Status: ACTIVE
+- Checkpoint 2 status: COMPLETE FOR CURRENT SCOPE. The next slice is the
+  separately scoped local-VM topology/churn checkpoint; this task remains the
+  sole active task until that successor slice is explicitly closed.
+- Verification: Checkpoint 2 passes with the command-local Windows/JDK
+  loopback workaround: deterministic overlay/reconciler tests, six-endpoint
+  native QUIC graph/transit/failure/rejoin acceptance, existing separate-JVM
+  Link regression, and `:link:check` with 96 tests. Physical traversal remains
+  unrun under SL-D-035 and VM/process-isolated multi-node churn is the next
+  checkpoint.
 - Purpose: Extend Synesis Link from authenticated direct physical adjacencies into a bounded project overlay that delivers opaque end-to-end encrypted logical messages by direct path, authorized peer transit, or an optional self-hosted organization relay.
 - Planning basis: explicit distributed-Link goal, current-source re-investigation, and ADR-0066. `SL-D-040` is the next unused Link deferred identifier after the existing `SL-D-031` through `SL-D-039` entries; no existing overlay/routing/relay identifier was found. It is not a repurposed `SL-D-035` or `SL-D-036` task.
 - Dependencies: existing Link identity, handshake, replay, liveness, `PeerSession`, and bounded application-stream seams; a new explicit project-membership authority contract; Java 25 crypto compatibility evidence.
 - Acceptance criteria: lawful project membership is authenticated independently from direct adjacency; a newer same-authority snapshot can refresh the local view and authorize a newcomer without making the bootstrap peer a permanent server; direct, bounded peer-transit, and configured relay routes deliver bidirectional logical messages; the origin and destination authenticate/decrypt while transit peers and the relay cannot; topology and routes are bounded/deterministic; duplicates, loops, stale topology, unauthorized traffic, malformed frames, and exhausted hop budgets fail closed; no durable mailbox or generic proxy exists.
 - Required tests: E2E key-agreement and envelope vectors; wrong-recipient, spoofing, substitution, tamper, replay, duplicate, loop, hop-limit, membership-refresh/newcomer, topology-staleness, unauthorized-transit, relay-authentication, size, quota/backpressure, three-peer, six-to-eight-peer, forced-transit, route-fallback, relay, and concurrency tests; existing Link regressions must remain green.
 - Required documentation: ADR, membership/trust model, routed wire format, threat model, relay operations, failure diagnostics, test matrix, and evidence/checkpoints. No browser UI, HTTP control plane, reconnect, or MCP contract changes.
-- Exact next action: preserve the passing local acceptance and keep physical
+- Checkpoint 2 evidence: `docs/evidence/sl-d-040-overlay-convergence-2026-09-13.md`
+  records the source-derived six-member threshold, exact target/observed graph,
+  native QUIC transit and E2E proof, abrupt transit loss, route withdrawal,
+  bounded retry, alternate delivery, same-identity rejoin, deterministic churn
+  tests, and the one-JVM/process-isolation limitation.
+- Exact next action: begin Checkpoint 3 by defining the isolated local-VM
+  topology/churn matrix and environment prerequisites; keep physical
   controlled-NAT/Internet traversal under the separately scoped `SL-D-035`
-  evidence gate; do not broaden this task into reconnect or physical-network
-  claims.
+  evidence gate and do not broaden this task into relay, resumption, or
+  path-migration work.
 - Scope exclusions: no `SL-D-036` reconnect/path migration, no generic TCP/UDP proxy, no provider credentials, no hosted Synesis relay, no durable offline queue, no horizontal relay cluster, no frontend/HTTP work, no source `.synesis` mutation, and no push.
 
 ## SL-D-035

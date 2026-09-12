@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -329,6 +330,9 @@ final class OverlayProtocolTest {
         now.plusSeconds(60), List.of(authority.nodeId(), origin.nodeId()), transit);
     assertEquals(OverlayTopologyView.Acceptance.ACCEPTED, view.accept(newer, snapshot, now));
     assertEquals(OverlayTopologyView.Acceptance.STALE, view.accept(decoded, snapshot, now));
+    assertTrue(view.removeOrigin(transit.nodeId()));
+    assertTrue(view.advertisement(transit.nodeId()).isEmpty());
+    assertFalse(view.removeOrigin(transit.nodeId()));
 
     byte[] tamperedBytes = advertisement.encoded();
     tamperedBytes[tamperedBytes.length - 1] ^= 1;
@@ -355,6 +359,9 @@ final class OverlayProtocolTest {
     assertEquals(OverlayRoute.Kind.ORGANIZATION_RELAY,
         OverlayRouteSelector.select(authority.nodeId(),
             origin.nodeId(), snapshot, Set.of(), new OverlayTopologyView(), now, "relay-1").kind());
+    assertEquals(OverlayRoute.Kind.UNREACHABLE,
+        OverlayRouteSelector.select(authority.nodeId(),
+            origin.nodeId(), snapshot, Set.of(), new OverlayTopologyView(), now, null).kind());
   }
 
   @Test
@@ -453,6 +460,34 @@ final class OverlayProtocolTest {
         OverlayTopologyPropagationFrame.decode(frame.encoded()).encoded());
     transitPropagation.receive(origin.nodeId(), frame, now).toCompletableFuture().join();
     assertEquals(1, destinationSends.get(), "duplicate advertisements must not reflood");
+  }
+
+  @Test
+  void topologyPropagationContinuesAfterPeerFailuresAndReturnsFirstFailure() throws Exception {
+    NodeIdentity local = NodeIdentity.generate();
+    NodeIdentity firstPeer = NodeIdentity.generate();
+    NodeIdentity secondPeer = NodeIdentity.generate();
+    UUID projectId = UUID.randomUUID();
+    OverlayMembershipSnapshot snapshot = membership(projectId, local, firstPeer, secondPeer);
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+    OverlayPeerRegistry<OverlayTopologyPropagation.PeerTransport> peers = new OverlayPeerRegistry<>();
+    AtomicInteger sends = new AtomicInteger();
+    IllegalStateException firstFailure = new IllegalStateException("first peer failed");
+    IllegalStateException secondFailure = new IllegalStateException("second peer failed");
+    OverlayTopologyPropagation.PeerTransport transport = frame -> sends.getAndIncrement() == 0
+        ? CompletableFuture.failedFuture(firstFailure)
+        : CompletableFuture.failedFuture(secondFailure);
+    peers.bind(firstPeer.nodeId(), transport);
+    peers.bind(secondPeer.nodeId(), transport);
+    OverlayTopologyPropagation propagation = new OverlayTopologyPropagation(local.nodeId(),
+        new OverlayMembershipView(snapshot), new OverlayTopologyView(), peers);
+    OverlayTopologyAdvertisement advertisement = OverlayTopologyAdvertisement.create(projectId,
+        snapshot.revision(), 1, now.plusSeconds(60), List.of(firstPeer.nodeId()), local);
+
+    CompletionException failure = assertThrows(CompletionException.class,
+        () -> propagation.publish(advertisement, now).toCompletableFuture().join());
+    assertSame(firstFailure, failure.getCause());
+    assertEquals(2, sends.get(), "later peers must still be attempted after a failed send");
   }
 
   @Test

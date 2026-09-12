@@ -1,3 +1,43 @@
+## 2026-09-13 — SL-D-040 Checkpoint 2 complete for current scope
+
+Checkpoint 2 is complete locally in durable checkpoint `CP-0934.md` from starting HEAD
+`f26fb03cc03eec56e2275b01bd07b53df56ad154`. Source inspection found that the
+existing `OverlayTopologyPolicy` uses full mesh through three members and
+sorted circular `+/-1`/`+/-2` neighbors above that threshold. Six members is
+therefore the smallest non-full-mesh population; its target is 12 undirected
+edges with degree four for every member.
+
+The deterministic tests and `OverlayGraphQuicTest` passed. The latter brought
+up six native QUIC endpoints, verified the exact target graph, selected a
+non-direct peer-transit route, delivered an E2E-encrypted payload while the
+transit endpoint observed only opaque bytes, abruptly killed the selected
+transit node, observed terminal adjacency/route withdrawal and bounded retry,
+delivered over the surviving route, and rejoined the same identity with no
+duplicate bindings. The existing separate-JVM `NettyQuicLoopbackTest` also
+passed. `:link:check` passed format, compilation, static analysis, Javadocs,
+and 96 tests.
+
+The production delta stays within existing Link/overlay seams: authenticated
+per-connection responder state, client peer-initiated application streams,
+the existing bounded stream budget, transition-only topology publication,
+sequential bounded topology propagation, and local stale-origin removal from
+the route read model. Signed membership is unchanged by physical loss. No
+browser/SSE projection exists for this overlay read model, so none was added.
+
+## Current limitations
+
+The six-node graph test is one JVM with six native QUIC endpoints; it is not a
+six-process acceptance. Existing separate-JVM Link evidence covers the process
+boundary, while isolated multi-process churn belongs to Checkpoint 3. Local
+stale-origin withdrawal is proven; a distributed tombstone for every stale
+advertisement is not part of the existing v1 contract. NAT/Internet traversal
+remains under SL-D-035.
+
+## Exact next action
+
+After the local commit, begin Checkpoint 3 by defining the isolated local-VM
+topology/churn matrix and environment prerequisites; do not implement it now.
+
 ## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility complete
 
 SYN-066 is COMPLETE FOR CURRENT SCOPE. The bundled Windows JDK could not

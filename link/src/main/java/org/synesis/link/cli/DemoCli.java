@@ -231,7 +231,7 @@ public final class DemoCli {
         CompletableFuture<PeerSession> result = new CompletableFuture<>();
         io.netty.util.concurrent.Future<QuicChannel> connected = QuicChannel.newBootstrap(udp)
             .handler(new ChannelInboundHandlerAdapter())
-            .streamHandler(new ChannelInboundHandlerAdapter())
+            .streamHandler(NettySessionHandshake.clientApplicationStreamHandler())
             .remoteAddress(new InetSocketAddress(pair.remote()
                 .address(),
                 pair.remote()

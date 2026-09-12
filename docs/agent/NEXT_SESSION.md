@@ -1,3 +1,18 @@
+## 2026-09-13 — SL-D-040 Checkpoint 2 closure
+
+Checkpoint 2 is complete for its current scope and must be preserved. The
+source-derived six-member bounded topology, native QUIC peer transit, E2E
+opaque forwarding, abrupt meaningful-transit failure, route withdrawal,
+bounded automatic reconciliation, alternate delivery, deterministic churn
+tests, and same-identity rejoin are recorded in
+`docs/evidence/sl-d-040-overlay-convergence-2026-09-13.md`. The six-node graph
+acceptance is one JVM with six native endpoints; process-isolated churn is
+intentionally deferred to Checkpoint 3.
+
+- Exact next code action: begin Checkpoint 3 by defining the isolated local-VM
+  topology/churn matrix and environment prerequisites; do not change
+  production overlay code or start VM testing in this continuation.
+
 ## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility closure
 
 SYN-066 is COMPLETE FOR CURRENT SCOPE. The fresh Windows installer now passes

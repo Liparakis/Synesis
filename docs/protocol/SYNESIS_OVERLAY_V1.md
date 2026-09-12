@@ -126,6 +126,37 @@ reconnection, not session resumption, path migration, authority succession, or
 offline work replay. Three-member policy remains full mesh; no B-required
 transit topology is implied by the three-peer recovery test.
 
+## Checkpoint 2 bounded multi-node convergence
+
+The source-defined default policy uses a full mesh through three members. For
+larger memberships it sorts stable node IDs and selects circular offsets
+`+/-1` and `+/-2`, deduplicating small-set wraparound. Its intended maximum
+direct degree is four. Six members is consequently the smallest population
+where at least one valid member pair is intentionally non-direct; the six-node
+target has 12 undirected edges, degree four at every node, and no bootstrap
+hub.
+
+Checkpoint 2 acceptance used the existing authenticated QUIC handshake and
+`PeerSession` bindings to realize that graph. Route selection still prefers a
+direct usable adjacency, then the shortest authorized peer-transit path, then
+a configured live organization relay, then `UNREACHABLE`. A transit endpoint
+forwards the hop-local frame without decoding the immutable `SLK1` or `SLE1`
+record; only the origin/destination E2E sessions interpret the logical bytes.
+
+When a direct session becomes terminal, the local reconciler removes only the
+exact binding, emits adjacency-loss and route-withdrawal diagnostics, removes
+the stale origin from its local topology read model, and schedules the normal
+bounded reconnect owned by the lower node ID. Membership remains signed and
+unchanged. A rejoined member uses a fresh authenticated session and must
+reconverge to the same policy graph; duplicate session admission remains
+compare-and-bind protected.
+
+The checkpoint proves local stale-origin withdrawal and route avoidance. It
+does not introduce a distributed tombstone for advertisements held by nodes
+that never had a direct session to the failed origin. It also does not claim
+NAT/Internet traversal, VM/process-isolated multi-node churn, UI/SSE overlay
+projection, session resumption, or path migration.
+
 ## SLK1 end-to-end key agreement
 
 `SLK1` records are logical messages. Transit peers forward them unchanged.

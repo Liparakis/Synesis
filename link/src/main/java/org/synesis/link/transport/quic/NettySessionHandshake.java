@@ -47,6 +47,8 @@ public final class NettySessionHandshake {
 
   private static final AttributeKey<StreamState> SERVER_STATE = AttributeKey.valueOf(
       "synesis-link-server-state");
+  private static final AttributeKey<StreamState> CLIENT_STATE = AttributeKey.valueOf(
+      "synesis-link-client-state");
 
   private NettySessionHandshake() {
   }
@@ -300,6 +302,63 @@ public final class NettySessionHandshake {
   }
 
   /**
+   * Creates the default client-side handler for application streams initiated by the peer.
+   *
+   * <p>The handler uses the authenticated state installed by the client control-stream handshake;
+   * it does not establish or accept a session on its own.
+   *
+   * @return configured inbound application-stream handler
+   */
+  public static ChannelHandler clientApplicationStreamHandler() {
+    return new ChannelInitializer<QuicStreamChannel>() {
+      @Override
+      protected void initChannel(QuicStreamChannel channel) {
+        StreamState state = channel.parent().attr(CLIENT_STATE).get();
+        if (state == null || state.session == null || state.applicationHandler == null) {
+          channel.close();
+          return;
+        }
+        channel.pipeline()
+            .addLast(new LengthFieldBasedFrameDecoder(
+                ApplicationStreamCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
+                Integer.BYTES));
+        channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
+        channel.pipeline().addLast(new ClientApplicationStreamHandler(state));
+      }
+    };
+  }
+
+  /**
+   * Creates a responder handshake handler that allocates independent completion state for each
+   * accepted QUIC connection.
+   *
+   * <p>This is the multi-peer server seam. Each connection still has one control stream and uses
+   * the same identity, replay, liveness, and application-stream validation as the fixed-result
+   * overloads; only the caller-owned completion future is allocated per connection.
+   *
+   * @param localIdentity         local responder identity
+   * @param expectedRemoteNodeId expected remote node identifier, or {@code null}
+   * @param supportedVersions    supported protocol versions
+   * @param replayGuard           shared bounded replay guard
+   * @param resultFactory         factory for one fresh connection completion
+   * @param livenessConfiguration liveness settings
+   * @param applicationHandler    optional application-stream handler
+   * @return configured multi-peer server handshake handler
+   */
+  public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
+      String expectedRemoteNodeId, List<ProtocolVersion> supportedVersions,
+      ReplayGuard replayGuard, Supplier<CompletableFuture<PeerSession>> resultFactory,
+      LivenessConfiguration livenessConfiguration,
+      PeerSession.ApplicationStreamHandler applicationHandler) {
+    Objects.requireNonNull(resultFactory, "result factory");
+    return streamInitializer(
+        () -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
+            null, replayGuard, Objects.requireNonNull(resultFactory.get(), "result"),
+            HandshakeRole.RESPONDER, livenessConfiguration, null, applicationHandler),
+        HandshakeRole.RESPONDER);
+  }
+
+  /**
    * Creates the invitation-accepting responder handshake stream handler.
    *
    * @param localIdentity         local node identity
@@ -344,26 +403,35 @@ public final class NettySessionHandshake {
     return streamInitializer(
         () -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
             null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission,
-            applicationHandler));
+            applicationHandler), HandshakeRole.RESPONDER);
   }
 
   private static ChannelHandler streamInitializer(StreamState state) {
-    return streamInitializer(() -> state);
+    return streamInitializer(() -> state, state.localRole);
   }
 
-  private static ChannelHandler streamInitializer(Supplier<StreamState> stateFactory) {
+  private static ChannelHandler streamInitializer(Supplier<StreamState> stateFactory,
+      HandshakeRole role) {
     return new ChannelInitializer<QuicStreamChannel>() {
       @Override
       protected void initChannel(QuicStreamChannel channel) {
-        StreamState state = stateFactory.get();
-        if (state.localRole == HandshakeRole.RESPONDER) {
-          var attribute = channel.parent()
-              .attr(SERVER_STATE);
-          StreamState prior = attribute.get();
-          if (prior == null) {
+        StreamState state;
+        if (role == HandshakeRole.RESPONDER) {
+          synchronized (channel.parent()) {
+            var attribute = channel.parent().attr(SERVER_STATE);
+            StreamState prior = attribute.get();
+            if (prior == null) {
+              state = stateFactory.get();
+              attribute.set(state);
+            } else {
+              state = prior;
+            }
+          }
+        } else {
+          state = stateFactory.get();
+          var attribute = channel.parent().attr(CLIENT_STATE);
+          if (attribute.get() == null) {
             attribute.set(state);
-          } else {
-            state = prior;
           }
         }
         channel.pipeline()
@@ -375,6 +443,33 @@ public final class NettySessionHandshake {
             .addLast(new HandshakeStreamHandler(state));
       }
     };
+  }
+
+  /** Processes peer-initiated application streams after client authentication. */
+  private static final class ClientApplicationStreamHandler
+      extends SimpleChannelInboundHandler<ByteBuf> {
+
+    private final StreamState state;
+
+    private ClientApplicationStreamHandler(StreamState state) {
+      this.state = state;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
+      byte[] bytes = new byte[message.readableBytes()];
+      message.readBytes(bytes);
+      if (!ApplicationStreamCodec.looksLike(bytes)) {
+        context.close();
+        return;
+      }
+      try {
+        ApplicationStreamTransport.accept(context, this, state.session, state.applicationHandler,
+            state.applicationStreams, bytes);
+      } catch (RuntimeException failure) {
+        context.close();
+      }
+    }
   }
 
   /**
