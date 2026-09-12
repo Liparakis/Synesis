@@ -173,7 +173,13 @@ create authority succession or transport reconnection.
 Membership refresh is monotonic and same-authority only. A new peer binding is
 accepted as a transport fact only after the refreshed signed snapshot permits
 that node; the registry itself does not grant membership or revive a dead
-session.
+session. Checkpoint 1 reconciliation removes a terminal binding by exact
+session identity and may request a fresh normal Link connection only for a
+currently authorized desired edge. Candidate descriptors provide addresses,
+not trust: the connector must still enforce expected node identity, key
+matching, replay protection, and control readiness. A physical disconnect never
+changes signed membership, and an obsolete retry is cancelled when membership
+or desired topology changes.
 
 `SLK1` signs an ephemeral X25519 transcript with the durable Ed25519 identity.
 The project, exact origin/destination, membership revision, session, nonces,

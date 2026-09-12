@@ -5095,3 +5095,30 @@ output. Evidence:
 
 Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No
 authoritative successor is defined.
+## 2026-09-12 — SL-D-036 automatic overlay adjacency reconciliation
+
+`SL-D-036` Checkpoint 1 is complete for this direct-session
+recovery slice. The user explicitly requested automatic healing after physical
+peer loss, and the current source already provides the needed signed membership,
+candidate descriptors, authenticated `PeerSession`, liveness, deterministic
+topology policy, and route selector. No Synesis metadata or coordination state
+was created in this source checkout.
+
+The implementation keeps membership and physical adjacency separate. A terminal
+session is removed with compare-and-remove semantics, its node is withdrawn
+from route inputs, and a missing desired edge is retried only by the
+lexicographically smaller member ID. Reconnection requires a retained signed
+descriptor and a connector that completes the existing normal Link
+authentication/control-ready path; a descriptor never authenticates a peer.
+
+Focused deterministic tests and a real three-member native-QUIC test pass with
+the documented Windows/JDK loopback workaround. The real test proves initial
+full-mesh adjacency, abrupt physical loss, route withdrawal, automatic rejoin,
+fresh session identity, and unchanged signed membership. The current topology
+policy intentionally uses full mesh for three members, so this evidence is a
+three-peer recovery proof rather than a B-required transit proof.
+
+## Immediate next action
+
+Preserve SL-D-036 Checkpoint 1 as COMPLETE FOR CURRENT SCOPE. No broader
+reconnect, path migration, NAT, relay, UI, HTTP, MCP, or push work is in scope.

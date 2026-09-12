@@ -1,3 +1,37 @@
+## SL-D-036
+
+### Checkpoint 1 — automatic overlay adjacency reconciliation — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: `SL-D-040` is COMPLETE FOR CURRENT SCOPE; existing Link
+  identity, signed candidate descriptors, authenticated `PeerSession`, liveness,
+  topology policy, and route-selection seams are the implementation boundary.
+- Purpose: heal missing desired physical overlay edges after terminal transport
+  loss, while preserving signed membership as authority and creating only fresh
+  authenticated Link sessions.
+- Scope: local reconciliation of signed-membership-derived desired neighbors
+  against the live `OverlayPeerRegistry`; terminal-adjacency withdrawal;
+  deterministic lower-node-ID connection ownership; bounded concurrent attempts
+  and exponential retry; candidate/key/identity validation; and topology
+  publication from the live physical registry.
+- Acceptance criteria: stale sessions are removed from direct route inputs;
+  signed membership is unchanged by physical disconnect; missing owned edges
+  retry without human invitation; duplicate attempts are coalesced; retries are
+  bounded; failed or mismatched authentication never binds; and a real local
+  QUIC session can leave and rejoin with a fresh session identity.
+- Required evidence: deterministic liveness/retry tests and a three-member
+  native-QUIC test covering initial adjacency, abrupt loss, route withdrawal,
+  automatic rejoin, fresh session identity, and unchanged signed membership.
+- Explicit exclusions: no session resumption, path migration, authority
+  succession, NAT traversal, relay, Internet/VM testing, UI/HTTP/MCP changes,
+  daemon redesign, durable offline queue, source `.synesis` state, or push.
+- Verification so far: strict Link compilation/static analysis, formatting, Javadoc,
+  89 tests, and the real three-member native-QUIC loss/rejoin acceptance all
+  pass with the documented Windows/JDK loopback workaround.
+- Closure evidence: `docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.
+- Exact next action: create the required durable checkpoint, then close
+  SL-D-036 Checkpoint 1 locally without pushing.
+
 ## SYN-066
 
 ### Windows JDK loopback bootstrap compatibility — activated 2026-09-12

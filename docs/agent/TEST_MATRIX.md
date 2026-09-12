@@ -1659,3 +1659,18 @@ authoritative successor is defined.
 | Broader `:cli:test` | BOUNDED, interrupted after no completion/failure output |
 
 Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+## SL-D-036 Checkpoint 1 — automatic overlay adjacency reconciliation — 2026-09-12
+
+| Check | Result |
+|---|---|
+| Stale terminal binding removal and route withdrawal | PASS focused |
+| Deterministic connection ownership and duplicate coalescing | PASS focused |
+| Bounded exponential retry/backoff | PASS focused |
+| Stable topology avoids unnecessary reconnect | PASS focused |
+| Real three-member native QUIC initial adjacency | PASS |
+| Abrupt physical loss removes direct route input | PASS |
+| Automatic rejoin through fresh authenticated Link session | PASS |
+| Signed membership remains byte-for-byte unchanged | PASS |
+| `:link:check` with documented loopback workaround | PASS, 89 tests |
+
+Evidence: `docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.

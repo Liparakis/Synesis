@@ -48,6 +48,30 @@ public final class OverlayPeerRegistry<T> {
   }
 
   /**
+   * Binds one direct peer only when no binding is currently present.
+   *
+   * <p>The operation is the registry's duplicate-admission seam. Callers that
+   * race two authenticated sessions can retain the first binding and close the
+   * losing session instead of replacing a live session behind its owner.
+   *
+   * @param nodeId  authenticated peer node ID
+   * @param binding transport binding
+   * @return {@code true} when the binding was installed
+   */
+  public synchronized boolean bindIfAbsent(String nodeId, T binding) {
+    OverlayCodecSupport.requireNodeId(nodeId);
+    Objects.requireNonNull(binding, "binding");
+    if (bindings.containsKey(nodeId)) {
+      return false;
+    }
+    if (bindings.size() >= OverlayMembershipSnapshot.MAX_MEMBERS) {
+      throw new IllegalStateException("direct-peer registry bound reached");
+    }
+    bindings.put(nodeId, binding);
+    return true;
+  }
+
+  /**
    * Removes one direct peer binding if present.
    *
    * @param nodeId peer node ID
@@ -56,6 +80,26 @@ public final class OverlayPeerRegistry<T> {
   public T unbind(String nodeId) {
     OverlayCodecSupport.requireNodeId(nodeId);
     return bindings.remove(nodeId);
+  }
+
+  /**
+   * Removes a binding only when it is still the supplied binding instance.
+   *
+   * <p>This compare-and-remove operation prevents a terminal callback from
+   * deleting a newer replacement session for the same peer.
+   *
+   * @param nodeId  peer node ID
+   * @param binding binding expected to be current
+   * @return {@code true} when that exact binding was removed
+   */
+  public synchronized boolean unbindIfSame(String nodeId, T binding) {
+    OverlayCodecSupport.requireNodeId(nodeId);
+    Objects.requireNonNull(binding, "binding");
+    if (bindings.get(nodeId) != binding) {
+      return false;
+    }
+    bindings.remove(nodeId);
+    return true;
   }
 
   /**

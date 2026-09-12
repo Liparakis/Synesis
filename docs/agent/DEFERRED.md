@@ -282,14 +282,25 @@ resource-limit, and unsupported-topology tests.
 **Area:** Session lifecycle
 **Current verified capability:** Closed or expired sessions do not resurrect; fresh authenticated sessions are
 supported.
-**Missing capability:** Explicit recovery using fresh authenticated authority, including reconnect state, replay
-protection, and epoch rebinding.
-**Reason deferred:** Transparent reconnection, resumption, and rebinding must be one coherent authority and work-safety
-design.
-**Activation trigger:** A product requirement for recovery after direct-session loss.
-**Evidence required before planning:** Duplicate-work, stale-callback, replay, stale-ticket, epoch, authority rollover,
-cancellation, and recovery tests.
-**Public-claims impact:** No transparent reconnection, resumption, or session resurrection claim.
+**Checkpoint 1 delivered:** Local overlay adjacency reconciliation after
+terminal physical loss is implemented under the active `SL-D-036` task, using a
+retained signed candidate descriptor and the existing fresh authenticated
+Link/session path. This does not add session resumption, path migration,
+authority succession, or work replay.
+**Missing capability:** Session resumption, path migration, work-safe replay,
+and explicit epoch rebinding remain unspecified and deferred.
+**Reason deferred:** Transparent resumption, rebinding, and work recovery must
+be one coherent authority and work-safety design beyond Checkpoint 1.
+**Activation trigger:** The 2026-09-12 recovery goal activated and completed
+Checkpoint 1; a later explicit requirement is still needed for the remaining
+resumption/rebinding capability.
+**Evidence required before planning:** Duplicate-work, stale-callback, replay,
+stale-ticket, epoch, authority rollover, cancellation, and recovery tests for
+the remaining resumption/rebinding design. Checkpoint 1 evidence is recorded in
+`docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.
+**Public-claims impact:** Checkpoint 1 supports fresh local authenticated
+reconnection only; no session resumption, path migration, work replay, or
+Internet/NAT traversal claim.
 **Related documents:** `docs/protocol/STATE_MACHINES.md`, `docs/security/THREAT_MODEL.md`, [
 `NETWORK_VALIDATION_MATRIX.md`](../operations/NETWORK_VALIDATION_MATRIX.md)
 **Last reviewed:** 2026-07-27

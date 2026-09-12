@@ -78,8 +78,10 @@ The local `OverlayMembershipView` accepts a newer snapshot only when the
 project and authority remain unchanged, the signature is valid, and the
 candidate is currently usable. Lower revisions are stale, identical revisions
 are idempotent, and conflicting same-revision bytes are rejected. Updating
-this view does not establish sockets or reconnect a dead transport; the
-direct-peer registry is refreshed only by authenticated Link/session owners.
+this view alone does not establish sockets; the direct-peer registry is
+refreshed only by authenticated Link/session owners. The optional
+`OverlayReconciler` described below performs fresh connection attempts after
+physical loss without changing the signed membership view.
 
 Membership updates use a separate bounded `SLP2` wrapper when the authority
 needs to distribute a newer snapshot through currently authenticated peers:
@@ -102,6 +104,27 @@ authenticated direct peers other than the immediate sender. Duplicate, stale,
 conflicting, expired, unauthorized, or over-budget updates do not reflood.
 Only the declared authority may originate a new update. This distributes
 membership knowledge without electing a new authority or creating a socket.
+
+## Checkpoint 1 physical adjacency reconciliation
+
+`OverlayReconciler` derives the local desired neighbor set from the accepted
+`SLM1` and the existing deterministic topology policy. It compares that set
+with usable authenticated `PeerSession` bindings in the local direct-peer
+registry. A terminal liveness transition removes only the exact session that
+ended, publishes the updated physical adjacency, and withdraws that peer from
+local route inputs. It never changes membership status or revokes a signed key
+because a socket disappeared.
+
+For each missing desired edge, only the lexicographically smaller member ID
+starts a connection attempt. The connector must use the ordinary Link candidate
+validation, expected-node identity check, replay guard, and reciprocal control
+readiness path. A returned session is admitted only when its authenticated node
+ID and public key match the current membership member. Duplicate winners are
+closed, failed attempts use bounded exponential backoff, and obsolete retries
+are cancelled when the desired topology changes. This is fresh-session
+reconnection, not session resumption, path migration, authority succession, or
+offline work replay. Three-member policy remains full mesh; no B-required
+transit topology is implied by the three-peer recovery test.
 
 ## SLK1 end-to-end key agreement
 

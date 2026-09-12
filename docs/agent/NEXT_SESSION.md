@@ -3604,3 +3604,17 @@ Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
 
 Preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
 defined; do not broaden this fix into lifecycle, Link, or cross-network work.
+## 2026-09-12 — SL-D-036 automatic overlay adjacency reconciliation
+
+Checkpoint 1 is complete. `OverlayReconciler` now withdraws terminal
+physical bindings and heals missing desired edges through a retained signed
+descriptor and the existing normal authenticated Link connector. Deterministic
+tests and a real three-member native-QUIC loss/rejoin test pass. The three-peer
+test follows the existing full-mesh policy; it does not claim B-required
+transit behavior.
+
+## Exact next action
+
+Create the required durable checkpoint, then close SL-D-036 Checkpoint 1
+locally; no broader reconnect, path-migration, NAT, relay, UI, HTTP, MCP, or
+push work is in scope.

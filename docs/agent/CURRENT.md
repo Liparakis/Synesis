@@ -1,3 +1,32 @@
+# 2026-09-12 — SL-D-036 automatic overlay adjacency reconciliation
+
+- Task ID: SL-D-036
+- Checkpoint: 1
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SL-D-040 is COMPLETE FOR CURRENT SCOPE; this slice is the
+  separately promoted direct-session recovery boundary.
+- Scope: reconcile desired neighbors from verified signed membership with live
+  authenticated `PeerSession` bindings; withdraw stale direct route inputs;
+  reconnect only through a fresh normal Link connector with deterministic
+  ownership and bounded retry/backoff.
+- Authority boundary: physical disconnect never revokes membership; descriptors
+  are routing candidates only; returned sessions must match the expected member
+  identity and key before registry admission.
+- Implementation result so far: `OverlayReconciler` observes terminal liveness,
+  removes exact stale bindings, publishes route-input withdrawal, and retries
+  missing owned edges. Deterministic tests and a real three-member localhost
+  QUIC loss/rejoin test pass.
+- Verification so far: `:link:check` passed with strict compilation/static analysis,
+  formatting, Javadoc, and 89 Link tests; the real three-member native-QUIC
+  loss/rejoin acceptance passed as well.
+- Closure evidence: `docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.
+
+## Immediate next action
+
+Create the required durable checkpoint, then close SL-D-036 Checkpoint 1
+locally. Do not broaden this slice into session resumption, path migration, NAT
+traversal, relay, UI, HTTP, MCP, or push.
+
 # 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility
 
 - Task ID: SYN-066
