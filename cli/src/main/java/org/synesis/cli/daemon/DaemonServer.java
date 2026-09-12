@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -113,6 +114,24 @@ final class DaemonServer implements AutoCloseable {
 
   static URI normalizeRuntimeEndpoint(URI endpoint) {
     return ProcessRuntimeHandle.normalizeEndpoint(endpoint);
+  }
+
+  static boolean runtimeReachable(URI endpoint) {
+    HttpURLConnection connection = null;
+    try {
+      connection = (HttpURLConnection) endpoint.resolve("/api/v1/health").toURL().openConnection();
+      connection.setConnectTimeout(500);
+      connection.setReadTimeout(1_000);
+      connection.setInstanceFollowRedirects(false);
+      connection.setRequestMethod("GET");
+      return connection.getResponseCode() == HttpURLConnection.HTTP_OK;
+    } catch (IOException failure) {
+      return false;
+    } finally {
+      if (connection != null) {
+        connection.disconnect();
+      }
+    }
   }
 
   /**
@@ -574,10 +593,24 @@ final class DaemonServer implements AutoCloseable {
       String java = Path.of(System.getProperty("java.home"), "bin",
           System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java")
           .toString();
-      ProcessBuilder builder = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"),
-          "org.synesis.cli.SynesisCli", "coordination", "serve", "--project",
-          project.toString(), "--port", "0", "--parent-pid",
-          Long.toString(ProcessHandle.current().pid()));
+      List<String> command = new ArrayList<>();
+      command.add(java);
+      String loopbackSocketDirectory = System.getProperty("jdk.net.unixdomain.tmpdir", "");
+      if (!loopbackSocketDirectory.isBlank()) {
+        command.add("-Djdk.net.unixdomain.tmpdir=" + loopbackSocketDirectory);
+      }
+      command.add("-cp");
+      command.add(System.getProperty("java.class.path"));
+      command.add("org.synesis.cli.SynesisCli");
+      command.add("coordination");
+      command.add("serve");
+      command.add("--project");
+      command.add(project.toString());
+      command.add("--port");
+      command.add("0");
+      command.add("--parent-pid");
+      command.add(Long.toString(ProcessHandle.current().pid()));
+      ProcessBuilder builder = new ProcessBuilder(command);
       builder.redirectInput(ProcessBuilder.Redirect.from(Path.of(
           System.getProperty("os.name", "").toLowerCase().contains("win") ? "NUL" : "/dev/null")
           .toFile()));
@@ -664,17 +697,7 @@ final class DaemonServer implements AutoCloseable {
       if (!process.isAlive()) {
         return false;
       }
-      try {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(500)).build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint + "/api/v1/health"))
-            .timeout(Duration.ofSeconds(1)).GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
-      } catch (InterruptedException interrupted) {
-        Thread.currentThread().interrupt();
-        return false;
-      } catch (IOException failure) {
-        return false;
-      }
+      return runtimeReachable(endpoint);
     }
 
     @Override

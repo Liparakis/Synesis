@@ -22,6 +22,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 class ControlPlaneReadModelTest {
 
@@ -94,5 +95,30 @@ class ControlPlaneReadModelTest {
     assertTrue(networkMap.get("overlay").toString().contains("memberCount=3"));
     assertTrue(networkMap.get("overlay").toString().contains("directEdges"));
     assertTrue(networkMap.get("relay").toString().contains("CONNECTED"));
+  }
+
+  @Test
+  void registersAnUninitializedFolderAfterPreparingGitAndSynesisState() throws Exception {
+    Path currentRoot = temp.resolve("current");
+    Files.createDirectories(currentRoot);
+    org.synesis.workspace.test.TestGit.output(currentRoot, "init");
+    ProjectApplicationService.InitResult current = new ProjectApplicationService().init(
+        currentRoot, false);
+    Path selected = temp.resolve("selected");
+    Files.createDirectories(selected);
+    KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("registry.json"));
+    CoordinationService coordination = new CoordinationService(new PredictionEventStore(
+        current.location().root().resolve(".synesis/coordination"), current.location().projectId()),
+        current.identity());
+    ControlPlaneReadModel model = new ControlPlaneReadModel(current.location(), coordination,
+        new ProviderApplicationService(), new DoctorService(),
+        ControlPlaneReadModel.NetworkSnapshot::empty, registry);
+
+    model.registerKnownProject(selected);
+
+    assertTrue(Files.isDirectory(selected.resolve(".git")));
+    assertTrue(Files.exists(selected.resolve(".synesis/project.json")));
+    assertEquals(1, registry.projects().size());
+    assertEquals(1, model.knownProjects().size());
   }
 }

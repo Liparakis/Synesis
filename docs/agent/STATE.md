@@ -1,3 +1,126 @@
+## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility complete
+
+SYN-066 is COMPLETE FOR CURRENT SCOPE. The bundled Windows JDK could not
+bootstrap its local HTTP server when the Unix-domain socket temporary path was
+too long. The generated launcher now creates `%PUBLIC%\s` and passes the JDK
+socket-directory property before JVM startup; direct Java and daemon child
+launches retain compatible fallback/inheritance behavior. No protocol,
+lifecycle, registry, browser, Link, or project-data semantics changed.
+
+Verification passed: focused `SynesisCliParsingTest`, full Windows runnable
+installer build, supported repair, clean installed `synesis coordination serve`
+without `JAVA_TOOL_OPTIONS`, installed `synesis ui --no-browser --project .`,
+and installed `synesis ui --project .` returning `SYNESIS_UI_OPENED`. Evidence:
+`docs/evidence/SYN-066-windows-jdk-loopback-bootstrap-2026-09-12.md`.
+
+Exact next action: preserve SYN-066 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility complete
+
+SYN-065 is COMPLETE FOR CURRENT SCOPE. The installed daemon rejected `ui`
+requests because its Java `HttpClient` loopback probe failed with the local
+JDK AF_UNIX selector configuration even though the managed project runtime
+returned HTTP 200 from `/api/v1/health`. The probe now uses the compatible
+`HttpURLConnection` transport; no lifecycle, registry, browser, Link, or
+filesystem semantics changed.
+
+Verification passed: focused daemon regression test, source `installDist`,
+Windows runnable installer, supported installer repair, and real installed
+`synesis ui --no-browser --project .` plus `synesis ui --project .` smokes. The
+broader CLI suite was bounded and interrupted after no completion or failure
+output. Evidence:
+`docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+
+Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-064 actionable Projects preview complete
+
+SYN-064 is COMPLETE FOR CURRENT SCOPE. The root cause of the missing controls
+in the shown page was the development mock branch providing no registry client.
+Mock mode now supplies a process-local adapter, while the real page retains the
+authenticated `ControlPlaneClient`. Project cards use an explicit Remove label,
+and the current-project protection remains unchanged.
+
+Verification passed: typecheck, lint, 26 frontend tests, production build,
+repository browser QA, and interactive mock add/remove flows. Evidence:
+`docs/evidence/SYN-064-actionable-projects-preview-2026-09-12.md`.
+
+Exact next action: preserve SYN-064 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-063 Projects front-page redesign complete
+
+SYN-063 is COMPLETE FOR CURRENT SCOPE. `ProjectsView` now presents the existing
+registry and network snapshot through a compact overview strip, visibly labeled
+search and status controls, responsive project cards, and a clearer connections
+panel. Existing commands, routes, dialogs, and authority boundaries are
+unchanged.
+
+Verification passed: frontend typecheck, lint, 25 tests, production build,
+`git diff --check`, the repository browser QA suite at 2560x1440, 1920x1080,
+and 1280x800, plus interactive inspection at 375x812 and the supplied 1555x457
+proportions. Browser checks found no horizontal overflow or accessibility
+violations on the Projects page. Evidence:
+`docs/evidence/SYN-063-projects-front-page-redesign-2026-09-12.md`.
+
+Exact next action: preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-062 instant project registry removal closure
+
+SYN-062 is COMPLETE FOR CURRENT SCOPE. Registry removal now has an
+optimistic Projects-page boundary: the confirmed row disappears immediately
+and the existing authenticated durable command continues in the background.
+Success is reconciled with the authoritative snapshot; failure restores the
+row and surfaces a bounded error. No project files, runtime, or Link state is
+changed.
+
+Verification: 23 frontend tests, typecheck, lint, and production build pass.
+Focused Gradle registry tests remain blocked before task execution by the
+known host loopback/daemon failure. Evidence:
+`docs/evidence/SYN-062-instant-project-registry-removal-2026-09-12.md`.
+
+Exact next action: preserve SYN-062 as COMPLETE FOR CURRENT SCOPE; no
+successor is defined.
+
+## 2026-09-12 — SYN-061 automatic project initialization closure
+
+SYN-061 is COMPLETE FOR CURRENT SCOPE. The authenticated Add project flow now
+accepts any selected directory. Existing valid Git/Synesis state is preserved;
+directories without Git receive direct non-interactive `git init`, followed by
+the normal Synesis initialization service and registry registration. The
+folder-derived name remains read-only. Initialization failures are bounded,
+safe diagnostics rendered inside the folder tile, with an accessible dismiss
+button.
+
+Focused service, registry, and control-plane read-model tests passed. Frontend
+typecheck, lint, production build, and 23 browser tests passed. The rebuilt
+Windows installed UI was launched and the updated Add project dialog was
+visibly verified. The known unrelated aggregate workspace failures remain
+untouched. Evidence:
+`docs/evidence/SYN-061-automatic-project-initialization-2026-09-12.md`.
+
+Exact next action: preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no
+successor is defined.
+
+## 2026-09-12 — SYN-060 native project folder picker
+
+SYN-060 is COMPLETE FOR CURRENT SCOPE. The authenticated local control plane
+owns a native Windows directory picker and returns the selected absolute path
+and folder-derived name. The installed Projects Add project dialog exposes a
+read-only folder tile, does not allow name editing, and submits the exact
+selected path through SYN-059 validation. Linux/macOS picker registration and
+login autostart remain out of scope.
+
+Focused backend and browser verification passed, as did the rebuilt Windows
+installer and live installed UI launch. Evidence:
+`docs/evidence/SYN-060-native-project-folder-picker-2026-09-12.md`.
+
+Exact next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+authoritative successor is defined.
+
 # 2026-09-12 — Final publication-blocker cleanup complete
 
 The publication-hygiene pass is complete for the intentionally dirty
@@ -4940,3 +5063,35 @@ tracked binaries, or temporary production diagnostics were found.
 Approve or redact the documented machine paths during deliberate staging, then
 stage only the classified roadmap files. Do not create SYN-059, alter product
 code, commit, or push in this continuation.
+# 2026-09-12 — SYN-059 activation
+
+SYN-059 is COMPLETE FOR CURRENT SCOPE. The requested slice was limited to main-page project
+filtering and authenticated management of the installation-local known-project
+registry. Existing project files, `.synesis` state, repositories, workspaces,
+and Link identity are outside the mutation boundary. SYN-056 through SYN-058
+remain closed for their current scopes.
+
+The registry register/remove commands, Projects page controls, focused tests,
+and installed rebuild are complete. Evidence is in
+`docs/evidence/SYN-059-project-registry-management-2026-09-12.md`.
+
+Exact next action: preserve the completed state; do not invent a successor or
+commit/push without explicit instruction.
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility complete
+
+SYN-065 is COMPLETE FOR CURRENT SCOPE. The installed daemon rejected `ui`
+requests because its Java `HttpClient` loopback probe failed with the local
+JDK AF_UNIX selector configuration even though the managed project runtime
+returned HTTP 200 from `/api/v1/health`. The probe now uses the compatible
+`HttpURLConnection` transport; no lifecycle, registry, browser, Link, or
+filesystem semantics changed.
+
+Verification passed: focused daemon regression test, source `installDist`,
+Windows runnable installer, supported installer repair, and real installed
+`synesis ui --no-browser --project .` plus `synesis ui --project .` smokes. The
+broader CLI suite was bounded and interrupted after no completion or failure
+output. Evidence:
+`docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+
+Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.

@@ -384,6 +384,7 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
         include("go.mod")
         include("go.sum")
         include("cmd/synesis-mcp/*.go")
+        include("cmd/synesis-folder-picker/*.go")
     })
     inputs.property("bundlePlatform", bundlePlatform)
     inputs.property("hostPlatform", hostPlatform)
@@ -412,11 +413,17 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
             environment["CGO_ENABLED"] = "0"
             for ((binaryName, packagePath) in listOf(
                 "synesis-mcp$suffix" to "./cmd/synesis-mcp",
+                "synesis-folder-picker$suffix" to "./cmd/synesis-folder-picker",
                 "synesis-installer$suffix" to "."
             )) {
                 val output = outputDirectory.resolve(binaryName)
+                val ldflags = if (target.first == "windows" && binaryName.startsWith("synesis-folder-picker")) {
+                    "-s -w -H=windowsgui"
+                } else {
+                    "-s -w"
+                }
                 val process = ProcessBuilder(
-                    "go", "build", "-trimpath", "-ldflags=-s -w", "-o", output.absolutePath, packagePath
+                    "go", "build", "-trimpath", "-ldflags=$ldflags", "-o", output.absolutePath, packagePath
                 ).directory(source).redirectErrorStream(true).apply {
                     environment().putAll(environment)
                 }.start()
@@ -427,9 +434,11 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
             }
         }
         val hostArtifact = outputRoot.resolve(hostPlatform).resolve(if (isWindows) "synesis-mcp.exe" else "synesis-mcp")
+        val hostFolderPicker = outputRoot.resolve(hostPlatform)
+            .resolve(if (isWindows) "synesis-folder-picker.exe" else "synesis-folder-picker")
         val installedBin = layout.buildDirectory.dir("install/synesis/bin").get().asFile
         installedBin.mkdirs()
-        copy { from(hostArtifact); into(installedBin) }
+        copy { from(hostArtifact, hostFolderPicker); into(installedBin) }
     }
 }
 
@@ -523,13 +532,21 @@ val platformBundle = tasks.register("platformBundle") {
         copy { from(runtimeImageDirectory); into(root.resolve("runtime")) }
         val bin = root.resolve("bin")
         bin.mkdirs()
+        val loopbackJvmArg = if (bundlePlatform.get().startsWith("windows")) {
+            " -Djdk.net.unixdomain.tmpdir=%SYNESIS_UNIX_SOCKET_DIR%"
+        } else {
+            ""
+        }
         val nativeLauncher = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
             .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-mcp.exe" else "synesis-mcp")
         val nativeInstaller = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
             .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-installer.exe" else "synesis-installer")
+        val nativeFolderPicker = nativeMcpDirectory.get().asFile.resolve(bundlePlatform.get())
+            .resolve(if (bundlePlatform.get().startsWith("windows")) "synesis-folder-picker.exe" else "synesis-folder-picker")
         require(nativeLauncher.isFile) { "Native MCP launcher missing for ${bundlePlatform.get()}: $nativeLauncher" }
         require(nativeInstaller.isFile) { "Native installer missing for ${bundlePlatform.get()}: $nativeInstaller" }
-        copy { from(nativeLauncher, nativeInstaller); into(bin) }
+        require(nativeFolderPicker.isFile) { "Native folder picker missing for ${bundlePlatform.get()}: $nativeFolderPicker" }
+        copy { from(nativeLauncher, nativeInstaller, nativeFolderPicker); into(bin) }
         if (!bundlePlatform.get().startsWith("windows")) {
             require(bin.resolve("synesis-mcp").setExecutable(true)) {
                 "Unable to mark Unix MCP launcher executable"
@@ -537,9 +554,12 @@ val platformBundle = tasks.register("platformBundle") {
             require(bin.resolve("synesis-installer").setExecutable(true)) {
                 "Unable to mark Unix installer executable"
             }
+            require(bin.resolve("synesis-folder-picker").setExecutable(true)) {
+                "Unable to mark Unix folder picker executable"
+            }
         }
         bin.resolve("synesis.cmd").writeText(
-            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
+            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\nset \"SYNESIS_UNIX_SOCKET_DIR=%PUBLIC%\\s\"\r\nif not exist \"%SYNESIS_UNIX_SOCKET_DIR%\" mkdir \"%SYNESIS_UNIX_SOCKET_DIR%\" >NUL 2>&1\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED$loopbackJvmArg -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
         bin.resolve("synesis").writeText(
             $$"""#!/bin/sh

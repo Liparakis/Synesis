@@ -267,6 +267,12 @@ export interface ServerEvent {
   data: Record<string, unknown>;
 }
 
+export interface ProjectFolderChoice {
+  state: "SELECTED" | "CANCELLED";
+  path: string;
+  name: string;
+}
+
 export class ControlPlaneError extends Error {
   readonly status: number;
   readonly code: string;
@@ -422,6 +428,18 @@ export class ControlPlaneClient {
 
   async selectProject(selectionId: string, projectId: string): Promise<Record<string, unknown>> {
     return this.command<Record<string, unknown>>("select-project", {selectionId, projectId});
+  }
+
+  async registerProject(path: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("register-project", {path});
+  }
+
+  async chooseProject(): Promise<ProjectFolderChoice> {
+    return this.command<ProjectFolderChoice>("choose-project", {});
+  }
+
+  async removeProject(projectId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("remove-project", {projectId});
   }
 
   startEvents(handlers: {

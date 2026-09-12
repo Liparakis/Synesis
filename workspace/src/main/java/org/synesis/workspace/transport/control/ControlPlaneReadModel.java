@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -166,6 +167,58 @@ public final class ControlPlaneReadModel {
    */
   public UUID projectId() {
     return location.projectId();
+  }
+
+  /**
+   * Registers a selected project directory in the installation-local
+   * discovery index, initializing it through the normal application path when
+   * it has not been initialized yet.
+   *
+   * @param root project directory to validate and remember
+   * @throws KnownProjectRegistry.RegistryException when validation or
+   *     persistence fails
+   */
+  public void registerKnownProject(Path root) throws KnownProjectRegistry.RegistryException {
+    if (projectRegistry == null) {
+      throw new KnownProjectRegistry.RegistryException("PROJECT_REGISTRY_UNAVAILABLE",
+          "project registry is unavailable");
+    }
+    try {
+      projectRegistry.register(root);
+    } catch (KnownProjectRegistry.RegistryException notInitialized) {
+      if (!"NOT_FOUND".equals(notInitialized.code())) {
+        throw notInitialized;
+      }
+      try {
+        new ProjectApplicationService().initForRegistration(root);
+        projectRegistry.register(root);
+      } catch (ProjectApplicationService.ProjectApplicationException failure) {
+        throw new KnownProjectRegistry.RegistryException("PROJECT_INITIALIZATION_FAILED",
+            failure.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Removes a non-current project from the installation-local discovery index.
+   *
+   * @param projectId stable project identity to remove
+   * @throws KnownProjectRegistry.RegistryException when removal is not allowed
+   */
+  public void removeKnownProject(UUID projectId) throws KnownProjectRegistry.RegistryException {
+    Objects.requireNonNull(projectId, "project ID");
+    if (projectId.equals(location.projectId())) {
+      throw new KnownProjectRegistry.RegistryException("CURRENT_PROJECT_PROTECTED",
+          "the current runtime project cannot be removed");
+    }
+    if (projectRegistry == null) {
+      throw new KnownProjectRegistry.RegistryException("PROJECT_REGISTRY_UNAVAILABLE",
+          "project registry is unavailable");
+    }
+    if (!projectRegistry.remove(projectId)) {
+      throw new KnownProjectRegistry.RegistryException("PROJECT_NOT_FOUND",
+          "project is not present in the registry");
+    }
   }
 
   /**

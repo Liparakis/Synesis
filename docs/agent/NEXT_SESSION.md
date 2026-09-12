@@ -1,3 +1,105 @@
+## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility closure
+
+SYN-066 is COMPLETE FOR CURRENT SCOPE. The fresh Windows installer now passes
+the short JDK Unix-domain socket directory before starting its bundled JVM,
+removing the workstation-specific loopback bootstrap rejection. The direct
+Java fallback and daemon child inheritance are covered without changing
+protocol, lifecycle, registry, browser, Link, or project-data semantics.
+
+Evidence: `docs/evidence/SYN-066-windows-jdk-loopback-bootstrap-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-066 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not broaden this fix into lifecycle, Link, or cross-network work.
+
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility closure
+
+SYN-065 is COMPLETE FOR CURRENT SCOPE. The installed daemon now recognizes its
+healthy loopback runtime on this Windows/JDK setup, and `synesis ui` opens
+successfully after the supported installer repair. The fix is limited to the
+daemon's local health-probe transport; no project or runtime data was removed.
+
+Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not broaden this fix into lifecycle, Link, or cross-network work.
+
+## 2026-09-12 — SYN-064 actionable Projects preview closure
+
+SYN-064 is COMPLETE FOR CURRENT SCOPE. Development mock mode exposes a working
+in-memory Add project flow and labeled Remove actions for every non-current
+project. The current project remains protected and no durable state is touched.
+
+## Exact next action
+
+Preserve SYN-064 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not broaden the development adapter into production behavior.
+
+## 2026-09-12 — SYN-063 Projects front-page redesign closure
+
+SYN-063 is COMPLETE FOR CURRENT SCOPE. The installed Projects front page has a
+new presentation hierarchy built entirely from the existing registry and
+network snapshot. Existing add, search, status-filter, open/details, remove,
+connection-detail, and network-navigation behavior is preserved.
+
+## Exact next action
+
+Preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not add backend behavior, synthetic dashboard data, or unrelated UI
+changes.
+
+## 2026-09-12 — SYN-062 instant project registry removal closure
+
+SYN-062 is COMPLETE FOR CURRENT SCOPE. The Projects page now hides a
+confirmed removal immediately while the existing authenticated registry
+mutation runs in the background. Successful removal is reconciled with
+authoritative state; failed removal restores the row and shows an error.
+
+Evidence: `docs/evidence/SYN-062-instant-project-registry-removal-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-062 as COMPLETE FOR CURRENT SCOPE. No successor is defined.
+
+## 2026-09-12 — SYN-061 automatic project initialization closure
+
+SYN-061 is COMPLETE FOR CURRENT SCOPE. The Add project folder picker accepts
+any directory, keeps the folder-derived name read-only, initializes Git
+directly when absent, then uses the normal Synesis initialization and registry
+path. Safe failures are displayed inside the folder tile and can be
+dismissed. Focused Java tests, frontend gates, packaging, and the live
+installed dialog passed. The full workspace suite still has the known
+unrelated aggregate failures recorded in the evidence.
+
+Evidence: `docs/evidence/SYN-061-automatic-project-initialization-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-061 as COMPLETE FOR CURRENT SCOPE. No successor is defined; do
+not reopen SYN-060 or add unrelated initialization, routing, or platform work.
+
+## 2026-09-12 — SYN-060 native project folder picker closure
+
+SYN-060 is COMPLETE FOR CURRENT SCOPE. The installed Projects page now opens
+an authenticated native Windows folder picker from the Add project dialog,
+displays the selected folder name read-only, and submits the exact selected
+absolute path through the existing SYN-059 registry validation. No project
+name editing or project-file mutation was added.
+
+Frontend typecheck, lint, production build, 22 browser tests, focused registry
+and control-plane tests, and the rebuilt Windows installer passed. No commit
+or push was made. Evidence:
+`docs/evidence/SYN-060-native-project-folder-picker-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-060 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not invent one, and do not add Linux/macOS registration or login
+autostart.
+
 ## 2026-09-12 — SYN-058 activation and transition checkpoint
 
 SYN-057 is COMPLETE FOR CURRENT SCOPE and remains closed. No authoritative
@@ -3479,3 +3581,26 @@ push was performed.
 
 Exact next action: stage only the classified roadmap files if publication is
 desired, then perform the operator-authorized commit step separately.
+# 2026-09-12 — SYN-059 project registry management
+
+SYN-059 is COMPLETE FOR CURRENT SCOPE. The authenticated add/remove registry
+actions and Projects page filter are implemented and installed. Add validates
+an initialized Synesis project; remove deletes only the registry record and
+does not delete project data. The existing SYN-056/SYN-057/SYN-058 closure
+semantics remain preserved.
+
+Exact next action: preserve the completed roadmap state; no authoritative
+successor exists, and no commit or push is authorized in this continuation.
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility closure
+
+SYN-065 is COMPLETE FOR CURRENT SCOPE. The installed daemon now recognizes its
+healthy loopback runtime on this Windows/JDK setup, and `synesis ui` opens
+successfully after the supported installer repair. The fix is limited to the
+daemon's local health-probe transport; no project or runtime data was removed.
+
+Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not broaden this fix into lifecycle, Link, or cross-network work.

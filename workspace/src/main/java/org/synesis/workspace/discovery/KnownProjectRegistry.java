@@ -148,6 +148,47 @@ public final class KnownProjectRegistry {
   }
 
   /**
+   * Validates and remembers an existing Synesis project directory.
+   *
+   * @param root project directory to register
+   * @return the durable discovery view after registration
+   * @throws RegistryException if the directory is not an initialized Synesis
+   *     project or the registry cannot be updated
+   */
+  public ProjectView register(Path root) throws RegistryException {
+    ProjectApplicationService.ProjectLocation location = validate(
+        Objects.requireNonNull(root, "project root"));
+    observe(location);
+    return projects().stream()
+        .filter(project -> project.projectId().equals(location.projectId()))
+        .findFirst()
+        .orElseThrow(() -> new RegistryException("REGISTRY_PERSISTENCE_FAILED",
+            "registered project is missing from the registry"));
+  }
+
+  /**
+   * Removes one project from this installation's discovery registry.
+   *
+   * <p>This operation never touches the project directory or its local
+   * Synesis state.</p>
+   *
+   * @param projectId stable project identity to remove
+   * @return {@code true} when an entry was removed, otherwise {@code false}
+   * @throws RegistryException if the registry cannot be read or persisted
+   */
+  public boolean remove(UUID projectId) throws RegistryException {
+    Objects.requireNonNull(projectId, "project ID");
+    return locked(() -> {
+      List<Entry> entries = readEntries();
+      boolean removed = entries.removeIf(entry -> entry.projectId().equals(projectId));
+      if (removed) {
+        writeEntries(entries);
+      }
+      return removed;
+    });
+  }
+
+  /**
    * Reads known projects without claiming any runtime is live.
    *
    * @return immutable discovery views

@@ -82,6 +82,19 @@ final class ProjectApplicationServiceTest {
   }
 
   @Test
+  void initializesGitAndSynesisForUninitializedRegistrationFolder() throws Exception {
+    Path root = Files.createTempDirectory("synesis-registration-");
+
+    ProjectApplicationService.InitResult initialized =
+        new ProjectApplicationService().initForRegistration(root);
+
+    assertEquals(ProjectApplicationService.InitStatus.SUCCESS, initialized.status());
+    assertTrue(Files.isDirectory(root.resolve(".git")));
+    assertTrue(Files.exists(root.resolve(".synesis/project.json")));
+    assertEquals(40, git(root, "rev-parse", "--verify", "HEAD").length());
+  }
+
+  @Test
   void preservesUserTextAndReplacesOnlyManagedSection() throws Exception {
     Path root = Files.createTempDirectory("synesis-agents-");
     String existing = "# Project rules\n\nKeep this text.\n\n"

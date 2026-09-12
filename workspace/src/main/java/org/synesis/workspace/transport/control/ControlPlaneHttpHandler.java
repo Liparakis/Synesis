@@ -2,12 +2,16 @@ package org.synesis.workspace.transport.control;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import java.awt.GraphicsEnvironment;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -22,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeUnit;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -667,8 +672,135 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
       case "connect" -> connect(exchange, body);
       case "cancel" -> cancel(exchange, body);
       case "select-project" -> selectProject(exchange, body);
+      case "choose-project" -> chooseProject(exchange);
+      case "register-project" -> registerProject(exchange, body);
+      case "remove-project" -> removeProject(exchange, body);
       default -> throw failure(404, "NOT_FOUND", "control-plane command not found");
     }
+  }
+
+  private void chooseProject(HttpExchange exchange) throws IOException, ApiFailure {
+    if (GraphicsEnvironment.isHeadless() || !isWindows()) {
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker is unavailable");
+    }
+    Path picker = nativeFolderPicker();
+    if (picker == null) {
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker is unavailable");
+    }
+    final Process process;
+    try {
+      process = new ProcessBuilder(picker.toString())
+          .redirectErrorStream(true)
+          .start();
+      if (!process.waitFor(10, TimeUnit.MINUTES)) {
+        process.destroyForcibly();
+        throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+            "the Windows Explorer folder picker timed out");
+      }
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker was interrupted");
+    } catch (IOException unavailable) {
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker is unavailable");
+    }
+    String output = removeTerminalLineBreak(
+        new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+    if (process.exitValue() == 2 && output.isEmpty()) {
+      sendJson(exchange, 200, Map.of("apiVersion", "v1", "state", "CANCELLED",
+          "path", "", "name", ""));
+      return;
+    }
+    if (process.exitValue() != 0 || output.isEmpty()) {
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker is unavailable");
+    }
+    final Path selected;
+    try {
+      selected = Path.of(output).toAbsolutePath().normalize();
+    } catch (InvalidPathException malformed) {
+      throw failure(503, "PROJECT_PICKER_UNAVAILABLE",
+          "the Windows Explorer folder picker returned an invalid folder");
+    }
+    Path fileName = selected.getFileName();
+    sendJson(exchange, 200, Map.of("apiVersion", "v1", "state", "SELECTED",
+        "path", selected.toString(), "name", fileName == null ? selected.toString() : fileName.toString()));
+  }
+
+  private static boolean isWindows() {
+    return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+  }
+
+  private static Path nativeFolderPicker() {
+    String classPath = System.getProperty("java.class.path", "");
+    String separator = java.util.regex.Pattern.quote(System.getProperty("path.separator"));
+    for (String entry : classPath.split(separator)) {
+      try {
+        Path classPathEntry = Path.of(entry).toAbsolutePath().normalize();
+        if ("synesis-cli.jar".equalsIgnoreCase(String.valueOf(classPathEntry.getFileName()))) {
+          Path payload = classPathEntry.getParent().getParent();
+          Path picker = payload.resolve("bin").resolve("synesis-folder-picker.exe");
+          if (Files.isRegularFile(picker)) {
+            return picker;
+          }
+        }
+      } catch (InvalidPathException | NullPointerException ignored) {
+        // Continue searching the remaining classpath entries.
+      }
+    }
+    return null;
+  }
+
+  private static String removeTerminalLineBreak(String value) {
+    if (value.endsWith("\r\n")) {
+      return value.substring(0, value.length() - 2);
+    }
+    return value.endsWith("\n") ? value.substring(0, value.length() - 1) : value;
+  }
+
+  private void registerProject(HttpExchange exchange, Map<String, Object> body)
+      throws IOException, ApiFailure {
+    String rawPath = text(body, "path", true, 4_096);
+    final Path path;
+    try {
+      path = Path.of(rawPath).toAbsolutePath().normalize();
+    } catch (InvalidPathException malformed) {
+      throw failure(400, "PROJECT_PATH_INVALID", "project path is invalid");
+    }
+    try {
+      readModel.registerKnownProject(path);
+    } catch (org.synesis.workspace.discovery.KnownProjectRegistry.RegistryException failure) {
+      throw registryFailure(failure);
+    }
+    sendJson(exchange, 200, Map.of("apiVersion", "v1", "state", "REGISTERED",
+        "projects", readModel.knownProjects()));
+  }
+
+  private void removeProject(HttpExchange exchange, Map<String, Object> body)
+      throws IOException, ApiFailure {
+    UUID projectId = uuid(text(body, "projectId", true, 64), "projectId");
+    try {
+      readModel.removeKnownProject(projectId);
+    } catch (org.synesis.workspace.discovery.KnownProjectRegistry.RegistryException failure) {
+      throw registryFailure(failure);
+    }
+    sendJson(exchange, 200, Map.of("apiVersion", "v1", "state", "REMOVED",
+        "projectId", projectId.toString(), "projects", readModel.knownProjects()));
+  }
+
+  private static ApiFailure registryFailure(
+      org.synesis.workspace.discovery.KnownProjectRegistry.RegistryException failure) {
+    int status = switch (failure.code()) {
+      case "CURRENT_PROJECT_PROTECTED", "PROJECT_NOT_FOUND", "IDENTITY_MISMATCH",
+          "REGISTRY_FULL" -> 409;
+      case "NOT_FOUND", "CONFLICT", "MALFORMED", "PROJECT_INVALID" -> 400;
+      case "GIT_INIT_FAILED", "PROJECT_INITIALIZATION_FAILED" -> 400;
+      default -> 503;
+    };
+    return failure(status, failure.code(), failure.getMessage());
   }
 
   private void selection(HttpExchange exchange, String rawSelectionId)

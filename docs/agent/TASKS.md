@@ -1,3 +1,227 @@
+## SYN-066
+
+### Windows JDK loopback bootstrap compatibility — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-065 is COMPLETE FOR CURRENT SCOPE.
+- Primary goal: make a fresh installed Synesis CLI process create its local
+  loopback server on this Windows/JDK environment without a shell-provided
+  workaround.
+- Scope: pass the JDK Unix-domain socket temporary-directory property through
+  the generated Windows launcher before JVM startup, retain the in-process
+  fallback for direct Java launches, and add a focused regression test. No
+  protocol, lifecycle, registry, browser, Link, or project-data behavior
+  changes.
+- Safety boundary: use only the existing OS temporary directory; preserve an
+  explicit `JAVA_OPTS` override and do not mutate project data.
+- Deferred-register review: no deferred capability is activated.
+- Acceptance criteria: a fresh `synesis coordination serve` and
+  `synesis ui --no-browser --project .` succeed without `JAVA_TOOL_OPTIONS`;
+  focused CLI tests and a rebuilt installer pass.
+- Implementation result: the generated Windows launcher now creates the
+  bounded short socket directory `%PUBLIC%\s` and passes
+  `-Djdk.net.unixdomain.tmpdir` before JVM startup. Direct Java launches retain
+  an in-process fallback, and daemon-spawned child runtimes inherit the
+  property without overwriting an explicit value.
+- Verification: focused `SynesisCliParsingTest` passed; the full runnable
+  Windows installer rebuilt successfully; supported repair completed with
+  `REPAIR_RESULT=SUCCESS`; a clean installed `synesis coordination serve`
+  succeeded without `JAVA_TOOL_OPTIONS`; and both installed
+  `synesis ui --no-browser --project .` and `synesis ui --project .` succeeded,
+  with the latter returning `SYNESIS_UI_OPENED`.
+- Closure evidence: `docs/evidence/SYN-066-windows-jdk-loopback-bootstrap-2026-09-12.md`.
+- Immediate next action: preserve SYN-066 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+## SYN-065
+
+### Windows daemon health-probe compatibility — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-056 installed daemon shell is COMPLETE FOR CURRENT SCOPE;
+  SYN-064 is COMPLETE FOR CURRENT SCOPE.
+- Primary goal: allow `synesis ui` to reuse a healthy daemon-managed project
+  runtime on this Windows/JDK environment.
+- Scope: replace only the daemon's local runtime health probe transport and add
+  a focused regression test.
+- Safety boundary: no project lifecycle, registry, browser, Link, authority,
+  filesystem, or remote behavior changes; no process cleanup is part of the
+  production fix.
+- Deferred-register review: no deferred capability is activated.
+- Acceptance criteria: a healthy loopback runtime is recognized without the
+  JDK HttpClient AF_UNIX failure; the daemon UI request succeeds; focused CLI
+  tests, install/build verification, and a real `synesis ui --no-browser`
+  smoke pass.
+- Implementation result: the daemon now probes the local runtime with the
+  Windows-compatible `HttpURLConnection` path, while the authenticated
+  daemon request and runtime lifecycle remain unchanged. The regression test
+  covers a healthy loopback runtime.
+- Verification: focused `DaemonServerTest` passed; source `installDist` and
+  Windows runnable installer builds passed; the repaired installed command
+  accepted both `synesis ui --no-browser --project .` and `synesis ui
+  --project .`, returning `SYNESIS_UI_OPENED`. The broader `:cli:test` run was
+  bounded and interrupted after it produced no completion or failure output.
+- Closure evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+- Immediate next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+## SYN-064
+
+### Actionable Projects Preview — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-063 is COMPLETE FOR CURRENT SCOPE.
+- Primary goal: make the development mock preview expose and safely exercise
+  the existing Add project and non-current Remove project controls.
+- Scope: provide an in-memory development-only registry client to the existing
+  Projects view and make the project removal action visibly labeled.
+- Safety boundary: no production control-plane, registry, filesystem, routing,
+  Link, or authority behavior changes; mock actions remain process-local.
+- Deferred-register review: no deferred capability is activated. This only
+  exercises existing authenticated product actions in the development fixture.
+- Acceptance criteria: Add project is visible in mock mode; non-current cards
+  expose a labeled Remove action; current-project protection remains visible;
+  mock add/remove changes only mock state; frontend checks and rendered QA pass.
+- Implementation result: mock mode now supplies an in-memory registry adapter;
+  Add and non-current Remove flows work without touching durable state, and
+  project removal is visibly labeled.
+- Verification: typecheck, lint, 26 frontend tests, production build, repository
+  browser QA, and interactive mock add/remove checks passed.
+- Closure evidence: `docs/evidence/SYN-064-actionable-projects-preview-2026-09-12.md`.
+- Immediate next action: preserve SYN-064 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+## SYN-063
+
+### Projects Front-Page Redesign — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 through SYN-062 are COMPLETE FOR CURRENT SCOPE.
+- Primary goal: redesign the installed Projects front page into a clearer,
+  more intentional operator surface while preserving every existing registry,
+  routing, and connection behavior.
+- Scope: improve the page hierarchy, responsive composition, project discovery,
+  project-row/card presentation, real installation summaries, connection
+  summary, interaction states, and accessibility using only the current
+  control-plane snapshot and actions.
+- Safety boundary: no backend, route, protocol, registry, Link, or authority
+  changes; no invented metrics, analytics, actions, settings, or durable state.
+- Acceptance criteria: add/search/filter/open/remove and connection-detail
+  behavior remain intact; empty and filtered states remain truthful; keyboard
+  focus and responsive layouts remain usable; frontend typecheck, lint, tests,
+  and production build pass; rendered Projects-page QA passes at 2560x1440,
+  1920x1080, 1280x800, and 375x812 without document overflow.
+- Implementation result: the Projects front page now has a compact real-data
+  overview, labeled discovery controls, responsive project cards, and a clearer
+  runtime-connections panel. Existing actions and semantics are preserved.
+- Closure evidence: `docs/evidence/SYN-063-projects-front-page-redesign-2026-09-12.md`.
+- Immediate next action: preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+## SYN-062
+
+### Instant Project Registry Removal — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 and SYN-061 are complete for their current scopes.
+- Primary goal: make removal from the Projects registry feel immediate while
+  preserving the real authenticated registry mutation and truthful recovery.
+- Scope: optimistically hide the confirmed project row, run the existing
+  removal command without blocking the page, reconcile with authoritative state
+  when it completes, and restore the row with a bounded error if removal fails.
+- Safety boundary: never delete project files, `.synesis` state, repositories,
+  runtimes, or Link identity; do not fake durable success or add a second
+  registry store.
+- Implementation result: the Projects page now hides a confirmed removal
+  immediately while the existing authenticated command completes in the
+  background. Success reconciles with the authoritative snapshot; failure
+  restores the row and shows a bounded error.
+- Closure evidence: `docs/evidence/SYN-062-instant-project-registry-removal-2026-09-12.md`.
+- Immediate next action: preserve SYN-062 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+
+## SYN-061
+
+### Automatic Project Initialization from Folder Picker — activated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 and SYN-060 complete for their current scopes.
+- Primary goal: allow the authenticated Add project folder picker to accept any
+  directory and prepare it through the existing Git and Synesis initialization
+  paths before registry registration.
+- Scope: preserve valid Git/Synesis projects; for directories without Git,
+  perform direct non-interactive `git init` and then normal `synesis init`;
+  surface bounded initialization failures inside the folder tile with a
+  dismiss button; keep the folder-derived name read-only.
+- Safety boundary: no shell command construction, project-name editing,
+  routing changes, persistent project preference, or changes to project files
+  beyond the existing initialization contract.
+- Immediate next action: preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no
+  successor is defined.
+- Implementation result: Add project now accepts any selected directory. A
+  valid existing Git/Synesis project is reused; a directory without Git is
+  initialized with direct non-interactive `git init` followed by the normal
+  Synesis initialization path. Initialization failures are returned as safe
+  bounded errors and rendered inside the folder tile with a dismiss button.
+- Closure evidence: `docs/evidence/SYN-061-automatic-project-initialization-2026-09-12.md`.
+
+## SYN-060
+
+### Native Project Folder Picker — Windows Explorer correction — reactivated 2026-09-12
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 complete for its current scope.
+- Primary goal: let the installed Projects page choose a project folder through
+  the Windows Explorer-style native folder picker rather than the legacy Swing
+  chooser.
+- Scope: add one authenticated local picker command; return the selected
+  absolute folder path and folder-derived display name; register the selected
+  path through the existing SYN-059 validation and registry mutation path.
+- Safety boundary: the browser cannot provide an absolute local path itself;
+  the local control plane owns the native picker. The selected folder remains
+  untrusted until existing project validation accepts it. No project name
+  editing, project-file deletion, shell invocation, or new project semantics.
+- Acceptance criteria: the Windows Explorer-style picker opens from the Add
+  project control; selected
+  folder name is displayed read-only; registration uses the exact selected
+  path; cancel is side-effect free; headless/unavailable picker fails closed;
+  authenticated CSRF protection remains required; focused UI and backend
+  tests pass.
+- Implementation result: the authenticated control-plane contract and read-only
+  folder tile are retained. A bundled Windows helper now opens the Explorer
+  shell `IFileDialog` in folder-selection mode and returns the exact selected
+  path through a direct process boundary.
+- Immediate next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+- Closure evidence: `docs/evidence/SYN-060-native-project-folder-picker-2026-09-12.md`.
+
+## SYN-059
+
+### Main Project Registry Management and Filtering — activated 2026-09-12
+
+- Status: COMPLETE
+- Dependencies: SYN-056, SYN-057, and SYN-058 are COMPLETE FOR CURRENT
+  SCOPE and remain closed.
+- Primary goal: make the installed Projects page useful as the operator's
+  registry surface without moving project authority into the browser.
+- Scope: retain and refine project search/filtering; add an authenticated
+  main-page action to register an existing initialized Synesis project; add an
+  authenticated action to remove a project from the installation registry.
+- Safety boundary: registration validates the target through the existing
+  ProjectApplicationService; removal deletes only the registry entry and
+  never project files, `.synesis` state, repositories, workspaces, or Link
+  identity. The current project cannot be removed while its runtime owns the
+  open control plane.
+- Acceptance criteria: add/filter/remove controls are accessible and
+  responsive; add rejects non-Synesis paths and duplicate/conflicting
+  identities; remove is idempotent and ownership-safe; authenticated CSRF
+  protection remains required; snapshots refresh after successful mutation;
+  focused backend and browser tests pass; unrelated aggregate failures remain
+  documented and untouched.
+- Immediate next action: preserve SYN-059 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+- Closure evidence: `docs/evidence/SYN-059-project-registry-management-2026-09-12.md`.
+
 ## Final publication-blocker cleanup — 2026-09-12
 
 - Status: COMPLETE as a read-only review; no new task created.

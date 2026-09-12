@@ -77,6 +77,29 @@ final class SynesisCliParsingTest {
         .resolve("identity.bin")));
   }
 
+  @Test
+  void configuresWindowsLoopbackSocketDirectoryWithoutOverwritingExplicitValue() {
+    String previous = System.getProperty("jdk.net.unixdomain.tmpdir");
+    try {
+      System.clearProperty("jdk.net.unixdomain.tmpdir");
+      SynesisCli.configureWindowsLoopbackSocketDirectory();
+      if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+        assertTrue(System.getProperty("jdk.net.unixdomain.tmpdir", "")
+            .endsWith("\\s") || System.getProperty("jdk.net.unixdomain.tmpdir", "")
+            .endsWith("/s"));
+      }
+      System.setProperty("jdk.net.unixdomain.tmpdir", "explicit-value");
+      SynesisCli.configureWindowsLoopbackSocketDirectory();
+      assertEquals("explicit-value", System.getProperty("jdk.net.unixdomain.tmpdir"));
+    } finally {
+      if (previous == null) {
+        System.clearProperty("jdk.net.unixdomain.tmpdir");
+      } else {
+        System.setProperty("jdk.net.unixdomain.tmpdir", previous);
+      }
+    }
+  }
+
   /**
    * Holds the isolated CLI invocation resources used by parsing tests.
    */

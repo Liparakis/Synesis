@@ -1,3 +1,144 @@
+## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility
+
+Diagnosed the remaining clean-shell failure after the UI rebuild: the bundled
+Windows JDK could not establish its local HTTP server because its default
+Unix-domain socket temporary path was too long. A short `%PUBLIC%\s`
+directory succeeds on this workstation. Added the directory/property to the
+generated Windows launcher before JVM startup, retained direct-Java fallback
+and daemon-child inheritance, rebuilt the current UI into the installer, and
+repaired the supported installation.
+
+Verification: focused bootstrap regression test, full runnable installer,
+supported repair, clean installed `coordination serve`, installed
+`ui --no-browser`, and installed browser-opening `ui` all passed without
+`JAVA_TOOL_OPTIONS`; the browser-opening command returned `SYNESIS_UI_OPENED`.
+No project data, protocol, lifecycle, registry, browser, Link, or remote state
+was changed. No commit or push was made.
+
+Exact next action: preserve SYN-066 as COMPLETE FOR CURRENT SCOPE; no
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility
+
+Diagnosed `SYNESIS_DAEMON_ERROR=REQUEST_REJECTED` from the installed
+`synesis ui` command. The managed runtime was healthy, but the daemon's JDK
+`HttpClient` loopback probe failed with `Unable to establish loopback
+connection`; a classic `HttpURLConnection` probe returned HTTP 200. Replaced
+only that local probe transport, added a regression test, rebuilt the Windows
+installer, repaired the installation through the supported installer, and
+verified both no-browser and browser-opening UI commands. No commit or push
+was made.
+
+Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE; no
+authoritative successor is defined.
+
+## 2026-09-12 — SYN-064 actionable Projects preview
+
+Corrected the development preview after user feedback exposed that the Add and
+project Remove controls were hidden because mock mode had no registry client.
+Added a development-only in-memory adapter, changed project removal to a labeled
+button, exercised add/remove in the open browser, and preserved current-project
+protection. Typecheck, lint, 26 tests, build, and browser QA passed. No durable
+registry or filesystem state changed.
+
+## 2026-09-12 — SYN-062 instant project registry removal
+
+The Projects page now applies an optimistic removal state after confirmation.
+The row and confirmation modal disappear immediately while the existing
+authenticated `remove-project` command completes in the background. Success
+refreshes authoritative state; failure restores the row and shows the
+existing bounded registry error. No durable semantics or project data
+boundaries changed.
+
+Verification: 23 focused frontend tests, typecheck, lint, and production
+build passed. Focused Gradle registry tests were blocked before execution by
+the known workstation loopback/daemon failure. CP-0922 recorded; no commit
+or push was performed.
+
+## 2026-09-12 — SYN-060 Windows Explorer folder picker correction
+
+Replaced the legacy Swing `JFileChooser` with a bundled Windows-native helper
+that invokes the shell `IFileDialog` in folder-selection mode. The authenticated
+control-plane response, exact selected path, read-only folder name, validation,
+and initialization flow remain unchanged.
+
+Verification: Windows helper compilation, workspace compilation, runnable
+installer build, bundle/install presence checks, bounded native-helper process
+smoke check, and installed UI refresh passed. No commit or push was made.
+
+## Exact next action
+
+Preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no successor is defined.
+
+## 2026-09-12 — SYN-061 folder picker error layout polish
+
+Moved the folder-initialization error panel above the folder picker and placed
+its dismiss X at the right edge. The existing message, dismissal action, picker
+accessibility, and initialization behavior are unchanged.
+
+Verification: frontend typecheck, lint, 23 browser tests, production build,
+Windows installer rebuild/reinstall, and live installed dialog verification
+passed. The focused UI test verifies the error-before-picker DOM order. No
+commit or push was made.
+
+## Exact next action
+
+Preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no successor is defined.
+
+## 2026-09-12 — SYN-061 folder picker title polish
+
+Removed the redundant `Project folder` title above the native Add project
+picker. The picker remains a single accessible button, keeps its read-only
+folder-derived name, and retains all existing initialization behavior.
+
+Verification: frontend typecheck, lint, 23 browser tests, and production build
+passed; the Windows installer was rebuilt and reinstalled; the live installed
+dialog was visually and accessibility-verified without the title. No commit or
+push was made.
+
+## Exact next action
+
+Preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no successor is defined.
+
+## 2026-09-12 — SYN-061 automatic project initialization closure
+
+Activated SYN-061 after SYN-060 closure because the operator requested that
+the native folder picker accept arbitrary directories. Added the smallest
+reuse path: existing valid projects continue through registry validation;
+directories without Git use direct `git init` and then the normal Synesis
+initialization service. The browser copy now describes arbitrary folders and
+initialization failures render inside the folder tile with an accessible X
+dismiss control. The folder-derived name remains non-editable.
+
+Verification: focused Java service/registry/read-model tests passed; frontend
+typecheck, lint, build, and 23 browser tests passed; `:cli:installDist`
+and the runnable Windows installer passed; the rebuilt installed UI visibly
+showed the corrected Add project dialog. The full workspace suite reported
+391 tests with 63 known unrelated failures; no aggregate repair was attempted.
+No commit or push was made.
+
+Evidence: `docs/evidence/SYN-061-automatic-project-initialization-2026-09-12.md`.
+
+## Exact next action
+
+Preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no successor is defined.
+
+## 2026-09-12 — SYN-060 native project folder picker
+
+Added the authenticated `choose-project` control-plane command backed by the
+native Windows directory picker. The Projects Add project dialog now uses a
+read-only folder tile, derives the displayed name from the selected folder,
+and forwards the exact absolute path through the existing registry mutation
+boundary. Cancel is side-effect free and headless picker use fails closed.
+
+Frontend typecheck, lint, production build, 22 Vitest tests, focused Gradle
+registry/control-plane tests, installer rebuild, and fresh installation
+passed. The live installed page was opened and the Add project dialog was
+visibly verified. No commit or push was made.
+
+Exact next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+authoritative successor is defined.
+
 ## 2026-09-12 — SYN-057 installed acceptance and current-scope closure
 
 Rebuilt the canonical installed distribution and completed a fresh D:-backed
@@ -7537,3 +7678,51 @@ independent cherry-picks: SYN-056 foundation, SYN-057 routing/selection,
 SYN-058 native Windows activation, and docs/evidence. A two-commit complete
 product-chain-plus-docs alternative is safer if independent cherry-picks are
 required.
+# 2026-09-12 — SYN-059 project registry management completed
+
+Activated and completed SYN-059 for the requested main-page project filter and registry
+management controls. The existing UI already has a name/identity/path/status
+search field and focused coverage. The missing production seam is an
+authenticated control-plane register/remove command backed by
+KnownProjectRegistry. The implementation mutates registry metadata only;
+focused Java/UI verification, packaging, installation, and doctor checks pass.
+Closure evidence: `docs/evidence/SYN-059-project-registry-management-2026-09-12.md`.
+## 2026-09-12 — SYN-061 Add project copy polish
+
+Shortened the Add project explanatory sentence to `Choose a folder to add.
+Existing state is preserved.` The installed dialog was rebuilt and visibly
+verified with the sentence rendered on one line. No behavior or backend
+semantics changed. No commit or push was made.
+
+## Exact next action
+
+Preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no successor is defined.
+## 2026-09-12 — SYN-063 Projects front-page redesign
+
+- Activated a new presentation-only task after reviewing the deferred register
+  and existing dirty worktree.
+- Rebuilt the Projects front-page hierarchy around truthful registry, live
+  runtime, and peer-connection counts.
+- Replaced the table-like project rows with responsive cards while preserving
+  add, search, filter, open/details, remove, and connection interactions.
+- Tightened the first visual pass after the supplied 1555x457 proportions showed
+  that the overview delayed project access too far below the fold.
+- Final verification passed: typecheck, lint, 25 tests, production build,
+  repository multi-viewport browser QA, interactive search/filter and connection
+  detail exploration, mobile inspection, and `git diff --check`.
+- Evidence: `docs/evidence/SYN-063-projects-front-page-redesign-2026-09-12.md`.
+- Exact next action: preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+## 2026-09-12 — SYN-065 Windows daemon health-probe compatibility
+
+Diagnosed `SYNESIS_DAEMON_ERROR=REQUEST_REJECTED` from the installed
+`synesis ui` command. The managed runtime was healthy, but the daemon's JDK
+`HttpClient` loopback probe failed with `Unable to establish loopback
+connection`; a classic `HttpURLConnection` probe returned HTTP 200. Replaced
+only that local probe transport, added a regression test, rebuilt the Windows
+installer, repaired the installation through the supported installer, and
+verified both no-browser and browser-opening UI commands. No commit or push
+was made.
+
+Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE; no
+authoritative successor is defined.

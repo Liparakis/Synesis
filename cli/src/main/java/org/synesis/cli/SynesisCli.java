@@ -1,5 +1,8 @@
 package org.synesis.cli;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
@@ -260,11 +263,32 @@ public final class SynesisCli {
   }
 
   /**
+   * Configures the Windows JDK loopback socket directory when the launcher did not provide one.
+   */
+  static void configureWindowsLoopbackSocketDirectory() {
+    if (!System.getProperty("os.name", "").toLowerCase().contains("win")
+        || !System.getProperty("jdk.net.unixdomain.tmpdir", "").isBlank()) {
+      return;
+    }
+    String publicDirectory = System.getenv("PUBLIC");
+    Path directory = publicDirectory == null || publicDirectory.isBlank()
+        ? Path.of(System.getProperty("java.io.tmpdir"), "s")
+        : Path.of(publicDirectory, "s");
+    try {
+      Files.createDirectories(directory);
+      System.setProperty("jdk.net.unixdomain.tmpdir", directory.toString());
+    } catch (IOException ignored) {
+      // Preserve the JDK's normal failure behavior if the fallback directory cannot be created.
+    }
+  }
+
+  /**
    * Runs the process entry point and exits with the command result.
    *
    * @param arguments process arguments
    */
   public static void main(String[] arguments) {
+    configureWindowsLoopbackSocketDirectory();
     System.exit(execute(arguments, CliRuntime.defaults(new ConsoleTerminal())));
   }
 }

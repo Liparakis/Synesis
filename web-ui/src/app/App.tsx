@@ -27,6 +27,7 @@ import {
   type KnownProjectSnapshot,
   type NetworkPeerSnapshot,
   type NetworkSnapshot,
+  type ProjectFolderChoice,
   type ProjectSelection,
   type Snapshot,
   clearSelectionId,
@@ -37,6 +38,7 @@ import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "
 export type View = ProjectView | "projects";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
 type CoordinationTab = "claims" | "tasks" | "capabilities" | "ownership";
+type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProject">;
 
 function asLiveRegistryProject(project: NonNullable<Snapshot["project"]>): KnownProjectSnapshot {
   return {
@@ -67,6 +69,19 @@ function projectSelectionMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Project selection is unavailable.";
 }
 
+function projectRegistryMessage(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code : "";
+  if (code === "NOT_FOUND") return "That folder could not be found.";
+  if (code === "IDENTITY_MISMATCH") return "That project identity is already registered at another path.";
+  if (code === "CURRENT_PROJECT_PROTECTED") return "The project serving this page cannot be removed from its own registry.";
+  if (code === "PROJECT_NOT_FOUND") return "That project is no longer in the registry.";
+  if (code === "REGISTRY_FULL") return "The installation project registry is full.";
+  if (code === "GIT_INIT_FAILED") return "Git could not be initialized in that folder.";
+  if (code === "PROJECT_INITIALIZATION_FAILED") return "Synesis could not initialize that folder.";
+  return error instanceof Error ? error.message : "Project registry update failed.";
+}
+
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute());
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -77,6 +92,39 @@ export function App() {
   const clientRef = useRef<ControlPlaneClient | null>(null);
   const [mockRequested] = useState(() => import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1");
   const mockMode = import.meta.env.DEV && mockRequested;
+  const registryClient: ProjectRegistryClient | null = mockMode ? {
+    chooseProject: async (): Promise<ProjectFolderChoice> => ({
+      state: "SELECTED",
+      path: "C:\\Projects\\New project",
+      name: "New project",
+    }),
+    registerProject: async (path: string): Promise<Record<string, unknown>> => {
+      setSnapshot((current) => {
+        if (!current || current.knownProjects.some((project) => project.path === path)) return current;
+        const observedAt = new Date().toISOString();
+        return {
+          ...current,
+          knownProjects: [...current.knownProjects, {
+            id: "proj_preview",
+            name: path.split(/[\\/]/).filter(Boolean).at(-1) ?? "New project",
+            path,
+            createdAt: observedAt,
+            firstObservedAt: observedAt,
+            lastObservedAt: observedAt,
+            status: "INACTIVE",
+          }],
+        };
+      });
+      return {state: "REGISTERED"};
+    },
+    removeProject: async (projectId: string): Promise<Record<string, unknown>> => {
+      setSnapshot((current) => current ? {
+        ...current,
+        knownProjects: current.knownProjects.filter((project) => project.id !== projectId),
+      } : current);
+      return {state: "REMOVED"};
+    },
+  } : clientRef.current;
 
   useEffect(() => {
     const handlePopState = () => setRoute(parseRoute());
@@ -205,6 +253,10 @@ export function App() {
           <div className="page-frame registry-frame">
             <ProjectsView
               snapshot={snapshot}
+              client={registryClient}
+              onSnapshotRefresh={async () => {
+                if (clientRef.current) setSnapshot(await clientRef.current.snapshot());
+              }}
               onOpenProject={(project) => navigate({kind: "project", projectId: project.id, view: "overview"})}
               onOpenNetwork={snapshot.project ? () => navigate({kind: "project", projectId: snapshot.project!.id, view: "network"}) : undefined}
             />
@@ -289,56 +341,170 @@ export function ProjectSelectionView({selection, client, onCompleted, onError}: 
   </div>;
 }
 
-export function ProjectsView({snapshot, onOpenProject, onOpenNetwork}: {snapshot: Snapshot; onOpenProject?: (project: KnownProjectSnapshot) => void; onOpenNetwork?: () => void}) {
+export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject, onOpenNetwork}: {snapshot: Snapshot; client?: ProjectRegistryClient | null; onSnapshotRefresh?: () => Promise<void>; onOpenProject?: (project: KnownProjectSnapshot) => void; onOpenNetwork?: () => void}) {
   const projects = registryProjects(snapshot);
   const [query, setQuery] = useState("");
-  const liveCount = projects.filter((project) => project.status === "LIVE").length;
+  const [statusFilter, setStatusFilter] = useState<KnownProjectSnapshot["status"] | "ALL">("ALL");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPath, setAddPath] = useState("");
+  const [addProjectName, setAddProjectName] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<KnownProjectSnapshot | null>(null);
+  const [pendingRemovalIds, setPendingRemovalIds] = useState<string[]>([]);
+  const [mutationError, setMutationError] = useState("");
+  const [removalError, setRemovalError] = useState("");
+  const [mutationBusy, setMutationBusy] = useState(false);
+  useEffect(() => {
+    if (!removalError) return;
+    const timeout = window.setTimeout(() => setRemovalError(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [removalError]);
+  const visibleProjects = projects.filter((project) => !pendingRemovalIds.includes(project.id));
+  const liveCount = visibleProjects.filter((project) => project.status === "LIVE").length;
+  const connectionCount = snapshot.network.peers.length;
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const filteredProjects = normalizedQuery
-    ? projects.filter((project) => [project.name, project.id, project.path, project.status].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)))
-    : projects;
+  const filteredProjects = visibleProjects.filter((project) => {
+    const matchesQuery = !normalizedQuery
+      || [project.name, project.id, project.path, project.status]
+        .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+    return matchesQuery && (statusFilter === "ALL" || project.status === statusFilter);
+  });
+
+  const refreshRegistry = async () => {
+    await onSnapshotRefresh?.();
+  };
+
+  const addProject = async () => {
+    if (!client || !addPath || mutationBusy) return;
+    setMutationBusy(true);
+    setMutationError("");
+    try {
+      await client.registerProject(addPath);
+      await refreshRegistry();
+      setAddPath("");
+      setAddOpen(false);
+    } catch (error) {
+      setMutationError(projectRegistryMessage(error));
+    } finally {
+      setMutationBusy(false);
+    }
+  };
+
+  const chooseProjectFolder = async () => {
+    if (!client || mutationBusy) return;
+    setMutationBusy(true);
+    setMutationError("");
+    try {
+      const choice = await client.chooseProject();
+      if (choice.state === "SELECTED") {
+        setAddPath(choice.path);
+        setAddProjectName(choice.name);
+      }
+    } catch (error) {
+      setMutationError(projectRegistryMessage(error));
+    } finally {
+      setMutationBusy(false);
+    }
+  };
+
+  const removeProject = async () => {
+    if (!client || !removeTarget || mutationBusy) return;
+    const target = removeTarget;
+    setRemoveTarget(null);
+    setMutationError("");
+    setPendingRemovalIds((current) => current.includes(target.id) ? current : [...current, target.id]);
+    void (async () => {
+      try {
+        await client.removeProject(target.id);
+        await refreshRegistry();
+        setPendingRemovalIds((current) => current.filter((id) => id !== target.id));
+      } catch (error) {
+        setPendingRemovalIds((current) => current.filter((id) => id !== target.id));
+        setRemovalError(projectRegistryMessage(error));
+      }
+    })();
+  };
+
   return (
     <div className="registry-page-layout">
-      <section className="registry-section" aria-labelledby="registry-title">
+      <section className="registry-hero panel" aria-labelledby="registry-title">
+        <div className="registry-hero-copy">
+          <p className="registry-kicker"><Activity size={14} aria-hidden="true"/>Local workspace registry</p>
+          <h1 id="registry-title">Projects</h1>
+          <p>Open a workspace, inspect its runtime, or bring another local folder into Synesis.</p>
+        </div>
+        {client && <button className="button button-primary registry-add-button" type="button" onClick={() => { setMutationError(""); setRemovalError(""); setAddPath(""); setAddProjectName(""); setAddOpen(true); }}><Plus size={17} aria-hidden="true"/>Add project</button>}
+        <div className="registry-overview" aria-label={projects.length + " known projects, " + liveCount + " live"}>
+          <div className="registry-overview-item">
+            <span>Known projects</span>
+            <strong>{projects.length}</strong>
+          </div>
+          <div className="registry-overview-item">
+            <span>Live runtimes</span>
+            <strong>{liveCount}</strong>
+          </div>
+          <div className="registry-overview-item">
+            <span>Peer connections</span>
+            <strong>{connectionCount}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="registry-section" aria-labelledby="registry-list-title">
         <div className="registry-heading">
-          <div>
-            <h1 id="registry-title">Projects</h1>
-            <p className="registry-subtitle">Known projects on this Synesis installation.</p>
+          <div className="registry-heading-copy">
+            <p className="registry-kicker">Workspace registry</p>
+            <h2 id="registry-list-title">Choose where to work</h2>
           </div>
           <div className="registry-heading-actions">
-            {projects.length > 0 && <p className="registry-summary" aria-label={projects.length + " known projects, " + liveCount + " live"}><strong>{projects.length}</strong> known <span aria-hidden="true">·</span> <strong>{liveCount}</strong> live</p>}
             <label className="project-search">
-              <Search size={16} aria-hidden="true"/>
-              <span className="sr-only">Search projects</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" type="search" />
+              <span className="registry-control-label">Search</span>
+              <span className="project-search-field"><Search size={16} aria-hidden="true"/><input aria-label="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, path, or identity" type="search" /></span>
+            </label>
+            <label className="project-status-filter">
+              <span className="registry-control-label">Status</span>
+              <select aria-label="Filter projects by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+                <option value="ALL">All statuses</option>
+                <option value="LIVE">Live</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="UNAVAILABLE">Unavailable</option>
+                <option value="IDENTITY_MISMATCH">Identity mismatch</option>
+              </select>
             </label>
           </div>
         </div>
-        {projects.length === 0 ? (
+        {projects.length > 0 && <p className="registry-results" aria-live="polite">Showing <strong>{filteredProjects.length}</strong> of <strong>{visibleProjects.length}</strong> {visibleProjects.length === 1 ? "project" : "projects"}</p>}
+        {visibleProjects.length === 0 && pendingRemovalIds.length > 0 ? (
+          <EmptyState icon={Trash2} title="Removal in progress" detail="The project is hidden while the registry confirms the removal."/>
+        ) : projects.length === 0 ? (
           <EmptyState icon={FolderOpen} title="No projects yet" detail="Projects appear after legitimate Synesis discovery through init, runtime startup, or MCP attachment."/>
         ) : filteredProjects.length === 0 ? (
           <EmptyState icon={Search} title="No matching projects" detail="Try a different project name, identity, path, or status."/>
         ) : (
           <div className="project-list panel" role="list" aria-label="Known projects">
-            <div className="project-list-header" aria-hidden="true"><span>Project</span><span>State</span><span>Action</span></div>
             {filteredProjects.map((project) => (
               <div className="project-row" key={project.id + project.path} role="listitem">
-                <div className="project-row-main">
-                  {onOpenProject ? <button className="registry-project-link" type="button" onClick={() => onOpenProject(project)}>{project.name}</button> : <strong className="registry-project-name">{project.name}</strong>}
-                  <div className="project-row-meta">
-                    <span className="mono">{project.id}</span>
-                    <span className="project-meta-separator" aria-hidden="true">·</span>
-                    <span className="mono project-path">{project.path}</span>
+                <div className="project-row-heading">
+                  <span className="project-folder-mark" aria-hidden="true"><FolderOpen size={18}/></span>
+                  <div className="project-row-main">
+                    {onOpenProject ? <button className="registry-project-link" type="button" onClick={() => onOpenProject(project)}>{project.name}</button> : <strong className="registry-project-name">{project.name}</strong>}
+                    <span className="mono project-path" title={project.path}>{project.path}</span>
                   </div>
-                  {project.status !== "LIVE" && <p className="project-row-note">{registryStateNote(project.status)}</p>}
+                  <div className="project-row-state"><StatusBadge value={project.status}/></div>
                 </div>
-                <div className="project-row-state"><StatusBadge value={project.status}/></div>
+                <div className="project-row-identity">
+                  <span>Project identity</span>
+                  <span className="mono">{project.id}</span>
+                </div>
+                {project.status !== "LIVE" && <p className="project-row-note">{registryStateNote(project.status)}</p>}
                 <div className="project-row-action">
-                  {onOpenProject && project.status === "LIVE" && project.id === snapshot.project?.id
-                    ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>Open project <ChevronRight size={14}/></button>
-                    : onOpenProject && project.status !== "LIVE"
-                      ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>View details <ChevronRight size={14}/></button>
-                      : <span className="muted">{project.status === "LIVE" ? "Runtime not attached" : "Registry detail"}</span>}
+                  <div className="project-row-actions">
+                    {onOpenProject && project.status === "LIVE" && project.id === snapshot.project?.id
+                      ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>Open project <ChevronRight size={14}/></button>
+                      : onOpenProject && project.status !== "LIVE"
+                        ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>View details <ChevronRight size={14}/></button>
+                        : <span className="muted">{project.status === "LIVE" ? "Runtime not attached" : "Registry detail"}</span>}
+                    {client && project.id !== snapshot.project?.id && <button className="button button-secondary project-remove-button" type="button" aria-label={`Remove ${project.name} from registry`} onClick={() => { setMutationError(""); setRemovalError(""); setRemoveTarget(project); }}><Trash2 size={15} aria-hidden="true"/><span>Remove</span></button>}
+                  </div>
                 </div>
               </div>
             ))}
@@ -346,6 +512,29 @@ export function ProjectsView({snapshot, onOpenProject, onOpenNetwork}: {snapshot
         )}
       </section>
       <ConnectionsRail snapshot={snapshot} onOpenNetwork={onOpenNetwork}/>
+      {addOpen && <DetailModal title="Add project to registry" onClose={() => { if (!mutationBusy) setAddOpen(false); }}>
+        <form className="registry-form" onSubmit={(event) => { event.preventDefault(); void addProject(); }}>
+          <p className="muted">Choose a folder to add. Existing state is preserved.</p>
+          {mutationError && <div className="registry-folder-error" role="alert"><p>{mutationError}</p><button className="icon-button registry-folder-error-close" type="button" aria-label="Dismiss project folder error" onClick={() => setMutationError("")}><X size={15} aria-hidden="true"/></button></div>}
+          <button className="registry-folder-picker" type="button" aria-label={addProjectName ? `Selected project folder ${addProjectName}` : "Choose project folder"} onClick={() => void chooseProjectFolder()} disabled={mutationBusy}>
+            <FolderOpen size={20} aria-hidden="true"/>
+            <span className="registry-folder-picker-copy">
+              <strong>{addProjectName || "Choose project folder"}</strong>
+              <span>{addPath || "Open Windows Explorer to select a folder"}</span>
+            </span>
+            <ChevronRight size={17} aria-hidden="true"/>
+          </button>
+          <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setAddOpen(false)} disabled={mutationBusy}>Cancel</button><button className="button button-primary" type="submit" disabled={!addPath || mutationBusy}>{mutationBusy ? "Adding…" : "Add project"}</button></div>
+        </form>
+      </DetailModal>}
+      {removeTarget && <DetailModal title="Remove project from registry" onClose={() => { if (!mutationBusy) setRemoveTarget(null); }}>
+        <div className="registry-form">
+          <p>Remove <strong>{removeTarget.name}</strong> from the local project registry?</p>
+          <p className="muted">Only the registry entry is removed. The project folder, `.synesis` state, and Link identity stay untouched.</p>
+          <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setRemoveTarget(null)} disabled={mutationBusy}>Cancel</button><button className="button button-danger" type="button" onClick={() => void removeProject()} disabled={mutationBusy}>{mutationBusy ? "Removing…" : "Remove from registry"}</button></div>
+        </div>
+      </DetailModal>}
+      {removalError && <div className="selection-toast registry-operation-toast" role="alert">{removalError}</div>}
     </div>
   );
 }
@@ -358,11 +547,11 @@ function ConnectionsRail({snapshot, onOpenNetwork}: {snapshot: Snapshot; onOpenN
     <aside className="connections-rail" aria-label="Connections">
       <section className="connections-panel panel">
         <div className="rail-section-heading">
-          <h2>Connections</h2>
+          <div className="rail-heading-copy"><span className="rail-heading-icon" aria-hidden="true"><Network size={17}/></span><div><p>Runtime network</p><h2>Connections</h2></div></div>
           <span className="rail-count">{peers.length}</span>
         </div>
         <p className="rail-caption">Current runtime connections</p>
-        {peers.length === 0 ? <p className="rail-empty-copy">No peer connections are currently projected.</p> : (
+        {peers.length === 0 ? <div className="rail-empty"><span className="rail-empty-icon" aria-hidden="true"><Network size={20}/></span><h3>No active peers</h3><p className="rail-empty-copy">No peer connections are currently projected.</p>{onOpenNetwork && <button className="text-action" type="button" onClick={onOpenNetwork}>Open network <ChevronRight size={14}/></button>}</div> : (
           <div className="connection-list">
             {peers.map((peer) => {
               const route = snapshot.network.routes.find((item) => item.destinationNodeId === peer.nodeId);

@@ -1,3 +1,140 @@
+# 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility
+
+- Task ID: SYN-066
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-065 is COMPLETE FOR CURRENT SCOPE.
+- Scope: pass the Windows JDK Unix-domain socket temporary-directory property
+  through the generated launcher before JVM startup, while retaining the
+  direct-Java fallback and explicit `JAVA_OPTS` override.
+- Authority boundary: no protocol, lifecycle, registry, browser, Link, or
+  project-data behavior changes.
+- Deferred-register review: no deferred capability is activated.
+- Implementation result: the generated Windows launcher now prepares the
+  short `%PUBLIC%\s` Unix-domain socket directory before starting the bundled
+  JVM. Direct Java entry points retain a bounded fallback, and daemon child
+  runtimes inherit the configured property.
+- Verification: focused bootstrap regression test passed; the rebuilt Windows
+  runnable installer and supported repair passed; clean installed
+  `coordination serve`, `ui --no-browser`, and browser-opening `ui` smokes
+  passed without `JAVA_TOOL_OPTIONS`. The browser-opening command returned
+  `SYNESIS_UI_OPENED`.
+- Closure evidence: `docs/evidence/SYN-066-windows-jdk-loopback-bootstrap-2026-09-12.md`.
+- Immediate next action: preserve SYN-066 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+# 2026-09-12 — SYN-065 Windows daemon health-probe compatibility
+
+- Task ID: SYN-065
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-056 installed daemon shell and SYN-064 are COMPLETE FOR
+  CURRENT SCOPE.
+- Scope: replace only the daemon's local runtime health probe transport and add
+  a focused regression test for the Windows/JDK AF_UNIX failure.
+- Authority boundary: no project lifecycle, registry, browser, Link, authority,
+  filesystem, or remote behavior changes.
+- Deferred-register review: no deferred capability is activated.
+- Implementation result: the daemon's local runtime health probe now uses a
+  Windows-compatible `HttpURLConnection` request, avoiding the JDK
+  HttpClient AF_UNIX selector failure on this workstation. The authenticated
+  daemon request path and runtime lifecycle are unchanged.
+- Verification: focused daemon regression tests, source install distribution,
+  Windows runnable installer, repair installation, and real installed
+  `synesis ui` smoke passed. The broader CLI suite was bounded and interrupted
+  after no completion or failure output.
+- Closure evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+- Immediate next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+# 2026-09-12 — SYN-064 actionable Projects preview
+
+- Task ID: SYN-064
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-063 is COMPLETE FOR CURRENT SCOPE.
+- Scope: expose the existing Add project and non-current Remove project
+  controls in development mock mode through an in-memory adapter, and replace
+  the ambiguous project trash-only affordance with a labeled action.
+- Authority boundary: no production control-plane, registry, filesystem,
+  routing, Link, or authority changes; preview mutations are process-local.
+- Deferred-register review: no deferred capability is activated.
+- Implementation result: mock mode now supplies a process-local registry
+  adapter; Add and non-current Remove flows are visible and functional, and the
+  Remove action is explicitly labeled on project cards.
+- Verification: typecheck, lint, 26 frontend tests, production build, browser QA,
+  and interactive mock add/remove checks passed.
+- Closure evidence: `docs/evidence/SYN-064-actionable-projects-preview-2026-09-12.md`.
+- Immediate next action: preserve SYN-064 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+# 2026-09-12 — SYN-063 Projects front-page redesign
+
+- Task ID: SYN-063
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 through SYN-062 are COMPLETE FOR CURRENT SCOPE.
+- Scope: presentation-only redesign of the installed Projects front page using
+  the existing authoritative registry and network snapshot plus the existing
+  add, filter, open, inspect, and remove actions.
+- Authority boundary: no backend, routing, registry, protocol, or Link behavior
+  changes and no invented data or controls.
+- Deferred-register review: no deferred capability is activated. This task
+  changes only the presentation of already implemented local control-plane
+  projections and actions.
+- Implementation result: the page now uses a compact real-data overview,
+  labeled search and status controls, responsive project cards, and a clearer
+  connection panel while preserving every existing action.
+- Verification: typecheck, lint, 25 frontend tests, production build, the
+  repository browser QA suite, and rendered 2560x1440, 1920x1080, 1280x800,
+  375x812, and 1555x457 inspections passed without horizontal overflow.
+- Closure evidence: `docs/evidence/SYN-063-projects-front-page-redesign-2026-09-12.md`.
+- Immediate next action: preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No
+  authoritative successor is defined.
+
+# 2026-09-12 — SYN-062 instant project registry removal
+
+- Task ID: SYN-062
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 and SYN-061 are COMPLETE FOR CURRENT SCOPE.
+- Scope: make confirmed registry removal immediate in the Projects UI while
+  retaining the real authenticated deletion and truthful failure recovery.
+- Implementation result: the row is hidden immediately after confirmation;
+  background success reconciles the authoritative snapshot and failure restores
+  the row with a bounded error.
+- Closure evidence: `docs/evidence/SYN-062-instant-project-registry-removal-2026-09-12.md`.
+- Immediate next action: preserve SYN-062 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+
+﻿# 2026-09-12 — SYN-060 Windows Explorer folder picker correction
+
+- Task ID: SYN-060
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 is COMPLETE FOR CURRENT SCOPE; SYN-061 remains closed.
+- Scope: replace the legacy Swing folder chooser with a Windows Explorer-style
+  native folder picker while preserving the authenticated `choose-project`
+  command, exact selected path, read-only folder-derived name, and existing
+  initialization flow.
+- Immediate next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+- Implementation result: the bundled Windows helper opens the Explorer shell
+  `IFileDialog` in folder-selection mode and returns the exact selected path
+  through the existing authenticated control-plane boundary. No Link, registry,
+  initialization, or browser behavior changes were introduced.
+
+# 2026-09-12 — SYN-060 native project folder picker
+
+- Task ID: SYN-060
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-059 is COMPLETE FOR CURRENT SCOPE and remains closed.
+- Scope: replace manual Add project path entry with an authenticated native
+  Windows folder picker whose selected folder name is displayed read-only and
+  whose exact absolute path is submitted through the existing registry path.
+- Immediate next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+- Implementation result: the authenticated `choose-project` command opens a
+  native Windows folder picker and returns the exact absolute path with the
+  folder-derived name. The Add project dialog now presents that selection in
+  a non-editable folder tile and submits it through existing registry
+  validation.
+- Closure evidence: `docs/evidence/SYN-060-native-project-folder-picker-2026-09-12.md`.
+
 # 2026-09-12 — Final publication-blocker cleanup
 
 - Review status: COMPLETE. The accumulated SYN-056 -> SYN-057 -> SYN-058
@@ -36,10 +173,45 @@ the documentation/evidence record.
 
 ## Immediate next action
 
-Stage only the classified roadmap files if publication is desired; do not
-create SYN-059, reopen completed tasks, or commit/push in this continuation.
+Preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; do not invent one, and do not commit or push.
 
 # Current Task
+
+## 2026-09-12 — SYN-061 automatic project initialization from folder picker
+
+- Task ID: SYN-061
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-059 and SYN-060 are COMPLETE FOR CURRENT SCOPE.
+- Immediate next action: preserve SYN-061 as COMPLETE FOR CURRENT SCOPE; no
+  successor is defined.
+
+## 2026-09-12 — SYN-060 native project folder picker
+
+- Task ID: SYN-060
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependency: SYN-059 is COMPLETE FOR CURRENT SCOPE.
+- Immediate next action: preserve SYN-060 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+
+## 2026-09-12 — SYN-059 project registry management and filtering
+
+- Task ID: SYN-059
+- Status: COMPLETE FOR CURRENT SCOPE
+- Dependencies: SYN-056, SYN-057, and SYN-058 remain COMPLETE FOR CURRENT
+  SCOPE and are not reopened.
+- Scope: provide the main Projects page with explicit project filtering plus
+  authenticated add/remove registry actions. Add validates an existing
+  initialized project through the existing project authority. Remove affects
+  only the installation-local registry entry and protects the current runtime
+  project.
+- Immediate next action: preserve SYN-059 as COMPLETE FOR CURRENT SCOPE; no
+  authoritative successor is defined.
+- Implementation result: the existing name/identity/path search is retained,
+  an explicit status filter was added, and authenticated add/remove registry
+  actions now refresh the authoritative snapshot. Removal protects the current
+  runtime project and never deletes project data.
+- Closure evidence: `docs/evidence/SYN-059-project-registry-management-2026-09-12.md`.
 
 ## 2026-09-12 — SYN-058 native deep-link registration and installed activation
 
@@ -72,25 +244,23 @@ create SYN-059, reopen completed tasks, or commit/push in this continuation.
 ## Work completed
 
 SYN-057 closure was reconciled as COMPLETE FOR CURRENT SCOPE and its evidence
-was preserved. No authoritative successor existed, so the operator-authorized
-SYN-058 task was activated. The installed path reconstruction found no existing
-CLI-facing OPEN_URI wrapper or native protocol registration; the reusable seam
-is `DaemonClient.request`, and the installer already owns the stable launcher,
-updates, repair, and uninstall.
+was preserved. SYN-058 is also closed for its current scope. SYN-059 added the
+authenticated project-registry controls and explicit Projects page filtering;
+the registry remains discovery metadata only. SYN-060 added the authenticated
+native Windows folder picker and read-only folder-derived naming for Add
+project.
 
 ## Current failures
 
 The known aggregate workspace/capability/provider failures remain unrelated
 and are preserved. The full CLI check also retains unrelated failures in
-`CodexHookProcessTest` and `WorkspaceCliTest`. No aggregate repair is
-authorized under SYN-058.
+`CodexHookProcessTest` and `WorkspaceCliTest`. No aggregate repair was
+authorized under SYN-059.
 
 ## Immediate next action
 
-Preserve SYN-058 as COMPLETE FOR CURRENT SCOPE. Do not add Linux/macOS native
-registration, login/reboot autostart, routing logic, or picker state. If the
-repository validator requires one administrative ACTIVE marker, retain only
-that bookkeeping marker without reopening the completed semantics.
+Preserve SYN-065 as COMPLETE FOR CURRENT SCOPE. No authoritative successor is
+defined; leave the roadmap with no active task and preserve the evidence.
 
 ## 2026-09-11 — SYN-056 r4 portability fix and r5 browser acceptance
 

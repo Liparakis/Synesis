@@ -21,6 +21,7 @@ import org.synesis.workspace.application.project.ProjectCommandSpec;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
+import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 /**
@@ -448,6 +449,31 @@ public final class ProjectApplicationService {
    */
   public InitResult init(Path projectRoot) throws ProjectApplicationException {
     return init(projectRoot, true);
+  }
+
+  /**
+   * Initializes a user-selected directory for registry registration.
+   *
+   * <p>An existing Git repository is preserved and passed through the normal
+   * Synesis initialization path. A directory without Git metadata receives a
+   * direct, non-interactive {@code git init} first; Synesis then creates its
+   * normal baseline and local identity. No shell command is used.</p>
+   *
+   * @param projectRoot target directory selected by the operator
+   * @return structured initialization result
+   * @throws ProjectApplicationException if Git or Synesis initialization fails
+   */
+  public InitResult initForRegistration(Path projectRoot) throws ProjectApplicationException {
+    Path root = directory(projectRoot, "project directory");
+    if (!Files.exists(root.resolve(".git"))) {
+      try {
+        GitProcessRunner.run(root, "init");
+      } catch (Exception failure) {
+        throw new ProjectApplicationException("GIT_INIT_FAILED",
+            "Could not initialize Git in the selected folder", failure);
+      }
+    }
+    return init(root);
   }
 
   /**

@@ -1,6 +1,6 @@
-import {render, screen} from "@testing-library/react";
+import {render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {AgentsView, DiagnosticsView, NetworkView, ProjectHeader, ProjectSelectionView, ProjectsView, RegistryProjectView} from "./App";
+import {AgentsView, App, DiagnosticsView, NetworkView, ProjectHeader, ProjectSelectionView, ProjectsView, RegistryProjectView} from "./App";
 import {parseRoute, routePath} from "./routes";
 import {ControlPlaneClient, type AgentSnapshot, type ProjectSelection, type Snapshot} from "../api/controlPlane";
 import {vi} from "vitest";
@@ -105,6 +105,15 @@ describe("truthful product states", () => {
     expect(screen.queryByText("Project Alpha")).not.toBeInTheDocument();
   });
 
+  it("keeps add and non-current remove actions visible in the development preview", async () => {
+    window.history.replaceState(null, "", "/projects?mock=1");
+    render(<App/>);
+
+    expect(await screen.findByRole("button", {name: "Add project"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Remove Vector mesh from registry"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Remove Test from registry"})).not.toBeInTheDocument();
+  });
+
   it("supports an empty agents state", () => {
     render(<AgentsView agents={[]}/>);
     expect(screen.getByText("No agents yet")).toBeInTheDocument();
@@ -150,6 +159,118 @@ describe("truthful product states", () => {
     await user.type(screen.getByRole("searchbox", {name: "Search projects"}), "idle");
     expect(screen.getByText("Idle project")).toBeInTheDocument();
     expect(screen.queryByText("Live project")).not.toBeInTheDocument();
+  });
+
+  it("filters projects by an explicit registry status", async () => {
+    const user = userEvent.setup();
+    render(<ProjectsView snapshot={registrySnapshot}/>);
+
+    await user.selectOptions(screen.getByRole("combobox", {name: "Filter projects by status"}), "LIVE");
+    expect(screen.getByText("Live project")).toBeInTheDocument();
+    expect(screen.queryByText("Idle project")).not.toBeInTheDocument();
+  });
+
+  it("registers a project from the main page without deleting project data", async () => {
+    const user = userEvent.setup();
+    const chooseProject = vi.fn().mockResolvedValue({state: "SELECTED", path: "C:\\Projects\\new-project", name: "new-project"});
+    const registerProject = vi.fn().mockResolvedValue({state: "REGISTERED"});
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    render(<ProjectsView snapshot={registrySnapshot} client={{chooseProject, registerProject} as unknown as ControlPlaneClient} onSnapshotRefresh={refresh}/>);
+
+    await user.click(screen.getByRole("button", {name: "Add project"}));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", {name: "Choose project folder"}));
+    await user.click(within(dialog).getByRole("button", {name: "Add project"}));
+
+    expect(registerProject).toHaveBeenCalledWith("C:\\Projects\\new-project");
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("uses the native folder picker and keeps the folder-derived name read-only", async () => {
+    const user = userEvent.setup();
+    const chooseProject = vi.fn().mockResolvedValue({state: "SELECTED", path: "C:\\Projects\\Copenhagen Trip", name: "Copenhagen Trip"});
+    const registerProject = vi.fn().mockResolvedValue({state: "REGISTERED"});
+    const client = {chooseProject, registerProject} as unknown as ControlPlaneClient;
+    render(<ProjectsView snapshot={registrySnapshot} client={client}/>);
+
+    await user.click(screen.getByRole("button", {name: "Add project"}));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", {name: "Choose project folder"})).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", {name: "Choose project folder"}));
+
+    expect(chooseProject).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Copenhagen Trip")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox", {name: "Project name"})).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", {name: "Add project"}));
+    expect(registerProject).toHaveBeenCalledWith("C:\\Projects\\Copenhagen Trip");
+  });
+
+  it("shows folder initialization failures inside a dismissible error panel", async () => {
+    const user = userEvent.setup();
+    const chooseProject = vi.fn().mockResolvedValue({state: "SELECTED", path: "C:\\Projects\\blocked", name: "blocked"});
+    const registerProject = vi.fn().mockRejectedValue({code: "PROJECT_INITIALIZATION_FAILED"});
+    const client = {chooseProject, registerProject} as unknown as ControlPlaneClient;
+    render(<ProjectsView snapshot={registrySnapshot} client={client}/>);
+
+    await user.click(screen.getByRole("button", {name: "Add project"}));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", {name: "Choose project folder"}));
+    await user.click(within(dialog).getByRole("button", {name: "Add project"}));
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Synesis could not initialize that folder.");
+    expect(alert.firstElementChild?.tagName).toBe("P");
+    expect(alert.lastElementChild).toBe(within(alert).getByRole("button", {name: "Dismiss project folder error"}));
+    await user.click(within(alert).getByRole("button", {name: "Dismiss project folder error"}));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("removes only an inactive registry entry and protects the current project", async () => {
+    const user = userEvent.setup();
+    const removeProject = vi.fn().mockResolvedValue({state: "REMOVED"});
+    const client = {removeProject} as unknown as ControlPlaneClient;
+    render(<ProjectsView snapshot={registrySnapshot} client={client}/>);
+
+    expect(screen.queryByRole("button", {name: "Remove Live project from registry"})).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Remove from registry"}));
+    expect(removeProject).toHaveBeenCalledWith("proj_idle");
+  });
+
+  it("hides a project immediately while registry removal is pending", async () => {
+    const user = userEvent.setup();
+    let resolveRemoval: (value: Record<string, unknown>) => void = () => undefined;
+    const removeProject = vi.fn(() => new Promise<Record<string, unknown>>((resolve) => {
+      resolveRemoval = resolve;
+    }));
+    render(<ProjectsView snapshot={registrySnapshot} client={{removeProject} as unknown as ControlPlaneClient}/>);
+
+    await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
+    await user.click(screen.getByRole("button", {name: "Remove from registry"}));
+
+    expect(screen.queryByText("Idle project")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    resolveRemoval({state: "REMOVED"});
+    await waitFor(() => expect(removeProject).toHaveBeenCalledWith("proj_idle"));
+  });
+
+  it("restores an optimistically removed project when registry removal fails", async () => {
+    const user = userEvent.setup();
+    let rejectRemoval: (reason?: unknown) => void = () => undefined;
+    const removeProject = vi.fn(() => new Promise<Record<string, unknown>>((_, reject) => {
+      rejectRemoval = reject;
+    }));
+    render(<ProjectsView snapshot={registrySnapshot} client={{removeProject} as unknown as ControlPlaneClient}/>);
+
+    await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
+    await user.click(screen.getByRole("button", {name: "Remove from registry"}));
+    expect(screen.queryByText("Idle project")).not.toBeInTheDocument();
+
+    rejectRemoval({code: "PROJECT_NOT_FOUND"});
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("no longer in the registry"));
+    expect(screen.getByText("Idle project")).toBeInTheDocument();
   });
 
   it("shows network and termination controls for each projected connection", async () => {

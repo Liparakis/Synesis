@@ -117,6 +117,28 @@ final class KnownProjectRegistryTest {
     }
   }
 
+  @Test
+  void registerAndRemoveChangeOnlyRegistryMetadata() throws Exception {
+    Path root = Files.createTempDirectory("synesis-known-project-mutation-");
+    try {
+      ProjectApplicationService service = new ProjectApplicationService();
+      Path project = Files.createDirectories(root.resolve("project"));
+      ProjectApplicationService.ProjectLocation location = service.init(project, false).location();
+      KnownProjectRegistry registry = new KnownProjectRegistry(root.resolve("state/registry.json"));
+
+      KnownProjectRegistry.ProjectView registered = registry.register(project);
+      assertEquals(location.projectId(), registered.projectId());
+      assertEquals(1, registry.projects().size());
+
+      assertTrue(registry.remove(location.projectId()));
+      assertFalse(registry.remove(location.projectId()));
+      assertTrue(Files.exists(location.metadataFile()));
+      assertTrue(registry.projects().isEmpty());
+    } finally {
+      delete(root);
+    }
+  }
+
   private static void delete(Path root) throws Exception {
     if (root == null || Files.notExists(root)) {
       return;

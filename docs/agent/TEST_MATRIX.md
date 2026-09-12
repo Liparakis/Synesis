@@ -1,3 +1,45 @@
+## SYN-066 Windows JDK loopback bootstrap compatibility — 2026-09-12
+
+| Check | Result |
+|---|---|
+| Focused `SynesisCliParsingTest` bootstrap regression | PASS |
+| Full `:cli:runnableInstaller --rerun-tasks` | PASS, 27 tasks |
+| Supported installer repair | PASS, `REPAIR_RESULT=SUCCESS` |
+| Clean installed `synesis coordination serve` without `JAVA_TOOL_OPTIONS` | PASS, `COORDINATION_SERVE_READY` |
+| Installed `synesis ui --no-browser --project .` without `JAVA_TOOL_OPTIONS` | PASS, exit 0 |
+| Installed `synesis ui --project .` without `JAVA_TOOL_OPTIONS` | PASS, `SYNESIS_UI_OPENED` |
+
+Evidence: `docs/evidence/SYN-066-windows-jdk-loopback-bootstrap-2026-09-12.md`.
+
+## SYN-065 Windows daemon health-probe compatibility — 2026-09-12
+
+| Check | Result |
+|---|---|
+| Regression: healthy loopback runtime recognized by daemon probe | PASS |
+| Focused `DaemonServerTest` | PASS |
+| `:cli:installDist` with local JDK socket-path workaround | PASS |
+| `:cli:runnableInstaller` | PASS |
+| Supported installer `repair` | PASS, `REPAIR_RESULT=SUCCESS` |
+| Installed `synesis ui --no-browser --project .` | PASS, no daemon error |
+| Installed `synesis ui --project .` | PASS, `SYNESIS_UI_OPENED` |
+| Broader `:cli:test` | BOUNDED, interrupted after no completion/failure output |
+
+Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
+
+## SYN-064 actionable Projects preview — 2026-09-12
+
+| Check | Result |
+|---|---|
+| Mock Add project control and in-memory add flow | PASS, 14 to 15 projects |
+| Labeled non-current Remove control and confirmation | PASS |
+| In-memory removal reconciliation | PASS, 15 to 14 projects |
+| Current project removal protection | PASS, no Remove action |
+| Frontend typecheck / lint / tests / build | PASS, 26 tests |
+| Browser QA at 2560 / 1920 / 1280 | PASS, no overflow or page errors |
+| Projects accessibility scan | PASS, zero violations |
+
+Evidence: `docs/evidence/SYN-064-actionable-projects-preview-2026-09-12.md`.
+
 ## SYN-055 final artistic direction — 2026-09-10
 
 | Check | Result |
@@ -1587,3 +1629,33 @@ SYN-054 product-code work is required.
 | Connecting asset | Supplied logo replaces the generated mark in the connection screen | PASS source review |
 | Brand accessibility | Existing accessible Synesis label and navigation remain present | PASS source review and live accessibility tree |
 | Frontend gates | Typecheck, lint, 12 tests, production build, and diff check | PASS |
+## SYN-063 Projects front-page redesign — 2026-09-12
+
+| Area | Check | Result | Evidence |
+|---|---|---|---|
+| Frontend types | `npm run typecheck` | PASS | `web-ui` gate |
+| Frontend lint | `npm run lint` | PASS — zero warnings | `web-ui` gate |
+| Frontend behavior | Vitest | PASS — 2 files, 25 tests | `web-ui` gate |
+| Production bundle | `npm run build` | PASS — 1,583 modules | `web-ui/dist` |
+| Desktop browser QA | 2560x1440, 1920x1080, 1280x800 | PASS — no horizontal overflow or page errors | `build/ui-art-direction/fixture-checks.json` |
+| Projects accessibility | axe at 1920x1080 | PASS — zero violations | `build/ui-art-direction/fixture-checks.json` |
+| Mobile layout | 375x812 interactive inspection | PASS — no horizontal overflow | `docs/evidence/SYN-063-projects-front-page-redesign-2026-09-12.md` |
+| Reference proportions | 1555x457 interactive inspection | PASS — overview and discovery remain usable | same evidence |
+| Interaction exploration | search, status filter, connection detail and close | PASS | same evidence |
+
+Exact next action: preserve SYN-063 as COMPLETE FOR CURRENT SCOPE. No
+authoritative successor is defined.
+## SYN-065 Windows daemon health-probe compatibility — 2026-09-12
+
+| Check | Result |
+|---|---|
+| Regression: healthy loopback runtime recognized by daemon probe | PASS |
+| Focused `DaemonServerTest` | PASS |
+| `:cli:installDist` with local JDK socket-path workaround | PASS |
+| `:cli:runnableInstaller` | PASS |
+| Supported installer `repair` | PASS, `REPAIR_RESULT=SUCCESS` |
+| Installed `synesis ui --no-browser --project .` | PASS, no daemon error |
+| Installed `synesis ui --project .` | PASS, `SYNESIS_UI_OPENED` |
+| Broader `:cli:test` | BOUNDED, interrupted after no completion/failure output |
+
+Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.

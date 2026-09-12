@@ -4,11 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -42,6 +44,23 @@ final class DaemonServerTest {
   void normalizesRuntimeReadyEndpointBeforeAppendingRoutes() {
     assertEquals(URI.create("http://127.0.0.1:12345"),
         DaemonServer.normalizeRuntimeEndpoint(URI.create("http://127.0.0.1:12345/")));
+  }
+
+  @Test
+  @Timeout(10)
+  void recognizesHealthyLoopbackRuntimeThroughTheJdkCompatibleProbe() throws Exception {
+    HttpServer runtime = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    runtime.createContext("/api/v1/health", exchange -> {
+      exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, -1);
+      exchange.close();
+    });
+    runtime.start();
+    try {
+      assertTrue(DaemonServer.runtimeReachable(
+          URI.create("http://127.0.0.1:" + runtime.getAddress().getPort())));
+    } finally {
+      runtime.stop(0);
+    }
   }
 
   @Test
