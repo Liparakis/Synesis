@@ -1,10 +1,221 @@
+# Current Task
+
+## SYN-067 Windows setup wizard and owned deep-link installation
+
+- Task ID: SYN-067
+- Status: COMPLETE; CP-0946 is the final checkpoint for this launch-responsiveness
+  follow-up.
+- Goal: replace the double-click console menu with a responsive native Windows
+  setup wizard offering Install/Repair, custom destination selection, and
+  metadata-preserving Uninstall controls, while making the existing owned
+  `synesis://` registration part of the normal install lifecycle.
+- Boundary: direct local checkout only. Keep versioned atomic activation,
+  user-level PATH ownership, registry ownership checks, project/workspace/
+  repository preservation, provider neutrality, and no daemon shutdown. Keep
+  Unix behavior unchanged.
+- Required evidence: focused Windows wizard/path/protocol tests, Go build with
+  the Windows GUI subsystem, extracted and single-file installer build output,
+  a bounded launch smoke covering the responsive wizard process without
+  deleting user data, and an honest native desktop-inspection result.
+
+## Work completed
+
+Source inspection found the existing text menu, explicit `--install-dir`
+support, ownership-safe HKCU protocol registration, versioned activation, and
+metadata-preserving uninstall. The current installed registry has no
+`synesis://` registration, which explains why pasted invitations do not enter
+the browser/daemon path. The screenshot is being used only as visual reference;
+its example text and values are not product instructions. The Windows wizard,
+owned post-install registration, safe metadata cleanup, and preservation test
+are now implemented. The visual-polish follow-up adds a branded header, larger
+Segoe UI hierarchy, app metadata/capability copy, warning footer, custom
+primary/secondary action treatment, the existing Synesis logo, and a mandatory
+dark client/control/title-bar treatment. Focused Windows tests, the GUI rebuild,
+and the final self-extracting launch/control-content probe are passing; the
+follow-up checkpoint is CP-0943. The latest live screenshot shows the remaining
+presentation defects: a white native group box, generic radio rows, and an
+empty logo tile. This follow-up replaces the fieldset/radios with custom dark
+selection cards, explicitly darkens the title bar, and passes `AlphaBlend` its
+value-form blend descriptor so the embedded product mark can render. Focused
+tests, cross-platform compilation, the final runnable-installer build, and a
+  visible responsive UI Automation launch were previously recorded at CP-0944;
+  independent verification found the rebuilt top-level window hidden. The
+  visibility-only correction exposed a startup freeze caused by Go moving the
+  UI goroutine between OS threads during Win32 child-window construction. CP-0946
+  keeps the complete wizard lifetime on one OS thread, queues the show message,
+  and passes the fresh wrapper responsiveness probe.
+
+## Current failures
+
+Pixel-level desktop capture remains unavailable from the inspection helper. No
+real installation was run;
+the managed installation, PATH, registry, daemon, and user project data remain
+outside this source acceptance run. Existing unrelated repository baseline
+failures and the paused Docker lab remain outside this slice.
+
+## Immediate next action
+
+Keep the CP-0946 installer artifacts and evidence as the current bounded result;
+do not install them, stop daemons, create `.synesis` state, push, or claim
+pixel-level capture.
+
+# 2026-09-13 — SL-D-040 Checkpoint 3A Docker process/network isolation lab
+
+- Task ID: SL-D-040
+- Checkpoint: 3A
+- Status: PAUSED AFTER SYN-067; bounded Docker harness implemented and verified for two
+  cycles; native/KVM/physical traversal remains outside this host's evidence
+  boundary
+- Substrate: current Windows 11 workstation with Docker Desktop's Linux engine
+  and Docker-managed WSL2 kernel. No Ubuntu WSL distribution, SSH target, or
+  exposed KVM capability is available, so this slice must not claim native Linux
+  or VM evidence.
+- Durable source boundary: direct local checkout only; no source `.synesis`
+  state, Synesis coordination tools, remote publish, or push.
+
+## Checkpoint 3A boundary
+
+The acceptance target is six independent JVM processes in Docker network
+namespaces using the existing signed Link/overlay surfaces. The local lab must
+prove the deterministic N=6 topology (12 undirected edges, degree 4), compact
+SLB2 first contact, authenticated peer transit, hard kill, endpoint/container
+replacement, partition, two-node failure, simultaneous reconnect, bounded
+latency/loss, repeat cycles, exact topology evidence, and cleanup.
+
+The source audit found two product limitations that must remain visible: the
+normal CLI passes an empty membership source to `LinkRuntimeOwner`, and the
+owner does not yet compose `OverlayReconciler` with a production direct
+descriptor connector. Therefore the lab is either a narrowly scoped process
+runner that supplies a legitimate signed snapshot and exercises existing
+production Link/overlay classes, or it stops at a documented preflight blocker.
+It must not manufacture membership, bypass authentication, or present a test
+fixture as shipped CLI capability.
+
+## Environment preflight
+
+- Docker Linux engine: healthy; server OS `linux`, Docker 29.7.2, 16 CPUs,
+  approximately 16.7 GiB engine memory.
+- Linux-targeted distribution: built successfully with the Linux x86_64 Netty
+  QUIC classifier; the packaged library contains the Linux native QUIC artifact.
+- Host limitations: C: has approximately 9.8 GiB free; no native Ubuntu/SSH
+  target; firmware virtualization is enabled but Windows exposes neither SLAT
+  nor KVM/Hyper-V acceleration to this task.
+- Existing Docker data was not pruned or removed.
+
+## Verified Docker evidence
+
+- Two-cycle run: `D:\SynesisDocker\p2p-lab-3a\run-20260913-181647`.
+- Image manifest: `sha256:22978dc50c2945dde268b546763859442e31a54468dfd54328943e0c79b78135`.
+- Six JVMs, a signed six-member snapshot, 12 edges, degree four, SLB2 first
+  contact, transit delivery, hard-kill withdrawal, same-identity replacement,
+  partition/recovery, netem impairment, two-node failure, and simultaneous
+  reconnect all passed for two cycles.
+- Containers and the private network were removed by bounded cleanup; no
+  `failure.txt` was produced.
+- Partition recovery deliberately uses a reversible traffic cut followed by
+  graceful same-identity process replacement and descriptor refresh. It is not
+  evidence that a live JVM automatically rebinds after arbitrary namespace
+  detach/reattach.
+
+## Immediate next action
+
+Resume from `docs/agent/checkpoints/CP-0941.md` after SYN-067 closes; stop at
+the documented Windows/Docker boundary and do not claim native Linux, KVM, NAT,
+or physical traversal evidence.
+
+# 2026-09-13 — SL-D-032 SLB2 minimization refinement
+
+- Task ID: SL-D-032
+- Checkpoint: 3 (SLB2 minimization audit and implementation)
+- Starting HEAD: `06acc4031f6c6ec77581463f3cfa7a3bdbfbc1b5`
+- Status: COMPLETE FOR CURRENT SCOPE; the prior SLB1 slice remains complete and
+  is preserved as a decode-compatible baseline
+- Related boundary: `SL-D-035` remains deferred for controlled-NAT and
+  physical two-network evidence
+- Prior scope completed: compact signed `synesis://join/SLB1-...` first contact,
+  one-way direct onboarding where the endpoint hint is reachable,
+  authenticated in-band candidate-descriptor exchange, CLI/deep-link and
+  control-plane compatibility, and legacy SLO1/SLA2 decoding
+- Completed refinement: produced an exact SLB1 byte budget, audited the detached
+  signature and admission entropy, add a clean minimized wire revision, and
+  prove the resulting lower bound without TOFU, compression, or transport/
+  overlay redesign
+- Exclusions preserved: relay/rendezvous/cloud services, TOFU,
+  membership/project authority, overlay redesign, session resumption, path
+  migration, and a universal NAT-traversal claim
+
+## Active refinement
+
+The current source-first audit confirms that the host signature and complete
+Ed25519 public key remain pre-authentication trust material: the existing Link
+proof authenticates the key supplied by the invite and cannot prevent key
+substitution if the invite binding is unsigned. The refinement may remove only
+redundant framing/metadata and defensibly bounded admission state; it must
+retain the signed endpoint, expected durable identity, freshness, and
+single-use admission boundary.
+
+## Work completed
+
+The additive SLB1 token carries only protocol/version fields, a short-lived
+single-use capability, the inviter Ed25519 public key, one signed non-relay
+endpoint hint, and the inviter signature. Full signed candidate descriptors
+are exchanged after authenticated `CONTROL_READY` through the bounded SLX1
+application-stream envelope. The existing Link identity proof and legacy
+SLO1/SLA2 lifecycle remain available.
+
+The terminal host/join, workspace control-plane, retained Link owner, sync
+application, and daemon deep-link paths now use compact one-way onboarding by
+default. Project routing remains application-level; compact Link material does
+not contain project membership or authority data. IPv6 link-local candidates
+are excluded because their interface scope cannot survive the existing wire
+encoding.
+
+The normal encoder now emits SLB2. It removes redundant inner framing and
+protocol bytes, derives expiry from a signed bounded lifetime, infers address
+family from the exact payload length, and reduces the admission capability to
+12 bytes. Fixed fixtures are 120/132 raw bytes and 180/196 URI characters for
+IPv4/IPv6; the full Ed25519 key and detached signature remain for self-contained
+non-TOFU authentication.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| `:link:check` | PASS; format, compile, static analysis, Javadocs, 107 tests |
+| Focused workspace control-plane tests | PASS; `ControlPlaneHttpHandlerTest`, `LinkRuntimeOwnerControlPlaneTest` |
+| Focused packaged CLI tests | PASS; generated onboarding, SLB2 daemon deep-link, and `UnifiedCliSyncProcessTest` |
+| SLB2 minimization | PASS; exact 120/132 raw and 180/196 URI bytes for IPv4/IPv6; SLB1 decode retained |
+| Workspace/CLI non-test gates | PASS; architecture, format, static analysis, and Javadocs |
+| `git diff --check` | PASS; only Git line-ending normalization warnings |
+| Detailed evidence | `docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`; durable checkpoint `CP-0939.md` |
+
+## Current failures
+
+The full `:cli:check` is not green because two unrelated pre-existing tests
+still fail: `CodexHookProcessTest.generatedLauncherFailsClosedBeforeMutationWhenWorkspaceIsUnassigned`
+and `WorkspaceCliTest.test14RepeatedBrokerRequestWithSameIdempotencyKeyDoesNotDuplicateMutation`.
+The focused compact CLI tests and all CLI non-test gates pass. A broad
+`:workspace:check` run also encountered unrelated Synesis-managed
+capability/session/worktree-state failures; it was not bypassed by creating
+`.synesis` state or using coordination tools. Physical NAT/Internet traversal
+and controlled two-network evidence remain outside this slice.
+The full `UnifiedCliSyncProcessTest` class was stopped after exceeding its
+expected bounded run window; its focused guided invitation test passed, so the
+class is not claimed as a complete gate.
+
+## Immediate next action
+
+Review the SLB2 diff, evidence, and working-tree boundary for any explicitly
+authorized commit; do not create `.synesis` state, push, or broaden the task
+into physical traversal.
+
 # 2026-09-13 — SL-D-040 bounded multi-node overlay convergence
 
 - Task ID: SL-D-040
 - Checkpoint: 2
 - Starting HEAD: `f26fb03cc03eec56e2275b01bd07b53df56ad154`
-- Status: COMPLETE FOR CURRENT SCOPE; SL-D-040 remains active for the next
-  explicitly scoped VM checkpoint
+- Status: COMPLETE FOR CURRENT SCOPE; the next explicitly scoped VM checkpoint
+  requires fresh activation
 - Durable checkpoint: `CP-0934.md`
 - Deferred-register review: SL-D-040 is promoted; SL-D-035 remains paused for
   physical traversal evidence. No new capability was invented or activated.

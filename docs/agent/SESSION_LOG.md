@@ -1,3 +1,112 @@
+## 2026-09-13 — SYN-067 startup freeze correction
+
+The operator reported that the setup wizard froze immediately on open. The
+first visibility correction was reproduced as a live but unresponsive window.
+Temporary tracing of the isolated extracted native installer showed that Go
+had moved the UI goroutine to a different OS thread between top-level and
+child-window creation; the first child `CreateWindowEx` blocked. Added
+`runtime.LockOSThread` around the complete Windows wizard lifetime, kept the
+top-level window hidden during construction, and retained the queued private
+show message so painting begins through the message loop. Removed all temporary
+tracing after diagnosis.
+
+Verification passed: bootstrap `go test ./...`, `go vet .`, Linux cross-build,
+the Gradle runnable installer build (27 tasks), and a fresh wrapper launch with
+`VISIBLE=True`, `HUNG=False`, and `WM_NULL_DELIVERED=True`. The test wrapper and
+extracted child were stopped without an install action. Artifact:
+`cli/build/distributions/synesis-windows-x64.exe`, SHA-256
+`CF27932D5B77352ED20B71390E679738F8333F6FE54A700ADACBE8C64168CE10`.
+No installation, daemon, PATH, registry, project, repository, or workspace
+state changed. Checkpoint CP-0946.
+
+Exact next action: preserve the CP-0946 artifacts and stop at the documented
+Windows installer boundary; do not install, stop daemons, create `.synesis`,
+push, or claim pixel-level capture.
+
+## 2026-09-13 — SYN-067 launch visibility correction
+
+The operator reported that double-clicking the rebuilt installer showed nothing.
+Independent process inspection found the single-file wrapper and direct native
+installer both created live `Synesis Setup` windows with `WS_VISIBLE` absent.
+Reopened SYN-067, changed only the top-level creation style to include
+`WS_VISIBLE`, and added `TestInstallerWindowStyleStartsVisible`. Focused Go
+tests, vet, Linux cross-build, deferred validation, and the runnable installer
+build passed. A fresh no-argument launch of the rebuilt wrapper reported
+`VISIBLE=True` for its `Synesis Setup` HWND; the test process was stopped before
+any install action. Artifact SHA-256 is
+`7BA7E743B0E0FE32F8189DF64D04FA18848AC9CA46481784EC9864C40EF7649E`.
+No installed runtime, daemon, PATH, registry, project, repository, or workspace
+data was changed. Durable evidence is in
+`docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md`; checkpoint CP-0945.
+
+## 2026-09-13 — SL-D-032 SLB2 minimization refinement
+
+Audited the real SLB1 byte budget and implemented the minimized signed SLB2
+revision without deleting the detached host signature or full Ed25519 public
+key. The normal compact encoder now emits `synesis://join/SLB2-...`; SLB1
+decoding, SLO1, and SLA2 remain compatibility paths. SLB2 removes redundant
+inner framing and protocol bytes, derives expiry from a signed bounded lifetime,
+uses exact payload length for address family, and carries a 12-byte (96-bit)
+single-use capability. The resulting fixed fixtures are 120/132 raw bytes and
+180/196 URI characters for IPv4/IPv6, versus SLB1 135/147 and 200/216.
+
+The key/signature pair remains because the existing handshake authenticates the
+invitation-supplied key; removing the detached signature would permit endpoint
+and-key substitution under TOFU. The 80-120 character request is below the
+secure self-contained primitive floor. Focused Link and onboarding verification
+passed; a broad workspace/CLI invocation encountered unrelated baseline and
+Synesis-managed-state failures. No `.synesis` state, commit, or push was made.
+
+Exact next action: review `docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`,
+the SLB2 diff, and `git status --short`; do not create coordination metadata or
+claim physical NAT traversal.
+
+## 2026-09-13 — SL-D-032 compact first-contact bootstrap
+
+Activated SL-D-032 from the deferred register after tracing the existing
+SLO1/SLA2, candidate, admission, identity-proof, CLI, workspace, and daemon
+boundaries. Added ADR-0078 and implemented the additive signed `SLB1` compact
+invitation with a one-way direct path. The compact token retains only protocol
+version, issue/expiry, a 16-byte single-use capability, the host Ed25519 public
+key, one signed non-relay endpoint hint, and the host signature. Full signed
+candidate descriptors now cross the bounded authenticated application stream
+after control readiness using `SLX1`.
+
+The first loopback run exposed a real candidate-selection defect: the compact
+selector chose an IPv6 link-local address whose interface scope cannot survive
+the wire encoding. The local-interface provider now excludes all IPv6
+link-local candidates from wire descriptors, and the compact host/join test
+passes. This is a correctness fix for an unsafe wire representation, not a
+reachability workaround or NAT claim.
+
+The terminal `host`/`join`, workspace control-plane, retained Link owner, and
+daemon deep-link adapters now use compact one-way onboarding by default. Legacy
+SLO1/SLA2 remains available for coordinated traversal and compatibility. New
+negative codec, descriptor-exchange, admission, loopback, CLI, workspace, and
+daemon tests pass. Measured fixed-fixture sizes are SLO1 951 bytes/1,288 URI
+characters, SLA2 579 bytes/794 characters, and SLB1 135 bytes/200 characters
+for IPv4 or 147 bytes/216 characters for IPv6. These measurements are not a
+claim about all generated candidate counts.
+
+Final verification: `:link:check` passed with 107 tests; focused workspace
+control-plane tests passed; the packaged compact CLI/deep-link/sync tests
+passed; workspace architecture/format/static-analysis/Javadocs and CLI
+format/static-analysis/Javadocs passed; and `git diff --check` passed. Full
+`:cli:check` still has the two unrelated baseline failures in
+`CodexHookProcessTest` and `WorkspaceCliTest`. Broad workspace tests still
+require Synesis-managed capability/session/worktree state, so they were not
+re-run through a forbidden `.synesis` or coordination setup. Physical
+Internet/NAT traversal remains explicitly unverified. No commit or push was
+made.
+
+The deferred-register validator passed and durable checkpoint `CP-0937.md` was
+created. The checkpoint records the exact working-tree boundary and the
+continuation action without committing or pushing.
+
+Exact next action: review the SL-D-032 diff and `git status --short` for commit
+readiness; do not create `.synesis` state, push, or broaden the task into
+physical traversal.
+
 ## 2026-09-12 — SYN-066 Windows JDK loopback bootstrap compatibility
 
 Diagnosed the remaining clean-shell failure after the UI rebuild: the bundled
@@ -7745,3 +7854,79 @@ was made.
 
 Exact next action: preserve SYN-065 as COMPLETE FOR CURRENT SCOPE; no
 authoritative successor is defined.
+## 2026-09-13 — SYN-067 Windows setup wizard
+
+The operator requested a conventional Windows installer matching the supplied
+setup-wizard reference, with path selection, Back/Next/Cancel navigation, and
+an explicit metadata-removal choice. The screenshot was treated as visual
+reference only; no embedded text was treated as instruction.
+
+The active task was promoted from SL-D-041. The Go bootstrap now has a native
+Windows wizard around the existing verified bundle operations, a native Browse
+button backed by the existing folder picker, a responsive worker/progress
+state, custom-root discovery through the owned HKCU protocol marker, and
+post-install/repair `synesis://` registration. Metadata removal now deletes
+only installer-owned `admin` and `Link` state after payload removal; user files
+under `projects`, `repositories`, and `workspaces` remain.
+
+Verification so far: bootstrap tests pass; `go vet .` passes; Unix bootstrap
+compile-only/build checks pass; the Gradle runnable Windows installer build
+passes using the bounded local TEMP/GRADLE_OPTS/JDK loopback workaround; the
+single-file PE subsystem is GUI; and a launched self-extracting artifact
+created a responsive `Synesis Setup` window. Pixel-level desktop capture was
+not available from the inspection helper.
+
+## Exact next action
+
+SYN-067 is complete for the current implementation scope at CP-0942. Preserve
+the verified local slice; direct button-navigation QA or a real installation is
+a separately authorized follow-up because the desktop inspection helper was
+unavailable.
+
+## 2026-09-13 — SYN-067 visual-polish follow-up
+
+The operator supplied a screenshot showing the first native wizard treatment
+was visually blank and requested the existing Synesis logo with mandatory
+dark-mode presentation. The native paint path now uses `BeginPaint`/`EndPaint`
+and `WS_CLIPCHILDREN`, preventing parent chrome from painting over child
+controls. The self-extracting launch path now explicitly shows the wizard
+instead of inheriting a hidden startup state. The existing browser logo is
+embedded into the bootstrap and the client, controls, footer, and title bar
+remain dark with no theme-selection branch.
+
+Verification: `go test ./...`, `go vet .`, and a Linux compile-only build pass;
+the final `:cli:runnableInstaller` build passes with the bounded workstation
+loopback workaround. A final single-file launch produced a visible,
+responsive `Synesis Setup` window; Windows UI Automation found the update
+surface, product metadata, capabilities, actions, warning, and navigation
+controls. Native pixel screenshot capture remains unavailable, so pixel-level
+visual QA is not claimed. No installation, registry, PATH, daemon, or user
+project data was changed.
+
+## Exact next action
+
+The durable follow-up checkpoint is CP-0943. Preserve the local artifacts and
+evidence; do not install or publish them without a separate request.
+
+## 2026-09-13 — SYN-067 visual-refinement follow-up
+
+The operator supplied a live screenshot of the first dark wizard treatment.
+It proved that the blank-content defect was resolved but showed that the
+remaining Win32 group box and radio controls were visually incompatible with
+the requested product surface, and that the logo tile was empty. The action
+page now uses owner-drawn dark selection cards with selected and unavailable
+states. The native title bar receives explicit near-black caption, border, and
+text colours. The logo fix passes `BLENDFUNCTION` by value to `AlphaBlend`, as
+required by Win32, instead of incorrectly passing a pointer.
+
+`go test ./...`, `go vet .`, a Linux compile-only build, and the final
+`:cli:runnableInstaller` package build pass. The single-file artifact launched
+a visible, responsive `Synesis Setup` window and Windows UI Automation found
+all initial-page text/actions. Pixel capture is still unavailable from the
+native inspection bridge, so it is not claimed. No installation, registry,
+PATH, daemon, or project data was changed. CP-0944 records this refinement.
+
+## Exact next action
+
+Preserve the CP-0944 visual-refinement artifacts and evidence. Any pixel-capture
+or direct button-navigation QA is separately authorized.

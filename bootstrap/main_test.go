@@ -243,6 +243,53 @@ func TestLocalBundleInstallRepairAndMetadataToggle(t *testing.T) {
 	}
 }
 
+func TestMetadataRemovalPreservesUserDataInsideInstallationRoot(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	archive := writeBundleArchive(t, root, "0.1.0")
+	installRoot := filepath.Join(root, "Synesis")
+	if err := runInstall("install", []string{"--bundle", archive, "--install-dir", installRoot}); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := installationPaths(installRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userFiles := map[string]string{
+		filepath.Join(paths.root, "projects", "keep.txt"):     "project",
+		filepath.Join(paths.root, "repositories", "keep.txt"): "repository",
+		filepath.Join(paths.root, "workspaces", "keep.txt"):   "workspace",
+	}
+	for path, contents := range userFiles {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	identity := filepath.Join(paths.root, "Link", "identity.pub")
+	if err := os.MkdirAll(filepath.Dir(identity), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(identity, []byte("installer-owned"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runUninstall([]string{"--install-dir", installRoot, "--remove-metadata"}); err != nil {
+		t.Fatal(err)
+	}
+	if fileExists(paths.bin) || fileExists(paths.versions) || fileExists(filepath.Join(paths.root, "Link")) {
+		t.Fatal("metadata uninstall retained application payload or installer identity")
+	}
+	for path, contents := range userFiles {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil || string(data) != contents {
+			t.Fatalf("metadata uninstall removed user data %s: err=%v contents=%q", path, readErr, string(data))
+		}
+	}
+}
+
 func TestLegacyLayoutMigration(t *testing.T) {
 	withoutPathMutation(t)
 	root := t.TempDir()
@@ -857,7 +904,12 @@ func withoutPathMutation(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	previous := pathUpdater
 	pathUpdater = func(installPaths, bool) error { return nil }
-	t.Cleanup(func() { pathUpdater = previous })
+	previousUnregister := unregisterProtocolForUninstall
+	unregisterProtocolForUninstall = func(installPaths) error { return nil }
+	t.Cleanup(func() {
+		pathUpdater = previous
+		unregisterProtocolForUninstall = previousUnregister
+	})
 }
 
 func runPreparedUpdate(t *testing.T, manifest, installRoot string) error {

@@ -1,3 +1,42 @@
+## SYN-067 — Windows installer startup responsiveness correction — 2026-09-13
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Root cause | Independent no-argument launch and initialization trace | PASS diagnosis | Go moved the UI goroutine between OS threads before child-window creation; the child `CreateWindowEx` blocked |
+| Regression | `TestInstallerWindowVisibilityIsDeferredUntilMessageLoop` | PASS | `bootstrap/installer_logo_windows_test.go`; top-level show is a private queued message |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap` |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Cross-platform source | `GOOS=linux GOARCH=amd64 go build ./...` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Local bounded JDK socket-path workaround; no installation |
+| Fresh wrapper launch | New single-file artifact, no arguments | PASS | `Synesis Setup` HWND reported `VISIBLE=True`, `HUNG=False`, `WM_NULL_DELIVERED=True`; test processes stopped before interaction |
+| UI thread affinity | `runtime.LockOSThread` around wizard lifetime | PASS | Parent and child Win32 windows are created and dispatched on one OS thread |
+| Deferred register | `scripts/agent-validate-deferred.ps1` | PASS | No deferred capability expanded |
+| Repository hygiene | `git diff --check` | PASS | Existing dirty worktree preserved; no push |
+
+Evidence: `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md`;
+checkpoint `CP-0946`.
+
+## SL-D-032 — compact first-contact bootstrap — 2026-09-13
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Source trace | SLO1/SLA2 fields, identity proof, candidates, admission, CLI, daemon | PASS | ADR-0078 and `sl-d-032-compact-bootstrap-2026-09-13.md` |
+| Compact codec | Canonical bounded SLB1 compatibility plus minimized SLB2 round-trip, IPv4/IPv6 sizes, version, trailing bytes, unsafe endpoint, tamper, expiry | PASS | `CompactBootstrapInvitationTest` |
+| In-band descriptor exchange | Signed SLX1 request/response and descriptor signature boundary | PASS | `AuthenticatedDescriptorExchangeTest` |
+| Admission | Compact 16-byte SLB1 and 12-byte SLB2 capabilities reserve once and consume after authentication | PASS | `InvitationAdmissionTest` |
+| One-way Link onboarding | Real local host/join, no SLA2, control readiness, post-control descriptor exchange | PASS | `CompactOnboardingTest`; direct local endpoint only |
+| Legacy compatibility | Existing SLO1/SLA2 lifecycle and replay behavior | PASS | `HumanMediatedOnboardingTest`, legacy protocol tests |
+| CLI | Installed two-profile host/join emits compact invite and completes without answer | PASS | `GeneratedOnboardingTest` |
+| Control plane | Compact invite/join, retained project membership, pending host projection | PASS | `ControlPlaneHttpHandlerTest`, `LinkRuntimeOwnerControlPlaneTest` |
+| Deep link | Daemon accepts strict SLB1/SLB2 shape and preserves project selection authority | PASS | `DaemonServerTest`; no daemon-side Link validation |
+| Link module gate | Full Link compilation, formatting, static analysis, Javadocs, and regression suite | PASS | `:link:check`; 107 tests |
+| Workspace non-test gates | Architecture, formatting, static analysis, and Javadocs | PASS | `:workspace:architectureCheck :workspace:formatCheck :workspace:staticAnalysis :workspace:javadoc` |
+| CLI non-test gates | Formatting, static analysis, and Javadocs | PASS | `:cli:formatCheck :cli:staticAnalysis :cli:javadoc` |
+| CLI full gate | Full CLI test suite | BOUNDED | Two unrelated baseline failures remain in `CodexHookProcessTest` and `WorkspaceCliTest`; focused compact tests pass |
+| Workspace broad suite | Full workspace test suite | BOUNDED | Unrelated Synesis-managed capability/session/worktree-state failures; no `.synesis` state or coordination bypass used |
+| Repository hygiene | Diff whitespace and direct-local state boundary | PASS | `git diff --check`; no `.synesis` state created |
+| NAT / physical network | Symmetric NAT, Internet, two-machine traversal | DEFERRED | SL-D-031/035; local evidence does not prove reachability |
+
 ## SL-D-040 Checkpoint 2 — bounded multi-node overlay convergence — 2026-09-13
 
 | Area | Check | Result | Evidence / boundary |
@@ -1695,3 +1734,23 @@ Evidence: `docs/evidence/SYN-065-windows-daemon-health-probe-2026-09-12.md`.
 | `:link:check` with documented loopback workaround | PASS, 89 tests |
 
 Evidence: `docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.
+## SYN-067 Windows setup wizard — 2026-09-13
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Bootstrap regression | `go test ./...` on Windows | PASS | installer lifecycle and metadata-preservation tests |
+| Bootstrap static check | `go vet .` | PASS | bootstrap package; existing folder-picker vet warnings are outside this package |
+| Unix compatibility | `GOOS=linux GOARCH=amd64 go test -c` and `go build ./...` | PASS | compile-only cross-platform check; no Unix execution claim |
+| Native GUI build | Go `-H=windowsgui` | PASS | installer PE subsystem `2` (GUI) |
+| Packaged artifact | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS | `cli/build/distributions/synesis-windows-x64.exe` |
+| Embedded product mark | `bootstrap/assets/synesis-logo.png` and native bitmap conversion test | PASS | existing Synesis browser mark reused; no network asset dependency |
+| Logo alpha compositing | `installerBlendValue` unit test and native `AlphaBlend` call | PASS | `BLENDFUNCTION` is passed by value, so the embedded mark is not transparent by accident |
+| Mandatory dark treatment | native client/control brushes and DWM title-bar request | PASS | no light-mode or theme-selection branch |
+| Selection-card treatment | native owner-drawn action controls | PASS | no native group box or stock radio row on the action page; selected/disabled card states are derived from installer state |
+| Wizard launch | single-file self-extractor | PASS | visible, responsive child window titled `Synesis Setup`; UI Automation found all initial-page text/actions; CP-0944 |
+| URI registration | owned HKCU protocol tests and wizard wiring | PASS | `bootstrap/protocol_registration_test.go`; unowned keys remain protected |
+| User-data boundary | metadata-removal regression | PASS | user files below `projects`, `repositories`, and `workspaces` preserved |
+
+Evidence boundary: this slice does not claim actual installation into the
+managed user root, two-machine onboarding, universal browser behavior, or
+pixel-level visual QA because the Windows inspection helper was unavailable.

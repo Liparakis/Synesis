@@ -1,3 +1,88 @@
+## 2026-09-13 — SYN-067 startup freeze correction complete
+
+The launch freeze was caused by Go moving the Win32 UI goroutine between OS
+threads after creating the top-level window and before creating child controls.
+`runInstallerMenu` now pins the OS thread for the wizard lifetime; the top-level
+window is constructed hidden, the show operation is posted, and the message
+loop handles showing and painting it. Focused Go tests, vet, Linux cross-build,
+the runnable installer build, and the fresh wrapper probe passed.
+
+Current single-file artifact:
+`cli/build/distributions/synesis-windows-x64.exe`
+SHA-256: `CF27932D5B77352ED20B71390E679738F8333F6FE54A700ADACBE8C64168CE10`.
+
+Checkpoint: `CP-0946`.
+
+- Exact next action: preserve this bounded result; do not install it, stop
+  daemons, create `.synesis` state, push, or claim pixel-level screenshot QA.
+
+## 2026-09-13 — SYN-067 launch visibility correction complete
+
+The Windows wizard had been created without `WS_VISIBLE`, so the rebuilt
+single-file installer ran in the background with a live but invisible
+`Synesis Setup` window. The creation style now includes `WS_VISIBLE`, and the
+new `TestInstallerWindowStyleStartsVisible` assertion passes. Fresh no-argument
+launch of `cli/build/distributions/synesis-windows-x64.exe` reported a visible
+`Synesis Setup` HWND. Build hash:
+`7BA7E743B0E0FE32F8189DF64D04FA18848AC9CA46481784EC9864C40EF7649E`.
+
+Checkpoint: `CP-0945`.
+
+- Exact next action: preserve the corrected artifact and evidence; do not
+  install it, stop daemons, create `.synesis` state, push, or claim pixel-level
+  screenshot capture.
+
+## 2026-09-13 — SL-D-040 Checkpoint 3A Docker process/network isolation lab verified
+
+Checkpoint 3A is active on the current Windows 11 host using the healthy
+Docker Desktop Linux/WSL2 engine. Native Ubuntu, SSH, and usable KVM are not
+available. The Linux x86_64 packaged distribution has been built with the
+native QUIC artifact.
+
+The required local lab is six independent JVMs with the existing signed Link
+and overlay protocol: N=6/12 edges/degree four, SLB2 first contact, peer
+transit, hard kill, endpoint/container replacement, partition, two-node
+failure, simultaneous reconnect, bounded loss/latency, repeated cycles,
+topology evidence, and cleanup.
+
+The source audit found that the shipped CLI has no signed membership authority
+and `LinkRuntimeOwner` has no production reconciler/direct descriptor connector.
+The test-only harness supplied a legitimate signed snapshot and existing
+authenticated Link/overlay classes. Two cycles passed at
+`D:\SynesisDocker\p2p-lab-3a\run-20260913-181647`; the evidence is recorded in
+`docs/evidence/sl-d-040-checkpoint-3a-docker-2026-09-13.md`.
+
+Partition recovery is an explicit traffic cut followed by graceful
+same-identity process replacement and descriptor refresh. Do not present it as
+automatic live-JVM namespace rebind. No source `.synesis` state, Synesis
+coordination tools, remote publish, or push was used.
+
+- Exact next action: review `docs/agent/checkpoints/CP-0941.md` and the
+  Checkpoint 3A evidence before any future extension; stop at the documented
+  Windows/Docker boundary unless a native Linux or KVM host is explicitly
+  supplied.
+
+## 2026-09-13 — SL-D-032 SLB2 minimization refinement complete
+
+SL-D-032's prior bounded SLB1 scope is complete and preserved. The active
+refinement must minimize the human-facing bootstrap without changing its trust
+boundary. The additive SLB1 compact
+invitation, authenticated SLX1 descriptor exchange, one-way Link lifecycle,
+terminal/control-plane/sync/deep-link adapters, and legacy SLO1/SLA2
+compatibility are implemented. `:link:check` passed with 107 tests; focused
+workspace and packaged CLI tests passed; workspace and CLI non-test gates
+passed; and evidence is recorded in
+`docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`.
+Durable checkpoint `CP-0939.md` records the direct-local working-tree state.
+
+The full CLI gate retains two unrelated baseline test failures, and broad
+workspace tests require Synesis-managed state that this source checkout must
+not create. Physical NAT/Internet traversal remains deferred to SL-D-035.
+
+- Exact next code action: review the SLB2 diff and working-tree boundary for any
+  explicitly authorized commit; do not create `.synesis` state, push, or broaden
+  the task into physical traversal.
+
 ## 2026-09-13 — SL-D-040 Checkpoint 2 closure
 
 Checkpoint 2 is complete for its current scope and must be preserved. The
@@ -3633,3 +3718,22 @@ transit behavior.
 Create the required durable checkpoint, then close SL-D-036 Checkpoint 1
 locally; no broader reconnect, path-migration, NAT, relay, UI, HTTP, MCP, or
 push work is in scope.
+## 2026-09-13 — SL-D-032 compact first-contact bootstrap activation record
+
+The direct-local activation record is closed by the current-scope checkpoint
+above. ADR-0078 records the additive compact `SLB1` invitation and the
+post-control `SLX1` descriptor exchange. Legacy SLO1/SLA2 remains the
+compatibility/coordinated-traversal path, and SL-D-035 still owns physical NAT
+evidence.
+## SYN-067 continuation
+
+The Windows setup wizard source and installer cleanup boundary are implemented
+locally and the first visual-polish follow-up is complete at CP-0943. A
+screenshot-driven visual refinement now replaces stock selection controls with
+dark cards and corrects the invisible logo mark; CP-0944 records its evidence.
+Do not install the artifact into the managed user installation, publish, push,
+create source `.synesis` state, or claim pixel visual QA because the desktop
+inspection helper was unavailable.
+
+- Exact next code action: preserve the CP-0944 SYN-067 artifacts and evidence;
+  any pixel-capture or direct button-navigation QA is separately authorized.

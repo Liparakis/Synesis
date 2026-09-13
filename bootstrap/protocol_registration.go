@@ -17,6 +17,11 @@ const (
 
 var errProtocolValueNotFound = errors.New("protocol registry value not found")
 
+// unregisterProtocolForUninstall is injectable so disposable bootstrap tests
+// never mutate or depend on the developer's real per-user registry. Production
+// code retains the ownership-checked implementation by default.
+var unregisterProtocolForUninstall = unregisterProtocol
+
 // protocolStore is the small registry surface needed by the ownership policy.
 // The Windows adapter implements it with HKCU; tests use an in-memory store so
 // focused registration checks never mutate the developer hive.

@@ -1,3 +1,148 @@
+## 2026-09-13 — SYN-067 startup freeze correction
+
+The CP-0945 visibility-only correction made the top-level wizard visible but
+left the launch unresponsive during initialization. Independent tracing showed
+that Go migrated the UI goroutine to another OS thread after the top-level
+window was created; the first child `CreateWindowEx` then blocked because Win32
+parent and child windows are thread-affine. `runInstallerMenu` now locks the OS
+thread for the full wizard lifetime. The top-level window remains hidden during
+construction, queues a private show message, and is shown after `GetMessage` is
+running.
+
+Focused bootstrap tests and vet passed, the Linux cross-build passed, and
+`:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon`
+completed successfully. A fresh no-argument launch of
+`cli/build/distributions/synesis-windows-x64.exe` reported
+`VISIBLE=True HUNG=False WM_NULL_DELIVERED=True`; the wrapper and extracted
+child were closed before any install action. No installed runtime, daemon,
+PATH, registry, project, repository, or workspace data was changed.
+
+Evidence: `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md`; checkpoint
+`CP-0946`.
+
+## Exact next action
+
+Keep the CP-0946 artifacts and evidence as the current bounded result; do not
+install, stop daemons, create `.synesis` state, push, or claim pixel-level
+capture.
+
+## 2026-09-13 — SYN-067 launch visibility correction
+
+The CP-0944 Windows installer claim was independently reproduced as a live but
+hidden `Synesis Setup` window. The top-level native window is now created with
+`WS_VISIBLE`, and `TestInstallerWindowStyleStartsVisible` protects the fix.
+The rebuilt single-file artifact `cli/build/distributions/synesis-windows-x64.exe`
+was launched without arguments; its child `Synesis Setup` HWND reported
+`VISIBLE=True`. The test process was closed before any install action. Focused
+bootstrap tests, vet, Linux cross-build, deferred validation, and the runnable
+installer build passed. No installed runtime, daemon, PATH, registry, project,
+repository, or workspace data was changed.
+
+Evidence: `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md`; checkpoint
+`CP-0945`.
+
+## Exact next action
+
+Preserve the CP-0945 artifacts and stop at the documented Windows installer
+boundary; do not install, stop daemons, create `.synesis` state, push, or claim
+pixel-level capture.
+
+## 2026-09-13 — SL-D-040 Checkpoint 3A Docker process/network isolation lab verified
+
+Task `SL-D-040`, Checkpoint 3A, is paused after SYN-067 completed its bounded
+installer slice for the local Docker process/network
+isolation lab. The current workstation is Windows 11 with Docker Desktop's
+Linux/WSL2 engine; it is not native Ubuntu and has no configured SSH target or
+usable KVM exposure. Docker is healthy and a Linux x86_64 packaged distribution
+with the native QUIC artifact has been built.
+
+The lab target is six independent JVMs, deterministic N=6 policy (12 edges,
+degree four), SLB2 first contact, authenticated peer transit, hard kill,
+container/endpoint replacement, partition, two-node failure, simultaneous
+reconnect, bounded impairment, repeated cycles, exact topology evidence, and
+cleanup. No source-checkout `.synesis` state, Synesis coordination tools,
+remote publish, or push is allowed.
+
+The source audit is an active constraint: the shipped CLI passes no signed
+membership authority to `LinkRuntimeOwner`, and the owner does not yet compose
+`OverlayReconciler` with a production direct descriptor reconnect connector.
+The test-only Docker harness made this explicit and used only a legitimate
+signed snapshot and existing authenticated Link/overlay classes. The two-cycle
+evidence run is `D:\SynesisDocker\p2p-lab-3a\run-20260913-181647`; it recorded
+12 edges, degree four, SLB2 first contact, transit, hard-kill withdrawal,
+same-identity replacement, partition/recovery, netem, two-node failure, and
+simultaneous reconnect. Exact result and limitations are in
+`docs/evidence/sl-d-040-checkpoint-3a-docker-2026-09-13.md`.
+
+The checkpoint remains paused only because this host cannot provide native
+Linux/KVM/physical traversal evidence, and the shipped CLI still lacks the
+membership-authority and production descriptor-reconnect composition used by
+the lab adapter.
+
+## Exact next action
+
+Resume from `docs/agent/checkpoints/CP-0942.md`, then stop at the documented
+Windows/Docker boundary.
+
+## 2026-09-13 — SL-D-032 SLB2 minimization refinement complete for current scope
+
+The active refinement preserved the additive SLB1 baseline and moved the normal
+compact encoder to a clean signed SLB2 wire revision. SLB2 is fixed to Link v1,
+derives expiry from a signed lifetime, infers IPv4/IPv6 from its exact bounded
+payload length, uses a 12-byte (96-bit) single-use admission capability, and
+retains the inviter's full Ed25519 public key, signed endpoint, and detached
+signature. The full key and signature remain necessary for self-contained
+pre-authentication; removing them would reduce the link to trust-on-first-use.
+
+Measured fixed-fixture sizes are SLB1 135/147 raw bytes and 200/216 URI
+characters for IPv4/IPv6; normal SLB2 is 120/132 raw bytes and 180/196 URI
+characters. The 80-120 character target is below the secure self-contained
+Ed25519 key-plus-signature floor once an endpoint, validity, and admission guard
+are included. SLB1 decode, SLO1, and SLA2 remain available.
+
+Verification: `:link:check` passed with 107 tests; focused SLB2 codec, admission,
+and local onboarding tests passed; the daemon/deep-link fixture was switched to
+SLB2; `git diff --check` passed; and the deferred-register validator passed.
+The broad workspace test invocation exposed unrelated Synesis-managed
+capability/session/worktree-state failures, so no `.synesis` state or
+coordination bypass was created. Physical NAT/Internet traversal remains
+unverified. No commit or push was made.
+
+Durable checkpoint `docs/agent/checkpoints/CP-0939.md` records the exact
+working-tree boundary and verification. The next action is an independent
+review of the diff before any explicitly authorized commit; do not create
+`.synesis` state or broaden this task into physical traversal.
+
+## 2026-09-13 — SL-D-032 compact first-contact bootstrap complete for current scope
+
+The direct-local source trace activated existing deferred capability `SL-D-032`
+for the bounded first-contact redesign recorded in ADR-0078. The additive
+SLB1 codec, authenticated SLX1 descriptor exchange, one-way Link lifecycle,
+terminal/daemon/deep-link adapters, workspace control-plane integration, and
+sync project-query routing are implemented and verified. The legacy signed
+SLO1/SLA2 path remains the compatibility and coordinated-traversal path.
+
+The compact token carries only a version, short expiry, 16-byte single-use
+capability, inviter Ed25519 public key, signature, and one signed non-relay
+endpoint hint. Complete candidate descriptors remain on the authenticated
+application stream after `CONTROL_READY`. IPv6 link-local candidates are
+excluded because the current wire encoding cannot preserve interface scope.
+The local one-way acceptance is direct loopback evidence only; physical
+NAT/Internet traversal remains `SL-D-035`.
+
+Verification: `:link:check` passed with 107 tests; focused workspace control-
+plane tests passed; packaged compact CLI/deep-link/sync tests passed; workspace
+and CLI non-test gates passed; and `git diff --check` passed. Full `:cli:check`
+still has two unrelated baseline test failures, and broad workspace tests still
+require Synesis-managed state that this direct-local rule forbids creating.
+Durable checkpoint `docs/agent/checkpoints/CP-0937.md` was created after the
+deferred-register validator passed.
+
+## Exact next action
+
+Review the SL-D-032 diff and `git status --short` for commit readiness; do not
+create `.synesis` state, push, or broaden the task into physical traversal.
+
 ## 2026-09-13 — SL-D-040 Checkpoint 2 complete for current scope
 
 Checkpoint 2 is complete locally in durable checkpoint `CP-0934.md` from starting HEAD
@@ -5162,3 +5307,36 @@ three-peer recovery proof rather than a B-required transit proof.
 
 Preserve SL-D-036 Checkpoint 1 as COMPLETE FOR CURRENT SCOPE. No broader
 reconnect, path migration, NAT, relay, UI, HTTP, MCP, or push work is in scope.
+## 2026-09-13 — SYN-067 Windows setup wizard implementation slice
+
+The initial `SYN-067` implementation is complete at CP-0942 and its first
+visual-polish follow-up is complete at CP-0943. A screenshot-driven visual
+refinement has replaced remaining stock-control artifacts with dark selection
+cards and corrected the invisible logo mark. CP-0944 records the final build,
+tests, and visible UI Automation launch evidence.
+The direct-local source audit found a console-only
+Windows installer, an existing ownership-safe HKCU `synesis://` seam that was
+not wired into the normal installer flow, and a metadata-removal branch that
+could remove the whole installation root. The slice now includes a native
+Win32 wizard source, an owned post-install protocol-registration step, a
+payload/metadata cleanup split, and a regression preserving user files under
+`projects`, `repositories`, and `workspaces`.
+
+Focused bootstrap tests pass, the Windows GUI build passes, the Unix bootstrap
+compile-only check passes, and `:cli:runnableInstaller --rerun-tasks
+--no-configuration-cache --no-daemon` passes with the bounded local Gradle/JDK
+loopback workaround. The single-file artifact is
+`cli/build/distributions/synesis-windows-x64.exe`; its PE subsystem is GUI and
+the launched self-extracting wrapper produced a visible, responsive `Synesis
+Setup` window whose UI Automation tree contains the update surface, product
+details, capabilities, actions, warning, and navigation controls. The visual
+follow-up also embeds the existing Synesis logo and applies a mandatory dark
+client/control/title-bar treatment. The desktop inspection helper was
+unavailable, so pixel-level visual capture is not claimed. CP-0943 records the
+final hashes and UI Automation launch evidence.
+
+## Exact next action
+
+The final focused verification and artifact hashes are recorded in the SYN-067
+evidence file and CP-0943. No further SYN-067 code action remains; any direct
+button-navigation QA or real install is a separately authorized follow-up.

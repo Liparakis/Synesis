@@ -1,3 +1,130 @@
+## SYN-067
+
+### Windows setup wizard and owned deep-link installation — activated 2026-09-13
+
+- Status: DONE
+- Evidence: CP-0946 and `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md`;
+  the startup freeze was traced to cross-thread Win32 window construction and
+  corrected with OS-thread pinning plus deferred show sequencing.
+- Dependency: SYN-058 native Windows activation and SYN-066 installed
+  launcher compatibility are COMPLETE FOR CURRENT SCOPE.
+- Primary goal: replace the double-click text menu with a responsive native
+  Windows setup wizard that makes installation, repair, custom destination
+  selection, and metadata-preserving uninstall understandable and reversible.
+- Scope: Windows-only no-argument installer UI with Install/Repair and
+  Uninstall choices, destination textbox and native Browse picker,
+  Back/Next/Cancel navigation, confirmation and progress states, explicit
+  metadata-removal checkbox, and background execution of the existing verified
+  bundle operations. The wizard also persists the selected installation root
+  through the existing owned per-user protocol registration and registers the
+  `synesis://` handler after a successful install or repair. This follow-up
+  adds a deliberate Windows-style visual hierarchy, branded header, capability
+  summary, warning footer, typography, primary/secondary action treatment,
+  embedded Synesis logo, and mandatory dark client/title-bar treatment. This
+  refinement replaces the white native group box and stock radio rows with
+  purposeful dark selection cards and ensures the product mark is visible.
+- Safety boundary: retain versioned atomic activation, user PATH ownership,
+  registry ownership checks, no administrator requirement, no provider
+  installation, no daemon shutdown, no project/workspace/repository scanning
+  or deletion, and no overwrite of an unowned `synesis` protocol key. Unix
+  installers retain their existing console entry point.
+- Acceptance criteria: native wizard compiles as a Windows GUI subsystem;
+  focused tests cover path normalization/discovery, navigation decisions,
+  protocol registration lifecycle, metadata toggle, and project preservation;
+  a rebuilt extracted and single-file Windows installer opens the wizard;
+  install/repair/uninstall operations remain responsive and report failures;
+  and the bundled documentation describes the actual controls and path/data
+  behavior.
+- Deferred-register review: explicit user activation of SL-D-041; no network,
+  authority, provider, or project lifecycle capability is promoted.
+- Completion: the CP-0944 refinement replaced stock action controls with dark
+  cards and repaired logo alpha compositing. CP-0945's visibility-only
+  correction exposed a startup freeze before the message loop; CP-0946 pins
+  the complete wizard lifetime to one OS thread, queues the show message, and
+  passes the fresh wrapper responsiveness probe.
+
+## SL-D-040 Checkpoint 3A
+
+### Docker process/network isolation lab — activated 2026-09-13
+
+- Status: PAUSED AFTER SYN-067; bounded Docker implementation verified for two cycles; native
+  Linux/KVM/physical traversal remains unavailable on this host
+- Substrate: Docker Desktop Linux engine on the current Windows 11 host, backed
+  by the Docker-managed WSL2 kernel. This is not native Ubuntu, a remote Linux
+  host, or KVM-backed VM evidence.
+- Goal: create a repeatable six-independent-JVM local lab for the existing
+  bounded overlay and Link transport, with deterministic N=6 policy evidence,
+  SLB2 first-contact bootstrap, peer transit, hard process/container failure,
+  endpoint/container replacement, partition, two-node failure, simultaneous
+  reconnect, bounded latency/loss, repeat cycles, exact topology snapshots,
+  cleanup, and an honest KVM-readiness result.
+- Acceptance boundary: every authenticated session must use the existing Link
+  identity/proof and signed candidate-descriptor checks; every overlay member
+  must come from an explicitly signed membership snapshot; the harness must not
+  create source-checkout `.synesis` state, use Synesis coordination tools, add
+  an unsigned allowlist, or claim physical/NAT/Internet traversal.
+- Current source constraint: the shipped CLI intentionally supplies no signed
+  membership authority and `LinkRuntimeOwner` does not yet compose the
+  production reconciler/direct-descriptor reconnect path. The lab may use a
+  bounded test-only process runner over the existing production Link/overlay
+  surfaces, or it must stop with that limitation documented; it may not hide
+  the gap with a fake mini-peer or state surgery.
+- Required evidence: build/runtime image identity, exact node IDs and signed
+  membership digest, twelve undirected edges with degree four, authenticated
+  transit delivery, stale-edge withdrawal, fresh-session reconnect, endpoint
+  change, partition/recovery, two-node failure/recovery, loss/latency settings,
+  repeated-cycle results, and cleanup proof. Verified in
+  `D:\SynesisDocker\p2p-lab-3a\run-20260913-181647` with image manifest
+  `sha256:22978dc50c2945dde268b546763859442e31a54468dfd54328943e0c79b78135`.
+- Explicit exclusions: native Linux/KVM installation on this host, external
+  machines, router/DNS changes, public daemons, credentials, relay/rendezvous,
+  source redesign beyond the minimum harness seam, remote publish, and push.
+- Exact next action: resume from `docs/agent/checkpoints/CP-0942.md`, preserving
+  the documented source/product and host limits.
+
+## SL-D-032
+
+### Compact first-contact bootstrap — SLB2 minimization complete 2026-09-13
+
+- Status: COMPLETE FOR CURRENT SCOPE
+- Prior SLB1 implementation remains complete for its original scope and must
+  remain decode-compatible.
+- Dependency: existing Link identity proof, invitation admission, bounded
+  application stream, candidate gathering, and direct QUIC race remain the
+  implementation boundary. `SL-D-035` remains deferred for physical NAT and
+  two-network evidence.
+- Primary goal: minimize the human-facing first-contact token to the
+  irreducible secure boundary while retaining the compact signed identity,
+  endpoint, freshness, and single-use admission proofs.
+- Prior scope: strict compact codec, one-way direct onboarding where the signed
+  endpoint hint is reachable, authenticated descriptor exchange, CLI/deep-link
+  compatibility, and legacy SLO1/SLA2 decoder/lifecycle coverage.
+- Active refinement scope: exact byte accounting for real SLB1, clean wire
+  revision for redundant pre-auth fields, signature/identity/capability threat
+  analysis, unchanged non-TOFU proof, and CLI/control-plane compatibility.
+- Acceptance criteria: canonical bounded parser; expiry, tamper, replay,
+  wrong-identity, wrong-version, and endpoint-negative tests; measured IPv4 /
+  IPv6 sizes with a regression budget; authenticated loopback without an answer
+  link; legacy mediated regression; attack-boundary coverage; and documented
+  no-relay/no-TOFU/no-universal-NAT boundaries.
+- Explicit exclusions: Synesis MCP/control-plane state in this source
+  checkout, cloud/rendezvous services, relay, membership/project authority,
+  overlay redesign, session resumption, path migration, and remote publish.
+- Architecture: `docs/adr/0078-compact-link-bootstrap.md`.
+- Prior verification: `:link:check` passed with 107 tests; focused workspace
+  control-plane tests and packaged CLI compact onboarding/sync tests passed;
+  workspace and CLI non-test gates passed; `git diff --check` passed. Full
+  `:cli:check` retains two unrelated baseline test failures, and broad
+  workspace tests remain outside the direct-local evidence boundary because
+  they require Synesis-managed state.
+- Closure evidence: `docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`;
+  durable checkpoint `docs/agent/checkpoints/CP-0939.md`. SLB2 measures
+  120/132 raw bytes and 180/196 URI characters for IPv4/IPv6; the full host
+  key and detached signature remain required for non-TOFU first contact.
+- Exact next action: review the SL-D-032 diff and working-tree boundary for
+  any explicitly authorized commit; do not create `.synesis` state, push, or
+  broaden the task into physical traversal.
+
 ## SL-D-036
 
 ### Checkpoint 1 — automatic overlay adjacency reconciliation — activated 2026-09-12
@@ -698,10 +825,10 @@
 
 ### Distributed project overlay, routed envelopes, and self-hosted relay — activated 2026-09-08
 
-- Status: ACTIVE
+- Status: COMPLETE FOR CURRENT SCOPE
 - Checkpoint 2 status: COMPLETE FOR CURRENT SCOPE. The next slice is the
-  separately scoped local-VM topology/churn checkpoint; this task remains the
-  sole active task until that successor slice is explicitly closed.
+  separately scoped local-VM topology/churn checkpoint and requires explicit
+  activation; this task is not active in the current checkout.
 - Verification: Checkpoint 2 passes with the command-local Windows/JDK
   loopback workaround: deterministic overlay/reconciler tests, six-endpoint
   native QUIC graph/transit/failure/rejoin acceptance, existing separate-JVM

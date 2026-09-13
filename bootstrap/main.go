@@ -339,11 +339,11 @@ func usage() {
 	fmt.Println("synesis-installer [install|repair|uninstall|register-protocol|unregister-protocol|doctor|version]")
 }
 
-// runInstallerMenu provides the double-click entry point shipped in every
-// platform bundle. It deliberately operates only on the bundle containing the
+// runConsoleInstallerMenu provides the non-GUI double-click entry point used
+// by Unix bundles. It deliberately operates only on the bundle containing the
 // running installer, so installation never needs a network manifest and never
 // installs a provider as a side effect.
-func runInstallerMenu() error {
+func runConsoleInstallerMenu() error {
 	bundle, err := runningBundleRoot()
 	if err != nil {
 		return err
@@ -2029,19 +2029,18 @@ func runUninstall(args []string) error {
 		return errors.New("refusing unexpected installation root")
 	}
 	if runtime.GOOS == "windows" {
-		if err := unregisterProtocol(paths); err != nil {
+		if err := unregisterProtocolForUninstall(paths); err != nil {
 			return err
 		}
 	}
 	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
+	if err := removeInstalledPayload(paths); err != nil {
+		return err
+	}
 	if *removeMetadata {
-		if err := removeInstallationTree(paths.root); err != nil {
-			return err
-		}
-	} else {
-		if err := removeInstalledPayload(paths); err != nil {
+		if err := removeInstallerMetadata(paths); err != nil {
 			return err
 		}
 	}
@@ -2056,6 +2055,9 @@ func runUninstall(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := removeEmptyInstallationRoot(paths.root); err != nil {
+		return err
+	}
 	prefix := filepath.Base(paths.root) + ".staging-"
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), prefix) {
@@ -2065,6 +2067,37 @@ func runUninstall(args []string) error {
 		}
 	}
 	fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true", "METADATA_REMOVED="+strconv.FormatBool(*removeMetadata))
+	return nil
+}
+
+// removeInstallerMetadata removes only metadata owned by the installer. User
+// project, repository, workspace, and other unrecognized entries remain in
+// place even when the operator requests metadata removal.
+func removeInstallerMetadata(paths installPaths) error {
+	for _, path := range []string{
+		paths.admin,
+		filepath.Join(paths.root, "Link"),
+	} {
+		if err := removeInstallationTree(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeEmptyInstallationRoot removes the now-empty application root without
+// touching user-owned data that may have been placed below that root.
+func removeEmptyInstallationRoot(root string) error {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return os.Remove(root)
+	}
 	return nil
 }
 

@@ -417,7 +417,8 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
                 "synesis-installer$suffix" to "."
             )) {
                 val output = outputDirectory.resolve(binaryName)
-                val ldflags = if (target.first == "windows" && binaryName.startsWith("synesis-folder-picker")) {
+                val ldflags = if (target.first == "windows" &&
+                    (binaryName.startsWith("synesis-folder-picker") || binaryName.startsWith("synesis-installer"))) {
                     "-s -w -H=windowsgui"
                 } else {
                     "-s -w"
