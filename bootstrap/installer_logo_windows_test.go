@@ -37,9 +37,41 @@ func TestInstallerPageLayoutDoesNotOverlapSharedControls(t *testing.T) {
 			continue
 		}
 		if page == installerPageAction {
+			copy := map[int]string{
+				controlTitle:             "Manage installation",
+				controlDescription:       "Choose what you want to do with the current installation.",
+				controlProductDetails:    "",
+				controlCapabilities:      "Setup includes",
+				controlCapabilityInstall: "Local runtime",
+				controlCapabilityLink:    "synesis:// link handler",
+				controlCapabilityData:    "Existing project and workspace data is kept",
+				controlActionGroup:       "Choose an action",
+				controlActionInstall:     "Install or update",
+				controlActionUninstall:   "Uninstall",
+				controlActionPath:        "Installed at C:\\Example\\Synesis",
+				controlNext:              "Continue",
+				controlCancel:            "Cancel",
+			}
+			for id, want := range copy {
+				if got := getInstallerText(w.controls[id]); got != want {
+					t.Fatalf("control %d copy = %q, want %q", id, got, want)
+				}
+			}
 			title := windowRect(controlTitle)
+			if title.bottom > description.top {
+				t.Fatal("main title overlaps the subtitle")
+			}
+			if title.bottom-title.top < w.scaled(80) {
+				t.Fatal("main title control is too short for the display font")
+			}
 			if title.right > title.left+w.scaled(1040) {
 				t.Fatal("header intrudes into logo area")
+			}
+			for _, id := range []int{controlCapabilityInstall, controlCapabilityLink, controlCapabilityData} {
+				row := windowRect(id)
+				if row.bottom-row.top < w.scaled(40) {
+					t.Fatalf("setup detail control %d is too short for readable body text", id)
+				}
 			}
 			cancelRight := windowRect(controlCancel).right
 			installRight := windowRect(controlActionInstall).right
@@ -47,8 +79,23 @@ func TestInstallerPageLayoutDoesNotOverlapSharedControls(t *testing.T) {
 			if cancelRight != installRight || cancelRight != uninstallRight {
 				t.Fatalf("main-page Cancel edge is not aligned with the action cards: cancel=%d install=%d uninstall=%d", cancelRight, installRight, uninstallRight)
 			}
+			actionHeading := windowRect(controlActionGroup)
+			installCard := windowRect(controlActionInstall)
+			uninstallCard := windowRect(controlActionUninstall)
+			if actionHeading.bottom+w.scaled(16) > installCard.top {
+				t.Fatal("action heading does not have a clear gap above the first card")
+			}
+			if installCard.bottom+w.scaled(12) > uninstallCard.top {
+				t.Fatal("action cards do not have a clear gap")
+			}
 			path := windowRect(controlActionPath)
 			next := windowRect(controlNext)
+			if uninstallCard.bottom+w.scaled(48) > next.top {
+				t.Fatal("footer crowds the action cards")
+			}
+			if next.top-uninstallCard.bottom > w.scaled(100) {
+				t.Fatal("main page leaves an excessive gap between actions and footer")
+			}
 			pathCenter := (path.top + path.bottom) / 2
 			nextCenter := (next.top + next.bottom) / 2
 			if pathCenter < nextCenter-1 || pathCenter > nextCenter+1 {
@@ -85,6 +132,16 @@ func TestInstallerPageLayoutDoesNotOverlapSharedControls(t *testing.T) {
 	w.goBack()
 	if w.page != installerPageAction {
 		t.Fatal("Back did not restore main page")
+	}
+}
+
+func TestInstallerWindowMetricsUseCompactMaintenanceSize(t *testing.T) {
+	width, height, scale := installerWindowMetrics()
+	if scale <= 0 {
+		t.Fatalf("installer scale = %v, want positive", scale)
+	}
+	if width < 720 || width > 780 || height < 480 || height > 540 {
+		t.Fatalf("installer window = %dx%d at scale %.2f, want compact 720-780 by 480-540", width, height, scale)
 	}
 }
 

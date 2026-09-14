@@ -45,7 +45,7 @@ const (
 	// The source layout is authored at 1400x980. A compact desktop default
 	// leaves the wizard closer to the supplied reference while the existing
 	// work-area calculation still protects smaller displays.
-	installerDesktopScale = 0.64
+	installerDesktopScale = 0.52
 
 	installerActionInstall installerAction = iota
 	installerActionUninstall
@@ -646,19 +646,19 @@ func (w *installerWizard) createControls() {
 	button := uint32(wsChild | wsVisible | wsTabStop)
 	static := uint32(wsChild | wsVisible | ssLeft)
 
-	w.controls[controlTitle] = w.addControl(controlTitle, "STATIC", "", static, 60, 48, 1280, 68, 0)
-	w.controls[controlDescription] = w.addControl(controlDescription, "STATIC", "", static, 60, 122, 1280, 78, 0)
+	w.controls[controlTitle] = w.addControl(controlTitle, "STATIC", "", static, 60, 48, 1280, 84, 0)
+	w.controls[controlDescription] = w.addControl(controlDescription, "STATIC", "", static, 60, 132, 1280, 58, 0)
 	w.controls[controlProductName] = w.addControl(controlProductName, "STATIC", "", static, 60, 218, 700, 46, 0)
 	w.controls[controlProductDetails] = w.addControl(controlProductDetails, "STATIC", "", static, 60, 264, 820, 62, 0)
-	w.controls[controlCapabilities] = w.addControl(controlCapabilities, "STATIC", "", static, 60, 344, 880, 38, 0)
-	w.controls[controlCapabilityInstall] = w.addControl(controlCapabilityInstall, "STATIC", "", static, 120, 392, 950, 34, 0)
-	w.controls[controlCapabilityLink] = w.addControl(controlCapabilityLink, "STATIC", "", static, 120, 432, 950, 34, 0)
-	w.controls[controlCapabilityData] = w.addControl(controlCapabilityData, "STATIC", "", static, 120, 472, 950, 34, 0)
+	w.controls[controlCapabilities] = w.addControl(controlCapabilities, "STATIC", "", static, 60, 220, 880, 38, 0)
+	w.controls[controlCapabilityInstall] = w.addControl(controlCapabilityInstall, "STATIC", "", static, 120, 268, 950, 42, 0)
+	w.controls[controlCapabilityLink] = w.addControl(controlCapabilityLink, "STATIC", "", static, 120, 312, 950, 42, 0)
+	w.controls[controlCapabilityData] = w.addControl(controlCapabilityData, "STATIC", "", static, 120, 356, 950, 42, 0)
 
-	w.controls[controlActionGroup] = w.addControl(controlActionGroup, "STATIC", "Choose what to do", static, 60, 525, 1280, 40, 0)
-	w.controls[controlActionInstall] = w.addControl(controlActionInstall, "BUTTON", "Install or update Synesis", button|bsOwnerDraw|wsGroup, 60, 569, 1280, 96, 0)
-	w.controls[controlActionUninstall] = w.addControl(controlActionUninstall, "BUTTON", "Uninstall Synesis", button|bsOwnerDraw, 60, 681, 1280, 96, 0)
-	w.controls[controlActionPath] = w.addControl(controlActionPath, "STATIC", "", static|ssLeftNoWrap, 60, 890, 900, 42, 0)
+	w.controls[controlActionGroup] = w.addControl(controlActionGroup, "STATIC", "Choose an action", static, 60, 430, 1280, 40, 0)
+	w.controls[controlActionInstall] = w.addControl(controlActionInstall, "BUTTON", "Install or update", button|bsOwnerDraw|wsGroup, 60, 490, 1280, 120, 0)
+	w.controls[controlActionUninstall] = w.addControl(controlActionUninstall, "BUTTON", "Uninstall", button|bsOwnerDraw, 60, 626, 1280, 120, 0)
+	w.controls[controlActionPath] = w.addControl(controlActionPath, "STATIC", "", static|ssLeftNoWrap, 60, 840, 900, 42, 0)
 
 	w.controls[controlInstallGroup] = w.addControl(controlInstallGroup, "STATIC", "Destination folder", static, 60, 250, 1280, 40, 0)
 	w.controls[controlInstallEdit] = w.addControl(controlInstallEdit, "EDIT", "", child|wsTabStop|esAutoHScroll, 80, 310, 1020, 46, wsExClientEdge)
@@ -683,19 +683,21 @@ func (w *installerWizard) createControls() {
 	// the destructive primary action without changing its command routing.
 	w.controls[controlBack] = w.addControl(controlBack, "BUTTON", "Back", button|bsOwnerDraw, 780, 886, 185, 72, 0)
 	w.controls[controlNext] = w.addControl(controlNext, "BUTTON", "Next  ›", button|bsOwnerDraw, 985, 886, 175, 72, 0)
-	w.controls[controlCancel] = w.addControl(controlCancel, "BUTTON", "Cancel", button|bsOwnerDraw, 1174, 886, 165, 72, 0)
+	w.controls[controlCancel] = w.addControl(controlCancel, "BUTTON", "Cancel", button|bsOwnerDraw, 1175, 886, 165, 72, 0)
 
 	font, _, _ := installerGetStockObject.Call(defaultGuiFont)
 	for _, control := range w.controls {
 		installerSendMessage.Call(control, wmSetFont, font, 1)
 	}
-	w.titleFont = createInstallerFont(w.scaled(-56), fontWeightBold)
-	w.bodyFont = createInstallerFont(w.scaled(-27), fontWeightNormal)
-	w.detailFont = createInstallerFont(w.scaled(-22), fontWeightNormal)
-	w.productFont = createInstallerFont(w.scaled(-34), fontWeightBold)
-	w.buttonFont = createInstallerFont(w.scaled(-24), fontWeightNormal)
-	w.cardTitleFont = createInstallerFont(w.scaled(-27), fontWeightBold)
-	w.cardDetailFont = createInstallerFont(w.scaled(-22), fontWeightNormal)
+	// Keep the compact window footprint while giving the maintenance copy the
+	// readable hierarchy of the reference composition.
+	w.titleFont = createInstallerFont(w.scaled(-64), fontWeightBold)
+	w.bodyFont = createInstallerFont(w.scaled(-32), fontWeightNormal)
+	w.detailFont = createInstallerFont(w.scaled(-28), fontWeightNormal)
+	w.productFont = createInstallerFont(w.scaled(-38), fontWeightBold)
+	w.buttonFont = createInstallerFont(w.scaled(-29), fontWeightNormal)
+	w.cardTitleFont = createInstallerFont(w.scaled(-32), fontWeightBold)
+	w.cardDetailFont = createInstallerFont(w.scaled(-27), fontWeightNormal)
 	w.iconFont = createInstallerFont(w.scaled(-60), fontWeightBold)
 	w.wordmarkFont = createInstallerFont(w.scaled(-16), fontWeightNormal)
 	setInstallerFont(w.controls[controlTitle], w.titleFont)
@@ -703,9 +705,9 @@ func (w *installerWizard) createControls() {
 	setInstallerFont(w.controls[controlProductName], w.productFont)
 	setInstallerFont(w.controls[controlProductDetails], w.detailFont)
 	setInstallerFont(w.controls[controlCapabilities], w.bodyFont)
-	setInstallerFont(w.controls[controlCapabilityInstall], w.buttonFont)
-	setInstallerFont(w.controls[controlCapabilityLink], w.buttonFont)
-	setInstallerFont(w.controls[controlCapabilityData], w.buttonFont)
+	setInstallerFont(w.controls[controlCapabilityInstall], w.bodyFont)
+	setInstallerFont(w.controls[controlCapabilityLink], w.bodyFont)
+	setInstallerFont(w.controls[controlCapabilityData], w.bodyFont)
 	setInstallerFont(w.controls[controlActionGroup], w.bodyFont)
 	setInstallerFont(w.controls[controlActionPath], w.detailFont)
 	setInstallerFont(w.controls[controlInstallGroup], w.detailFont)
@@ -774,14 +776,8 @@ func (w *installerWizard) showPage(page installerPage) {
 	description := "Choose an action to continue."
 	switch page {
 	case installerPageAction:
-		if w.installed {
-			title = "Update Synesis"
-		} else {
-			title = "Install Synesis"
-		}
-		description = "A local-first collaboration runtime for secure, project-aware work."
-		setInstallerVisible(w.controls[controlProductName], true)
-		setInstallerVisible(w.controls[controlProductDetails], true)
+		title = "Manage installation"
+		description = "Choose what you want to do with the current installation."
 		setInstallerVisible(w.controls[controlCapabilities], true)
 		setInstallerVisible(w.controls[controlCapabilityInstall], true)
 		setInstallerVisible(w.controls[controlCapabilityLink], true)
@@ -790,17 +786,13 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerVisible(w.controls[controlActionInstall], true)
 		setInstallerVisible(w.controls[controlActionUninstall], true)
 		setInstallerVisible(w.controls[controlActionPath], true)
-		setInstallerText(w.controls[controlProductName], "Synesis")
-		setInstallerText(w.controls[controlProductDetails], "Local-first collaboration runtime\r\nVersion 0.1.0-dev.local · Synesis contributors")
-		setInstallerText(w.controls[controlCapabilities], "Capabilities:")
-		setInstallerText(w.controls[controlCapabilityInstall], "Install or repair the verified local runtime")
-		setInstallerText(w.controls[controlCapabilityLink], "Register the per-user synesis:// invitation handler")
-		setInstallerText(w.controls[controlCapabilityData], "Preserve project, repository, and workspace data")
-		if w.installed {
-			setInstallerText(w.controls[controlActionPath], "Current installation: "+w.installRoot)
-		} else {
-			setInstallerText(w.controls[controlActionPath], "No existing installation found. Install is selected.")
-		}
+		setInstallerText(w.controls[controlProductName], "")
+		setInstallerText(w.controls[controlProductDetails], "")
+		setInstallerText(w.controls[controlCapabilities], "Setup includes")
+		setInstallerText(w.controls[controlCapabilityInstall], "Local runtime")
+		setInstallerText(w.controls[controlCapabilityLink], "synesis:// link handler")
+		setInstallerText(w.controls[controlCapabilityData], "Existing project and workspace data is kept")
+		setInstallerText(w.controls[controlActionPath], "Installed at "+w.installRoot)
 	case installerPageInstall:
 		title = "Choose Install Location"
 		description = "Choose the folder where Synesis will be installed. The installer manages only its own application files and metadata."
@@ -860,6 +852,9 @@ func (w *installerWizard) showPage(page installerPage) {
 	}
 	if showNext {
 		label := "Next  ›"
+		if page == installerPageAction {
+			label = "Continue"
+		}
 		if page == installerPageUninstall {
 			label = "Uninstall"
 		}
@@ -886,7 +881,7 @@ func (w *installerWizard) showPage(page installerPage) {
 }
 
 // layoutPage confines shared controls to the space actually available on each
-// page. All coordinates retain the existing compact window's 0.64 scale.
+// page while keeping the compact maintenance layout aligned to the footer.
 func (w *installerWizard) layoutPage(page installerPage) {
 	move := func(id int, x, y, width, height int32) {
 		installerMoveWindow.Call(w.controls[id], uintptr(w.scaled(x)), uintptr(w.scaled(y)),
@@ -896,19 +891,26 @@ func (w *installerWizard) layoutPage(page installerPage) {
 	if page == installerPageUninstall {
 		headerWidth = 1280
 	}
-	move(controlTitle, 60, 48, headerWidth, 68)
+	move(controlTitle, 60, 48, headerWidth, 84)
 	descriptionHeight := int32(60)
 	if page == installerPageUninstall {
 		descriptionHeight = 100
 	}
-	move(controlDescription, 60, 122, headerWidth, descriptionHeight)
+	move(controlDescription, 60, 132, headerWidth, descriptionHeight)
 	move(controlNext, 1010, 894, 175, 64)
 	move(controlCancel, 1174, 894, 165, 64)
 	move(controlBack, 780, 894, 185, 64)
 	if page == installerPageAction {
-		move(controlActionPath, 60, 890, 900, 42)
-		move(controlNext, 980, 879, 175, 64)
-		move(controlCancel, 1174, 879, 165, 64)
+		move(controlCapabilities, 60, 220, 880, 38)
+		move(controlCapabilityInstall, 120, 268, 950, 42)
+		move(controlCapabilityLink, 120, 312, 950, 42)
+		move(controlCapabilityData, 120, 356, 950, 42)
+		move(controlActionGroup, 60, 430, 1280, 40)
+		move(controlActionInstall, 60, 490, 1280, 120)
+		move(controlActionUninstall, 60, 626, 1280, 120)
+		move(controlActionPath, 60, 840, 900, 42)
+		move(controlNext, 980, 825, 175, 72)
+		move(controlCancel, 1175, 825, 165, 72)
 	}
 	if page == installerPageUninstall {
 		move(controlBack, 740, 886, 180, 72)
@@ -1066,9 +1068,9 @@ func drawInstallerChrome(w *installerWizard) {
 		kind string
 		y    int32
 	}{
-		{kind: "install", y: 409},
-		{kind: "link", y: 449},
-		{kind: "data", y: 489},
+		{kind: "install", y: 289},
+		{kind: "link", y: 333},
+		{kind: "data", y: 377},
 	} {
 		drawInstallerCapabilityIcon(hdc, w, capability.kind, w.scaled(84), w.scaled(capability.y), w.scaled(28))
 	}
