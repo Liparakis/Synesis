@@ -1,3 +1,105 @@
+## 2026-09-14 — SYN-078 completion
+
+Operator requested a copy-only cleanup of the main maintenance page. Replaced the title, subtitle, version/details, setup heading/items, action heading/card titles/descriptions, installed-path label, and main Continue button copy exactly as requested; left layout, styles, controls, behavior, navigation, and installer logic unchanged. Added copy assertions to the Windows layout test. `go test ./...`, `go vet .`, and canonical runnableInstaller packaging passed. Settled capture `C:/t/setup-copy-main-settled.png` reported 912x666 and showed the requested wording. Canonical artifact SHA256: 7475247D3300409A35C291800F1164392CB48C14BA2060B95CA687473B002D56. No operation executed. Evidence: docs/evidence/SYN-078-maintenance-page-copy-2026-09-14.md.
+
+## 2026-09-14 — SYN-077 completion
+
+Operator requested removal of two horizontal bars, Current installation moved onto the button row, and the button row shifted left to align Cancel's far-right edge with both action cards. Removed the y870/y801 separator draws, moved the path control to the button-row center, and adjusted shared/action/uninstall coordinates. `go test ./...`, `go vet .`, and canonical runnableInstaller packaging passed. Settled capture `C:/t/syn077-main-layout-settled.png` reported 912x666 and showed the requested alignment. Canonical artifact SHA256: AB0D8D7A3F88118BC53D5130021D33A11430048C949F1224521F282A57354452. No operation executed. Evidence: docs/evidence/SYN-077-main-footer-layout-2026-09-14.md.
+
+## 2026-09-14 — SYN-076 completion
+
+Operator requested removal of the warning icon and adjacent text. Removed the warning child, parent-painted icon, separator, and unused warning font/control paths. `go test ./...`, `go vet .`, and canonical runnableInstaller packaging passed. Native capture `C:/t/syn076-clean-return.png` reported 912x666 after Uninstall → Next → Back and showed no warning, no stale Back residue, and complete Next/Cancel controls. Canonical artifact SHA256: AB466DC66CE06A6E96BC526B69541379B0FBC956DAF1824F46C6FA4A1FBF96D4. No operation executed. Evidence: docs/evidence/SYN-076-remove-main-warning-footer-2026-09-14.md.
+
+## 2026-09-14 — SYN-075 completion
+
+Operator reported three final footer defects: the Back button peeking after uninstall → Back, the warning line wrapping/clipping, and Next/Cancel vertical misalignment. Added synchronous parent/all-child redraw after page changes, shortened the warning to `Only install trusted software. Setup may register synesis://.`, and moved Next/Cancel to the footer midpoint. `go test ./...`, `go vet .`, and canonical runnableInstaller packaging passed. Native capture `C:/t/syn075-return-main.png` reported 912x666 after Uninstall → Next → Back and showed no Back residue, complete note, and centered buttons. Canonical artifact SHA256: 2FEEDE0D1CD0F59A2ECAB361B88A6860210B47AF32566AE9B118849AE528CA4E. No operation executed. Evidence: docs/evidence/SYN-075-main-page-return-repaint-2026-09-14.md.
+
+## 2026-09-14 — SYN-074 completion
+
+Operator asked for the main-page footer note to be centered. Changed the warning STATIC style to centered alignment only; dimensions, copy, actions, and all other pages remain unchanged. `go test ./...`, `go vet .`, and the canonical `:cli:runnableInstaller` build passed. Settled native capture `C:/t/syn074-main-centered-repeat.png` reported 912x666 and showed the centered note, logo, capability icons, and complete controls. Canonical artifact SHA256: 128EE4FBA259C8E4A69403CD9DB1757994FB48DD935AE4C2791C599C20B9662C. No operation executed. Evidence: docs/evidence/SYN-074-main-page-footer-centering-2026-09-14.md.
+
+## 2026-09-14 — SYN-073 completion
+
+Operator reported the previously unclipped footer still looked cramped. Changed only the main-page warning to a shorter, single nonwrapping safety line, increased its font, and aligned it with the warning mark. `go test ./...` and `go vet .` passed. The Gradle build completed native staging and platform bundle but could not overwrite `synesis-windows-x64.exe` because PID 17088 has that operator-open artifact locked. Created the equivalent fresh `synesis-windows-x64-footer-polished.exe`, captured it at 912x666, and closed only the review preview. SHA256: CCF501092F248E662BC26D7751805544EF977A606755464CA4B457D5368B037E. No operation executed. Evidence: docs/evidence/SYN-073-main-page-footer-composition-2026-09-14.md.
+
+## 2026-09-14 — SYN-072 completion
+
+User reported that the main page's bottom buttons/footer were cut off. Moved only the main-page warning and Next/Cancel row upward, retaining 912x666. Added a native client-bound layout regression assertion. Packaged capture at C:/t/syn072-main-footer.png confirmed full warning and controls. Bootstrap tests/vet, Linux test compilation, and runnableInstaller packaging passed. Canonical artifact SHA256: 8B1AF692F95BFA13B10FF2B8DF988F180A2AC7352E06174C52213693C5E699BD. No operation executed. Evidence: docs/evidence/SYN-072-main-page-footer-clipping-2026-09-14.md.
+
+## 2026-09-14 — SYN-071 completion
+
+User requested main and uninstall page repair while preserving window size. Fixed overlapping shared header/footer controls and moved uninstall panel painting behind child controls; owner-drawn controls now use the supplied Windows paint context. Native captures verified both pages and repeated Back/Next navigation at 912x666. Bootstrap tests/vet and forced packaging passed. Canonical artifact SHA256: 719A74243067FF8612EB26AC7D9FE32B53B3D71A57EC66C4338B5B3C4CF52DD8. No operation executed. Evidence: docs/evidence/SYN-071-windows-installer-page-regressions-2026-09-14.md.
+
+## 2026-09-14 — SYN-070 completion
+
+Completed the bounded visual cleanup requested after the operator inspected the
+new uninstall artifact. The capture showed stale hidden install-page text
+peeking above the options card, helper copy wrapping into an awkward second
+line, a title-bar icon fallback, and compact path/action typography that needed
+more presence. The implementation clears the hidden heading before page
+switches, suppresses the uninstall-page class icon fallback, improves path
+legibility, fits the helper copy on one line, and balances the compact action
+row. Only uninstall-page presentation changed; installer behavior, user-data
+preservation, and all other pages remain frozen.
+
+Verification passed: bootstrap `go test ./...`, `go vet .`, Windows test
+compilation, Windows GUI compilation, and `git diff --check`. Gradle's fresh
+native launcher and bundle stages passed, but the canonical single-file output
+was locked by the already-running prior installer (PID 34644), which was left
+untouched. A separately named valid self-extractor was assembled from the fresh
+inputs and its footer validated. No installer action or managed user state was
+changed. Evidence: `docs/evidence/SYN-070-windows-uninstall-page-cleanup-2026-09-14.md`;
+checkpoint CP-0950.
+
+Exact next action: preserve the scoped source and preview artifact; do not
+install it, terminate the running prior installer, create `.synesis` state,
+push, or broaden the task.
+
+## 2026-09-14 — SYN-069 completion
+
+Completed the requested native Windows uninstall-page visual redesign. The
+uninstall surface now follows the approved dark, logo-free, banner-free
+composition with a framed options card, read-only installation path, custom
+metadata checkbox/helper copy, and polished Back/Uninstall/Cancel hierarchy.
+The existing Win32 navigation, confirmation, metadata, operation, and data
+preservation paths were not changed.
+
+Verification passed: bootstrap `go test ./...`, `go vet .`, Windows test
+compilation, Windows GUI compilation, and `git diff --check`. A temporary
+preview executable was built but the Windows visual bridge was unavailable, so
+no pixel-level capture is claimed. No installer action or managed user state
+was changed. Evidence: `docs/evidence/SYN-069-windows-uninstall-page-visual-parity-2026-09-14.md`;
+checkpoint CP-0949.
+
+## 2026-09-14 — SYN-069 activation
+
+Activated the explicit follow-up to align the current native Windows uninstall
+page with the approved dark, logo-free, banner-free mockup. Scope is limited to
+uninstall-page presentation; installer operations, data/metadata boundaries,
+other pages, and Unix entry points remain out of scope.
+
+## 2026-09-14 — SYN-068 compact window and native icon
+
+The operator asked for a smaller wizard and the Synesis mark in the top-left,
+taskbar, and installer executable. Capped the existing reference layout at a
+0.64 desktop scale, producing a 912x666 window including the title bar while
+keeping bounded work-area scaling. Generated a dark square icon from the
+existing mark, linked it as amd64/arm64 Windows resources, and loaded large and
+small resource icons for the native window class. The resource was extracted
+from the native installer as `#1_0000.ico`, proving the `.exe` carries the mark.
+
+Bootstrap tests/vet, Linux source compilation, forced runnable packaging, and
+the fresh no-argument probe passed (`VISIBLE=True`, `HUNG=False`,
+`WM_NULL_DELIVERED=True`). The class icon handle was nonzero, and the compact
+native action page was captured and inspected. Artifact SHA-256:
+`5B86349F9F88B358FE1D3023D0C686DEC4AF6DD54B554628437CD5C1B606D91C`.
+The preview wrapper and extracted installer were closed without executing an
+installer action. Checkpoint CP-0948.
+
+Exact next action: preserve the compact/icon artifact and stop at the
+presentation-only installer boundary; do not install, stop unrelated daemons,
+create `.synesis`, push, or broaden the task.
+
 ## 2026-09-13 — SYN-067 startup freeze correction
 
 The operator reported that the setup wizard froze immediately on open. The
@@ -7930,3 +8032,25 @@ PATH, daemon, or project data was changed. CP-0944 records this refinement.
 
 Preserve the CP-0944 visual-refinement artifacts and evidence. Any pixel-capture
 or direct button-navigation QA is separately authorized.
+## 2026-09-13 — SYN-068 setup wizard visual fidelity refinement
+
+The native Windows setup wizard was refined against the supplied dark Synesis
+mockup without treating its example copy, paths, or values as instructions.
+The client now uses a reference-sized composition with bounded work-area
+scaling, a larger rounded logo/wordmark panel, a quiet diagonal backdrop,
+native capability glyphs, radio-style action cards, and the matching footer and
+button hierarchy. Existing install, repair, uninstall, registration, PATH,
+ownership, metadata, and user-data boundaries were preserved.
+
+Verification passed: bootstrap `go test ./...`, `go vet .`, Linux cross-build,
+the Gradle `:cli:runnableInstaller` build, `git diff --check`, and a fresh
+no-argument launch probe reporting `VISIBLE=True`, `HUNG=False`, and
+`WM_NULL_DELIVERED=True`. A bounded native `PrintWindow` capture of the final
+action page was inspected at 1416×1019. The single-file artifact SHA-256 is
+`2FFB281ABD83D1A9B6DFA451F884277357BBB66FB990AA8AB86AAFBE8B7C222E`.
+The wrapper and extracted installer were stopped before any operation; no
+managed installation or user data changed. Checkpoint CP-0947.
+
+Exact next action: preserve CP-0947 and the SYN-068 artifact/evidence; do not
+install the artifact, stop unrelated daemons, create `.synesis` state, push, or
+broaden the task into installer behavior changes.

@@ -16,6 +16,8 @@ import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.onboarding.OnboardingFailureCode;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 import org.synesis.projectrecord.domain.ProjectConfig;
@@ -170,7 +172,7 @@ public final class SyncApplicationService {
         }
       });
       try {
-        onboarding.host(config.peerNodeIds()
+        onboarding.hostCompact(config.peerNodeIds()
             .iterator()
             .next(), handler, ignored -> {
         });
@@ -208,9 +210,13 @@ public final class SyncApplicationService {
         query = query(uri.getQuery());
         clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null,
             uri.getFragment()).toString();
-        var decoded = org.synesis.link.protocol.SessionInvitation.fromShareLink(clean);
-        host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded())
-            .nodeId();
+        if (CompactBootstrapInvitation.isShareLink(clean)) {
+          host = CompactBootstrapInvitation.fromShareLink(clean).hostNodeId();
+        } else {
+          var decoded = SessionInvitation.fromShareLink(clean);
+          host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded())
+              .nodeId();
+        }
       } catch (Exception invalidInvitation) {
         throw failure("INVITE_INVALID");
       }

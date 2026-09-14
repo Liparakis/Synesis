@@ -1,3 +1,137 @@
+## SYN-079
+
+### Uninstall-page template parity
+
+- Status: ACTIVE
+- Scope: rebuild the existing uninstall options page on the compact maintenance-page template, with shared branding, proportions, alignment, and concise content while preserving uninstall and metadata behavior.
+- Acceptance criteria: 744x549 window; normal Synesis title-bar icon and branded header; unclipped title/subtitle; compact options panel; Back/Uninstall/Cancel use the main-page footer height and proportions and share its right edge; navigation and metadata state remain unchanged; focused tests/vet and packaged main/uninstall/back captures pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-078
+
+### Compact maintenance-screen redesign
+
+- Status: DONE
+- Evidence: PASS; commit 3017c6d3, docs/evidence/SYN-078-maintenance-page-compact-2026-09-14.md, and CP-0961.
+- Scope: apply the operator-supplied concise Windows setup copy and compact the existing maintenance screen while preserving controls, navigation, and installer logic.
+- Acceptance criteria: exact requested maintenance copy with no visible version line; compact 720–780 by 480–540 window; readable hierarchy, aligned cards/footer, no clipping; focused tests/vet and packaged capture pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-076
+
+### Remove main-page warning footer
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-077-main-footer-layout-2026-09-14.md and CP-0957.
+- Scope: remove the main-page warning icon and adjacent text entirely while preserving the 912x666 window and navigation.
+- Acceptance criteria: no warning icon/text appears on the main page or after uninstall → Back; buttons remain fully visible and vertically aligned; focused tests, vet, and packaged visual check pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-075
+
+### Main-page return repaint and footer alignment
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-075-main-page-return-repaint-2026-09-14.md and CP-0955.
+- Scope: clear stale uninstall controls on return to the main page, keep the safety note on one line, and vertically center Next/Cancel in the existing footer.
+- Acceptance criteria: no Back residue after uninstall → Back; warning text is complete and readable; Next/Cancel share the footer's vertical center; window remains 912x666; focused tests, vet, and packaged visual check pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-074
+
+### Main-page footer centering
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-074-main-page-footer-centering-2026-09-14.md and CP-0954.
+- Scope: center the main-page safety note within its existing footer slot at unchanged 912x666.
+- Acceptance criteria: the note is horizontally centered between the warning divider and primary actions, remains readable and inside the client area, and does not change installer behavior or other page geometry; focused tests, vet, and a packaged visual check pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-073
+
+### Main-page footer composition polish
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-073-main-page-footer-composition-2026-09-14.md and CP-0953.
+- Scope: improve only the main-page safety-note typography and alignment within the unchanged 912x666 window.
+- Acceptance criteria: one readable safety-note line aligned with its warning mark, no client clipping, unchanged installer behavior and other page geometry; focused tests, vet, and packaged visual check pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-072
+
+### Main-page footer clipping repair
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-072-main-page-footer-clipping-2026-09-14.md and CP-0952.
+- Scope: move only the main-page warning and navigation row upward within the unchanged 912x666 window.
+- Acceptance criteria: main footer warning and Next/Cancel render fully inside the client area; other page layouts and installer behavior remain unchanged; focused tests, vet, and rebuilt package pass; no installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-071
+
+### Main and uninstall page regression repair
+
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-071-windows-installer-page-regressions-2026-09-14.md.
+- Scope: page-specific header/footer layout and correct native painting at the unchanged 912x666 size.
+- Acceptance criteria: main logo and footer unobstructed; uninstall options free of overlapping paint; both pages and round-trip navigation captured; bootstrap tests/vet and packaged build pass. No installer operation executed.
+- Deferred-register review: no deferred capability is activated.
+
+## SYN-070
+
+### Windows uninstall page cleanup — activated 2026-09-14
+
+- Status: DONE
+- Dependency: SYN-069 Windows uninstall page visual parity is COMPLETE FOR CURRENT SCOPE.
+- Primary goal: correct the remaining native uninstall-page presentation defects visible in the operator capture while preserving the existing uninstall flow.
+- Scope: presentation-only cleanup of stale hidden-control paint, helper-copy fit, title-bar mark suppression, path typography, and compact action-button proportions. Existing Win32 controls remain the interaction surface.
+- Safety boundary: no changes to install, repair, uninstall execution, metadata ownership, PATH, protocol registration, project/workspace/repository preservation, provider behavior, daemon behavior, Unix entry points, or other wizard pages.
+- Acceptance criteria: no clipped or duplicated text appears above the uninstall card; the helper copy fits as a deliberate single line at the default compact scale; the page remains logo/banner-free with readable path text and balanced Back/Uninstall/Cancel actions; focused bootstrap tests, vet, Windows GUI compilation, and diff hygiene pass; no real installation action is run.
+- Deferred-register review: no deferred capability is activated.
+- Evidence: CP-0950 and `docs/evidence/SYN-070-windows-uninstall-page-cleanup-2026-09-14.md`.
+- Completion: the stale hidden install heading is cleared before page switches, uninstall-page title-bar icon fallback is suppressed, the path uses the body face, helper copy fits as one line, and the compact action row has balanced visual weight. Focused tests, vet, Windows test compilation, Windows GUI compilation, and diff hygiene passed. The canonical single-file output was locked by the already-running prior installer, so a separately named self-extractor was assembled from the fresh native launcher and bundle archive; no installer action was run.
+
+## SYN-069
+
+### Windows uninstall page visual parity — activated 2026-09-14
+
+- Status: DONE
+- Dependency: SYN-067 Windows setup wizard and SYN-068 visual fidelity refinement are COMPLETE FOR CURRENT SCOPE.
+- Primary goal: bring the existing native Windows uninstall page in line with the approved dark, logo-free, banner-free uninstall mockup while preserving the existing uninstall flow.
+- Scope: uninstall-page presentation only—page geometry, typography, options grouping, installation-path presentation, metadata checkbox treatment, helper copy layout, and bottom action hierarchy. Existing Win32 controls remain the interaction surface.
+- Safety boundary: no changes to install, repair, uninstall execution, metadata ownership, PATH, protocol registration, project/workspace/repository preservation, provider behavior, daemon behavior, Unix entry points, or other wizard pages.
+- Acceptance criteria: the uninstall page renders as a balanced full-width dark installer screen without the global brand/logo treatment or footer banner; the existing path, metadata toggle, helper text, Back/Uninstall/Cancel actions, and navigation remain present and source-backed; focused bootstrap tests, vet, and Windows GUI compilation pass; no real installation action is run.
+- Deferred-register review: no deferred capability is activated.
+- Evidence: CP-0949 and `docs/evidence/SYN-069-windows-uninstall-page-visual-parity-2026-09-14.md`.
+- Completion: the native uninstall page now uses the approved full-width dark options surface, logo-free/banner-free page chrome, read-only installation-path field, custom metadata checkbox treatment, and the requested Back/Uninstall/Cancel hierarchy. Existing navigation and operation/data boundaries remain unchanged. Focused tests, vet, Windows test compilation, and Windows GUI compilation passed; no installer action was executed.
+
+## SYN-068
+
+### Windows setup wizard visual fidelity refinement — activated 2026-09-13
+
+- Status: DONE
+- Dependency: SYN-067 Windows setup wizard is COMPLETE FOR CURRENT SCOPE.
+- Primary goal: bring the native Windows setup wizard materially closer to the
+  supplied dark Synesis mockup while preserving the existing wizard behavior.
+- Scope: presentation-only refinement of the native client layout, typography,
+  brand panel, capability glyphs, action-card radio treatment, spacing, footer,
+  and primary/secondary button hierarchy. The supplied image is visual
+  reference only; its example copy, paths, and values are not instructions.
+- Safety boundary: no changes to install, repair, uninstall, protocol
+  registration, metadata ownership, PATH, project/workspace/repository
+  preservation, provider behavior, daemon behavior, or Unix entry points.
+- Acceptance criteria: Windows GUI build and focused bootstrap tests pass; the
+  no-argument installer remains visible and responsive; the action page has no
+  stock white group box or stock radio rows; the dark brand/logo treatment,
+  capability icons, selection cards, footer warning, and button hierarchy are
+  source-backed and aligned with the reference; no real installation is run.
+- Deferred-register review: no deferred capability is activated.
+- Evidence: CP-0948 and `docs/evidence/SYN-068-windows-setup-wizard-visual-fidelity-2026-09-13.md`.
+- Completion: the source, packaged installer, fresh visible/responsive launch,
+  compact 912x666 desktop window, branded title-bar/taskbar/Explorer icon
+  resource, and final rendered action-page capture passed. No real installation
+  was run.
+
 ## SYN-067
 
 ### Windows setup wizard and owned deep-link installation — activated 2026-09-13

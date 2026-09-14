@@ -11,7 +11,7 @@ import picocli.CommandLine.Option;
 /**
  * Adapts {@code synesis host} to the Link onboarding façade.
  */
-@Command(name = "host", description = "Create SLO1 and wait for one SLA2 on standard input.", mixinStandardHelpOptions = true)
+@Command(name = "host", description = "Create a compact invite and wait for one direct session.", mixinStandardHelpOptions = true)
 public final class HostCommand implements Callable<Integer> {
 
   private final CliRuntime runtime;
@@ -33,19 +33,10 @@ public final class HostCommand implements Callable<Integer> {
   @Override
   public Integer call() {
     try {
-      try (var host = runtime.onboarding().createInvitation(expectedPeer)) {
-        runtime.terminal().stdout("AWAITING_ANSWER=true");
-        String answer = runtime.terminal().readLine();
-        if (answer == null || answer.isBlank()) {
-          throw new org.synesis.link.onboarding.OnboardingFailure(
-              org.synesis.link.onboarding.OnboardingFailureCode.ANSWER_INVALID,
-              new IllegalArgumentException("answer input is empty"));
-        }
-        host.importAnswer(answer);
+      try (var host = runtime.onboarding().createCompactInvitation(expectedPeer)) {
+        host.awaitConnection();
       }
       return ExitCodes.OK;
-    } catch (java.io.IOException failure) {
-      return FailureMapper.internal(runtime.terminal());
     } catch (OnboardingFailure failure) {
       return FailureMapper.map(failure, runtime.terminal());
     } catch (RuntimeException failure) {

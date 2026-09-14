@@ -83,6 +83,10 @@ public enum OnboardingEventType {
    */
   CONTROL_READY,
   /**
+   * Complete signed candidate descriptors were exchanged after control readiness.
+   */
+  DESCRIPTORS_EXCHANGED,
+  /**
    * The current liveness state.
    */
   LIVENESS,

@@ -33,6 +33,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -403,6 +404,23 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     }
   }
 
+  private static InvitationDetails parseInvitationDetails(String link) throws ApiFailure {
+    if (CompactBootstrapInvitation.isShareLink(link)) {
+      try {
+        CompactBootstrapInvitation invitation = CompactBootstrapInvitation.fromShareLink(link);
+        return new InvitationDetails(invitation.hostNodeId(), invitation.expiresAt(), true);
+      } catch (IOException | IllegalArgumentException invalid) {
+        throw failure(400, "INVITE_INVALID", "invitation link is invalid");
+      }
+    }
+    TraversalInvitation invitation = parseInvitation(link);
+    return new InvitationDetails(invitation.offer().initiatorNodeId(),
+        invitation.invitation().expiresAt(), false);
+  }
+
+  private record InvitationDetails(String peerIdentity, Instant expiresAt, boolean compact) {
+  }
+
   private static ApiFailure onboardingFailure(OnboardingFailure failure) {
     return failure(400, "ONBOARDING_" + failure.code().name(), "onboarding operation failed");
   }
@@ -645,8 +663,21 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
 
   private Map<String, Object> snapshot() {
     Map<String, Object> result = new LinkedHashMap<>(readModel.snapshot());
+    List<Map<String, Object>> pendingHosts = new ArrayList<>();
     List<Map<String, Object>> pendingJoins = new ArrayList<>();
     synchronized (operationLock) {
+      for (String operationId : hosts.keySet()) {
+        Instant expiresAt = operationExpiry.get(operationId);
+        if (expiresAt == null) {
+          continue;
+        }
+        boolean compact = CompactBootstrapInvitation.isShareLink(
+            hosts.get(operationId).invitationLink());
+        pendingHosts.add(Map.of(
+            "operationId", operationId,
+            "state", compact ? "WAITING_FOR_CONNECTION" : "WAITING_FOR_ANSWER",
+            "expiresAt", expiresAt.toString()));
+      }
       for (String operationId : joins.keySet()) {
         Instant expiresAt = operationExpiry.get(operationId);
         if (expiresAt == null) {
@@ -658,7 +689,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             "expiresAt", expiresAt.toString()));
       }
     }
-    result.put("onboarding", Map.of("pendingJoins", pendingJoins));
+    result.put("onboarding", Map.of("pendingHosts", pendingHosts, "pendingJoins", pendingJoins));
     return result;
   }
 
@@ -927,26 +958,29 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
       throw onboardingFailure(failure);
     }
     String link = prepared.invitationLink();
-    TraversalInvitation parsed = parseInvitation(link);
+    InvitationDetails parsed = parseInvitationDetails(link);
     String operationId = UUID.randomUUID().toString();
     synchronized (operationLock) {
       hosts.put(operationId, prepared);
-      operationExpiry.put(operationId, parsed.invitation().expiresAt());
+      operationExpiry.put(operationId, parsed.expiresAt());
+    }
+    if (parsed.compact()) {
+      monitorCompactHost(operationId, prepared);
     }
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("apiVersion", "v1");
     response.put("operationId", operationId);
     response.put("inviteUri", link);
-    response.put("peerIdentity", parsed.offer().initiatorNodeId());
-    response.put("expiresAt", parsed.invitation().expiresAt().toString());
-    response.put("state", "WAITING_FOR_ANSWER");
+    response.put("peerIdentity", parsed.peerIdentity());
+    response.put("expiresAt", parsed.expiresAt().toString());
+    response.put("state", parsed.compact() ? "WAITING_FOR_CONNECTION" : "WAITING_FOR_ANSWER");
     sendJson(exchange, 201, response);
   }
 
   private void join(HttpExchange exchange, Map<String, Object> body)
       throws IOException, ApiFailure {
     String link = text(body, "inviteUri", true, 65_536);
-    TraversalInvitation parsed = parseInvitation(link);
+    InvitationDetails parsed = parseInvitationDetails(link);
     ensureCapacity();
     ControlPlaneLinkOperations.PendingJoin prepared;
     try {
@@ -959,14 +993,29 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     String operationId = UUID.randomUUID().toString();
     synchronized (operationLock) {
       joins.put(operationId, prepared);
-      operationExpiry.put(operationId, parsed.invitation().expiresAt());
+      operationExpiry.put(operationId, parsed.expiresAt());
+    }
+    if (parsed.compact()) {
+      boolean retain = false;
+      try {
+        prepared.connect();
+        retain = prepared.retainsSession();
+        Map<String, Object> connected = operationResult(operationId, "CONNECTED");
+        connected.put("peerIdentity", parsed.peerIdentity());
+        sendJson(exchange, 201, connected);
+      } catch (OnboardingFailure failure) {
+        throw onboardingFailure(failure);
+      } finally {
+        finishJoin(operationId, prepared, retain);
+      }
+      return;
     }
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("apiVersion", "v1");
     response.put("operationId", operationId);
     response.put("answerUri", prepared.answerLink());
-    response.put("peerIdentity", parsed.offer().initiatorNodeId());
-    response.put("expiresAt", parsed.invitation().expiresAt().toString());
+    response.put("peerIdentity", parsed.peerIdentity());
+    response.put("expiresAt", parsed.expiresAt().toString());
     response.put("state", "WAITING_FOR_CONNECT");
     sendJson(exchange, 201, response);
   }
@@ -1074,6 +1123,21 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     if (!retain) {
       closeQuietly(prepared);
     }
+  }
+
+  private void monitorCompactHost(String operationId,
+      ControlPlaneLinkOperations.PendingHost prepared) {
+    prepared.completion().whenComplete((ignored, failure) -> {
+      boolean retain = failure == null && prepared.retainsSession();
+      synchronized (operationLock) {
+        hosts.remove(operationId, prepared);
+        operationExpiry.remove(operationId);
+        activeOperations.remove(operationId);
+      }
+      if (!retain) {
+        closeQuietly(prepared);
+      }
+    });
   }
 
   private void finishJoin(String operationId, ControlPlaneLinkOperations.PendingJoin prepared,

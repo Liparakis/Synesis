@@ -1,3 +1,112 @@
+## 2026-09-14 — SYN-079 uninstall-page template parity
+
+- Exact next code action: Review C:/t/syn079-uninstall-repaint-fixed-onscreen.png and C:/t/syn079-main-after-back-final-onscreen.png, then run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Uninstall now shares the compact main-page branding, proportions, footer alignment, and reliable repaint order while preserving metadata and navigation behavior.
+- Evidence: docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md and the next checkpoint. No installer operation executed.
+
+## 2026-09-14 — SYN-078 compact maintenance screen
+
+- Exact next code action: Review the settled capture at C:/t/setup-main-larger-details.png, then run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Main maintenance page renders at 744x549 with larger Setup includes details, extra header text height, and the aligned footer row slightly lower.
+- Evidence: docs/evidence/SYN-078-maintenance-page-compact-2026-09-14.md and the next checkpoint. No installer operation executed.
+
+## 2026-09-14 — SYN-077 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Lower separator bars are removed, Current installation shares the button row, and Cancel's right edge matches both action cards at 912x666.
+- Evidence: docs/evidence/SYN-077-main-footer-layout-2026-09-14.md and CP-0957. No installer operation executed.
+
+## 2026-09-14 — SYN-076 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Warning icon/text and unused footer control paths are removed. Uninstall → Back capture is clean at 912x666.
+- Evidence: docs/evidence/SYN-076-remove-main-warning-footer-2026-09-14.md and CP-0956. No installer operation executed.
+
+## 2026-09-14 — SYN-075 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Full parent repaint clears stale Back residue after uninstall → Back. The warning is a complete one-line note and Next/Cancel share its vertical center at 912x666.
+- Evidence: docs/evidence/SYN-075-main-page-return-repaint-2026-09-14.md and CP-0955. No installer operation executed.
+
+## 2026-09-14 — SYN-074 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Main-page safety note is centered within the existing footer slot. Canonical package rebuilt and settled capture verified at 912x666.
+- Evidence: docs/evidence/SYN-074-main-page-footer-centering-2026-09-14.md and CP-0954. No installer operation executed.
+
+## 2026-09-14 — SYN-073 complete
+
+- Exact next code action: After the operator closes cli/build/distributions/synesis-windows-x64.exe, run `$env:JAVA_TOOL_OPTIONS='-Djdk.net.unixdomain.tmpdir=C:\t\synesis-loopback-probe'; ./gradlew.bat :cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` to replace the canonical filename; no source change is needed.
+- The freshly assembled `cli/build/distributions/synesis-windows-x64-footer-polished.exe` has the verified footer composition at unchanged 912x666.
+- Evidence: docs/evidence/SYN-073-main-page-footer-composition-2026-09-14.md and CP-0953. No installer operation executed.
+
+## 2026-09-14 — SYN-072 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Main footer warning and Next/Cancel row were lifted within the unchanged 912x666 window and visually verified in the canonical package.
+- Evidence: docs/evidence/SYN-072-main-page-footer-clipping-2026-09-14.md and CP-0952. No installer operation executed.
+
+## 2026-09-14 — SYN-071 complete
+
+- Exact next code action: Await operator review of cli/build/distributions/synesis-windows-x64.exe; run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.
+- Main and uninstall visual regressions repaired at unchanged 912x666. Canonical package rebuilt successfully; this supersedes SYN-070's alternate-package limitation below.
+- Evidence: docs/evidence/SYN-071-windows-installer-page-regressions-2026-09-14.md. No installer operation executed.
+
+## 2026-09-14 — SYN-070 complete
+
+SYN-070 is complete. The bounded cleanup of the current native Windows uninstall
+page clears the hidden install heading before other pages, removes the
+class-level icon fallback for page-specific icon control, uses a more readable
+path face, shortens helper copy for one-line fit, and balances the compact
+Back/Uninstall/Cancel row. The existing uninstall flow and data boundaries are
+preserved.
+
+Focused bootstrap tests, vet, Windows test compilation, Windows GUI compilation,
+and diff hygiene passed. The canonical single-file output was locked by the
+already-running prior installer and was left untouched; the valid preview is
+`cli/build/distributions/synesis-windows-x64-uninstall-polished.exe`, assembled
+from the fresh native launcher and bundle archive with its footer validated. No
+installer action or managed state change occurred. Evidence: CP-0950 and
+`docs/evidence/SYN-070-windows-uninstall-page-cleanup-2026-09-14.md`.
+
+- Exact next action: preserve this scoped presentation-only result; do not
+  install the preview, terminate the running prior installer, create `.synesis`
+  state, push, or broaden the task.
+
+## 2026-09-14 — SYN-069 complete
+
+SYN-069 is complete. The current native Windows uninstall page now aligns with
+the approved dark, logo-free, banner-free mockup while preserving the existing
+Win32 control/event model and installer/data boundaries. The options surface,
+path field, metadata checkbox/helper copy, page chrome, and bottom actions were
+refined in `bootstrap/installer_menu_windows.go` only.
+
+Verification passed: bootstrap tests, vet, Windows test compilation, Windows
+GUI compilation, and diff hygiene. The Windows visual bridge was unavailable,
+so no pixel-level screenshot claim is made. No installer action or managed
+state change occurred. Evidence: `CP-0949` and
+`docs/evidence/SYN-069-windows-uninstall-page-visual-parity-2026-09-14.md`.
+
+- Exact next action: preserve this scoped presentation-only result; do not
+  install the preview, create `.synesis` state, push, or broaden the task.
+
+## 2026-09-14 — SYN-068 compact window and native icon complete
+
+The setup wizard now opens at 912x666 on the normal desktop scale, with the
+Synesis mark in the title bar and the linked Windows resource used by the
+taskbar and Explorer `.exe` icon. The resource was verified by extracting
+`#1_0000.ico` from the native installer. The fresh artifact is
+`cli/build/distributions/synesis-windows-x64.exe` with SHA-256
+`5B86349F9F88B358FE1D3023D0C686DEC4AF6DD54B554628437CD5C1B606D91C`.
+
+Focused Go tests/vet, Linux compilation, packaging, visible/responsive launch,
+and bounded native capture passed. No installer action or managed user state
+was changed.
+
+- Exact next action: preserve this presentation-only artifact and evidence; do
+  not install it, stop unrelated daemons, create `.synesis` state, push, or
+  broaden the task.
+
 ## 2026-09-13 — SYN-067 startup freeze correction complete
 
 The launch freeze was caused by Go moving the Win32 UI goroutine between OS
@@ -3737,3 +3846,15 @@ inspection helper was unavailable.
 
 - Exact next code action: preserve the CP-0944 SYN-067 artifacts and evidence;
   any pixel-capture or direct button-navigation QA is separately authorized.
+## 2026-09-13 — SYN-068 visual fidelity refinement complete
+
+The user authorized a presentation-only refinement of the native Windows setup
+wizard against the supplied dark Synesis mockup. The dark reference-sized
+composition, brand panel, capability glyphs, selection cards, footer, and
+button hierarchy are implemented. Focused source checks, packaging, a fresh
+visible/responsive launch probe, and a bounded native capture passed. Keep the
+existing installer behavior and safety boundaries unchanged.
+
+- Exact next code action: preserve CP-0947 and the SYN-068 artifact/evidence; do not
+  install the artifact, stop unrelated daemons, create `.synesis` state, push,
+  or broaden the task into installer behavior changes.

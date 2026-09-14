@@ -59,6 +59,56 @@ implement reconnection, path migration, or session revival. The optional
 SL-D-035 traversal coordinator can retain simultaneous authenticated results
 for a bounded settle window and choose one deterministic winner.
 
+### Compact first contact
+
+SL-D-032 adds the normal one-way first-contact artifact:
+`synesis://join/SLB2-<base64url>`. Its canonical payload is a signed, bounded
+binary record containing issue epoch seconds, a bounded lifetime, a fresh
+12-byte (96-bit) single-use admission capability, the inviter's compact
+Ed25519 public key, and one signed non-relay UDP endpoint hint. The URI
+revision fixes the Link protocol to v1; exact payload length selects IPv4 or
+IPv6, so the payload does not repeat an inner magic, protocol, candidate-type,
+or address-length field. The expiry is derived from signed issue plus
+lifetime. SLB1 remains a strict decode-compatible legacy compact format.
+The public key and detached signature are retained before contact because the
+joiner must authenticate the intended durable node; the endpoint and port are
+retained because a peer needs some destination before it can send the first
+QUIC packet. The capability, validity interval, and deterministic session ID
+bind admission and replay handling to that one invitation.
+
+The compact record contains no private key, project membership, provider
+credential, full candidate set, or long-lived reconnect secret. The endpoint is
+a signed routing hint, not an identity and not a promise of Internet NAT
+reachability. The local candidate provider omits IPv6 link-local addresses from
+wire candidates because their interface scope cannot be represented safely in
+this artifact. Endpoint selection prefers a server-reflexive candidate when
+configured, then deterministic direct candidates.
+
+The exact SLB1 IPv4/IPv6 sizes are 135/147 raw bytes and 200/216 URI
+characters. SLB2 is 120/132 raw bytes and 180/196 URI characters. The 32-byte
+Ed25519 public key and 64-byte Ed25519 signature are the irreducible identity
+trust floor for the existing self-contained non-TOFU construction. Removing
+the detached signature would allow endpoint and key substitution; the normal
+Link proof would then authenticate the attacker's supplied key. The 12-byte
+capability remains above the defensible 96-bit online guessing floor for the
+ten-minute single-use admission window.
+
+After the existing QUIC handshake has authenticated the remote public key,
+reciprocal control readiness is reached, and the session is admitted, Link
+uses the bounded `SLX1` application envelope to request and return the complete
+signed `CandidateDescriptor`. Each descriptor is still independently verified
+and must match the already-authenticated node identity and invitation expiry.
+This is an explicit descriptor exchange, not a trust-on-first-use key update.
+Project identity and membership remain higher-level authorization decisions;
+possession of an SLB2 endpoint hint does not grant project membership.
+
+The one-way path is the normal UX for directly reachable or otherwise
+pre-discoverable endpoints. Existing signed SLO1/SLA2 remains available for
+coordinated candidate exchange when a NAT class requires a return target before
+the first transport. That compatibility path is not compressed and remains
+subject to its existing size and validation bounds. Cross-network NAT success
+is not claimed by SLB2 local loopback evidence.
+
 Human-mediated onboarding uses two copyable links and no Synesis signaling
 service. The host command creates `synesis://join/SLO1-...`, which contains
 the existing signed `SYN1` invitation plus the host-signed traversal offer.

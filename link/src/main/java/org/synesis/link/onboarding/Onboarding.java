@@ -29,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
@@ -49,6 +50,8 @@ import org.synesis.link.demo.DemoWorkRequest;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.HandshakeProof;
+import org.synesis.link.protocol.AuthenticatedDescriptorExchange;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
@@ -192,6 +195,13 @@ public final class Onboarding {
   private static ConnectionAttempt attempt(NodeIdentity identity, CandidateDescriptor host,
       HandshakeTranscript transcript, Channel udp, CandidatePair pair,
       PeerSession.ApplicationStreamHandler applicationHandler) {
+    return attempt(identity, host.nodeId(), host.publicKeyEncoded(), transcript, udp, pair,
+        applicationHandler);
+  }
+
+  private static ConnectionAttempt attempt(NodeIdentity identity, String hostNodeId,
+      byte[] hostPublicKey, HandshakeTranscript transcript, Channel udp, CandidatePair pair,
+      PeerSession.ApplicationStreamHandler applicationHandler) {
     return new ConnectionAttempt() {
       private volatile QuicChannel connection;
 
@@ -218,7 +228,7 @@ public final class Onboarding {
                 HandshakeProof proof = SessionAuthenticator.createProof(identity, transcript,
                     HandshakeRole.INITIATOR);
                 connection.createStream(QuicStreamType.BIDIRECTIONAL,
-                    NettySessionHandshake.clientStreamHandler(identity, host.nodeId(), transcript,
+                    NettySessionHandshake.clientStreamHandler(identity, hostNodeId, transcript,
                         proof, new ReplayGuard(), established,
                         org.synesis.link.session.LivenessConfiguration.DEFAULT,
                         applicationHandler));
@@ -248,6 +258,10 @@ public final class Onboarding {
 
   private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
     return new OnboardingFailure(code, cause);
+  }
+
+  private static boolean isCompactInvitationLink(String link) {
+    return CompactBootstrapInvitation.isShareLink(link);
   }
 
   /**
@@ -339,12 +353,197 @@ public final class Onboarding {
     }
   }
 
+  private PreparedJoin importCompactInvitation(String link,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    CompactBootstrapInvitation invitation;
+    try {
+      invitation = CompactBootstrapInvitation.fromShareLink(link);
+      if (!invitation.protocolVersion()
+          .equals(ProtocolVersion.V1)
+          || !invitation.verifyAt(Instant.now(), CompactBootstrapInvitation.DEFAULT_CLOCK_SKEW)) {
+        throw new IllegalArgumentException("compact invitation is invalid or expired");
+      }
+      emit(OnboardingEventType.INVITE_PARSED, "");
+      emit(OnboardingEventType.INVITE_VERIFIED, "");
+    } catch (Exception failure) {
+      throw failure(OnboardingFailureCode.INVITE_INVALID, failure);
+    }
+    IdentityBootstrap.Result local = loadIdentity();
+    emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
+        : OnboardingEventType.IDENTITY_LOADED, "");
+    emit(OnboardingEventType.HOST_IDENTITY_PINNED, invitation.hostNodeId());
+    MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2,
+        NioIoHandler.newFactory());
+    Channel udp = null;
+    NettyStunBindingTransport stun = null;
+    try {
+      QuicSslContext ssl = QuicSslContextBuilder.forClient()
+          .trustManager(InsecureTrustManagerFactory.INSTANCE)
+          .applicationProtocols(SynesisLink.ALPN)
+          .build();
+      udp = new Bootstrap().group(group)
+          .channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.clientCodec(ssl))
+          .bind(new InetSocketAddress(0))
+          .sync()
+          .channel();
+      if (stunServer != null) {
+        stun = new NettyStunBindingTransport(udp, Duration.ofSeconds(2));
+      }
+      List<CandidateProvider> optionalProviders = stun == null
+          ? List.of()
+          : List.of(new StunCandidateProvider(stunServer, 100, stun));
+      List<Candidate> candidates = gather("join",
+          ((InetSocketAddress) udp.localAddress()).getPort(), optionalProviders);
+      CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
+          Instant.now().truncatedTo(ChronoUnit.SECONDS), invitation.expiresAt(), candidates);
+      emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
+      emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
+      return new PreparedJoin(local.identity(), null, null, null, null, localDescriptor,
+          invitation, group, udp, stun, applicationHandler, sessionAction);
+    } catch (Exception failure) {
+      closeResources(udp, group, null, stun, null);
+      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+    }
+  }
+
   /**
-   * Imports a human-mediated SLO1 link, creates an SLA2 answer, and keeps the local QUIC endpoint
-   * ready for the direct attempt.
+   * Creates and serves one compact one-way invitation.
    *
-   * @param link exact SLO1 link received from the host
-   * @return open join handle containing the answer link
+   * <p>The method returns only after the bounded authenticated session has
+   * completed. The compact invitation is emitted before the wait through the
+   * normal {@link OnboardingEventType#SHARE_LINK} event.
+   *
+   * @param expectedPeer optional expected responder node ID
+   * @throws OnboardingFailure if setup, authentication, descriptor exchange,
+   *                           or bounded cleanup fails
+   */
+  public void hostCompact(String expectedPeer) throws OnboardingFailure {
+    hostCompact(expectedPeer, null, _ -> {
+    });
+  }
+
+  /**
+   * Creates and serves one compact one-way invitation with callbacks.
+   *
+   * @param expectedPeer       optional expected responder node ID
+   * @param applicationHandler optional handler for non-bootstrap application payloads
+   * @param sessionAction      callback invoked after authenticated descriptor exchange
+   * @throws OnboardingFailure if setup, authentication, descriptor exchange,
+   *                           or bounded cleanup fails
+   */
+  public void hostCompact(String expectedPeer,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    try {
+      try (PreparedHost prepared = createCompactInvitation(expectedPeer, applicationHandler,
+          sessionAction)) {
+        prepared.awaitConnection();
+      }
+    } catch (OnboardingFailure failure) {
+      throw failure;
+    }
+  }
+
+  /**
+   * Opens a compact host handle and returns after the invite has been emitted.
+   *
+   * <p>The returned handle owns the listener until {@link PreparedHost#awaitConnection()} or
+   * {@link PreparedHost#close()} is called. This is the non-blocking seam used by the local
+   * control-plane owner; the terminal one-shot façade is {@link #hostCompact(String)}.
+   *
+   * @param expectedPeer       optional expected responder node ID
+   * @param applicationHandler optional handler for non-bootstrap application payloads
+   * @param sessionAction      callback invoked after authenticated descriptor exchange
+   * @return open compact host handle
+   * @throws OnboardingFailure if identity, listener, candidate, or compact-signing setup fails
+   */
+  public PreparedHost createCompactInvitation(String expectedPeer,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    Objects.requireNonNull(sessionAction, "session action");
+    IdentityBootstrap.Result local = loadIdentity();
+    emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
+        : OnboardingEventType.IDENTITY_LOADED, "");
+    byte[] capability = new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES];
+    RANDOM.nextBytes(capability);
+    Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+    Instant expires = issued.plus(CompactBootstrapInvitation.MAX_LIFETIME);
+    UUID sessionId = CompactBootstrapInvitation.sessionIdForMinimized(
+        local.identity().publicKeyEncoded(), capability, issued, expires);
+    InvitationAdmission admission = new InvitationAdmission(sessionId, capability);
+    MultiThreadIoEventLoopGroup group = null;
+    Channel udp = null;
+    EphemeralTlsMaterial tls = null;
+    NettyStunBindingTransport stun = null;
+    try {
+      AtomicReference<CandidateDescriptor> localDescriptor = new AtomicReference<>();
+      CompletableFuture<CandidateDescriptor> remoteDescriptor = new CompletableFuture<>();
+      PeerSession.ApplicationStreamHandler bootstrapHandler = compactApplicationHandler(
+          localDescriptor, remoteDescriptor, applicationHandler);
+      tls = EphemeralTlsMaterial.create();
+      group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+      CompletableFuture<PeerSession> established = new CompletableFuture<>();
+      QuicSslContext ssl = QuicSslContextBuilder.forServer(tls.key, null, tls.certificate)
+          .applicationProtocols(SynesisLink.ALPN)
+          .build();
+      udp = new Bootstrap().group(group)
+          .channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.serverCodec(ssl, InsecureQuicTokenHandler.INSTANCE,
+              new ChannelInboundHandlerAdapter(),
+              NettySessionHandshake.serverInvitationStreamHandler(
+                  local.identity(), expectedPeer, List.of(ProtocolVersion.V1), new ReplayGuard(),
+                  established, org.synesis.link.session.LivenessConfiguration.DEFAULT, admission,
+                  bootstrapHandler)))
+          .bind(new InetSocketAddress(0))
+          .sync()
+          .channel();
+      if (stunServer != null) {
+        stun = new NettyStunBindingTransport(udp, Duration.ofSeconds(2));
+      }
+      int port = ((InetSocketAddress) udp.localAddress()).getPort();
+      emit(OnboardingEventType.SESSION_CREATED, "");
+      emit(OnboardingEventType.LISTENER_READY, "");
+      List<CandidateProvider> providers = stun == null ? List.of()
+          : List.of(new StunCandidateProvider(stunServer, 100, stun));
+      List<Candidate> candidates = gather("host", port, providers);
+      emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
+      Candidate endpoint = CompactBootstrapInvitation.selectEndpoint(candidates);
+      CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued, expires,
+          candidates);
+      localDescriptor.set(descriptor);
+      CompactBootstrapInvitation invitation = CompactBootstrapInvitation.createMinimized(
+          local.identity(), ProtocolVersion.V1, issued, expires, capability, endpoint);
+      emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
+      emit(OnboardingEventType.INVITE_CREATED, "");
+      emit(OnboardingEventType.SHARE_LINK, invitation.shareLink());
+      return new PreparedHost(local.identity(), expectedPeer, null, null, invitation,
+          remoteDescriptor, established, group, udp, tls, stun, admission, sessionAction);
+    } catch (Exception failure) {
+      closeResources(udp, group, tls, stun, admission);
+      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+    }
+  }
+
+  /**
+   * Opens a compact host handle with no application callback.
+   *
+   * @param expectedPeer optional expected responder node ID
+   * @return open compact host handle
+   * @throws OnboardingFailure if compact host setup fails
+   */
+  public PreparedHost createCompactInvitation(String expectedPeer) throws OnboardingFailure {
+    return createCompactInvitation(expectedPeer, null, _ -> {
+    });
+  }
+
+  /**
+   * Imports a compact one-way or legacy human-mediated invitation and keeps the local QUIC
+   * endpoint ready for the direct attempt.
+   *
+   * @param link exact compact or SLO1 link received from the host
+   * @return open join handle; compact handles do not contain an answer link
    * @throws OnboardingFailure if the link, identity, transport, or candidates are invalid
    */
   public PreparedJoin importInvitation(String link) throws OnboardingFailure {
@@ -362,9 +561,10 @@ public final class Onboarding {
   }
 
   /**
-   * Imports a human-mediated SLO1 link with callbacks and creates its SLA2 answer.
+   * Imports a compact or human-mediated invitation with callbacks. Legacy SLO1 input creates an
+   * SLA2 answer; compact input keeps the signed endpoint hint and uses one-way contact.
    *
-   * @param link               exact SLO1 link received from the host
+   * @param link               exact compact or SLO1 link received from the host
    * @param applicationHandler optional application-stream handler
    * @param sessionAction      callback invoked after control readiness
    * @return open join handle containing the answer link
@@ -374,6 +574,10 @@ public final class Onboarding {
       PeerSession.ApplicationStreamHandler applicationHandler,
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(link, "link");
+    if (isCompactInvitationLink(link)) {
+      return importCompactInvitation(link, applicationHandler, sessionAction);
+    }
     SessionInvitation invitation;
     TraversalOffer offer;
     try {
@@ -624,6 +828,13 @@ public final class Onboarding {
   public void join(String link, PeerSession.ApplicationStreamHandler applicationHandler,
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(link, "link");
+    if (isCompactInvitationLink(link)) {
+      try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
+        prepared.connect();
+      }
+      return;
+    }
     SessionInvitation invitation;
     try {
       invitation = SessionInvitation.fromShareLink(link);
@@ -772,6 +983,53 @@ public final class Onboarding {
     }
   }
 
+  private static PeerSession.ApplicationStreamHandler compactApplicationHandler(
+      AtomicReference<CandidateDescriptor> localDescriptor,
+      CompletableFuture<CandidateDescriptor> remoteDescriptor,
+      PeerSession.ApplicationStreamHandler delegate) {
+    return (remoteNodeId, payload) -> {
+      if (!AuthenticatedDescriptorExchange.looksLike(payload)) {
+        return delegate == null
+            ? CompletableFuture.failedFuture(new IllegalStateException(
+                "no application handler is installed"))
+            : delegate.handle(remoteNodeId, payload);
+      }
+      try {
+        CandidateDescriptor received = AuthenticatedDescriptorExchange.decodeRequest(payload);
+        if (!remoteNodeId.equals(received.nodeId())
+            || !received.isValidAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)) {
+          throw new IllegalArgumentException("remote descriptor does not match session identity");
+        }
+        CandidateDescriptor local = localDescriptor.get();
+        if (local == null) {
+          throw new IllegalStateException("local descriptor is not ready");
+        }
+        remoteDescriptor.complete(received);
+        return CompletableFuture.completedFuture(AuthenticatedDescriptorExchange.response(local));
+      } catch (Exception failure) {
+        remoteDescriptor.completeExceptionally(failure);
+        return CompletableFuture.failedFuture(failure);
+      }
+    };
+  }
+
+  private static CandidateDescriptor exchangeDescriptor(PeerSession session,
+      CandidateDescriptor localDescriptor, String expectedRemoteNodeId, byte[] expectedRemoteKey,
+      Instant expiresAt) throws Exception {
+    byte[] response = session.requestApplication(
+            AuthenticatedDescriptorExchange.request(localDescriptor))
+        .toCompletableFuture()
+        .get(10, TimeUnit.SECONDS);
+    CandidateDescriptor remote = AuthenticatedDescriptorExchange.decodeResponse(response);
+    if (!remote.nodeId().equals(expectedRemoteNodeId)
+        || !Arrays.equals(remote.publicKeyEncoded(), expectedRemoteKey)
+        || !remote.isValidAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)
+        || remote.expiresAt().isAfter(expiresAt)) {
+      throw new IllegalArgumentException("remote descriptor is not bound to the invitation");
+    }
+    return remote;
+  }
+
   private IdentityBootstrap bootstrap() {
     return new IdentityBootstrap(profileDirectory);
   }
@@ -809,6 +1067,8 @@ public final class Onboarding {
     private final String expectedPeer;
     private final SessionInvitation invitation;
     private final TraversalOffer offer;
+    private final CompactBootstrapInvitation compactInvitation;
+    private final CompletableFuture<CandidateDescriptor> remoteDescriptor;
     private final CompletableFuture<PeerSession> established;
     private final MultiThreadIoEventLoopGroup group;
     private final Channel udp;
@@ -816,6 +1076,7 @@ public final class Onboarding {
     private final NettyStunBindingTransport stun;
     private final InvitationAdmission admission;
     private final Consumer<PeerSession> sessionAction;
+    private final CompletableFuture<Void> compactCompletion;
     private final AtomicBoolean answerImported = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
 
@@ -825,10 +1086,23 @@ public final class Onboarding {
         Channel udp, EphemeralTlsMaterial tls, NettyStunBindingTransport stun,
         InvitationAdmission admission,
         Consumer<PeerSession> sessionAction) {
+      this(identity, expectedPeer, invitation, offer, null, null, established, group, udp, tls,
+          stun, admission, sessionAction);
+    }
+
+    private PreparedHost(NodeIdentity identity, String expectedPeer, SessionInvitation invitation,
+        TraversalOffer offer, CompactBootstrapInvitation compactInvitation,
+        CompletableFuture<CandidateDescriptor> remoteDescriptor,
+        CompletableFuture<PeerSession> established, MultiThreadIoEventLoopGroup group,
+        Channel udp, EphemeralTlsMaterial tls, NettyStunBindingTransport stun,
+        InvitationAdmission admission,
+        Consumer<PeerSession> sessionAction) {
       this.identity = identity;
       this.expectedPeer = expectedPeer;
       this.invitation = invitation;
       this.offer = offer;
+      this.compactInvitation = compactInvitation;
+      this.remoteDescriptor = remoteDescriptor;
       this.established = established;
       this.group = group;
       this.udp = udp;
@@ -836,15 +1110,85 @@ public final class Onboarding {
       this.stun = stun;
       this.admission = admission;
       this.sessionAction = sessionAction;
+      this.compactCompletion = compactInvitation == null ? null : new CompletableFuture<>();
     }
 
     /**
-     * Returns the exact SLO1 link to send to the other user.
+     * Returns the exact compact one-way link, or the legacy SLO1 link for a mediated handle.
      *
-     * @return copyable signed SLO1 link
+     * @return copyable signed invitation link
      */
     public String invitationLink() {
-      return TraversalInvitation.create(invitation, offer).shareLink();
+      return compactInvitation == null
+          ? TraversalInvitation.create(invitation, offer).shareLink()
+          : compactInvitation.shareLink();
+    }
+
+    /**
+     * Waits for a compact one-way session and closes it after the callback.
+     *
+     * @throws OnboardingFailure if this is a legacy handle or the session/exchange fails
+     */
+    public void awaitConnection() throws OnboardingFailure {
+      awaitConnection(false);
+    }
+
+    /**
+     * Waits for a compact one-way session while retaining the authenticated endpoint.
+     *
+     * @return authenticated control-ready session
+     * @throws OnboardingFailure if this is a legacy handle or the session/exchange fails
+     */
+    public PeerSession awaitConnectionAndKeepAlive() throws OnboardingFailure {
+      return awaitConnection(true);
+    }
+
+    /**
+     * Returns the completion stage for a compact host wait.
+     *
+     * <p>Legacy host handles return an already-completed stage because their lifecycle is driven
+     * explicitly by {@link #importAnswer(String)}. Compact stages complete after descriptor
+     * exchange and the configured session callback have finished.
+     *
+     * @return compact wait completion, or an already-completed stage for a legacy handle
+     */
+    public CompletionStage<Void> completion() {
+      return compactCompletion == null
+          ? CompletableFuture.completedFuture(null)
+          : compactCompletion;
+    }
+
+    private PeerSession awaitConnection(boolean keepAlive) throws OnboardingFailure {
+      if (compactInvitation == null || remoteDescriptor == null) {
+        throw failure(OnboardingFailureCode.ANSWER_INVALID,
+            new IllegalStateException("host handle requires a legacy answer"));
+      }
+      try {
+        PeerSession session = established.get(CompactBootstrapInvitation.MAX_LIFETIME.toSeconds()
+            + 30, TimeUnit.SECONDS);
+        remoteDescriptor.get(12, TimeUnit.SECONDS);
+        emit(OnboardingEventType.DESCRIPTORS_EXCHANGED, "");
+        emitSession(session);
+        sessionAction.accept(session);
+        if (!keepAlive) {
+          session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
+          emit(OnboardingEventType.SESSION_CLOSED, "");
+        }
+        if (compactCompletion != null) {
+          compactCompletion.complete(null);
+        }
+        return session;
+      } catch (java.util.concurrent.TimeoutException timeout) {
+        if (compactCompletion != null) {
+          compactCompletion.completeExceptionally(timeout);
+        }
+        throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
+      } catch (Exception failure) {
+        if (compactCompletion != null) {
+          compactCompletion.completeExceptionally(failure);
+        }
+        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+      }
     }
 
     /**
@@ -905,16 +1249,20 @@ public final class Onboarding {
     @Override
     public void close() {
       if (closed.compareAndSet(false, true)) {
+        if (compactCompletion != null) {
+          compactCompletion.completeExceptionally(
+              new java.util.concurrent.CancellationException("host handle closed"));
+        }
         closeResources(udp, group, tls, stun, admission);
       }
     }
   }
 
   /**
-   * Open join-side state for one human-mediated answer.
+   * Opens join-side state for one invitation.
    *
-   * <p>The instance is single-use: creating the answer does not destroy the
-   * bound endpoint, and {@link #connect()} starts the direct race once.
+   * <p>The instance is single-use: a legacy handle creates an answer and a compact handle keeps
+   * the local endpoint ready for the direct race; {@link #connect()} starts that race once.
    */
   public final class PreparedJoin implements AutoCloseable {
 
@@ -924,6 +1272,7 @@ public final class Onboarding {
     private final TraversalAnswer answer;
     private final CandidateDescriptor host;
     private final CandidateDescriptor localDescriptor;
+    private final CompactBootstrapInvitation compactInvitation;
     private final MultiThreadIoEventLoopGroup group;
     private final Channel udp;
     private final NettyStunBindingTransport stun;
@@ -937,12 +1286,23 @@ public final class Onboarding {
         MultiThreadIoEventLoopGroup group, Channel udp, NettyStunBindingTransport stun,
         PeerSession.ApplicationStreamHandler applicationHandler,
         Consumer<PeerSession> sessionAction) {
+      this(identity, invitation, offer, answer, host, localDescriptor, null, group, udp, stun,
+          applicationHandler, sessionAction);
+    }
+
+    private PreparedJoin(NodeIdentity identity, SessionInvitation invitation, TraversalOffer offer,
+        TraversalAnswer answer, CandidateDescriptor host, CandidateDescriptor localDescriptor,
+        CompactBootstrapInvitation compactInvitation, MultiThreadIoEventLoopGroup group,
+        Channel udp, NettyStunBindingTransport stun,
+        PeerSession.ApplicationStreamHandler applicationHandler,
+        Consumer<PeerSession> sessionAction) {
       this.identity = identity;
       this.invitation = invitation;
       this.offer = offer;
       this.answer = answer;
       this.host = host;
       this.localDescriptor = localDescriptor;
+      this.compactInvitation = compactInvitation;
       this.group = group;
       this.udp = udp;
       this.stun = stun;
@@ -951,12 +1311,12 @@ public final class Onboarding {
     }
 
     /**
-     * Returns the exact SLA2 link to send back to the host user.
+     * Returns the exact legacy SLA2 link to send back to the host user.
      *
-     * @return copyable signed SLA2 link
+     * @return copyable signed SLA2 link, or {@code null} for a compact one-way handle
      */
     public String answerLink() {
-      return answer.shareLink();
+      return answer == null ? null : answer.shareLink();
     }
 
     /**
@@ -985,6 +1345,9 @@ public final class Onboarding {
       if (!started.compareAndSet(false, true)) {
         throw failure(OnboardingFailureCode.ANSWER_INVALID,
             new IllegalStateException("answer has already been used"));
+      }
+      if (compactInvitation != null) {
+        return connectCompactPrepared(keepAlive);
       }
       try {
         TraversalCoordinator coordinator = new TraversalCoordinator(identity, host.nodeId(),
@@ -1024,6 +1387,60 @@ public final class Onboarding {
           if (!session.hasRemotePublicKey(host.publicKeyEncoded())) {
             throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
           }
+          emit(OnboardingEventType.PATH_SELECTED, pairs.getFirst().identifier());
+          emitSession(session);
+          sessionAction.accept(session);
+          if (!keepAlive) {
+            session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+                .toCompletableFuture()
+                .get(10, TimeUnit.SECONDS);
+            emit(OnboardingEventType.SESSION_CLOSED, "");
+          }
+          return session;
+        }
+      } catch (OnboardingFailure failure) {
+        throw failure;
+      } catch (Exception failure) {
+        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+      }
+    }
+
+    private PeerSession connectCompactPrepared(boolean keepAlive) throws OnboardingFailure {
+      try {
+        List<CandidatePair> pairs = CandidatePairs.generate(localDescriptor.candidates(),
+            List.of(compactInvitation.endpoint()), 8);
+        if (pairs.isEmpty()) {
+          throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
+        }
+        byte[] initiatorNonce = randomBytes();
+        byte[] responderNonce = randomBytes();
+        HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
+            SynesisLink.ALPN, compactInvitation.sessionId(), 1, 1, initiatorNonce, responderNonce,
+            compactInvitation.capability(), identity.nodeId(), identity.publicKeyEncoded(),
+            compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded());
+        emit(OnboardingEventType.TRAVERSAL_STARTED, "");
+        try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 8, 2,
+            Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20),
+            Duration.ofSeconds(2), 16))) {
+          DirectConnectionResult result = racer.race(pairs, compactInvitation.hostNodeId(),
+                  pair -> attempt(identity, compactInvitation.hostNodeId(),
+                      compactInvitation.publicKeyEncoded(), transcript, udp, pair,
+                      applicationHandler))
+              .completion()
+              .toCompletableFuture()
+              .get(25, TimeUnit.SECONDS);
+          if (result.session() == null) {
+            throw failure(OnboardingFailureCode.CONNECTION_FAILED,
+                new IllegalStateException("compact candidate race failed: "
+                    + result.failureCategory() + " diagnostics=" + result.diagnostics()));
+          }
+          PeerSession session = result.session();
+          if (!session.hasRemotePublicKey(compactInvitation.publicKeyEncoded())) {
+            throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
+          }
+          exchangeDescriptor(session, localDescriptor, compactInvitation.hostNodeId(),
+              compactInvitation.publicKeyEncoded(), compactInvitation.expiresAt());
+          emit(OnboardingEventType.DESCRIPTORS_EXCHANGED, "");
           emit(OnboardingEventType.PATH_SELECTED, pairs.getFirst().identifier());
           emitSession(session);
           sessionAction.accept(session);

@@ -68,8 +68,7 @@ public final class LocalInterfaceCandidateProvider implements CandidateProvider 
               || address.isLoopbackAddress()) {
             continue;
           }
-          if (address instanceof Inet6Address ipv6 && ipv6.isLinkLocalAddress()
-              && ipv6.getScopeId() == 0) {
+          if (address instanceof Inet6Address ipv6 && ipv6.isLinkLocalAddress()) {
             continue;
           }
           CandidateType type = address instanceof Inet6Address ipv6 && !ipv6.isSiteLocalAddress()

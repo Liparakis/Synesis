@@ -1,3 +1,89 @@
+## 2026-09-14 — SYN-078 completion
+
+Replaced only the main maintenance-page copy with the operator-supplied concise Windows setup wording: Manage installation, the requested subtitle/version/setup labels/action descriptions/Installed at label, Continue, and Cancel. Layout, styling, controls, navigation, installer logic, and functionality are unchanged. Bootstrap tests/vet, canonical packaging, and packaged capture passed. Evidence: docs/evidence/SYN-078-maintenance-page-copy-2026-09-14.md and CP-0958. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-077 completion
+
+Removed the two lower separator draws, aligned Current installation with the action buttons, and shifted the button row so Cancel's right edge matches both Install and Uninstall cards. Window remains 912x666. Bootstrap tests/vet, canonical packaging, and settled native capture passed. Evidence: docs/evidence/SYN-077-main-footer-layout-2026-09-14.md and CP-0957. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-076 completion
+
+Removed the main-page warning icon, adjacent warning text, separator, and unused warning control/font paths at the operator's request. Window remains 912x666; navigation and footer buttons remain. Bootstrap tests/vet, canonical packaging, and uninstall → Back capture passed. Evidence: docs/evidence/SYN-076-remove-main-warning-footer-2026-09-14.md and CP-0956. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-075 completion
+
+Repaired the main-page return path and footer alignment. Synchronous parent/child redraw removes stale Back paint after uninstall → Back; the compact warning copy stays on one line; Next/Cancel are centered on the footer's vertical midpoint. Window remains 912x666. Bootstrap tests/vet, canonical packaging, and native return capture passed. Evidence: docs/evidence/SYN-075-main-page-return-repaint-2026-09-14.md and CP-0955. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-074 completion
+
+Centered the main-page safety note within its existing footer slot at unchanged 912x666. Canonical runnable installer rebuilt successfully. Bootstrap tests/vet passed, and a settled native capture confirmed the centered note, warning mark, logo, capability icons, and complete controls. Evidence: docs/evidence/SYN-074-main-page-footer-centering-2026-09-14.md and CP-0954. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-073 completion
+
+Polished the main-page footer after operator visual feedback: shorter one-line safety note, readable face, deliberate spacing from the warning divider, and alignment with the warning mark. The window remains 912x666 and all non-main layouts are unchanged. Bootstrap tests and vet passed. Fresh native launcher and bundle inputs completed, but the canonical output remained locked by the operator-open executable. The equivalent fresh alternate package was assembled and visually captured. Evidence: docs/evidence/SYN-073-main-page-footer-composition-2026-09-14.md and CP-0953. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-072 completion
+
+Repaired the main-page footer clipping reported by the operator. The warning and Next/Cancel controls now sit above the compact client's lower edge while the 912x666 window size remains unchanged. Native packaged capture confirms complete warning text and controls. Bootstrap tests/vet, Linux test compilation, and canonical packaging passed. Evidence: docs/evidence/SYN-072-main-page-footer-clipping-2026-09-14.md and CP-0952. No installer operation or remote mutation executed.
+
+## 2026-09-14 — SYN-071 completion
+
+Repaired shared header/footer geometry and native painting regressions affecting main and uninstall pages. Window remains 912x666. Canonical runnable installer rebuilt; native captures and repeated navigation verified. Tests and vet pass. Evidence: docs/evidence/SYN-071-windows-installer-page-regressions-2026-09-14.md. No installer operation or remote mutation executed. Earlier SYN-070 visual/package limitations are superseded.
+
+## 2026-09-14 — SYN-070 completion
+
+The operator supplied a capture of the current uninstall page and identified
+remaining visual quality defects: clipped hidden text above the options card,
+unnecessary helper-copy wrapping, a title-bar icon fallback, and compact path
+and action controls that read too small. SYN-070 completed as a presentation-
+only follow-up. The hidden heading is cleared before page switches, the
+uninstall page has no class-level icon fallback, the path is more legible, the
+helper copy fits on one line, and the compact action row is balanced. The
+existing Win32 control/event model, uninstall confirmation and execution,
+metadata semantics, user-data preservation, and all non-uninstall pages remain
+unchanged.
+
+Focused bootstrap tests, vet, Windows test compilation, Windows GUI compilation,
+and diff hygiene passed. The Gradle native launcher and bundle stages passed;
+the canonical single-file output was locked by the already-running prior
+installer (PID 34644), so it was not terminated or overwritten. A separately
+named self-extractor was assembled from the fresh inputs and its footer was
+validated. No installer action or managed user state was changed.
+
+Evidence: `docs/evidence/SYN-070-windows-uninstall-page-cleanup-2026-09-14.md`;
+checkpoint `CP-0950`.
+
+## Exact next action
+
+Preserve the scoped source and preview artifact; do not install it, terminate
+the running prior installer, create `.synesis` state, push, or broaden the
+presentation-only installer task.
+
+## 2026-09-14 — SYN-069 completion
+
+The operator requested that the current native Windows uninstall page be made
+visually consistent with the approved dark, logo-free, banner-free uninstall
+mockup. SYN-069 completed as a presentation-only follow-up to the completed
+SYN-067 and SYN-068 slices. The page now has quiet page chrome, a bordered
+options surface, a read-only path field, a custom metadata checkbox/helper
+layout, and the requested bottom action hierarchy. The existing Win32 controls
+and operation/event paths remain the behavioral boundary; no install, repair,
+uninstall, metadata, PATH, registry, protocol, project-data, daemon, or Unix
+behavior changed.
+
+Focused bootstrap tests, vet, Windows test compilation, Windows GUI build, and
+diff hygiene passed. A temporary preview executable was built but not run
+through the unavailable Windows visual bridge, so no pixel-level capture claim
+is made. No installer action or managed user state was changed.
+
+Evidence: `docs/evidence/SYN-069-windows-uninstall-page-visual-parity-2026-09-14.md`;
+checkpoint `CP-0949`.
+
+## Exact next action
+
+Preserve the scoped source and evidence; do not install the preview, create
+`.synesis` state, push, or broaden the presentation-only installer task.
+
 ## 2026-09-13 — SYN-067 startup freeze correction
 
 The CP-0945 visibility-only correction made the top-level wizard visible but
@@ -5340,3 +5426,22 @@ final hashes and UI Automation launch evidence.
 The final focused verification and artifact hashes are recorded in the SYN-067
 evidence file and CP-0943. No further SYN-067 code action remains; any direct
 button-navigation QA or real install is a separately authorized follow-up.
+## 2026-09-13 — SYN-068 visual fidelity refinement complete
+
+The user explicitly requested a closer match to the supplied dark Synesis setup
+mockup. SYN-068 is complete. The refinement changed only native wizard
+geometry, typography, branded surfaces, capability glyphs, selection-card
+visuals, and footer/action hierarchy. Installer operations, ownership
+boundaries, protocol registration, metadata preservation, user data, and Unix
+behavior are unchanged.
+
+Verification passed: bootstrap tests, vet, Linux cross-build, the runnable
+Windows installer build, diff hygiene, a fresh visible/responsive no-argument
+launch probe, and a final bounded native action-page capture. The final
+artifact SHA-256 is recorded in the SYN-068 evidence file.
+
+## Exact next action
+
+Keep the CP-0947 artifact and evidence as the bounded result; do not install
+the artifact, stop unrelated daemons, create `.synesis` state, push, or broaden
+the task into installer behavior changes.

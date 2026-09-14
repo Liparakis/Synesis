@@ -399,7 +399,7 @@ class ControlPlaneHttpHandlerTest {
 
   @Test
   @Timeout(90)
-  void onboardingCommandsUseRealLinkInviteJoinAndAnswerFlow() throws Exception {
+  void onboardingCommandsUseRealLinkInviteAndOneWayJoinFlow() throws Exception {
     try (Fixture host = new Fixture("host"); Fixture join = new Fixture("join")) {
       Map<String, Object> hostCredentials = login(host);
       Map<String, Object> joinCredentials = login(join);
@@ -414,8 +414,10 @@ class ControlPlaneHttpHandlerTest {
           HttpResponse.BodyHandlers.ofString());
       assertEquals(201, invitation.statusCode());
       Map<String, Object> invitationBody = object(invitation.body());
+      assertTrue(((String) invitationBody.get("inviteUri")).startsWith("synesis://join/SLB2-"));
+      assertEquals("WAITING_FOR_CONNECTION", invitationBody.get("state"));
 
-      HttpResponse<String> answer = join.client.send(jsonRequest(join, "/api/v1/commands/join")
+      HttpResponse<String> connection = join.client.send(jsonRequest(join, "/api/v1/commands/join")
               .header(ControlPlaneHttpHandler.SESSION_HEADER,
                   (String) joinCredentials.get("sessionToken"))
               .header(ControlPlaneHttpHandler.CSRF_HEADER, (String) joinCredentials.get("csrfToken"))
@@ -423,36 +425,16 @@ class ControlPlaneHttpHandlerTest {
                   "inviteUri", invitationBody.get("inviteUri")))))
               .build(),
           HttpResponse.BodyHandlers.ofString());
-      assertEquals(201, answer.statusCode());
-      Map<String, Object> answerBody = object(answer.body());
-
-      HttpRequest hostAnswerRequest = jsonRequest(host, "/api/v1/commands/answer")
-          .header(ControlPlaneHttpHandler.SESSION_HEADER,
-              (String) hostCredentials.get("sessionToken"))
-          .header(ControlPlaneHttpHandler.CSRF_HEADER, (String) hostCredentials.get("csrfToken"))
-          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
-              "operationId", invitationBody.get("operationId"),
-              "answerUri", answerBody.get("answerUri")))))
-          .build();
-      HttpRequest joinConnectRequest = jsonRequest(join, "/api/v1/commands/connect")
-          .header(ControlPlaneHttpHandler.SESSION_HEADER,
-              (String) joinCredentials.get("sessionToken"))
-          .header(ControlPlaneHttpHandler.CSRF_HEADER, (String) joinCredentials.get("csrfToken"))
-          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
-              "operationId", answerBody.get("operationId")))))
-          .build();
-      CompletableFuture<HttpResponse<String>> hostResult = host.client.sendAsync(hostAnswerRequest,
-          HttpResponse.BodyHandlers.ofString());
-      CompletableFuture<HttpResponse<String>> joinResult = join.client.sendAsync(joinConnectRequest,
-          HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, hostResult.get(60, TimeUnit.SECONDS).statusCode());
-      assertEquals(200, joinResult.get(60, TimeUnit.SECONDS).statusCode());
+      assertEquals(201, connection.statusCode());
+      Map<String, Object> connectionBody = object(connection.body());
+      assertEquals("CONNECTED", connectionBody.get("state"));
+      assertFalse(connectionBody.containsKey("answerUri"));
     }
   }
 
   @Test
   @Timeout(90)
-  void runtimeCommandDeepLinkUsesExistingJoinAndAnswerAuthority() throws Exception {
+  void runtimeCommandDeepLinkUsesExistingOneWayBootstrapAuthority() throws Exception {
     try (Fixture host = new Fixture("deep-link-host"); Fixture join = new Fixture("deep-link-join")) {
       Map<String, Object> hostCredentials = login(host);
       HttpResponse<String> invitation = host.client.send(
@@ -493,6 +475,8 @@ class ControlPlaneHttpHandlerTest {
               .build(), HttpResponse.BodyHandlers.ofString());
       assertEquals(201, joinResult.statusCode());
       Map<String, Object> joinBody = object(joinResult.body());
+      assertEquals("CONNECTED", joinBody.get("state"));
+      assertFalse(joinBody.containsKey("answerUri"));
 
       Map<String, Object> joinCredentials = login(join);
       HttpResponse<String> pendingSnapshot = join.client.send(
@@ -504,34 +488,18 @@ class ControlPlaneHttpHandlerTest {
       Map<String, Object> snapshot = object(pendingSnapshot.body());
       Map<?, ?> onboarding = (Map<?, ?>) snapshot.get("onboarding");
       List<?> pendingJoins = (List<?>) onboarding.get("pendingJoins");
-      assertEquals(1, pendingJoins.size());
-      Map<?, ?> pendingJoin = (Map<?, ?>) pendingJoins.getFirst();
-      assertEquals(joinBody.get("operationId"), pendingJoin.get("operationId"));
-      assertEquals("WAITING_FOR_CONNECT", pendingJoin.get("state"));
+      assertTrue(pendingJoins.isEmpty());
 
-      HttpRequest answerRequest = jsonRequest(host, "/api/v1/commands/deep-link")
-          .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER,
-              host.handler.runtimeCommandToken())
-          .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
-              "uri", joinBody.get("answerUri"))))).build();
-      HttpRequest connectRequest = jsonRequest(join, "/api/v1/commands/connect")
+      HttpResponse<String> cancel = host.client.send(jsonRequest(host, "/api/v1/commands/cancel")
           .header(ControlPlaneHttpHandler.SESSION_HEADER,
-              (String) joinCredentials.get("sessionToken"))
+              (String) hostCredentials.get("sessionToken"))
           .header(ControlPlaneHttpHandler.CSRF_HEADER,
-              (String) joinCredentials.get("csrfToken"))
+              (String) hostCredentials.get("csrfToken"))
           .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of(
-              "operationId", joinBody.get("operationId"))))).build();
-      CompletableFuture<HttpResponse<String>> hostResult = host.client.sendAsync(answerRequest,
+              "operationId", invitationBody.get("operationId"))))).build(),
           HttpResponse.BodyHandlers.ofString());
-      CompletableFuture<HttpResponse<String>> joinConnection = join.client.sendAsync(connectRequest,
-          HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, hostResult.get(60, TimeUnit.SECONDS).statusCode());
-      assertEquals(200, joinConnection.get(60, TimeUnit.SECONDS).statusCode());
-
-      HttpResponse<String> replay = host.client.send(answerRequest,
-          HttpResponse.BodyHandlers.ofString());
-      assertEquals(404, replay.statusCode());
-      assertTrue(replay.body().contains("OPERATION_NOT_FOUND"));
+      assertEquals(404, cancel.statusCode());
+      assertTrue(cancel.body().contains("OPERATION_NOT_FOUND"));
     }
   }
 

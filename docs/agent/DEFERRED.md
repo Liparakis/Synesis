@@ -8,6 +8,47 @@ Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
 
 # Deferred Functionality Register
 
+## SL-D-041 — Windows setup wizard and owned installation deep-link lifecycle
+
+**Status:** SUPERSEDED by replacement task SYN-067; checkpoint CP-0944
+**Priority:** Current
+**Area:** Windows installation and native deep-link activation
+**Current verified capability:** The Go bootstrap now has a native Windows
+setup wizard around the verified local bundle operations, with path selection,
+Back/Next/Cancel flow, progress, owned per-user `synesis://` registration,
+metadata-preserving uninstall, the existing Synesis logo, and mandatory dark
+client/control/title-bar treatment. Screenshot-driven refinement is active for
+selection-card styling and reliable logo compositing.
+**Missing capability:** Direct button-navigation and pixel-level UI QA remain
+unverified because the desktop inspection helper was unavailable; this does
+not expand the bounded implementation into privileged installation or
+universal browser/network onboarding.
+**Remaining boundary:** Direct button-navigation and pixel-level UI QA remain
+unverified because the desktop inspection helper was unavailable; privileged
+machine-wide installation and universal browser/network onboarding remain out
+of scope.
+**Reason deferred:** The prior installed-product slices proved the daemon and
+activation seams but deliberately left the native installer presentation and
+normal installer registration lifecycle outside their scope. SYN-067 supplied
+the bounded implementation and evidence.
+**Activation trigger:** The operator explicitly requested a concrete Windows
+setup experience with install-path selection and a metadata-removal choice
+after observing the unusable console installer and non-opening invitation URI.
+**Evidence required before planning:** For any future expansion, retain the
+source trace of the existing bootstrap
+activation/uninstall/registry boundaries, the accepted native activation ADR,
+focused ownership tests, and a visual reference for the requested wizard
+controls are recorded in SYN-067 and ADR-0080; final build and test evidence is
+recorded in `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md` and
+`docs/agent/checkpoints/CP-0944.md`.
+**Public-claims impact:** Synesis may claim only a per-user Windows wizard and
+owned `synesis://` registration after the bounded installer evidence passes.
+It must not claim privileged machine-wide installation, daemon termination,
+automatic provider setup, project-data cleanup, or universal browser/network
+onboarding.
+**Related documents:** `docs/adr/0075-native-deep-link-registration-and-installed-activation.md`, `docs/adr/0080-windows-setup-wizard.md`, `docs/installation/bootstrap-install.md`, `docs/evidence/SYN-056-installed-daemon-2026-09-10.md`
+**Last reviewed:** 2026-09-13
+
 ## SYN-057 promotion review — 2026-09-11
 
 The operator explicitly promotes deterministic multi-project runtime selection
@@ -208,22 +249,34 @@ punching, unsupported NATs, identity, cleanup, and failure diagnostics.
 `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`
 **Last reviewed:** 2026-07-27
 
-## SL-D-032 — Offer/answer invitation exchange
+## SL-D-032 — Compact first-contact bootstrap and authenticated descriptor exchange
 
 **Status:** DEFERRED
+**Current refinement:** The bounded SLB2 minimization refinement is complete
+for the activated direct-onboarding scope; broader coordinated traversal and
+physical-evidence capability remains deferred.
 **Area:** Connectivity and onboarding
 **Current verified capability:** Signed, single-use invitations and bounded candidate descriptors exist for the current
 direct-session path.
-**Missing capability:** A short-lived project-bound offer/answer exchange carrying ephemeral peer keys, candidates, and
-synchronized-attempt information.
-**Reason deferred:** The complete exchange contract, expiry, replay handling, and out-of-band operator flow are not
-promoted as one capability.
-**Activation trigger:** A serverless direct-connectivity task requires coordinated endpoint attempts.
-**Evidence required before planning:** Signed vectors for expiry, single use, project binding, ephemeral keys, candidate
-integrity, synchronized-attempt bounds, replay, and wrong-project rejection.
-**Public-claims impact:** Invitations remain operator-exchanged; no discovery or rendezvous service is claimed.
+**Activated scope:** A compact signed first-contact token for one-way direct onboarding where one endpoint hint is
+reachable, with the full signed candidate descriptors exchanged only after authenticated control readiness, plus a
+source-first minimization refinement that preserves the signed identity/endpoint and admission boundary. The existing
+SLO1/SLA2 path remains the compatibility/coordinated-traversal path.
+**Missing capability:** Coordinated endpoint exchange for compatible NATs, project-bound offer/answer policy, and physical
+traversal evidence remain outside this completed compact-bootstrap slice.
+**Reason deferred:** The current goal explicitly bounded the implementation to a signed direct endpoint hint and local
+authenticated descriptor exchange; expanding to coordinated traversal would change the transport and deployment boundary.
+**Activation trigger:** A separately authorized controlled two-network/NAT requirement with a concrete traversal contract
+and acceptance matrix.
+**Evidence delivered for this slice:** Strict parser vectors for expiry, single use, canonical form, tamper, wrong identity,
+wrong protocol, endpoint bounds, measured URI sizes, and authenticated post-control descriptor exchange are recorded in
+`docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`.
+**Evidence required before planning:** Controlled two-network candidate exchange, project-bound offer/answer authority,
+identity/replay/failure diagnostics, and explicit physical reachability limitations.
+**Public-claims impact:** Invitations remain operator-exchanged; no discovery, rendezvous, relay, universal NAT, or
+Internet reachability claim is made.
 **Related documents:** `docs/protocol/SYNESIS_LINK_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/demo/FIRST_DEMO.md`
-**Last reviewed:** 2026-07-27
+**Last reviewed:** 2026-09-13; SLB2 minimization refinement complete for current scope
 
 ## SL-D-033 — Manual port-forwarded endpoint support
 
@@ -375,11 +428,11 @@ ranking is implied.
 
 ## SL-D-040 — Distributed project overlay, routed envelopes, and self-hosted relay
 
-**Status:** DEFERRED / PROMOTED TO ACTIVE TASK
+**Status:** DEFERRED / PROMOTED TO ACTIVE TASK; Checkpoint 3A activated 2026-09-13
 **Priority:** Current
 **Area:** Link overlay networking and project delivery
 **Current verified capability:** Authenticated direct Link adjacencies, durable Ed25519 node identities, bounded control/application streams, signed project membership, opaque E2E logical envelopes, bounded deterministic topology, peer-transit forwarding, route selection, replay/loop/queue controls, and native six-endpoint convergence/failure/rejoin evidence.
-**Missing capability:** Optional self-hosted live relay operations beyond the existing bounded relay seam; distributed stale-topology tombstones; browser/SSE overlay projection; isolated VM/process multi-node churn; and physical NAT/Internet traversal.
+**Missing capability:** Optional self-hosted live relay operations beyond the existing bounded relay seam; distributed stale-topology tombstones; browser/SSE overlay projection; and physical NAT/Internet traversal. Checkpoint 3A now has two-cycle bounded local Docker process/network-isolation evidence in `docs/evidence/sl-d-040-checkpoint-3a-docker-2026-09-13.md`; it does not promote native VM, KVM, or physical traversal capability.
 **Reason deferred:** The remaining overlay capabilities are staged behind
 separate evidence gates: self-hosted relay operations, globally unambiguous
 stale-topology withdrawal, browser projection, isolated VM/process churn, and
@@ -389,3 +442,30 @@ physical traversal each have distinct operational and security boundaries.
 **Public-claims impact:** Synesis may claim only the route classes, endpoint confidentiality, bounded topology, and local recovery demonstrated by evidence. It must not claim metadata anonymity, generic proxying, offline delivery, universal reachability, TURN/Internet traversal, global stale-topology tombstones, or VM/process-isolated churn.
 **Related documents:** `docs/adr/0066-distributed-project-overlay-proposal.md`, `docs/adr/0077-native-multi-peer-quic-overlay-convergence.md`, `docs/protocol/SYNESIS_OVERLAY_V1.md`, `docs/security/THREAT_MODEL.md`, `docs/operations/NETWORK_VALIDATION_MATRIX.md`
 **Last reviewed:** 2026-09-13
+
+## 2026-09-14 SYN-068 screenshot refinement
+Presentation-only continuation; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-071 page regression repair
+Reviewed at activation and checkpoint preparation. Presentation-only geometry and native painting repairs; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-072 main footer clipping repair
+Presentation-only main-page geometry repair; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-073 main footer composition polish
+Presentation-only typography and alignment repair; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-074 main footer centering
+Presentation-only text alignment repair; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-075 main return repaint and footer alignment
+Presentation-only repaint and geometry repair; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-076 remove main warning footer
+Presentation-only removal of warning visuals; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-077 main footer layout alignment
+Presentation-only geometry repair; no deferred capability or architecture change is activated.
+
+## 2026-09-14 SYN-078 main maintenance-page copy cleanup
+Copy-only presentation repair; no deferred capability or architecture change is activated.

@@ -57,8 +57,9 @@ const (
 	installerPageProgress
 	installerPageResult
 
-	installerMessageDone = 0x8001
-	installerMessageShow = 0x8002
+	installerMessageDone    = 0x8001
+	installerMessageShow    = 0x8002
+	installerMessageRefresh = 0x8003
 
 	wsChild         = 0x40000000
 	wsVisible       = 0x10000000
@@ -105,6 +106,7 @@ const (
 	rdwErase         = 0x0004
 	rdwAllChildren   = 0x0080
 	rdwUpdateNow     = 0x0100
+	rdwFrame         = 0x0400
 
 	mbOK              = 0x00000000
 	mbIconError       = 0x00000010
@@ -156,6 +158,7 @@ const (
 	controlUninstallPath
 	controlMetadata
 	controlUninstallWarning
+	controlUninstallImpact
 	controlConfirmGroup
 	controlConfirmSummary
 	controlProgressStatus
@@ -282,6 +285,7 @@ type installerWizard struct {
 	darkBrush       uintptr
 	surfaceBrush    uintptr
 	cardBrush       uintptr
+	warningBrush    uintptr
 }
 
 type installerPoint struct {
@@ -450,7 +454,8 @@ func (w *installerWizard) createWindow() error {
 	w.darkBrush, _, _ = installerCreateSolidBrush.Call(installerRGB(15, 18, 24))
 	w.surfaceBrush, _, _ = installerCreateSolidBrush.Call(installerRGB(27, 32, 43))
 	w.cardBrush, _, _ = installerCreateSolidBrush.Call(installerRGB(24, 29, 36))
-	if w.darkBrush == 0 || w.surfaceBrush == 0 || w.cardBrush == 0 {
+	w.warningBrush, _, _ = installerCreateSolidBrush.Call(installerRGB(36, 31, 22))
+	if w.darkBrush == 0 || w.surfaceBrush == 0 || w.cardBrush == 0 || w.warningBrush == 0 {
 		return errors.New("unable to create the setup theme")
 	}
 	className, err := windows.UTF16PtrFromString(installerWindowClass)
@@ -607,18 +612,10 @@ func setInstallerDarkTitleBar(hwnd uintptr) {
 	installerDwmSetWindowAttr.Call(hwnd, 34, uintptr(unsafe.Pointer(&border)), uintptr(unsafe.Sizeof(border)))
 }
 
-// setPageIcon removes the product mark from the uninstall surface while
-// retaining the normal application icon on the install/update pages. The
-// uninstall page is intentionally the quiet, logo-free screen from the
-// approved mockup; this changes presentation only and does not affect the
-// executable or taskbar resource.
-func (w *installerWizard) setPageIcon(page installerPage) {
-	large, small := w.windowIconLarge, w.windowIconSmall
-	if page == installerPageUninstall {
-		large, small = 0, 0
-	}
-	installerSendMessage.Call(w.hwnd, wmSetIcon, iconBig, large)
-	installerSendMessage.Call(w.hwnd, wmSetIcon, iconSmall, small)
+// setPageIcon keeps every wizard page on the same native application shell.
+func (w *installerWizard) setPageIcon(_ installerPage) {
+	installerSendMessage.Call(w.hwnd, wmSetIcon, iconBig, w.windowIconLarge)
+	installerSendMessage.Call(w.hwnd, wmSetIcon, iconSmall, w.windowIconSmall)
 }
 
 func createInstallerWindow(className, title string, exStyle, style uint32, x, y, width, height int32, parent, menu, instance uintptr) uintptr {
@@ -667,11 +664,12 @@ func (w *installerWizard) createControls() {
 
 	// The options surface is painted by the parent so it cannot obscure sibling
 	// controls when Windows repaints the page or switches focus.
-	w.controls[controlUninstallGroup] = w.addControl(controlUninstallGroup, "STATIC", "Uninstall options", static, 88, 274, 1190, 40, 0)
-	w.controls[controlUninstallPathLabel] = w.addControl(controlUninstallPathLabel, "STATIC", "Installation folder", static, 88, 328, 1190, 34, 0)
-	w.controls[controlUninstallPath] = w.addControl(controlUninstallPath, "EDIT", "", child|esReadOnly|esAutoHScroll, 90, 368, 1220, 58, 0)
-	w.controls[controlMetadata] = w.addControl(controlMetadata, "BUTTON", "Remove Synesis metadata, identity, and installer state", button|bsOwnerDraw, 88, 454, 1220, 54, 0)
-	w.controls[controlUninstallWarning] = w.addControl(controlUninstallWarning, "STATIC", "", static, 136, 516, 1170, 74, 0)
+	w.controls[controlUninstallGroup] = w.addControl(controlUninstallGroup, "STATIC", "Uninstall options", static, 88, 330, 1190, 40, 0)
+	w.controls[controlUninstallPathLabel] = w.addControl(controlUninstallPathLabel, "STATIC", "Installation folder", static, 88, 380, 1190, 34, 0)
+	w.controls[controlUninstallPath] = w.addControl(controlUninstallPath, "EDIT", "", child|esReadOnly|esAutoHScroll, 90, 418, 1220, 58, 0)
+	w.controls[controlMetadata] = w.addControl(controlMetadata, "BUTTON", "Remove metadata", button|bsOwnerDraw, 88, 510, 1220, 54, 0)
+	w.controls[controlUninstallWarning] = w.addControl(controlUninstallWarning, "STATIC", "", static, 136, 568, 1200, 60, 0)
+	w.controls[controlUninstallImpact] = w.addControl(controlUninstallImpact, "STATIC", "", static, 165, 684, 1120, 52, 0)
 
 	w.controls[controlConfirmGroup] = w.addControl(controlConfirmGroup, "STATIC", "Review", static, 60, 250, 1280, 40, 0)
 	w.controls[controlConfirmSummary] = w.addControl(controlConfirmSummary, "STATIC", "", static, 80, 302, 1180, 260, 0)
@@ -716,6 +714,7 @@ func (w *installerWizard) createControls() {
 	setInstallerFont(w.controls[controlUninstallPath], w.bodyFont)
 	setInstallerFont(w.controls[controlMetadata], w.bodyFont)
 	setInstallerFont(w.controls[controlUninstallWarning], w.detailFont)
+	setInstallerFont(w.controls[controlUninstallImpact], w.buttonFont)
 	setInstallerFont(w.controls[controlConfirmGroup], w.detailFont)
 	setInstallerFont(w.controls[controlBack], w.buttonFont)
 	setInstallerFont(w.controls[controlNext], w.buttonFont)
@@ -765,8 +764,10 @@ func setInstallerFont(hwnd, font uintptr) {
 func (w *installerWizard) showPage(page installerPage) {
 	w.page = page
 	w.setPageIcon(page)
-	for _, control := range w.controls {
-		setInstallerVisible(control, false)
+	for id, control := range w.controls {
+		if id != controlCancel {
+			setInstallerVisible(control, false)
+		}
 	}
 	w.layoutPage(page)
 	setInstallerVisible(w.controls[controlTitle], true)
@@ -804,16 +805,18 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerText(w.controls[controlInstallEdit], w.installRoot)
 		setInstallerText(w.controls[controlInstallHint], "Projects, repositories, workspaces, and provider configuration are not installed or removed here.")
 	case installerPageUninstall:
-		title = "Uninstall Synesis"
-		description = "Synesis will be removed from the selected installation folder. Your projects, repositories, and workspaces remain untouched; the optional cleanup below removes only installer-owned metadata."
+		title = "Uninstall"
+		description = "Remove the application from this computer.\r\nYour projects, repositories, and workspace data will be preserved."
 		setInstallerVisible(w.controls[controlUninstallGroup], true)
 		setInstallerVisible(w.controls[controlUninstallPathLabel], true)
 		setInstallerVisible(w.controls[controlUninstallPath], true)
 		setInstallerVisible(w.controls[controlMetadata], true)
 		setInstallerVisible(w.controls[controlUninstallWarning], true)
+		setInstallerVisible(w.controls[controlUninstallImpact], true)
 		setInstallerText(w.controls[controlUninstallPath], w.installRoot)
-		setInstallerText(w.controls[controlMetadata], "Remove Synesis metadata, identity, and installer state")
-		setInstallerText(w.controls[controlUninstallWarning], "Checked: removes installer-owned records. Unchecked: keeps them for a future reinstall.")
+		setInstallerText(w.controls[controlMetadata], "Remove metadata")
+		setInstallerText(w.controls[controlUninstallWarning], "Removes local identity and installer state. Project, repository, and workspace data stay intact.")
+		setInstallerText(w.controls[controlUninstallImpact], "Application files and the synesis:// handler will be removed.")
 	case installerPageConfirm:
 		title = "Ready to Continue"
 		description = "Review the choices below, then select the operation button."
@@ -874,10 +877,36 @@ func (w *installerWizard) showPage(page installerPage) {
 	} else if page == installerPageInstall {
 		installerSetFocus.Call(w.controls[controlInstallEdit])
 	}
-	// A hidden owner-drawn child can leave its old pixels behind when a page
-	// changes. Redraw the parent and all children synchronously so returning
-	// from uninstall cannot expose the old Back button.
-	installerRedrawWindow.Call(w.hwnd, 0, 0, rdwInvalidate|rdwErase|rdwAllChildren|rdwUpdateNow)
+	// Paint the new parent surface before refreshing its child controls. The
+	// posted second pass runs after the current navigation message has unwound;
+	// this keeps the branded chrome and unchanged footer controls from retaining
+	// stale pixels across page transitions.
+	w.refreshPage()
+	installerPostMessage.Call(w.hwnd, installerMessageRefresh, 0, 0)
+}
+
+func (w *installerWizard) refreshPage() {
+	client := installerRect{}
+	installerGetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&client)))
+	for _, rect := range []installerRect{
+		{left: 0, top: 0, right: w.scaled(1120), bottom: w.scaled(285)},
+		{left: 0, top: w.scaled(285), right: client.right, bottom: w.scaled(800)},
+		{left: 0, top: w.scaled(790), right: client.right, bottom: w.scaled(825)},
+		{left: 0, top: w.scaled(825), right: w.scaled(1170), bottom: client.bottom},
+	} {
+		installerInvalidateRect.Call(w.hwnd, uintptr(unsafe.Pointer(&rect)), 1)
+	}
+	installerUpdateWindow.Call(w.hwnd)
+	for _, control := range w.controls {
+		installerRedrawWindow.Call(control, 0, 0, rdwInvalidate|rdwErase|rdwUpdateNow)
+	}
+}
+
+func (w *installerWizard) refreshEntireWindow() {
+	installerRedrawWindow.Call(w.hwnd, 0, 0, rdwInvalidate|rdwErase|rdwAllChildren|rdwUpdateNow|rdwFrame)
+	for _, control := range w.controls {
+		installerRedrawWindow.Call(control, 0, 0, rdwInvalidate|rdwErase|rdwUpdateNow)
+	}
 }
 
 // layoutPage confines shared controls to the space actually available on each
@@ -888,14 +917,8 @@ func (w *installerWizard) layoutPage(page installerPage) {
 			uintptr(w.scaled(width)), uintptr(w.scaled(height)), 0)
 	}
 	headerWidth := int32(1040)
-	if page == installerPageUninstall {
-		headerWidth = 1280
-	}
 	move(controlTitle, 60, 48, headerWidth, 84)
 	descriptionHeight := int32(60)
-	if page == installerPageUninstall {
-		descriptionHeight = 100
-	}
 	move(controlDescription, 60, 132, headerWidth, descriptionHeight)
 	move(controlNext, 1010, 894, 175, 64)
 	move(controlCancel, 1174, 894, 165, 64)
@@ -913,9 +936,16 @@ func (w *installerWizard) layoutPage(page installerPage) {
 		move(controlCancel, 1175, 825, 165, 72)
 	}
 	if page == installerPageUninstall {
-		move(controlBack, 740, 886, 180, 72)
-		move(controlNext, 930, 886, 220, 72)
-		move(controlCancel, 1159, 886, 180, 72)
+		move(controlDescription, 60, 132, headerWidth, 96)
+		move(controlUninstallGroup, 88, 330, 1190, 40)
+		move(controlUninstallPathLabel, 88, 380, 1190, 34)
+		move(controlUninstallPath, 90, 418, 1220, 58)
+		move(controlMetadata, 88, 510, 1220, 54)
+		move(controlUninstallWarning, 136, 568, 1200, 60)
+		move(controlUninstallImpact, 165, 684, 1120, 52)
+		move(controlBack, 785, 825, 175, 72)
+		move(controlNext, 980, 825, 175, 72)
+		move(controlCancel, 1175, 825, 165, 72)
 	}
 }
 
@@ -1022,44 +1052,47 @@ func drawInstallerChrome(w *installerWizard) {
 	client := installerRect{}
 	installerGetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&client)))
 	installerFillRect.Call(hdc, uintptr(unsafe.Pointer(&client)), w.darkBrush)
+	// Keep the ribbon outside opaque native text-control bounds.
+	w.drawArt(hdc, "ribbon", w.scaled(1100), 0, w.scaled(300), w.scaled(310))
+	brandRight := client.right - w.scaled(60)
+	brandLeft := brandRight - w.scaled(190)
+	brandTop := w.scaled(40)
+	brandBottom := brandTop + w.scaled(190)
+	w.drawArt(hdc, "brand", brandLeft, brandTop, w.scaled(190), w.scaled(190))
+	if w.logoBitmap != 0 {
+		drawInstallerLogo(hdc, w.logoBitmap, w.logoWidth, w.logoHeight,
+			brandLeft+w.scaled(25), brandTop+w.scaled(22), w.scaled(140), w.scaled(140))
+	} else {
+		oldFont, _, _ := installerSelectObject.Call(hdc, w.iconFont)
+		installerSetBkMode.Call(hdc, transparent)
+		installerSetTextColor.Call(hdc, installerRGB(255, 255, 255))
+		logo, _ := windows.UTF16PtrFromString("S")
+		logoRect := installerRect{left: brandLeft, top: brandTop, right: brandRight, bottom: brandBottom}
+		installerDrawText.Call(hdc, uintptr(unsafe.Pointer(logo)), 1, uintptr(unsafe.Pointer(&logoRect)), dtCenter|dtVCenter|dtSingleLine)
+		installerSelectObject.Call(hdc, oldFont)
+	}
+	oldFont, _, _ := installerSelectObject.Call(hdc, w.wordmarkFont)
+	installerSetBkMode.Call(hdc, transparent)
+	installerSetTextColor.Call(hdc, installerRGB(170, 182, 201))
+	wordmark, _ := windows.UTF16PtrFromString("S  Y  N  E  S  I  S")
+	wordmarkRect := installerRect{left: brandLeft, top: brandBottom + w.scaled(20), right: brandRight, bottom: brandBottom + w.scaled(48)}
+	installerDrawText.Call(hdc, uintptr(unsafe.Pointer(wordmark)), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&wordmarkRect)), dtCenter|dtVCenter|dtSingleLine)
+	installerSelectObject.Call(hdc, oldFont)
 	if w.page == installerPageUninstall {
 		w.drawUninstallPanel(hdc)
 	}
 
-	if w.page != installerPageUninstall {
-		// Keep the ribbon outside opaque native text-control bounds.
-		w.drawArt(hdc, "ribbon", w.scaled(1100), 0, w.scaled(300), w.scaled(310))
-		brandRight := client.right - w.scaled(60)
-		brandLeft := brandRight - w.scaled(190)
-		brandTop := w.scaled(40)
-		brandBottom := brandTop + w.scaled(190)
-		w.drawArt(hdc, "brand", brandLeft, brandTop, w.scaled(190), w.scaled(190))
-		if w.logoBitmap != 0 {
-			drawInstallerLogo(hdc, w.logoBitmap, w.logoWidth, w.logoHeight,
-				brandLeft+w.scaled(25), brandTop+w.scaled(22), w.scaled(140), w.scaled(140))
-		} else {
-			oldFont, _, _ := installerSelectObject.Call(hdc, w.iconFont)
-			installerSetBkMode.Call(hdc, transparent)
-			installerSetTextColor.Call(hdc, installerRGB(255, 255, 255))
-			logo, _ := windows.UTF16PtrFromString("S")
-			logoRect := installerRect{left: brandLeft, top: brandTop, right: brandRight, bottom: brandBottom}
-			installerDrawText.Call(hdc, uintptr(unsafe.Pointer(logo)), 1, uintptr(unsafe.Pointer(&logoRect)), dtCenter|dtVCenter|dtSingleLine)
-			installerSelectObject.Call(hdc, oldFont)
-		}
-		oldFont, _, _ := installerSelectObject.Call(hdc, w.wordmarkFont)
-		installerSetBkMode.Call(hdc, transparent)
-		installerSetTextColor.Call(hdc, installerRGB(170, 182, 201))
-		wordmark, _ := windows.UTF16PtrFromString("S  Y  N  E  S  I  S")
-		wordmarkRect := installerRect{left: brandLeft, top: brandBottom + w.scaled(20), right: brandRight, bottom: brandBottom + w.scaled(48)}
-		installerDrawText.Call(hdc, uintptr(unsafe.Pointer(wordmark)), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&wordmarkRect)), dtCenter|dtVCenter|dtSingleLine)
-		installerSelectObject.Call(hdc, oldFont)
-	}
-
 	linePen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), installerRGB(35, 43, 54))
 	oldPen, _, _ := installerSelectObject.Call(hdc, linePen)
-	if w.page != installerPageUninstall {
-		installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(192)), 0)
-		installerLineTo.Call(hdc, uintptr(w.scaled(1030)), uintptr(w.scaled(192)))
+	headerDividerY := int32(192)
+	if w.page == installerPageUninstall {
+		headerDividerY = 250
+	}
+	installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(headerDividerY)), 0)
+	installerLineTo.Call(hdc, uintptr(w.scaled(1030)), uintptr(w.scaled(headerDividerY)))
+	if w.page == installerPageUninstall {
+		installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(800)), 0)
+		installerLineTo.Call(hdc, uintptr(w.scaled(1340)), uintptr(w.scaled(800)))
 	}
 	installerSelectObject.Call(hdc, oldPen)
 	installerDeleteObject.Call(linePen)
@@ -1077,17 +1110,57 @@ func drawInstallerChrome(w *installerWizard) {
 }
 
 func (w *installerWizard) drawUninstallPanel(device uintptr) {
-	drawInstallerSurface(device, installerRect{left: w.scaled(60), top: w.scaled(250), right: w.scaled(1340), bottom: w.scaled(650)},
+	drawInstallerSurface(device, installerRect{left: w.scaled(60), top: w.scaled(300), right: w.scaled(1340), bottom: w.scaled(640)},
 		installerRGB(24, 29, 36), installerRGB(50, 60, 72), w.scaled(15), w.scale)
 
 	// Keep the read-only path field visually distinct without making it look
 	// editable. The EDIT child is inset slightly so this border remains visible.
 	drawInstallerSurface(device, installerRect{
 		left:   w.scaled(86),
-		top:    w.scaled(364),
+		top:    w.scaled(414),
 		right:  w.scaled(1314),
-		bottom: w.scaled(430),
+		bottom: w.scaled(480),
 	}, installerRGB(27, 32, 43), installerRGB(58, 70, 84), w.scaled(8), w.scale)
+
+	drawInstallerSurface(device, installerRect{left: w.scaled(60), top: w.scaled(670), right: w.scaled(1340), bottom: w.scaled(760)},
+		installerRGB(36, 31, 22), installerRGB(92, 69, 27), w.scaled(15), w.scale)
+	w.drawUninstallWarningIcon(device, w.scaled(112), w.scaled(715))
+}
+
+func (w *installerWizard) drawUninstallWarningIcon(device uintptr, centerX, centerY int32) {
+	halfWidth := w.scaled(18)
+	halfHeight := w.scaled(20)
+	points := []installerPoint{
+		{x: centerX, y: centerY - halfHeight},
+		{x: centerX - halfWidth, y: centerY + halfHeight},
+		{x: centerX + halfWidth, y: centerY + halfHeight},
+	}
+	brush, _, _ := installerCreateSolidBrush.Call(installerRGB(255, 183, 51))
+	pen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), installerRGB(255, 183, 51))
+	if brush == 0 || pen == 0 {
+		if brush != 0 {
+			installerDeleteObject.Call(brush)
+		}
+		if pen != 0 {
+			installerDeleteObject.Call(pen)
+		}
+		return
+	}
+	oldBrush, _, _ := installerSelectObject.Call(device, brush)
+	oldPen, _, _ := installerSelectObject.Call(device, pen)
+	installerPolygon.Call(device, uintptr(unsafe.Pointer(&points[0])), uintptr(len(points)))
+	installerSelectObject.Call(device, oldPen)
+	installerSelectObject.Call(device, oldBrush)
+	installerDeleteObject.Call(pen)
+	installerDeleteObject.Call(brush)
+
+	oldFont, _, _ := installerSelectObject.Call(device, w.cardTitleFont)
+	installerSetBkMode.Call(device, transparent)
+	installerSetTextColor.Call(device, installerRGB(24, 29, 36))
+	markRect := installerRect{left: centerX - halfWidth, top: centerY - w.scaled(13), right: centerX + halfWidth, bottom: centerY + w.scaled(20)}
+	mark, _ := windows.UTF16PtrFromString("!")
+	installerDrawText.Call(device, uintptr(unsafe.Pointer(mark)), 1, uintptr(unsafe.Pointer(&markRect)), dtCenter|dtVCenter|dtSingleLine)
+	installerSelectObject.Call(device, oldFont)
 }
 
 func drawInstallerSurface(device uintptr, rect installerRect, fill, border uintptr, radius int32, scale float64) {
@@ -1456,10 +1529,15 @@ func (w *installerWizard) colorStatic(device, hwnd uintptr) uintptr {
 	case controlProductDetails, controlActionPath, controlInstallHint, controlUninstallWarning,
 		controlCapabilityInstall, controlCapabilityLink, controlCapabilityData:
 		red, green, blue = 190, 201, 219
+	case controlUninstallImpact:
+		red, green, blue = 238, 241, 247
 	case controlTitle:
 		red, green, blue = 248, 250, 252
 	}
 	installerSetTextColor.Call(device, installerRGB(red, green, blue))
+	if id == controlUninstallImpact {
+		return w.warningBrush
+	}
 	if id == controlUninstallGroup || id == controlUninstallPathLabel || id == controlUninstallWarning {
 		return w.cardBrush
 	}
@@ -1503,6 +1581,10 @@ func (w *installerWizard) disposeTheme() {
 	if w.cardBrush != 0 {
 		installerDeleteObject.Call(w.cardBrush)
 		w.cardBrush = 0
+	}
+	if w.warningBrush != 0 {
+		installerDeleteObject.Call(w.warningBrush)
+		w.warningBrush = 0
 	}
 }
 
@@ -1685,6 +1767,10 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		return 1
 	case installerMessageShow:
 		showInstallerWindow(hwnd)
+		wizard.refreshEntireWindow()
+		return 0
+	case installerMessageRefresh:
+		wizard.refreshPage()
 		return 0
 	case wmCommand:
 		wizard.handleCommand(uint16(wParam&0xffff), uint16((wParam>>16)&0xffff))

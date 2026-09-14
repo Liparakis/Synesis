@@ -28,11 +28,58 @@ func TestInstallerPageLayoutDoesNotOverlapSharedControls(t *testing.T) {
 		w.showPage(page)
 		description := windowRect(controlDescription)
 		if page == installerPageUninstall {
+			copy := map[int]string{
+				controlTitle:              "Uninstall",
+				controlDescription:        "Remove the application from this computer.\r\nYour projects, repositories, and workspace data will be preserved.",
+				controlUninstallGroup:     "Uninstall options",
+				controlUninstallPathLabel: "Installation folder",
+				controlUninstallPath:      "C:\\Example\\Synesis",
+				controlMetadata:           "Remove metadata",
+				controlUninstallWarning:   "Removes local identity and installer state. Project, repository, and workspace data stay intact.",
+				controlUninstallImpact:    "Application files and the synesis:// handler will be removed.",
+				controlBack:               "Back",
+				controlNext:               "Uninstall",
+				controlCancel:             "Cancel",
+			}
+			for id, want := range copy {
+				if got := getInstallerText(w.controls[id]); got != want {
+					t.Fatalf("uninstall control %d copy = %q, want %q", id, got, want)
+				}
+			}
 			if description.bottom >= windowRect(controlUninstallGroup).top {
 				t.Fatal("uninstall description overlaps options")
 			}
-			if windowRect(controlUninstallPath).bottom >= windowRect(controlMetadata).top {
+			path := windowRect(controlUninstallPath)
+			metadata := windowRect(controlMetadata)
+			metadataDescription := windowRect(controlUninstallWarning)
+			impact := windowRect(controlUninstallImpact)
+			if path.bottom >= metadata.top {
 				t.Fatal("path overlaps metadata toggle")
+			}
+			if metadata.bottom > metadataDescription.top {
+				t.Fatal("metadata toggle overlaps its helper text")
+			}
+			if metadataDescription.bottom >= impact.top {
+				t.Fatal("metadata explanation overlaps removal warning")
+			}
+			back := windowRect(controlBack)
+			next := windowRect(controlNext)
+			cancel := windowRect(controlCancel)
+			if impact.bottom >= back.top {
+				t.Fatal("uninstall options overlap the footer")
+			}
+			if back.top != next.top || back.bottom != next.bottom || next.top != cancel.top || next.bottom != cancel.bottom {
+				t.Fatal("uninstall footer buttons do not share the main-page row height")
+			}
+			if back.right-back.left != next.right-next.left {
+				t.Fatal("Back and Uninstall buttons do not share the same width")
+			}
+			if cancel.right != windowRect(controlActionInstall).right {
+				t.Fatal("uninstall footer does not share the main-page right edge")
+			}
+			icon, _, _ := installerSendMessage.Call(w.hwnd, 0x007f, iconSmall, 0)
+			if icon == 0 || icon != w.windowIconSmall {
+				t.Fatal("uninstall page does not retain the Synesis window icon")
 			}
 			continue
 		}
@@ -187,7 +234,7 @@ func TestInstallerWindowVisibilityIsDeferredUntilMessageLoop(t *testing.T) {
 	if style := installerWindowStyle(); style&wsVisible != 0 {
 		t.Fatalf("installerWindowStyle() = %#x, visibility must be deferred", style)
 	}
-	if installerMessageShow <= wmUser || installerMessageShow == installerMessageDone {
+	if installerMessageShow <= wmUser || installerMessageShow == installerMessageDone || installerMessageRefresh == installerMessageShow || installerMessageRefresh == installerMessageDone {
 		t.Fatalf("installerMessageShow = %#x, want a distinct private window message", installerMessageShow)
 	}
 }

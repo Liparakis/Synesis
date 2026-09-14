@@ -86,6 +86,7 @@ final class UnifiedCliSyncProcessTest {
         "--record",
         record);
     HostCapture capture = captureInvitation(host);
+    assertTrue(capture.invitation().startsWith("synesis://join/SLB2-"));
     Process join = start(state.join(),
         "sync",
         "join",
@@ -381,6 +382,7 @@ final class UnifiedCliSyncProcessTest {
         state.recordId());
     HostCapture capture = captureInvitation(host);
     String invitation = capture.invitation();
+    assertTrue(invitation.startsWith("synesis://join/SLB2-"));
     assertTrue(invitation.contains("project=" + state.projectId()));
     assertTrue(invitation.contains("record=" + state.recordId()));
     assertTrue(invitation.contains("host=" + state.hostNodeId()));

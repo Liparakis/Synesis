@@ -1,3 +1,163 @@
+# 2026-09-14 — SYN-070 Windows uninstall page cleanup
+
+- Status: COMPLETE FOR CURRENT SCOPE; presentation-only cleanup closed 2026-09-14
+- Task ID: SYN-070
+
+## Goal boundary
+
+Correct only the remaining visible uninstall-page defects shown in the operator capture: stale hidden text above the options card, unnecessary helper-copy wrapping, title-bar product-mark fallback, and undersized compact path/action typography. Preserve all uninstall behavior and every non-uninstall page.
+
+## Acceptance criteria
+
+1. No clipped or duplicated text is visible above the uninstall card.
+2. Helper text fits as a clean single line at the default compact scale.
+3. The uninstall surface remains logo-free/banner-free, with a readable path field and balanced Back/Uninstall/Cancel controls.
+4. Focused tests, vet, Windows GUI compilation, and diff hygiene pass; no installer action is executed.
+
+## Completion evidence
+
+The bounded cleanup is complete in `bootstrap/installer_menu_windows.go`. The
+hidden install heading is cleared before page switches, the uninstall page
+suppresses the class-level title-bar icon fallback, the path uses the body face,
+helper text fits as one line, and the Back/Uninstall/Cancel action row has
+balanced compact proportions. `go test ./...`, `go vet .`, Windows test
+compilation, Windows GUI compilation, and `git diff --check` passed. The
+canonical single-file output was locked by the already-running prior installer,
+so `cli/build/distributions/synesis-windows-x64-uninstall-polished.exe` was
+assembled from the fresh native launcher and bundle archive and its footer was
+validated. No installer action was executed and no behavior or data boundary
+changed. Evidence: `CP-0950` and
+`docs/evidence/SYN-070-windows-uninstall-page-cleanup-2026-09-14.md`.
+
+# 2026-09-14 — SYN-069 Windows uninstall page visual parity
+
+- Status: COMPLETE FOR CURRENT SCOPE; presentation-only implementation closed 2026-09-14
+- Task ID: SYN-069
+
+## Goal boundary
+
+Apply the approved dark, logo-free, banner-free uninstall mockup to the existing native Windows setup wizard's uninstall page. Preserve the existing native controls, navigation, metadata toggle, uninstall execution, project/workspace/repository preservation, and every non-uninstall page.
+
+## Acceptance criteria
+
+1. The uninstall page uses a balanced full-width dark installer composition without the global brand/logo treatment or footer warning banner.
+2. The existing title, explanatory copy, uninstall-options grouping, installation path, metadata checkbox/helper text, and Back/Uninstall/Cancel actions remain present and legible.
+3. Navigation and uninstall operation code remain behaviorally unchanged.
+4. Focused bootstrap tests, vet, Windows GUI compilation, and diff hygiene pass; no installer action is executed.
+
+## Completion evidence
+
+The native uninstall page was updated in `bootstrap/installer_menu_windows.go` with the full-width dark options surface, polished path presentation, custom metadata checkbox/helper layout, quiet logo-free/banner-free chrome, and requested bottom actions. The existing event/navigation and operation code remains the behavior boundary. Focused tests, vet, Windows test compilation, Windows GUI compilation, and diff hygiene passed. Evidence: `CP-0949` and `docs/evidence/SYN-069-windows-uninstall-page-visual-parity-2026-09-14.md`. A native screenshot was not claimed because the Windows visual bridge was unavailable; no installer operation was executed.
+
+# 2026-09-13 — SL-D-040 Checkpoint 3A Docker process/network isolation lab
+
+- Status: ACTIVE; bounded Docker implementation and two-cycle evidence
+  complete; native Linux/KVM/physical traversal remains unavailable
+- Task ID: SL-D-040, Checkpoint 3A
+
+## Goal boundary
+
+Build a repeatable local Docker lab for six independent Synesis JVMs on the
+current Windows/Docker Desktop Linux engine. The lab must retain the existing
+signed identity, candidate, membership, and authenticated Link boundaries while
+exercising the deterministic N=6 topology, SLB2 first contact, peer transit,
+hard process/container failures, changed endpoints, partitions, simultaneous
+reconnect, bounded network impairment, repeated cycles, topology evidence, and
+cleanup.
+
+The host is not a freshly installed native Linux machine: no Ubuntu WSL distro,
+SSH target, or usable KVM exposure exists. Docker-on-WSL2 is therefore the
+available local isolation substrate, and the result must be reported as such.
+The shipped CLI has no membership authority and the production runtime owner
+does not yet wire automatic reconciliation/direct descriptor reconnect. The
+test-only lab supplied a legitimate signed snapshot and existing authenticated
+Link/overlay classes. Those facts remain acceptance boundaries, not reasons to
+invent an unsigned allowlist, fake peer, relay, or source-checkout coordination
+state. Two cycles passed at
+`D:\SynesisDocker\p2p-lab-3a\run-20260913-181647`.
+
+## Required evidence and exclusions
+
+The final evidence must identify the exact build/image, node identities,
+verified membership digest, 12-edge/degree-4 graph, authenticated transit,
+failure and recovery transitions, impairment parameters, repeat-cycle results,
+and cleanup. Native Linux/KVM, external machines, physical NAT/Internet
+traversal, public daemons, credentials, remote publish, push, and source
+`.synesis` state remain excluded.
+
+## Exact next action
+
+Review `docs/agent/checkpoints/CP-0941.md` and the verified Docker evidence
+before any future extension, then stop at the documented Windows/Docker
+boundary unless a native Linux/KVM host is explicitly supplied.
+
+# 2026-09-13 — SL-D-032 SLB2 minimization refinement
+
+- Status: COMPLETE FOR CURRENT SCOPE; roadmap complete for this activated
+  slice; SLB1 remains the preserved decode-compatible baseline
+- Task ID: SL-D-032
+
+## Goal boundary
+
+Complete the SL-D-032 minimization refinement: retain the normal one-way,
+versioned, signed first-contact architecture while reducing the human-facing
+token to the irreducible secure pre-auth boundary. The existing `SLB1` remains
+decode-compatible; the normal encoder may use a clean `SLB2` revision. Use
+one-way direct
+connection when the signed endpoint hint is reachable; keep the existing
+operator-mediated SLO1/SLA2 path as a compatibility and coordinated-traversal
+fallback. After authenticated control readiness, exchange the complete signed
+candidate descriptors in-band through the existing bounded application stream.
+
+The task must preserve expected identity checks, single-use admission,
+expiry/replay protection, project/membership boundaries, direct-only
+connectivity, and legacy decoder compatibility. It must not add a Synesis
+service, rendezvous, relay, TOFU, overlay redesign, session resumption, or
+universal NAT claim.
+
+## Acceptance criteria
+
+1. Source trace and ADR-0078 identify the current SLO1/SLA2 fields, identity
+   proof inputs, endpoint selection, admission state, CLI path, and deep-link
+   boundaries.
+2. The compact parser is strict, canonical, bounded, versioned, signed, and
+   rejects tampering, expiry, replay, wrong identity, wrong protocol, and
+   malformed endpoints without allocating unbounded state.
+3. The compact encoder carries no full candidate descriptor; measured URI and
+   raw-payload sizes are recorded for IPv4 and IPv6 fixtures.
+4. A compact loopback host/join completes one authenticated Link session with
+   no answer link, and both full signed descriptors are exchanged only after
+   `CONTROL_READY`.
+5. Legacy SLO1/SLA2 encode/decode and the existing mediated lifecycle remain
+   covered; no physical NAT or Internet reachability claim is made.
+6. CLI output and supported deep-link adapters accept the compact URI without
+   leaking keys, descriptors, or capability material in diagnostics.
+7. Focused Link/CLI tests, formatting, static analysis, Javadocs, and the
+   documented checkpoint/evidence updates pass; no remote repository is
+   modified.
+8. The exact SLB1 byte budget and an SLB1-vs-SLB2 threat comparison explain
+   every retained pre-auth byte, the capability entropy floor, and the
+   resulting IPv4/IPv6 URI-size regression budget.
+
+## Prior closure evidence
+
+Criteria 1–7 are satisfied for the bounded local scope. `:link:check` passed
+with 107 tests; focused workspace control-plane and packaged CLI compact
+onboarding/sync tests passed; workspace and CLI non-test gates passed; and the
+measured sizes and negative cases are recorded in
+`docs/evidence/sl-d-032-compact-bootstrap-2026-09-13.md`. Full CLI and broad
+workspace-suite results retain the unrelated failures documented in
+`docs/agent/CURRENT.md`. Durable checkpoint `CP-0939.md` was created after the
+deferred-register validator passed. No remote repository was changed, and no
+`.synesis` state was created in this source checkout.
+
+The active minimization refinement is complete. Normal SLB2 output is 120/132
+raw bytes and 180/196 URI characters for IPv4/IPv6; the signed full Ed25519
+key, endpoint, freshness, and host signature remain because they are the
+self-contained non-TOFU trust boundary. The 80-120 character target is below
+that secure primitive floor. A future reduction requires a separately
+authorized protocol or identity change.
+
 # 2026-09-13 — SL-D-040 Checkpoint 2 bounded multi-node overlay convergence
 
 ## Task boundary
@@ -11,7 +171,7 @@ returns to a stable graph after rejoin.
 
 - Task ID: SL-D-040
 - Checkpoint: 2
-- Status: ACTIVE; Checkpoint 2 is complete for its current scope
+- Status: COMPLETE FOR CURRENT SCOPE; Checkpoint 2 is complete for its current scope
 - Authority: signed membership remains the membership source; physical loss
   never revokes a member
 - Exclusions: VM/NAT/Internet traversal, long soak or randomized chaos,

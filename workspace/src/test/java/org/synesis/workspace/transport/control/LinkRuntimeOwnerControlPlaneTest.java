@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -101,6 +100,23 @@ class LinkRuntimeOwnerControlPlaneTest {
     return body;
   }
 
+  private static Map<String, Object> awaitPeer(RuntimeFixture fixture,
+      Map<String, Object> session, String peerNodeId) throws Exception {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+    Map<String, Object> latest = network(fixture, session);
+    while (System.nanoTime() < deadline) {
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> peers = (List<Map<String, Object>>) latest.get("peers");
+      if ("HEALTHY".equals(latest.get("status"))
+          && peers.stream().anyMatch(peer -> peerNodeId.equals(peer.get("nodeId")))) {
+        return latest;
+      }
+      Thread.sleep(100);
+      latest = network(fixture, session);
+    }
+    return latest;
+  }
+
   private static HttpRequest.Builder json(RuntimeFixture fixture, String path) {
     return HttpRequest.newBuilder(fixture.baseUri.resolve(path))
         .header("Content-Type", "application/json; charset=utf-8");
@@ -135,22 +151,15 @@ class LinkRuntimeOwnerControlPlaneTest {
       Map<String, Object> joinSession = login(join);
       Map<String, Object> invitation = command(host, hostSession, "invite", Map.of(
           "expectedPeer", joinIdentity.nodeId()));
-      Map<String, Object> answer = command(join, joinSession, "join", Map.of(
+      assertTrue(((String) invitation.get("inviteUri")).startsWith("synesis://join/SLB2-"));
+      assertEquals("WAITING_FOR_CONNECTION", invitation.get("state"));
+      Map<String, Object> connection = command(join, joinSession, "join", Map.of(
           "inviteUri", invitation.get("inviteUri")));
+      assertEquals("CONNECTED", connection.get("state"));
+      assertTrue(!connection.containsKey("answerUri"));
 
-      HttpRequest hostAnswer = commandRequest(host, hostSession, "answer", Map.of(
-          "operationId", invitation.get("operationId"), "answerUri", answer.get("answerUri")));
-      HttpRequest joinConnect = commandRequest(join, joinSession, "connect", Map.of(
-          "operationId", answer.get("operationId")));
-      CompletableFuture<HttpResponse<String>> hostResult = host.client.sendAsync(hostAnswer,
-          HttpResponse.BodyHandlers.ofString());
-      CompletableFuture<HttpResponse<String>> joinResult = join.client.sendAsync(joinConnect,
-          HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, hostResult.get(90, TimeUnit.SECONDS).statusCode());
-      assertEquals(200, joinResult.get(90, TimeUnit.SECONDS).statusCode());
-
-      Map<String, Object> hostNetwork = network(host, hostSession);
-      Map<String, Object> joinNetwork = network(join, joinSession);
+      Map<String, Object> hostNetwork = awaitPeer(host, hostSession, joinIdentity.nodeId());
+      Map<String, Object> joinNetwork = awaitPeer(join, joinSession, hostIdentity.nodeId());
       assertEquals("HEALTHY", hostNetwork.get("status"));
       assertEquals("HEALTHY", joinNetwork.get("status"));
       assertEquals(1, ((List<?>) hostNetwork.get("peers")).size());

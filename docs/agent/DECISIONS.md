@@ -1,3 +1,23 @@
+## 2026-09-13 — SL-D-040 Checkpoint 3A Docker process-isolation lab
+
+Checkpoint 3A uses disposable Docker Linux namespaces on the current Windows
+Docker Desktop/WSL2 engine as the local process-isolation substrate. The lab
+may supply one explicit signed six-member snapshot to a test-only process
+adapter and must bootstrap the desired edges through the existing compact SLB2
+host/join flow. Existing authenticated Link/overlay classes remain the only
+transport and membership-validation surfaces. Endpoint refresh after container
+replacement is a controlled lab descriptor update, not a shipped-CLI claim.
+Native Ubuntu, KVM, physical NAT, Internet traversal, membership authority in
+the CLI, and source `.synesis` state remain outside this decision. ADR-0079 is
+the architecture boundary. Two cycles passed using the resulting harness; the
+evidence is recorded in
+`docs/evidence/sl-d-040-checkpoint-3a-docker-2026-09-13.md`.
+
+## ADR index update
+
+- ADR-0079: Docker process-isolation lab for SL-D-040 Checkpoint 3A — accepted
+  for the bounded local lab slice.
+
 ## 2026-09-13 — SL-D-040 Checkpoint 2 native multi-peer seam
 
 Checkpoint 2 keeps the accepted overlay architecture above direct
@@ -30,7 +50,18 @@ Evidence: `docs/evidence/SYN-055-art-direction-2026-09-10.md`.
 
 # Decisions / ADR Index
 
+- ADR-0080: Native Windows setup wizard for the bootstrap installer — accepted
+  for the bounded SYN-067 slice; uses native Win32 controls, existing verified
+  activation, owned per-user deep-link registration, custom-root discovery,
+  and metadata cleanup that preserves user data.
+
 Product decisions are indexed in ADRs under `docs/adr/`.
+
+- ADR-0078: Compact Link first-contact bootstrap — accepted for the bounded
+  `SL-D-032` slice; the inviter key, short-lived admission, and one signed
+  endpoint hint remain in the compact token while complete candidate
+  descriptors move to the authenticated application stream. Legacy SLO1/SLA2,
+  direct-only transport, expected identity, and no-TOFU boundaries remain.
 
 - ADR-0071: External maximum-protector adapter and signed candidate gate —
   accepted for `SYN-009E`; a versioned release-environment adapter supplies

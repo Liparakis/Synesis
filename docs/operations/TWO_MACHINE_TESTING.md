@@ -1,9 +1,8 @@
 # Two-machine testing
 
 The required two-machine test must use two physical computers on a documented direct-network
-scenario, exchange signed
-descriptors out of band, require the expected fingerprint, establish `synesis-link/1`, exercise a
-typed stream, record
+scenario, exchange the signed compact bootstrap out of band, require the expected identity,
+establish `synesis-link/1`, exercise a typed stream, record
 liveness, and verify graceful and abrupt-close behavior. Do not claim this evidence until it is run.
 
 For candidate and direct-connectivity validation, record the provider list,
@@ -23,11 +22,12 @@ tests remain `TWO_PROCESS_VERIFIED` and must not be relabeled.
 For launcher validation, build with
 `./gradlew.bat :cli:installDist --dependency-verification=strict` and run the
 generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
-human-mediated flow is `synesis host`, copy its
-`synesis://join/SLO1-...` output to the other machine, run
-`synesis join "<link>"`, and paste the resulting
-`synesis://answer/SLA2-...` line into the waiting host process. No signaling
-server or mailbox is used. Use a temporary PATH change only in the current
+normal flow is `synesis host`, copy its
+`synesis://join/SLB2-...` output to the other machine, and run
+`synesis join "<link>"`. No answer is printed for the compact one-way path.
+If the selected topology requires coordinated candidate exchange, use the
+legacy SLO1/SLA2 flow documented in [`SYNESIS_LINK_V1.md`](../protocol/SYNESIS_LINK_V1.md).
+No signaling server or mailbox is used. Use a temporary PATH change only in the current
 shell if desired; do not record a permanent PATH or installation claim.
 Capture sanitized launcher output in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing
 `PHYSICAL-DEMO-2026-07-20.md` is diagnostic `DemoCli` evidence and does not

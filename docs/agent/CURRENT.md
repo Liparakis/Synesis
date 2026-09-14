@@ -1,5 +1,119 @@
 # Current Task
 
+## SYN-079 Uninstall-page template parity
+
+- Task ID: SYN-079
+- Status: ACTIVE
+- Scope: apply the compact main-page template to the uninstall options screen while preserving controls, navigation, metadata state, and uninstall behavior.
+
+## Immediate next action
+
+Await operator review of `C:/t/syn079-uninstall-repaint-fixed-onscreen.png` and `C:/t/syn079-main-after-back-final-onscreen.png`; run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before any further installer change.
+
+## Work completed
+
+The completed compact main page was committed as `3017c6d3`. The uninstall page now uses the same title-bar icon, branded header, divider, width, footer baseline, button heights, and right edge as the main page. Its concise title/subtitle and metadata copy fit inside a compact options panel. Parent-first then child-control repaint ordering keeps the page complete after navigation and window repaint; Back returns to a complete main page with the selected action preserved.
+
+## Current failures
+
+No functional failure remains. Focused bootstrap tests and vet pass; the canonical package builds; native on-screen captures pass for uninstall and Back-to-main after a forced window repaint. No installation or uninstallation was executed.
+
+## SYN-070 Windows uninstall page cleanup
+
+- Task ID: SYN-070
+- Status: COMPLETE; presentation-only cleanup closed 2026-09-14.
+- Goal: remove the remaining goofy visual artifacts from the current native uninstall page without changing installer semantics.
+- Boundary: stale hidden-control paint, helper-copy fit, title-bar mark suppression, path typography, and compact action-button proportions only. Keep all existing Win32 control/event and operation/data boundaries unchanged.
+- Required evidence: focused bootstrap tests, vet, Windows GUI build or cross-compile, and diff hygiene. Do not execute an installer action or claim pixel-level QA without a real capture.
+
+## Work completed
+
+Applied the bounded cleanup in `bootstrap/installer_menu_windows.go`: clear the hidden install-page heading before rendering other pages, keep the uninstall title bar free of the class fallback icon, use the body face for the read-only path, shorten the helper copy to a single deliberate line, and give Back/Uninstall/Cancel a balanced compact action rhythm.
+
+## Verification and constraints
+
+Focused source checks passed. The Gradle packaging stages for the fresh native launcher and bundle archive passed, but replacement of the canonical `synesis-windows-x64.exe` was blocked by the already-running prior installer (PID 34644); it was left untouched. A separately named valid self-extractor was assembled from those fresh inputs and its embedded archive footer was validated. Native screenshot capture is not available in this session, so no pixel-level claim is made. No installer operation has been executed.
+
+Final preview artifact: `cli/build/distributions/synesis-windows-x64-uninstall-polished.exe`.
+
+## Immediate next action
+
+Preserve the scoped source and preview artifact; do not install it, terminate the running prior installer, create `.synesis` state, push, or broaden this presentation-only task.
+
+## SYN-069 Windows uninstall page visual parity
+
+- Task ID: SYN-069
+- Status: COMPLETE; presentation-only implementation closed 2026-09-14.
+- Goal: make the current native uninstall page match the approved dark, logo-free, banner-free mockup without changing installer semantics.
+- Boundary: presentation only—uninstall page geometry, typography, options surface, path field, metadata checkbox/helper copy, and bottom action hierarchy. Keep the native control/event model and every existing operation/data boundary unchanged.
+- Required evidence: focused bootstrap tests, vet, Windows GUI build or cross-compile, and diff hygiene. Do not execute an installer action or claim pixel-level QA without a real capture.
+
+## Work completed
+
+Updated `bootstrap/installer_menu_windows.go` only for the uninstall-page presentation slice. The page now suppresses the global brand/ribbon/logo and footer warning treatment, keeps the title and explanatory copy prominent, frames the options in a dark bordered surface, presents the installation folder in a read-only inset field, and draws the metadata toggle with a visible focus state. The existing Win32 event path still owns navigation and the metadata value; the uninstall button continues through the existing confirmation page.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| `go test ./...` in `bootstrap` | PASS |
+| `go vet .` in `bootstrap` | PASS |
+| Windows test compilation (`GOOS=windows GOARCH=amd64 go test -c`) | PASS |
+| Windows GUI build (`GOOS=windows GOARCH=amd64 go build -ldflags '-H=windowsgui'`) | PASS |
+| `git diff --check` for source and task records | PASS |
+| Installer operation / managed-state mutation | NOT RUN |
+| Native screenshot capture | UNAVAILABLE in this session; no pixel-level claim made |
+
+## Current failures
+
+No functional failure was found. The rebuilt preview executable was produced in a temporary directory but not launched through the unavailable Windows visual bridge, so the evidence is source/build-backed rather than a native screenshot capture. No installer action, metadata removal, PATH change, registry change, project/repository/workspace change, or daemon action was performed.
+
+## Immediate next action
+
+Preserve the scoped source and evidence; do not install the preview, create `.synesis` state, push, or broaden this presentation-only task.
+
+## SYN-068 Windows setup wizard visual fidelity refinement (CP-0948)
+
+- Task ID: SYN-068
+- Status: COMPLETE; screenshot-driven refinement closed 2026-09-14.
+- Goal: make the native Windows setup wizard materially closer to the supplied
+  dark Synesis mockup while preserving all existing installer semantics.
+- Boundary: presentation only—client layout, typography, brand/logo panel,
+  capability glyphs, action-card selection treatment, spacing, footer, and
+  button hierarchy. The image is visual reference only; its example text,
+  paths, and values are not product instructions. Keep SYN-067's Win32
+  thread-affinity, deferred-show, ownership, PATH, protocol, metadata, and
+  user-data preservation boundaries unchanged.
+- Required evidence: focused bootstrap tests, vet, cross-platform source
+  compatibility, a rebuilt Windows runnable installer, and a bounded no-argument
+  launch/responsiveness probe. Do not install the artifact or claim pixel-level
+  screenshot QA unless a real capture is available.
+
+## Work completed
+
+The native wizard now uses a reference-sized dark composition with bounded
+work-area scaling, a larger rounded logo/wordmark panel, quiet diagonal brand
+backdrop, native capability glyphs, radio-style action cards, visible focus
+treatment for unselected cards, and the mockup's footer/action hierarchy. The
+existing installer operations and ownership/data boundaries were not changed.
+The final packaged artifact launched visibly and responsively, and a bounded
+native capture confirmed the rendered action page. The desktop default is now
+912x666 including the title bar; the Synesis mark is loaded from a linked
+Windows resource for the title bar, taskbar, and Explorer `.exe` icon. The
+resource was extracted from the built native installer as `#1_0000.ico`.
+
+## Current failures
+
+No installer action was executed. The evidence does not claim pixel identity at
+every Windows DPI or display size, and no real managed installation was
+modified.
+
+## Immediate next action
+
+Preserve the compact/icon installer artifact and evidence; do not install it,
+stop unrelated daemons, create `.synesis` state, push, or broaden this
+presentation-only task.
+
 ## SYN-067 Windows setup wizard and owned deep-link installation
 
 - Task ID: SYN-067

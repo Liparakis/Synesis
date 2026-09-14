@@ -28,6 +28,7 @@ import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.ProtocolVersion;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.link.protocol.TraversalOffer;
@@ -90,6 +91,12 @@ final class DaemonServerTest {
       assertTrue(Boolean.TRUE.equals(unresolved.get("ok")));
       assertEquals("URI_UNRESOLVED", unresolved.get("state"));
 
+      Map<String, Object> compactUnresolved = object(exchange(endpoint, Map.of(
+          "token", endpoint.token(), "operation", "OPEN_URI",
+          "uri", validCompact())));
+      assertTrue(Boolean.TRUE.equals(compactUnresolved.get("ok")));
+      assertEquals("URI_UNRESOLVED", compactUnresolved.get("state"));
+
       Map<String, Object> rejected = object(exchange(endpoint, Map.of(
           "token", endpoint.token(), "operation", "OPEN_URI",
           "uri", "https://example.test/SLO1-test")));
@@ -129,6 +136,15 @@ final class DaemonServerTest {
     TraversalOffer offer = TraversalOffer.create(host, null, session, digest, issued, expires,
         new byte[TraversalOffer.NONCE_BYTES], descriptor);
     return TraversalInvitation.create(invitation, offer).shareLink();
+  }
+
+  private static String validCompact() throws Exception {
+    NodeIdentity host = NodeIdentity.generate();
+    java.time.Instant issued = java.time.Instant.now().minusSeconds(1);
+    return CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, issued,
+        issued.plusSeconds(600), new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
+        new Candidate(CandidateType.MANUAL, InetAddress.getByName("198.51.100.1"), 4401, 1))
+        .shareLink();
   }
 
   private static String exchange(DaemonEndpoint.Record endpoint, Map<String, Object> request)

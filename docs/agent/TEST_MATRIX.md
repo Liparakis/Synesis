@@ -1,3 +1,68 @@
+## SYN-078 — Main maintenance-page copy cleanup — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Copy contract | Native packaged capture and control assertions | PASS | `C:/t/setup-copy-main-settled.png`; exact requested wording at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; copy assertions included |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
+## SYN-077 — Main-footer layout alignment — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Footer geometry | Settled native packaged capture | PASS | `C:/t/syn077-main-layout-settled.png`; no lower bars, path aligned to buttons, Cancel edge matches cards at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; layout/navigation assertions remain green |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
+## SYN-076 — Remove main-page warning footer — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Warning removal | Native Uninstall → Next → Back capture | PASS | `C:/t/syn076-clean-return.png`; no warning icon/text, no stale Back, complete controls at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap` |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
+## SYN-075 — Main-page return repaint and footer alignment — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Uninstall return | Native Uninstall → Next → Back capture | PASS | `C:/t/syn075-return-main.png`; no stale Back residue, complete warning, centered Next/Cancel at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; navigation/layout regression remains green |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
+## SYN-074 — Main-page footer centering — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Footer alignment | Settled native packaged capture | PASS | `C:/t/syn074-main-centered-repeat.png`; note centered between warning divider and actions at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; footer/layout regression coverage remains green |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
+## SYN-073 — Main-page footer composition polish — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Main footer composition | Packaged native capture | PASS | `C:/t/syn073-main-footer.png`; one readable warning line, aligned mark, full controls at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; includes footer copy/client-bound layout regression |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Native packaging inputs | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS through staging/bundle; final canonical copy blocked | `synesis-windows-x64.exe` is held open by operator PID 17088; fresh equivalent alternate executable assembled from those inputs |
+
+## SYN-072 — Main-page footer clipping repair — 2026-09-14
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Main footer geometry | Native client-bound control rectangles | PASS | Warning, Next, and Cancel remain inside the actual client area at 912x666 |
+| Visual package check | Packaged executable capture | PASS | `C:/t/syn072-main-footer.png`; full warning and controls visible at 912x666 |
+| Bootstrap tests | `go test ./...` | PASS | Run from `bootstrap`; includes navigation/layout regression |
+| Bootstrap vet | `go vet .` | PASS | Run from `bootstrap` |
+| Cross-platform source | `GOOS=linux GOARCH=amd64 go test -c` | PASS | `C:/t/syn072-linux.test` |
+| Runnable installer | `:cli:runnableInstaller --rerun-tasks --no-configuration-cache --no-daemon` | PASS; 27 tasks | Canonical Windows artifact rebuilt; no installer operation |
+
 ## SYN-067 — Windows installer startup responsiveness correction — 2026-09-13
 
 | Area | Check | Result | Evidence / boundary |

@@ -10,6 +10,7 @@ liveness state, stream metadata, and resource capacity.
 | Threat                                              | Boundary              | Mitigation                                                    | Residual risk / verification                       |
 |-----------------------------------------------------|-----------------------|---------------------------------------------------------------|----------------------------------------------------|
 | Forged or replayed descriptors                      | descriptor input      | canonical bytes, signatures, expiry, node-ID binding          | tamper and expiry tests                            |
+| Forged, replayed, or oversized compact bootstrap    | SLB1/SLB2 parser/admission | canonical bounded record, host signature, 16/12-byte capability, derived expiry, single-use admission | compact parser, tamper, expiry, and replay tests |
 | Impersonation or certificate substitution           | QUIC handshake        | expected long-term identity proof; TLS alone is insufficient  | wrong-key and substitution tests                   |
 | Downgrade or replay                                 | protocol negotiation  | explicit versions, transcript binding, no 0-RTT               | replay/downgrade tests                             |
 | Malformed/oversized input                           | wire parser           | validate before allocation and hard bounds                    | parser tests                                       |
@@ -78,13 +79,29 @@ untrusted routing input and cannot carry normal Link application traffic.
 
 ## Invitation and bootstrap mitigations
 
-Invitations are bounded, canonical, signed by the host identity, expire after
-ten minutes, and carry a random 32-byte capability. Parsing and descriptor
-verification precede candidate use. The capability is bound into the existing
-identity-proof transcript rather than treated as peer identity. A process-local
+The normal SLB2 invitation is a bounded canonical record signed by the host
+identity. It expires after ten minutes and carries a random 12-byte (96-bit)
+single-use capability, the host's compact Ed25519 public key, and one signed
+non-relay UDP endpoint hint. SLB1 remains decode-compatible with its original
+16-byte capability. The URI revision removes redundant inner framing and
+derives expiry from signed issue plus lifetime; it does not remove the host
+signature. The key and signature prevent an endpoint-only MITM; the endpoint
+is never treated as identity. No private key, project credential, or permanent
+membership authority is included. The capability is an online admission guard
+bound into the existing identity-proof transcript rather than peer identity.
+Its 96-bit guessing floor is defensible for the bounded ten-minute online
+window; the invitation itself remains the bearer artifact. A process-local
 atomic admission reservation prevents concurrent reuse; reservations expire
 after 15 seconds, release only before authentication, and are consumed after
-mutual identity binding. The capability creates no permanent trust.
+mutual identity binding. Link then exchanges complete signed candidate
+descriptors over the authenticated `SLX1` application envelope and checks
+their node IDs, public keys, validity, and invitation expiry before using them.
+The capability creates no permanent trust or project membership.
+
+Legacy SLO1/SLA2 remains a separate signed compatibility path for coordinated
+candidate exchange. Compact local loopback success does not establish a claim
+about arbitrary Internet NAT, symmetric-NAT hole punching, or universal
+reachability.
 
 Long-term private identity material is stored through the atomic, overwrite-
 preventing file store with restrictive permissions where supported. Public

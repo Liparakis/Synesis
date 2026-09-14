@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -21,6 +22,7 @@ import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.onboarding.OnboardingEvent;
 import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.overlay.OverlayDuplicateGuard;
 import org.synesis.link.overlay.OverlayForwarder;
 import org.synesis.link.overlay.OverlayMembershipPropagation;
@@ -162,10 +164,12 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
   @Override
   public PendingHost createInvitation(String expectedPeer) throws OnboardingFailure {
     ensureOpen();
-    Onboarding.PreparedHost delegate = onboarding.createInvitation(expectedPeer, applicationHandler,
+    Onboarding.PreparedHost delegate = onboarding.createCompactInvitation(expectedPeer,
+        applicationHandler,
         this::acceptSession);
     LiveHost result = new LiveHost(delegate);
     handles.add(result);
+    result.startDirectWaitIfNeeded();
     return result;
   }
 
@@ -296,9 +300,22 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
 
     private final Onboarding.PreparedHost delegate;
     private final AtomicBoolean closedHandle = new AtomicBoolean();
+    private CompletableFuture<PeerSession> directWait;
 
     private LiveHost(Onboarding.PreparedHost delegate) {
       this.delegate = delegate;
+    }
+
+    private void startDirectWaitIfNeeded() {
+      if (CompactBootstrapInvitation.isShareLink(delegate.invitationLink())) {
+        directWait = CompletableFuture.supplyAsync(() -> {
+          try {
+            return delegate.awaitConnectionAndKeepAlive();
+          } catch (OnboardingFailure failure) {
+            throw new java.util.concurrent.CompletionException(failure);
+          }
+        });
+      }
     }
 
     @Override
@@ -308,7 +325,16 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
 
     @Override
     public void importAnswer(String link) throws OnboardingFailure {
+      if (CompactBootstrapInvitation.isShareLink(delegate.invitationLink())) {
+        throw new OnboardingFailure(org.synesis.link.onboarding.OnboardingFailureCode.ANSWER_INVALID,
+            new IllegalArgumentException("compact invitation does not accept an answer"));
+      }
       delegate.importAnswerAndKeepAlive(link);
+    }
+
+    @Override
+    public CompletionStage<Void> completion() {
+      return delegate.completion();
     }
 
     @Override

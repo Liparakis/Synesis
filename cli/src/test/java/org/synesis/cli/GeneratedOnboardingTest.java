@@ -51,7 +51,7 @@ final class GeneratedOnboardingTest {
   }
 
   @Test
-  void installedLaunchersCompleteTwoProfileOnboarding() throws Exception {
+  void installedLaunchersCompleteCompactOneWayOnboarding() throws Exception {
     Path hostProfile = Files.createTempDirectory("synesis-generated-host");
     Path joinProfile = Files.createTempDirectory("synesis-generated-join");
     Process host = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), hostProfile,
@@ -61,14 +61,12 @@ final class GeneratedOnboardingTest {
       CompletableFuture<String> linkFuture = new CompletableFuture<>();
       CompletableFuture<CapturedProcess> hostFuture = capture(host, "SHARE_LINK", linkFuture);
       String link = linkFuture.get(45, TimeUnit.SECONDS);
+      assertTrue(link.startsWith("synesis://join/SLB2-"));
       join = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), joinProfile,
           "join", link);
-      CompletableFuture<String> answerFuture = new CompletableFuture<>();
-      CompletableFuture<CapturedProcess> joinFuture = capture(join, "ANSWER_LINK", answerFuture);
-      String answer = answerFuture.get(45, TimeUnit.SECONDS);
-      host.getOutputStream()
-          .write((answer + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
-      host.getOutputStream().flush();
+      CompletableFuture<String> workFuture = new CompletableFuture<>();
+      CompletableFuture<CapturedProcess> joinFuture = capture(join, "WORK_RESULT", workFuture);
+      workFuture.get(45, TimeUnit.SECONDS);
       CapturedProcess capturedHost = hostFuture.get(75, TimeUnit.SECONDS);
       CapturedProcess capturedJoin = joinFuture.get(75, TimeUnit.SECONDS);
       assertTrue(join.waitFor(10, TimeUnit.SECONDS), "join process did not exit");
@@ -79,15 +77,14 @@ final class GeneratedOnboardingTest {
       assertTrue(capturedHost.output()
           .contains("SHARE_LINK="));
       assertTrue(capturedHost.output()
-          .contains("AWAITING_ANSWER=true"));
-      assertTrue(capturedHost.output()
-          .contains("ANSWER_VERIFIED"));
+          .contains("DESCRIPTORS_EXCHANGED"));
       assertTrue(capturedHost.output()
           .contains("CONTROL_READY=true"));
       assertTrue(capturedHost.output()
           .contains("SESSION_CLOSED"));
       assertTrue(joinOutput.contains("INVITE_VERIFIED"));
-      assertTrue(joinOutput.contains("ANSWER_LINK="));
+      assertTrue(joinOutput.contains("DESCRIPTORS_EXCHANGED"));
+      assertTrue(!joinOutput.contains("ANSWER_LINK="));
       assertTrue(joinOutput.contains("WORK_RESULT=OK"));
       assertTrue(joinOutput.contains("SESSION_CLOSED"));
     } finally {

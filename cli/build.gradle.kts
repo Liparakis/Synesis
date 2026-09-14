@@ -385,6 +385,8 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
         include("go.sum")
         include("cmd/synesis-mcp/*.go")
         include("cmd/synesis-folder-picker/*.go")
+        include("*.syso")
+        include("assets/*.png")
     })
     inputs.property("bundlePlatform", bundlePlatform)
     inputs.property("hostPlatform", hostPlatform)

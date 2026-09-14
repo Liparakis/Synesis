@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.synesis.cli.command.coordination.BrowserLauncher;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -226,7 +227,11 @@ final class DaemonServer implements AutoCloseable {
       }
       return openLegacy(uriValue, openBrowser);
     }
-    TraversalInvitation.fromShareLink(uriValue);
+    if (CompactBootstrapInvitation.isShareLink(uriValue)) {
+      CompactBootstrapInvitation.fromShareLink(uriValue);
+    } else {
+      TraversalInvitation.fromShareLink(uriValue);
+    }
     List<KnownProjectRegistry.ProjectView> eligibleProjects;
     try {
       eligibleProjects = eligibleProjects();
@@ -456,7 +461,9 @@ final class DaemonServer implements AutoCloseable {
     String path = uri.getPath();
     boolean join = "join".equalsIgnoreCase(host);
     boolean answer = "answer".equalsIgnoreCase(host);
-    boolean payload = join && path != null && path.startsWith("/SLO1-")
+    boolean payload = join && path != null
+        && (path.startsWith("/SLO1-") || path.startsWith("/SLB1-")
+        || path.startsWith("/SLB2-"))
         || answer && path != null && path.startsWith("/SLA2-");
     if (!"synesis".equalsIgnoreCase(uri.getScheme()) || host == null || uri.getUserInfo() != null
         || uri.getQuery() != null || uri.getFragment() != null || !payload) {
