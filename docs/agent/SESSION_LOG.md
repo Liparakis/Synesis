@@ -1,3 +1,27 @@
+## 2026-09-17 — SYN-079 Git publication preflight
+
+The user explicitly requested pushing the latest project updates. Fetched origin and verified master and origin/master had no divergent commits before publication. The pending files are the completed installer flow/rendering/result cleanup, regression tests, and existing task evidence. Reran bootstrap go test ./... and go vet . successfully; git diff --check and the resume/deferred validator passed. Publish these source and documentation changes to origin/master using a normal push. Generated installers and toolchains remain ignored build artifacts. No new task, Synesis runtime action, machine install/uninstall, or force push is part of this request.
+
+## 2026-09-14 — SYN-079 result-screen decluttering
+
+User requested a cleaner result view. Removed the always-visible raw failure log, grouped concise status and path in one card, and added Show/Hide details with wrapping diagnostics and a vertical-only scrollbar. Failures still name the failed stage; bounded errors/history remain available. Native preview confirmed readable collapsed/expanded views and clean repaint. Opening details now resets to the error summary; native regression checks cover this. Final Go suite/vet passed. Native/ZIP rebuild passed; the operator-open canonical executable prevented replacement, so cli/build/distributions/synesis-windows-x64-clean.exe was assembled using the existing self-extractor format and fully byte-verified. No actual machine operations, new tasks, Synesis usage or remote changes. Evidence: docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md, CP-0966.
+
+## 2026-09-14 — SYN-079 uninstall cleanup and depth
+
+Followed the user's screenshots: separated the folder label and border, inset the path, refined metadata text spacing and smoothed the warning triangle. Added restrained navy/panel gradients with cached aligned backgrounds to prevent native label patches. A first preview exposed tight metadata copy; corrected height and native text-fit checks, then visually verified both lines and Back-to-main repaint. Includes prior smooth progress/sheen work and premultiplied icon rendering. Full bootstrap suite, go vet ., native build, forced package assembly and byte-level artifact checks passed. No new tasks, Synesis operations, actual user installation/uninstallation or remote changes. Evidence: current SYN-079 section and CP-0965.
+
+## 2026-09-14 — SYN-079 visual-defect correction completed
+
+User reported white focused edits, stale Cancel pixels and progress styling drift. Corrected edit DC background/foreground, full page repaint, truthful completed-stage blue gradient bar, connected markers, log typography/dark scrollbars and partial-row clipping. Native fixture checks covered focus/selection/typing, longer path persistence through Back, both operation result transitions, metadata control, and log scrolling. go test ./... and go vet . passed; native Gradle build/forced packaging and byte-level outer/inner installer checks passed. Existing task completed; no new task, Synesis operation, actual installation/uninstallation or remote mutation. Evidence: current SYN-079 evidence section and CP-0964.
+
+## 2026-09-14 — SYN-079 installer brief implemented
+
+Continued the existing task under explicit user authorization; no new task ledger or task ID. Source changes are limited to the native wizard, backend progress notifications and existing tests. Preserved existing installation/repair/uninstall operation order and injected no fake progress into production. Used test-only previews with operation execution disabled. The user stopped Computer Use with Escape; no further UI calls were made.
+
+Go 1.26.5 was obtained from go.dev and Microsoft OpenJDK 25.0.4.1 from the official Microsoft download endpoint into ignored build folders with archive checksum verification. No installed toolchain settings were changed. Build caches are isolated in build directories. The connected Synesis MCP service was found to refer to Synesis Painting Atlas, not this checkout; it was not used to mutate this repository.
+
+Tests and bootstrap vet passed. Full-repository Go vet retains unrelated pre-existing folder-picker pointer diagnostics. Gradle's normal up-to-date check reused a stale package after native compilation; rerunning only the existing packaging tasks regenerated the archive, and byte comparisons verified current outer/inner installer payloads. No release, commit, push or user installation/uninstall occurred. See the existing SYN-079 evidence document.
+
 ## 2026-09-14 — SYN-078 completion
 
 Operator requested a copy-only cleanup of the main maintenance page. Replaced the title, subtitle, version/details, setup heading/items, action heading/card titles/descriptions, installed-path label, and main Continue button copy exactly as requested; left layout, styles, controls, behavior, navigation, and installer logic unchanged. Added copy assertions to the Windows layout test. `go test ./...`, `go vet .`, and canonical runnableInstaller packaging passed. Settled capture `C:/t/setup-copy-main-settled.png` reported 912x666 and showed the requested wording. Canonical artifact SHA256: 7475247D3300409A35C291800F1164392CB48C14BA2060B95CA687473B002D56. No operation executed. Evidence: docs/evidence/SYN-078-maintenance-page-copy-2026-09-14.md.

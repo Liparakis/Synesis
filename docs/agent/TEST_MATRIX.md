@@ -1,3 +1,41 @@
+## SYN-079 — result-screen cleanup — 2026-09-14
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Failure clarity and collapsed diagnostics | PASS | Native control assertions; raw progress log hidden on result |
+| Wrapping/read-only dark diagnostics, no horizontal scrollbar | PASS | Native edit style, line count, color and first-visible-line assertions |
+| Expand/collapse and path retention | PASS | Native control regression; visual preview shows clean collapse repaint |
+| Bootstrap suite and vet | PASS | go test ./...; go vet . |
+| Native visual preview | PASS for observed states | Failed-uninstall collapsed/expanded details, readable text, vertical scrolling and repaint; final top-reset checked by native test |
+| Fresh Windows x64 package | PASS with alternate filename | Native build and forced platform ZIP; equivalent self-extractor assembly and outer/inner payload/footer checks |
+| Canonical runnableInstaller replacement | LOCKED | Operator-open prior executable (PID 54572) retained; deliver synesis-windows-x64-clean.exe |
+| Actual user installation/uninstallation | NOT RUN | Fixture-only verification |
+
+## SYN-079 — layout, depth and animation follow-ups — 2026-09-14
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Native label/frame separation and measured metadata text fit | PASS | Existing layout test extended |
+| Native gradient brush alignment | PASS | Offscreen child paint matches parent pixels for title, label, helper and warning |
+| Motion bounds/retarget continuity; sheen within fill; antialiased icon alpha | PASS | Existing Windows tests extended |
+| Bootstrap suite and bootstrap vet | PASS | go test ./...; go vet . |
+| Native visual preview | PASS for observed desktop | Complete uninstall text/frame/icon, gradient continuity, Back-to-main; test-only executor |
+| Fresh packaged installer | PASS | Gradle native build/forced packaging and outer/inner byte comparisons |
+
+## SYN-079 — approved installer flow — 2026-09-14
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Bootstrap suite, including real backend callback order and failure events | PASS | go test ./...; disposable fixtures with PATH/protocol mutation disabled |
+| Native navigation, busy controls, edit DC colors, completed-stage counting, metadata persistence, result semantics and bounded logs | PASS | Existing installer_logo_windows_test.go extended; go test ./... |
+| Bootstrap static vet | PASS | go vet . |
+| Whole-module vet | PRE-EXISTING DIAGNOSTICS | cmd/synesis-folder-picker/main_windows.go:121-122 unsafe.Pointer; file unchanged |
+| Windows test binary | PASS | go test -c; includes opt-in test-only preview with operations disabled |
+| Windows x64 package | PASS | Existing Gradle runnableInstaller and forced packaging from current binaries |
+| Embedded artifact freshness | PASS | Native bytes equal outer executable prefix and archive's bin/synesis-installer.exe; footer length and archive match |
+| Native visual QA | PASS for current desktop | Non-operative fixtures: focused/selected/typed/long path, Back preservation, main/uninstall options, both progress/result transitions, metadata toggle, dark scrollbars and complete rows while scrolled |
+| Real installation, uninstall, registry/PATH mutation | NOT RUN | Only sandboxed backend fixtures and non-operative visual previews |
+
 ## SYN-078 — Main maintenance-page copy cleanup — 2026-09-14
 
 | Area | Check | Result | Evidence / boundary |

@@ -1,22 +1,24 @@
 # Current Task
 
-## SYN-079 Uninstall-page template parity
+## SYN-079 Approved installer flow and visual polish
 
 - Task ID: SYN-079
-- Status: ACTIVE
-- Scope: apply the compact main-page template to the uninstall options screen while preserving controls, navigation, metadata state, and uninstall behavior.
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md and CP-0966.
 
 ## Immediate next action
 
-Await operator review of `C:/t/syn079-uninstall-repaint-fixed-onscreen.png` and `C:/t/syn079-main-after-back-final-onscreen.png`; run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before any further installer change.
+Review cli/build/distributions/synesis-windows-x64-clean.exe with the user; no implementation remains queued for the authorized installer scope.
 
 ## Work completed
 
-The completed compact main page was committed as `3017c6d3`. The uninstall page now uses the same title-bar icon, branded header, divider, width, footer baseline, button heights, and right edge as the main page. Its concise title/subtitle and metadata copy fit inside a compact options panel. Parent-first then child-control repaint ordering keeps the page complete after navigation and window repaint; Back returns to a complete main page with the selected action preserved.
+Simplified the result screen into an action-specific heading and compact summary/folder card. Diagnostics are collapsed by default behind Show details; expanded errors and retained history wrap in a dark read-only panel with only vertical scrolling, starting at the error summary. Toggle repaint is clean. Existing artwork, gradients, smooth progress and backend/data semantics are preserved. No new task or Synesis runtime/connector was used.
 
 ## Current failures
 
-No functional failure remains. Focused bootstrap tests and vet pass; the canonical package builds; native on-screen captures pass for uninstall and Back-to-main after a forced window repaint. No installation or uninstallation was executed.
+Focused bootstrap tests and vet pass. Native preview verified the collapsed failure summary, wrapping expanded details, vertical-only scrollbar and clean collapse repaint on the current desktop. Final scroll-to-top behavior is covered by the native control test. Native build and forced platform ZIP passed. Canonical runnableInstaller replacement was blocked by the operator-open prior executable (PID 54572); an equivalent fresh self-extractor was assembled as synesis-windows-x64-clean.exe and its outer/inner installer, archive and footer bytes verified. No real user install/uninstall was run; other DPI settings were not visually exercised. Unrelated whole-module folder-picker vet diagnostics remain outside this scope.
+
+## Historical completed scopes
 
 ## SYN-070 Windows uninstall page cleanup
 

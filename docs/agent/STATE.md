@@ -1,3 +1,21 @@
+## 2026-09-14 — SYN-079 result-screen cleanup completed
+
+Simplified the result screen into an action-specific heading and compact summary/folder card. Diagnostics are collapsed by default behind Show details; expanded errors and retained history wrap in a dark read-only panel with only vertical scrolling, starting at the error summary. Toggle repaint is clean. Existing artwork, gradients, smooth progress and backend/data semantics are preserved. No new task or Synesis runtime/connector was used.
+
+Focused bootstrap tests and vet pass. Native preview verified the collapsed failure summary, wrapping expanded details, vertical-only scrollbar and clean collapse repaint on the current desktop. Final scroll-to-top behavior is covered by the native control test. Native build and forced platform ZIP passed. Canonical runnableInstaller replacement was blocked by the operator-open prior executable (PID 54572); an equivalent fresh self-extractor was assembled as synesis-windows-x64-clean.exe and its outer/inner installer, archive and footer bytes verified. No real user install/uninstall was run; other DPI settings were not visually exercised. Unrelated whole-module folder-picker vet diagnostics remain outside this scope.
+
+Current artifact: cli/build/distributions/synesis-windows-x64-clean.exe; SHA-256 cfd76fca51c60aa21f00ce3483aba34198ac893c50579b9a50c2a07fee1221a1. Evidence: docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md, CP-0966.
+
+## 2026-09-14 — SYN-079 uninstall depth and smooth rendering completed
+
+Current package includes separated label/frame bounds, measured two-line metadata text, antialiased warning/selection/status icons, subtle shared/panel gradients and aligned native backgrounds. Progress is eased between verified stage counts with a sheen. Bootstrap tests/vet, native uninstall/main previews, Gradle native build/forced packaging and embedded-byte comparisons passed. No actual install/uninstall or Synesis operation was performed. Current evidence and CP-0965 record the scope and artifact.
+
+## 2026-09-14 — SYN-079 completed after visual-defect follow-up
+
+Focused path contrast, stale footer pixels and progress/log parity are fixed and verified. The native preview confirms readable selected and typed text, a single Close button after both operations, truthful completed-stage fill, connected status rings, dark scrollbars and complete log rows. Full bootstrap suite and go vet . pass. Final native build and forced package assembly pass, with both packaged installer copies matching current native bytes. No actual user install/uninstall or Synesis operation was performed. See the current evidence section for artifact identity and limits.
+
+## Historical state
+
 ## 2026-09-14 — SYN-078 completion
 
 Replaced only the main maintenance-page copy with the operator-supplied concise Windows setup wording: Manage installation, the requested subtitle/version/setup labels/action descriptions/Installed at label, Continue, and Cancel. Layout, styling, controls, navigation, installer logic, and functionality are unchanged. Bootstrap tests/vet, canonical packaging, and packaged capture passed. Evidence: docs/evidence/SYN-078-maintenance-page-copy-2026-09-14.md and CP-0958. No installer operation or remote mutation executed.

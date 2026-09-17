@@ -1,3 +1,11 @@
+# Current operator goal — 2026-09-14
+
+- Task ID: SYN-079 (existing task; no new task created)
+- Status: COMPLETE; operator-scoped installer roadmap complete. Native fixture verification and package freshness checks passed after the result-screen cleanup, uninstall layout, gradient and smooth-rendering follow-ups.
+- User authorization: confirmed implementation of the attached installer brief and four mockups; directed use of existing project components, no new tasks, and no Synesis tooling.
+- Current brief supersedes older UI-only confirmation-page and copy requirements below: Manage installation -> location/options -> truthful progress/log -> action-specific summary. Preserve operation ordering, security, filesystem/registry, metadata and project/workspace semantics.
+- Evidence: docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md, current continuation section. Historical goals follow.
+
 # 2026-09-14 — SYN-070 Windows uninstall page cleanup
 
 - Status: COMPLETE FOR CURRENT SCOPE; presentation-only cleanup closed 2026-09-14

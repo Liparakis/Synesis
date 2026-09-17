@@ -1,10 +1,11 @@
 ## SYN-079
 
-### Uninstall-page template parity
+### Complete the approved installer flow and visual polish
 
-- Status: ACTIVE
-- Scope: rebuild the existing uninstall options page on the compact maintenance-page template, with shared branding, proportions, alignment, and concise content while preserving uninstall and metadata behavior.
-- Acceptance criteria: 744x549 window; normal Synesis title-bar icon and branded header; unclipped title/subtitle; compact options panel; Back/Uninstall/Cancel use the main-page footer height and proportions and share its right edge; navigation and metadata state remain unchanged; focused tests/vet and packaged main/uninstall/back captures pass; no installer operation executed.
+- Status: DONE
+- Evidence: PASS; docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md, CP-0966; native result-details/contrast/layout tests, visual fixtures and verified Windows x64 clean package.
+- Scope: user-requested concise result card and collapsible wrapping diagnostics; uninstall field/text/icon cleanup and mockup gradients, smooth progress/sheen and antialiased icons, plus prior focused-edit contrast, stale footer rendering and mockup progress parity fixes; user-authorized continuation on 2026-09-14; finish the supplied installer brief using existing native controls, artwork, operation implementations, and this existing task. Remove both preview pages, use direct action labels, and provide a shared truthful progress/log view and action-specific summaries with collapsed diagnostics.
+- Acceptance criteria: main -> location/options -> progress -> summary; no confirmation page or dead navigation; selection and metadata persist across Back; real stage events and bounded scrollable status log; no fabricated percentage, shortcuts, daemon stops or success; safe busy navigation; consistent compact dark layout; focused bootstrap tests/vet and native UI checks pass. Preserve filesystem, registry, activation, metadata and user-project semantics. No real user installation/uninstallation during verification.
 - Deferred-register review: no deferred capability is activated.
 
 ## SYN-078

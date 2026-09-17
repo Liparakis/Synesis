@@ -398,10 +398,22 @@ func runningBundleRoot() (string, error) {
 	return bundle, nil
 }
 
+// operationProgress reports completed backend boundaries without estimating time or bytes.
+// A nil observer keeps command-line operation behavior unchanged.
+type operationProgress func(stage, status, detail string)
+
+func reportOperation(observers []operationProgress, stage, status, detail string) {
+	for _, observer := range observers {
+		if observer != nil {
+			observer(stage, status, detail)
+		}
+	}
+}
+
 // runInstall implements both "install" and "update": fetch and verify the
 // manifest, resolve the platform-appropriate artifact, verify its checksum,
 // and atomically activate it.
-func runInstall(operation string, args []string) error {
+func runInstall(operation string, args []string, observers ...operationProgress) error {
 	flags := flag.NewFlagSet(operation, flag.ContinueOnError)
 	manifestURL := flags.String("manifest", os.Getenv("SYNESIS_MANIFEST_URL"), "manifest URL")
 	bundlePath := flags.String("bundle", "", "verified local bundle path")
@@ -435,10 +447,12 @@ func runInstall(operation string, args []string) error {
 		if operation == "update" {
 			return errors.New("local bundles support install or repair; use a signed manifest for update")
 		}
+		reportOperation(observers, "verify", "working", "Verifying the local bundle")
 		archive, m, manifestData, err := loadLocalBundle(*bundlePath)
 		if err != nil {
 			return err
 		}
+		reportOperation(observers, "verify", "done", "Local bundle verified")
 		if *prepare {
 			id, err := prepareUpdatePlan(paths, m, manifestData, nil, archive, *acceptance)
 			if err != nil {
@@ -447,7 +461,7 @@ func runInstall(operation string, args []string) error {
 			fmt.Printf("UPDATE_RESULT=PREPARED\nPLAN_ID=%s\n", id)
 			return nil
 		}
-		if err := activateVersioned(paths, m, manifestData, archive, operation, nil, !*skipPathUpdate); err != nil {
+		if err := activateVersioned(paths, m, manifestData, archive, operation, nil, !*skipPathUpdate, observers...); err != nil {
 			return err
 		}
 		fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -501,7 +515,7 @@ func runInstall(operation string, args []string) error {
 // provider lifecycle command or modifying project workspaces. Installation
 // bookkeeping (the active payload pointer and integrity manifest) is updated
 // because those records are required to activate the repaired binaries safely.
-func runRepair(args []string) error {
+func runRepair(args []string, observers ...operationProgress) error {
 	flags := flag.NewFlagSet("repair", flag.ContinueOnError)
 	bundlePath := flags.String("bundle", "", "local bundle directory or archive")
 	installDir := flags.String("install-dir", "", "installation root")
@@ -516,10 +530,12 @@ func runRepair(args []string) error {
 			return errors.New("repair requires --bundle when the installer is not inside a bundle")
 		}
 	}
+	reportOperation(observers, "verify", "working", "Verifying the local repair bundle")
 	archive, m, manifestData, err := loadLocalBundle(*bundlePath)
 	if err != nil {
 		return err
 	}
+	reportOperation(observers, "verify", "done", "Local bundle verified")
 	paths, err := installationPaths(*installDir)
 	if err != nil {
 		return err
@@ -527,7 +543,7 @@ func runRepair(args []string) error {
 	if !fileExists(paths.root) {
 		return errors.New("no Synesis installation found to repair")
 	}
-	if err := activateVersioned(paths, m, manifestData, archive, "repair", nil, !*skipPathUpdate); err != nil {
+	if err := activateVersioned(paths, m, manifestData, archive, "repair", nil, !*skipPathUpdate, observers...); err != nil {
 		return err
 	}
 	fmt.Printf("REPAIR_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, platformID())
@@ -1168,7 +1184,8 @@ func executeUpdatePlan(paths installPaths, id string) error {
 	return atomicWrite(filepath.Join(paths.executions, id+".json"), []byte(fmt.Sprintf("{\"planId\":%q,\"result\":\"SUCCESS\"}\n", id)))
 }
 
-func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan, updatePath bool) (err error) {
+func activateVersioned(paths installPaths, m manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan, updatePath bool, observers ...operationProgress) (err error) {
+	reportOperation(observers, "runtime", "working", "Preparing and verifying runtime files")
 	release, err := acquireUpdateLock(paths, operation)
 	if err != nil {
 		return err
@@ -1288,15 +1305,18 @@ func activateVersioned(paths installPaths, m manifest, manifestData, archive []b
 		return err
 	}
 	pointerActivated = true
+	reportOperation(observers, "runtime", "done", "Verified runtime activated")
 	if migrationPlan != nil {
 		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "POINTER_ACTIVATED", "")
 	}
 	// Remove only the obsolete text pointer after the new pointer is durable.
 	_ = os.Remove(filepath.Join(paths.root, "current"))
 	if updatePath {
+		reportOperation(observers, "shell", "working", "Updating the user PATH")
 		if err := pathUpdater(paths, true); err != nil {
 			return err
 		}
+		reportOperation(observers, "shell", "done", "Shell integration updated")
 	}
 	if migrationPlan != nil {
 		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "INSTALLED_SMOKE_TEST_PASSED", "")
@@ -2014,7 +2034,7 @@ func runDoctor(args []string) error {
 	return nil
 }
 
-func runUninstall(args []string) error {
+func runUninstall(args []string, observers ...operationProgress) error {
 	flags := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	installDir := flags.String("install-dir", "", "installation root")
 	removeMetadata := flags.Bool("remove-metadata", false, "also remove installer-owned metadata and identity")
@@ -2028,6 +2048,7 @@ func runUninstall(args []string) error {
 	if filepath.Base(paths.root) != "Synesis" && *installDir == "" {
 		return errors.New("refusing unexpected installation root")
 	}
+	reportOperation(observers, "shell", "working", "Removing owned protocol and PATH integration")
 	if runtime.GOOS == "windows" {
 		if err := unregisterProtocolForUninstall(paths); err != nil {
 			return err
@@ -2036,19 +2057,28 @@ func runUninstall(args []string) error {
 	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
+	reportOperation(observers, "shell", "done", "Owned shell integration removed")
+	reportOperation(observers, "runtime", "working", "Removing application files")
 	if err := removeInstalledPayload(paths); err != nil {
 		return err
 	}
+	reportOperation(observers, "runtime", "done", "Application files removed")
 	if *removeMetadata {
+		reportOperation(observers, "metadata", "working", "Removing installer-owned identity and state")
 		if err := removeInstallerMetadata(paths); err != nil {
 			return err
 		}
+		reportOperation(observers, "metadata", "done", "Installer-owned metadata removed")
+	} else {
+		reportOperation(observers, "metadata", "done", "Installer-owned metadata preserved")
 	}
+	reportOperation(observers, "cleanup", "working", "Cleaning obsolete installer files")
 	if err := removeInstallationTree(paths.rollback); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(filepath.Dir(paths.root))
 	if errors.Is(err, os.ErrNotExist) {
+		reportOperation(observers, "cleanup", "done", "Cleanup complete; project and workspace data preserved")
 		fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true")
 		return nil
 	}
@@ -2067,6 +2097,7 @@ func runUninstall(args []string) error {
 		}
 	}
 	fmt.Println("UNINSTALL_RESULT=SUCCESS", "USER_PROJECTS_PRESERVED=true", "METADATA_REMOVED="+strconv.FormatBool(*removeMetadata))
+	reportOperation(observers, "cleanup", "done", "Cleanup complete; project and workspace data preserved")
 	return nil
 }
 

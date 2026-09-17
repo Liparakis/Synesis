@@ -1,3 +1,12 @@
+## 2026-09-14 — SYN-079 result-screen cleanup complete
+
+- Exact next code action: Review cli/build/distributions/synesis-windows-x64-clean.exe with the user; no implementation remains queued for the authorized installer scope.
+- Current artifact identity and checks: docs/evidence/SYN-079-uninstall-template-parity-2026-09-14.md, CP-0966.
+- Canonical synesis-windows-x64.exe is the older operator-open artifact; deliver the clean filename above. Do not terminate the operator's installer to overwrite it.
+- Preserve constraints: no new task, no Synesis runtime/connector, no real machine installer operations for verification, no remote mutation.
+
+## Historical continuation (superseded)
+
 ## 2026-09-14 — SYN-079 uninstall-page template parity
 
 - Exact next code action: Review C:/t/syn079-uninstall-repaint-fixed-onscreen.png and C:/t/syn079-main-after-back-final-onscreen.png, then run powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1 before any new task.

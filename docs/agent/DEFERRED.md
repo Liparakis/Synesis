@@ -1,3 +1,19 @@
+## 2026-09-14 — SYN-079 result-screen cleanup review
+
+No deferred capability is activated. This continuation changes only result layout, concise failure presentation and diagnostic disclosure. Existing backend operations, ownership and data boundaries remain unchanged.
+
+## 2026-09-14 — SYN-079 layout/gradient completion review
+
+No deferred capability is activated. Work remains installer presentation and rendering; backend behavior, coordination and data ownership boundaries are unchanged.
+
+## 2026-09-14 — SYN-079 visual-defect follow-up review
+
+No deferred capability is activated. This completion corrects native paint, contrast, progress and log presentation only; installer backend behavior and data ownership boundaries remain unchanged.
+
+## 2026-09-14 — SYN-079 installer-flow brief review
+
+The user authorized shorter native installer flows and truthful progress presentation within the existing SYN-079 task. No deferred capability is activated: no shortcuts, daemon stop/cancellation, network service, provider setup or new filesystem/registry operation was added. Existing install/repair/uninstall functions only gained optional observer callbacks. Final visual acceptance is unverified after the user stopped Computer Use.
+
 ## SYN-055 final artistic-direction checkpoint review — 2026-09-10
 
 Reviewed the current brief and final diff against this register. Typography,

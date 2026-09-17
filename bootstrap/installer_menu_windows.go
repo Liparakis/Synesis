@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -53,13 +54,13 @@ const (
 	installerPageAction installerPage = iota
 	installerPageInstall
 	installerPageUninstall
-	installerPageConfirm
 	installerPageProgress
 	installerPageResult
 
-	installerMessageDone    = 0x8001
-	installerMessageShow    = 0x8002
-	installerMessageRefresh = 0x8003
+	installerMessageDone     = 0x8001
+	installerMessageShow     = 0x8002
+	installerMessageRefresh  = 0x8003
+	installerMessageProgress = 0x8004
 
 	wsChild         = 0x40000000
 	wsVisible       = 0x10000000
@@ -82,7 +83,6 @@ const (
 	bsOwnerDraw     = 0x0000000b
 	esAutoHScroll   = 0x00000080
 	esReadOnly      = 0x00000800
-	pbsMarquee      = 0x00000008
 
 	wmPaint          = 0x000f
 	wmEraseBkgnd     = 0x0014
@@ -159,20 +159,18 @@ const (
 	controlMetadata
 	controlUninstallWarning
 	controlUninstallImpact
-	controlConfirmGroup
-	controlConfirmSummary
 	controlProgressStatus
 	controlProgressBar
+	controlProgressCount
+	controlProgressSteps
+	controlProgressLogTitle
+	controlProgressLog
 	controlResult
+	controlResultDetailsToggle
+	controlResultDetails
 	controlBack
 	controlNext
 	controlCancel
-)
-
-const (
-	pbmSetBkColor  = wmUser + 1
-	pbmSetBarColor = wmUser + 9
-	pbmSetMarquee  = wmUser + 10
 )
 
 var errInstallerBrowseCancelled = errors.New("folder selection cancelled")
@@ -253,39 +251,84 @@ type installerOperationResult struct {
 	warning string
 }
 
+type installerStep struct {
+	id, title, status, detail string
+}
+
+type installerLogEntry struct {
+	status, detail string
+}
+
+func installerOperationSteps(action installerAction, metadata bool) []installerStep {
+	if action == installerActionUninstall {
+		metadataTitle := "Preserve metadata"
+		if metadata {
+			metadataTitle = "Remove metadata"
+		}
+		return []installerStep{
+			{id: "shell", title: "Remove shell integration", status: "pending"},
+			{id: "runtime", title: "Remove application files", status: "pending"},
+			{id: "metadata", title: metadataTitle, status: "pending"},
+			{id: "cleanup", title: "Clean obsolete installer files", status: "pending"},
+		}
+	}
+	return []installerStep{
+		{id: "verify", title: "Verify local bundle", status: "pending"},
+		{id: "runtime", title: "Activate runtime files", status: "pending"},
+		{id: "shell", title: "Update shell integration", status: "pending"},
+		{id: "protocol", title: "Register synesis:// link handler", status: "pending"},
+	}
+}
+
 type installerWizard struct {
-	art             map[string]installerArt
-	bundle          string
-	installRoot     string
-	scale           float64
-	installed       bool
-	action          installerAction
-	page            installerPage
-	metadata        bool
-	result          installerOperationResult
-	hwnd            uintptr
-	instance        uintptr
-	controls        map[int]uintptr
-	busy            bool
-	mu              sync.Mutex
-	titleFont       uintptr
-	bodyFont        uintptr
-	detailFont      uintptr
-	productFont     uintptr
-	buttonFont      uintptr
-	cardTitleFont   uintptr
-	cardDetailFont  uintptr
-	iconFont        uintptr
-	wordmarkFont    uintptr
-	windowIconLarge uintptr
-	windowIconSmall uintptr
-	logoBitmap      uintptr
-	logoWidth       int32
-	logoHeight      int32
-	darkBrush       uintptr
-	surfaceBrush    uintptr
-	cardBrush       uintptr
-	warningBrush    uintptr
+	art               map[string]installerArt
+	bundle            string
+	installRoot       string
+	installDraft      string
+	scale             float64
+	installed         bool
+	action            installerAction
+	page              installerPage
+	metadata          bool
+	result            installerOperationResult
+	hwnd              uintptr
+	instance          uintptr
+	controls          map[int]uintptr
+	busy              bool
+	mu                sync.Mutex
+	steps             []installerStep
+	logEntries        []installerLogEntry
+	logRendered       int
+	operationStatus   string
+	logFont           uintptr
+	progressMotion    installerProgressMotion
+	progressEpoch     time.Time
+	progressComplete  time.Time
+	progressRaster    *installerRaster
+	progressTimer     uintptr
+	smoothIcons       map[string]*installerRaster
+	backdrop          *installerRaster
+	backdropBrush     uintptr
+	resultDetailsOpen bool
+	executeOperation  func(string, string, installerAction, bool, operationProgress) installerOperationResult
+	titleFont         uintptr
+	bodyFont          uintptr
+	detailFont        uintptr
+	productFont       uintptr
+	buttonFont        uintptr
+	cardTitleFont     uintptr
+	cardDetailFont    uintptr
+	iconFont          uintptr
+	wordmarkFont      uintptr
+	windowIconLarge   uintptr
+	windowIconSmall   uintptr
+	logoBitmap        uintptr
+	logoWidth         int32
+	logoHeight        int32
+	darkBrush         uintptr
+	surfaceBrush      uintptr
+	cardBrush         uintptr
+	warningBrush      uintptr
 }
 
 type installerPoint struct {
@@ -658,8 +701,8 @@ func (w *installerWizard) createControls() {
 	w.controls[controlActionPath] = w.addControl(controlActionPath, "STATIC", "", static|ssLeftNoWrap, 60, 840, 900, 42, 0)
 
 	w.controls[controlInstallGroup] = w.addControl(controlInstallGroup, "STATIC", "Destination folder", static, 60, 250, 1280, 40, 0)
-	w.controls[controlInstallEdit] = w.addControl(controlInstallEdit, "EDIT", "", child|wsTabStop|esAutoHScroll, 80, 310, 1020, 46, wsExClientEdge)
-	w.controls[controlBrowse] = w.addControl(controlBrowse, "BUTTON", "Browse...", button|bsPushButton, 1120, 310, 220, 46, 0)
+	w.controls[controlInstallEdit] = w.addControl(controlInstallEdit, "EDIT", "", child|wsTabStop|esAutoHScroll, 80, 310, 1020, 46, 0)
+	w.controls[controlBrowse] = w.addControl(controlBrowse, "BUTTON", "Browse...", button|bsOwnerDraw, 1120, 310, 220, 46, 0)
 	w.controls[controlInstallHint] = w.addControl(controlInstallHint, "STATIC", "", static, 80, 382, 1180, 60, 0)
 
 	// The options surface is painted by the parent so it cannot obscure sibling
@@ -671,12 +714,24 @@ func (w *installerWizard) createControls() {
 	w.controls[controlUninstallWarning] = w.addControl(controlUninstallWarning, "STATIC", "", static, 136, 568, 1200, 60, 0)
 	w.controls[controlUninstallImpact] = w.addControl(controlUninstallImpact, "STATIC", "", static, 165, 684, 1120, 52, 0)
 
-	w.controls[controlConfirmGroup] = w.addControl(controlConfirmGroup, "STATIC", "Review", static, 60, 250, 1280, 40, 0)
-	w.controls[controlConfirmSummary] = w.addControl(controlConfirmSummary, "STATIC", "", static, 80, 302, 1180, 260, 0)
-
 	w.controls[controlProgressStatus] = w.addControl(controlProgressStatus, "STATIC", "", static, 60, 300, 1280, 70, 0)
-	w.controls[controlProgressBar] = w.addControl(controlProgressBar, "msctls_progress32", "", child|pbsMarquee, 60, 410, 1280, 34, 0)
+	w.controls[controlProgressBar] = w.addControl(controlProgressBar, "STATIC", "Operation in progress", child|ssOwnerDraw, 60, 410, 1280, 34, 0)
+	w.controls[controlProgressCount] = w.addControl(controlProgressCount, "STATIC", "", static, 1130, 344, 210, 40, 0)
+	w.controls[controlProgressSteps] = w.addControl(controlProgressSteps, "STATIC", "", child|ssOwnerDraw, 60, 350, 1280, 300, 0)
+	w.controls[controlProgressLogTitle] = w.addControl(controlProgressLogTitle, "STATIC", "Operation log", static, 60, 662, 1280, 38, 0)
+	// Native owner-drawn list keeps rows accessible, selectable and scrollable.
+	// LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, vertical/horizontal scroll. Keep the
+	// default integral row height so scrolling never exposes half a line.
+	w.controls[controlProgressLog] = w.addControl(controlProgressLog, "LISTBOX", "Operation log", child|wsTabStop|0x20|0x40|0x00200000|0x00100000, 60, 706, 1280, 154, 0)
+	// Keep native scrolling and keyboard behavior while matching the dark log.
+	windows.NewLazySystemDLL("uxtheme.dll").NewProc("SetWindowTheme").Call(w.controls[controlProgressLog], uintptr(unsafe.Pointer(mustInstallerUTF16("DarkMode_Explorer"))), 0)
 	w.controls[controlResult] = w.addControl(controlResult, "STATIC", "", static, 60, 270, 1280, 330, 0)
+	w.controls[controlResultDetailsToggle] = w.addControl(controlResultDetailsToggle, "BUTTON", "Show details", button|bsOwnerDraw, 60, 596, 300, 52, 0)
+	// Read-only, wrapping diagnostics: one vertical scrollbar, no horizontal
+	// scrolling required to read an error or a long filesystem path.
+	w.controls[controlResultDetails] = w.addControl(controlResultDetails, "EDIT", "", child|wsTabStop|esReadOnly|0x4|0x40|0x00200000, 74, 668, 1252, 182, 0)
+	windows.NewLazySystemDLL("uxtheme.dll").NewProc("SetWindowTheme").Call(w.controls[controlResultDetails], uintptr(unsafe.Pointer(mustInstallerUTF16("DarkMode_Explorer"))), 0)
+	installerSendMessage.Call(w.controls[controlResultDetails], 0x00c5, 256*1024, 0) // EM_SETLIMITTEXT
 	// Give the compact action row an even rhythm and enough visual weight for
 	// the destructive primary action without changing its command routing.
 	w.controls[controlBack] = w.addControl(controlBack, "BUTTON", "Back", button|bsOwnerDraw, 780, 886, 185, 72, 0)
@@ -698,6 +753,7 @@ func (w *installerWizard) createControls() {
 	w.cardDetailFont = createInstallerFont(w.scaled(-27), fontWeightNormal)
 	w.iconFont = createInstallerFont(w.scaled(-60), fontWeightBold)
 	w.wordmarkFont = createInstallerFont(w.scaled(-16), fontWeightNormal)
+	w.logFont = createInstallerNamedFont(w.scaled(-27), fontWeightNormal, "Consolas")
 	setInstallerFont(w.controls[controlTitle], w.titleFont)
 	setInstallerFont(w.controls[controlDescription], w.bodyFont)
 	setInstallerFont(w.controls[controlProductName], w.productFont)
@@ -710,17 +766,25 @@ func (w *installerWizard) createControls() {
 	setInstallerFont(w.controls[controlActionPath], w.detailFont)
 	setInstallerFont(w.controls[controlInstallGroup], w.detailFont)
 	setInstallerFont(w.controls[controlUninstallGroup], w.cardTitleFont)
-	setInstallerFont(w.controls[controlUninstallPathLabel], w.bodyFont)
+	setInstallerFont(w.controls[controlUninstallPathLabel], w.detailFont)
 	setInstallerFont(w.controls[controlUninstallPath], w.bodyFont)
 	setInstallerFont(w.controls[controlMetadata], w.bodyFont)
 	setInstallerFont(w.controls[controlUninstallWarning], w.detailFont)
 	setInstallerFont(w.controls[controlUninstallImpact], w.buttonFont)
-	setInstallerFont(w.controls[controlConfirmGroup], w.detailFont)
+	setInstallerFont(w.controls[controlInstallEdit], w.bodyFont)
+	setInstallerFont(w.controls[controlInstallHint], w.detailFont)
+	setInstallerFont(w.controls[controlBrowse], w.buttonFont)
+	setInstallerFont(w.controls[controlProgressStatus], w.bodyFont)
+	setInstallerFont(w.controls[controlProgressCount], w.detailFont)
+	setInstallerFont(w.controls[controlProgressLogTitle], w.cardTitleFont)
+	setInstallerFont(w.controls[controlProgressLog], w.logFont)
+	setInstallerFont(w.controls[controlResult], w.bodyFont)
+	setInstallerFont(w.controls[controlResultDetailsToggle], w.detailFont)
+	setInstallerFont(w.controls[controlResultDetails], w.logFont)
+	installerSendMessage.Call(w.controls[controlProgressLog], 0x01a0, 0, uintptr(w.scaled(34))) // LB_SETITEMHEIGHT
 	setInstallerFont(w.controls[controlBack], w.buttonFont)
 	setInstallerFont(w.controls[controlNext], w.buttonFont)
 	setInstallerFont(w.controls[controlCancel], w.buttonFont)
-	installerSendMessage.Call(w.controls[controlProgressBar], pbmSetBkColor, 0, installerRGB(36, 42, 52))
-	installerSendMessage.Call(w.controls[controlProgressBar], pbmSetBarColor, 0, installerRGB(0, 145, 255))
 	if !w.installed {
 		setInstallerEnabled(w.controls[controlActionUninstall], false)
 	}
@@ -732,7 +796,11 @@ func (w *installerWizard) addControl(id int, className, title string, style uint
 }
 
 func createInstallerFont(height int32, weight int32) uintptr {
-	face, err := windows.UTF16PtrFromString("Segoe UI")
+	return createInstallerNamedFont(height, weight, "Segoe UI")
+}
+
+func createInstallerNamedFont(height int32, weight int32, name string) uintptr {
+	face, err := windows.UTF16PtrFromString(name)
 	if err != nil {
 		return 0
 	}
@@ -763,13 +831,18 @@ func setInstallerFont(hwnd, font uintptr) {
 
 func (w *installerWizard) showPage(page installerPage) {
 	w.page = page
+	w.resultDetailsOpen = false
+	if page != installerPageProgress {
+		installerUser32.NewProc("KillTimer").Call(w.hwnd, 1)
+		w.progressTimer = 0
+		w.progressComplete = time.Time{}
+	}
 	w.setPageIcon(page)
-	for id, control := range w.controls {
-		if id != controlCancel {
-			setInstallerVisible(control, false)
-		}
+	for _, control := range w.controls {
+		setInstallerVisible(control, false)
 	}
 	w.layoutPage(page)
+	w.rebuildBackdrop()
 	setInstallerVisible(w.controls[controlTitle], true)
 	setInstallerVisible(w.controls[controlDescription], true)
 
@@ -796,13 +869,16 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerText(w.controls[controlActionPath], "Installed at "+w.installRoot)
 	case installerPageInstall:
 		title = "Choose Install Location"
-		description = "Choose the folder where Synesis will be installed. The installer manages only its own application files and metadata."
+		description = "Choose the folder where Synesis will be installed.\r\nThis is where the application files will be placed."
 		setInstallerVisible(w.controls[controlInstallGroup], true)
 		setInstallerVisible(w.controls[controlInstallEdit], true)
 		setInstallerVisible(w.controls[controlBrowse], true)
 		setInstallerVisible(w.controls[controlInstallHint], true)
 		setInstallerText(w.controls[controlInstallGroup], "Destination folder")
-		setInstallerText(w.controls[controlInstallEdit], w.installRoot)
+		if w.installDraft == "" {
+			w.installDraft = w.installRoot
+		}
+		setInstallerText(w.controls[controlInstallEdit], w.installDraft)
 		setInstallerText(w.controls[controlInstallHint], "Projects, repositories, workspaces, and provider configuration are not installed or removed here.")
 	case installerPageUninstall:
 		title = "Uninstall"
@@ -815,62 +891,77 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerVisible(w.controls[controlUninstallImpact], true)
 		setInstallerText(w.controls[controlUninstallPath], w.installRoot)
 		setInstallerText(w.controls[controlMetadata], "Remove metadata")
-		setInstallerText(w.controls[controlUninstallWarning], "Removes local identity and installer state. Project, repository, and workspace data stay intact.")
+		setInstallerText(w.controls[controlUninstallWarning], "Removes local identity and installer state.\r\nProject, repository, and workspace data stay intact.")
 		setInstallerText(w.controls[controlUninstallImpact], "Application files and the synesis:// handler will be removed.")
-	case installerPageConfirm:
-		title = "Ready to Continue"
-		description = "Review the choices below, then select the operation button."
-		setInstallerVisible(w.controls[controlConfirmGroup], true)
-		setInstallerVisible(w.controls[controlConfirmSummary], true)
-		setInstallerText(w.controls[controlConfirmSummary], w.confirmationText())
 	case installerPageProgress:
+		w.progressEpoch = time.Now()
+		w.progressMotion = installerProgressMotion{}
+		w.progressComplete = time.Time{}
 		if w.action == installerActionUninstall {
-			title = "Uninstalling Synesis"
-		} else if fileExists(filepath.Join(w.installRoot, "current.json")) {
-			title = "Repairing Synesis"
+			title = "Uninstalling"
 		} else {
-			title = "Installing Synesis"
+			title = "Installing"
 		}
-		description = "Please wait while the verified bundle is processed. This window will remain responsive until the operation finishes."
+		description = "Setting up the local runtime and shell integration. This may take a minute."
+		if w.action == installerActionUninstall {
+			description = "Removing the application and shell integration. Your project data is preserved."
+		}
 		setInstallerVisible(w.controls[controlProgressStatus], true)
 		setInstallerVisible(w.controls[controlProgressBar], true)
+		setInstallerVisible(w.controls[controlProgressCount], true)
+		setInstallerVisible(w.controls[controlProgressSteps], true)
+		setInstallerVisible(w.controls[controlProgressLogTitle], true)
+		setInstallerVisible(w.controls[controlProgressLog], true)
+		if w.action == installerActionUninstall {
+			setInstallerText(w.controls[controlProgressLogTitle], "Uninstallation log")
+		} else {
+			setInstallerText(w.controls[controlProgressLogTitle], "Installation log")
+		}
 		setInstallerText(w.controls[controlProgressStatus], "Preparing the operation...")
-		installerSendMessage.Call(w.controls[controlProgressBar], pbmSetMarquee, 1, 30)
+		w.refreshProgress()
+		w.progressTimer, _, _ = installerUser32.NewProc("SetTimer").Call(w.hwnd, 1, 16, 0)
 	case installerPageResult:
+		title, description = "Installed", "Synesis is ready to use."
+		if w.action == installerActionUninstall {
+			title, description = "Uninstalled", "The application has been removed."
+		}
+		if w.result.err != nil {
+			title = "Installation incomplete"
+			if w.action == installerActionUninstall {
+				title = "Uninstall incomplete"
+			}
+			description = w.resultFailureDescription()
+		} else if w.result.warning != "" {
+			description = "Application installed. Link registration needs attention."
+		}
 		setInstallerVisible(w.controls[controlResult], true)
 		setInstallerText(w.controls[controlResult], w.resultText())
+		setInstallerVisible(w.controls[controlUninstallPathLabel], true)
+		setInstallerVisible(w.controls[controlUninstallPath], true)
+		setInstallerText(w.controls[controlUninstallPath], w.installRoot)
+		details := w.resultDetailsText()
+		setInstallerText(w.controls[controlResultDetails], details)
+		setInstallerText(w.controls[controlResultDetailsToggle], "Show details")
+		setInstallerVisible(w.controls[controlResultDetailsToggle], details != "")
 	}
 	setInstallerText(w.controls[controlTitle], title)
 	setInstallerText(w.controls[controlDescription], description)
 
-	showBack := page == installerPageInstall || page == installerPageUninstall || page == installerPageConfirm
-	showNext := page == installerPageAction || page == installerPageInstall || page == installerPageUninstall || page == installerPageConfirm
+	showBack := page == installerPageInstall || page == installerPageUninstall || page == installerPageProgress
+	showNext := page == installerPageAction || page == installerPageInstall || page == installerPageUninstall || page == installerPageProgress
 	setInstallerVisible(w.controls[controlBack], showBack)
 	setInstallerVisible(w.controls[controlNext], showNext)
-	setInstallerVisible(w.controls[controlCancel], page != installerPageResult)
+	setInstallerVisible(w.controls[controlCancel], true)
+	setInstallerEnabled(w.controls[controlBack], !w.busy)
+	setInstallerEnabled(w.controls[controlNext], !w.busy)
+	setInstallerEnabled(w.controls[controlCancel], !w.busy)
 	if page == installerPageResult {
 		setInstallerText(w.controls[controlCancel], "Close")
 	} else {
 		setInstallerText(w.controls[controlCancel], "Cancel")
 	}
 	if showNext {
-		label := "Next  ›"
-		if page == installerPageAction {
-			label = "Continue"
-		}
-		if page == installerPageUninstall {
-			label = "Uninstall"
-		}
-		if page == installerPageConfirm {
-			if w.action == installerActionUninstall {
-				label = "Uninstall"
-			} else if fileExists(filepath.Join(w.installRoot, "current.json")) {
-				label = "Repair"
-			} else {
-				label = "Install"
-			}
-		}
-		setInstallerText(w.controls[controlNext], label)
+		w.updateActionLabel()
 	}
 	if page == installerPageAction {
 		installerSetFocus.Call(w.controls[controlActionInstall])
@@ -886,16 +977,9 @@ func (w *installerWizard) showPage(page installerPage) {
 }
 
 func (w *installerWizard) refreshPage() {
-	client := installerRect{}
-	installerGetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&client)))
-	for _, rect := range []installerRect{
-		{left: 0, top: 0, right: w.scaled(1120), bottom: w.scaled(285)},
-		{left: 0, top: w.scaled(285), right: client.right, bottom: w.scaled(800)},
-		{left: 0, top: w.scaled(790), right: client.right, bottom: w.scaled(825)},
-		{left: 0, top: w.scaled(825), right: w.scaled(1170), bottom: client.bottom},
-	} {
-		installerInvalidateRect.Call(w.hwnd, uintptr(unsafe.Pointer(&rect)), 1)
-	}
+	// Controls move between page layouts. Repaint their former bounds as well as
+	// their new bounds, including the entire right-hand footer and brand area.
+	installerInvalidateRect.Call(w.hwnd, 0, 1)
 	installerUpdateWindow.Call(w.hwnd)
 	for _, control := range w.controls {
 		installerRedrawWindow.Call(control, 0, 0, rdwInvalidate|rdwErase|rdwUpdateNow)
@@ -920,9 +1004,36 @@ func (w *installerWizard) layoutPage(page installerPage) {
 	move(controlTitle, 60, 48, headerWidth, 84)
 	descriptionHeight := int32(60)
 	move(controlDescription, 60, 132, headerWidth, descriptionHeight)
-	move(controlNext, 1010, 894, 175, 64)
-	move(controlCancel, 1174, 894, 165, 64)
-	move(controlBack, 780, 894, 185, 64)
+	move(controlNext, 980, 894, 175, 64)
+	move(controlCancel, 1175, 894, 165, 64)
+	move(controlBack, 785, 894, 175, 64)
+	if page == installerPageInstall {
+		move(controlDescription, 60, 132, headerWidth, 96)
+		move(controlInstallGroup, 60, 330, 1280, 42)
+		move(controlInstallEdit, 74, 405, 1008, 54)
+		move(controlBrowse, 1120, 390, 220, 82)
+		move(controlInstallHint, 60, 518, 1260, 100)
+		move(controlBack, 785, 825, 175, 72)
+		move(controlNext, 980, 825, 175, 72)
+		move(controlCancel, 1175, 825, 165, 72)
+	}
+	if page == installerPageProgress || page == installerPageResult {
+		move(controlDescription, 60, 132, headerWidth, 90)
+		move(controlProgressStatus, 60, 280, 1280, 40)
+		move(controlProgressBar, 60, 328, 1050, 36)
+		move(controlProgressCount, 1140, 324, 200, 44)
+		move(controlProgressSteps, 60, 384, 1280, 272)
+		move(controlProgressLogTitle, 60, 674, 1280, 38)
+		move(controlProgressLog, 60, 718, 1280, 145)
+		move(controlResult, 60, 300, 1250, 310)
+	}
+	if page == installerPageResult {
+		move(controlResult, 88, 320, 1224, 96)
+		move(controlUninstallPathLabel, 88, 432, 1224, 38)
+		move(controlUninstallPath, 102, 494, 1196, 40)
+		move(controlResultDetailsToggle, 60, 596, 300, 52)
+		move(controlResultDetails, 74, 668, 1252, 182)
+	}
 	if page == installerPageAction {
 		move(controlCapabilities, 60, 220, 880, 38)
 		move(controlCapabilityInstall, 120, 268, 950, 42)
@@ -937,47 +1048,113 @@ func (w *installerWizard) layoutPage(page installerPage) {
 	}
 	if page == installerPageUninstall {
 		move(controlDescription, 60, 132, headerWidth, 96)
-		move(controlUninstallGroup, 88, 330, 1190, 40)
-		move(controlUninstallPathLabel, 88, 380, 1190, 34)
-		move(controlUninstallPath, 90, 418, 1220, 58)
-		move(controlMetadata, 88, 510, 1220, 54)
-		move(controlUninstallWarning, 136, 568, 1200, 60)
-		move(controlUninstallImpact, 165, 684, 1120, 52)
+		move(controlUninstallGroup, 88, 328, 1190, 44)
+		move(controlUninstallPathLabel, 88, 384, 1190, 40)
+		move(controlUninstallPath, 104, 454, 1192, 42)
+		move(controlMetadata, 88, 528, 1220, 48)
+		move(controlUninstallWarning, 136, 584, 1172, 80)
+		move(controlUninstallImpact, 164, 721, 1144, 42)
 		move(controlBack, 785, 825, 175, 72)
 		move(controlNext, 980, 825, 175, 72)
 		move(controlCancel, 1175, 825, 165, 72)
 	}
 }
 
-func (w *installerWizard) confirmationText() string {
-	if w.action == installerActionUninstall {
-		metadata := "No: installer-owned identity and admin metadata will be kept."
-		if w.metadata {
-			metadata = "Yes: installer-owned identity and admin metadata will also be removed."
-		}
-		return "Operation: Uninstall Synesis\r\n\r\n" +
-			"Installation folder:\r\n" + w.installRoot + "\r\n\r\n" +
-			metadata + "\r\n\r\n" +
-			"Projects, repositories, workspaces, and provider data are preserved."
-	}
-	operation := "Install"
-	if fileExists(filepath.Join(w.installRoot, "current.json")) {
-		operation = "Repair"
-	}
-	return "Operation: " + operation + " Synesis\r\n\r\n" +
-		"Installation folder:\r\n" + w.installRoot + "\r\n\r\n" +
-		"The verified local bundle will be activated and the per-user\r\n" +
-		"synesis:// invitation handler will be registered if available."
-}
-
 func (w *installerWizard) resultText() string {
 	if w.result.err != nil {
-		return "The operation could not be completed.\r\n\r\n" + w.result.err.Error()
+		return "Some changes may already have been applied."
 	}
+	if w.action == installerActionUninstall {
+		metadata := "Installer-owned metadata was preserved."
+		if w.metadata {
+			metadata = "Installer-owned metadata was removed."
+		}
+		return metadata +
+			"\r\nYour projects, repositories, and workspace data were left untouched."
+	}
+	protocol := "The synesis:// link handler is registered."
 	if w.result.warning != "" {
-		return "Synesis was installed successfully, but one integration step needs attention.\r\n\r\n" + w.result.warning
+		protocol = "The synesis:// link handler could not be registered."
 	}
-	return "Synesis setup completed successfully.\r\n\r\nYou can close this window and use the installed Synesis command."
+	return "Runtime and shell integration are ready.\r\n" + protocol
+}
+
+func (w *installerWizard) resultFailureDescription() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	stage := ""
+	for _, step := range w.steps {
+		if step.status == "failed" {
+			stage = step.id
+			break
+		}
+	}
+	if w.action == installerActionUninstall {
+		switch stage {
+		case "runtime":
+			return "Application files could not be removed."
+		case "shell":
+			return "Shell integration could not be fully removed."
+		case "metadata":
+			return "Installer metadata could not be removed."
+		case "cleanup":
+			return "Some installer files could not be cleaned up."
+		}
+		return "Synesis could not be fully removed."
+	}
+	switch stage {
+	case "verify":
+		return "The local installation bundle could not be verified."
+	case "runtime":
+		return "Application files could not be installed."
+	case "shell":
+		return "Shell integration could not be updated."
+	}
+	return "Setup could not finish the installation."
+}
+
+func (w *installerWizard) resultDetailsText() string {
+	w.mu.Lock()
+	entries := append([]installerLogEntry(nil), w.logEntries...)
+	w.mu.Unlock()
+	var sections []string
+	if w.result.err != nil {
+		message := []rune(strings.Join(strings.Fields(w.result.err.Error()), " "))
+		if len(message) > 4096 {
+			message = append(message[:4093], '.', '.', '.')
+		}
+		sections = append(sections, "Error: "+string(message))
+	} else if w.result.warning != "" {
+		sections = append(sections, w.result.warning)
+	}
+	var history []string
+	for _, entry := range entries {
+		history = append(history, "["+entry.status+"] "+entry.detail)
+	}
+	if len(history) > 0 {
+		sections = append(sections, strings.Join(history, "\r\n"))
+	}
+	return strings.Join(sections, "\r\n\r\n")
+}
+
+func (w *installerWizard) toggleResultDetails() {
+	if w.page != installerPageResult || w.busy {
+		return
+	}
+	w.resultDetailsOpen = !w.resultDetailsOpen
+	label := "Show details"
+	if w.resultDetailsOpen {
+		label = "Hide details"
+	}
+	setInstallerText(w.controls[controlResultDetailsToggle], label)
+	setInstallerVisible(w.controls[controlResultDetails], w.resultDetailsOpen)
+	if w.resultDetailsOpen {
+		// Start with the error summary, even after earlier diagnostic scrolling.
+		installerSendMessage.Call(w.controls[controlResultDetails], 0x00b1, 0, 0) // EM_SETSEL
+		installerSendMessage.Call(w.controls[controlResultDetails], 0x00b7, 0, 0) // EM_SCROLLCARET
+	}
+	w.rebuildBackdrop()
+	w.refreshPage()
 }
 
 func (w *installerWizard) messageLoop() error {
@@ -996,10 +1173,12 @@ func (w *installerWizard) messageLoop() error {
 }
 
 func (w *installerWizard) handleCommand(id uint16, notification uint16) {
-	if notification != bnClicked {
+	if notification != bnClicked || w.busy {
 		return
 	}
 	switch int(id) {
+	case controlResultDetailsToggle:
+		w.toggleResultDetails()
 	case controlActionInstall:
 		w.action = installerActionInstall
 		w.invalidateActionCards()
@@ -1023,11 +1202,23 @@ func (w *installerWizard) handleCommand(id uint16, notification uint16) {
 }
 
 func (w *installerWizard) invalidateActionCards() {
+	w.updateActionLabel()
 	for _, controlID := range []int{controlActionInstall, controlActionUninstall} {
 		if control := w.controls[controlID]; control != 0 {
 			installerInvalidateRect.Call(control, 0, 1)
 		}
 	}
+}
+
+func (w *installerWizard) updateActionLabel() {
+	label := "Install"
+	if w.page == installerPageUninstall || (w.page == installerPageAction && w.action == installerActionUninstall) {
+		label = "Uninstall"
+	}
+	if w.page == installerPageProgress {
+		label = "Next"
+	}
+	setInstallerText(w.controls[controlNext], label)
 }
 
 func (w *installerWizard) browse() {
@@ -1051,14 +1242,15 @@ func drawInstallerChrome(w *installerWizard) {
 	defer installerEndPaint.Call(w.hwnd, uintptr(unsafe.Pointer(&paint)))
 	client := installerRect{}
 	installerGetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&client)))
-	installerFillRect.Call(hdc, uintptr(unsafe.Pointer(&client)), w.darkBrush)
-	// Keep the ribbon outside opaque native text-control bounds.
-	w.drawArt(hdc, "ribbon", w.scaled(1100), 0, w.scaled(300), w.scaled(310))
+	if w.backdrop != nil {
+		w.backdrop.draw(hdc, 0, 0)
+	} else {
+		installerFillRect.Call(hdc, uintptr(unsafe.Pointer(&client)), w.darkBrush)
+	}
 	brandRight := client.right - w.scaled(60)
 	brandLeft := brandRight - w.scaled(190)
 	brandTop := w.scaled(40)
 	brandBottom := brandTop + w.scaled(190)
-	w.drawArt(hdc, "brand", brandLeft, brandTop, w.scaled(190), w.scaled(190))
 	if w.logoBitmap != 0 {
 		drawInstallerLogo(hdc, w.logoBitmap, w.logoWidth, w.logoHeight,
 			brandLeft+w.scaled(25), brandTop+w.scaled(22), w.scaled(140), w.scaled(140))
@@ -1085,14 +1277,18 @@ func drawInstallerChrome(w *installerWizard) {
 	linePen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), installerRGB(35, 43, 54))
 	oldPen, _, _ := installerSelectObject.Call(hdc, linePen)
 	headerDividerY := int32(192)
-	if w.page == installerPageUninstall {
+	if w.page != installerPageAction {
 		headerDividerY = 250
 	}
 	installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(headerDividerY)), 0)
 	installerLineTo.Call(hdc, uintptr(w.scaled(1030)), uintptr(w.scaled(headerDividerY)))
-	if w.page == installerPageUninstall {
-		installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(800)), 0)
-		installerLineTo.Call(hdc, uintptr(w.scaled(1340)), uintptr(w.scaled(800)))
+	if w.page != installerPageAction {
+		footer := int32(800)
+		if w.page == installerPageProgress || w.page == installerPageResult {
+			footer = 878
+		}
+		installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(footer)), 0)
+		installerLineTo.Call(hdc, uintptr(w.scaled(1340)), uintptr(w.scaled(footer)))
 	}
 	installerSelectObject.Call(hdc, oldPen)
 	installerDeleteObject.Call(linePen)
@@ -1110,57 +1306,7 @@ func drawInstallerChrome(w *installerWizard) {
 }
 
 func (w *installerWizard) drawUninstallPanel(device uintptr) {
-	drawInstallerSurface(device, installerRect{left: w.scaled(60), top: w.scaled(300), right: w.scaled(1340), bottom: w.scaled(640)},
-		installerRGB(24, 29, 36), installerRGB(50, 60, 72), w.scaled(15), w.scale)
-
-	// Keep the read-only path field visually distinct without making it look
-	// editable. The EDIT child is inset slightly so this border remains visible.
-	drawInstallerSurface(device, installerRect{
-		left:   w.scaled(86),
-		top:    w.scaled(414),
-		right:  w.scaled(1314),
-		bottom: w.scaled(480),
-	}, installerRGB(27, 32, 43), installerRGB(58, 70, 84), w.scaled(8), w.scale)
-
-	drawInstallerSurface(device, installerRect{left: w.scaled(60), top: w.scaled(670), right: w.scaled(1340), bottom: w.scaled(760)},
-		installerRGB(36, 31, 22), installerRGB(92, 69, 27), w.scaled(15), w.scale)
-	w.drawUninstallWarningIcon(device, w.scaled(112), w.scaled(715))
-}
-
-func (w *installerWizard) drawUninstallWarningIcon(device uintptr, centerX, centerY int32) {
-	halfWidth := w.scaled(18)
-	halfHeight := w.scaled(20)
-	points := []installerPoint{
-		{x: centerX, y: centerY - halfHeight},
-		{x: centerX - halfWidth, y: centerY + halfHeight},
-		{x: centerX + halfWidth, y: centerY + halfHeight},
-	}
-	brush, _, _ := installerCreateSolidBrush.Call(installerRGB(255, 183, 51))
-	pen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), installerRGB(255, 183, 51))
-	if brush == 0 || pen == 0 {
-		if brush != 0 {
-			installerDeleteObject.Call(brush)
-		}
-		if pen != 0 {
-			installerDeleteObject.Call(pen)
-		}
-		return
-	}
-	oldBrush, _, _ := installerSelectObject.Call(device, brush)
-	oldPen, _, _ := installerSelectObject.Call(device, pen)
-	installerPolygon.Call(device, uintptr(unsafe.Pointer(&points[0])), uintptr(len(points)))
-	installerSelectObject.Call(device, oldPen)
-	installerSelectObject.Call(device, oldBrush)
-	installerDeleteObject.Call(pen)
-	installerDeleteObject.Call(brush)
-
-	oldFont, _, _ := installerSelectObject.Call(device, w.cardTitleFont)
-	installerSetBkMode.Call(device, transparent)
-	installerSetTextColor.Call(device, installerRGB(24, 29, 36))
-	markRect := installerRect{left: centerX - halfWidth, top: centerY - w.scaled(13), right: centerX + halfWidth, bottom: centerY + w.scaled(20)}
-	mark, _ := windows.UTF16PtrFromString("!")
-	installerDrawText.Call(device, uintptr(unsafe.Pointer(mark)), 1, uintptr(unsafe.Pointer(&markRect)), dtCenter|dtVCenter|dtSingleLine)
-	installerSelectObject.Call(device, oldFont)
+	w.drawSmoothIcon(device, w.scaled(112), w.scaled(741), w.scaled(22), "alert", installerRGB(255, 190, 65))
 }
 
 func drawInstallerSurface(device uintptr, rect installerRect, fill, border uintptr, radius int32, scale float64) {
@@ -1194,7 +1340,7 @@ func (w *installerWizard) drawMetadataControl(device uintptr) {
 	}
 	rect := installerRect{}
 	installerGetClientRect.Call(control, uintptr(unsafe.Pointer(&rect)))
-	installerFillRect.Call(device, uintptr(unsafe.Pointer(&rect)), w.cardBrush)
+	w.paintControlBackground(device, control)
 
 	checkSize := w.scaled(28)
 	checkLeft := w.scaled(2)
@@ -1389,13 +1535,25 @@ func (w *installerWizard) drawButton(controlID int, device uintptr) {
 	rect := installerRect{}
 	installerGetClientRect.Call(control, uintptr(unsafe.Pointer(&rect)))
 	primary := controlID == controlNext
-	installerFillRect.Call(device, uintptr(unsafe.Pointer(&rect)), w.darkBrush)
+	enabled, _, _ := installerUser32.NewProc("IsWindowEnabled").Call(control)
+	w.paintControlBackground(device, control)
+	if controlID == controlResultDetailsToggle {
+		drawInstallerText(device, w.detailFont, getInstallerText(control), rect, installerRGB(113, 190, 249))
+		if focus, _, _ := installerGetFocus.Call(); focus == control {
+			installerFrameRect.Call(device, uintptr(unsafe.Pointer(&rect)), w.surfaceBrush)
+		}
+		return
+	}
 	art := "secondary"
 	if primary {
 		art = "primary"
 	}
 	w.drawArt(device, art, 0, 0, rect.right, rect.bottom)
 	textRed, textGreen, textBlue := byte(248), byte(250), byte(255)
+	if enabled == 0 {
+		drawInstallerSurface(device, rect, installerRGB(22, 28, 36), installerRGB(42, 52, 64), w.scaled(10), w.scale)
+		textRed, textGreen, textBlue = 95, 108, 123
+	}
 
 	oldFont, _, _ := installerSelectObject.Call(device, w.buttonFont)
 	installerSetBkMode.Call(device, transparent)
@@ -1429,7 +1587,7 @@ func (w *installerWizard) drawActionCard(controlID int, device uintptr) {
 		textRed, textGreen, textBlue = 100, 116, 139
 		detailRed, detailGreen, detailBlue = 71, 85, 105
 	}
-	installerFillRect.Call(device, uintptr(unsafe.Pointer(&rect)), w.darkBrush)
+	w.paintControlBackground(device, control)
 	w.drawArt(device, art, 0, 0, rect.right, rect.bottom)
 	focused, _, _ := installerGetFocus.Call()
 	if focused == control && !selected {
@@ -1447,38 +1605,14 @@ func (w *installerWizard) drawActionCard(controlID int, device uintptr) {
 	// The mockup uses a radio indicator as the first visual anchor in each
 	// card. Keep it inside the owner-drawn button so keyboard focus and mouse
 	// activation continue to use the same native control.
-	radioCenterX := w.scaled(48)
-	radioCenterY := rect.bottom / 2
-	radioRadius := w.scaled(18)
-	radioPenColor := installerRGB(128, 145, 168)
+	kind, color := "radio-unselected", installerRGB(128, 145, 168)
 	if selected {
-		radioPenColor = installerRGB(115, 198, 255)
+		kind, color = "radio-selected", installerRGB(115, 198, 255)
 	}
-	radioPen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), radioPenColor)
-	oldRadioPen, _, _ := installerSelectObject.Call(device, radioPen)
-	nullBrush, _, _ := installerGetStockObject.Call(nullBrush)
-	radioBrush := nullBrush
-	if selected {
-		radioBrush, _, _ = installerCreateSolidBrush.Call(installerRGB(9, 104, 217))
-		defer installerDeleteObject.Call(radioBrush)
+	if !enabled {
+		kind, color = "radio-disabled", installerRGB(76, 90, 110)
 	}
-	oldRadioBrush, _, _ := installerSelectObject.Call(device, radioBrush)
-	installerEllipse.Call(device, uintptr(radioCenterX-radioRadius), uintptr(radioCenterY-radioRadius), uintptr(radioCenterX+radioRadius), uintptr(radioCenterY+radioRadius))
-	installerSelectObject.Call(device, oldRadioBrush)
-	installerSelectObject.Call(device, oldRadioPen)
-	installerDeleteObject.Call(radioPen)
-	if selected {
-		dotBrush, _, _ := installerCreateSolidBrush.Call(installerRGB(225, 245, 255))
-		dotPen, _, _ := installerCreatePen.Call(0, 1, installerRGB(225, 245, 255))
-		oldDotBrush, _, _ := installerSelectObject.Call(device, dotBrush)
-		oldDotPen, _, _ := installerSelectObject.Call(device, dotPen)
-		dotRadius := w.scaled(6)
-		installerEllipse.Call(device, uintptr(radioCenterX-dotRadius), uintptr(radioCenterY-dotRadius), uintptr(radioCenterX+dotRadius), uintptr(radioCenterY+dotRadius))
-		installerSelectObject.Call(device, oldDotBrush)
-		installerSelectObject.Call(device, oldDotPen)
-		installerDeleteObject.Call(dotBrush)
-		installerDeleteObject.Call(dotPen)
-	}
+	w.drawSmoothIcon(device, w.scaled(48), rect.bottom/2, w.scaled(18), kind, color)
 
 	titleRect := installerRect{left: w.scaled(94), top: w.scaled(14), right: rect.right - w.scaled(28), bottom: w.scaled(49)}
 	detailRect := installerRect{left: w.scaled(94), top: w.scaled(50), right: rect.right - w.scaled(28), bottom: rect.bottom - w.scaled(12)}
@@ -1516,10 +1650,8 @@ func (w *installerWizard) colorStatic(device, hwnd uintptr) uintptr {
 	installerSetBkMode.Call(device, transparent)
 	red, green, blue := byte(226), byte(232), byte(240)
 	id := w.installerControlID(hwnd)
-	if id == controlUninstallPath {
-		installerSetBkColor.Call(device, installerRGB(27, 32, 43))
-		installerSetTextColor.Call(device, installerRGB(226, 232, 240))
-		return w.surfaceBrush
+	if id == controlUninstallPath || id == controlInstallEdit || id == controlResultDetails {
+		return w.colorEdit(device)
 	}
 	switch id {
 	case controlProductName:
@@ -1535,17 +1667,25 @@ func (w *installerWizard) colorStatic(device, hwnd uintptr) uintptr {
 		red, green, blue = 248, 250, 252
 	}
 	installerSetTextColor.Call(device, installerRGB(red, green, blue))
-	if id == controlUninstallImpact {
-		return w.warningBrush
-	}
-	if id == controlUninstallGroup || id == controlUninstallPathLabel || id == controlUninstallWarning {
-		return w.cardBrush
+	if w.backdropBrush != 0 {
+		origin := w.controlOrigin(hwnd)
+		installerGDI32.NewProc("SetBrushOrgEx").Call(device, uintptr(-origin.x), uintptr(-origin.y), 0)
+		return w.backdropBrush
 	}
 	return w.darkBrush
 }
 
+func (w *installerWizard) colorEdit(device uintptr) uintptr {
+	// The edit control uses the DC background for text cells and the returned
+	// brush for unused space. Both must match, including while typing/focused.
+	installerSetBkMode.Call(device, opaque)
+	installerSetBkColor.Call(device, installerRGB(27, 32, 43))
+	installerSetTextColor.Call(device, installerRGB(241, 245, 249))
+	return w.surfaceBrush
+}
+
 func (w *installerWizard) disposeFonts() {
-	for _, font := range []uintptr{w.titleFont, w.bodyFont, w.detailFont, w.productFont, w.buttonFont, w.cardTitleFont, w.cardDetailFont, w.iconFont, w.wordmarkFont} {
+	for _, font := range []uintptr{w.titleFont, w.bodyFont, w.detailFont, w.productFont, w.buttonFont, w.cardTitleFont, w.cardDetailFont, w.iconFont, w.wordmarkFont, w.logFont} {
 		if font != 0 {
 			installerDeleteObject.Call(font)
 		}
@@ -1562,6 +1702,18 @@ func (w *installerWizard) disposeFonts() {
 }
 
 func (w *installerWizard) disposeTheme() {
+	if w.backdropBrush != 0 {
+		installerDeleteObject.Call(w.backdropBrush)
+		w.backdropBrush = 0
+	}
+	w.backdrop.dispose()
+	w.backdrop = nil
+	w.progressRaster.dispose()
+	w.progressRaster = nil
+	for _, icon := range w.smoothIcons {
+		icon.dispose()
+	}
+	w.smoothIcons = nil
 	for _, art := range w.art {
 		installerDeleteObject.Call(art.bitmap)
 	}
@@ -1589,19 +1741,23 @@ func (w *installerWizard) disposeTheme() {
 }
 
 func (w *installerWizard) goBack() {
+	if w.busy {
+		return
+	}
 	switch w.page {
 	case installerPageInstall, installerPageUninstall:
-		w.showPage(installerPageAction)
-	case installerPageConfirm:
-		if w.action == installerActionUninstall {
-			w.showPage(installerPageUninstall)
-		} else {
-			w.showPage(installerPageInstall)
+		if w.page == installerPageInstall {
+			// Preserve an edited path even when returning before validation.
+			w.installDraft = getInstallerText(w.controls[controlInstallEdit])
 		}
+		w.showPage(installerPageAction)
 	}
 }
 
 func (w *installerWizard) goNext() {
+	if w.busy {
+		return
+	}
 	switch w.page {
 	case installerPageAction:
 		if w.action == installerActionUninstall {
@@ -1616,10 +1772,8 @@ func (w *installerWizard) goNext() {
 			return
 		}
 		w.installRoot = root
-		w.showPage(installerPageConfirm)
+		w.startOperation()
 	case installerPageUninstall:
-		w.showPage(installerPageConfirm)
-	case installerPageConfirm:
 		w.startOperation()
 	case installerPageResult:
 		w.closeOrWarn()
@@ -1649,34 +1803,27 @@ func (w *installerWizard) startOperation() {
 		return
 	}
 	w.busy = true
+	w.mu.Lock()
+	w.steps = installerOperationSteps(w.action, w.metadata)
+	w.logEntries = nil
+	w.operationStatus = "Preparing the operation..."
+	w.result = installerOperationResult{}
+	w.mu.Unlock()
+	w.logRendered = 0
+	installerSendMessage.Call(w.controls[controlProgressLog], 0x0184, 0, 0) // LB_RESETCONTENT
 	w.showPage(installerPageProgress)
 	root := w.installRoot
 	action := w.action
 	metadata := w.metadata
 	bundle := w.bundle
+	execute := w.executeOperation
+	if execute == nil {
+		execute = executeInstallerOperation
+	}
 	go func() {
-		result := installerOperationResult{}
-		paths, err := installationPaths(root)
-		if err != nil {
-			result.err = err
-		} else if action == installerActionUninstall {
-			args := []string{"--install-dir", paths.root}
-			if metadata {
-				args = append(args, "--remove-metadata")
-			}
-			result.err = runUninstall(args)
-		} else {
-			args := []string{"--bundle", bundle, "--install-dir", paths.root}
-			if fileExists(paths.current) {
-				result.err = runRepair(args)
-			} else {
-				result.err = runInstall("install", args)
-			}
-			if result.err == nil {
-				if registrationErr := registerProtocol(paths); registrationErr != nil {
-					result.warning = "The application is installed, but Windows could not register the synesis:// invitation handler: " + registrationErr.Error()
-				}
-			}
+		result := execute(root, bundle, action, metadata, w.reportProgress)
+		if result.err != nil {
+			w.reportProgress("", "failed", result.err.Error())
 		}
 		w.mu.Lock()
 		w.result = result
@@ -1685,18 +1832,256 @@ func (w *installerWizard) startOperation() {
 	}()
 }
 
+func installerStatusColor(status string) uintptr {
+	switch status {
+	case "done":
+		return installerRGB(91, 212, 150)
+	case "working":
+		return installerRGB(81, 178, 250)
+	case "warning":
+		return installerRGB(239, 189, 93)
+	case "failed":
+		return installerRGB(245, 122, 122)
+	default:
+		return installerRGB(145, 160, 180)
+	}
+}
+
+func drawInstallerText(device, font uintptr, text string, rect installerRect, color uintptr) {
+	previous, _, _ := installerSelectObject.Call(device, font)
+	defer installerSelectObject.Call(device, previous)
+	installerSetBkMode.Call(device, transparent)
+	installerSetTextColor.Call(device, color)
+	installerDrawText.Call(device, uintptr(unsafe.Pointer(mustInstallerUTF16(text))), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&rect)), dtSingleLine|dtVCenter|dtEndEllipsis)
+}
+
+func (w *installerWizard) drawProgressSteps(device uintptr) {
+	w.mu.Lock()
+	steps := append([]installerStep(nil), w.steps...)
+	w.mu.Unlock()
+	var rect installerRect
+	installerGetClientRect.Call(w.controls[controlProgressSteps], uintptr(unsafe.Pointer(&rect)))
+	w.paintControlBackground(device, w.controls[controlProgressSteps])
+	for i, step := range steps {
+		y := w.scaled(int32(i) * 68)
+		w.drawStepMarker(device, w.scaled(21), y+w.scaled(19), step.status, i < len(steps)-1)
+		font := w.bodyFont
+		if step.status == "working" {
+			font = w.cardTitleFont
+		}
+		drawInstallerText(device, font, step.title, installerRect{left: w.scaled(68), top: y, right: rect.right, bottom: y + w.scaled(36)}, installerRGB(235, 240, 247))
+		detail := step.detail
+		if detail == "" {
+			detail = "Pending"
+		}
+		drawInstallerText(device, w.detailFont, detail, installerRect{left: w.scaled(68), top: y + w.scaled(35), right: rect.right, bottom: y + w.scaled(66)}, installerRGB(174, 190, 211))
+	}
+}
+
+func (w *installerWizard) drawStepMarker(device uintptr, x, y int32, status string, connected bool) {
+	r := w.scaled(16)
+	if connected {
+		pen, _, _ := installerCreatePen.Call(0, 1, installerRGB(49, 65, 84))
+		previous, _, _ := installerSelectObject.Call(device, pen)
+		installerMoveToEx.Call(device, uintptr(x), uintptr(y+r+w.scaled(4)), 0)
+		installerLineTo.Call(device, uintptr(x), uintptr(y+w.scaled(68)-r-w.scaled(4)))
+		installerSelectObject.Call(device, previous)
+		installerDeleteObject.Call(pen)
+	}
+	w.drawSmoothIcon(device, x, y, r, status, installerStatusColor(status))
+}
+
+// Count only completed stages; no estimate of bytes, elapsed time or partial
+// work is implied by the bar. Warnings and failed steps are not successes.
+func completedInstallerSteps(steps []installerStep) int {
+	completed := 0
+	for _, step := range steps {
+		if step.status == "done" {
+			completed++
+		}
+	}
+	return completed
+}
+
+func (w *installerWizard) drawProgressBar(device uintptr) {
+	var rect installerRect
+	installerGetClientRect.Call(w.controls[controlProgressBar], uintptr(unsafe.Pointer(&rect)))
+	if w.progressRaster == nil || w.progressRaster.width != rect.right || w.progressRaster.height != rect.bottom {
+		w.progressRaster.dispose()
+		w.progressRaster = newInstallerRaster(rect.right, rect.bottom)
+	}
+	if w.progressRaster == nil {
+		return
+	}
+	now := time.Now()
+	phase := math.Mod(now.Sub(w.progressEpoch).Seconds(), 2.2) / 2.2
+	origin := w.controlOrigin(w.controls[controlProgressBar])
+	paintInstallerProgressOnBackground(w.progressRaster.pixels, rect.right, rect.bottom, w.progressMotion.value(now), phase, w.backdrop, origin.x, origin.y)
+	w.progressRaster.draw(device, 0, 0)
+}
+
+func (w *installerWizard) drawProgressLog(item installerDrawItem) {
+	w.mu.Lock()
+	if int(item.itemID) >= len(w.logEntries) {
+		w.mu.Unlock()
+		return
+	}
+	entry := w.logEntries[item.itemID]
+	w.mu.Unlock()
+	installerFillRect.Call(item.device, uintptr(unsafe.Pointer(&item.rect)), w.surfaceBrush)
+	var client installerRect
+	installerGetClientRect.Call(item.window, uintptr(unsafe.Pointer(&client)))
+	// Owner-drawn lists can still request a partial final item after a resize
+	// or scrollbar change. Keep that sliver blank instead of cutting a line.
+	if item.rect.top < client.top || item.rect.bottom > client.bottom {
+		return
+	}
+	if item.state&1 != 0 { // ODS_SELECTED: keep keyboard/selection feedback visible.
+		installerFrameRect.Call(item.device, uintptr(unsafe.Pointer(&item.rect)), w.cardBrush)
+	}
+	rect := item.rect
+	rect.left += w.scaled(14)
+	previous, _, _ := installerSelectObject.Call(item.device, w.logFont)
+	defer installerSelectObject.Call(item.device, previous)
+	installerSetBkMode.Call(item.device, transparent)
+	// Let the native list clip/scroll the full text instead of baking an
+	// ellipsis into a row whose remaining diagnostics should stay reachable.
+	for i, text := range []string{"[" + entry.status + "] ", entry.detail} {
+		color := installerRGB(226, 232, 240)
+		if i == 0 {
+			color = installerStatusColor(entry.status)
+		}
+		installerSetTextColor.Call(item.device, color)
+		value, _ := windows.UTF16FromString(text)
+		var size installerPoint
+		installerGDI32.NewProc("GetTextExtentPoint32W").Call(item.device, uintptr(unsafe.Pointer(&value[0])), uintptr(len(value)-1), uintptr(unsafe.Pointer(&size)))
+		rect.right = rect.left + size.x
+		installerDrawText.Call(item.device, uintptr(unsafe.Pointer(&value[0])), uintptr(len(value)-1), uintptr(unsafe.Pointer(&rect)), dtSingleLine|dtVCenter)
+		rect.left = rect.right
+	}
+}
+
+func executeInstallerOperation(root, bundle string, action installerAction, metadata bool, observer operationProgress) installerOperationResult {
+	result := installerOperationResult{}
+	paths, err := installationPaths(root)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	if action == installerActionUninstall {
+		args := []string{"--install-dir", paths.root}
+		if metadata {
+			args = append(args, "--remove-metadata")
+		}
+		result.err = runUninstall(args, observer)
+		return result
+	}
+	args := []string{"--bundle", bundle, "--install-dir", paths.root}
+	if fileExists(paths.current) {
+		result.err = runRepair(args, observer)
+	} else {
+		result.err = runInstall("install", args, observer)
+	}
+	if result.err == nil {
+		reportOperation([]operationProgress{observer}, "protocol", "working", "Registering the owned synesis:// link handler")
+		if registrationErr := registerProtocol(paths); registrationErr != nil {
+			result.warning = "Windows could not register the synesis:// link handler: " + registrationErr.Error()
+			reportOperation([]operationProgress{observer}, "protocol", "warning", result.warning)
+		} else {
+			reportOperation([]operationProgress{observer}, "protocol", "done", "The synesis:// link handler is registered")
+		}
+	}
+	return result
+}
+
+// reportProgress runs on the worker; the posted message is the only UI boundary.
+func (w *installerWizard) reportProgress(stage, status, detail string) {
+	// Bound retained diagnostics, including untrusted filesystem/error text.
+	detail = strings.Map(func(r rune) rune {
+		if r < 32 {
+			return ' '
+		}
+		return r
+	}, detail)
+	if len([]rune(detail)) > 512 {
+		detail = string([]rune(detail)[:509]) + "..."
+	}
+	w.mu.Lock()
+	for i := range w.steps {
+		if w.steps[i].id == stage || (stage == "" && status == "failed" && w.steps[i].status == "working") {
+			w.steps[i].status, w.steps[i].detail = status, detail
+		}
+	}
+	w.operationStatus = detail
+	w.logEntries = append(w.logEntries, installerLogEntry{status: status, detail: detail})
+	if len(w.logEntries) > 200 {
+		w.logEntries = append([]installerLogEntry(nil), w.logEntries[len(w.logEntries)-200:]...)
+	}
+	w.mu.Unlock()
+	installerPostMessage.Call(w.hwnd, installerMessageProgress, 0, 0)
+}
+
+func (w *installerWizard) refreshProgress() {
+	w.mu.Lock()
+	status := w.operationStatus
+	entries := append([]installerLogEntry(nil), w.logEntries...)
+	steps := append([]installerStep(nil), w.steps...)
+	w.mu.Unlock()
+	setInstallerText(w.controls[controlProgressStatus], status)
+	count := fmt.Sprintf("%d / %d steps", completedInstallerSteps(steps), len(steps))
+	if len(steps) > 0 {
+		w.progressMotion.setTarget(float64(completedInstallerSteps(steps))/float64(len(steps)), time.Now())
+	}
+	setInstallerText(w.controls[controlProgressCount], count)
+	setInstallerText(w.controls[controlProgressBar], count+" complete")
+	installerInvalidateRect.Call(w.controls[controlProgressBar], 0, 0)
+	var accessible []string
+	for _, step := range steps {
+		accessible = append(accessible, step.title+": "+step.status)
+	}
+	setInstallerText(w.controls[controlProgressSteps], strings.Join(accessible, "; "))
+	list := w.controls[controlProgressLog]
+	dc, _, _ := installerGetDC.Call(list)
+	previous, _, _ := installerSelectObject.Call(dc, w.logFont)
+	var extent int32
+	for _, entry := range entries {
+		value, _ := windows.UTF16FromString("[" + entry.status + "] " + entry.detail)
+		var size installerPoint
+		installerGDI32.NewProc("GetTextExtentPoint32W").Call(dc, uintptr(unsafe.Pointer(&value[0])), uintptr(len(value)-1), uintptr(unsafe.Pointer(&size)))
+		if size.x+w.scaled(28) > extent {
+			extent = size.x + w.scaled(28)
+		}
+	}
+	installerSelectObject.Call(dc, previous)
+	installerReleaseDC.Call(list, dc)
+	installerSendMessage.Call(list, 0x0194, uintptr(extent), 0) // horizontal scroll only if needed
+	top, _, _ := installerSendMessage.Call(list, 0x018e, 0, 0)  // LB_GETTOPINDEX
+	followTail := int(top)+4 >= w.logRendered
+	installerSendMessage.Call(list, 0x0184, 0, 0)
+	for _, entry := range entries {
+		text := "[" + entry.status + "] " + entry.detail
+		installerSendMessage.Call(list, 0x0180, 0, uintptr(unsafe.Pointer(mustInstallerUTF16(text)))) // LB_ADDSTRING
+	}
+	w.logRendered = len(entries)
+	if followTail && len(entries) > 4 {
+		top = uintptr(len(entries) - 4)
+	}
+	installerSendMessage.Call(list, 0x0197, top, 0) // LB_SETTOPINDEX
+	installerInvalidateRect.Call(w.controls[controlProgressSteps], 0, 1)
+	installerInvalidateRect.Call(list, 0, 1)
+}
+
 func (w *installerWizard) handleDone() {
 	w.mu.Lock()
-	result := w.result
-	w.mu.Unlock()
-	w.busy = false
-	installerSendMessage.Call(w.controls[controlProgressBar], pbmSetMarquee, 0, 0)
-	w.showPage(installerPageResult)
-	if result.err != nil {
-		showInstallerMessage(w.hwnd, "Synesis Setup", result.err.Error(), mbIconError)
-	} else if result.warning != "" {
-		showInstallerMessage(w.hwnd, "Synesis Setup", result.warning, mbIconWarning)
+	w.mu.Unlock() // acquire the worker's final result before presenting it
+	w.refreshProgress()
+	if w.result.err == nil && w.progressMotion.target == 1 && w.progressTimer != 0 {
+		// Let the final verified step reach the end before showing the result.
+		w.progressComplete = time.Now().Add(installerProgressEase + 80*time.Millisecond)
+		return
 	}
+	w.busy = false
+	w.showPage(installerPageResult)
 }
 
 func (w *installerWizard) closeOrWarn() {
@@ -1744,13 +2129,14 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	case wmCtlColorStatic:
 		return wizard.colorStatic(wParam, lParam)
 	case wmCtlColorEdit:
-		installerSetBkMode.Call(wParam, opaque)
-		installerSetTextColor.Call(wParam, installerRGB(241, 245, 249))
-		return wizard.surfaceBrush
+		return wizard.colorEdit(wParam)
 	case wmCtlColorBtn:
 		installerSetBkMode.Call(wParam, transparent)
 		installerSetTextColor.Call(wParam, installerRGB(226, 232, 240))
 		return wizard.darkBrush
+	case 0x0134: // WM_CTLCOLORLISTBOX
+		installerSetBkColor.Call(wParam, installerRGB(27, 32, 43))
+		return wizard.surfaceBrush
 	case wmDrawItem:
 		if lParam == 0 {
 			return 0
@@ -1761,6 +2147,12 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		installerCopyMemory.Call(uintptr(unsafe.Pointer(&item)), lParam, unsafe.Sizeof(item))
 		if int(wParam) == controlMetadata {
 			wizard.drawMetadataControl(item.device)
+		} else if int(wParam) == controlProgressSteps {
+			wizard.drawProgressSteps(item.device)
+		} else if int(wParam) == controlProgressBar {
+			wizard.drawProgressBar(item.device)
+		} else if int(wParam) == controlProgressLog {
+			wizard.drawProgressLog(item)
 		} else {
 			wizard.drawButton(int(wParam), item.device)
 		}
@@ -1772,6 +2164,19 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	case installerMessageRefresh:
 		wizard.refreshPage()
 		return 0
+	case installerMessageProgress:
+		wizard.refreshProgress()
+		return 0
+	case 0x0113: // WM_TIMER: time-based movement, independent of timer jitter.
+		if wParam == 1 && wizard.page == installerPageProgress {
+			if !wizard.progressComplete.IsZero() && !time.Now().Before(wizard.progressComplete) {
+				wizard.busy = false
+				wizard.showPage(installerPageResult)
+			} else {
+				installerInvalidateRect.Call(wizard.controls[controlProgressBar], 0, 0)
+			}
+		}
+		return 0
 	case wmCommand:
 		wizard.handleCommand(uint16(wParam&0xffff), uint16((wParam>>16)&0xffff))
 		return 0
@@ -1782,6 +2187,7 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		wizard.closeOrWarn()
 		return 0
 	case wmDestroy:
+		installerUser32.NewProc("KillTimer").Call(hwnd, 1)
 		wizard.disposeFonts()
 		wizard.disposeTheme()
 		installerWindows.Delete(hwnd)

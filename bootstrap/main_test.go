@@ -184,6 +184,74 @@ func TestBootstrapInstallUpdateRollbackDoctorAndUninstall(t *testing.T) {
 	}
 }
 
+func TestOperationProgressReflectsBackendBoundaries(t *testing.T) {
+	withoutPathMutation(t)
+	root := t.TempDir()
+	archive := writeBundleArchive(t, root, "0.1.0")
+	installRoot := filepath.Join(root, "install")
+	var events []string
+	observer := func(stage, status, detail string) {
+		if detail == "" {
+			t.Fatal("empty operation event")
+		}
+		events = append(events, stage+":"+status)
+		if stage == "runtime" && status == "done" {
+			paths, err := installationPaths(installRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertStableVersion(t, paths, "0.1.0")
+		}
+	}
+	if err := runInstall("install", []string{"--bundle", archive, "--install-dir", installRoot}, observer); err != nil {
+		t.Fatal(err)
+	}
+	want := "verify:working,verify:done,runtime:working,runtime:done,shell:working,shell:done"
+	if strings.Join(events, ",") != want {
+		t.Fatalf("install boundaries = %v", events)
+	}
+	events = nil
+	if err := runRepair([]string{"--bundle", archive, "--install-dir", installRoot}, observer); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(events, ",") != want {
+		t.Fatalf("repair boundaries = %v", events)
+	}
+	pathUpdater = func(installPaths, bool) error { return errors.New("PATH fixture failure") }
+	events = nil
+	if err := runRepair([]string{"--bundle", archive, "--install-dir", installRoot}, observer); err == nil {
+		t.Fatal("PATH failure hidden")
+	}
+	if strings.Join(events, ",") != strings.TrimSuffix(want, ",shell:done") {
+		t.Fatalf("failed PATH reported success: %v", events)
+	}
+	pathUpdater = func(installPaths, bool) error { return nil }
+	for _, remove := range []bool{false, true} {
+		events = nil
+		args := []string{"--install-dir", installRoot}
+		if remove {
+			args = append(args, "--remove-metadata")
+		}
+		if err := runUninstall(args, func(stage, status, detail string) { events = append(events, stage+":"+status) }); err != nil {
+			t.Fatal(err)
+		}
+		want := "shell:working,shell:done,runtime:working,runtime:done,metadata:done,cleanup:working,cleanup:done"
+		if remove {
+			want = strings.Replace(want, "metadata:done", "metadata:working,metadata:done", 1)
+		}
+		if strings.Join(events, ",") != want {
+			t.Fatalf("uninstall boundaries = %v", events)
+		}
+	}
+	events = nil
+	if err := runInstall("install", []string{"--bundle", filepath.Join(root, "missing"), "--install-dir", installRoot}, observer); err == nil {
+		t.Fatal("missing bundle accepted")
+	}
+	if strings.Join(events, ",") != "verify:working" {
+		t.Fatalf("invalid bundle reported success: %v", events)
+	}
+}
+
 func TestLocalBundleInstallRepairAndMetadataToggle(t *testing.T) {
 	withoutPathMutation(t)
 	root := t.TempDir()
