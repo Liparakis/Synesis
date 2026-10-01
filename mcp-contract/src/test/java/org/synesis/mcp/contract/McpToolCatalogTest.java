@@ -141,7 +141,7 @@ class McpToolCatalogTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void advertisesTheExistingReviewValidationKindAndPayloadFields() {
+  void advertisesDistinctCoordinationResponseAndReviewValidationChoices() {
     McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors()
         .stream()
         .filter(candidate -> candidate.wireName()
@@ -151,14 +151,81 @@ class McpToolCatalogTest {
     Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema()
         .get("properties");
     Map<String, Object> kind = (Map<String, Object>) properties.get("kind");
+    assertEquals(List.of("kind", "payload"), descriptor.inputSchema().get("required"));
+    assertTrue(((List<String>) kind.get("enum")).contains("coordination_response"));
     assertTrue(((List<String>) kind.get("enum")).contains("review_validation"));
     Map<String, Object> payload = (Map<String, Object>) properties.get("payload");
     Map<String, Object> payloadProperties = (Map<String, Object>) payload.get("properties");
+    assertEquals("uuid", ((Map<?, ?>) payloadProperties.get("coordinationRequest")).get("format"));
+    assertEquals(List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED"),
+        ((Map<?, ?>) payloadProperties.get("coordinationStatus")).get("enum"));
     assertTrue(payloadProperties.keySet()
         .containsAll(List.of(
             "grantId", "snapshotId", "intentId", "claimEpoch", "result")));
     Map<String, Object> result = (Map<String, Object>) payloadProperties.get("result");
     assertTrue(((List<String>) result.get("enum")).contains("rejected"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void requestCoordinationCarriesBootstrapReviewPolicyAndExactSnapshotChoice() {
+    assertEquals(10, McpToolCatalog.rawNames().size());
+    McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
+        .filter(candidate -> candidate.wireName().equals(McpToolCatalog.REQUEST_COORDINATION))
+        .findFirst().orElseThrow();
+    Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema()
+        .get("properties");
+    Map<String, Object> kind = (Map<String, Object>) properties.get("kind");
+    assertTrue(((List<String>) kind.get("enum")).contains("work_group_create"));
+    Map<String, Object> payload = (Map<String, Object>) properties.get("payload");
+    Map<String, Object> payloadProperties = (Map<String, Object>) payload.get("properties");
+    assertTrue(payloadProperties.containsKey("snapshotId"));
+    Map<String, Object> policy = (Map<String, Object>) payloadProperties.get("reviewPolicy");
+    Map<String, Object> policyProperties = (Map<String, Object>) policy.get("properties");
+    assertTrue(policyProperties.keySet().containsAll(List.of("mandatory", "independenceRequired")));
+  }
+
+  @Test
+  void contractRequestAdvertisesItsStrictPayloadInsteadOfOtherKindsFields() {
+    Map<String, Object> schema = payloadForKind(McpToolCatalog.REQUEST_COORDINATION,
+        "contract_request");
+    assertEquals(List.of("conflictingIntentId", "proposal"), schema.get("required"));
+    assertEquals(Boolean.FALSE, schema.get("additionalProperties"));
+    assertEquals(java.util.Set.of("conflictingIntentId", "proposal", "contractId", "revision"),
+        ((Map<?, ?>) schema.get("properties")).keySet());
+  }
+
+  @Test
+  void coordinationResponseAdvertisesOwnerDecisionFieldsWithoutChoosingAStatus() {
+    Map<String, Object> schema = payloadForKind(McpToolCatalog.RESPOND_COORDINATION,
+        "coordination_response");
+    assertEquals(List.of("coordinationRequest", "coordinationStatus"), schema.get("required"));
+    assertEquals(Boolean.FALSE, schema.get("additionalProperties"));
+    Map<?, ?> properties = (Map<?, ?>) schema.get("properties");
+    assertEquals(java.util.Set.of("coordinationRequest", "coordinationStatus", "proposal"),
+        properties.keySet());
+    Map<?, ?> status = (Map<?, ?>) properties.get("coordinationStatus");
+    assertEquals(List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED"),
+        status.get("enum"));
+    assertFalse(status.containsKey("default"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> payloadForKind(String tool, String kind) {
+    Map<String, Object> input = McpToolCatalog.descriptors().stream()
+        .filter(descriptor -> descriptor.wireName().equals(tool)).findFirst().orElseThrow()
+        .inputSchema();
+    List<Map<String, Object>> alternatives = (List<Map<String, Object>>) input.get("oneOf");
+    assertTrue(alternatives != null, "the published schema must distinguish strict payload kinds");
+    Map<String, Object> matching = alternatives.stream().filter(alternative -> {
+      Map<?, ?> properties = (Map<?, ?>) alternative.get("properties");
+      return List.of(kind).equals(((Map<?, ?>) properties.get("kind")).get("enum"));
+    }).findFirst().orElseThrow();
+    assertEquals(1, alternatives.stream().filter(alternative -> {
+      Map<?, ?> properties = (Map<?, ?>) alternative.get("properties");
+      return ((List<?>) ((Map<?, ?>) properties.get("kind")).get("enum")).contains(kind);
+    }).count());
+    return (Map<String, Object>) ((Map<?, ?>) matching.get("properties")).get("payload");
   }
 
   @Test

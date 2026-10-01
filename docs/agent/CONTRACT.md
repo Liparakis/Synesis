@@ -94,6 +94,28 @@ Record architecture-changing decisions in ADRs.
 
 Do not create or implement the wider Synesis platform.
 
+## Approved evolution exception — SYN-080
+
+The current operator goal explicitly activates SYN-080 under ADR-0080. This
+bounded evolution may change the existing higher-level workspace, project-record,
+daemon, MCP adapter, and project-facing overlay consumers to establish portable
+project identity, replica/fork semantics, discovery, and pre-mutation project
+admission. It must not make core `link`/`PeerSession` own projects or
+membership, change the ten-tool MCP catalog, add cloud/federation behavior, or
+copy private authority state. Project context remains an authenticated
+application-level consumer concern after Link control readiness.
+
+## Approved evolution exception — SYN-081
+
+The current operator goal explicitly activates SYN-081 under ADR-0081. This
+bounded evolution may add a narrow higher-level project-storage seam for the
+canonical `.synesis` metadata root, safe root validation, and best-effort local
+Windows Hidden normalization, plus focused root-hygiene and regression evidence.
+It must not redefine ProjectId, replicas, Git tracking semantics, core Link,
+the ten-tool MCP catalog, daemon authority, security checks, user/agent file
+visibility, or installer behavior. Hidden state remains derived presentation
+state and is not project authority or integrity state.
+
 # Product
 
 The current implemented product boundary is:

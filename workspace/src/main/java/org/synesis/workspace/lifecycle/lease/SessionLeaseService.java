@@ -351,7 +351,9 @@ public final class SessionLeaseService {
         record.processIdentity()
             .executableIdentity(),
         record.processIdentity()
-            .commandLine());
+            .commandLine(),
+        record.processIdentity()
+            .processStartTime());
     return evidence == ProcessEvidenceState.NOT_OBSERVED
         || evidence == ProcessEvidenceState.PID_REUSED_OR_MISMATCHED
         || evidence == ProcessEvidenceState.PROCESS_EVIDENCE_UNAVAILABLE;
@@ -428,7 +430,9 @@ public final class SessionLeaseService {
         record.processIdentity()
             .executableIdentity(),
         record.processIdentity()
-            .commandLine()
+            .commandLine(),
+        record.processIdentity()
+            .processStartTime()
     );
 
     if (processEvidence == ProcessEvidenceState.LIVE_VERIFIED) {

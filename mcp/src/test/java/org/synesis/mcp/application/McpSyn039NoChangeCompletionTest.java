@@ -2,6 +2,7 @@ package org.synesis.mcp.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -138,6 +139,46 @@ final class McpSyn039NoChangeCompletionTest {
             .orElseThrow()
             .status()
             .name());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void mutationRequiredAcceptanceCannotCompleteAsNoChange(@TempDir Path temp) throws Exception {
+    Fixture fixture = prepare(temp, "syn039-mutation-required-no-change",
+        "AGENTS.md must be corrected and the issue tracker implementation must be verified.");
+    Map<String, Object> projected = innerResult(fixture.handler.handleMessage(
+        toolCall("get_next_action", "{\"completionRequested\":true}")));
+    assertNotEquals("finish_lane", projected.get("nextAction"), projected.toString());
+
+    Map<String, Object> currentIntent = (Map<String, Object>) ((Map<String, Object>) projected.get(
+        "result")).get("currentIntent");
+    PredictionEventStore store = fixture.store();
+    Map<String, Object> finishArguments = new LinkedHashMap<>();
+    finishArguments.put("outcome", "no_change");
+    finishArguments.put("intentId", fixture.intentId().toString());
+    finishArguments.put("workGroupId", fixture.groupId().toString());
+    finishArguments.put("claimEpoch", ((Number) currentIntent.get("version")).longValue());
+    finishArguments.put("workGroupVersion", store.workGroupProjection()
+        .group(fixture.groupId())
+        .orElseThrow()
+        .version());
+    finishArguments.put("expectedRevision", store.headSequence());
+    finishArguments.put("participant", currentIntent.get("participant"));
+    finishArguments.put("summary", "Verification completed without repository mutation");
+
+    Map<String, Object> rejected = innerResult(fixture.handler.handleMessage(
+        toolCall("finish_lane", ProviderJson.write(finishArguments))));
+    assertEquals("blocked", rejected.get("status"), rejected.toString());
+    assertEquals("task_not_ready", rejected.get("reason"), rejected.toString());
+    assertEquals("NO_CHANGE_NOT_DECLARED",
+        ((Map<String, Object>) rejected.get("result")).get("reason"));
+    assertEquals("ACTIVE", store.workGroupProjection()
+        .group(fixture.groupId())
+        .orElseThrow()
+        .status()
+        .name());
+    assertTrue(store.collaborationProjection().intent(fixture.intentId()).isPresent());
+    assertTrue(store.collaborationProjection().noChangeCompletions().isEmpty());
   }
 
   @Test
@@ -521,6 +562,10 @@ final class McpSyn039NoChangeCompletionTest {
   }
 
   private Fixture prepare(Path temp, String connection) throws Exception {
+    return prepare(temp, connection, "Verification succeeds without repository mutation");
+  }
+
+  private Fixture prepare(Path temp, String connection, String acceptance) throws Exception {
     Path project = temp.resolve("project");
     Files.createDirectories(project);
     git(project, "init");
@@ -538,7 +583,7 @@ final class McpSyn039NoChangeCompletionTest {
         connection);
     Map<String, Object> task = new LinkedHashMap<>();
     task.put("goal", "Verify the repository");
-    task.put("acceptance", "Verification succeeds without repository mutation");
+    task.put("acceptance", acceptance);
     task.put("claims", List.of(Map.of("kind", "path_exact", "path", "verification.txt")));
     Map<String, Object> ensure = new LinkedHashMap<>();
     ensure.put("task", task);

@@ -15,6 +15,19 @@ import org.synesis.workspace.application.agent.AgentWorkflowReducer;
  */
 final class AgentWorkflowReducerTest {
 
+  @Test
+  void staleFinishEvidenceProjectsAnExplicitFreshCompletionPoll() {
+    AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+    var request = new AgentNextActionService.NextActionRequest(
+        Path.of("."), "codex", "connection-1");
+    AgentResponse stale = reducer.decorate(request,
+        new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.TASK_NOT_READY,
+            AgentNextAction.RETRY, Map.of("reason", "SNAPSHOT_COMPLETION_EVIDENCE_STALE")));
+    Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) stale.result()).get("workflow");
+    assertEquals("get_next_action", workflow.get("recommendedTool"));
+    assertEquals(Map.of("completionRequested", true), workflow.get("arguments"));
+  }
+
   /**
    * Verifies repeated retrieval derives the same action identity and policy.
    */

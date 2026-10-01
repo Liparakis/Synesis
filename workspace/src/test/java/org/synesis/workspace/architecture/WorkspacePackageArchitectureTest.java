@@ -1,6 +1,7 @@
 package org.synesis.workspace.architecture;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -94,5 +95,22 @@ class WorkspacePackageArchitectureTest {
   void productionDoesNotDependOnTestCode() throws IOException {
     assertTrue(productionSources().noneMatch(source -> source.contains("src/test")
         || source.contains("org.synesis.workspace.test")));
+  }
+
+  /**
+   * Keeps the platform-specific metadata visibility operation behind one
+   * storage seam instead of allowing security or application services to
+   * interpret filesystem presentation state.
+   *
+   * @throws IOException if production sources cannot be read
+   */
+  @Test
+  void metadataVisibilityHasOneProductionOwner() throws IOException {
+    List<String> dosAttributeUsers = productionSources()
+        .filter(source -> source.contains("DosFileAttributeView"))
+        .toList();
+    assertEquals(1, dosAttributeUsers.size());
+    assertTrue(dosAttributeUsers.getFirst()
+        .contains("package org.synesis.workspace.infrastructure.filesystem;"));
   }
 }

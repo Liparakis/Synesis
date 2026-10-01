@@ -13,9 +13,25 @@ import java.util.UUID;
  * @param acceptance  shared acceptance criteria
  * @param version     group version
  * @param status      lifecycle status
+ * @param reviewPolicy structured review requirement
  */
 public record WorkGroup(UUID workGroupId, UUID projectId, String goal, String acceptance,
-                        long version, Status status) {
+                        long version, Status status, ReviewPolicy reviewPolicy) {
+
+  /**
+   * Creates a group with the legacy no-review policy.
+   *
+   * @param workGroupId group ID
+   * @param projectId project ID
+   * @param goal shared goal
+   * @param acceptance shared acceptance criteria
+   * @param version group version
+   * @param status lifecycle status
+   */
+  public WorkGroup(UUID workGroupId, UUID projectId, String goal, String acceptance,
+      long version, Status status) {
+    this(workGroupId, projectId, goal, acceptance, version, status, ReviewPolicy.none());
+  }
 
   /**
    * Validates the bounded group identity and lifecycle.
@@ -29,6 +45,7 @@ public record WorkGroup(UUID workGroupId, UUID projectId, String goal, String ac
       throw new IllegalArgumentException("group version must be positive");
     }
     Objects.requireNonNull(status, "status");
+    Objects.requireNonNull(reviewPolicy, "reviewPolicy");
   }
 
   private static void require(String value, String name) {

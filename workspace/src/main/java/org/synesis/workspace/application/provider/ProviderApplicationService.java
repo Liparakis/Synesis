@@ -981,7 +981,8 @@ public final class ProviderApplicationService {
       Path managedManual = manualService.skillDirectory(provider.id())
           .resolve("SKILL.md");
       boolean guidanceValid = manual.valid() && Files.isRegularFile(managedManual)
-          && McpToolCatalog.guidanceArtifactDigest("synesis-manual", provider.id(),
+          && McpToolCatalog.guidanceArtifactDigest(ProviderManualService.MANUAL_NAME,
+              provider.id(),
               Files.readAllBytes(managedManual))
           .equals(String.valueOf(metadata.get("guidanceArtifactDigest")));
       if (!wireCompatible) {

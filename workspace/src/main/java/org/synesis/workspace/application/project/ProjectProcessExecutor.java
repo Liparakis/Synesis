@@ -115,12 +115,13 @@ public final class ProjectProcessExecutor {
         || value.matches("^[A-Za-z]:[\\\\/].*");
   }
 
-  private static void filterEnvironment(Map<String, String> environment) {
+  static void filterEnvironment(Map<String, String> environment) {
     environment.keySet()
         .removeIf(key -> {
           String upper = key.toUpperCase(Locale.ROOT);
           return upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY")
-              || upper.contains("AUTH");
+              || upper.contains("AUTH") || upper.equals("PYTHONPATH")
+              || upper.equals("PYTHONHOME") || upper.equals("PYTHONUSERBASE");
         });
   }
 

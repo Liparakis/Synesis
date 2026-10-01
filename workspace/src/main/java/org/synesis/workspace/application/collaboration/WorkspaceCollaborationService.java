@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.application.WorkGroupService;
@@ -16,6 +17,7 @@ import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.contract.ContractDependency;
@@ -64,6 +66,38 @@ public final class WorkspaceCollaborationService {
   public static String participantHandle(String connectionInstanceId) {
     Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
     return "agt_" + UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Derives the deterministic successor intent identity for one exact caller and source epoch.
+   *
+   * @param sourceIntentId source intent
+   * @param targetParticipant fresh participant handle
+   * @param claimEpoch source claim epoch
+   * @return successor intent identity
+   */
+  public static UUID recoveryContinuationIntentId(UUID sourceIntentId, String targetParticipant,
+      long claimEpoch) {
+    Objects.requireNonNull(sourceIntentId, "sourceIntentId");
+    Objects.requireNonNull(targetParticipant, "targetParticipant");
+    return UUID.nameUUIDFromBytes(("synesis-recovery-intent:" + sourceIntentId + ":"
+        + targetParticipant + ":" + claimEpoch).getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Derives the deterministic single-use grant identity for one exact caller and source epoch.
+   *
+   * @param sourceIntentId source intent
+   * @param targetParticipant fresh participant handle
+   * @param claimEpoch source claim epoch
+   * @return successor grant identity
+   */
+  public static UUID recoveryContinuationGrantId(UUID sourceIntentId, String targetParticipant,
+      long claimEpoch) {
+    Objects.requireNonNull(sourceIntentId, "sourceIntentId");
+    Objects.requireNonNull(targetParticipant, "targetParticipant");
+    return UUID.nameUUIDFromBytes(("synesis-recovery-grant:" + sourceIntentId + ":"
+        + targetParticipant + ":" + claimEpoch).getBytes(StandardCharsets.UTF_8));
   }
 
   /**
@@ -412,6 +446,10 @@ public final class WorkspaceCollaborationService {
             .equals(expectedWorkGroupId))
         .filter(grant -> grant.targetParticipant()
             .equals(participant))
+        .filter(grant -> !store.workGroupProjection()
+            .continuationGrant(grant.grantId()))
+        .filter(grant -> !store.workGroupProjection()
+            .grantSuperseded(grant.grantId()))
         .anyMatch(grant -> store.workGroupProjection()
             .grantAvailable(grant.grantId())
             || (store.workGroupProjection()
@@ -506,6 +544,26 @@ public final class WorkspaceCollaborationService {
    */
   public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId,
       UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal) throws Exception {
+    return request(projectRoot, provider, connectionInstanceId, conflictingIntentId, kind,
+        proposal, null);
+  }
+
+  /**
+   * Opens a request optionally bound to one immutable review candidate.
+   *
+   * @param projectRoot project root
+   * @param provider provider ID
+   * @param connectionInstanceId exact connection ID
+   * @param conflictingIntentId conflicting intent
+   * @param kind request kind
+   * @param proposal proposal
+   * @param snapshotId exact review candidate, or {@code null}
+   * @return durable request
+   * @throws Exception when resolution or append fails
+   */
+  public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId,
+      UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal,
+      String snapshotId) throws Exception {
     ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
     ProviderSessionBindingService.Binding binding = kind == CoordinationRequest.Kind.REVIEW
         ? reviewBinding(location, provider, connectionInstanceId)
@@ -543,7 +601,8 @@ public final class WorkspaceCollaborationService {
     return new WorkIntentService(store, identity).request(participantHandle(binding.sessionId()),
         conflictingIntentId,
         kind,
-        proposal);
+        proposal,
+        snapshotId);
   }
 
   /**
@@ -699,6 +758,65 @@ public final class WorkspaceCollaborationService {
   }
 
   /**
+   * Reports whether a fresh authenticated session may defer an overlapping claim long enough to
+   * discover an explicit recovery-continuation action.
+   *
+   * <p>This is an admission read only. It never creates a participant, releases a claim, issues a
+   * grant, selects a continuation, or transfers authority. A caller still has to observe
+   * {@code get_next_action} and submit the exact server-projected continuation request before it
+   * receives the held lane's authority. Exact selectors are required when the caller supplied
+   * ownership claims; an empty selector list is accepted only for a role-matching recovery lane,
+   * which lets a blind replacement discover its server-projected claim before declaring a new
+   * intent.</p>
+   *
+   * @param projectRoot          project root
+   * @param connectionInstanceId fresh connection instance
+   * @param role                 requested semantic role
+   * @param selectors            requested ownership selectors
+   * @param workGroupId          optional group restriction
+   * @return {@code true} only when a matching active recovery-held lane exists
+   */
+  public boolean recoveryContinuationAdmission(Path projectRoot, String connectionInstanceId,
+      WorkIntent.Role role, List<ResourceSelector> selectors, UUID workGroupId) {
+    Objects.requireNonNull(projectRoot, "projectRoot");
+    Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+    WorkIntent.Role requestedRole = role == null ? WorkIntent.Role.PRODUCER : role;
+    List<ResourceSelector> requestedSelectors = selectors == null ? List.of() : List.copyOf(
+        selectors);
+    try {
+      ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+      PredictionEventStore store = new PredictionEventStore(location.root()
+          .resolve(".synesis/coordination"), location.projectId());
+      String currentParticipant = participantHandle(connectionInstanceId);
+      return store.collaborationProjection()
+          .activeIntents()
+          .stream()
+          .filter(intent -> intent.role() == requestedRole)
+          .filter(intent -> !intent.participant()
+              .equals(currentParticipant))
+          .filter(intent -> workGroupId == null || intent.workGroupId()
+              .equals(workGroupId))
+          .filter(intent -> store.collaborationProjection()
+              .participantState(intent.participant())
+              .orElse(null) == Participant.State.RECOVERY_HELD)
+          .filter(intent -> store.collaborationProjection()
+              .recoverySnapshotReference(intent.participant())
+              .filter(reference -> !reference.isBlank())
+              .isPresent())
+          .filter(intent -> store.workGroupProjection()
+              .group(intent.workGroupId())
+              .map(group -> group.status() == WorkGroup.Status.ACTIVE)
+              .orElse(false))
+          .anyMatch(intent -> requestedSelectors.isEmpty()
+              || requestedSelectors.equals(intent.selectors()));
+    } catch (Exception ignored) {
+      // A failed read must never turn an overlapping claim into an admission bypass. The normal
+      // claim path remains authoritative and will fail closed on the same state.
+      return false;
+    }
+  }
+
+  /**
    * Lists active intents and pending/resolved coordination requests.
    *
    * @param projectRoot project root
@@ -753,9 +871,24 @@ public final class WorkspaceCollaborationService {
    */
   public void createWorkGroup(Path projectRoot, UUID groupId, String goal, String acceptance)
       throws Exception {
+    createWorkGroup(projectRoot, groupId, goal, acceptance, ReviewPolicy.none());
+  }
+
+  /**
+   * Creates a work group with its structured review policy.
+   *
+   * @param projectRoot project root
+   * @param groupId group ID
+   * @param goal shared goal
+   * @param acceptance shared acceptance criteria
+   * @param reviewPolicy structured review policy
+   * @throws Exception persistence failure
+   */
+  public void createWorkGroup(Path projectRoot, UUID groupId, String goal, String acceptance,
+      ReviewPolicy reviewPolicy) throws Exception {
     ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
     createWorkGroup(projectRoot, new WorkGroup(groupId, location.projectId(), goal, acceptance, 1,
-        WorkGroup.Status.ACTIVE));
+        WorkGroup.Status.ACTIVE, reviewPolicy));
   }
 
   /**
@@ -821,12 +954,14 @@ public final class WorkspaceCollaborationService {
    * @param projectRoot          project root
    * @param provider             target provider
    * @param connectionInstanceId target connection
-   * @param grantId              single-use continuation grant
+   * @param grantId              optional pre-issued single-use continuation grant
    * @param sourceIntentId       suspended source intent
    * @param claimEpoch           expected source epoch
+   * @return durable continuation result, including idempotent replay state
    * @throws Exception when authority, snapshot, or grant validation fails
    */
-  public void continueLane(Path projectRoot, String provider, String connectionInstanceId,
+  public WorkIntentService.ContinuationResult continueLane(Path projectRoot, String provider,
+      String connectionInstanceId,
       UUID grantId, UUID sourceIntentId, long claimEpoch) throws Exception {
     manualService.requireAttested(provider);
     ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
@@ -840,30 +975,55 @@ public final class WorkspaceCollaborationService {
         .identity();
     PredictionEventStore store = new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId());
+    String targetParticipant = participantHandle(binding.sessionId());
+    Optional<UUID> existingSuccessor = store.collaborationProjection()
+        .successorIntent(sourceIntentId);
+    if (existingSuccessor.isPresent()) {
+      WorkIntent successor = store.collaborationProjection()
+          .intent(existingSuccessor.get())
+          .orElseThrow(() -> new IOException("CONTINUATION_SUCCESSOR_NOT_FOUND"));
+      boolean callerOwnsSuccessor = successor.participant()
+          .equals(targetParticipant);
+      return new WorkIntentService.ContinuationResult(
+          callerOwnsSuccessor ? "COMMITTED" : "ALREADY_COMMITTED",
+          successor.intentId(), successor.participant(), callerOwnsSuccessor);
+    }
     WorkIntent source = store.collaborationProjection()
         .intent(sourceIntentId)
         .orElseThrow(() -> new IOException("CONTINUATION_SOURCE_NOT_FOUND"));
-    var grant = store.workGroupProjection()
-        .grants()
-        .stream()
-        .filter(candidate -> candidate.grantId()
-            .equals(grantId))
-        .findFirst()
-        .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
-    String targetParticipant = participantHandle(binding.sessionId());
-    if (!grant.targetParticipant()
-        .equals(targetParticipant)) {
-      throw new IOException("LANE_GRANT_TARGET_MISMATCH");
+    UUID preIssuedGrantId = grantId;
+    boolean preIssuedGrant = preIssuedGrantId != null;
+    UUID targetIntentId = preIssuedGrantId == null
+        ? recoveryContinuationIntentId(sourceIntentId, targetParticipant, claimEpoch)
+        : store.workGroupProjection()
+            .grants()
+            .stream()
+            .filter(candidate -> candidate.grantId()
+                .equals(preIssuedGrantId))
+            .findFirst()
+            .map(LaneGrant::targetIntentId)
+            .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
+    if (preIssuedGrantId != null) {
+      LaneGrant grant = store.workGroupProjection()
+          .grants()
+          .stream()
+          .filter(candidate -> candidate.grantId()
+              .equals(preIssuedGrantId))
+          .findFirst()
+          .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
+      if (!grant.targetParticipant()
+          .equals(targetParticipant)) {
+        throw new IOException("LANE_GRANT_TARGET_MISMATCH");
+      }
+    } else {
+      grantId = recoveryContinuationGrantId(sourceIntentId, targetParticipant, claimEpoch);
     }
     String snapshotReference = store.collaborationProjection()
         .recoverySnapshotReference(source.participant())
         .orElseThrow(() -> new IOException("RECOVERY_SNAPSHOT_REQUIRED"));
-    new RecoverySnapshotService().restoreToLane(snapshotReference, Path.of(binding.worktreePath()));
-    UUID targetIntentId = grant.targetIntentId();
     WorkIntent target = new WorkIntent(targetIntentId, source.projectId(), targetParticipant,
         provider,
-        UUID.nameUUIDFromBytes(
-            (connectionInstanceId + ":" + targetIntentId).getBytes(StandardCharsets.UTF_8)),
+        source.taskId(),
         source.goal(), source.acceptance(), binding.baseCommit(), source.selectors(),
         source.version() + 1, source.workGroupId(), source.authorityLineageId(),
         WorkIntent.Status.ANNOUNCED,
@@ -876,7 +1036,13 @@ public final class WorkspaceCollaborationService {
         targetParticipant,
         claimEpoch,
         snapshotReference);
-    new WorkIntentService(store, identity).continueFromRecovery(continuation);
+    WorkIntentService service = new WorkIntentService(store, identity);
+    new RecoverySnapshotService().restoreToLane(snapshotReference, Path.of(binding.worktreePath()));
+    if (preIssuedGrant) {
+      return service.continueFromRecovery(continuation);
+    } else {
+      return service.continueEligibleFromRecovery(continuation);
+    }
   }
 
   /**
@@ -1004,6 +1170,25 @@ public final class WorkspaceCollaborationService {
       String relativePath) {
     try {
       ProjectApplicationService.ProjectLocation location = projectService.locate(projectRoot);
+      ProviderSessionBindingService.Binding binding = binding(location, provider,
+          connectionInstanceId);
+      return mutationReason(location, binding, relativePath);
+    } catch (Exception failure) {
+      return "coordination_intent_required";
+    }
+  }
+
+  /**
+   * Returns a stable mutation authorization classification for an already resolved binding.
+   *
+   * @param location initialized project location
+   * @param binding exact provider binding
+   * @param relativePath repository-relative target
+   * @return {@code allowed}, {@code overlapping_claim}, or {@code coordination_intent_required}
+   */
+  public String mutationReason(ProjectApplicationService.ProjectLocation location,
+      ProviderSessionBindingService.Binding binding, String relativePath) {
+    try {
       NodeIdentity identity = new IdentityBootstrap(location.profile()
           .resolve("link")).loadOrCreate()
           .identity();
@@ -1016,8 +1201,6 @@ public final class WorkspaceCollaborationService {
         return "allowed";
       }
       ResourceSelector selector = ResourceSelector.pathExact(relativePath);
-      ProviderSessionBindingService.Binding binding = binding(location, provider,
-          connectionInstanceId);
       // A completion transaction fences its exact lane before the
       // prepared tree is durable.  Do not permit a caller to mutate a
       // worktree after preparation or publication, even if the claim
@@ -1066,6 +1249,40 @@ public final class WorkspaceCollaborationService {
               .anyMatch(selector::overlaps)) ? "overlapping_claim" : "coordination_intent_required";
     } catch (Exception failure) {
       return "coordination_intent_required";
+    }
+  }
+
+  /**
+   * Returns whether an exact active claim authorizes this binding to mutate the target.
+   *
+   * <p>This is narrower than {@link #mutationReason(ProjectApplicationService.ProjectLocation,
+   * ProviderSessionBindingService.Binding, String)}, which intentionally allows legacy projects
+   * that have not activated collaboration. A claim is required when continuing a stale assigned
+   * worktree after a sibling advances the control checkout.</p>
+   *
+   * @param location initialized project location
+   * @param binding exact provider binding
+   * @param relativePath repository-relative target
+   * @return true only when the binding's active intent owns the target and has no completion fence
+   */
+  public boolean hasActiveMutationClaim(ProjectApplicationService.ProjectLocation location,
+      ProviderSessionBindingService.Binding binding, String relativePath) {
+    try {
+      if (binding == null || relativePath == null || relativePath.isBlank()) {
+        return false;
+      }
+      NodeIdentity identity = new IdentityBootstrap(location.profile()
+          .resolve("link")).loadOrCreate()
+          .identity();
+      PredictionEventStore store = new PredictionEventStore(location.root()
+          .resolve(".synesis/coordination"), location.projectId());
+      WorkIntentService service = new WorkIntentService(store, identity);
+      String participant = participantHandle(binding.sessionId());
+      ResourceSelector selector = ResourceSelector.pathExact(relativePath);
+      return service.owns(participant, selector)
+          && "allowed".equals(mutationReason(location, binding, relativePath));
+    } catch (Exception failure) {
+      return false;
     }
   }
 

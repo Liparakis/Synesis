@@ -47,4 +47,30 @@ class ProcessInspectorTest {
     ProcessEvidenceState state = mockInspector.evaluateEvidence(5678L, "java", "SynesisMcpServer");
     assertEquals(ProcessEvidenceState.PID_REUSED_OR_MISMATCHED, state);
   }
+
+  @Test
+  void evaluatesPidReusedWhenProcessStartTimeDiffers() {
+    ProcessInspector mockInspector = _ -> Optional.of(new ProcessInspector.ProcessDetails(5678L,
+        "C:\\jdk\\bin\\java.exe",
+        "java -jar SynesisMcpServer.jar",
+        true,
+        200L));
+
+    ProcessEvidenceState state = mockInspector.evaluateEvidence(5678L, "java", "SynesisMcpServer",
+        100L);
+    assertEquals(ProcessEvidenceState.PID_REUSED_OR_MISMATCHED, state);
+  }
+
+  @Test
+  void evaluatesLiveVerifiedWhenProcessStartTimeMatches() {
+    ProcessInspector mockInspector = _ -> Optional.of(new ProcessInspector.ProcessDetails(1234L,
+        "C:\\jdk\\bin\\java.exe",
+        "java -jar SynesisMcpServer.jar",
+        true,
+        100L));
+
+    ProcessEvidenceState state = mockInspector.evaluateEvidence(1234L, "java", "SynesisMcpServer",
+        100L);
+    assertEquals(ProcessEvidenceState.LIVE_VERIFIED, state);
+  }
 }

@@ -240,7 +240,7 @@ public final class McpToolCatalog {
     taskProperties.put("claims", claimArray);
     Map<String, Object> taskSchema = objectSchema(taskProperties, List.of());
     result.add(descriptor(ENSURE_SESSION,
-        "Ensures an active, verified Synesis workspace session. Before visible task mutation, include task.goal, task.acceptance, task.claims, and any knownDependencies as structured capability identifiers to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims.",
+        "Ensures an active, verified Synesis workspace session. Keep every task member inside task, including role, workGroupId, reviewTargets, and claims; top-level task fields beside a task object are rejected. Before visible task mutation, include task.goal, task.acceptance, task.claims, and any knownDependencies as structured capability identifiers to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims.",
         objectSchema(Map.of("task", taskSchema, "refresh", property("boolean")), List.of()),
         "ensure-session",
         "MUTATING",
@@ -373,6 +373,13 @@ public final class McpToolCatalog {
     requestPayload.put("ownerAuthorityLineageId", Map.of("type", "string", "format", "uuid",
         "description", "Durable authority lineage of the intended capability publisher"));
     requestPayload.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+    requestPayload.put("goal", property("string"));
+    requestPayload.put("acceptance", property("string"));
+    requestPayload.put("snapshotId", property("string"));
+    requestPayload.put("reviewPolicy", objectSchema(Map.of(
+        "mandatory", Map.of("type", "boolean"),
+        "independenceRequired", Map.of("type", "boolean")),
+        List.of("mandatory", "independenceRequired")));
     requestPayload.put("grantId", Map.of("type", "string", "format", "uuid"));
     requestPayload.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
     Map<String, Object> requestSchema = objectSchema(Map.of(
@@ -387,11 +394,16 @@ public final class McpToolCatalog {
                 "scope_revision",
                 "handoff",
                 "work_group_join",
-                "continuation")),
+                "continuation",
+                "work_group_create")),
         "payload",
         objectSchema(requestPayload, List.of())), List.of("kind", "payload"));
+    constrainPayloadKind(requestSchema, "contract_request",
+        List.of("conflictingIntentId", "proposal", "contractId", "revision"),
+        List.of("conflictingIntentId", "proposal"));
     result.add(
-        descriptor(REQUEST_COORDINATION, "Submits one strict capability or collaboration request.",
+        descriptor(REQUEST_COORDINATION,
+            "Submits one strict capability or collaboration request. For kind contract_request, payload requires conflictingIntentId (the exact owner intent UUID from public state) and proposal. Optional fields are contractId and revision. Only these fields are allowed for contract_request.",
             requestSchema,
             "request-coordination", "MUTATING", List.of("SESSION_BINDING", "COORDINATION"), 6));
     Map<String, Object> responsePayload = new LinkedHashMap<>();
@@ -432,8 +444,11 @@ public final class McpToolCatalog {
                 "review_validation")),
         "payload",
         objectSchema(responsePayload, List.of())), List.of("kind", "payload"));
+    constrainPayloadKind(responseSchema, "coordination_response",
+        List.of("coordinationRequest", "coordinationStatus", "proposal"),
+        List.of("coordinationRequest", "coordinationStatus"));
     result.add(descriptor(RESPOND_COORDINATION,
-        "Responds to a pending coordination item or validates an implementation.",
+        "Responds to a pending coordination item or validates an implementation. For kind coordination_response, payload requires coordinationRequest (the owned request UUID) and coordinationStatus (ACCEPTED, REVISED, REJECTED, CANCELLED, or COMPLETED); proposal is optional. Only these fields are allowed for coordination_response. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
         responseSchema,
         "respond-coordination",
         "MUTATING",
@@ -530,6 +545,26 @@ public final class McpToolCatalog {
 
   private static Map<String, Object> property(String type) {
     return Map.of("type", type);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void constrainPayloadKind(Map<String, Object> schema, String kind,
+      List<String> allowed, List<String> required) {
+    Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+    Map<String, Object> kindSchema = (Map<String, Object>) properties.get("kind");
+    Map<String, Object> payloadSchema = (Map<String, Object>) properties.get("payload");
+    Map<String, Object> payloadProperties = (Map<String, Object>) payloadSchema.get("properties");
+    Map<String, Object> selected = new LinkedHashMap<>();
+    allowed.forEach(field -> selected.put(field, payloadProperties.get(field)));
+    Map<String, Object> strictPayload = objectSchema(selected, required);
+    strictPayload.put("additionalProperties", false);
+    List<String> otherKinds = ((List<String>) kindSchema.get("enum")).stream()
+        .filter(value -> !value.equals(kind)).toList();
+    schema.put("oneOf", List.of(
+        objectSchema(Map.of("kind", Map.of("type", "string", "enum", List.of(kind)),
+            "payload", strictPayload), List.of("kind", "payload")),
+        objectSchema(Map.of("kind", Map.of("type", "string", "enum", otherKinds),
+            "payload", payloadSchema), List.of("kind", "payload"))));
   }
 
   private static Map<String, Object> objectSchema(Map<String, Object> properties,

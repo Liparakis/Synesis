@@ -29,6 +29,13 @@ identity, provider, and runtime state under `.synesis/local/`. Add that local
 directory to `.gitignore`. Initialization also adds one replaceable Synesis
 section to `AGENTS.md`; user-authored text is preserved.
 
+`.synesis/` is the canonical Synesis bookkeeping boundary. Windows marks the
+directory Hidden by default, while Unix-like systems rely on the leading dot.
+That is only a presentation convenience, not a security or authorization
+boundary. A move, copy, archive extraction, or cross-platform transfer may
+drop the attribute; the next supported open or attachment re-ensures it
+without changing the project identity. User and agent files remain visible.
+
 ## Normal workflow
 
 Use a managed provider hook or MCP connection. Reads return a revision for the

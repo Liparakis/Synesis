@@ -56,8 +56,8 @@ public final class AgentWorkflowReducer {
         .append('|')
         .append(request.connectionInstanceId());
     for (String key : List.of("inboxItemId", "capabilityRequestHandle", "capability", "pending",
-        "workGroupId",
-        "laneId", "claimEpoch", "snapshotId", "latestRejectedSnapshotId")) {
+        "workGroupId", "actionableReviewCandidates",
+        "laneId", "claimEpoch", "snapshotId", "latestRejectedSnapshotId", "sourceIntentId")) {
       if (result.containsKey(key)) {
         seed.append('|')
             .append(key)
@@ -71,6 +71,10 @@ public final class AgentWorkflowReducer {
   }
 
   private static LaneAction actionFor(AgentResponse response, Map<String, Object> result) {
+    if ("SESSION_TERMINAL_STATE_UNAVAILABLE".equals(result.get("reason"))) {
+      return new LaneAction("RECOVER", List.of("session_terminal_state_unavailable"),
+          List.of(), false);
+    }
     String laneState = laneState(result);
     if (response.nextAction() == null && ("COMPLETED".equals(laneState) || "CANCELLED".equals(
         laneState)
@@ -87,15 +91,24 @@ public final class AgentWorkflowReducer {
     AgentNextAction next = response.nextAction();
     AgentReason reason = response.reason();
     if (next == null) {
+      if (hasActionableReviewCandidates(result)) {
+        return new LaneAction("REVIEW_CONTRACT", List.of("review_candidate_selection_required"),
+            List.of("request_coordination", "get_next_action"), true);
+      }
       return new LaneAction("IMPLEMENT", List.of(),
           List.of("read_file", "apply_patch", "run_command"), true);
     }
     return switch (next) {
       case ENSURE_SESSION -> new LaneAction("RECOVER", List.of(reasonCode(reason)),
           List.of("ensure_session"), true);
-      case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST -> new LaneAction("REVISE_SCOPE",
-          List.of(reasonCode(reason)), List.of("request_coordination", "respond_coordination"),
-          true);
+      case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST -> {
+        if (reason == AgentReason.CONTINUATION_AVAILABLE) {
+          yield new LaneAction("RECOVER", List.of(reasonCode(reason)),
+              List.of("request_coordination", "get_next_action"), true);
+        }
+        yield new LaneAction("REVISE_SCOPE", List.of(reasonCode(reason)),
+            List.of("request_coordination", "respond_coordination"), true);
+      }
       case RESPOND_COORDINATION -> {
         // A capability owner may need to accept a request before the
         // implementation is ready.  Keep the exact response handle
@@ -133,6 +146,11 @@ public final class AgentWorkflowReducer {
       case REQUEST_HUMAN_HELP -> new LaneAction("INTEGRATION_REPAIR", List.of(reasonCode(reason)),
           List.of("get_next_action", "request_coordination"), false);
     };
+  }
+
+  private static boolean hasActionableReviewCandidates(Map<String, Object> result) {
+    Object candidates = result.get("actionableReviewCandidates");
+    return candidates instanceof List<?> list && !list.isEmpty();
   }
 
   private static Map<String, Object> executableAction(AgentResponse response,
@@ -186,7 +204,12 @@ public final class AgentWorkflowReducer {
       case ENSURE_SESSION -> {
         return Map.of("tool", "ensure_session", "arguments", Map.of());
       }
-      case RETRY, WAIT -> {
+      case RETRY -> {
+        Map<String, Object> arguments = "SNAPSHOT_COMPLETION_EVIDENCE_STALE".equals(
+            result.get("reason")) ? Map.of("completionRequested", true) : Map.of();
+        return Map.of("tool", "get_next_action", "arguments", arguments);
+      }
+      case WAIT -> {
         return Map.of("tool", "get_next_action", "arguments", Map.of());
       }
       default -> {

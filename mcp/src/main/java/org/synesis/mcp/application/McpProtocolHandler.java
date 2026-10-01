@@ -7,10 +7,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
@@ -58,6 +60,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationService;
 
 /**
  * Handles JSON-RPC 2.0 requests for the Synesis Model Context Protocol (MCP) server over stdio.
@@ -104,6 +107,7 @@ public final class McpProtocolHandler {
   private final SessionAuthorityResolver authorityResolver;
   private final SessionLeaseService leaseService;
   private final SessionLeasePolicy leasePolicy;
+  private final ReconciliationService reconciliationService;
   private final ProviderManualService manualService;
   /**
    * Project root supplied by the launcher before MCP roots are resolved.
@@ -142,6 +146,10 @@ public final class McpProtocolHandler {
    * Whether initialize has successfully bound this connection to a session.
    */
   private boolean isSessionBound;
+  /**
+   * Whether the one-time verified-admission reconciliation hook has run for this connection.
+   */
+  private boolean admissionReconciliationAttempted;
   /**
    * Fail-closed root-authority diagnostic set before provider admission.
    */
@@ -281,6 +289,7 @@ public final class McpProtocolHandler {
     this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
     this.leaseService = new SessionLeaseService();
     this.leasePolicy = new SessionLeasePolicy();
+    this.reconciliationService = new ReconciliationService();
     this.manualService = new ProviderManualService();
     this.initialProjectRoot = Objects.requireNonNull(projectRoot, "projectRoot");
     this.projectRootPinned = projectRootPinned;
@@ -787,9 +796,13 @@ public final class McpProtocolHandler {
       case "scope_revision" -> List.of("intentId", "selectors", "proposal");
       case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
       case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch",
-          "targetParticipant", "proposal", "reviewedIntentId", "reviewedParticipantId",
+          "targetParticipant", "proposal", "snapshotId", "reviewedIntentId", "reviewedParticipantId",
           "reviewerParticipant");
-      case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
+      case "work_group_create" ->
+          List.of("workGroupId", "goal", "acceptance", "reviewPolicy");
+      case "continuation" -> payload.containsKey("grantId")
+          ? List.of("grantId", "intentId", "claimEpoch")
+          : List.of("intentId", "claimEpoch");
       default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
     };
     for (String key : payload.keySet()) {
@@ -806,7 +819,10 @@ public final class McpProtocolHandler {
       case "work_group_join" -> payload.containsKey("grantId")
           ? List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant")
           : List.of("workGroupId", "intentId", "proposal");
-      case "continuation" -> List.of("grantId", "intentId", "claimEpoch");
+      case "work_group_create" -> List.of("workGroupId", "goal", "acceptance");
+      case "continuation" -> payload.containsKey("grantId")
+          ? List.of("grantId", "intentId", "claimEpoch")
+          : List.of("intentId", "claimEpoch");
       default -> List.of();
     };
     for (String key : required) {
@@ -830,6 +846,7 @@ public final class McpProtocolHandler {
       case "handoff" -> "handoff";
       case "work_group_join" ->
           payload.containsKey("grantId") ? "lane_grant_consume" : "request_coordination";
+      case "work_group_create" -> "work_group_create";
       default -> kind;
     });
     if ("contract_proposal".equals(kind)) {
@@ -851,8 +868,18 @@ public final class McpProtocolHandler {
         normalized.put("collaborationProposal", payload.get("proposal"));
       }
     }
-    if ("contract_request".equals(kind) || "scope_revision".equals(kind)) {
+    if ("work_group_create".equals(kind)) {
+      validateReviewPolicyPayload(payload.get("reviewPolicy"));
+      normalized.put("collaborationGoal", payload.get("goal"));
+      normalized.put("collaborationAcceptance", payload.get("acceptance"));
+    }
+    if ("contract_request".equals(kind)) {
       normalized.putIfAbsent("collaborationIntentId", payload.get("conflictingIntentId"));
+      normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
+      normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+    }
+    if ("scope_revision".equals(kind)) {
+      normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
       normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
       normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
     }
@@ -1054,7 +1081,7 @@ public final class McpProtocolHandler {
   /**
    * Renews the exact session lease after verified MCP activity.
    */
-  private void renewLease() {
+  private boolean renewLease() {
     try {
       ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
           activeProjectRoot);
@@ -1071,9 +1098,30 @@ public final class McpProtocolHandler {
           nodeId,
           binding.sessionId(),
           leasePolicy);
-      collaborationService.heartbeat(activeProjectRoot, provider, connectionInstanceId);
+      collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);
+      return true;
     } catch (Exception ignored) {
       // Unbound requests are handled by the session and workspace policy paths.
+      return false;
+    }
+  }
+
+  /**
+   * Runs the existing durable recovery plan once after this exact connection has been admitted and
+   * its own lease has been renewed. Process absence and the configured grace period remain the only
+   * recovery trigger; this hook does not transfer claims or issue continuation authority.
+   */
+  private void reconcileAfterAdmission() {
+    if (admissionReconciliationAttempted) {
+      return;
+    }
+    admissionReconciliationAttempted = true;
+    try {
+      reconciliationService.reconcileOnAdmission(activeProjectRoot);
+    } catch (Exception failure) {
+      System.err.println("SYNESIS_MCP_RECONCILIATION_FAILURE="
+          + (failure.getMessage() == null ? failure.getClass().getSimpleName()
+          : failure.getMessage()));
     }
   }
 
@@ -1639,9 +1687,11 @@ public final class McpProtocolHandler {
         try {
           taskIntent = parseTaskIntent(arguments);
         } catch (IllegalArgumentException invalidTask) {
+          String reason = "TASK_FIELDS_MUST_BE_NESTED".equals(invalidTask.getMessage())
+              ? "TASK_FIELDS_MUST_BE_NESTED" : "INVALID_TASK_INTENT";
           agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
               AgentNextAction.REQUEST_HUMAN_HELP,
-              Map.of("reason", "INVALID_TASK_INTENT"));
+              Map.of("reason", reason));
           break;
         }
         boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
@@ -1666,7 +1716,9 @@ public final class McpProtocolHandler {
           // The first verified ensure_session is activity too. Establish the lease
           // before any claim is announced so an abruptly deleted chat remains
           // recoverable even when it sends no follow-up MCP request.
-          renewLease();
+          if (renewLease()) {
+            reconcileAfterAdmission();
+          }
           if (arguments != null && Boolean.TRUE.equals(arguments.get("unwindCompletion"))) {
             agentResponse = taskCompletionService.unwindPrepared(
                 new AgentTaskCompletionService.CompleteTaskRequest(
@@ -1707,11 +1759,21 @@ public final class McpProtocolHandler {
           }
           List<ResourceSelector> selectors = parseClaimSelectors(arguments);
           boolean claimsSpecified = claimsFieldSpecified(arguments);
+          WorkIntent.Role requestedRole = taskIntent == null
+              ? WorkIntent.Role.PRODUCER : taskIntent.role();
+          boolean recoveryAdmission = !refresh
+              && collaborationService.recoveryContinuationAdmission(activeProjectRoot,
+              connectionInstanceId, requestedRole, selectors,
+              taskIntent == null ? null : taskIntent.workGroupId());
           if (refresh && claimsSpecified && selectors.isEmpty()) {
             try {
               collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
             } catch (java.io.IOException missing) {
-              if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
+              if ("INTENT_NOT_FOUND".equals(missing.getMessage())
+                  && taskIntent != null
+                  && taskIntent.role() == WorkIntent.Role.REVIEWER) {
+                agentResponse = reviewerClaimRequiredResponse();
+              } else if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
                 agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
                     AgentNextAction.REQUEST_HUMAN_HELP, null);
               }
@@ -1719,7 +1781,12 @@ public final class McpProtocolHandler {
               agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
                   AgentNextAction.REQUEST_HUMAN_HELP, null);
             }
-          } else if (!selectors.isEmpty()) {
+          } else if (taskIntent != null
+              && taskIntent.role() == WorkIntent.Role.REVIEWER
+              && selectors.isEmpty()
+              && !recoveryAdmission) {
+            agentResponse = reviewerClaimRequiredResponse();
+          } else if (!selectors.isEmpty() && !recoveryAdmission) {
             try {
               ClaimResult claimResult = collaborationService.announce(activeProjectRoot, provider,
                   connectionInstanceId, taskIntent == null ? null : taskIntent.goal(),
@@ -2019,7 +2086,8 @@ public final class McpProtocolHandler {
                     connectionInstanceId,
                     intentId,
                     kind,
-                    proposal);
+                    proposal,
+                    arguments.get("snapshotId") instanceof String snapshotId ? snapshotId : null);
                 yield Map.of("request", requestMap(request));
               }
               case "handoff" -> {
@@ -2040,7 +2108,8 @@ public final class McpProtocolHandler {
                 UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
                 collaborationService.createWorkGroup(activeProjectRoot, groupId,
                     String.valueOf(arguments.getOrDefault("collaborationGoal", "")),
-                    String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")));
+                    String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")),
+                    parseReviewPolicy(arguments.get("reviewPolicy")));
                 yield Map.of("workGroupId", groupId.toString(), "status", "ACTIVE");
               }
               case "lane_grant_issue" -> {
@@ -2074,13 +2143,30 @@ public final class McpProtocolHandler {
                 yield Map.of("grantId", grantId.toString(), "status", "REVOKED");
               }
               case "continuation" -> {
-                UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                Object rawGrantId = arguments.get("grantId");
+                UUID grantId = rawGrantId == null || String.valueOf(rawGrantId).isBlank()
+                    ? null : UUID.fromString(String.valueOf(rawGrantId));
                 UUID sourceIntentId = UUID.fromString(String.valueOf(arguments.get(
                     "collaborationSourceIntentId")));
                 long epoch = ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue();
-                collaborationService.continueLane(activeProjectRoot, provider, connectionInstanceId,
-                    grantId, sourceIntentId, epoch);
-                yield Map.of("grantId", grantId.toString(), "status", "CONTINUED");
+                WorkIntentService.ContinuationResult continuationOutcome = collaborationService.continueLane(
+                    activeProjectRoot, provider, connectionInstanceId, grantId, sourceIntentId,
+                    epoch);
+                Map<String, Object> continuationResult = new LinkedHashMap<>();
+                if (grantId != null) {
+                  continuationResult.put("grantId", grantId.toString());
+                }
+                continuationResult.put("sourceIntentId", sourceIntentId.toString());
+                continuationResult.put("claimEpoch", epoch);
+                continuationResult.put("status", "COMMITTED".equals(continuationOutcome.status())
+                    ? "CONTINUED" : continuationOutcome.status());
+                continuationResult.put("successorIntentId",
+                    continuationOutcome.successorIntentId().toString());
+                continuationResult.put("successorParticipant",
+                    continuationOutcome.successorParticipant());
+                continuationResult.put("callerOwnsSuccessor",
+                    continuationOutcome.callerOwnsSuccessor());
+                yield continuationResult;
               }
               case "work_group_close" -> {
                 UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
@@ -2302,6 +2388,10 @@ public final class McpProtocolHandler {
     Object taskObj = arguments.get("task");
     Map<String, Object> map;
     if (taskObj instanceof Map<?, ?> taskMap) {
+      if (List.of("goal", "acceptance", "likelyScopes", "knownDependencies", "workGroupId",
+          "role", "reviewTargets", "claims").stream().anyMatch(arguments::containsKey)) {
+        throw new IllegalArgumentException("TASK_FIELDS_MUST_BE_NESTED");
+      }
       map = (Map<String, Object>) taskMap;
     } else if (arguments.containsKey("goal") || arguments.containsKey("acceptance")
         || arguments.containsKey("claims") || arguments.containsKey("role")
@@ -2344,6 +2434,37 @@ public final class McpProtocolHandler {
         workGroupId, role, reviewTargetSelectors);
   }
 
+  private static void validateReviewPolicyPayload(Object rawPolicy) {
+    if (rawPolicy == null) {
+      return;
+    }
+    if (!(rawPolicy instanceof Map<?, ?> policy)) {
+      throw new IllegalArgumentException("REVIEW_POLICY_SCHEMA_INVALID");
+    }
+    if (policy.keySet().stream().anyMatch(key ->
+        !"mandatory".equals(key) && !"independenceRequired".equals(key))) {
+      throw new IllegalArgumentException("REVIEW_POLICY_FIELD_NOT_ALLOWED");
+    }
+    if (!(policy.get("mandatory") instanceof Boolean)
+        || !(policy.get("independenceRequired") instanceof Boolean)) {
+      throw new IllegalArgumentException("REVIEW_POLICY_FIELDS_REQUIRED");
+    }
+  }
+
+  private static ReviewPolicy parseReviewPolicy(Object rawPolicy) {
+    if (rawPolicy == null) {
+      return ReviewPolicy.none();
+    }
+    validateReviewPolicyPayload(rawPolicy);
+    Map<?, ?> policy = (Map<?, ?>) rawPolicy;
+    try {
+      return new ReviewPolicy((Boolean) policy.get("mandatory"),
+          (Boolean) policy.get("independenceRequired"));
+    } catch (IllegalArgumentException invalidPolicy) {
+      throw new IllegalArgumentException("REVIEW_POLICY_UNSUPPORTED", invalidPolicy);
+    }
+  }
+
   /**
    * Parses the bounded non-ownership selectors used to identify review targets.
    */
@@ -2382,6 +2503,19 @@ public final class McpProtocolHandler {
       }
     }
     return List.copyOf(selectors);
+  }
+
+  /**
+   * Explains the explicit ownership required before a reviewer lane can be admitted.
+   *
+   * @return retryable reviewer admission response
+   */
+  private AgentResponse reviewerClaimRequiredResponse() {
+    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+        AgentNextAction.ENSURE_SESSION,
+        Map.of("reason", "REVIEW_CLAIM_REQUIRED",
+            "message", "A reviewer must explicitly claim a disjoint report or test path; "
+                + "reviewTargets identify evidence to inspect but do not grant ownership."));
   }
 
   private List<ResourceSelector> parseClaimSelectors(Map<String, Object> arguments) {

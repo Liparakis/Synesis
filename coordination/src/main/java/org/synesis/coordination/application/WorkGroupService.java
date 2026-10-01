@@ -8,6 +8,8 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
@@ -90,6 +92,15 @@ public final class WorkGroupService {
           .grantAvailable(grantId)) {
         throw new IOException("LANE_GRANT_REPLAYED");
       }
+      if (grant.snapshotId() == null) {
+        if (current.collaborationProjection()
+            .successorIntent(grant.targetIntentId())
+            .isPresent()) {
+          throw new IOException("LANE_GRANT_TARGET_STALE");
+        }
+      } else {
+        validateSnapshotBoundGrant(current, grant);
+      }
       if (!grant.targetParticipant()
           .equals(participant) || !grant.targetIntentId()
           .equals(intentId)) {
@@ -101,6 +112,26 @@ public final class WorkGroupService {
       current.append(grantId, PredictionEventType.LANE_GRANT_CONSUMED,
           signer.nodeId(), CollaborationCodec.encodeLaneGrant(grant), signer);
     });
+  }
+
+  private static void validateSnapshotBoundGrant(PredictionEventStore current, LaneGrant grant)
+      throws IOException {
+    TaskSnapshotRecord snapshot = current.taskCompletionProjection()
+        .findSnapshotById(grant.snapshotId())
+        .orElseThrow(() -> new IOException("REVIEW_SNAPSHOT_NOT_FOUND"));
+    if (!snapshot.reviewRequired()
+        || !snapshot.provenance().workGroupId().equals(grant.workGroupId())
+        || !snapshot.provenance().laneId().equals(grant.targetIntentId())
+        || snapshot.provenance().claimEpoch() != grant.claimEpoch()
+        || snapshot.provenance().participant().equals(grant.targetParticipant())
+        || current.taskCompletionProjection()
+        .snapshotState(snapshot.snapshotId())
+        .orElse(TaskCompletionState.ACTIVE) != TaskCompletionState.REVIEW_PENDING
+        || current.workGroupProjection()
+        .reviewValidationForSnapshot(snapshot.snapshotId())
+        .isPresent()) {
+      throw new IOException("REVIEW_SNAPSHOT_MISMATCH");
+    }
   }
 
   /**
@@ -148,7 +179,7 @@ public final class WorkGroupService {
     }
     WorkGroup update = new WorkGroup(groupId, current.projectId(), current.goal(),
         current.acceptance(),
-        current.version() + 1, status);
+        current.version() + 1, status, current.reviewPolicy());
     withLock(reloaded -> reloaded.append(groupId, PredictionEventType.WORK_GROUP_STATUS_CHANGED,
         signer.nodeId(), CollaborationCodec.encodeWorkGroup(update), signer));
   }

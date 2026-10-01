@@ -144,7 +144,9 @@ public final class ProviderSessionTerminalizationService {
         .grants()) {
       boolean exact = grant.targetParticipant()
           .equals(participant) || intentIds.contains(grant.targetIntentId());
-      if (exact && (store.workGroupProjection()
+      if (exact && !store.workGroupProjection()
+          .grantSuperseded(grant.grantId())
+          && (store.workGroupProjection()
           .grantAvailable(grant.grantId())
           || (store.workGroupProjection()
           .grantConsumed(grant.grantId())

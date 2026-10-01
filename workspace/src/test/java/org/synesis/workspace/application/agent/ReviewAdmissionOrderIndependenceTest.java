@@ -261,7 +261,8 @@ final class ReviewAdmissionOrderIndependenceTest {
     WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
     ClaimResult reviewer = collaboration.announce(project, "claude",
         "reviewer-before-producer-reviewer",
-        "Review the producer source", "Inspect the producer snapshot",
+        "Review the producer source",
+        "Inspect the producer snapshot",
         List.of(ResourceSelector.pathExact("tests/todo_test.py")), null,
         WorkIntent.Role.REVIEWER,
         List.of(ResourceSelector.pathExact("src/todo.py")));

@@ -23,6 +23,7 @@ public final class CollaborationProjection {
   private final Map<UUID, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
   private final Map<String, ProviderSessionTerminalPayload> terminalSessions = new LinkedHashMap<>();
   private final Map<String, Participant> participantHistory = new LinkedHashMap<>();
+  private final Map<UUID, UUID> successorIntents = new LinkedHashMap<>();
   private final Set<UUID> acknowledgedInboxItems = new HashSet<>();
   private boolean activated;
 
@@ -98,6 +99,7 @@ public final class CollaborationProjection {
     candidate.noChangeCompletions.putAll(noChangeCompletions);
     candidate.terminalSessions.putAll(terminalSessions);
     candidate.participantHistory.putAll(participantHistory);
+    candidate.successorIntents.putAll(successorIntents);
     candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
     candidate.activated = activated;
     candidate.apply(event);
@@ -111,6 +113,32 @@ public final class CollaborationProjection {
    */
   public synchronized Optional<WorkIntent> intent(UUID id) {
     return Optional.ofNullable(intents.get(id));
+  }
+
+  /**
+   * Resolves the immediate successor of a historical intent, when one exists.
+   *
+   * @param sourceIntentId predecessor intent
+   * @return successor intent ID
+   */
+  public synchronized Optional<UUID> successorIntent(UUID sourceIntentId) {
+    return Optional.ofNullable(successorIntents.get(Objects.requireNonNull(sourceIntentId,
+        "source intent ID")));
+  }
+
+  /**
+   * Resolves the immediate predecessor of a historical successor intent, when one exists.
+   *
+   * @param successorIntentId successor intent
+   * @return predecessor intent ID
+   */
+  public synchronized Optional<UUID> predecessorIntent(UUID successorIntentId) {
+    UUID successor = Objects.requireNonNull(successorIntentId, "successor intent ID");
+    return successorIntents.entrySet()
+        .stream()
+        .filter(entry -> entry.getValue().equals(successor))
+        .map(Map.Entry::getKey)
+        .findFirst();
   }
 
   /**
@@ -287,10 +315,7 @@ public final class CollaborationProjection {
       throw new IOException("OVERLAPPING_CLAIM");
     }
     intents.put(intent.intentId(), intent);
-    String opaqueId = intent.participant()
-        .startsWith("agt_") ? intent.participant() : "agt_" + intent.participant();
-    participantHistory.put(intent.participant(), new Participant(opaqueId, intent.provider(),
-        intent.goal(), Participant.State.ACTIVE, 0L, intent.selectors(), null));
+    refreshParticipant(intent.participant(), Participant.State.ACTIVE, intent);
   }
 
   private void release(UUID id) throws IOException {
@@ -298,14 +323,39 @@ public final class CollaborationProjection {
     if (released == null) {
       throw new IOException("INTENT_NOT_FOUND");
     }
-    Participant previous = participantHistory.get(released.participant());
-    if (previous != null) {
-      participantHistory.put(released.participant(),
-          new Participant(previous.id(), previous.provider(),
-              previous.goal(), Participant.State.COMPLETED, previous.lastVerifiedActivity(),
-              List.of(),
-              previous.recoverySnapshotReference()));
+    refreshParticipant(released.participant(), Participant.State.COMPLETED, null);
+  }
+
+  private void refreshParticipant(String participant, Participant.State emptyState,
+      WorkIntent preferred) {
+    Participant previous = participantHistory.get(participant);
+    List<WorkIntent> owned = intents.values()
+        .stream()
+        .filter(intent -> intent.participant()
+            .equals(participant))
+        .toList();
+    if (owned.isEmpty()) {
+      if (previous != null) {
+        participantHistory.put(participant,
+            new Participant(previous.id(), previous.provider(), previous.goal(), emptyState,
+                previous.lastVerifiedActivity(), List.of(), previous.recoverySnapshotReference()));
+      }
+      return;
     }
+    WorkIntent primary = preferred != null && preferred.participant()
+        .equals(participant) ? preferred : owned.getLast();
+    List<ResourceSelector> claims = owned.stream()
+        .flatMap(intent -> intent.selectors()
+            .stream())
+        .distinct()
+        .toList();
+    String opaqueId = previous == null
+        ? participant.startsWith("agt_") ? participant : "agt_" + participant
+        : previous.id();
+    participantHistory.put(participant, new Participant(opaqueId, primary.provider(),
+        primary.goal(), Participant.State.ACTIVE,
+        previous == null ? 0L : previous.lastVerifiedActivity(), claims,
+        previous == null ? null : previous.recoverySnapshotReference()));
   }
 
   private void repair(RepairLanePayload payload) throws IOException {
@@ -416,7 +466,8 @@ public final class CollaborationProjection {
         new CoordinationRequest(current.requestId(), current.projectId(),
             current.requester(), current.target(), current.conflictingIntentId(), current.kind(),
             response.proposal()
-                .isBlank() ? current.proposal() : response.proposal(), response.status()));
+                .isBlank() ? current.proposal() : response.proposal(), response.status(),
+            current.snapshotId()));
   }
 
   private void review(ReviewValidationPayload validation) throws IOException {
@@ -549,8 +600,7 @@ public final class CollaborationProjection {
   }
 
   private void continued(CollaborationCodec.Continuation continuation) throws IOException {
-    if (isParticipantTerminal(continuation.sourceParticipant())
-        || isParticipantTerminal(continuation.targetParticipant())) {
+    if (isParticipantTerminal(continuation.targetParticipant())) {
       throw new IOException("SESSION_TERMINAL");
     }
     WorkIntent source = intents.get(continuation.sourceIntentId());
@@ -568,28 +618,73 @@ public final class CollaborationProjection {
     WorkIntent target = continuation.targetIntent();
     if (!target.participant()
         .equals(continuation.targetParticipant())
+        || !target.projectId()
+        .equals(source.projectId())
+        || !target.taskId()
+        .equals(source.taskId())
+        || !target.goal()
+        .equals(source.goal())
+        || !target.acceptance()
+        .equals(source.acceptance())
         || !target.workGroupId()
         .equals(source.workGroupId())
+        || !target.authorityLineageId()
+        .equals(source.authorityLineageId())
+        || target.version() != source.version() + 1L
+        || target.role() != source.role()
+        || !target.reviewTargetSelectors()
+        .equals(source.reviewTargetSelectors())
+        || !target.knownDependencies()
+        .equals(source.knownDependencies())
         || !target.selectors()
         .equals(source.selectors())) {
       throw new IOException("CONTINUATION_TARGET_INVALID");
+    }
+    if (intents.values()
+        .stream()
+        .filter(intent -> !intent.intentId()
+            .equals(source.intentId()))
+        .filter(intent -> intent.participant()
+            .equals(target.participant()))
+        .anyMatch(intent -> selectorsOverlap(intent.selectors(), target.selectors()))) {
+      throw new IOException("OVERLAPPING_CLAIM");
     }
     if (intents.containsKey(target.intentId())) {
       throw new IOException("CONTINUATION_TARGET_EXISTS");
     }
     intents.remove(source.intentId());
     intents.put(target.intentId(), target);
-    participantHistory.put(continuation.sourceParticipant(), new Participant(sourceParticipant.id(),
-        sourceParticipant.provider(), sourceParticipant.goal(), Participant.State.DETACHED,
-        sourceParticipant.lastVerifiedActivity(), List.of(),
-        sourceParticipant.recoverySnapshotReference()));
-    String targetId = continuation.targetParticipant()
-        .startsWith("agt_")
-        ? continuation.targetParticipant() : "agt_" + continuation.targetParticipant();
-    participantHistory.put(continuation.targetParticipant(),
-        new Participant(targetId, target.provider(),
-            target.goal(), Participant.State.ACTIVE, System.currentTimeMillis(), target.selectors(),
-            null));
+    successorIntents.put(source.intentId(), target.intentId());
+    requests.replaceAll((requestId, request) -> {
+      if (source.role() == WorkIntent.Role.PRODUCER
+          && request.status() == CoordinationRequest.Status.PENDING
+          && request.kind() == CoordinationRequest.Kind.REVIEW
+          && request.target().equals(continuation.sourceParticipant())
+          && request.conflictingIntentId().equals(source.intentId())) {
+        return new CoordinationRequest(request.requestId(), request.projectId(),
+            request.requester(), continuation.targetParticipant(), target.intentId(),
+            request.kind(), request.proposal(), request.status(), request.snapshotId());
+      }
+      if (source.role() == WorkIntent.Role.REVIEWER
+          && (request.status() == CoordinationRequest.Status.PENDING
+          || request.status() == CoordinationRequest.Status.ACCEPTED)
+          && request.kind() == CoordinationRequest.Kind.REVIEW
+          && request.requester().equals(continuation.sourceParticipant())) {
+        return new CoordinationRequest(request.requestId(), request.projectId(),
+            continuation.targetParticipant(), request.target(), request.conflictingIntentId(),
+            request.kind(), request.proposal(), request.status(), request.snapshotId());
+      }
+      return request;
+    });
+    refreshParticipant(continuation.sourceParticipant(), Participant.State.DETACHED, null);
+    refreshParticipant(continuation.targetParticipant(), Participant.State.ACTIVE, target);
+  }
+
+  private static boolean selectorsOverlap(List<ResourceSelector> left,
+      List<ResourceSelector> right) {
+    return left.stream()
+        .anyMatch(existing -> right.stream()
+            .anyMatch(requested -> existing.overlaps(requested)));
   }
 
   private void revoked(String participant) throws IOException {
@@ -700,12 +795,6 @@ public final class CollaborationProjection {
     }
     intents.remove(completion.intentId());
     noChangeCompletions.put(completion.intentId(), completion);
-    Participant previousParticipant = participantHistory.get(current.participant());
-    if (previousParticipant != null) {
-      participantHistory.put(current.participant(), new Participant(previousParticipant.id(),
-          previousParticipant.provider(), previousParticipant.goal(), Participant.State.COMPLETED,
-          previousParticipant.lastVerifiedActivity(), List.of(),
-          previousParticipant.recoverySnapshotReference()));
-    }
+    refreshParticipant(current.participant(), Participant.State.COMPLETED, null);
   }
 }

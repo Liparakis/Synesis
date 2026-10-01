@@ -1,3 +1,138 @@
+## 2026-09-23 — SYN-082 process-crash and reviewer-wait verification
+
+- Status: ACTIVE. Actual child-JVM termination at the three event append
+  boundaries proves replay to no continuation or one successor. Focused crash
+  tests pass.
+- Full serial coordination passed. Full workspace ran 432 tests and exposed a
+  reviewer-before-producer wait regression; the narrow durable-grant fix is
+  covered by the formerly failing test, the full four-test ordering class, and
+  focused MCP tests. Full workspace rerun remains required.
+- Full MCP regression remains required because the prior run was interrupted.
+  Then run strict quality gates and checkpoint. Do not claim all phases pass:
+  hostile A/B/C is partial, review-enabled terminal convergence is not reached.
+
+## 2026-09-20 — SYN-082 recovery-continuation admission seam and live boundary
+
+- Status: ACTIVE; focused admission/recovery tests pass. The latest disposable
+  target proved concurrent blind lanes, process-tree loss, 6/6 reconciliation,
+  disjoint producer successors, and reviewer successor projection through
+  `SNAPSHOT_PENDING` / `review_validation`.
+- The target stopped before independent review decision, reviewer artifact
+  publication, review integration, WorkGroup completion, or goal closure.
+  Phase 1 is PASS; Phase 2 is PARTIAL; Phase 3 is PARTIAL/NOT REACHED.
+- The late blind launch emitted mixed role/session evidence and is not treated
+  as terminal proof. Preserve the retained claims and do not manually repair
+  the target.
+- Remaining: full serial MCP regression, strict quality gates, checkpoint,
+  and an evidence-backed final report. Do not claim overall completion.
+
+## 2026-09-20 — SYN-082 recovery-continuation admission seam
+
+- Status: ACTIVE; ADR-0086 implemented and focused MCP admission/recovery
+  verification passes. A fresh reviewer may reach the existing continuation
+  projection when its blind task declaration repeats a recovery-held exact
+  claim, without receiving a claim or successor authority during admission.
+- Remaining acceptance: complete the fresh hostile multi-lane target through a
+  killed reviewer, independent review decision, review artifact publication,
+  integration, and terminal WorkGroup/goal projection. Do not bypass a held
+  reviewer claim or infer closure from the current partial target.
+- Evidence: `docs/adr/0086-recovery-continuation-admission.md`,
+  `McpAdmissionRecoveryTest`, and the current SYN-082 evidence report.
+- Preserve: exactly ten MCP tools, no source `.synesis`, no Synesis
+  coordination in the source checkout, no commit, and no push.
+
+## SYN-082
+
+### Ordinary Codex workspace admission under Windows path aliases
+
+- Status: ACTIVE
+- Progress: source fix/front-door, admission-triggered recovery, lawful successor acquisition, protected artifact restore, targeted real completion, integration, WorkGroup closure, and goal projection PASS. Source-level crash-prefix, scoped-publication, reviewer-grant succession, producer pending-review retargeting, and continuation-grant self-review rejection checks PASS. The current-build overnight target proved a real process-tree kill, grace-bound recovery, and three exact successor continuations. The extended unchanged-prompt target recovered a failed integration with a claim-epoch-2 successor and integrated a later 42-test correction; those later producer slices projected `reviewRequired:false`. A separate current-build review target produced `reviewRequired:true` snapshots and exact reviewer `SNAPSHOT_PENDING` states, but no review decision, reviewer loss, or review-enabled terminal convergence. Mandatory review and reviewer-loss convergence remain open and are not claimed.
+- Latest current-build continuation target `SynesisMandatoryReviewContinuation6-20260919` proved reviewer successor acquisition, current-grant consumption, exact `SNAPSHOT_PENDING`, producer process-tree recovery with a clean reconciliation retry, and late predecessor-grant fencing. It remained partial: no independent review decision, reviewer process-tree loss, post-review publication, integration, WorkGroup closure, or durable goal completion was reached; the final dry run still reported recovery-eligible sessions and executable actions.
+- Scope: trace and repair the existing ordinary Codex MCP admission path when the
+  same Git worktree is exposed through distinct Windows filesystem path aliases;
+  preserve exact connection-instance authority, project identity/replica
+  semantics, hidden `.synesis` storage, provider admission policy, and the
+  ten-tool MCP catalog. Audit safe derived-cache loss and restart recovery only
+  where the existing lifecycle already owns those transitions. The lifecycle
+  repair is limited to invoking the existing bounded reconciliation plan after
+  ordinary MCP admission and preventing terminal/stale-plan recovery. The
+  explicitly activated continuation slice under ADR-0083 may derive
+  recovery-held eligibility through `get_next_action` and execute an explicit
+  successor request through the existing generic coordination surface. The
+  user-authorized overnight extension also requires crash-prefix recovery,
+  concurrent multi-lane successor fencing, and real mandatory independent
+  review/reviewer-loss continuation using existing review semantics. It does
+  not weaken grace periods or claims, add tools, auto-assign successors,
+  auto-review, or fabricate authority.
+- Acceptance criteria: a fresh valid project can bind and pass strict workspace
+  verification through the normal Codex lifecycle; a fresh Codex process can
+  re-admit the same project without latest-session or path-only authority
+  fallback; physically identical path aliases are accepted while distinct
+  worktrees remain rejected; true missing/dirty/unsupported workspaces remain
+  fail-closed with an actionable bounded diagnostic; focused tests, affected
+  MCP/workspace regressions, strict workspace gates, diff hygiene, durable
+  evidence, and checkpoint pass; no commit or push.
+7. A fresh exact participant can discover and explicitly acquire one
+   recovery-held unfinished lane under a new participant/connection/intent
+   authority while preserving task/work lineage; stale, replayed, and racing
+   actions fail closed and the existing review/integration gates remain
+   authoritative.
+8. Continuation durable prefixes and lost responses recover automatically to
+   either no successor or exactly one successor without manual state repair.
+9. A fresh disposable project exercises genuinely concurrent blind A/B work,
+   abrupt loss of one participant, blind C continuation, and final product /
+   WorkGroup convergence without bootstrap task assignment.
+10. A real mandatory independent review requirement remains strict when the
+   implementation owner or reviewer becomes terminal; a fresh participant
+   can lawfully continue the missing responsibility and the approved candidate
+   reaches integration and terminal goal state.
+- Evidence target: `docs/evidence/SYN-082-lifecycle-recovery-2026-09-18.md`,
+  `docs/evidence/SYN-082-ordinary-codex-admission-2026-09-18.md`,
+  `docs/evidence/SYN-082-lawful-recovery-continuation-2026-09-19.md`, and
+  `docs/evidence/SYN-082-overnight-successor-recovery-2026-09-19.md`.
+- Current evidence: the Windows same-filesystem alias correction, bounded
+  readiness diagnostics, focused regressions, strict workspace gates, real
+  fresh-process/cache-loss admission, admission-triggered recovery, terminal
+  stale-plan fencing, protected recovery-snapshot restore, process-tree
+  interruption, explicit successor acquisition, recovered application tests,
+  snapshot publication, integration, WorkGroup closure, and `COMPLETED`
+  projection all pass for the bounded target. The fresh overnight target then
+  proved blind decomposition, abrupt producer loss, and exact successor
+  acquisition, but did not reach current-build review/integration convergence.
+  The narrower current-build A/B/C target reached two integrated snapshots but
+  projected `reviewRequired:false` because no reviewer request was created; a
+  review-required current-build successor is not claimed. Continuation
+  authorizations remain excluded from review obligations and are rejected by
+  review validation.
+- Deferred-register review: the bounded continuation-authority slice and the
+  user-authorized crash/concurrency/reviewer-loss acceptance extension are
+  activated under ADR-0083; automatic assignment, claim release, new tools,
+  grace changes, automatic review, and remote recovery remain deferred.
+
+## SYN-081
+
+### Invisible canonical project metadata boundary
+
+- Status: DONE
+- Architecture: ADR-0081
+- Scope: audit Synesis project write surfaces; keep Synesis-owned project-internal state beneath the canonical `.synesis` root; apply Windows Hidden as best-effort local presentation state; preserve Unix dot-directory behavior, project identity, replica/fork semantics, registry discovery, daemon/MCP attachment, Git semantics, and visible user/agent project output.
+- Acceptance criteria: a complete write inventory identifies every project-local target and explicit exception; a reusable storage seam creates/validates `.synesis` and re-ensures Windows Hidden on initialization, open/attach, replica, fork, and relocation/copy reopen; visibility failures are diagnostic-only and never affect identity or authorization; bounded root-hygiene, atomic-temporary, Windows/Unix, SYN-080, daemon, MCP, and strict repository checks pass or are honestly documented.
+- Required evidence: ADR-0081, write-surface inventory/evidence, focused storage tests including simulated visibility failure, root-hygiene acceptance fixture, relevant regression tests, checkpoint, and no push.
+- Implementation evidence: `docs/evidence/SYN-081-invisible-project-metadata-2026-09-18.md`; focused and affected regressions plus workspace/CLI quality gates pass; checkpoint `CP-0973` created; no push.
+- Deferred-register review: no deferred capability is activated; this is a bounded project-storage and presentation evolution.
+
+## SYN-080
+
+### Universal portable project identity and replica model
+
+- Status: DONE
+- Architecture: ADR-0080
+- Scope: Establish one portable logical `ProjectId`, lawful local replica and explicit fork semantics, multi-path discovery, project-bound membership admission, and daemon/MCP/Link-consumer adaptation without changing core Link ownership or the ten-tool MCP catalog.
+- Acceptance criteria: canonical identity remains stable across path/name/branch/HEAD/restart/reconnect; malformed or conflicting identity fails closed; two legitimate same-ID paths can be represented; replica materialization preserves only portable identity and creates fresh private state; explicit fork creates a new ID; copied ID alone grants no authority; valid membership for another project is rejected before mutation; registry remains discovery-only; process-isolated evidence covers the required positive and negative cases; no push.
+- Required evidence: focused workspace/project-record tests, process-isolated replica/fork tests where practical, Link/overlay regression checks, MCP ten-tool check, checkpoint, and updated ADR/docs.
+- Evidence: PASS for the bounded identity/replica/admission slice; `docs/evidence/SYN-080-portable-project-identity-2026-09-18.md` records exact commands and the broad-suite limitations.
+- Exact next action: preserve the verified bounded result; run `scripts/agent-resume.ps1` before any future task and do not publish without explicit authorization.
+
 ## SYN-079
 
 ### Complete the approved installer flow and visual polish
@@ -5365,3 +5500,26 @@ separate. Exact next action: run another fresh bounded diagnostic with the
 same exact-projection rule and verify continued polling through the second
 grant, B snapshot, validation, integration, and closure. Do not create
 SYN-040 or push.
+
+## SYN-082 — 2026-09-24 overnight acceptance update
+
+Phase 1 PASS for deterministic crash-prefix/replay and the bounded disposable
+participant-process-loss/fresh-successor evidence. The full MCP server was not
+crashed mid-append in the real target. Phase 2 PARTIAL: target
+SynesisOvernightABC4-20260924, project a57fef3a-b7a4-449b-8565-81ddf0b83af6,
+WorkGroup 93a9e157-8a82-3328-9e67-928bf03f6b55. A and B held disjoint active
+claims; B was killed with its process tree while A was alive. A exited before
+C acquired B's lane. C continued B's exact storage lane at epoch 2. Later, blind
+E continued that storage lineage again and passed its tests, but no terminal
+WorkGroup/goal resulted. Phase 3 PARTIAL: producer-origin review attempts were
+rejected with REVIEWER_INTENT_REQUIRED; snapshots said reviewRequired=false;
+there was no valid reviewer intent or accepted decision.
+
+No human/bootstrap role assignment was made. All productive agents received
+the same blind prompt. Do not repeat blind runs against this target expecting
+review to emerge: first establish a fresh target where ordinary agent actions
+create a matching reviewer intent and exact review request before publication,
+then verify that the snapshot projects review-required through Synesis. The
+WorkGroup acceptance prose alone does not set this gate. Do not hand-assign a
+reviewer or bypass the authority gate. Full results are in the SYN-082 evidence
+addendum.

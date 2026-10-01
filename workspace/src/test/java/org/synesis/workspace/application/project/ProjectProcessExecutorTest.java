@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,22 @@ class ProjectProcessExecutorTest {
     assertEquals(0, result.stdoutBytesRetained());
     assertFalse(result.stdoutTruncated());
     assertFalse(result.stderrTruncated());
+  }
+
+  @Test
+  void workspaceCommandsDoNotInheritPythonImportRoots() {
+    Map<String, String> environment = new HashMap<>();
+    environment.put("PYTHONPATH", "C:/control-checkout/src");
+    environment.put("PYTHONHOME", "C:/control-checkout/.venv");
+    environment.put("PYTHONUSERBASE", "C:/control-checkout/user-site");
+    environment.put("PATH", "C:/python;C:/windows");
+
+    ProjectProcessExecutor.filterEnvironment(environment);
+
+    assertFalse(environment.containsKey("PYTHONPATH"));
+    assertFalse(environment.containsKey("PYTHONHOME"));
+    assertFalse(environment.containsKey("PYTHONUSERBASE"));
+    assertEquals("C:/python;C:/windows", environment.get("PATH"));
   }
 
   @Test

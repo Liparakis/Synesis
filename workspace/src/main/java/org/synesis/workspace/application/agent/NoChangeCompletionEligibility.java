@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.agent;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Objects;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
@@ -48,6 +49,9 @@ final class NoChangeCompletionEligibility {
     if (!intent.participant()
         .equals(participant)) {
       return denied("NO_CHANGE_PARTICIPANT_MISMATCH");
+    }
+    if (!declaresNoRepositoryMutation(intent.acceptance())) {
+      return denied("NO_CHANGE_NOT_DECLARED");
     }
     if (AgentNextActionService.hasUnresolvedReviewObligation(store, intent)) {
       return denied("NO_CHANGE_REVIEWER_PENDING");
@@ -98,6 +102,10 @@ final class NoChangeCompletionEligibility {
       boolean targetsCaller = grant.targetParticipant()
           .equals(participant);
       if ((targetsThisIntent || targetsCaller)
+          && !store.workGroupProjection()
+          .grantSuperseded(grant.grantId())
+          && !store.workGroupProjection()
+          .continuationGrant(grant.grantId())
           && (store.workGroupProjection()
           .grantAvailable(grant.grantId())
           || (store.workGroupProjection()
@@ -129,6 +137,15 @@ final class NoChangeCompletionEligibility {
       return denied("NO_CHANGE_DEPENDENCY_PENDING");
     }
     return new Result(true, null);
+  }
+
+  private static boolean declaresNoRepositoryMutation(String acceptance) {
+    if (acceptance == null || acceptance.isBlank()) {
+      return false;
+    }
+    String normalized = acceptance.toLowerCase(Locale.ROOT);
+    return normalized.contains("without repository mutation")
+        || normalized.contains("no repository mutation is required");
   }
 
   private static boolean hasPendingCapability(PredictionEventStore store, String nodeId,

@@ -91,7 +91,7 @@ final class CoordinationServerLauncher {
       var eventHub = new ControlPlaneEventHub();
       var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish);
       var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, Optional.empty(),
-          eventHub::publish);
+          eventHub::publish, location.identity());
       var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(),
           new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
       var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub,

@@ -29,8 +29,19 @@ overlapping ownership. `likelyScopes` is descriptive planning information only
 and does not announce intent or acquire claims. There is no separate announce
 tool in the ten-tool MCP surface.
 
+Keep all task members inside `task`. If a `task` object is present, placing task
+fields beside it is rejected instead of silently defaulting omitted fields.
+
 Provider continuity is explicit. A normal MCP process is `SESSION_BOUND`; a
 managed Codex process is `MANAGED_CONTINUITY` only after startup authenticates
 the exact existing binding, thread, generation, and server-issued proof. The
 proof is delivered through the allow-listed process environment and is never
 written to configuration, repository state, prompts, output, or diagnostics.
+
+If Synesis cannot load the durable terminal fence for the exact bound session,
+`ensure_session` and `get_next_action` fail closed with
+`SESSION_TERMINAL_STATE_UNAVAILABLE`. The response includes only the cause's
+exception type; it does not include paths or exception messages. The workflow
+marks this as non-retryable recovery with no recommended MCP tool. The symbolic
+`request_human_help` action is not an MCP tool; stop and request operator
+intervention before retrying session operations.

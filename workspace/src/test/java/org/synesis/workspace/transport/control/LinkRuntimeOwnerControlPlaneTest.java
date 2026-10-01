@@ -2,6 +2,7 @@ package org.synesis.workspace.transport.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -28,6 +29,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.overlay.OverlayMembershipSnapshot;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -134,6 +136,7 @@ class LinkRuntimeOwnerControlPlaneTest {
     UUID projectId = UUID.randomUUID();
     Path hostRoot = temp.resolve("host");
     Path joinRoot = temp.resolve("join");
+    Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
     NodeIdentity hostIdentity = identity(hostRoot);
     NodeIdentity joinIdentity = identity(joinRoot);
     Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -145,8 +148,10 @@ class LinkRuntimeOwnerControlPlaneTest {
                 OverlayMembershipSnapshot.STATUS_ACTIVE, joinIdentity.publicKeyEncoded())),
         hostIdentity);
 
-    try (RuntimeFixture host = new RuntimeFixture(hostRoot, projectId, hostIdentity, membership);
-        RuntimeFixture join = new RuntimeFixture(joinRoot, projectId, joinIdentity, membership)) {
+    try (RuntimeFixture host = new RuntimeFixture(hostRoot, projectId, createdAt, hostIdentity,
+        membership);
+        RuntimeFixture join = new RuntimeFixture(joinRoot, projectId, createdAt, joinIdentity,
+            membership)) {
       Map<String, Object> hostSession = login(host);
       Map<String, Object> joinSession = login(join);
       Map<String, Object> invitation = command(host, hostSession, "invite", Map.of(
@@ -169,6 +174,22 @@ class LinkRuntimeOwnerControlPlaneTest {
     }
   }
 
+  @Test
+  void rejectsMembershipBoundToAnotherProjectBeforeSessionAdmission() throws Exception {
+    Path root = temp.resolve("mismatch");
+    NodeIdentity local = identity(root);
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+    OverlayMembershipSnapshot membership = OverlayMembershipSnapshot.create(UUID.randomUUID(), 1,
+        now.minusSeconds(1), now.plusSeconds(300), List.of(
+            new OverlayMembershipSnapshot.Member(local.nodeId(),
+                OverlayMembershipSnapshot.STATUS_ACTIVE, local.publicKeyEncoded())), local);
+
+    assertThrows(IllegalArgumentException.class, () -> new LinkRuntimeOwner(
+        new Onboarding(root.resolve(".synesis/local/profile/link"), ignored -> {
+        }), local, Optional.of(membership), ignored -> {
+        }, new ProjectIdentity(UUID.randomUUID(), now)));
+  }
+
   private static final class RuntimeFixture implements AutoCloseable {
 
     private final HttpClient client = HttpClient.newHttpClient();
@@ -177,19 +198,19 @@ class LinkRuntimeOwnerControlPlaneTest {
     private final LinkRuntimeOwner owner;
     private final URI baseUri;
 
-    private RuntimeFixture(Path root, UUID projectId, NodeIdentity identity,
+    private RuntimeFixture(Path root, UUID projectId, Instant createdAt, NodeIdentity identity,
         OverlayMembershipSnapshot membership) throws Exception {
       Path synesis = root.resolve(".synesis");
       Path profile = synesis.resolve("local/profile");
       Files.createDirectories(profile);
       ProjectApplicationService.ProjectLocation location = new ProjectApplicationService.ProjectLocation(
-          root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
+          root, synesis, root.resolve("project.json"), profile, projectId, createdAt);
       CoordinationService coordination = new CoordinationService(
           new PredictionEventStore(synesis.resolve("coordination"), projectId), identity);
       ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
       Onboarding onboarding = new Onboarding(profile.resolve("link"), eventHub::publish);
       owner = new LinkRuntimeOwner(onboarding, identity, Optional.of(membership),
-          eventHub::publish);
+          eventHub::publish, new ProjectIdentity(projectId, createdAt));
       ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination,
           new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner));
       handler = new ControlPlaneHttpHandler(readModel, coordination, owner, eventHub);

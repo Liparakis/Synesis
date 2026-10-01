@@ -24,6 +24,8 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.sync.ProjectReconciliationSync;
 import org.synesis.projectrecord.sync.ProjectRecordSync;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectIdentity;
 
 /**
  * Owns project synchronization orchestration for the unified CLI.
@@ -46,6 +48,14 @@ public final class SyncApplicationService {
     }
   }
 
+  private static ProjectIdentity canonicalIdentity(Path profile) {
+    try {
+      return new ProjectApplicationService().locate(profile).identity();
+    } catch (ProjectApplicationService.ProjectApplicationException failure) {
+      throw failure("PROJECT_INVALID");
+    }
+  }
+
   private static NodeIdentity identity(Path profile) {
     try {
       return new IdentityBootstrap(profile.resolve("link")).loadOrCreate()
@@ -60,6 +70,18 @@ public final class SyncApplicationService {
     if (store.head(record)
         .isEmpty()) {
       throw failure("RECORD_NOT_FOUND");
+    }
+  }
+
+  private static void validateExistingConfig(Path profile, UUID project, String host)
+      throws Exception {
+    Path path = profile.resolve(PROJECT_CONFIG);
+    if (!Files.exists(path)) {
+      return;
+    }
+    ProjectConfig config = ProjectConfig.load(path);
+    if (!project.equals(config.projectId()) || !config.peerNodeIds().equals(Set.of(host))) {
+      throw failure("PROJECT_MISMATCH");
     }
   }
 
@@ -143,7 +165,11 @@ public final class SyncApplicationService {
     Objects.requireNonNull(profile, "profile");
     Objects.requireNonNull(invitationSink, "invitationSink");
     try {
+      ProjectIdentity localIdentity = canonicalIdentity(profile);
       ProjectConfig config = loadConfig(profile);
+      if (!localIdentity.projectId().equals(config.projectId())) {
+        throw failure("PROJECT_MISMATCH");
+      }
       UUID projectId = parseUuid(project, "PROJECT_INVALID");
       UUID recordId = parseUuid(record, "RECORD_INVALID");
       if (projectId != null && !projectId.equals(config.projectId())) {
@@ -163,8 +189,10 @@ public final class SyncApplicationService {
       PeerSession.ApplicationStreamHandler reconciliation = new ProjectReconciliationSync(hostNode,
           config,
           store).handler();
-      PeerSession.ApplicationStreamHandler handler = (remote, bytes) -> isReconciliation(bytes)
+      PeerSession.ApplicationStreamHandler syncHandler = (remote, bytes) -> isReconciliation(bytes)
           ? reconciliation.handle(remote, bytes) : records.handle(remote, bytes);
+      PeerSession.ApplicationStreamHandler handler = ProjectContextExchange.withResponder(
+          localIdentity, syncHandler);
       Onboarding onboarding = new Onboarding(profile.resolve("link"), event -> {
         if (event.type() == OnboardingEventType.SHARE_LINK) {
           invitationSink.accept(
@@ -231,8 +259,15 @@ public final class SyncApplicationService {
       if (projectId == null) {
         throw failure("USAGE");
       }
+      ProjectIdentity localIdentity = canonicalIdentity(profile);
+      if (!localIdentity.projectId().equals(projectId)) {
+        throw failure("PROJECT_MISMATCH");
+      }
       UUID recordId = parseUuid(record != null ? record : query.get("record"), "RECORD_INVALID");
-      ProjectConfig config = existingOrCreate(profile, projectId, host, expectedHost != null);
+      validateExistingConfig(profile, projectId, host);
+      if (expectedHost == null && !Files.exists(profile.resolve(PROJECT_CONFIG))) {
+        throw failure("PROJECT_NOT_CONFIGURED");
+      }
       AtomicReference<SyncFailure> callbackFailure = new AtomicReference<>();
       Map<String, String> values = new LinkedHashMap<>();
       Onboarding onboarding = new Onboarding(profile.resolve("link"), ignored -> {
@@ -243,6 +278,13 @@ public final class SyncApplicationService {
             if (!session.isUsable() || !host.equals(session.remoteNodeId())) {
               throw failure("AUTH_FAILED");
             }
+            try {
+              ProjectContextExchange.require(session, localIdentity);
+            } catch (ProjectContextExchange.ProjectContextException contextFailure) {
+              throw failure(contextFailure.code());
+            }
+            ProjectConfig config = existingOrCreate(profile, projectId, host,
+                expectedHost != null);
             values.put("AUTHENTICATED_REMOTE", session.remoteNodeId());
             DecisionStore store = new DecisionStore(profile.resolve("records"), projectId);
             String local = identity(profile).nodeId();

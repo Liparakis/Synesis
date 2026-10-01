@@ -293,6 +293,30 @@ class WorkspacePatchServiceTest {
   }
 
   @Test
+  void staleControlBaseDoesNotPermitAnUnclaimedMutation() throws Exception {
+    String connectionId = "conn-patch-stale-unclaimed";
+    AgentSessionService sessions = new AgentSessionService();
+    sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        controlRoot, "codex", connectionId, null, false));
+    Path worktree = sessions.resolveSessionContext(
+        new AgentSessionService.SessionResolutionRequest(controlRoot, "codex", connectionId,
+            null, false)).worktreePath();
+
+    Files.writeString(controlRoot.resolve("control-advance.txt"), "sibling integration\n");
+    git(controlRoot, "add", "control-advance.txt");
+    git(controlRoot, "commit", "-m", "advance control checkout");
+
+    AgentResponse response = new WorkspacePatchService().applyPatch(
+        new WorkspacePatchService.PatchRequest(controlRoot, "codex", connectionId,
+            "src/Unclaimed.java", true, "public class Unclaimed {}\n", null, List.of()));
+
+    assertEquals(AgentStatus.RETRY_REQUIRED, response.status());
+    assertTrue(response.toJson().contains("workspace_stale"), response.toJson());
+    assertFalse(Files.exists(worktree.resolve("src/Unclaimed.java")));
+    assertFalse(Files.exists(controlRoot.resolve("src/Unclaimed.java")));
+  }
+
+  @Test
   void testRejectsOccurrenceMismatchAndRollsBackCompletely() throws Exception {
     AgentSessionService sessionService = new AgentSessionService();
     AgentSessionService.SessionResolutionRequest req = new AgentSessionService.SessionResolutionRequest(

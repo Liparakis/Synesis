@@ -295,6 +295,28 @@ class McpServerTest {
   }
 
   @Test
+  void mixedTaskFieldsAreRejectedWithoutCreatingAnIntent() throws Exception {
+    McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(),
+        tempRoot, "codex", "conn-mixed-task-fields");
+    String request = "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\","
+        + "\"params\":{\"name\":\"ensure_session\",\"arguments\":{"
+        + "\"task\":{\"goal\":\"review candidate\",\"acceptance\":\"report findings\","
+        + "\"claims\":[{\"kind\":\"path_exact\",\"path\":\"review-report.md\"}]},"
+        + "\"workGroupId\":\"f5714c5c-7ab4-4033-a4d8-ac63906a0418\","
+        + "\"role\":\"reviewer\",\"reviewTargets\":[{\"kind\":\"path_subtree\","
+        + "\"path\":\"greeting_card\"}]}}}";
+
+    String response = handler.handleMessage(request);
+    assertTrue(response.contains("TASK_FIELDS_MUST_BE_NESTED"), response);
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        tempRoot);
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    assertTrue(store.collaborationProjection().activeIntents().isEmpty());
+  }
+
+  @Test
   void runCommandRejectsTheRemovedIntentSchema() {
     AgentSessionService sessionService = new AgentSessionService();
     McpProtocolHandler handler = new McpProtocolHandler(sessionService, tempRoot, "codex",
@@ -415,6 +437,14 @@ class McpServerTest {
     assertFalse(requestResponse.contains("-32603"));
     assertTrue(requestResponse.contains("CONTRACT"));
     assertTrue(requestResponse.contains("PENDING"));
+    String scopeRevision =
+        "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"scope_revision\",\"payload\":{\"intentId\":\""
+            + intentId + "\",\"selectors\":[\"tests/mcp-request-owner.txt\"],"
+            + "\"proposal\":\"narrow ownership to a disjoint slice\"}}}}";
+    String scopeRevisionResponse = requester.handleMessage(scopeRevision);
+    assertFalse(scopeRevisionResponse.contains("-32603"), scopeRevisionResponse);
+    assertTrue(scopeRevisionResponse.contains("CONTRACT"), scopeRevisionResponse);
+    assertTrue(scopeRevisionResponse.contains("PENDING"), scopeRevisionResponse);
     String participantMarker = "\\\"id\\\":\\\"agt_";
     int firstParticipant = statusResponse.indexOf(participantMarker);
     int secondParticipant = statusResponse.indexOf(participantMarker,

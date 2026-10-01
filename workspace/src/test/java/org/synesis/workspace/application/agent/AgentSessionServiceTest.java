@@ -10,14 +10,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 /**
  * Exercises agent-session binding, renewal, and authority checks.
@@ -107,6 +116,43 @@ class AgentSessionServiceTest {
     assertEquals(ctx1.workerId(), ctx2.workerId());
     assertEquals(ctx1.supervisorId(), ctx2.supervisorId());
     assertEquals(ctx1.worktreePath(), ctx2.worktreePath());
+  }
+
+  @Test
+  void activeNoChangeSessionRecoversAfterTheControlBaseAdvances() throws Exception {
+    String connection = "read-only-after-control-advance";
+    var location = new ProjectApplicationService().locate(tempRoot);
+    var bindings = new ProviderSessionBindingService();
+    var original = bindings.ensure(location, "codex", connection).binding();
+    String participant = WorkspaceCollaborationService.participantHandle(original.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    WorkIntent intent = new WorkIntent(UUID.randomUUID(), location.projectId(), participant,
+        "codex", UUID.randomUUID(), "Review an immutable candidate",
+        "No repository mutation is required for this responsibility", original.baseCommit(),
+        List.of(ResourceSelector.pathExact("review_report.md")), 1, UUID.randomUUID(),
+        WorkIntent.Status.ANNOUNCED);
+    assertTrue(new WorkIntentService(store, identity).announce(intent).acquired());
+
+    Files.writeString(tempRoot.resolve("README.md"), "integrated sibling snapshot\n");
+    git(tempRoot, "add", "README.md");
+    git(tempRoot, "commit", "-m", "integrate sibling snapshot");
+
+    AgentSessionService.SessionResolutionRequest request =
+        new AgentSessionService.SessionResolutionRequest(tempRoot, "codex", connection, null,
+            false);
+    AgentResponse ensured = sessionService.ensureSession(request);
+    var recovered = sessionService.resolveSessionContext(request);
+    var ordinary = new WorkspaceReadinessService(bindings).assess(location, "codex", connection);
+
+    assertEquals(AgentStatus.READY, ensured.status());
+    assertEquals(original.sessionId(), recovered.sessionId());
+    assertEquals(Path.of(original.worktreePath()), recovered.worktreePath());
+    assertEquals(original.baseCommit(), recovered.baseCommit());
+    assertFalse(ordinary.ready());
+    assertEquals("CONTROL_BASE_ADVANCED", ordinary.internalReason());
   }
 
   @Test

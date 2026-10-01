@@ -274,7 +274,7 @@ final class DaemonServer implements AutoCloseable {
     } catch (IOException unavailable) {
       return response("URI_UNRESOLVED", Map.of("reason", "PROJECT_REGISTRY_UNAVAILABLE"));
     }
-    KnownProjectRegistry.ProjectView view = projects.stream()
+    KnownProjectRegistry.ProjectView view = logicalProjectChoices(projects).stream()
         .filter(project -> project.projectId().equals(target))
         .findFirst()
         .orElse(null);
@@ -389,10 +389,34 @@ final class DaemonServer implements AutoCloseable {
   }
 
   private List<KnownProjectRegistry.ProjectView> eligibleProjects() throws IOException {
-    return knownProjects().stream()
+    return logicalProjectChoices(knownProjects().stream()
         .filter(project -> project.status() == KnownProjectRegistry.Status.LIVE
             || project.status() == KnownProjectRegistry.Status.INACTIVE)
-        .toList();
+        .toList());
+  }
+
+  private List<KnownProjectRegistry.ProjectView> logicalProjectChoices(
+      List<KnownProjectRegistry.ProjectView> replicas) {
+    Map<UUID, KnownProjectRegistry.ProjectView> choices = new LinkedHashMap<>();
+    for (KnownProjectRegistry.ProjectView candidate : replicas) {
+      choices.merge(candidate.projectId(), candidate, this::preferReplica);
+    }
+    return List.copyOf(choices.values());
+  }
+
+  private KnownProjectRegistry.ProjectView preferReplica(
+      KnownProjectRegistry.ProjectView first, KnownProjectRegistry.ProjectView second) {
+    boolean firstLive = runtimeReachable(first.path());
+    boolean secondLive = runtimeReachable(second.path());
+    if (firstLive != secondLive) {
+      return secondLive ? second : first;
+    }
+    return first.path().toString().compareTo(second.path().toString()) <= 0 ? first : second;
+  }
+
+  private boolean runtimeReachable(Path path) {
+    RuntimeHandle runtime = runtimes.get(path);
+    return runtime != null && runtime.reachable();
   }
 
   private List<KnownProjectRegistry.ProjectView> knownProjects() throws IOException {

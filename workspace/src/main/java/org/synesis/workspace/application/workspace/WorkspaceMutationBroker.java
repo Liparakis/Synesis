@@ -216,6 +216,24 @@ public final class WorkspaceMutationBroker {
         request.location(),
         binding,
         assignedWorktree);
+    if (!workspaceCheck.verified() && "CONTROL_BASE_ADVANCED".equals(workspaceCheck.code())) {
+      // Keep broker verification aligned with readiness: a live managed provider may mutate
+      // within its exact assigned worktree after a sibling integrates, while inactive or
+      // ordinary bindings remain fenced by the current control base.
+      ProviderSessionBindingService.WorkspaceCheck managedContinuation =
+          bindingService.verifyManagedContinuationWorkspace(request.location(), binding,
+              assignedWorktree);
+      if (managedContinuation.verified()) {
+        workspaceCheck = managedContinuation;
+      } else {
+        ProviderSessionBindingService.WorkspaceCheck claimedContinuation =
+            bindingService.verifyClaimedMutationContinuationWorkspace(request.location(), binding,
+                assignedWorktree, request.relativePath());
+        if (claimedContinuation.verified()) {
+          workspaceCheck = claimedContinuation;
+        }
+      }
+    }
     if (!workspaceCheck.verified()) {
       return evaluateAndRecord(false,
           Decision.WORKSPACE_UNVERIFIED,

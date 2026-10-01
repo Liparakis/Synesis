@@ -109,13 +109,14 @@ public final class TaskSnapshotService {
     }
   }
 
-  private static String preparedTreeHash(Path workdir, String parent) throws IOException {
+  private static String preparedTreeHash(Path workdir, String parent, List<String> paths)
+      throws IOException {
     Path index = null;
     try {
       index = Files.createTempFile("synesis-tree-", ".index");
       Files.deleteIfExists(index);
       runGitWithIndex(workdir, index, "read-tree", parent);
-      stageSourceIndex(workdir, index);
+      stageSourceIndex(workdir, index, paths);
       return runGitWithIndexOutput(workdir, index, "write-tree");
     } finally {
       if (index != null) {
@@ -162,7 +163,8 @@ public final class TaskSnapshotService {
         .replace('\\', '/');
   }
 
-  private static String materializeSnapshot(Path workdir, String parent, String snapshotId)
+  private static String materializeSnapshot(Path workdir, String parent, String snapshotId,
+      List<String> paths)
       throws IOException {
     Path index = Files.createTempFile("synesis-snapshot-", ".index");
     Files.deleteIfExists(index);
@@ -170,7 +172,7 @@ public final class TaskSnapshotService {
       runGitWithIndex(workdir, index, "read-tree", parent);
       // Provider/session metadata belongs to the lane runtime, never to a
       // published source snapshot.  Keep it at the parent tree value.
-      stageSourceIndex(workdir, index);
+      stageSourceIndex(workdir, index, paths);
       String tree = runGitWithIndexOutput(workdir, index, "write-tree");
       String commit = runGitWithIndexOutput(workdir,
           index,
@@ -187,11 +189,21 @@ public final class TaskSnapshotService {
     }
   }
 
-  private static void stageSourceIndex(Path workdir, Path index) throws IOException {
+  private static void stageSourceIndex(Path workdir, Path index, List<String> paths)
+      throws IOException {
     // Let Git's ignore rules omit provider/admin material first.  Reset
     // explicitly managed paths from the temporary index as well, covering
     // projects that accidentally track one of those files.
-    runGitWithIndex(workdir, index, "add", "-A", "--", ".");
+    if (paths.isEmpty()) {
+      runGitWithIndex(workdir, index, "add", "-A", "--", ".");
+    } else {
+      List<String> add = new ArrayList<>();
+      add.add("add");
+      add.add("-A");
+      add.add("--");
+      add.addAll(paths);
+      runGitWithIndex(workdir, index, add.toArray(String[]::new));
+    }
     for (String managed : List.of(".synesis", ".codex", ".claude", "AGENTS.md", ".mcp.json",
         "__pycache__", ":(glob)**/__pycache__/**")) {
       try {
@@ -250,6 +262,44 @@ public final class TaskSnapshotService {
   }
 
   /**
+   * Resolves the diff base for an intent running in its exact bound worktree.
+   *
+   * <p>An active intent can outlive an integration that advances the control checkout. A clean
+   * provider binding may then be reallocated at the new control commit while the durable intent
+   * keeps its original admission base. Use that assigned-worktree base only when Git proves it is
+   * descended from the intent base and the current worktree HEAD; otherwise preserve the original
+   * intent base. This excludes already-integrated sibling changes from the next snapshot without
+   * changing the intent, its claims, or its authority lineage.</p>
+   *
+   * @param workerWorktreePath exact assigned worktree
+   * @param intentBaseCommit   immutable intent admission base
+   * @param bindingBaseCommit server-recorded base of the assigned worktree
+   * @return the verified worktree base, or the original intent base
+   * @throws IOException if Git inspection fails
+   */
+  public String snapshotBaseForBoundWorktree(Path workerWorktreePath,
+      String intentBaseCommit, String bindingBaseCommit) throws IOException {
+    Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+    if (intentBaseCommit == null || intentBaseCommit.isBlank()
+        || bindingBaseCommit == null || bindingBaseCommit.isBlank()
+        || intentBaseCommit.equals(bindingBaseCommit)) {
+      return intentBaseCommit;
+    }
+    String worktreeHead = gitRevParse(workerWorktreePath);
+    if (commitIsAncestor(workerWorktreePath, intentBaseCommit, bindingBaseCommit)
+        && commitIsAncestor(workerWorktreePath, bindingBaseCommit, worktreeHead)) {
+      return bindingBaseCommit;
+    }
+    return intentBaseCommit;
+  }
+
+  private static boolean commitIsAncestor(Path worktree, String ancestor, String descendant)
+      throws IOException {
+    return GitProcessRunner.runResult(worktree, "merge-base", "--is-ancestor", ancestor,
+        descendant).exitCode() == 0;
+  }
+
+  /**
    * Checks whether the worker worktree contains source changes covered by the current lane claims.
    *
    * <p>A recovered worktree may be based on a sibling's integrated commit.
@@ -286,6 +336,24 @@ public final class TaskSnapshotService {
    */
   public boolean hasPublishableChanges(Path workerWorktreePath,
       List<ResourceSelector> claims, String laneBaseCommit) throws IOException {
+    return hasPublishableChanges(workerWorktreePath, claims, laneBaseCommit, false);
+  }
+
+  /**
+   * Checks whether this lane has claim-covered source changes while optionally allowing sibling
+   * lanes owned by the same participant to have separate claim-covered changes in the same
+   * worktree.
+   *
+   * @param workerWorktreePath absolute worker worktree path
+   * @param claims             exact lane claims
+   * @param laneBaseCommit     server-recorded lane baseline, or {@code null}
+   * @param allowOtherClaimedChanges whether source changes outside this lane may be present
+   * @return true when this lane has at least one publishable source change
+   * @throws IOException if Git inspection fails
+   */
+  public boolean hasPublishableChanges(Path workerWorktreePath,
+      List<ResourceSelector> claims, String laneBaseCommit, boolean allowOtherClaimedChanges)
+      throws IOException {
     Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
     Objects.requireNonNull(claims, "claims");
     boolean dirty = !runGitOutput(workerWorktreePath,
@@ -303,12 +371,168 @@ public final class TaskSnapshotService {
         .filter(path -> !manifest.allowedArtifacts()
             .contains(path))
         .toList();
-    if (!claims.isEmpty() && sourceChanges.stream()
-        .anyMatch(path -> claims.stream()
-            .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-      return false;
+    if (!claims.isEmpty()) {
+      boolean laneChange = sourceChanges.stream()
+          .anyMatch(path -> claims.stream()
+              .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
+      if (!laneChange) {
+        return false;
+      }
+      if (!allowOtherClaimedChanges && sourceChanges.stream()
+          .anyMatch(path -> claims.stream()
+              .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
+        return false;
+      }
     }
     return !sourceChanges.isEmpty();
+  }
+
+  /**
+   * Checks one lane in a shared worktree without allowing unowned source changes.
+   *
+   * @param workerWorktreePath absolute worker worktree path
+   * @param laneClaims        claims for the lane being published
+   * @param participantClaims union of all active claims owned by the participant
+   * @param laneBaseCommit    server-recorded lane baseline
+   * @return true when lane changes exist and every source change belongs to a participant lane
+   * @throws IOException if Git inspection fails
+   */
+  public boolean hasScopedPublishableChanges(Path workerWorktreePath,
+      List<ResourceSelector> laneClaims, List<ResourceSelector> participantClaims,
+      String laneBaseCommit) throws IOException {
+    return hasScopedPublishableChanges(workerWorktreePath, laneClaims, participantClaims,
+        List.of(), laneBaseCommit);
+  }
+
+  /**
+   * Checks one lane in a worktree that may contain durable content belonging to other active
+   * claims.
+   *
+   * <p>Continuation deliberately restores the immutable recovery snapshot as a usable working
+   * tree.  That snapshot can contain source paths claimed by another active lane, such as a
+   * review report or a sibling producer's partial output.  Those paths must remain available to
+   * the other lane, but they must not fence publication of the current lane or become part of its
+   * immutable snapshot.  Unknown source paths remain fail-closed.</p>
+   *
+   * @param workerWorktreePath absolute worker worktree path
+   * @param laneClaims exact claims for the lane being published
+   * @param participantClaims union of active claims owned by the participant
+   * @param foreignClaims active claims owned by other participants whose durable content may be
+   *                     present in the worktree
+   * @param laneBaseCommit server-recorded lane baseline
+   * @return true when the lane has a claim-covered source change and all other source changes are
+   *         covered by participant or foreign claims
+   * @throws IOException if Git inspection fails
+   */
+  public boolean hasScopedPublishableChanges(Path workerWorktreePath,
+      List<ResourceSelector> laneClaims, List<ResourceSelector> participantClaims,
+      List<ResourceSelector> foreignClaims, String laneBaseCommit) throws IOException {
+    Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+    Objects.requireNonNull(laneClaims, "laneClaims");
+    Objects.requireNonNull(participantClaims, "participantClaims");
+    Objects.requireNonNull(foreignClaims, "foreignClaims");
+    if (foreignClaims.isEmpty()) {
+      return hasPublishableChanges(workerWorktreePath, laneClaims, laneBaseCommit, true)
+          && hasPublishableChanges(workerWorktreePath, participantClaims, laneBaseCommit, false);
+    }
+    boolean dirty = !runGitOutput(workerWorktreePath,
+        "status", "--porcelain", "--untracked-files=all").isBlank();
+    String headCommit = gitRevParse(workerWorktreePath);
+    String baseCommit = laneBaseCommit == null || laneBaseCommit.isBlank()
+        ? dirty ? headCommit : deriveBaseCommit(workerWorktreePath)
+        : laneBaseCommit;
+    List<String> allChangedPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+    SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(allChangedPaths);
+    if (!manifest.valid()) {
+      return false;
+    }
+    List<String> sourceChanges = allChangedPaths.stream()
+        .filter(path -> !manifest.allowedArtifacts().contains(path))
+        .toList();
+    boolean laneChange = sourceChanges.stream()
+        .anyMatch(path -> laneClaims.stream()
+            .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
+    if (!laneChange) {
+      return false;
+    }
+    return sourceChanges.stream()
+        .allMatch(path -> participantClaims.stream()
+            .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))
+            || foreignClaims.stream()
+            .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
+  }
+
+  /**
+   * Checks whether a successor has changed the claim-covered content of a rejected immutable
+   * snapshot.
+   *
+   * <p>A recovery worktree intentionally starts with the rejected snapshot materialized as
+   * working-tree content on the successor's own lane baseline. Comparing only with that lane
+   * baseline would therefore mistake the recovered content for a new revision. This predicate
+   * compares the current claim-scoped source paths with the rejected snapshot commit. The later
+   * publication predicate remains responsible for the complete participant-claim and artifact
+   * fence; this predicate only decides whether the owner has made a real correction.</p>
+   *
+   * @param workerWorktreePath successor worktree
+   * @param laneClaims         exact successor lane claims
+   * @param laneBaseCommit     server-recorded successor lane baseline
+   * @param rejectedSnapshot   immutable rejected snapshot
+   * @return {@code true} when a claim-covered source correction exists
+   * @throws IOException when Git inspection or the rejected snapshot commit is unavailable
+   */
+  public boolean hasRevisionPublishableChanges(Path workerWorktreePath,
+      List<ResourceSelector> laneClaims, String laneBaseCommit,
+      TaskSnapshotRecord rejectedSnapshot) throws IOException {
+    Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
+    Objects.requireNonNull(laneClaims, "laneClaims");
+    Objects.requireNonNull(rejectedSnapshot, "rejectedSnapshot");
+    String rejectedCommit = rejectedSnapshot.commitSha();
+    if (rejectedCommit == null || rejectedCommit.isBlank()) {
+      return false;
+    }
+    runGitOutput(workerWorktreePath, "cat-file", "-e", rejectedCommit + "^{commit}");
+    boolean dirty = !runGitOutput(workerWorktreePath,
+        "status", "--porcelain", "--untracked-files=all").isBlank();
+    String headCommit = gitRevParse(workerWorktreePath);
+    String baseCommit = laneBaseCommit == null || laneBaseCommit.isBlank()
+        ? dirty ? headCommit : deriveBaseCommit(workerWorktreePath)
+        : laneBaseCommit;
+    List<String> currentPaths = deriveChangedPaths(workerWorktreePath, baseCommit, dirty);
+    java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>(
+        rejectedSnapshot.changedPaths());
+    candidates.addAll(currentPaths);
+    for (String path : candidates) {
+      if (laneClaims.stream()
+          .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))) {
+        continue;
+      }
+      if (differsFromCommit(workerWorktreePath, rejectedCommit, path)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean differsFromCommit(Path workdir, String commit, String path)
+      throws IOException {
+    String normalized = path.replace('\\', '/');
+    boolean presentInCommit;
+    try {
+      runGitOutput(workdir, "cat-file", "-e", commit + ":" + normalized);
+      presentInCommit = true;
+    } catch (IOException missingPath) {
+      presentInCommit = false;
+    }
+    if (!presentInCommit) {
+      return Files.exists(workdir.resolve(normalized));
+    }
+    Path currentPath = workdir.resolve(normalized);
+    if (!Files.exists(currentPath)) {
+      return true;
+    }
+    String committedHash = runGitOutput(workdir, "rev-parse", commit + ":" + normalized);
+    String currentHash = runGitOutput(workdir, "hash-object", "--", normalized);
+    return !committedHash.equals(currentHash);
   }
 
   /**
@@ -540,6 +764,95 @@ public final class TaskSnapshotService {
       String bindingIdentity, long claimEpoch, UUID authorityLineageId,
       List<String> handoffLineage, boolean reviewRequired, String laneBaseCommit
   ) throws IOException {
+    return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+        workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, claims,
+        workGroupId, laneId, participant, bindingIdentity, claimEpoch, authorityLineageId,
+        handoffLineage, reviewRequired, laneBaseCommit, false);
+  }
+
+  /**
+   * Creates a snapshot for one lane in a shared participant worktree.
+   *
+   * @param taskId task ID
+   * @param nodeId node identity
+   * @param supervisorId supervisor identity
+   * @param workerId worker identity
+   * @param providerSessionId provider binding
+   * @param workerWorktreePath lane worktree
+   * @param controlRoot control root
+   * @param summary completion summary
+   * @param existingOpt existing snapshot
+   * @param activeCapabilities capability dependencies
+   * @param claims exact lane claims
+   * @param workGroupId work group
+   * @param laneId lane intent
+   * @param participant participant
+   * @param bindingIdentity binding identity
+   * @param claimEpoch claim epoch
+   * @param authorityLineageId authority lineage
+   * @param handoffLineage handoff references
+   * @param reviewRequired whether review gates integration
+   * @param laneBaseCommit server-recorded baseline
+   * @param scopeToClaims whether to materialize only this lane's claim-covered changes
+   * @return immutable snapshot
+   * @throws IOException if Git inspection fails
+   */
+  public TaskSnapshotRecord createSnapshot(
+      UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+      Path workerWorktreePath, Path controlRoot, String summary,
+      Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+      List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+      String bindingIdentity, long claimEpoch, UUID authorityLineageId,
+      List<String> handoffLineage, boolean reviewRequired, String laneBaseCommit,
+      boolean scopeToClaims
+  ) throws IOException {
+    return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId,
+        workerWorktreePath, controlRoot, summary, existingOpt, activeCapabilities, claims,
+        workGroupId, laneId, participant, bindingIdentity, claimEpoch, authorityLineageId,
+        handoffLineage, reviewRequired, laneBaseCommit, scopeToClaims, List.of());
+  }
+
+  /**
+   * Creates a snapshot for one lane while excluding source paths owned by other active claims.
+   *
+   * <p>Foreign paths are preserved in the worker worktree for their lawful owners, but are not
+   * materialized into this lane's immutable snapshot.  When claim scoping is disabled, unknown
+   * source paths still cause a fail-closed rejection.</p>
+   *
+   * @param taskId task ID
+   * @param nodeId node identity
+   * @param supervisorId supervisor identity
+   * @param workerId worker identity
+   * @param providerSessionId provider binding
+   * @param workerWorktreePath absolute worker worktree path
+   * @param controlRoot control root
+   * @param summary completion summary
+   * @param existingOpt existing immutable snapshot for the exact revision
+   * @param activeCapabilities capability records
+   * @param claims exact claims for the lane being published
+   * @param workGroupId logical work-group ID
+   * @param laneId lane intent ID
+   * @param participant participant handle
+   * @param bindingIdentity exact provider binding identity
+   * @param claimEpoch current claim epoch
+   * @param authorityLineageId current authority lineage
+   * @param handoffLineage handoff references
+   * @param reviewRequired whether review acceptance gates integration
+   * @param laneBaseCommit server-recorded lane baseline
+   * @param scopeToClaims whether to materialize only this lane's claim-covered changes
+   * @param foreignClaims active claims owned by other participants
+   * @return immutable snapshot
+   * @throws IOException if Git inspection fails
+   */
+  public TaskSnapshotRecord createSnapshot(
+      UUID taskId, String nodeId, String supervisorId, String workerId, String providerSessionId,
+      Path workerWorktreePath, Path controlRoot, String summary,
+      Optional<TaskSnapshotRecord> existingOpt, List<CapabilityRequestRecord> activeCapabilities,
+      List<ResourceSelector> claims, UUID workGroupId, UUID laneId, String participant,
+      String bindingIdentity, long claimEpoch, UUID authorityLineageId,
+      List<String> handoffLineage, boolean reviewRequired, String laneBaseCommit,
+      boolean scopeToClaims, List<ResourceSelector> foreignClaims
+  ) throws IOException {
     Objects.requireNonNull(taskId, "taskId");
     Objects.requireNonNull(nodeId, "nodeId");
     Objects.requireNonNull(supervisorId, "supervisorId");
@@ -550,6 +863,7 @@ public final class TaskSnapshotService {
     Objects.requireNonNull(summary, "summary");
     Objects.requireNonNull(activeCapabilities, "activeCapabilities");
     Objects.requireNonNull(claims, "claims");
+    Objects.requireNonNull(foreignClaims, "foreignClaims");
 
     // Inspect the lane without requiring the harness to create a commit.
     if (existingOpt.isPresent()) {
@@ -572,21 +886,32 @@ public final class TaskSnapshotService {
         .filter(path -> !artifactManifest.allowedArtifacts()
             .contains(path))
         .toList();
-    if (!claims.isEmpty() && changedPaths.stream()
+    List<String> nonForeignChangedPaths = changedPaths.stream()
+        .filter(path -> foreignClaims.stream()
+            .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))
+        .toList();
+    if (!scopeToClaims && !claims.isEmpty() && nonForeignChangedPaths.stream()
         .anyMatch(path -> claims.stream()
             .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-      throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH:" + changedPaths.stream()
+      throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH:" + nonForeignChangedPaths.stream()
           .filter(path -> claims.stream()
               .noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))
           .findFirst()
           .orElse("unknown"));
     }
-    String treeHash = preparedTreeHash(workerWorktreePath, headCommit);
+    List<String> materializedPaths = scopeToClaims
+        ? nonForeignChangedPaths.stream()
+          .filter(path -> claims.stream()
+              .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))
+          .toList()
+        : nonForeignChangedPaths;
+    String treeHash = preparedTreeHash(workerWorktreePath, headCommit, materializedPaths);
     String snapshotId =
         "snap_" + stableId(projectIdentity(controlRoot), laneId, claimEpoch, baseCommit, treeHash);
     String commitSha;
     if (dirty) {
-      commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId);
+      commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId,
+          materializedPaths);
     } else {
       commitSha = headCommit;
       runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId,
@@ -616,11 +941,11 @@ public final class TaskSnapshotService {
             .map(selector -> selector.kind()
                 .name() + ":" + selector.value())
             .toList(),
-        "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, changedPaths),
+        "refs/synesis/snapshots/" + snapshotId, integrity(commitSha, materializedPaths),
         artifactManifest.digest());
     return new TaskSnapshotRecord(
         taskId, snapshotId, nodeId, supervisorId, workerId,
-        providerSessionId, baseCommit, commitSha, changedPaths,
+        providerSessionId, baseCommit, commitSha, materializedPaths,
         List.copyOf(capabilityDependencies), summary, System.currentTimeMillis(), provenance,
         reviewRequired);
   }

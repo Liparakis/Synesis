@@ -9,10 +9,15 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -20,6 +25,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
+import org.synesis.workspace.application.task.SnapshotArtifactPolicy;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
@@ -189,8 +195,6 @@ public final class ProviderSessionBindingService {
   private static boolean registeredWorktree(Path root, Path assigned, Binding binding)
       throws Exception {
     String list = runGit(root, "worktree", "list", "--porcelain");
-    String canonical = assigned.toRealPath()
-        .toString();
     boolean pathFound = false;
     for (String line : list.lines()
         .toList()) {
@@ -198,9 +202,11 @@ public final class ProviderSessionBindingService {
         Path wt = Path.of(line.substring("worktree ".length()))
             .toAbsolutePath()
             .normalize();
-        String wtCanonical = Files.exists(wt) ? wt.toRealPath()
-                                                .toString() : wt.toString();
-        pathFound = wtCanonical.equalsIgnoreCase(canonical);
+        // Git and a packaged Windows host can spell one existing worktree
+        // through different LOCALAPPDATA aliases. Files.isSameFile follows
+        // those aliases without accepting a merely similar or nonexistent
+        // path.
+        pathFound = sameFilesystemObject(wt, assigned);
       }
       if (pathFound && line.equals("branch refs/heads/" + binding.branch())) {
         return true;
@@ -209,12 +215,39 @@ public final class ProviderSessionBindingService {
     return false;
   }
 
+  private static boolean sameFilesystemObject(Path left, Path right) {
+    if (left == null || right == null) {
+      return false;
+    }
+    try {
+      return Files.isSameFile(left, right);
+    } catch (IOException | SecurityException unavailable) {
+      return false;
+    }
+  }
+
+  private static boolean sameOrDescendant(Path candidate, Path parent) {
+    if (candidate == null || parent == null) {
+      return false;
+    }
+    Path current = candidate.toAbsolutePath()
+        .normalize();
+    while (current != null) {
+      if (sameFilesystemObject(current, parent)) {
+        return true;
+      }
+      current = current.getParent();
+    }
+    return false;
+  }
+
   private static boolean sameGitCommonDirectory(Path root, Path assigned, Binding binding)
       throws Exception {
     Path expected = Path.of(canonicalGitCommon(root));
     Path actual = Path.of(canonicalGitCommon(assigned));
-    return expected.equals(actual) && (binding.gitCommonDir() == null || binding.gitCommonDir()
-        .equals(actual.toString()));
+    return sameFilesystemObject(expected, actual)
+        && (binding.gitCommonDir() == null || sameFilesystemObject(
+            Path.of(binding.gitCommonDir()), actual));
   }
 
   private static String canonicalGitCommon(Path root) throws Exception {
@@ -500,6 +533,74 @@ public final class ProviderSessionBindingService {
     }
   }
 
+  /**
+   * Determines whether a dirty binding is the exact live target of a committed recovery
+   * continuation. Snapshot restoration intentionally creates provider-visible changes in the
+   * target worktree; the durable continuation event is the authority that distinguishes those
+   * changes from an unrelated stale workspace.
+   *
+   * @param location initialized project location
+   * @param binding exact provider binding
+   * @return {@code true} only for an active successor intent bound to this session
+   */
+  private static boolean authorizedRecoveryContinuation(
+      ProjectApplicationService.ProjectLocation location, Binding binding) {
+    if (binding == null || binding.worktreePath() == null
+        || !Files.isDirectory(Path.of(binding.worktreePath()))) {
+      return false;
+    }
+    try {
+      String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+      var projection = new PredictionEventStore(location.root()
+          .resolve(".synesis/coordination"), location.projectId()).collaborationProjection();
+      return projection.activeIntents()
+          .stream()
+          .filter(intent -> intent.projectId().equals(location.projectId()))
+          .filter(intent -> intent.provider().equals(binding.provider()))
+          .filter(intent -> intent.participant().equals(participant))
+          .filter(intent -> intent.status() == WorkIntent.Status.ANNOUNCED)
+          .anyMatch(intent -> projection.predecessorIntent(intent.intentId()).isPresent()
+              && projection.participantState(participant)
+              .filter(state -> state
+                  == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE)
+              .isPresent());
+    } catch (Exception failure) {
+      return false;
+    }
+  }
+
+  /**
+   * Returns whether the exact provider session has an active intent that explicitly requires no
+   * repository mutation.
+   *
+   * @param location initialized project location
+   * @param binding exact provider binding
+   * @return whether a matching announced intent permits no-change session readiness
+   */
+  public boolean hasActiveNoChangeIntent(
+      ProjectApplicationService.ProjectLocation location, Binding binding) throws Exception {
+    Path events = location.root()
+        .resolve(".synesis/coordination/events");
+    if (!Files.exists(events)) {
+      return false;
+    }
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    return new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId())
+        .collaborationProjection()
+        .activeIntents()
+        .stream()
+        .filter(intent -> intent.participant()
+            .equals(participant))
+        .anyMatch(intent -> declaresNoRepositoryMutation(intent.acceptance()));
+  }
+
+  private static boolean declaresNoRepositoryMutation(String acceptance) {
+    String normalized = acceptance.toLowerCase(Locale.ROOT);
+    return normalized.contains("without repository mutation")
+        || normalized.contains("no repository mutation is required");
+  }
+
   private static boolean workspaceGenerationFresh(
       ProjectApplicationService.ProjectLocation location,
       Binding binding) {
@@ -545,7 +646,12 @@ public final class ProviderSessionBindingService {
   private static Binding reallocatePreservingSession(
       ProjectApplicationService.ProjectLocation location,
       Binding binding) {
-    String suffix = "recovery-" + UUID.randomUUID();
+    // Keep the derived worktree path below Windows' legacy checkout-path
+    // limit even when the project contains deep private metadata paths.
+    String suffix = "r-" + UUID.randomUUID()
+        .toString()
+        .replace("-", "")
+        .substring(0, 12);
     Binding replacement = copy(binding,
         null,
         location.root()
@@ -558,6 +664,157 @@ public final class ProviderSessionBindingService {
         "WORKSPACE_REBOUND",
         "WORKSPACE_UNVERIFIED");
     return withWorktree(location, replacement, suffix);
+  }
+
+  private Binding refreshClaimedDirtyWorkspace(ProjectApplicationService.ProjectLocation location,
+      Binding binding, Path bindingPath) throws Exception {
+    Path coordination = location.root().resolve(".synesis/coordination");
+    // The same lock fences claim transitions and peer integration while the new
+    // worktree is prepared. The old worktree remains intact even after publication.
+    try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordination)) {
+      if (!lock.isHeld()) {
+        throw staleDirty();
+      }
+      Binding current = read(bindingPath);
+      if (!current.sessionId().equals(binding.sessionId()) || !"BOUND".equals(current.status())
+          || isSessionTerminal(location, current.sessionId())) {
+        throw staleDirty();
+      }
+      if (!current.worktreePath().equals(binding.worktreePath())) {
+        if (!workspaceGenerationFresh(location, current)) {
+          throw staleDirty();
+        }
+        return verifyBinding(location.root(), current);
+      }
+      Path source = Path.of(current.worktreePath());
+      if (hasActiveManagedAttachment(location, current)
+          || !verifyWorkspace(location, current, source, false, false).verified()
+          || !controlAdvancedWithoutUnintegratedWorkerWork(location, current)
+          || !current.baseCommit().equals(currentCommit(source))) {
+        throw staleDirty();
+      }
+      var projection = new PredictionEventStore(coordination, location.projectId())
+          .collaborationProjection();
+      String participant = WorkspaceCollaborationService.participantHandle(current.sessionId());
+      if (projection.participantState(participant)
+          .filter(state -> state
+              == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE)
+          .isEmpty()) {
+        throw staleDirty();
+      }
+      List<ResourceSelector> claims = projection.activeIntents().stream()
+          .filter(intent -> intent.projectId().equals(location.projectId())
+              && intent.provider().equals(current.provider())
+              && intent.participant().equals(participant)
+              && intent.status() == WorkIntent.Status.ANNOUNCED)
+          .flatMap(intent -> intent.selectors().stream()).toList();
+      String controlHead = currentCommit(location.root());
+      if (GitProcessRunner.runResult(location.root(), "merge-base", "--is-ancestor",
+          current.baseCommit(), controlHead).exitCode() != 0) {
+        throw staleDirty();
+      }
+      List<String> peerChanges = gitPaths(location.root(), "diff", "--name-only", "--no-renames",
+          "-z", current.baseCommit(), controlHead, "--");
+      if (claims.isEmpty() || peerChanges.stream().anyMatch(path -> claims.stream()
+          .anyMatch(claim -> claim.overlaps(ResourceSelector.pathExact(path))))) {
+        throw staleDirty();
+      }
+      Map<String, byte[]> changes = claimedDirtyContents(source, claims);
+      Binding replacement = reallocatePreservingSession(location, current);
+      Path target = Path.of(replacement.worktreePath());
+      if (!controlHead.equals(replacement.baseCommit())
+          || !verifyWorkspace(location, replacement, target).verified()) {
+        throw staleDirty();
+      }
+      for (var change : changes.entrySet()) {
+        Path destination = safeRefreshPath(target, change.getKey());
+        if (change.getValue() == null) {
+          Files.deleteIfExists(destination);
+        } else {
+          Files.createDirectories(destination.getParent());
+          Files.copy(safeRefreshPath(source, change.getKey()), destination,
+              StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+          if (!java.util.Arrays.equals(change.getValue(), Files.readAllBytes(destination))) {
+            throw staleDirty();
+          }
+        }
+      }
+      Map<String, byte[]> rechecked = claimedDirtyContents(source, claims);
+      if (!changes.keySet().equals(rechecked.keySet()) || changes.entrySet().stream()
+          .anyMatch(change -> !java.util.Arrays.equals(change.getValue(),
+              rechecked.get(change.getKey())))
+          || !verifyWorkspace(location, replacement, target).verified()
+          || !verifyWorkspace(location, current, source, false, false).verified()) {
+        throw staleDirty();
+      }
+      // Before this atomic write a retry uses the untouched original; afterwards
+      // it uses the fully prepared replacement, with the same session and claims.
+      write(bindingPath, replacement.touch());
+      return replacement;
+    }
+  }
+
+  private static Map<String, byte[]> claimedDirtyContents(Path source,
+      List<ResourceSelector> claims) throws Exception {
+    // An index-only edit needs its own replay semantics; do not discard it.
+    if (!gitPaths(source, "diff", "--cached", "--name-only", "-z", "--").isEmpty()) {
+      throw staleDirty();
+    }
+    var paths = new java.util.TreeSet<>(gitPaths(source, "diff", "--name-only", "--no-renames",
+        "-z", "HEAD", "--"));
+    paths.addAll(gitPaths(source, "ls-files", "--others", "--exclude-standard", "-z"));
+    var artifacts = new SnapshotArtifactPolicy().classify(List.copyOf(paths));
+    if (!artifacts.valid()) {
+      throw staleDirty();
+    }
+    Map<String, byte[]> contents = new LinkedHashMap<>();
+    long bytes = 0;
+    for (String path : paths) {
+      if (artifacts.allowedArtifacts().contains(path)) {
+        continue;
+      }
+      if (claims.stream().noneMatch(claim -> claim.overlaps(ResourceSelector.pathExact(path)))) {
+        throw staleDirty();
+      }
+      Path file = safeRefreshPath(source, path);
+      byte[] content = null;
+      if (Files.exists(file)) {
+        if (!Files.isRegularFile(file) || (bytes += Files.size(file)) > 16 * 1024 * 1024) {
+          throw staleDirty();
+        }
+        content = Files.readAllBytes(file);
+      }
+      contents.put(path, content);
+    }
+    return contents;
+  }
+
+  private static Path safeRefreshPath(Path root, String relative) throws Exception {
+    Path path = root.resolve(relative).normalize();
+    if (!path.startsWith(root) || path.equals(root)) {
+      throw staleDirty();
+    }
+    for (Path part = path; !part.equals(root); part = part.getParent()) {
+      if (Files.isSymbolicLink(part) || (Files.exists(part)
+          && !part.toRealPath().startsWith(root.toRealPath()))) {
+        throw staleDirty();
+      }
+    }
+    return path;
+  }
+
+  private static List<String> gitPaths(Path root, String... arguments) throws IOException {
+    byte[] output = GitProcessRunner.runBytes(root, arguments);
+    if (output.length >= GitProcessRunner.DEFAULT_MAX_OUTPUT_BYTES) {
+      throw new IOException("Workspace path inspection exceeded its output bound");
+    }
+    return java.util.Arrays.stream(new String(output, StandardCharsets.UTF_8)
+        .split("\u0000")).filter(path -> !path.isEmpty()).toList();
+  }
+
+  private static BindingException staleDirty() {
+    return new BindingException("WORKSPACE_STALE_DIRTY",
+        "Stored provider workspace cannot be refreshed without risking uncommitted work");
   }
 
   private static boolean isWorktreeClean(Binding binding) {
@@ -683,24 +940,38 @@ public final class ProviderSessionBindingService {
             && !binding.status()
             .equals("SUSPENDED") && !binding.status()
             .equals("CANCELLED")) {
+          if (binding.worktreePath() != null && workspaceGenerationFresh(location, binding)) {
+            Binding refreshed = verifyBinding(location.root(), binding).touch();
+            write(bindingPath, refreshed);
+            return new BindingResult(refreshed,
+                instanceEvidence == null || instanceEvidence.isBlank());
+          }
+          boolean retainExistingWorktree = false;
           if (binding.worktreePath() != null && !workspaceGenerationFresh(location, binding)) {
-            if (!isWorktreeClean(binding)) {
-              throw new BindingException("WORKSPACE_STALE_DIRTY",
-                  "Stored provider workspace contains uncommitted work");
+            boolean authorizedContinuation = authorizedRecoveryContinuation(location, binding);
+            boolean worktreeClean = isWorktreeClean(binding);
+            if (!worktreeClean && !authorizedContinuation) {
+              Binding refreshed = refreshClaimedDirtyWorkspace(location, binding, bindingPath);
+              return new BindingResult(refreshed,
+                  instanceEvidence == null || instanceEvidence.isBlank());
             }
             boolean activeManagedAttachment = hasActiveManagedAttachment(location, binding);
+            boolean activeNoChangeIntent = hasActiveNoChangeIntent(location, binding);
             if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding)
-                && !activeManagedAttachment) {
+                && !activeManagedAttachment && !activeNoChangeIntent && worktreeClean) {
               Binding rebound = reallocatePreservingSession(location, binding).touch();
               write(bindingPath, rebound);
               return new BindingResult(rebound,
                   instanceEvidence == null || instanceEvidence.isBlank());
             }
-            if (!activeManagedAttachment) {
+            if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent) {
               binding = newBinding(location, identity, provider, fingerprint);
+            } else {
+              retainExistingWorktree = true;
             }
           }
-          Binding refreshed = withWorktree(location, binding).touch();
+          Binding refreshed = (retainExistingWorktree ? binding : withWorktree(location, binding))
+              .touch();
           write(bindingPath, refreshed);
           return new BindingResult(refreshed,
               instanceEvidence == null || instanceEvidence.isBlank());
@@ -735,7 +1006,7 @@ public final class ProviderSessionBindingService {
         .normalize();
     return list(location, provider).stream()
         .filter(binding -> "BOUND".equals(binding.status()) && binding.worktreePath() != null)
-        .filter(binding -> normalized.equals(Path.of(binding.worktreePath())
+        .filter(binding -> sameFilesystemObject(normalized, Path.of(binding.worktreePath())
             .toAbsolutePath()
             .normalize()))
         .findFirst();
@@ -1163,6 +1434,33 @@ public final class ProviderSessionBindingService {
   }
 
   /**
+   * Verifies a mutation continuation on the exact assigned worktree when the target remains inside
+   * the binding's active collaboration claim.
+   *
+   * <p>This permits a claimed lane to continue after a sibling integrates its snapshot. It does
+   * not permit a changed worker generation, another worktree, or a target outside the active claim.
+   * The collaboration service also applies its completion and publication fences.</p>
+   *
+   * @param location initialized project location
+   * @param binding exact provider binding
+   * @param cwd provider event working directory
+   * @param relativePath claimed mutation target
+   * @return workspace verification result
+   */
+  public synchronized WorkspaceCheck verifyClaimedMutationContinuationWorkspace(
+      ProjectApplicationService.ProjectLocation location, Binding binding, Path cwd,
+      String relativePath) {
+    if (binding == null || !"BOUND".equals(binding.status())) {
+      return new WorkspaceCheck(false, "SESSION_NOT_ACTIVE");
+    }
+    if (!new WorkspaceCollaborationService().hasActiveMutationClaim(location, binding,
+        relativePath)) {
+      return new WorkspaceCheck(false, "ACTIVE_MUTATION_CLAIM_REQUIRED");
+    }
+    return verifyWorkspace(location, binding, cwd, false, false);
+  }
+
+  /**
    * Verifies a clean producer lane whose HEAD is a committed descendant of its admission base
    * without authorizing ordinary workspace mutation.
    *
@@ -1200,14 +1498,14 @@ public final class ProviderSessionBindingService {
       Path actual = Objects.requireNonNull(cwd, "cwd")
           .toAbsolutePath()
           .normalize();
-      if (actual.equals(root)) {
+      if (sameFilesystemObject(actual, root)) {
         return new WorkspaceCheck(false, "CONTROL_CHECKOUT_MUTATION_DENIED");
       }
-      if (assigned.equals(root) || assigned.startsWith(root)
-          || !root.equals(Path.of(binding.controlCheckoutPath()))) {
+      if (sameOrDescendant(assigned, root)
+          || !sameFilesystemObject(root, Path.of(binding.controlCheckoutPath()))) {
         return new WorkspaceCheck(false, "CONTROL_CHECKOUT_MUTATION_DENIED");
       }
-      if (!Files.isDirectory(assigned) || !actual.equals(assigned)) {
+      if (!Files.isDirectory(assigned) || !sameFilesystemObject(actual, assigned)) {
         return new WorkspaceCheck(false, "WORKSPACE_TRANSITION_REQUIRED");
       }
       if (!registeredWorktree(root, assigned, binding)) {
@@ -1289,7 +1587,7 @@ public final class ProviderSessionBindingService {
           .normalize();
 
       // 1. Check assigned worktree differs from control checkout
-      if (assigned.equals(root) || assigned.startsWith(root) || actual.equals(root)) {
+      if (sameOrDescendant(assigned, root) || sameFilesystemObject(actual, root)) {
         return new WorkspaceVerificationResult(false, "CONTROL_CHECKOUT_MUTATION_DENIED", null,
             binding);
       }
@@ -1301,8 +1599,7 @@ public final class ProviderSessionBindingService {
 
       // 3. Check canonical path equality
       Path canonicalAssigned = assigned.toRealPath();
-      Path canonicalActual = actual.toRealPath();
-      if (!canonicalAssigned.equals(canonicalActual)) {
+      if (!sameFilesystemObject(actual, assigned)) {
         return new WorkspaceVerificationResult(false, "WORKSPACE_TRANSITION_REQUIRED", null,
             binding);
       }
@@ -1312,10 +1609,9 @@ public final class ProviderSessionBindingService {
         if (!other.sessionId()
             .equals(binding.sessionId()) && !"REVOKED".equals(other.status())
             && !"COMPLETED".equals(other.status()) && other.worktreePath() != null) {
-          if (Path.of(other.worktreePath())
+          if (sameFilesystemObject(Path.of(other.worktreePath())
               .toAbsolutePath()
-              .normalize()
-              .equals(assigned)) {
+              .normalize(), assigned)) {
             return new WorkspaceVerificationResult(false, "DUPLICATE_ACTIVE_WORKTREE", null,
                 binding);
           }

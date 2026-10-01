@@ -52,4 +52,29 @@ class StaleAndGraceTest {
     SessionLeaseState state2 = service.evaluateLiveness(record, policyGrace);
     assertEquals(SessionLeaseState.RECOVERY_ELIGIBLE, state2);
   }
+
+  @Test
+  void treatsMatchingPidAndCommandWithDifferentStartTimeAsAmbiguous() {
+    long start = System.currentTimeMillis();
+    SessionProcessIdentity identity = new SessionProcessIdentity(99999L,
+        "java",
+        "java -jar synesis.jar",
+        start,
+        "nonce-reused-pid");
+    SessionLeaseRecord record = new SessionLeaseRecord(
+        1, "proj-1", "codex", "conn-reused-pid", "w-1", "s-1",
+        identity, "0.1.0-SNAPSHOT", start, start, SessionLeaseState.ACTIVE
+    );
+    ProcessInspector reusedPidInspector = _ -> java.util.Optional.of(
+        new ProcessInspector.ProcessDetails(99999L, "java", "java -jar synesis.jar", true,
+            start + 1));
+    SessionLeaseService service = new SessionLeaseService(new SessionLeaseStore(),
+        reusedPidInspector);
+    SessionLeasePolicy policy = new SessionLeasePolicy(
+        Clock.fixed(Instant.ofEpochMilli(start + Duration.ofMinutes(10).toMillis()),
+            ZoneId.of("UTC")),
+        Duration.ofSeconds(30), Duration.ofMinutes(2), Duration.ofMinutes(5));
+
+    assertEquals(SessionLeaseState.AMBIGUOUS, service.evaluateLiveness(record, policy));
+  }
 }

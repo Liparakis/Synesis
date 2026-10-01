@@ -105,6 +105,39 @@ final class McpSyn039RejectedContinuationTest {
   }
 
   @Test
+  void continuationRequestMayOmitPreIssuedGrant(@TempDir Path temp) throws Exception {
+    Path project = temp.resolve("continuation-request");
+    Files.createDirectories(project);
+    git(project, "init");
+    git(project, "config", "user.name", "Continuation Test");
+    git(project, "config", "user.email", "continuation@example.test");
+    Files.writeString(project.resolve("README.md"), "# continuation\n");
+    git(project, "add", ".");
+    git(project, "commit", "-m", "baseline");
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(
+        project).location();
+    McpProviderTestSupport.install(location, "codex");
+    new ProviderManualService().install("codex");
+    AgentSessionService sessions = new AgentSessionService();
+    sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        project, "codex", "continuation-requester", null, false));
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var binding = bindings.find(location, "codex", "continuation-requester")
+        .orElseThrow();
+    bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(),
+        Path.of(binding.worktreePath()));
+    McpProtocolHandler handler = new McpProtocolHandler(sessions, project, "codex",
+        "continuation-requester");
+
+    String response = handler.handleMessage(toolCall("request_coordination", ProviderJson.write(
+        Map.of("kind", "continuation", "payload", Map.of(
+            "intentId", UUID.randomUUID().toString(), "claimEpoch", 1L)))));
+    assertFalse(response.contains("COORDINATION_FIELD_REQUIRED:grantId"), response);
+    assertTrue(response.contains("CONTINUATION_SOURCE_NOT_FOUND"), response);
+  }
+
+  @Test
   void rejectedSnapshotCreatesFreshReviewableCorrectionAndOnlyAcceptedCorrectionIntegrates(
       @TempDir Path temp) throws Exception {
     Path project = temp.resolve("syn039-rejected-continuation");
@@ -216,6 +249,9 @@ final class McpSyn039RejectedContinuationTest {
     assertEquals("task_not_ready", firstReplay.get("reason"), firstReplay.toString());
     assertEquals("SNAPSHOT_COMPLETION_EVIDENCE_STALE",
         map(firstReplay.get("result")).get("reason"), firstReplay.toString());
+    Map<String, Object> replayWorkflow = map(map(firstReplay.get("result")).get("workflow"));
+    assertEquals("get_next_action", replayWorkflow.get("recommendedTool"));
+    assertEquals(Map.of("completionRequested", true), replayWorkflow.get("arguments"));
     store = store(project);
     assertEquals(1,
         store.taskCompletionProjection()

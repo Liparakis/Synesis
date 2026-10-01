@@ -14,6 +14,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Preserves valid workspace process coverage through the unified launcher.
@@ -24,7 +25,8 @@ final class UnifiedCliSyncProcessTest {
   private static ProjectState prepare() throws Exception {
     Path root = Files.createTempDirectory("synesis-unified-sync-");
     Path host = initProject(root.resolve("host"));
-    Path join = initProject(root.resolve("join"));
+    Path join = initReplica(root.resolve("join"),
+        new ProjectApplicationService().locate(host));
     String joinNode = value(run(join, "identity", "show", "--project", join.toString()).output(),
         "NODE_ID");
     CommandResult project = run(host, "project", "create", "--project", host.toString(), "--peer",
@@ -43,7 +45,8 @@ final class UnifiedCliSyncProcessTest {
   private static ProjectState prepareForReconciliation() throws Exception {
     Path root = Files.createTempDirectory("synesis-unified-reconcile-");
     Path host = initProject(root.resolve("host"));
-    Path join = initProject(root.resolve("join"));
+    Path join = initReplica(root.resolve("join"),
+        new ProjectApplicationService().locate(host));
     String joinNode = value(run(join, "identity", "show", "--project", join.toString()).output(),
         "NODE_ID");
     CommandResult project = run(host, "project", "create", "--project", host.toString(), "--peer",
@@ -58,6 +61,13 @@ final class UnifiedCliSyncProcessTest {
     git(project, "init");
     CommandResult result = run(project, "init", "--project", project.toString());
     assertEquals(0, result.exit(), result.output());
+    return project;
+  }
+
+  private static Path initReplica(Path project,
+      ProjectApplicationService.ProjectLocation source) throws Exception {
+    Files.createDirectories(project);
+    new ProjectApplicationService().initReplica(project, source.identity(), false);
     return project;
   }
 
@@ -325,6 +335,34 @@ final class UnifiedCliSyncProcessTest {
         .contains("ERROR=PROJECT_MISMATCH"), mismatch.output());
     assertEquals(before,
         Files.readString(mismatchJoin.resolve(".synesis/local/profile/project.conf")));
+  }
+
+  @Test
+  void projectContextMismatchDoesNotCreateFirstTimeJoinConfig() throws Exception {
+    Path root = Files.createTempDirectory("synesis-unified-context-mismatch-");
+    Path join = initProject(root.resolve("join"));
+    Path host = initProject(root.resolve("host"));
+    ProjectApplicationService service = new ProjectApplicationService();
+    String joinNode = value(run(join, "identity", "show", "--project", join.toString()).output(),
+        "NODE_ID");
+    CommandResult project = run(host, "project", "create", "--project", host.toString(),
+        "--peer", joinNode);
+    assertEquals(0, project.exit(), project.output());
+    String hostNode = value(project.output(), "NODE_ID");
+    String hostProjectId = service.locate(host).projectId().toString();
+    String joinProjectId = service.locate(join).projectId().toString();
+
+    Process hostProcess = start(host, "sync", "host", "--project", host.toString());
+    HostCapture capture = captureInvitation(hostProcess);
+    String forgedQuery = capture.invitation().replace("project=" + hostProjectId,
+        "project=" + joinProjectId);
+    CommandResult mismatch = run(join, "sync", "join", "--project", join.toString(),
+        "--expect-host", hostNode, forgedQuery);
+    stopHost(hostProcess);
+
+    assertEquals(10, mismatch.exit());
+    assertTrue(mismatch.output().contains("ERROR=PROJECT_MISMATCH"), mismatch.output());
+    assertFalse(Files.exists(join.resolve(".synesis/local/profile/project.conf")));
   }
 
   @Test

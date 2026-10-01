@@ -47,7 +47,7 @@ public final class GitProcessRunner {
    * @return bounded raw Git output
    * @throws IOException if Git fails to start, times out, or exits nonzero
    */
-  static byte[] runBytes(Path workdir, String... arguments) throws IOException {
+  public static byte[] runBytes(Path workdir, String... arguments) throws IOException {
     return runInternal(workdir, null, DEFAULT_TIMEOUT, true, arguments).bytes();
   }
 

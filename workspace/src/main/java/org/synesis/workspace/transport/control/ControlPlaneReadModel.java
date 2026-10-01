@@ -238,7 +238,7 @@ public final class ControlPlaneReadModel {
       return List.of(current);
     }
     try {
-      return projectRegistry.projects(Set.of(location.projectId())).stream()
+      return projectRegistry.projectsForReplicas(Set.of(location.root())).stream()
           .limit(MAX_COLLECTION_ITEMS)
           .map(view -> {
             Map<String, Object> result = new LinkedHashMap<>();

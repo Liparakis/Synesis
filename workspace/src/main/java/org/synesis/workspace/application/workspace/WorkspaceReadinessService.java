@@ -69,7 +69,23 @@ public final class WorkspaceReadinessService {
    */
   public ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
       String provider, String connectionInstanceId) {
-    return assess(location, provider, connectionInstanceId, false, false);
+    return assess(location, provider, connectionInstanceId, false, false, null);
+  }
+
+  /**
+   * Resolves a mutation workspace, permitting a stale control base only when the exact target is
+   * still owned by this binding's active collaboration claim.
+   *
+   * @param location             initialized project location
+   * @param provider             stable provider identifier
+   * @param connectionInstanceId provider connection identity
+   * @param relativePath         repository-relative mutation target
+   * @return readiness result containing the exact binding when ready
+   */
+  public ReadinessResult assessMutation(ProjectApplicationService.ProjectLocation location,
+      String provider, String connectionInstanceId, String relativePath) {
+    return assess(location, provider, connectionInstanceId, false, false,
+        Objects.requireNonNull(relativePath, "relativePath"));
   }
 
   /**
@@ -86,7 +102,7 @@ public final class WorkspaceReadinessService {
    */
   public ReadinessResult assessNoChange(ProjectApplicationService.ProjectLocation location,
       String provider, String connectionInstanceId) {
-    return assess(location, provider, connectionInstanceId, true, false);
+    return assess(location, provider, connectionInstanceId, true, false, null);
   }
 
   /**
@@ -104,12 +120,12 @@ public final class WorkspaceReadinessService {
    */
   public ReadinessResult assessCompletion(ProjectApplicationService.ProjectLocation location,
       String provider, String connectionInstanceId) {
-    return assess(location, provider, connectionInstanceId, true, true);
+    return assess(location, provider, connectionInstanceId, true, true, null);
   }
 
   private ReadinessResult assess(ProjectApplicationService.ProjectLocation location,
       String provider, String connectionInstanceId, boolean allowControlBaseAdvance,
-      boolean allowCommittedGeneration) {
+      boolean allowCommittedGeneration, String mutationPath) {
     try {
       ProviderApplicationService.ProviderWorkAdmission providerAdmission = providerService.assessWorkAdmission(
           location, provider);
@@ -140,12 +156,20 @@ public final class WorkspaceReadinessService {
       if (!workspaceCheck.verified() && "CONTROL_BASE_ADVANCED".equals(workspaceCheck.code())) {
         // A live managed provider owns an exact isolated worktree and
         // may continue after a sibling integrates its snapshot into
-        // the control checkout. Keep ordinary mutation lanes strict;
-        // the managed attachment is the additional continuation fence.
+        // the control checkout. Exact claimed mutation targets have
+        // the same continuation boundary; unclaimed reads and commands
+        // remain subject to the current control-base check.
         ProviderSessionBindingService.WorkspaceCheck managedContinuation =
             bindingService.verifyManagedContinuationWorkspace(location, binding, worktree);
         if (managedContinuation.verified()) {
           workspaceCheck = managedContinuation;
+        } else if (mutationPath != null) {
+          ProviderSessionBindingService.WorkspaceCheck claimedContinuation =
+              bindingService.verifyClaimedMutationContinuationWorkspace(location, binding,
+                  worktree, mutationPath);
+          if (claimedContinuation.verified()) {
+            workspaceCheck = claimedContinuation;
+          }
         }
       }
       if (!workspaceCheck.verified()) {

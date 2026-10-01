@@ -1,3 +1,199 @@
+## SYN-082 — 2026-10-01 coordination response projection
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Generic non-owner response dead-end | PASS (source reproduction) | Two pending CONTRACT requests produce count/first request/empty response args before repair |
+| Owner request discoverability and judgment | PASS | Both complete requests remain in public pendingCoordination; no CONTRACT status is chosen |
+| Project-wide integration fence | PASS | WAIT / integration_pending, no arbitrary request selector, no attempt append |
+| Next-action / reducer / integration tests | PASS | 31 tests; focused regression red/green |
+| Full coordination suite | PASS | 102 tests executed freshly, no failures or skips |
+| MCP review/recovery / exact-ten-tool catalog | PASS | 43 relevant MCP tests plus 11 mcp-contract checks |
+| Full workspace suite | FAIL | 445 tests, one denial-reason mismatch: expected NO_CHANGE_REVIEWER_PENDING, received NO_CHANGE_NOT_DECLARED; changed fence is not reached |
+| Formatting / compiler / architecture / repository hygiene | PASS | Relevant module gates completed |
+| Workspace Javadocs | FAIL | Known warnings at ProviderManualService:26 and ProviderSessionBindingService:576; other relevant module Javadocs pass |
+| Unique package and payload provenance | PASS | Version 0.1.0-syn082-projection-20261001-025045; compiled class / JAR / ZIP bytes and dirty source manifest checked |
+| Old Stage 4 specimen | FROZEN / NOT REVERIFIED | One fresh poll returned session_not_ready; no recovery, response, install or state repair followed |
+| Fresh final acceptance | NOT RUN | Reserved for the next task |
+
+Evidence: [coordination response projection](../evidence/SYN-082-coordination-response-projection-2026-10-01.md).
+
+## SYN-082 — 2026-09-29 review deliverable after candidate acceptance
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Report as a structured pre-integration obligation | NO | ReviewPolicy requires exact independent review; WorkIntent acceptance is free text; no report-deliverable gate exists |
+| Accepted candidate integration before reviewer report | ALLOWED BY CURRENT MODEL | The active reviewer intent/claim still blocks WorkGroup terminality |
+| Claimed reviewer mutation after sibling integration | PASS | MCP apply_patch succeeds only for the same bound session, original registered worktree/generation, and exact active claim; unclaimed patch remains denied |
+| Post-decision report publication projection | PASS (source fixture) | MCP reviewer artifact flow projects exact finish_lane, publishes/integrates reviewer snapshot, and closes WorkGroup |
+| Exact-ten-tool catalog | PASS | McpToolCatalogTest; catalog still exposes ten MCP tools |
+| Fresh-build real Stage 3 | NOT REACHED | Fresh target initialized, but global launcher remains old because its executable is held by two live MCP processes; source task has no Synesis tools |
+| Reviewer process-loss and Stage 4 | NOT REACHED | No process-loss injection or Stage 4 run was performed |
+
+## SYN-082 — 2026-09-23 process crash and reviewer wait
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Child-JVM continuation crash prefixes | PASS | `Runtime.halt(86)` at `BEFORE_DURABLE_MOVE`, `AFTER_DURABLE_MOVE`, and `AFTER_PROJECTION`; restart/retry gives zero or one successor as required |
+| Full serial coordination suite | PASS | Completed in the combined coordination/workspace invocation before the workspace task failure |
+| Full serial workspace suite before reviewer-wait repair | FAIL | 432 tests, 1 failure: reviewer with no producer and no grants received generic `IMPLEMENT` instead of `WAIT` |
+| Reviewer-wait regression after repair | PASS | The formerly failing test and all four `ReviewAdmissionOrderIndependenceTest` cases pass |
+| Focused MCP continuation/recovery/rejection | PASS | Three MCP classes, `BUILD SUCCESSFUL in 2m 26s` |
+| Full serial workspace after repair | NOT RUN | Required before broad workspace pass claim |
+| Full serial MCP | INTERRUPTED / NO RESULT | Earlier attempt was explicitly interrupted; do not count it |
+
+## SYN-082 — lawful recovery continuation — 2026-09-20 fixed review-recovery boundary
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Recovery-held reviewer admission | PASS | Read-only exact-claim admission reaches the existing continuation projection; focused `McpAdmissionRecoveryTest` passes |
+| Fixed fresh-target concurrent recovery | PARTIAL | `SynesisReviewRecoveryFixed-20260920`: process-tree loss, 6/6 reconciliation, and disjoint producer successors were observed |
+| Reviewer-loss successor action | PARTIAL | Successor K reached `SNAPSHOT_PENDING` / `review_validation` without reading the report or deciding |
+| Mandatory review terminal convergence | NOT REACHED | No independent decision, reviewer publication, review integration, WorkGroup completion, or goal closure |
+| Late mixed-role blind launch | NOT CLAIMED | Diagnostic output was inconsistent; no terminal lifecycle state was inferred |
+
+Evidence: `docs/evidence/SYN-082-lawful-recovery-continuation-2026-09-20.md`.
+
+## SYN-082 — lawful recovery continuation — 2026-09-20 final verification
+
+Fresh review-gated target `SynesisMandatoryReviewFresh6-20260920` added real
+live evidence for concurrent blind claims, exact review admission/grants,
+reviewer loss/recovery, reviewer successor `SNAPSHOT_PENDING`, and fail-closed
+self-review rejection. It stopped before accepted review, reviewer report
+publication, review integration, WorkGroup completion, or goal closure. The
+phase verdict is crash-safe authority PASS, hostile A/B/C recovery PARTIAL,
+and mandatory review/reviewer-loss convergence PARTIAL/NOT REACHED.
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Process identity and stale-grace repair | PASS | Start-time-aware `ProcessInspector` plus `StaleAndGraceTest`; PID reuse is not treated as the old live authority |
+| Final focused continuation/recovery/integration/MCP run | PASS | Coordination, targeted workspace, and MCP predicates; `BUILD SUCCESSFUL in 1m 7s` |
+| Strict quality gates | PASS | Workspace format/static/architecture/Javadoc and MCP catalog test |
+| Rebuilt local distribution | PASS | `:cli:installDist --rerun-tasks --no-daemon`; `BUILD SUCCESSFUL in 29s` |
+| Exact named-project blind continuation | PASS | `SomethingVeryFuckingRandom`: fresh blind participant discovered `continuation_available`, submitted the projected generic action, and received `CONTINUED` under a new participant/intent |
+| Exact named-project review/integration/closure | PARTIAL / NOT REACHED | Successor remained `REVIEW_GRANT_PENDING` against a pre-existing completed reviewer; bounded waits did not project closure |
+| Reviewer-successor hostile probe | PARTIAL | Fresh reviewer successor reached `SNAPSHOT_PENDING`; publication, integration, WorkGroup closure, and goal closure were not reached |
+| Full hostile review-enabled A/B/C acceptance | NOT CLAIMED | Real target evidence proves lawful successor acquisition but not end-to-end convergence through mandatory review |
+| Source boundary and mutation policy | PASS | Source `.synesis` absent; no source Synesis coordination/MCP, commit, push, or manual target mutation |
+
+Evidence: `docs/evidence/SYN-082-lawful-recovery-continuation-2026-09-20.md`.
+
+## SYN-082 — lawful recovery continuation — 2026-09-19
+
+Overnight update: the source repair now covers both reviewer successor grants,
+producer successor retargeting of matching pending review requests, and
+fail-closed rejection of continuation grants at review validation. Focused
+source checks and quality gates PASS. The first blind target
+`SynesisOvernightReviewRecovery-20260919` used the pre-repair build; the fresh
+current-build target
+`SynesisOvernightReviewCurrent-20260919` additionally proved a real
+process-tree kill, five-minute grace, and three exact successor continuations.
+The later unchanged-prompt extension in
+`SynesisReviewContinuationBlind-20260919` recovered a failed integration with
+an exact epoch-2 successor and integrated a genuine 42-test correction. All
+real snapshots still projected `reviewRequired:false`; no current-build real
+mandatory-review or reviewer-loss PASS is claimed.
+
+Latest source-side follow-up: reviewer-owned claimed evidence now uses the
+existing scoped publication/integration path. The focused MCP boundary fixture
+records an independent accepted review, publishes only `review-report.md`,
+integrates both snapshots, clears active intents, and closes the WorkGroup.
+The full MCP class was stopped at a bounded unrelated fixture Git-init stall;
+real blind reviewer-loss acceptance remains partial.
+
+The public `ensure_session` reviewer admission regression now rejects an empty
+claim set with `REVIEW_CLAIM_REQUIRED`, then admits the explicit report claim
+through the ordinary ten-tool surface.
+
+Fresh blind negative probe: `SynesisReviewerLossBlindFresh10-20260919` used a
+new project identity and unchanged prompt. A producer snapshot projected
+`reviewRequired:false`; a later natural reviewer attempt supplied no ownership
+claim and was left at `coordination_intent_required`. No reviewer acceptance or
+reviewer-loss evidence is counted.
+
+Fresh current-build follow-up `SynesisReviewerLossBlindFresh11-20260919` proved
+four disjoint blind lanes, a detached predecessor, and a fresh epoch-2
+successor that ran 9 tests. It did not project a finish action or terminal
+WorkGroup; final dry run showed five recovery-eligible lanes and zero
+executable actions. All snapshots remained `reviewRequired:false`.
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Successor append crash-prefix/replay matrix | PASS | `RecoveryContinuationCrashSafetyTest`; before durable move leaves the predecessor recovery-held and retryable, after durable move/replay exposes exactly one successor, and a competing request returns current-state replay |
+| Successor-scoped multi-lane publication | PASS | `TaskIntegrationServiceTest.sharedParticipantWorktreeCanPublishEachDisjointLaneSeparately`; exact finish evidence selects the lane and claim-scoped snapshots exclude sibling paths |
+| Reviewer-owned evidence publication and terminal integration | PASS (focused source fixture) | `McpSyn039SliceTest.reviewerOwnedArtifactCompletesThroughPublishIntegrationAndGroupClosure`; accepted independent review publishes only the reviewer claim, integrates both snapshots, and closes the WorkGroup |
+| Reviewer-loss successor grant projection | PASS | `WorkIntentServiceTest.reviewerContinuationReplacesDeadReviewerGrantWithoutChangingProducerAuthority`; unresolved grant is superseded and a fresh reviewer grant targets the new participant while accepted evidence is not migrated |
+| Producer successor pending-review retargeting | PASS | `WorkIntentServiceTest.producerContinuationRetargetsPendingReviewRequestToSuccessor`; request remains pending and the normal independent response issues the successor-scoped review grant |
+| Continuation grant cannot self-approve | PASS | `WorkIntentServiceTest.freshContinuationDerivesAndConsumesAOneShotSuccessorGrant`; replayed continuation authorization is rejected by the review projection, and `ReviewValidationService` has the same fail-closed guard |
+| Mandatory review hostile acceptance | PARTIAL | The old real target accepted a review but later stranded a predecessor grant; the fresh target reproduced a pre-repair stale pending request; the current-build extension never projected a review request, so reviewer-loss integration remains NOT REACHED |
+| Hostile concurrent A/B/C multi-lane acceptance | PARTIAL | Current-build targets proved blind decomposition, abrupt producer loss, grace-bound recovery, exact successor acquisitions, retry after a target-only integration failure, and later integrated correction; no review-enabled terminal convergence was reached |
+| Continuation residual atomicity | PASS for process crash | Fresh continuation is one durable `LANE_CONTINUATION_ACCEPTED` append; event-store fault boundaries replay to no successor or exactly one successor. No hardware power-loss directory-fsync guarantee is claimed |
+| Recovery-held candidate projection through `get_next_action` | PASS | Single candidate is explicitly selectable; multiple candidates expose no selected payload and polling emits no event |
+| Fresh one-shot grant and successor acquisition | PASS | `WorkIntentServiceTest`; replay/race/lineage checks; existing generic `request_coordination` surface |
+| Protected recovery snapshot restore | PASS | Root `.git`, `.git` descendants, and `.synesis` excluded; ordinary partial files restored |
+| Successor worktree binding after real interruption | PASS | Fixed target successor `.git` points to its own generated worktree metadata |
+| Blind recovered application validation | PASS | 6/6 unit tests, editable install, CLI lifecycle/error/database smoke |
+| Snapshot publication, integration, WorkGroup/goal closure | PASS | Real `finish_lane` returned `PUBLISHED`/`integrated`; following projection was `COMPLETED`; focused integration test also passes |
+| Review-required successor | NOT REACHED | Every current-build real snapshot projected `reviewRequired:false`; blind agents selected producer/no-change work and no reviewer request was created; existing review/integration gates remain authoritative |
+| Simultaneous hostile multi-lane A/B/C decomposition | NOT CLAIMED | Targeted run used bootstrap no-op, one interrupted producer, and one successor |
+| Disposable-target documentation caveat | NON-BLOCKING | Pre-existing README mojibake left untouched because the authorized patcher could not safely match it |
+| Serial coordination module suite | PASS | `:coordination:test` completed successfully |
+| Serial workspace module suite | PASS | `:workspace:test`, `BUILD SUCCESSFUL in 9m32s` |
+| Serial MCP module suite | INCOMPLETE | Stopped after approximately 16 minutes in the known process-isolated phase without a result; focused MCP checks pass |
+| Quality-only format/static/architecture/Javadoc/catalog gates | PASS | 22 actionable tasks, `BUILD SUCCESSFUL in 1s` |
+| Deferred register, startup resume, and diff hygiene | PASS | 11 deferred entries; active SYN-082; `git diff --check` had only line-ending normalization warnings |
+| Parallel aggregate workspace failure | NON-REPRODUCIBLE | 419 tests/one `ProjectProcessExecutorTest` failure; isolated test and serial full workspace suite pass |
+
+## SYN-082 — ordinary Codex workspace admission under Windows path aliases — 2026-09-18
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Same physical worktree through normal and package-local Codex paths | PASS | `ProviderSessionBindingServiceTest.acceptsTheSameWorktreeThroughTheCodexPackagePathAlias`; strict `Files.isSameFile` identity |
+| Genuine worktree registration/containment/common-directory checks remain fail-closed | PASS | Full `ProviderSessionBindingServiceTest`; `WORKTREE_NOT_REGISTERED` is still returned for true mismatch |
+| Missing derived discovery cache rebuilds from canonical metadata | PASS | `KnownProjectRegistryTest.missingDiscoveryCacheIsRebuiltFromCanonicalProjectMetadata`; ProjectId and metadata bytes remain stable |
+| Bounded readiness diagnostics | PASS | `AgentSessionServiceTest`; stable internal readiness code is returned without private authority material |
+| Fresh project / fresh MCP process / cache-loss real admission | PASS | Rebuilt staged MCP helper; exactly 10 tools, `ensure_session=ready/isolated`, `get_next_action=ready` |
+| Provider review state | PASS | Current Codex install remains `DEGRADED` / `REVIEW_REQUIRED`; source policy admits compatible MCP evidence and workspace trust verifies |
+| Affected workspace/MCP regressions | PASS | Focused workspace suites and `McpServerTest` (37 tests) |
+| Strict formatting/static/architecture/Javadocs/catalog | PASS | `:workspace:formatCheck :workspace:staticAnalysis :workspace:architectureCheck :workspace:javadoc :mcp-contract:test` |
+| Diff hygiene | PASS | `git diff --check`; only line-ending normalization warnings |
+| Admission-triggered recovery and terminal stale-plan fencing | PASS | `RecoveryLifecycleTest`; dead lane is held once, second admission is idempotent, and a participant completed before execution is not suspended |
+| Ordinary MCP admission recovery and ten-tool catalog | PASS | `McpAdmissionRecoveryTest`; rebuilt handler invokes existing bounded reconciliation after `ensure_session`, catalog remains exactly 10 tools |
+| Targeted disposable-project recovery | PASS | `reconcile --prepare` / `--execute`; 4 requested and 4 completed, 0 stale/ambiguous/failed, claims retained, completed participant unchanged |
+| Real process-tree interruption and replacement admission | PASS for lifecycle boundary | Outer Codex kill removed `synesis-mcp.exe` and Java child; old lease stayed `ACTIVE` until five-minute grace, then replacement admission held the interrupted lanes exactly once |
+| Blind interruption-to-integrated-completion acceptance | PARTIAL | Replacement independently claimed `INTEGRATION_REPORT.md` and passed its audit, but Synesis projected `owner_request_pending` / `INTEGRATION_PENDING`; no lawful continuation action for the held CLI lane was proven |
+| Broad workspace/MCP aggregate after lifecycle repair | INCOMPLETE | The run reached historical long-running MCP integration tests for roughly 16 minutes without a reported failure and was stopped before the MCP result phase; not a full-suite pass |
+
+## SYN-081 — invisible canonical project metadata boundary — 2026-09-18
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Complete project write-surface inventory | PASS | `docs/evidence/SYN-081-invisible-project-metadata-2026-09-18.md`; project-local, external, Git, provider, and visible-output exceptions classified |
+| New project creates canonical `.synesis` and normalizes visibility | PASS | `ProjectMetadataStorageTest`, `ProjectApplicationServiceTest` |
+| Existing project re-ensures visibility without identity rewrite | PASS | existing-project reopen and copied-metadata tests |
+| Already-hidden and simulated visibility failure | PASS | JDK DOS view checks plus injectable `HIDDEN_APPLY_FAILED` test |
+| Unix dot-directory behavior | PASS | platform-neutral no-DOS-view seam test |
+| Replica/fork/relocation reopen behavior | PASS | SYN-080 replica/fork tests plus copied-path reopen and identity-byte assertions |
+| Root hygiene and bounded atomic temporaries | PASS | disposable root-hygiene fixture; metadata temps remain beside `.synesis/project.json` |
+| Daemon/registry/MCP and ten-tool catalog | PASS | affected registry, daemon, CLI, MCP contract/application tests; catalog unchanged |
+| Strict formatting/static/architecture/Javadocs/diff hygiene | PASS | workspace and CLI gates plus `git diff --check` |
+| Graphify refresh | PASS | 3,990 nodes, 13,598 edges, 180 communities, no import cycles |
+
+## SYN-080 — portable project identity and replicas — 2026-09-18
+
+| Check | Result | Evidence / boundary |
+| --- | --- | --- |
+| Canonical identity persists and parses strictly | PASS | `ProjectApplicationServiceTest`; `.synesis/project.json` remains canonical and malformed/conflicting state fails closed |
+| Same identity across different paths/HEADs | PASS | `ProjectReplicaProcessTest`; separate JVM probes saw equal identity, distinct node/root values, and different Git HEADs |
+| Same Git history with a new identity | PASS | `ProjectApplicationServiceTest.identicalGitHistoryCanHaveDistinctCanonicalProjectIdentities` |
+| Explicit fork creates a new identity | PASS | `ProjectApplicationServiceTest.explicitForkCreatesNewIdentityAndFreshPrivateState` |
+| Copied identity without authority | PASS for bounded boundary | private state is rejected; Link owner has no project application handler without membership; signed membership remains the authority boundary |
+| Valid member bound to wrong project | PASS | `LinkRuntimeOwnerControlPlaneTest`, `OverlayProtocolTest`, `ProjectContextExchangeTest` |
+| Context mismatch before project mutation | PASS | `UnifiedCliSyncProcessTest.projectContextMismatchDoesNotCreateFirstTimeJoinConfig` |
+| Multiple same-ID registry paths | PASS | `KnownProjectRegistryTest.oneLogicalProjectMayHaveMultipleValidatedLocalPaths` and path-scoped LIVE/INACTIVE projection |
+| MCP ten-tool catalog unchanged | PASS | `McpToolCatalogTest` in `mcp-contract` and `mcp` |
+| Strict workspace/CLI gates | PASS | format, static analysis, architecture checks, and Javadocs |
+| Broad whole-module aggregate | PARTIAL / RED | pre-final aggregate retained `WORKTREE_NOT_REGISTERED` and JDK 25 null-Path environment failures; see SYN-080 evidence |
+
 ## SYN-079 — result-screen cleanup — 2026-09-14
 
 | Check | Result | Evidence / boundary |
@@ -1857,3 +2053,20 @@ Evidence: `docs/evidence/sl-d-036-overlay-reconciliation-2026-09-12.md`.
 Evidence boundary: this slice does not claim actual installation into the
 managed user root, two-machine onboarding, universal browser behavior, or
 pixel-level visual QA because the Windows inspection helper was unavailable.
+
+## SYN-082 overnight acceptance — 2026-09-24
+
+| Area | Check | Result | Evidence / boundary |
+|---|---|---|---|
+| Crash safety | Continuation crash-prefix/replay, retry and duplicate-successor coverage | PASS | One durable continuation event reconstructs one successor; source tests do not model power loss |
+| Real process loss | Kill B's disposable Codex/MCP/Java process tree; fresh blind continuation | PASS, bounded | B's storage lane continued at epoch 2; this does not prove an MCP-server crash at the append boundary |
+| Concurrent A/B lanes | Disjoint exact claims and meaningful concurrent work | PASS, bounded | A model and B storage slices; A was alive at B's kill |
+| Survivor condition | C acquires while A remains active | NOT MET | A exited before C started; stale ACTIVE projection is not live-process evidence |
+| Further recovery | Blind E continues the storage lineage and runs tests | PASS, bounded | Storage 4 passed; combined target suite 8 passed; no terminal WorkGroup |
+| CLI slice | Direct CLI create smoke | PASS | D's direct smoke returned a todo issue; no package/install acceptance |
+| CLI pytest | Targeted/full pytest through Synesis command surface | BLOCKED | ImportError came from a different workspace's issue_tracker initializer; Synesis reads and patch revisions disagreed |
+| Mandatory review | Independent reviewer intent, decision, reviewer-loss successor, integration | NOT REACHED | Producer-origin requests denied with REVIEWER_INTENT_REQUIRED; snapshots had reviewRequired=false |
+| Source suites | Coordination 91; workspace 432; MCP 108; focused SYN-039 20 | PASS | Serial/current-source results after the fix |
+| Build and gates | Static, architecture, Javadocs, validators, 10-tool catalog, cli installDist | PASS | distributionCheck GUI smoke hung and was interrupted; not a pass |
+| Format | Repository format gate | PARTIAL | Trailing whitespace reported in three pre-existing untracked evidence docs; preserved |
+## SYN-082 — 2026-09-23 process crash and reviewer wait

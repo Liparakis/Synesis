@@ -36,6 +36,8 @@ import org.synesis.link.overlay.OverlayTopologyView;
 import org.synesis.link.session.LivenessTransition;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
+import org.synesis.workspace.application.project.ProjectIdentity;
+import org.synesis.workspace.application.sync.ProjectContextExchange;
 
 /**
  * Small in-process owner for live Link sessions and overlay read state.
@@ -51,6 +53,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
   private final NodeIdentity localIdentity;
   private final Consumer<OnboardingEvent> events;
   private final Clock clock;
+  private final ProjectIdentity projectIdentity;
   private final OverlayMembershipView membership;
   private final OverlayTopologyView topology;
   private final OverlayPeerRegistry<OverlayForwarder.PeerTransport> peerTransports;
@@ -74,7 +77,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
    */
   public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity,
       Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events) {
-    this(onboarding, localIdentity, membership, events, Clock.systemUTC());
+    this(onboarding, localIdentity, membership, events, Clock.systemUTC(), null);
   }
 
   /**
@@ -90,22 +93,73 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
   public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity,
       Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events,
       Clock clock) {
+    this(onboarding, localIdentity, membership, events, clock, null);
+  }
+
+  /**
+   * Creates a runtime owner that requires an authenticated project-context exchange.
+   *
+   * <p>The project identity is deliberately kept above core Link. It is exchanged
+   * only after Link authentication and before this owner retains a session for
+   * project-facing use.</p>
+   *
+   * @param onboarding       Link-owned onboarding facade
+   * @param localIdentity    local authenticated node identity
+   * @param membership       explicitly verified signed membership, or empty when overlay membership
+   *                         is not configured
+   * @param events           safe Link event sink
+   * @param projectIdentity  canonical local project identity
+   */
+  public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity,
+      Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events,
+      ProjectIdentity projectIdentity) {
+    this(onboarding, localIdentity, membership, events, Clock.systemUTC(),
+        Objects.requireNonNull(projectIdentity, "project identity"));
+  }
+
+  /**
+   * Creates a project-scoped runtime owner with an injectable clock.
+   *
+   * @param onboarding       Link-owned onboarding facade
+   * @param localIdentity    local authenticated node identity
+   * @param membership       explicitly verified signed membership, or empty when overlay membership
+   *                         is not configured
+   * @param events           safe Link event sink
+   * @param projectIdentity  canonical local project identity
+   * @param clock            time source for membership, topology, and lifecycle views
+   */
+  public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity,
+      Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events,
+      ProjectIdentity projectIdentity, Clock clock) {
+    this(onboarding, localIdentity, membership, events, Objects.requireNonNull(clock, "clock"),
+        Objects.requireNonNull(projectIdentity, "project identity"));
+  }
+
+  private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity,
+      Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events,
+      Clock clock, ProjectIdentity projectIdentity) {
     this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
     this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
     this.events = Objects.requireNonNull(events, "events");
     this.clock = Objects.requireNonNull(clock, "clock");
+    this.projectIdentity = projectIdentity;
     Optional<OverlayMembershipSnapshot> initial = Objects.requireNonNull(membership, "membership");
     this.membership = initial.map(OverlayMembershipView::new).orElse(null);
     if (this.membership != null && !this.membership.current().allows(localIdentity.nodeId())) {
       throw new IllegalArgumentException("local identity is not in the supplied membership");
     }
+    if (projectIdentity != null && this.membership != null
+        && !projectIdentity.projectId().equals(this.membership.current().projectId())) {
+      throw new IllegalArgumentException("membership project does not match local project identity");
+    }
     this.topology = new OverlayTopologyView();
     this.peerTransports = new OverlayPeerRegistry<>();
     this.membershipTransports = new OverlayPeerRegistry<>();
     this.topologyTransports = new OverlayPeerRegistry<>();
+    PeerSession.ApplicationStreamHandler handler;
     if (this.membership == null) {
       this.topologyPropagation = null;
-      this.applicationHandler = null;
+      handler = null;
     } else {
       OverlayMembershipPropagation membershipPropagation = new OverlayMembershipPropagation(
           localIdentity.nodeId(), this.membership,
@@ -117,9 +171,17 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
           topology,
           new OverlayDuplicateGuard(256), peerTransports,
           frame -> CompletableFuture.completedFuture(null));
-      this.applicationHandler = OverlayPeerSessionBridge.inbound(forwarder, topologyPropagation,
+      handler = OverlayPeerSessionBridge.inbound(forwarder, topologyPropagation,
           membershipPropagation, clock);
     }
+    if (projectIdentity != null) {
+      PeerSession.ApplicationStreamHandler delegate = handler == null
+          ? (remote, payload) -> CompletableFuture.failedFuture(
+              new IllegalStateException("no project application handler is installed"))
+          : handler;
+      handler = ProjectContextExchange.withResponder(projectIdentity, delegate);
+    }
+    this.applicationHandler = handler;
   }
 
   private static void closeQuietly(AutoCloseable value) {
@@ -229,6 +291,15 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations,
       Instant now = clock.instant();
       if (!current.isUsableAt(now) || !current.allows(session.remoteNodeId())) {
         throw new IllegalStateException("authenticated peer is not a current project member");
+      }
+    }
+    if (projectIdentity != null) {
+      try {
+        ProjectContextExchange.require(session, projectIdentity);
+      } catch (ProjectContextExchange.ProjectContextException mismatch) {
+        closeSessionQuietly(session);
+        publish(OnboardingEventType.LIVENESS, mismatch.code());
+        throw new IllegalStateException(mismatch.code(), mismatch);
       }
     }
     PeerSession previous = sessions.put(session.remoteNodeId(), session);

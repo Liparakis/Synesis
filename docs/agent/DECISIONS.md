@@ -1,3 +1,55 @@
+## 2026-09-20 — ADR-0086 recovery-continuation admission
+
+Fresh replacement admission now has a read-only recovery-continuation
+preflight. When an authenticated session's requested role and exact ownership
+selectors match an active recovery-held lane, MCP admission defers the normal
+claim announcement so the replacement can observe `get_next_action` and make
+the explicit continuation choice. The preflight creates no participant intent,
+claim, grant, or successor; failed reads fall back to the existing fail-closed
+claim path. Ordinary reviewers remain required to claim a disjoint report or
+test path when no matching recovery lane exists. ADR-0086 records the boundary
+and `McpAdmissionRecoveryTest` proves no authority transfer occurs before the
+explicit continuation request.
+
+## ADR index update
+
+- ADR-0086: Recovery continuation admission before claim declaration — accepted
+  for SYN-082 on 2026-09-20.
+
+## 2026-09-18 — ADR-0081 invisible canonical project metadata boundary
+
+The filesystem-boundary milestone is activated as SYN-081. `.synesis` remains
+the fixed cross-platform metadata root. A small project-storage seam will own
+directory creation, no-follow root validation, and best-effort Windows Hidden
+normalization. Hidden state is derived local presentation state: it is never
+serialized, copied as authority, consulted for identity, or used by
+authentication/authorization, registry, daemon, MCP, or Git logic. Existing
+project writes that already target `.synesis` remain in place; external host
+administration/workspace/runtime roots and the visible `AGENTS.md` integration
+file remain documented exceptions rather than being moved speculatively.
+
+## ADR index update
+
+- ADR-0081: Invisible canonical project metadata boundary — accepted for SYN-081.
+
+Implementation evidence: `ProjectMetadataStorage` is the only production
+owner of DOS Hidden handling; supported project lifecycle paths re-ensure it,
+and the complete write-surface inventory is recorded in
+`docs/evidence/SYN-081-invisible-project-metadata-2026-09-18.md`.
+
+## 2026-09-18 — ADR-0080 portable project identity and replica model
+
+The existing `.synesis/project.json` UUID remains the sole canonical logical
+project identity. A replica is a separately initialized local realization with
+fresh private/node state; an explicit fork creates a new UUID. Discovery may
+store multiple paths for one ID but never grants authority. Project context is
+bound after Link authentication by higher-level consumers before mutation; core
+`PeerSession` remains project-agnostic.
+
+## ADR index update
+
+- ADR-0080: Portable project identity and replica model — accepted for SYN-080.
+
 ## 2026-09-13 — SL-D-040 Checkpoint 3A Docker process-isolation lab
 
 Checkpoint 3A uses disposable Docker Linux namespaces on the current Windows
@@ -182,3 +234,25 @@ Product decisions are indexed in ADRs under `docs/adr/`.
   for SYN-051; dedicated retained Codex homes and App Servers, exact thread
   resume, selected `env_vars` proof delivery, rotation, and generation fencing
   behind the existing provider-neutral authority seams.
+
+## 2026-09-19 — ADR-0085 continuation grants remain outside review authority
+
+The fresh blind continuation target showed that a replay projection must keep
+the consumed continuation authorization visible for audit without presenting
+it as review authority. The continuation grant is tagged and excluded from
+review-obligation projection; the collaboration projection and
+`ReviewValidationService` reject a review decision against it with
+`REVIEW_SELF_APPROVAL_FORBIDDEN`. No automatic review or identity transfer was
+added.
+## 2026-09-19 — ADR-0083 lawful recovery continuation and successor authority
+
+The remaining SYN-082 continuation gap is activated within the existing task.
+Recovery reconciliation remains responsible only for fencing and preserving
+unfinished work. A fresh exact participant may explicitly choose a derived
+recovery-held continuation action through the existing generic coordination
+surface; the action creates a new successor intent under the append lock while
+preserving task/work lineage and never reviving the source runtime authority.
+
+## ADR index update
+
+- ADR-0083: Lawful recovery continuation and successor authority — accepted for SYN-082.

@@ -1,13 +1,20 @@
 package org.synesis.coordination.collaboration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkGroupService;
@@ -16,9 +23,14 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
+import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -224,7 +236,7 @@ final class WorkIntentServiceTest {
   }
 
   @Test
-  void reviewerCanRequestAdmissionWithoutAWriteClaimAndConsumesIssuedGrant(@TempDir Path temp)
+  void reviewAdmissionRequiresReviewerIntentAndConsumesIssuedGrant(@TempDir Path temp)
       throws Exception {
     UUID project = UUID.randomUUID();
     NodeIdentity identity = NodeIdentity.generate();
@@ -246,6 +258,33 @@ final class WorkIntentServiceTest {
     assertEquals(1,
         service.requests()
             .size());
+
+    IOException unannounced = assertThrows(IOException.class,
+        () -> service.respond("agt-owner", request.requestId(),
+            CoordinationRequest.Status.ACCEPTED, "review admitted"));
+    assertEquals("REVIEWER_INTENT_REQUIRED", unannounced.getMessage());
+    PredictionEventStore afterUnannounced = new PredictionEventStore(temp, project);
+    assertEquals(CoordinationRequest.Status.PENDING, afterUnannounced.collaborationProjection()
+        .requests().getFirst().status());
+    assertEquals(0, afterUnannounced.events().stream()
+        .filter(event -> event.type()
+            == org.synesis.coordination.domain.prediction.PredictionEventType.COORDINATION_RESPONDED)
+        .count());
+    assertTrue(afterUnannounced.workGroupProjection().grants().isEmpty());
+
+    UUID reviewerId = UUID.randomUUID();
+    WorkIntent reviewer = new WorkIntent(reviewerId, project, "agt-reviewer", "codex",
+        UUID.randomUUID(), "Review task tracker", "Review the immutable producer snapshot",
+        "base-commit", List.of(ResourceSelector.pathExact("docs/task-tracker-review.md")), 1,
+        owner.workGroupId(), WorkIntent.defaultAuthorityLineage(reviewerId),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/task_tracker.py")));
+    assertTrue(service.announce(reviewer).acquired());
+
+    CoordinationRequest admittedReplay = service.request("agt-reviewer", owner.intentId(),
+        CoordinationRequest.Kind.REVIEW,
+        "Review the published snapshot without claiming its files");
+    assertEquals(request.requestId(), admittedReplay.requestId());
     service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED,
         "review admitted");
 
@@ -276,6 +315,113 @@ final class WorkIntentServiceTest {
         new PredictionEventStore(temp, project).workGroupProjection()
             .grants()
             .size());
+  }
+
+  @Test
+  void producerOnlyRequesterCannotAcceptReviewAdmission(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    PredictionEventStore store = new PredictionEventStore(temp, project);
+    WorkIntentService service = new WorkIntentService(store, identity);
+    WorkIntent owner = intent(project, "agt-owner",
+        ResourceSelector.pathExact("src/task_tracker.py"));
+    UUID requesterId = UUID.randomUUID();
+    WorkIntent requesterProducer = new WorkIntent(requesterId, project, "agt-reviewer", "codex",
+        UUID.randomUUID(), "Implement another task", "Publish another task", "base-commit",
+        List.of(ResourceSelector.pathExact("tests/other_task.py")), 1, owner.workGroupId(),
+        WorkIntent.defaultAuthorityLineage(requesterId), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.PRODUCER);
+    assertTrue(service.announce(owner).acquired());
+    assertTrue(service.announce(requesterProducer).acquired());
+
+    CoordinationRequest request = service.request(requesterProducer.participant(),
+        owner.intentId(), CoordinationRequest.Kind.REVIEW, "Review the producer snapshot");
+    IOException rejected = assertThrows(IOException.class,
+        () -> service.respond(owner.participant(), request.requestId(),
+            CoordinationRequest.Status.ACCEPTED, "review admitted"));
+
+    assertEquals("REVIEWER_INTENT_REQUIRED", rejected.getMessage());
+    PredictionEventStore afterRejected = new PredictionEventStore(temp, project);
+    assertEquals(CoordinationRequest.Status.PENDING, afterRejected.collaborationProjection()
+        .requests().getFirst().status());
+    assertEquals(0, afterRejected.events().stream()
+        .filter(event -> event.type()
+            == org.synesis.coordination.domain.prediction.PredictionEventType.COORDINATION_RESPONDED)
+        .count());
+    assertTrue(afterRejected.workGroupProjection().grants().isEmpty());
+  }
+
+  @Test
+  void mandatoryReviewRequiresExactCandidateAndIssuesSnapshotBoundSingleReviewerGrant(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    PredictionEventStore store = new PredictionEventStore(temp, project);
+    new WorkGroupService(store, identity).create(new WorkGroup(groupId, project,
+        "Build a board", "CRUD and persistence", 1, WorkGroup.Status.ACTIVE,
+        ReviewPolicy.mandatoryIndependent()));
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    WorkIntent owner = lane(project, groupId, "agt-policy-owner", WorkIntent.Role.PRODUCER,
+        "src/board.py", List.of());
+    WorkIntent reviewer = lane(project, groupId, "agt-policy-reviewer", WorkIntent.Role.REVIEWER,
+        "docs/review.md", List.of(ResourceSelector.pathExact("src/board.py")));
+    assertTrue(service.announce(owner).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    TaskSnapshotPayload snapshot = snapshot(owner, "snap_policy_candidate", "src/board.py");
+    new PredictionEventStore(temp, project).append(UUID.randomUUID(),
+        PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+
+    IOException missingSnapshot = assertThrows(IOException.class,
+        () -> service.request(reviewer.participant(), owner.intentId(),
+            CoordinationRequest.Kind.REVIEW, "Review candidate"));
+    assertEquals("REVIEW_SNAPSHOT_REQUIRED", missingSnapshot.getMessage());
+
+    CoordinationRequest request = service.request(reviewer.participant(), owner.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review candidate", snapshot.snapshotId());
+    assertEquals(snapshot.snapshotId(), request.snapshotId());
+    assertEquals(request.requestId(), service.request(reviewer.participant(), owner.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review candidate", snapshot.snapshotId()).requestId());
+    service.respond(owner.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "candidate selected");
+
+    LaneGrant grant = new PredictionEventStore(temp, project).workGroupProjection().grants()
+        .getFirst();
+    assertEquals(snapshot.snapshotId(), grant.snapshotId());
+    assertEquals(reviewer.participant(), grant.targetParticipant());
+
+    WorkIntent secondReviewer = lane(project, groupId, "agt-policy-reviewer-two",
+        WorkIntent.Role.REVIEWER, "tests/review.py",
+        List.of(ResourceSelector.pathExact("src/board.py")));
+    assertTrue(service.announce(secondReviewer).acquired());
+    IOException alreadyAssigned = assertThrows(IOException.class,
+        () -> service.request(secondReviewer.participant(), owner.intentId(),
+            CoordinationRequest.Kind.REVIEW, "Review candidate", snapshot.snapshotId()));
+    assertEquals("REVIEW_CANDIDATE_ALREADY_ASSIGNED", alreadyAssigned.getMessage());
+    assertEquals(1, new PredictionEventStore(temp, project).collaborationProjection()
+        .requests().size());
+  }
+
+  private static WorkIntent lane(UUID project, UUID groupId, String participant,
+      WorkIntent.Role role, String claim, List<ResourceSelector> reviewTargets) {
+    UUID intentId = UUID.randomUUID();
+    return new WorkIntent(intentId, project, participant, "codex", UUID.randomUUID(),
+        "Build a board", "CRUD and persistence", "base-commit",
+        List.of(ResourceSelector.pathExact(claim)), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(intentId), WorkIntent.Status.ANNOUNCED, role,
+        reviewTargets);
+  }
+
+  private static TaskSnapshotPayload snapshot(WorkIntent owner, String snapshotId, String path) {
+    String sessionId = "session-" + owner.participant();
+    SnapshotProvenance provenance = new SnapshotProvenance(owner.workGroupId(), owner.intentId(),
+        owner.authorityLineageId(), owner.participant(), sessionId, owner.version(), List.of(),
+        List.of(), List.of("PATH_EXACT:" + path), "refs/synesis/snapshots/" + snapshotId,
+        "integrity-" + snapshotId, "manifest-" + snapshotId);
+    return new TaskSnapshotPayload(owner.taskId(), snapshotId, "node", "supervisor", "worker",
+        sessionId, "base-commit", "commit-" + snapshotId, List.of(path), List.of(),
+        "Published candidate", provenance, true);
   }
 
   @Test
@@ -450,10 +596,11 @@ final class WorkIntentServiceTest {
     new WorkGroupService(new PredictionEventStore(temp, project), identity).issue(new LaneGrant(
         grantId, owner.workGroupId(), targetIntentId, "agt-target", owner.version(), true));
     WorkIntent target = new WorkIntent(targetIntentId, project, "agt-target", "codex",
-        UUID.randomUUID(),
+        owner.taskId(),
         owner.goal(), owner.acceptance(), owner.baseCommit(), owner.selectors(),
         owner.version() + 1,
-        owner.workGroupId(), WorkIntent.Status.ANNOUNCED);
+        owner.workGroupId(), owner.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+        owner.role(), owner.reviewTargetSelectors(), owner.knownDependencies());
     service.continueFromRecovery(
         new CollaborationCodec.Continuation(grantId, owner.intentId(), target,
             "agt-owner", "agt-target", owner.version(), reference));
@@ -467,6 +614,661 @@ final class WorkIntentServiceTest {
         replayed.collaborationProjection()
             .participantState("agt-owner")
             .orElseThrow());
+    assertEquals(owner.taskId(), replayed.collaborationProjection()
+        .intent(targetIntentId)
+        .orElseThrow()
+        .taskId());
+    assertEquals(owner.authorityLineageId(), replayed.collaborationProjection()
+        .intent(targetIntentId)
+        .orElseThrow()
+        .authorityLineageId());
+  }
+
+  @Test
+  void freshContinuationDerivesAndConsumesAOneShotSuccessorGrant(@TempDir Path temp)
+      throws Exception {
+    UUID project = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    PredictionEventStore store = new PredictionEventStore(temp, project);
+    WorkIntentService service = new WorkIntentService(store, identity);
+    WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+    assertTrue(service.announce(owner).acquired());
+    service.suspend(owner.participant());
+    String reference = temp.resolve("recovery").toAbsolutePath() + "#hash";
+    service.holdRecovery(owner.participant(), reference);
+
+    UUID targetIntentId = UUID.nameUUIDFromBytes(("target:" + owner.intentId())
+        .getBytes(StandardCharsets.UTF_8));
+    UUID grantId = UUID.nameUUIDFromBytes(("grant:" + owner.intentId())
+        .getBytes(StandardCharsets.UTF_8));
+    WorkIntent target = new WorkIntent(targetIntentId, project, "agt-successor", "codex",
+        owner.taskId(), owner.goal(), owner.acceptance(), owner.baseCommit(), owner.selectors(),
+        owner.version() + 1, owner.workGroupId(), owner.authorityLineageId(),
+        WorkIntent.Status.ANNOUNCED, owner.role(), owner.reviewTargetSelectors(),
+        owner.knownDependencies());
+    CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(grantId,
+        owner.intentId(), target, owner.participant(), target.participant(), owner.version(),
+        reference);
+
+    assertFalse(store.workGroupProjection().grantAvailable(grantId));
+    service.continueEligibleFromRecovery(continuation);
+    assertDoesNotThrow(() -> service.continueEligibleFromRecovery(continuation));
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    assertFalse(replayed.workGroupProjection().grantAvailable(grantId));
+    assertEquals(0,
+        replayed.events().stream().filter(event -> event.type()
+            == org.synesis.coordination.domain.prediction.PredictionEventType.LANE_GRANT_ISSUED)
+            .count());
+    assertEquals(1,
+        replayed.events().stream().filter(event -> event.type()
+            == org.synesis.coordination.domain.prediction.PredictionEventType.LANE_CONTINUATION_ACCEPTED)
+            .count());
+    ReviewValidationPayload selfReview = new ReviewValidationPayload(grantId,
+        owner.workGroupId(), target.intentId(), target.participant(), target.version(),
+        owner.taskId(), "snap_self_review", "ACCEPTED", "", target.participant());
+    java.io.IOException rejected = assertThrows(java.io.IOException.class,
+        () -> replayed.append(UUID.randomUUID(),
+            org.synesis.coordination.domain.prediction.PredictionEventType.REVIEW_VALIDATION_RECORDED,
+            identity.nodeId(), selfReview.encode(), identity));
+    assertEquals("REVIEW_SELF_APPROVAL_FORBIDDEN", rejected.getMessage());
+  }
+
+  @Test
+  void reviewerContinuationReplacesDeadReviewerGrantWithoutChangingProducerAuthority(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID taskId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(source), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+    WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+        UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+        List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.REVIEWER, List.of(source), List.of());
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review the feature candidate");
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+    LaneGrant original = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants()
+        .stream()
+        .findFirst()
+        .orElseThrow();
+
+    service.suspend(reviewer.participant());
+    String reference = temp.resolve("review-recovery")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(reviewer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer-successor",
+        "codex", reviewer.taskId(), reviewer.goal(), reviewer.acceptance(), reviewer.baseCommit(),
+        reviewer.selectors(), reviewer.version() + 1, reviewer.workGroupId(),
+        reviewer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, reviewer.role(),
+        reviewer.reviewTargetSelectors(), reviewer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + reviewer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), reviewer.intentId(), successor,
+        reviewer.participant(), successor.participant(), reviewer.version(), reference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    assertTrue(replayed.workGroupProjection().grantSuperseded(original.grantId()));
+    assertFalse(replayed.workGroupProjection().grantAvailable(original.grantId()));
+    LaneGrant replacement = replayed.workGroupProjection()
+        .grants()
+        .stream()
+        .filter(grant -> grant.targetParticipant().equals(successor.participant()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(original.targetIntentId(), replacement.targetIntentId());
+    assertEquals(original.claimEpoch(), replacement.claimEpoch());
+    assertTrue(replayed.workGroupProjection().grantAvailable(replacement.grantId()));
+    assertEquals(1, replayed.collaborationProjection().activeIntents().stream()
+        .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER)
+        .count());
+  }
+
+  @Test
+  void reviewerContinuationMigratesConsumedSnapshotBoundReviewGrant(@TempDir Path temp)
+      throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    new WorkGroupService(new PredictionEventStore(temp, project), identity)
+        .create(new WorkGroup(groupId, project, "Build a feature", "Review the exact candidate",
+            1, WorkGroup.Status.ACTIVE, ReviewPolicy.mandatoryIndependent()));
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = lane(project, groupId, "agt-producer", WorkIntent.Role.PRODUCER,
+        "src/feature.py", List.of());
+    WorkIntent reviewer = lane(project, groupId, "agt-reviewer", WorkIntent.Role.REVIEWER,
+        "tests/review.py", List.of(source));
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    TaskSnapshotPayload snapshot = snapshot(producer, "snap_reviewer_recovery", "src/feature.py");
+    new PredictionEventStore(temp, project).append(UUID.randomUUID(),
+        PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review exact candidate", snapshot.snapshotId());
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+
+    LaneGrant original = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants().stream()
+        .filter(grant -> snapshot.snapshotId().equals(grant.snapshotId()))
+        .findFirst()
+        .orElseThrow();
+    new WorkGroupService(new PredictionEventStore(temp, project), identity).consume(
+        original.grantId(), reviewer.participant(), producer.intentId(), producer.version());
+
+    service.suspend(reviewer.participant());
+    String reference = temp.resolve("reviewer-recovery-snapshot")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(reviewer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer-successor",
+        "codex", reviewer.taskId(), reviewer.goal(), reviewer.acceptance(), reviewer.baseCommit(),
+        reviewer.selectors(), reviewer.version() + 1, reviewer.workGroupId(),
+        reviewer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, reviewer.role(),
+        reviewer.reviewTargetSelectors(), reviewer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + reviewer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), reviewer.intentId(), successor,
+        reviewer.participant(), successor.participant(), reviewer.version(), reference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    assertTrue(replayed.workGroupProjection().grantSuperseded(original.grantId()));
+    assertFalse(replayed.workGroupProjection().grantAvailable(original.grantId()));
+    LaneGrant replacement = replayed.workGroupProjection().grants().stream()
+        .filter(grant -> snapshot.snapshotId().equals(grant.snapshotId()))
+        .filter(grant -> grant.targetParticipant().equals(successor.participant()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(producer.intentId(), replacement.targetIntentId());
+    assertEquals(producer.version(), replacement.claimEpoch());
+    assertTrue(replayed.workGroupProjection().grantAvailable(replacement.grantId()));
+    assertDoesNotThrow(() -> new WorkGroupService(replayed, identity).consume(
+        replacement.grantId(), successor.participant(), producer.intentId(), producer.version()));
+  }
+
+  @Test
+  void reviewerContinuationCannotReuseActiveProducerParticipant(@TempDir Path temp)
+      throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID taskId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector producerSelector = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(producerSelector), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+    WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+        UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+        List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.REVIEWER, List.of(producerSelector), List.of());
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+
+    service.suspend(reviewer.participant());
+    String reference = temp.resolve("reviewer-role-isolation")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(reviewer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, producer.participant(),
+        "codex", reviewer.taskId(), reviewer.goal(), reviewer.acceptance(), reviewer.baseCommit(),
+        reviewer.selectors(), reviewer.version() + 1, reviewer.workGroupId(),
+        reviewer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, reviewer.role(),
+        reviewer.reviewTargetSelectors(), reviewer.knownDependencies());
+    CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + reviewer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), reviewer.intentId(), successor,
+        reviewer.participant(), successor.participant(), reviewer.version(), reference);
+
+    IOException rejected = assertThrows(IOException.class,
+        () -> service.continueEligibleFromRecovery(continuation));
+    assertEquals("REVIEW_SELF_NOT_ALLOWED", rejected.getMessage());
+  }
+
+  @Test
+  void reviewerContinuationRetargetsPendingReviewRequestToSuccessor(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID taskId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(source), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+    WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+        UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+        List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.REVIEWER, List.of(source), List.of());
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review the feature candidate");
+
+    service.suspend(reviewer.participant());
+    String reference = temp.resolve("reviewer-recovery-pending-review")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(reviewer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer-successor",
+        "codex", reviewer.taskId(), reviewer.goal(), reviewer.acceptance(), reviewer.baseCommit(),
+        reviewer.selectors(), reviewer.version() + 1, reviewer.workGroupId(),
+        reviewer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, reviewer.role(),
+        reviewer.reviewTargetSelectors(), reviewer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + reviewer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), reviewer.intentId(), successor,
+        reviewer.participant(), successor.participant(), reviewer.version(), reference));
+
+    CoordinationRequest retargeted = new PredictionEventStore(temp, project)
+        .collaborationProjection().requests().stream()
+        .filter(candidate -> candidate.requestId().equals(request.requestId()))
+        .findFirst().orElseThrow();
+    assertEquals(CoordinationRequest.Status.PENDING, retargeted.status());
+    assertEquals(successor.participant(), retargeted.requester());
+    assertEquals(producer.participant(), retargeted.target());
+    assertEquals(producer.intentId(), retargeted.conflictingIntentId());
+
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted after reviewer continuation");
+    LaneGrant successorGrant = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants().stream()
+        .filter(grant -> grant.targetParticipant().equals(successor.participant()))
+        .filter(grant -> grant.targetIntentId().equals(producer.intentId()))
+        .findFirst().orElseThrow();
+    assertEquals(producer.version(), successorGrant.claimEpoch());
+    assertTrue(new PredictionEventStore(temp, project).workGroupProjection()
+        .grantAvailable(successorGrant.grantId()));
+  }
+
+  @Test
+  void producerContinuationRebindsOutstandingReviewerGrantToSuccessorEpoch(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID taskId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(source), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+    WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+        UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+        List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.REVIEWER, List.of(source), List.of());
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review the feature candidate");
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+    LaneGrant original = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants()
+        .stream()
+        .findFirst()
+        .orElseThrow();
+
+    service.suspend(producer.participant());
+    String reference = temp.resolve("producer-recovery")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(producer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-producer-successor",
+        "codex", producer.taskId(), producer.goal(), producer.acceptance(), producer.baseCommit(),
+        producer.selectors(), producer.version() + 1, producer.workGroupId(),
+        producer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, producer.role(),
+        producer.reviewTargetSelectors(), producer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + producer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), producer.intentId(), successor,
+        producer.participant(), successor.participant(), producer.version(), reference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    assertTrue(replayed.workGroupProjection().grantSuperseded(original.grantId()));
+    assertFalse(replayed.workGroupProjection().grantAvailable(original.grantId()));
+    LaneGrant replacement = replayed.workGroupProjection()
+        .grants()
+        .stream()
+        .filter(grant -> grant.targetIntentId().equals(successor.intentId()))
+        .filter(grant -> grant.targetParticipant().equals(reviewer.participant()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(successor.version(), replacement.claimEpoch());
+    assertTrue(replayed.workGroupProjection().grantAvailable(replacement.grantId()));
+  }
+
+  @Test
+  void reviewerContinuationConsumesGrantMigratedFromProducerSuccessor(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    UUID taskId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(source), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+    WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+        UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+        List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+        WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.REVIEWER, List.of(source), List.of());
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review the feature candidate");
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+
+    service.suspend(producer.participant());
+    String producerReference = temp.resolve("producer-recovery-before-reviewer")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(producer.participant(), producerReference);
+    WorkIntent producerSuccessor = new WorkIntent(UUID.randomUUID(), project,
+        "agt-producer-successor", "codex", producer.taskId(), producer.goal(),
+        producer.acceptance(), producer.baseCommit(), producer.selectors(), producer.version() + 1,
+        producer.workGroupId(), producer.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+        producer.role(), producer.reviewTargetSelectors(), producer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + producer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), producer.intentId(), producerSuccessor,
+        producer.participant(), producerSuccessor.participant(), producer.version(),
+        producerReference));
+
+    service.suspend(reviewer.participant());
+    String reviewerReference = temp.resolve("reviewer-recovery-after-producer")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(reviewer.participant(), reviewerReference);
+    WorkIntent reviewerSuccessor = new WorkIntent(UUID.randomUUID(), project,
+        "agt-reviewer-successor", "codex", reviewer.taskId(), reviewer.goal(),
+        reviewer.acceptance(), reviewer.baseCommit(), reviewer.selectors(), reviewer.version() + 1,
+        reviewer.workGroupId(), reviewer.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+        reviewer.role(), reviewer.reviewTargetSelectors(), reviewer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + reviewer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), reviewer.intentId(), reviewerSuccessor,
+        reviewer.participant(), reviewerSuccessor.participant(), reviewer.version(),
+        reviewerReference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    LaneGrant migrated = replayed.workGroupProjection().grants().stream()
+        .filter(grant -> grant.targetIntentId().equals(producerSuccessor.intentId()))
+        .filter(grant -> grant.targetParticipant().equals(reviewerSuccessor.participant()))
+        .filter(grant -> grant.claimEpoch() == producerSuccessor.version())
+        .filter(grant -> replayed.workGroupProjection().grantAvailable(grant.grantId()))
+        .findFirst()
+        .orElseThrow();
+    assertDoesNotThrow(() -> new WorkGroupService(replayed, identity).consume(
+        migrated.grantId(), reviewerSuccessor.participant(), producerSuccessor.intentId(),
+        producerSuccessor.version()));
+    assertTrue(new PredictionEventStore(temp, project).workGroupProjection()
+        .grantConsumed(migrated.grantId()));
+  }
+
+  @Test
+  void producerContinuationRetargetsPendingReviewRequestToSuccessor(
+      @TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+      UUID groupId = UUID.randomUUID();
+      UUID taskId = UUID.randomUUID();
+      NodeIdentity identity = NodeIdentity.generate();
+      WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+          identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = new WorkIntent(UUID.randomUUID(), project, "agt-producer", "codex",
+        taskId, "Implement feature", "Publish feature", "base", List.of(source), 1,
+        groupId, WorkIntent.defaultAuthorityLineage(UUID.randomUUID()),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), List.of());
+      WorkIntent reviewer = new WorkIntent(UUID.randomUUID(), project, "agt-reviewer", "claude",
+          UUID.randomUUID(), "Review feature", "Review immutable candidate", "base",
+          List.of(ResourceSelector.pathExact("tests/feature_test.py")), 1, groupId,
+          WorkIntent.defaultAuthorityLineage(UUID.randomUUID()), WorkIntent.Status.ANNOUNCED,
+          WorkIntent.Role.REVIEWER, List.of(source), List.of());
+      assertTrue(service.announce(producer).acquired());
+      assertTrue(service.announce(reviewer).acquired());
+      CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+          CoordinationRequest.Kind.REVIEW, "Review the feature candidate");
+
+    service.suspend(producer.participant());
+    String reference = temp.resolve("producer-recovery-pending-review")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(producer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-producer-successor",
+        "codex", producer.taskId(), producer.goal(), producer.acceptance(), producer.baseCommit(),
+        producer.selectors(), producer.version() + 1, producer.workGroupId(),
+        producer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, producer.role(),
+        producer.reviewTargetSelectors(), producer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + producer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), producer.intentId(), successor,
+        producer.participant(), successor.participant(), producer.version(), reference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    CoordinationRequest retargeted = replayed.collaborationProjection().requests().stream()
+        .filter(candidate -> candidate.requestId().equals(request.requestId()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(CoordinationRequest.Status.PENDING, retargeted.status());
+    assertEquals(successor.participant(), retargeted.target());
+    assertEquals(successor.intentId(), retargeted.conflictingIntentId());
+    service.respond(successor.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+    LaneGrant grant = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants()
+        .stream()
+        .filter(candidate -> candidate.targetIntentId().equals(successor.intentId()))
+        .filter(candidate -> candidate.targetParticipant().equals(reviewer.participant()))
+        .findFirst()
+        .orElseThrow();
+      assertEquals(successor.intentId(), grant.targetIntentId());
+      assertEquals(reviewer.participant(), grant.targetParticipant());
+      assertEquals(successor.version(), grant.claimEpoch());
+    }
+
+  @Test
+  void pendingSnapshotReviewCanBeAcceptedByProducerSuccessor(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    new WorkGroupService(new PredictionEventStore(temp, project), identity)
+        .create(new WorkGroup(groupId, project, "Build a feature", "Review the exact candidate", 1,
+            WorkGroup.Status.ACTIVE, ReviewPolicy.mandatoryIndependent()));
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = lane(project, groupId, "agt-producer", WorkIntent.Role.PRODUCER,
+        "src/feature.py", List.of());
+    WorkIntent reviewer = lane(project, groupId, "agt-reviewer", WorkIntent.Role.REVIEWER,
+        "tests/review.py", List.of(source));
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    TaskSnapshotPayload snapshot = snapshot(producer, "snap_pending_review_successor",
+        "src/feature.py");
+    new PredictionEventStore(temp, project).append(UUID.randomUUID(),
+        PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review exact candidate", snapshot.snapshotId());
+
+    service.suspend(producer.participant());
+    String reference = temp.resolve("producer-recovery-pending-review")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(producer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-producer-successor",
+        "codex", producer.taskId(), producer.goal(), producer.acceptance(), producer.baseCommit(),
+        producer.selectors(), producer.version() + 1, producer.workGroupId(),
+        producer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, producer.role(),
+        producer.reviewTargetSelectors(), producer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + producer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), producer.intentId(), successor,
+        producer.participant(), successor.participant(), producer.version(), reference));
+
+    CoordinationRequest retargeted = new PredictionEventStore(temp, project)
+        .collaborationProjection().requests().stream()
+        .filter(candidate -> candidate.requestId().equals(request.requestId()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(successor.participant(), retargeted.target());
+    assertEquals(successor.intentId(), retargeted.conflictingIntentId());
+    assertEquals(snapshot.snapshotId(), retargeted.snapshotId());
+    service.respond(successor.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    LaneGrant grant = replayed.workGroupProjection().grants().stream()
+        .filter(candidate -> snapshot.snapshotId().equals(candidate.snapshotId()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(producer.intentId(), grant.targetIntentId());
+    assertEquals(producer.version(), grant.claimEpoch());
+    assertDoesNotThrow(() -> new WorkGroupService(replayed, identity).consume(grant.grantId(),
+        reviewer.participant(), producer.intentId(), producer.version()));
+  }
+
+  @Test
+  void producerContinuationPreservesExistingSnapshotBoundReviewGrant(@TempDir Path temp)
+      throws Exception {
+    UUID project = UUID.randomUUID();
+    UUID groupId = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    new WorkGroupService(new PredictionEventStore(temp, project), identity)
+        .create(new WorkGroup(groupId, project, "Build a feature", "Review the exact candidate", 1,
+            WorkGroup.Status.ACTIVE, ReviewPolicy.mandatoryIndependent()));
+    WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+        identity);
+    ResourceSelector source = ResourceSelector.pathExact("src/feature.py");
+    WorkIntent producer = lane(project, groupId, "agt-producer", WorkIntent.Role.PRODUCER,
+        "src/feature.py", List.of());
+    WorkIntent reviewer = lane(project, groupId, "agt-reviewer", WorkIntent.Role.REVIEWER,
+        "tests/review.py", List.of(source));
+    assertTrue(service.announce(producer).acquired());
+    assertTrue(service.announce(reviewer).acquired());
+    TaskSnapshotPayload snapshot = snapshot(producer, "snap_granted_review_successor",
+        "src/feature.py");
+    new PredictionEventStore(temp, project).append(UUID.randomUUID(),
+        PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+    CoordinationRequest request = service.request(reviewer.participant(), producer.intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review exact candidate", snapshot.snapshotId());
+    service.respond(producer.participant(), request.requestId(),
+        CoordinationRequest.Status.ACCEPTED, "admitted");
+    LaneGrant originalGrant = new PredictionEventStore(temp, project).workGroupProjection()
+        .grants().stream()
+        .filter(candidate -> snapshot.snapshotId().equals(candidate.snapshotId()))
+        .findFirst()
+        .orElseThrow();
+
+    service.suspend(producer.participant());
+    String reference = temp.resolve("producer-recovery-granted-review")
+        .toAbsolutePath() + "#hash";
+    service.holdRecovery(producer.participant(), reference);
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-producer-successor",
+        "codex", producer.taskId(), producer.goal(), producer.acceptance(), producer.baseCommit(),
+        producer.selectors(), producer.version() + 1, producer.workGroupId(),
+        producer.authorityLineageId(), WorkIntent.Status.ANNOUNCED, producer.role(),
+        producer.reviewTargetSelectors(), producer.knownDependencies());
+    service.continueEligibleFromRecovery(new CollaborationCodec.Continuation(
+        UUID.nameUUIDFromBytes(("continuation:" + producer.intentId())
+            .getBytes(StandardCharsets.UTF_8)), producer.intentId(), successor,
+        producer.participant(), successor.participant(), producer.version(), reference));
+
+    PredictionEventStore replayed = new PredictionEventStore(temp, project);
+    LaneGrant retainedGrant = replayed.workGroupProjection().grants().stream()
+        .filter(candidate -> candidate.grantId().equals(originalGrant.grantId()))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(producer.intentId(), retainedGrant.targetIntentId());
+    assertEquals(producer.version(), retainedGrant.claimEpoch());
+    assertFalse(replayed.workGroupProjection().grantSuperseded(retainedGrant.grantId()));
+    assertTrue(replayed.workGroupProjection().grantAvailable(retainedGrant.grantId()));
+    assertDoesNotThrow(() -> new WorkGroupService(replayed, identity).consume(
+        retainedGrant.grantId(), reviewer.participant(), producer.intentId(), producer.version()));
+  }
+
+  @Test
+  void concurrentFreshSuccessorsHaveExactlyOneWinner(@TempDir Path temp) throws Exception {
+    UUID project = UUID.randomUUID();
+    NodeIdentity identity = NodeIdentity.generate();
+    PredictionEventStore store = new PredictionEventStore(temp, project);
+    WorkIntentService setup = new WorkIntentService(store, identity);
+    WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+    assertTrue(setup.announce(owner).acquired());
+    setup.suspend(owner.participant());
+    String reference = temp.resolve("recovery").toAbsolutePath() + "#hash";
+    setup.holdRecovery(owner.participant(), reference);
+
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      List<Future<String>> attempts = List.of(
+          executor.submit(() -> attemptContinuation(temp, project, owner, "agt-successor-b",
+              reference, ready, start)),
+          executor.submit(() -> attemptContinuation(temp, project, owner, "agt-successor-c",
+              reference, ready, start)));
+      ready.await();
+      start.countDown();
+      List<String> outcomes = attempts.stream().map(future -> {
+        try {
+          return future.get();
+        } catch (Exception failure) {
+          throw new AssertionError(failure);
+        }
+      }).toList();
+      assertEquals(1, outcomes.stream().filter("WON"::equals).count(), outcomes.toString());
+      assertEquals(1, new PredictionEventStore(temp, project).collaborationProjection()
+          .activeIntents().stream().filter(intent -> intent.taskId().equals(owner.taskId())).count());
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private static String attemptContinuation(Path temp, UUID project, WorkIntent owner,
+      String participant, String reference, CountDownLatch ready, CountDownLatch start)
+      throws Exception {
+    UUID targetIntentId = UUID.nameUUIDFromBytes(("target:" + owner.intentId() + ":" + participant)
+        .getBytes(StandardCharsets.UTF_8));
+    UUID grantId = UUID.nameUUIDFromBytes(("grant:" + owner.intentId() + ":" + participant)
+        .getBytes(StandardCharsets.UTF_8));
+    WorkIntent target = new WorkIntent(targetIntentId, project, participant, "codex",
+        owner.taskId(), owner.goal(), owner.acceptance(), owner.baseCommit(), owner.selectors(),
+        owner.version() + 1, owner.workGroupId(), owner.authorityLineageId(),
+        WorkIntent.Status.ANNOUNCED, owner.role(), owner.reviewTargetSelectors(),
+        owner.knownDependencies());
+    ready.countDown();
+    start.await();
+    try {
+      WorkIntentService.ContinuationResult result = new WorkIntentService(
+          new PredictionEventStore(temp, project), NodeIdentity.generate())
+          .continueEligibleFromRecovery(new CollaborationCodec.Continuation(grantId,
+              owner.intentId(), target, owner.participant(), participant, owner.version(),
+              reference));
+      return "COMMITTED".equals(result.status()) ? "WON" : result.status();
+    } catch (java.io.IOException expected) {
+      return expected.getMessage();
+    }
   }
 
   @Test

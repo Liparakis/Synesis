@@ -86,6 +86,10 @@ public final class ReviewValidationService {
                 .equals(request.grantId()))
             .findFirst()
             .orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
+        if (store.workGroupProjection()
+            .continuationGrant(grant.grantId())) {
+          return blocked("REVIEW_SELF_APPROVAL_FORBIDDEN", AgentNextAction.RETRY);
+        }
         if (!grant.targetParticipant()
             .equals(reviewer)) {
           return blocked("REVIEW_GRANT_TARGET_MISMATCH", AgentNextAction.RETRY);
@@ -101,6 +105,14 @@ public final class ReviewValidationService {
         TaskSnapshotRecord snapshot = store.taskCompletionProjection()
             .findSnapshotById(request.snapshotId())
             .orElseThrow(() -> new IOException("REVIEW_SNAPSHOT_NOT_FOUND"));
+        if (grant.snapshotId() != null && !grant.snapshotId().equals(snapshot.snapshotId())) {
+          return blocked("REVIEW_SNAPSHOT_MISMATCH", AgentNextAction.RETRY);
+        }
+        if (snapshot.provenance()
+            .participant()
+            .equals(reviewer)) {
+          return blocked("REVIEW_SELF_APPROVAL_FORBIDDEN", AgentNextAction.RETRY);
+        }
         if (!snapshot.provenance()
             .workGroupId()
             .equals(grant.workGroupId())

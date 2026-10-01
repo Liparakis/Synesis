@@ -45,6 +45,33 @@ final class KnownProjectRegistryTest {
   }
 
   @Test
+  void missingDiscoveryCacheIsRebuiltFromCanonicalProjectMetadata() throws Exception {
+    Path root = Files.createTempDirectory("synesis-known-project-cache-recovery-");
+    try {
+      ProjectApplicationService.ProjectLocation location = new ProjectApplicationService()
+          .init(root, false)
+          .location();
+      Path registryPath = root.resolve("state/registry.json");
+      KnownProjectRegistry registry = new KnownProjectRegistry(registryPath);
+      registry.observe(location);
+      String metadataBefore = Files.readString(location.metadataFile(), StandardCharsets.UTF_8);
+
+      Files.delete(registryPath);
+      KnownProjectRegistry restarted = new KnownProjectRegistry(registryPath);
+      assertTrue(restarted.projects().isEmpty());
+
+      restarted.observe(location);
+
+      assertEquals(location.projectId(), restarted.projects().getFirst().projectId());
+      assertEquals(metadataBefore,
+          Files.readString(location.metadataFile(), StandardCharsets.UTF_8));
+      assertTrue(Files.exists(registryPath));
+    } finally {
+      delete(root);
+    }
+  }
+
+  @Test
   void projectsRemainDistinctAndOnlyDiscoveryMetadataIsPersisted() throws Exception {
     Path root = Files.createTempDirectory("synesis-known-projects-");
     try {
@@ -78,6 +105,41 @@ final class KnownProjectRegistryTest {
       assertFalse(json.contains("capabilities"));
       assertFalse(json.contains("peers"));
       assertFalse(json.contains("diagnostics"));
+    } finally {
+      delete(root);
+    }
+  }
+
+  @Test
+  void oneLogicalProjectMayHaveMultipleValidatedLocalPaths() throws Exception {
+    Path root = Files.createTempDirectory("synesis-known-replicas-");
+    try {
+      ProjectApplicationService service = new ProjectApplicationService();
+      Path source = Files.createDirectories(root.resolve("source"));
+      Path replica = Files.createDirectories(root.resolve("replica"));
+      ProjectApplicationService.ProjectLocation original = service.init(source, false)
+          .location();
+      ProjectApplicationService.ProjectLocation localReplica = service.initReplica(replica,
+          original.identity(), false).location();
+      KnownProjectRegistry registry = new KnownProjectRegistry(root.resolve("state/registry.json"));
+
+      registry.observe(original);
+      registry.observe(localReplica);
+
+      List<KnownProjectRegistry.ProjectView> views = registry.projects();
+      assertEquals(2, views.size());
+      assertEquals(Set.of(source.toAbsolutePath().normalize(), replica.toAbsolutePath().normalize()),
+          views.stream().map(KnownProjectRegistry.ProjectView::path).collect(java.util.stream.Collectors.toSet()));
+      assertEquals(original.projectId(), views.get(0).projectId());
+      assertEquals(original.projectId(), views.get(1).projectId());
+      List<KnownProjectRegistry.ProjectView> pathScoped = registry.projectsForReplicas(
+          Set.of(source));
+      assertEquals(KnownProjectRegistry.Status.LIVE,
+          pathScoped.stream().filter(view -> view.path().equals(source.toAbsolutePath().normalize()))
+              .findFirst().orElseThrow().status());
+      assertEquals(KnownProjectRegistry.Status.INACTIVE,
+          pathScoped.stream().filter(view -> view.path().equals(replica.toAbsolutePath().normalize()))
+              .findFirst().orElseThrow().status());
     } finally {
       delete(root);
     }

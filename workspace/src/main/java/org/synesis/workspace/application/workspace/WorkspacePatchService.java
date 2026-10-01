@@ -92,8 +92,8 @@ public final class WorkspacePatchService {
     WorkspaceReadinessService.ReadinessResult readiness;
     try {
       location = projectService.locate(root);
-      readiness = readinessService.assess(location, request.provider(),
-          request.connectionInstanceId());
+      readiness = readinessService.assessMutation(location, request.provider(),
+          request.connectionInstanceId(), request.relativePath());
     } catch (Exception ex) {
       return new AgentResponse(AgentStatus.RETRY_REQUIRED,
           AgentReason.WORKSPACE_NOT_READY,

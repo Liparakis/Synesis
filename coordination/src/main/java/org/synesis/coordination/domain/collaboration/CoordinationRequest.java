@@ -14,10 +14,29 @@ import java.util.UUID;
  * @param kind                request kind
  * @param proposal            bounded proposal
  * @param status              lifecycle status
+ * @param snapshotId          exact review candidate, when this is a snapshot-bound review request
  */
 public record CoordinationRequest(UUID requestId, UUID projectId, String requester,
                                   String target, UUID conflictingIntentId, Kind kind,
-                                  String proposal, Status status) {
+                                  String proposal, Status status, String snapshotId) {
+
+  /**
+   * Creates a request that is not bound to a particular review snapshot.
+   *
+   * @param requestId request identity
+   * @param projectId project identity
+   * @param requester opaque requester
+   * @param target opaque target
+   * @param conflictingIntentId conflicting intent
+   * @param kind request kind
+   * @param proposal bounded proposal
+   * @param status lifecycle status
+   */
+  public CoordinationRequest(UUID requestId, UUID projectId, String requester, String target,
+      UUID conflictingIntentId, Kind kind, String proposal, Status status) {
+    this(requestId, projectId, requester, target, conflictingIntentId, kind, proposal, status,
+        null);
+  }
 
   /**
    * Validates bounded request fields.
@@ -33,6 +52,9 @@ public record CoordinationRequest(UUID requestId, UUID projectId, String request
     Objects.requireNonNull(status, "status");
     if (requester.isBlank() || target.isBlank() || proposal.isBlank() || proposal.length() > 8192) {
       throw new IllegalArgumentException("invalid coordination request");
+    }
+    if (snapshotId != null && (snapshotId.isBlank() || snapshotId.length() > 256)) {
+      throw new IllegalArgumentException("invalid review snapshot ID");
     }
     if (requester.equals(target)) {
       throw new IllegalArgumentException("request cannot target requester");

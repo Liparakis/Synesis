@@ -7,10 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
@@ -38,6 +48,46 @@ final class ProviderSessionBindingServiceTest {
       throw new IllegalStateException(output);
     }
     return output;
+  }
+
+  private static Optional<Path> packagedSynesisAlias() throws Exception {
+    String localAppData = System.getenv("LOCALAPPDATA");
+    if (localAppData == null || localAppData.isBlank()) {
+      return Optional.empty();
+    }
+    Path normal = Path.of(localAppData, "Synesis");
+    Path packages = Path.of(localAppData, "Packages");
+    if (!Files.isDirectory(normal) || !Files.isDirectory(packages)) {
+      return Optional.empty();
+    }
+    try (var entries = Files.list(packages)) {
+      return entries.filter(path -> path.getFileName()
+              .toString()
+              .startsWith("OpenAI.Codex_"))
+          .map(path -> path.resolve("LocalCache/Local/Synesis"))
+          .filter(Files::isDirectory)
+          .filter(path -> {
+            try {
+              return Files.isSameFile(normal, path);
+            } catch (Exception unavailable) {
+              return false;
+            }
+          })
+          .findFirst();
+    }
+  }
+
+  private static ProviderSessionBindingService.Binding withWorktreePath(
+      ProviderSessionBindingService.Binding binding, Path worktree) {
+    return new ProviderSessionBindingService.Binding(binding.schemaVersion(), binding.sessionId(),
+        binding.projectId(), binding.nodeId(), binding.provider(),
+        binding.providerInstanceFingerprint(), binding.supervisorId(), binding.workerId(),
+        binding.worktreeId(), worktree.toString(), binding.controlCheckoutPath(), binding.branch(),
+        binding.baseCommit(), binding.gitCommonDir(), binding.creationState(),
+        binding.verificationState(), binding.lastSeenState(), binding.status(),
+        binding.createdAtEpochMillis(), binding.lastSeenEpochMillis(),
+        binding.lastVerifiedProjectSequence(), binding.providerTrustState(),
+        binding.bindingVersion(), binding.completedAt());
   }
 
   @Test
@@ -85,6 +135,39 @@ final class ProviderSessionBindingServiceTest {
     try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
       assertEquals(3, paths.count());
     }
+  }
+
+  @Test
+  void acceptsTheSameWorktreeThroughTheCodexPackagePathAlias() throws Exception {
+    Optional<Path> aliasRoot = packagedSynesisAlias();
+    Assumptions.assumeTrue(aliasRoot.isPresent(),
+        "Codex package-local Synesis alias is unavailable on this host");
+
+    Path root = Files.createTempDirectory("synesis-session-package-alias-");
+    git(root, "init");
+    git(root, "config", "user.email", "package-alias@example.invalid");
+    git(root, "config", "user.name", "Package Alias Test");
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "baseline");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    var service = new ProviderSessionBindingService();
+    var original = service.ensure(location, "codex", "package-alias")
+        .binding();
+    Path alias = aliasRoot.get()
+        .resolve("workspaces")
+        .resolve(original.projectId())
+        .resolve("worktrees")
+        .resolve(original.sessionId());
+    Path registered = Path.of(original.worktreePath());
+    assertTrue(Files.isSameFile(registered, alias));
+
+    var aliasedBinding = withWorktreePath(original, alias);
+    var verification = service.verifyWorkspace(location, aliasedBinding, alias);
+
+    assertTrue(verification.verified(), verification::code);
+    git(root, "worktree", "remove", "--force", registered.toString());
   }
 
   @Test
@@ -176,6 +259,118 @@ final class ProviderSessionBindingServiceTest {
   }
 
   @Test
+  void refreshesClaimedDirtyWorkAfterDisjointControlAdvance() throws Exception {
+    Path root = Files.createTempDirectory("synesis-claimed-dirty-refresh-");
+    git(root, "init");
+    Files.writeString(root.resolve("owned.txt"), "baseline\n");
+    Files.writeString(root.resolve("deleted.txt"), "delete me\n");
+    Files.writeString(root.resolve("peer.txt"), "peer baseline\n");
+    git(root, "add", ".");
+    git(root, "commit", "-m", "baseline");
+    var location = new ProjectApplicationService().init(root).location();
+    var service = new ProviderSessionBindingService();
+    var first = service.ensure(location, "codex", "dirty-refresh").binding();
+    Path worker = Path.of(first.worktreePath());
+    String participant = WorkspaceCollaborationService.participantHandle(first.sessionId());
+    var store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+    WorkIntent intent = new WorkIntent(UUID.randomUUID(), location.projectId(), participant,
+        "codex", UUID.randomUUID(), "Implement owned files", "Owned behavior passes",
+        first.baseCommit(), List.of(ResourceSelector.pathExact("owned.txt"),
+            ResourceSelector.pathExact("deleted.txt"), ResourceSelector.pathExact("new.bin")),
+        1, WorkIntent.Status.ANNOUNCED);
+    assertTrue(new WorkIntentService(store, identity).announce(intent).acquired());
+    Files.writeString(worker.resolve("owned.txt"), "unfinished\r\n");
+    Files.delete(worker.resolve("deleted.txt"));
+    byte[] binary = new byte[]{0, 1, (byte) 255, 13, 10};
+    Files.write(worker.resolve("new.bin"), binary);
+    Files.writeString(root.resolve("peer.txt"), "integrated peer\n");
+    git(root, "add", "peer.txt");
+    git(root, "commit", "-m", "integrate peer");
+
+    var refreshed = service.ensure(location, "codex", "dirty-refresh").binding();
+    Path target = Path.of(refreshed.worktreePath());
+    assertEquals(first.sessionId(), refreshed.sessionId());
+    assertEquals(first.workerId(), refreshed.workerId());
+    assertNotEquals(worker, target);
+    assertEquals(gitHead(root), refreshed.baseCommit());
+    assertTrue(service.verifyWorkspace(location, refreshed, target).verified());
+    assertEquals("unfinished\r\n", Files.readString(target.resolve("owned.txt")));
+    assertTrue(java.util.Arrays.equals(binary, Files.readAllBytes(target.resolve("new.bin"))));
+    assertTrue(Files.notExists(target.resolve("deleted.txt")));
+    assertEquals("integrated peer\n", Files.readString(target.resolve("peer.txt")));
+    assertEquals("unfinished\r\n", Files.readString(worker.resolve("owned.txt")));
+    assertEquals("peer baseline\n", Files.readString(worker.resolve("peer.txt")));
+    assertEquals(intent, new PredictionEventStore(root.resolve(".synesis/coordination"),
+        location.projectId()).collaborationProjection().activeIntents().getFirst());
+    var snapshots = new org.synesis.workspace.application.task.TaskSnapshotService();
+    String publicationBase = snapshots.snapshotBaseForBoundWorktree(target, intent.baseCommit(),
+        refreshed.baseCommit());
+    assertEquals(refreshed.baseCommit(), publicationBase);
+    assertTrue(snapshots.hasScopedPublishableChanges(target, intent.selectors(), intent.selectors(),
+        publicationBase));
+    assertEquals(target.toString(), new ProviderSessionBindingService()
+        .ensure(location, "codex", "dirty-refresh")
+        .binding().worktreePath());
+
+    Files.writeString(root.resolve("owned.txt"), "conflicting peer change\n");
+    git(root, "add", "owned.txt");
+    git(root, "commit", "-m", "conflicting integration");
+    assertEquals("WORKSPACE_STALE_DIRTY", assertThrows(
+        ProviderSessionBindingService.BindingException.class,
+        () -> service.ensure(location, "codex", "dirty-refresh")).code());
+    assertEquals("unfinished\r\n", Files.readString(target.resolve("owned.txt")));
+  }
+
+  @Test
+  void refusesUnsafeClaimedDirtyRefreshAndPreservesOriginalWork() throws Exception {
+    for (String failure : List.of("unclaimed", "staged", "suspended", "private-commit")) {
+      Path root = Files.createTempDirectory("synesis-dirty-refresh-" + failure + "-");
+      git(root, "init");
+      Files.writeString(root.resolve("owned.txt"), "baseline\n");
+      Files.writeString(root.resolve("peer.txt"), "peer baseline\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "baseline");
+      var location = new ProjectApplicationService().init(root).location();
+      var service = new ProviderSessionBindingService();
+      var first = service.ensure(location, "codex", failure).binding();
+      Path worker = Path.of(first.worktreePath());
+      String participant = WorkspaceCollaborationService.participantHandle(first.sessionId());
+      var store = new PredictionEventStore(root.resolve(".synesis/coordination"),
+          location.projectId());
+      var identity = new IdentityBootstrap(location.profile().resolve("link"))
+          .loadOrCreate().identity();
+      var intents = new WorkIntentService(store, identity);
+      assertTrue(intents.announce(new WorkIntent(UUID.randomUUID(), location.projectId(),
+          participant, "codex", UUID.randomUUID(), "Implement owned file", "Behavior passes",
+          first.baseCommit(), List.of(ResourceSelector.pathExact("owned.txt")), 1,
+          WorkIntent.Status.ANNOUNCED)).acquired());
+      Files.writeString(worker.resolve("owned.txt"), "unfinished\n");
+      switch (failure) {
+        case "unclaimed" -> Files.writeString(worker.resolve("unclaimed.txt"), "preserve me\n");
+        case "staged" -> git(worker, "add", "owned.txt");
+        case "suspended" -> intents.suspend(participant);
+        case "private-commit" -> {
+          git(worker, "add", "owned.txt");
+          git(worker, "commit", "-m", "private generation");
+          Files.writeString(worker.resolve("owned.txt"), "unfinished\nmore\n");
+        }
+        default -> throw new AssertionError(failure);
+      }
+      String preserved = Files.readString(worker.resolve("owned.txt"));
+      Files.writeString(root.resolve("peer.txt"), "integrated peer\n");
+      git(root, "add", "peer.txt");
+      git(root, "commit", "-m", "integrate peer");
+      assertEquals("WORKSPACE_STALE_DIRTY", assertThrows(
+          ProviderSessionBindingService.BindingException.class,
+          () -> service.ensure(location, "codex", failure)).code(), failure);
+      assertEquals(preserved, Files.readString(worker.resolve("owned.txt")), failure);
+      assertEquals(first.worktreePath(), service.list(location, "codex").getFirst().worktreePath(),
+          failure);
+    }
+  }
+
+  @Test
   void preservesSessionIdentityWhenOnlyTheControlCheckoutAdvanced() throws Exception {
     Path root = Files.createTempDirectory("synesis-session-control-advance-");
     git(root, "init");
@@ -204,6 +399,130 @@ final class ProviderSessionBindingServiceTest {
     assertEquals(gitHead(root), recovered.baseCommit());
     assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
         .verified());
+    for (int retry = 0; retry < 3; retry++) {
+      var repeated = service.ensure(location, "codex", "reviewer-recovery").binding();
+      assertEquals(recovered.sessionId(), repeated.sessionId());
+      assertEquals(recovered.supervisorId(), repeated.supervisorId());
+      assertEquals(recovered.workerId(), repeated.workerId());
+      assertEquals(recovered.worktreeId(), repeated.worktreeId());
+      assertEquals(recovered.worktreePath(), repeated.worktreePath());
+      assertEquals(recovered.branch(), repeated.branch());
+      assertEquals(recovered.baseCommit(), repeated.baseCommit());
+      assertTrue(service.verifyWorkspace(location, repeated, Path.of(repeated.worktreePath()))
+          .verified());
+    }
+  }
+
+  @Test
+  void retainsTheOriginalWorkspaceForAnActiveNoChangeIntentAfterControlAdvance()
+      throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-no-change-control-advance-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root)
+        .location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "no-change@example.invalid");
+    git(root, "config", "user.name", "No Change Test");
+    git(root, "commit", "-m", "baseline");
+
+    var service = new ProviderSessionBindingService();
+    var original = service.ensure(location, "codex", "no-change-reviewer")
+        .binding();
+    String participant = WorkspaceCollaborationService.participantHandle(original.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    WorkIntent intent = new WorkIntent(UUID.randomUUID(), location.projectId(), participant,
+        "codex", UUID.randomUUID(), "Review an immutable candidate",
+        "Review succeeds; no repository mutation is required", original.baseCommit(),
+        List.of(ResourceSelector.pathExact("review-notes.md")), 1, UUID.randomUUID(),
+        WorkIntent.Status.ANNOUNCED);
+    assertTrue(new WorkIntentService(store, identity).announce(intent).acquired());
+
+    Files.writeString(root.resolve("README.md"), "integrated control state\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrate sibling snapshot");
+
+    var retained = service.ensure(location, "codex", "no-change-reviewer")
+        .binding();
+
+    assertEquals(original.sessionId(), retained.sessionId());
+    assertEquals(original.worktreePath(), retained.worktreePath());
+    assertEquals(original.baseCommit(), retained.baseCommit());
+    assertTrue(service.verifyNoChangeWorkspace(location, retained,
+        Path.of(retained.worktreePath())).verified());
+    assertEquals("CONTROL_BASE_ADVANCED", service.verifyWorkspace(location, retained,
+        Path.of(retained.worktreePath())).code());
+  }
+
+  @Test
+  void reallocatesCleanActiveRecoveryContinuationAndPreservesItsDirtyWorktree() throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-active-continuation-advance-");
+    git(root, "init");
+    Files.createDirectories(root.resolve("src"));
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    Files.writeString(root.resolve("src/Product.java"), "public class Product {}\n");
+    git(root, "add", ".");
+    git(root, "config", "user.email", "continuation-control@example.invalid");
+    git(root, "config", "user.name", "Continuation Control Test");
+    git(root, "commit", "-m", "baseline");
+
+    var location = new ProjectApplicationService().init(root).location();
+    var service = new ProviderSessionBindingService();
+    var binding = service.ensure(location, "codex", "active-continuation-recovery").binding();
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    var intents = new WorkIntentService(store, identity);
+    WorkIntent source = new WorkIntent(UUID.randomUUID(), location.projectId(), "agt-interrupted",
+        "codex", UUID.randomUUID(), "Implement source", "Publish the source snapshot",
+        gitHead(root), List.of(ResourceSelector.pathExact("src/Product.java")), 1,
+        WorkIntent.Status.ANNOUNCED);
+    intents.announce(source);
+    intents.suspend(source.participant());
+    String recoveryReference = root.resolve("recovery").toAbsolutePath() + "#verified";
+    intents.holdRecovery(source.participant(), recoveryReference);
+
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), location.projectId(), participant,
+        "codex", source.taskId(), source.goal(), source.acceptance(), source.baseCommit(),
+        source.selectors(), source.version() + 1, source.workGroupId(),
+        source.authorityLineageId(), WorkIntent.Status.ANNOUNCED, source.role(),
+        source.reviewTargetSelectors(), source.knownDependencies());
+    intents.continueEligibleFromRecovery(new CollaborationCodec.Continuation(UUID.randomUUID(),
+        source.intentId(), successor, source.participant(), participant, source.version(),
+        recoveryReference));
+
+    String initialWorktree = binding.worktreePath();
+    Files.writeString(root.resolve("README.md"), "integrated snapshot\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "integrate snapshot");
+
+    var recovered = service.ensure(location, "codex", "active-continuation-recovery").binding();
+
+    assertEquals(binding.sessionId(), recovered.sessionId());
+    assertNotEquals(initialWorktree, recovered.worktreePath());
+    assertEquals(gitHead(root), recovered.baseCommit());
+    assertTrue(service.verifyWorkspace(location, recovered, Path.of(recovered.worktreePath()))
+        .verified());
+
+    Path recoveredWorktree = Path.of(recovered.worktreePath());
+    Path reviewerNotes = recoveredWorktree.resolve("reviewer-notes.txt");
+    Files.writeString(reviewerNotes, "preserve this continuation work\n");
+    Files.writeString(root.resolve("README.md"), "second integrated snapshot\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "advance control again");
+
+    var dirtyContinuation = service.ensure(location, "codex", "active-continuation-recovery")
+        .binding();
+
+    assertEquals(recovered.worktreePath(), dirtyContinuation.worktreePath());
+    assertEquals("preserve this continuation work\n", Files.readString(reviewerNotes));
+    var staleCheck = service.verifyWorkspace(location, dirtyContinuation, recoveredWorktree);
+    assertEquals("CONTROL_BASE_ADVANCED", staleCheck.code());
   }
 
   @Test

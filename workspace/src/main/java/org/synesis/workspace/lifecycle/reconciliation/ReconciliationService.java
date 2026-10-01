@@ -6,11 +6,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.synesis.coordination.application.WorkIntentService;
-import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -83,17 +85,17 @@ public final class ReconciliationService {
 
     SessionLeasePolicy policy = new SessionLeasePolicy();
     List<SessionLeaseRecord> leases = leaseStore.listAll(root);
-    Set<String> knownParticipants;
+    Map<String, Participant.State> participantStates;
     try {
-      knownParticipants = new PredictionEventStore(location.root()
+      participantStates = new PredictionEventStore(location.root()
           .resolve(".synesis/coordination"), location.projectId())
           .collaborationProjection()
           .participants()
           .stream()
-          .map(org.synesis.coordination.domain.collaboration.Participant::id)
-          .collect(java.util.stream.Collectors.toSet());
+          .collect(java.util.stream.Collectors.toMap(Participant::id,
+              Participant::state, (first, ignored) -> first));
     } catch (Exception ignored) {
-      knownParticipants = Set.of();
+      participantStates = Map.of();
     }
 
     int activeCount = 0;
@@ -114,14 +116,18 @@ public final class ReconciliationService {
           recoveryEligibleCount++;
           String actionId = "rec-" + lease.connectionInstanceId();
           String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
-          if (!knownParticipants.contains(participant)) {
+          Participant.State participantState = participantStates.get(participant);
+          if (participantState == null || isTerminalParticipantState(participantState)
+              || participantState == Participant.State.RECOVERY_HELD) {
             continue;
           }
-          entries.add(new ReconciliationPlanEntry(
-              1, actionId, ReconciliationAction.MARK_SESSION_SUSPENDED, lease.sessionId(),
-              true, List.of("session_recovery_eligible"),
-              "Fence old authority without releasing claims"
-          ));
+          if (participantState != Participant.State.SUSPENDED) {
+            entries.add(new ReconciliationPlanEntry(
+                1, actionId, ReconciliationAction.MARK_SESSION_SUSPENDED, lease.sessionId(),
+                true, List.of("session_recovery_eligible"),
+                "Fence old authority without releasing claims"
+            ));
+          }
           entries.add(new ReconciliationPlanEntry(
               1, actionId + "-recovery", ReconciliationAction.HOLD_SUSPENDED_RECOVERY,
               lease.sessionId(),
@@ -161,6 +167,30 @@ public final class ReconciliationService {
         discovery.projectId(),
         discovery.totalSessionsInspected(),
         discovery.entries());
+  }
+
+  /**
+   * Reconciles verified dead lanes when a new exact MCP session is admitted.
+   *
+   * <p>This is deliberately a narrow ingress hook into the existing durable plan lifecycle. It
+   * only executes entries already classified as recovery-eligible after process and grace-period
+   * evidence; it never releases claims, selects another participant, or bypasses continuation
+   * grants. An empty result means there was no executable recovery transition to apply.</p>
+   *
+   * @param controlRoot control project root path
+   * @return the durable execution result when recovery work was found
+   * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
+   * @throws IOException                                           if planning or execution fails
+   */
+  public Optional<ReconciliationExecutionSummary> reconcileOnAdmission(Path controlRoot)
+      throws ProjectApplicationService.ProjectApplicationException, IOException {
+    ReconciliationDiscoverySummary discovery = discover(controlRoot);
+    if (discovery.entries().isEmpty()) {
+      return Optional.empty();
+    }
+    ReconciliationPlan plan = planStore.createAndSave(controlRoot,
+        discovery.projectId(), discovery.totalSessionsInspected(), discovery.entries());
+    return Optional.of(executePlan(controlRoot, plan.planId()));
   }
 
   /**
@@ -211,6 +241,7 @@ public final class ReconciliationService {
       }
 
       int completedCount = 0;
+      int skippedStaleCount = 0;
       int skippedAmbiguousCount = 0;
       int failedCount = 0;
       boolean controlCheckoutModified = false;
@@ -243,21 +274,60 @@ public final class ReconciliationService {
           continue;
         }
 
+        if (entry.action() == ReconciliationAction.MARK_SESSION_SUSPENDED
+            || entry.action() == ReconciliationAction.HOLD_SUSPENDED_RECOVERY) {
+          String participant = WorkspaceCollaborationService.participantHandle(
+              entry.targetResourceId());
+          Participant.State participantState = store.collaborationProjection()
+              .participantState(participant)
+              .orElse(null);
+          if (participantState == null || isTerminalParticipantState(participantState)) {
+            skippedStaleCount++;
+            ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
+                executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
+                "SKIPPED_STALE", "participant_terminal_or_missing", now,
+                "Recovery plan no longer matches the participant lifecycle state");
+            journal.append(rec);
+            records.add(rec);
+            continue;
+          }
+          if (entry.action() == ReconciliationAction.MARK_SESSION_SUSPENDED
+              && (participantState == Participant.State.SUSPENDED
+              || participantState == Participant.State.RECOVERY_HELD)) {
+            completedCount++;
+            ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
+                executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
+                "COMPLETED", "already_suspended", now,
+                "Participant was already fenced by an earlier recovery execution");
+            journal.append(rec);
+            records.add(rec);
+            continue;
+          }
+          if (entry.action() == ReconciliationAction.HOLD_SUSPENDED_RECOVERY
+              && participantState == Participant.State.RECOVERY_HELD) {
+            completedCount++;
+            ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
+                executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
+                "COMPLETED", "already_recovery_held", now,
+                "Recovery snapshot was already held for this participant");
+            journal.append(rec);
+            records.add(rec);
+            continue;
+          }
+        }
+
         try {
           switch (entry.action()) {
             case MARK_SESSION_SUSPENDED -> {
               String participant = WorkspaceCollaborationService.participantHandle(
                   entry.targetResourceId());
-              boolean knownParticipant = store.collaborationProjection()
-                  .participants()
-                  .stream()
-                  .anyMatch(candidate -> candidate.id()
-                      .equals(participant));
-              if (knownParticipant) {
-                store.append(UUID.nameUUIDFromBytes(participant.getBytes(StandardCharsets.UTF_8)),
-                    PredictionEventType.PARTICIPANT_SUSPENDED, identity.nodeId(),
-                    CollaborationCodec.encodeHeartbeat(participant), identity);
-              }
+              // Suspension is a lifecycle authority transition, so it must use the same
+              // project append lock as provider heartbeats and collaboration mutations.  A
+              // direct append here could race a live heartbeat, compute the same sequence, and
+              // leave the durable log with the heartbeat while this journal incorrectly records
+              // the suspension as complete.
+              new WorkIntentService(store, identity).suspend(participant);
+              store = new PredictionEventStore(coordDir, location.projectId());
               completedCount++;
               ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(
                   executionId, planId, entry.actionId(), entry.action(), entry.targetResourceId(),
@@ -379,7 +449,7 @@ public final class ReconciliationService {
           plan.entries()
               .size(),
           completedCount,
-          0,
+          skippedStaleCount,
           skippedAmbiguousCount,
           failedCount,
           controlCheckoutModified,
@@ -388,6 +458,13 @@ public final class ReconciliationService {
           Collections.unmodifiableList(records)
       );
     }
+  }
+
+  private static boolean isTerminalParticipantState(Participant.State state) {
+    return state == Participant.State.REVOKED
+        || state == Participant.State.COMPLETED
+        || state == Participant.State.CANCELLED
+        || state == Participant.State.DETACHED;
   }
 
   /**

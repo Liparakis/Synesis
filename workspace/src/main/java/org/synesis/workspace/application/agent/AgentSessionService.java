@@ -124,8 +124,12 @@ public final class AgentSessionService {
 
     ProviderSessionBindingService.Binding binding;
 
-    WorkspaceReadinessService.ReadinessResult readiness = readinessService.assess(
-        location, request.provider(), request.connectionInstanceId());
+    WorkspaceReadinessService.ReadinessResult readiness = bindingService.hasActiveNoChangeIntent(
+        location, bindingResult.binding())
+            ? readinessService.assessNoChange(location, request.provider(),
+                request.connectionInstanceId())
+            : readinessService.assess(location, request.provider(),
+                request.connectionInstanceId());
     if (!readiness.ready()) {
       if ("PROVIDER_CONFIGURATION_CONFLICT".equals(readiness.internalReason())) {
         throw new IllegalStateException("PROVIDER_CONFIGURATION_CONFLICT");
@@ -200,14 +204,22 @@ public final class AgentSessionService {
             AgentNextAction.REQUEST_HUMAN_HELP,
             java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
       }
+      String diagnostic = readinessDiagnostic(ex.getMessage());
       return new AgentResponse(AgentStatus.RETRY_REQUIRED,
           AgentReason.WORKSPACE_NOT_READY,
           AgentNextAction.ENSURE_SESSION,
-          null);
+          diagnostic == null ? null : java.util.Map.of("diagnostic", diagnostic));
     } catch (ProviderSessionBindingService.BindingException ex) {
       if ("SESSION_TERMINAL".equals(ex.code())) {
         return new AgentResponse(AgentStatus.COMPLETED, null, null,
             java.util.Map.of("state", "SESSION_TERMINAL"));
+      }
+      if ("SESSION_TERMINAL_STATE_UNAVAILABLE".equals(ex.code())) {
+        Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+        return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+            AgentNextAction.REQUEST_HUMAN_HELP,
+            java.util.Map.of("reason", ex.code(),
+                "causeType", cause.getClass().getSimpleName()));
       }
       return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
           AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code()));
@@ -217,6 +229,15 @@ public final class AgentSessionService {
           AgentNextAction.REQUEST_HUMAN_HELP,
           null);
     }
+  }
+
+  private static String readinessDiagnostic(String message) {
+    String prefix = "Workspace readiness failed: ";
+    if (message == null || !message.startsWith(prefix)) {
+      return null;
+    }
+    String diagnostic = message.substring(prefix.length());
+    return diagnostic.matches("[A-Z][A-Z0-9_]{2,63}") ? diagnostic : "WORKSPACE_UNVERIFIED";
   }
 
   /**

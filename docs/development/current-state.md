@@ -31,6 +31,11 @@ workspace/session authority remains isolated per provider connection.
 - Project discovery walks upward through `.synesis/project.json`; private
   identity, provider metadata, and runtime state remain under
   `.synesis/local/`.
+- `.synesis/` is the canonical project-internal Synesis metadata root. Windows
+  Hidden and the Unix dot-directory convention are presentation only; they do
+  not participate in identity, authentication, authorization, or integrity.
+  The visible `AGENTS.md` integration section and ordinary user/agent output
+  remain outside that hidden-bookkeeping rule.
 - `synesis provider` currently exposes the canonical IDs `claude` and `codex`.
   Both are experimental: installation and synthetic checks are not proof of
   real provider trust or universal hook enforcement.

@@ -1,6 +1,8 @@
 package org.synesis.coordination.persistence;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -29,6 +31,36 @@ import org.synesis.link.identity.NodeIdentity;
  */
 @SuppressWarnings("DuplicatedCode")
 public final class PredictionEventStore {
+
+  /**
+   * Boundaries at which the persistence test harness may simulate an abrupt process loss.
+   */
+  enum AppendBoundary {
+    BEFORE_DURABLE_MOVE,
+    AFTER_DURABLE_MOVE,
+    AFTER_PROJECTION
+  }
+
+  /**
+   * Deterministic fault hook kept package-private so production callers cannot control durability.
+   */
+  @FunctionalInterface
+  interface TestFaultInjector {
+
+    /**
+     * Simulates loss at one append boundary.
+     *
+     * @param boundary append boundary reached
+     * @throws IOException simulated process failure
+     */
+    void hit(AppendBoundary boundary) throws IOException;
+  }
+
+  /**
+   * Test-only hook; a volatile reference keeps a fault visible to the fresh store opened by a
+   * service during the same JVM test.
+   */
+  private static volatile TestFaultInjector testFaultInjector;
 
   /**
    * Directory containing the immutable, sequence-numbered event files.
@@ -109,6 +141,7 @@ public final class PredictionEventStore {
     this.projectId = Objects.requireNonNull(projectId, "project ID");
     this.clock = Objects.requireNonNull(clock, "clock");
     Files.createDirectories(eventsDirectory);
+    cleanupTemporaryFiles();
     load();
   }
 
@@ -153,13 +186,21 @@ public final class PredictionEventStore {
     Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
     Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
     try {
-      Files.write(temporary, event.encoded(), StandardOpenOption.CREATE_NEW,
-          StandardOpenOption.WRITE);
+      try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
+          StandardOpenOption.WRITE)) {
+        ByteBuffer encoded = ByteBuffer.wrap(event.encoded());
+        while (encoded.hasRemaining()) {
+          channel.write(encoded);
+        }
+        channel.force(true);
+      }
+      invokeFaultInjector(AppendBoundary.BEFORE_DURABLE_MOVE);
       try {
         Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
       } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
         Files.move(temporary, target);
       }
+      invokeFaultInjector(AppendBoundary.AFTER_DURABLE_MOVE);
     } finally {
       Files.deleteIfExists(temporary);
     }
@@ -171,7 +212,42 @@ public final class PredictionEventStore {
     workGroupProjection.apply(event);
     contractProjection.apply(event);
     events.add(event);
+    invokeFaultInjector(AppendBoundary.AFTER_PROJECTION);
     return event;
+  }
+
+  /**
+   * Installs a deterministic append fault for package-local crash-boundary tests.
+   *
+   * @param injector test fault injector, or null to clear it
+   */
+  static void setTestFaultInjector(TestFaultInjector injector) {
+    testFaultInjector = injector;
+  }
+
+  /**
+   * Clears the deterministic append fault after a crash-boundary test.
+   */
+  static void clearTestFaultInjector() {
+    testFaultInjector = null;
+  }
+
+  private static void invokeFaultInjector(AppendBoundary boundary) throws IOException {
+    TestFaultInjector injector = testFaultInjector;
+    if (injector != null) {
+      injector.hit(boundary);
+    }
+  }
+
+  private void cleanupTemporaryFiles() throws IOException {
+    try (var stream = Files.list(eventsDirectory)) {
+      for (Path file : stream.filter(path -> path.getFileName()
+          .toString()
+          .contains(".sce.tmp-"))
+          .toList()) {
+        Files.deleteIfExists(file);
+      }
+    }
   }
 
   @SuppressWarnings("DataFlowIssue")

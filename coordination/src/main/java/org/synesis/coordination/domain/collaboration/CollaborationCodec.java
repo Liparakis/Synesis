@@ -26,11 +26,14 @@ public final class CollaborationCodec {
   private static final int MAGIC_RELEASE = 0x53524c31;
   private static final int MAGIC_NO_CHANGE_COMPLETION = 0x534e4331;
   private static final int MAGIC_REQUEST = 0x53525131;
+  private static final int MAGIC_REQUEST_V2 = 0x53525132;
   private static final int MAGIC_RESPONSE = 0x53525331;
   private static final int MAGIC_HEARTBEAT = 0x53484231;
   private static final int MAGIC_HANDOFF = 0x53484631;
   private static final int MAGIC_GROUP = 0x53474731;
+  private static final int MAGIC_GROUP_V2 = 0x53474732;
   private static final int MAGIC_GRANT = 0x53475231;
+  private static final int MAGIC_GRANT_V2 = 0x53475232;
   private static final int MAGIC_CONTINUATION = 0x53434e31;
 
   private CollaborationCodec() {
@@ -276,7 +279,7 @@ public final class CollaborationCodec {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       DataOutputStream out = new DataOutputStream(bytes);
-      out.writeInt(MAGIC_REQUEST);
+      out.writeInt(MAGIC_REQUEST_V2);
       uuid(out, request.requestId());
       uuid(out, request.projectId());
       text(out, request.requester());
@@ -285,6 +288,10 @@ public final class CollaborationCodec {
       out.writeByte(request.kind()
           .ordinal());
       text(out, request.proposal());
+      out.writeBoolean(request.snapshotId() != null);
+      if (request.snapshotId() != null) {
+        text(out, request.snapshotId());
+      }
       out.flush();
       return bytes.toByteArray();
     } catch (IOException impossible) {
@@ -302,7 +309,8 @@ public final class CollaborationCodec {
   public static CoordinationRequest decodeRequest(byte[] encoded) throws IOException {
     try {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-      if (in.readInt() != MAGIC_REQUEST) {
+      int magic = in.readInt();
+      if (magic != MAGIC_REQUEST && magic != MAGIC_REQUEST_V2) {
         throw new IOException("unsupported request format");
       }
       UUID requestId = readUuid(in), projectId = readUuid(in);
@@ -313,11 +321,13 @@ public final class CollaborationCodec {
         throw new IOException("request kind");
       }
       String proposal = readText(in);
+      String snapshotId = magic == MAGIC_REQUEST_V2 && in.readBoolean() ? readText(in) : null;
       if (in.available() != 0) {
         throw new IOException("trailing request bytes");
       }
       return new CoordinationRequest(requestId, projectId, requester, target, conflict,
-          CoordinationRequest.Kind.values()[kind], proposal, CoordinationRequest.Status.PENDING);
+          CoordinationRequest.Kind.values()[kind], proposal, CoordinationRequest.Status.PENDING,
+          snapshotId);
     } catch (RuntimeException | java.io.EOFException failure) {
       throw new IOException("malformed request", failure);
     }
@@ -607,7 +617,7 @@ public final class CollaborationCodec {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       DataOutputStream out = new DataOutputStream(bytes);
-      out.writeInt(MAGIC_GROUP);
+      out.writeInt(MAGIC_GROUP_V2);
       uuid(out, group.workGroupId());
       uuid(out, group.projectId());
       text(out, group.goal());
@@ -615,6 +625,8 @@ public final class CollaborationCodec {
       out.writeLong(group.version());
       out.writeByte(group.status()
           .ordinal());
+      out.writeBoolean(group.reviewPolicy().mandatory());
+      out.writeBoolean(group.reviewPolicy().independenceRequired());
       out.flush();
       return bytes.toByteArray();
     } catch (IOException impossible) {
@@ -632,18 +644,21 @@ public final class CollaborationCodec {
   public static WorkGroup decodeWorkGroup(byte[] encoded) throws IOException {
     try {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-      if (in.readInt() != MAGIC_GROUP) {
+      int magic = in.readInt();
+      if (magic != MAGIC_GROUP && magic != MAGIC_GROUP_V2) {
         throw new IOException("unsupported group format");
       }
       UUID id = readUuid(in), project = readUuid(in);
       String goal = readText(in), acceptance = readText(in);
       long version = in.readLong();
       int status = in.readUnsignedByte();
+      ReviewPolicy reviewPolicy = magic == MAGIC_GROUP_V2
+          ? new ReviewPolicy(in.readBoolean(), in.readBoolean()) : ReviewPolicy.none();
       if (status >= WorkGroup.Status.values().length || in.available() != 0) {
         throw new IOException("malformed group");
       }
       return new WorkGroup(id, project, goal, acceptance, version,
-          WorkGroup.Status.values()[status]);
+          WorkGroup.Status.values()[status], reviewPolicy);
     } catch (RuntimeException | java.io.EOFException failure) {
       throw new IOException("malformed group", failure);
     }
@@ -659,13 +674,17 @@ public final class CollaborationCodec {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       DataOutputStream out = new DataOutputStream(bytes);
-      out.writeInt(MAGIC_GRANT);
+      out.writeInt(MAGIC_GRANT_V2);
       uuid(out, grant.grantId());
       uuid(out, grant.workGroupId());
       uuid(out, grant.targetIntentId());
       text(out, grant.targetParticipant());
       out.writeLong(grant.claimEpoch());
       out.writeBoolean(grant.singleUse());
+      out.writeBoolean(grant.snapshotId() != null);
+      if (grant.snapshotId() != null) {
+        text(out, grant.snapshotId());
+      }
       out.flush();
       return bytes.toByteArray();
     } catch (IOException impossible) {
@@ -683,17 +702,19 @@ public final class CollaborationCodec {
   public static LaneGrant decodeLaneGrant(byte[] encoded) throws IOException {
     try {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-      if (in.readInt() != MAGIC_GRANT) {
+      int magic = in.readInt();
+      if (magic != MAGIC_GRANT && magic != MAGIC_GRANT_V2) {
         throw new IOException("unsupported grant format");
       }
       UUID id = readUuid(in), group = readUuid(in), intent = readUuid(in);
       String target = readText(in);
       long epoch = in.readLong();
       boolean single = in.readBoolean();
+      String snapshotId = magic == MAGIC_GRANT_V2 && in.readBoolean() ? readText(in) : null;
       if (in.available() != 0) {
         throw new IOException("malformed grant");
       }
-      return new LaneGrant(id, group, intent, target, epoch, single);
+      return new LaneGrant(id, group, intent, target, epoch, single, snapshotId);
     } catch (RuntimeException | java.io.EOFException failure) {
       throw new IOException("malformed grant", failure);
     }

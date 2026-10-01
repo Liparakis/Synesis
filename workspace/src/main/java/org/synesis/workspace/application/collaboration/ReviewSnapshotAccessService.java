@@ -62,6 +62,8 @@ public final class ReviewSnapshotAccessService {
     return store.taskCompletionProjection()
         .allSnapshots()
         .stream()
+        .filter(snapshot -> grant.snapshotId() == null
+            || grant.snapshotId().equals(snapshot.snapshotId()))
         .filter(snapshot -> snapshot.provenance()
             .workGroupId()
             .equals(grant.workGroupId()))
@@ -230,6 +232,15 @@ public final class ReviewSnapshotAccessService {
           .stream()
           .filter(grant -> grant.targetParticipant()
               .equals(participant))
+          // The consumed grant created by LANE_CONTINUATION_ACCEPTED is a
+          // lifecycle receipt, not review authority.  It carries the
+          // successor participant and intent so the continuation remains
+          // auditable, but must never redirect that producer to an
+          // immutable review worktree.
+          .filter(grant -> !store.workGroupProjection()
+              .continuationGrant(grant.grantId()))
+          .filter(grant -> !store.workGroupProjection()
+              .grantSuperseded(grant.grantId()))
           .filter(grant -> store.workGroupProjection()
               .grantConsumed(grant.grantId()))
           .filter(grant -> store.workGroupProjection()

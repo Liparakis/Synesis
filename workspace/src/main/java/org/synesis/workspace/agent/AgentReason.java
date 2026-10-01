@@ -273,6 +273,11 @@ public enum AgentReason {
   COORDINATION_INTENT_REQUIRED("coordination_intent_required"),
 
   /**
+   * An unfinished recovery-held lane is available for explicit successor selection.
+   */
+  CONTINUATION_AVAILABLE("continuation_available"),
+
+  /**
    * Mutation overlaps another participant's active resource claim.
    */
   OVERLAPPING_CLAIM("overlapping_claim");

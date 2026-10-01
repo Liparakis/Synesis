@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 
@@ -40,7 +41,7 @@ public final class KnownProjectRegistry {
 
   /** Current registry document schema. */
   public static final int SCHEMA_VERSION = 1;
-  /** Maximum number of remembered projects. */
+  /** Maximum number of remembered local project records. */
   public static final int MAX_PROJECTS = 256;
   /** Maximum registry document size in UTF-8 bytes. */
   public static final int MAX_BYTES = 1_048_576;
@@ -96,9 +97,9 @@ public final class KnownProjectRegistry {
   /**
    * Records one already validated project observation.
    *
-   * <p>Observation is idempotent for the same project UUID and normalized
-   * path. A path already belonging to another UUID, or a UUID already bound
-   * to another path, is rejected rather than silently merged.</p>
+   * <p>Observation is idempotent for the same project identity and normalized
+   * path. Multiple paths may represent one logical project. A path already
+   * belonging to another identity is rejected rather than silently merged.</p>
    *
    * @param location validated Synesis project location
    * @throws RegistryException if identity validation or durable persistence fails
@@ -107,7 +108,7 @@ public final class KnownProjectRegistry {
       throws RegistryException {
     Objects.requireNonNull(location, "location");
     ProjectApplicationService.ProjectLocation validated = validate(location.root());
-    if (!validated.projectId().equals(location.projectId())) {
+    if (!validated.identity().matches(location.identity())) {
       throw new RegistryException("IDENTITY_MISMATCH",
           "observed project identity does not match the supplied location");
     }
@@ -115,32 +116,36 @@ public final class KnownProjectRegistry {
     Instant observedAt = Instant.now();
     locked(() -> {
       List<Entry> entries = readEntries();
-      Entry byId = entries.stream()
-          .filter(entry -> entry.projectId().equals(validated.projectId()))
+      Entry byIdentityAndPath = entries.stream()
+          .filter(entry -> entry.projectId().equals(validated.projectId())
+              && entry.path().equals(root))
           .findFirst()
           .orElse(null);
       Entry byPath = entries.stream()
           .filter(entry -> entry.path().equals(root))
           .findFirst()
           .orElse(null);
-      if (byId != null && !byId.path().equals(root)) {
+      boolean conflictingIdentity = entries.stream()
+          .anyMatch(entry -> entry.projectId().equals(validated.projectId())
+              && !entry.identity().matches(validated.identity()));
+      if (conflictingIdentity) {
         throw new RegistryException("IDENTITY_MISMATCH",
-            "project identity is already remembered at another path");
+            "remembered project identity conflicts with the canonical identity");
       }
       if (byPath != null && !byPath.projectId().equals(validated.projectId())) {
         throw new RegistryException("IDENTITY_MISMATCH",
             "remembered path belongs to another project identity");
       }
-      if (byId == null) {
+      if (byIdentityAndPath == null) {
         if (entries.size() >= MAX_PROJECTS) {
           throw new RegistryException("REGISTRY_FULL", "known project limit reached");
         }
         entries.add(new Entry(validated.projectId(), root, validated.createdAt(), observedAt,
             observedAt));
       } else {
-        int index = entries.indexOf(byId);
-        entries.set(index, new Entry(byId.projectId(), byId.path(), byId.createdAt(),
-            byId.firstObservedAt(), observedAt));
+        int index = entries.indexOf(byIdentityAndPath);
+        entries.set(index, new Entry(byIdentityAndPath.projectId(), byIdentityAndPath.path(),
+            byIdentityAndPath.createdAt(), byIdentityAndPath.firstObservedAt(), observedAt));
       }
       writeEntries(entries);
       return null;
@@ -160,7 +165,8 @@ public final class KnownProjectRegistry {
         Objects.requireNonNull(root, "project root"));
     observe(location);
     return projects().stream()
-        .filter(project -> project.projectId().equals(location.projectId()))
+        .filter(project -> project.projectId().equals(location.projectId())
+            && project.path().equals(location.root()))
         .findFirst()
         .orElseThrow(() -> new RegistryException("REGISTRY_PERSISTENCE_FAILED",
             "registered project is missing from the registry"));
@@ -212,8 +218,30 @@ public final class KnownProjectRegistry {
       throw new NullPointerException("live project IDs contains null");
     }
     return locked(() -> readEntries().stream()
-        .sorted(Comparator.comparing(Entry::projectId))
-        .map(entry -> view(entry, liveProjectIds))
+        .sorted(Comparator.comparing(Entry::projectId).thenComparing(Entry::path))
+        .map(entry -> view(entry, liveProjectIds, Set.of()))
+        .toList());
+  }
+
+  /**
+   * Reads known projects and marks only the explicitly owned replica paths as live.
+   *
+   * <p>This path-aware form prevents two local replicas of one logical project
+   * from both being reported as live merely because they share a ProjectId.</p>
+   *
+   * @param liveReplicaPaths normalized local replica roots owned by the current process
+   * @return immutable discovery views with path-local status
+   * @throws RegistryException if the registry cannot be read or validated
+   */
+  public List<ProjectView> projectsForReplicas(Set<Path> liveReplicaPaths)
+      throws RegistryException {
+    Objects.requireNonNull(liveReplicaPaths, "live replica paths");
+    Set<Path> normalizedPaths = liveReplicaPaths.stream()
+        .map(path -> normalize(Objects.requireNonNull(path, "live replica path")))
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    return locked(() -> readEntries().stream()
+        .sorted(Comparator.comparing(Entry::projectId).thenComparing(Entry::path))
+        .map(entry -> view(entry, Set.of(), normalizedPaths))
         .toList());
   }
 
@@ -226,17 +254,19 @@ public final class KnownProjectRegistry {
     return registryFile;
   }
 
-  private ProjectView view(Entry entry, Set<UUID> liveProjectIds) {
+  private ProjectView view(Entry entry, Set<UUID> liveProjectIds, Set<Path> liveReplicaPaths) {
     Status status;
     if (!Files.isDirectory(entry.path())) {
       status = Status.UNAVAILABLE;
     } else {
       try {
         ProjectApplicationService.ProjectLocation current = projectService.require(entry.path());
-        if (!entry.projectId().equals(current.projectId())) {
+        if (!entry.identity().matches(current.identity())) {
           status = Status.IDENTITY_MISMATCH;
         } else {
-          status = liveProjectIds.contains(entry.projectId()) ? Status.LIVE : Status.INACTIVE;
+          status = liveReplicaPaths.contains(entry.path())
+              || (liveReplicaPaths.isEmpty() && liveProjectIds.contains(entry.projectId()))
+              ? Status.LIVE : Status.INACTIVE;
         }
       } catch (ProjectApplicationService.ProjectApplicationException unavailable) {
         status = unavailable.code().equals("MALFORMED")
@@ -277,8 +307,9 @@ public final class KnownProjectRegistry {
         throw new IOException("invalid project list");
       }
       List<Entry> entries = new ArrayList<>();
-      Set<UUID> identities = new LinkedHashSet<>();
+      Set<String> identityPaths = new LinkedHashSet<>();
       Set<Path> paths = new LinkedHashSet<>();
+      Map<UUID, Instant> projectCreationTimes = new LinkedHashMap<>();
       for (Object rawEntry : list) {
         if (!(rawEntry instanceof Map<?, ?> map)) {
           throw new IOException("project entry must be an object");
@@ -293,7 +324,13 @@ public final class KnownProjectRegistry {
             Instant.parse(text(value, "createdAt")),
             Instant.parse(text(value, "firstObservedAt")),
             Instant.parse(text(value, "lastObservedAt")));
-        if (!identities.add(entry.projectId()) || !paths.add(entry.path())
+        Instant priorCreatedAt = projectCreationTimes.putIfAbsent(entry.projectId(),
+            entry.createdAt());
+        if (priorCreatedAt != null && !priorCreatedAt.equals(entry.createdAt())) {
+          throw new IOException("conflicting project identity material");
+        }
+        String identityPath = entry.projectId() + "\n" + entry.path();
+        if (!identityPaths.add(identityPath) || !paths.add(entry.path())
             || entry.firstObservedAt().isAfter(entry.lastObservedAt())) {
           throw new IOException("duplicate or invalid project registry entry");
         }
@@ -308,7 +345,7 @@ public final class KnownProjectRegistry {
 
   private void writeEntries(List<Entry> entries) throws RegistryException {
     List<Map<String, Object>> projects = entries.stream()
-        .sorted(Comparator.comparing(Entry::projectId))
+        .sorted(Comparator.comparing(Entry::projectId).thenComparing(Entry::path))
         .map(entry -> {
           Map<String, Object> value = new LinkedHashMap<>();
           value.put("projectId", entry.projectId().toString());
@@ -403,6 +440,10 @@ public final class KnownProjectRegistry {
 
   private record Entry(UUID projectId, Path path, Instant createdAt, Instant firstObservedAt,
                        Instant lastObservedAt) {
+
+    private ProjectIdentity identity() {
+      return new ProjectIdentity(projectId, createdAt);
+    }
   }
 
   /** Runtime reachability derived for one registry response. */

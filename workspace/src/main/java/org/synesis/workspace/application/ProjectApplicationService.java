@@ -18,7 +18,9 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.application.project.ProjectCommandSpec;
+import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.infrastructure.filesystem.ProjectMetadataStorage;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService;
 import org.synesis.workspace.lifecycle.GitProcessRunner;
@@ -40,8 +42,8 @@ public final class ProjectApplicationService {
    * Current project metadata schema.
    */
   public static final int PROJECT_SCHEMA_VERSION = 2;
-  private static final String SYNESIS_DIRECTORY = ".synesis";
-  private static final String PROJECT_FILE = "project.json";
+  private static final String SYNESIS_DIRECTORY = ProjectMetadataStorage.DIRECTORY_NAME;
+  private static final String PROJECT_FILE = ProjectMetadataStorage.PROJECT_METADATA_FILE;
   private static final String AGENTS_FILE = "AGENTS.md";
   private static final String AGENTS_BEGIN = "<!-- SYNESIS-BEGIN -->";
   private static final String AGENTS_END = "<!-- SYNESIS-END -->";
@@ -52,7 +54,7 @@ public final class ProjectApplicationService {
 
       - Use Synesis tools for project reads, file changes, and commands.
       - One persistent MCP connection owns one provider binding and one isolated worker context.
-      - After synesis init succeeds, install the integration matching the responding harness before starting work: Claude Code uses `synesis provider install claude`, and Codex uses `synesis provider install codex`. The matching `claude` or `codex` executable must already be installed and available to that harness; installing one provider is not a substitute for the other.
+      - Before the first MCP session after `synesis init`, install the integration matching the responding harness in the control project directory: Claude Code uses `synesis provider install claude`, and Codex uses `synesis provider install codex`. The matching `claude` or `codex` executable must be installed and available to that harness. Once `ensure_session` is ready, continue with that provider binding; do not rerun provider installation from the assigned isolated worktree, which may not contain the control project profile.
       - After synesis.ensure_session succeeds, keep the provider in the current project directory and use Synesis MCP for all reads, writes, and commands. Synesis applies those operations internally in the assigned worktree; do not switch branches, cd, or edit another worker's worktree manually. Native provider hooks are optional and may be unavailable in desktop harnesses, but they do not replace the required Synesis integration, so never assume a native mutation was routed. If a native tool is used and Synesis reports workspace_mismatch, stop native mutations and verify state through synesis.read_file.
       - Reads carry revisions; provide the matching revision when applying a patch.
       - Do not modify the control checkout or another worker's files directly.
@@ -67,12 +69,13 @@ public final class ProjectApplicationService {
       - When get_next_action projects WAIT with recommendedTool=get_next_action and arguments {}, execute that continuation after a bounded wait and remain engaged while the WorkGroup is active or grants, snapshots, review decisions, or coordination requests remain unresolved. Do not report success or stop merely because your own lane is complete.
       """;
   private final ManagedBaselineTransactionService baselineService;
+  private final ProjectMetadataStorage metadataStorage;
 
   /**
    * Creates a project application service.
    */
   public ProjectApplicationService() {
-    this(new ManagedBaselineTransactionService());
+    this(new ManagedBaselineTransactionService(), new ProjectMetadataStorage());
   }
 
   /**
@@ -81,7 +84,22 @@ public final class ProjectApplicationService {
    * @param baselineService managed-baseline transaction service
    */
   public ProjectApplicationService(ManagedBaselineTransactionService baselineService) {
+    this(baselineService, new ProjectMetadataStorage());
+  }
+
+  ProjectApplicationService(ManagedBaselineTransactionService baselineService,
+      ProjectMetadataStorage metadataStorage) {
     this.baselineService = Objects.requireNonNull(baselineService, "baselineService");
+    this.metadataStorage = Objects.requireNonNull(metadataStorage, "metadataStorage");
+  }
+
+  private void ensureMetadataStorage(Path projectRoot) throws ProjectApplicationException {
+    try {
+      metadataStorage.ensure(projectRoot);
+    } catch (IOException failure) {
+      throw new ProjectApplicationException("METADATA_ROOT_UNAVAILABLE",
+          "Synesis metadata root is unavailable or unsafe", failure);
+    }
   }
 
   private static ProjectLocation readLocation(Path root, Path synesis, Path metadata)
@@ -116,9 +134,10 @@ public final class ProjectApplicationService {
     }
   }
 
-  private static String metadataJson(UUID projectId, Instant createdAt) {
-    return "{\n" + "  \"schemaVersion\": 2,\n" + "  \"projectId\": \"" + projectId + "\",\n"
-        + "  \"createdAt\": \"" + createdAt + "\"\n" + "}\n";
+  private static String metadataJson(ProjectIdentity identity) {
+    return "{\n" + "  \"schemaVersion\": 2,\n" + "  \"projectId\": \""
+        + identity.projectId() + "\",\n"
+        + "  \"createdAt\": \"" + identity.createdAt() + "\"\n" + "}\n";
   }
 
   private static ProjectCommandSpec parseValidation(Object raw) throws IOException {
@@ -202,8 +221,9 @@ public final class ProjectApplicationService {
     return text;
   }
 
-  private static void writeMetadata(Path metadata, UUID projectId) throws IOException {
-    String json = metadataJson(projectId, Instant.now());
+  private static void writeMetadata(Path metadata, ProjectIdentity identity,
+      boolean replaceExisting) throws IOException {
+    String json = metadataJson(identity);
     Path temporary = metadata.resolveSibling("project.json.tmp-" + UUID.randomUUID());
     Files.writeString(temporary,
         json,
@@ -212,9 +232,18 @@ public final class ProjectApplicationService {
         StandardOpenOption.WRITE);
     try {
       try {
-        Files.move(temporary, metadata, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        if (replaceExisting) {
+          Files.move(temporary, metadata, StandardCopyOption.ATOMIC_MOVE,
+              StandardCopyOption.REPLACE_EXISTING);
+        } else {
+          Files.move(temporary, metadata, StandardCopyOption.ATOMIC_MOVE);
+        }
       } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-        Files.move(temporary, metadata);
+        if (replaceExisting) {
+          Files.move(temporary, metadata, StandardCopyOption.REPLACE_EXISTING);
+        } else {
+          Files.move(temporary, metadata);
+        }
       }
     } finally {
       Files.deleteIfExists(temporary);
@@ -303,6 +332,19 @@ public final class ProjectApplicationService {
         .identity();
   }
 
+  private static void initializeLocalState(Path synesis) throws IOException {
+    Files.createDirectories(synesis.resolve("shared/records"));
+    Files.createDirectories(synesis.resolve("local/providers"));
+    Files.createDirectories(synesis.resolve("local/runtime"));
+    Files.createDirectories(synesis.resolve("local/profile/records"));
+  }
+
+  private static boolean hasReplicaPrivateState(Path synesis) throws IOException {
+    try (var children = Files.list(synesis)) {
+      return children.anyMatch(child -> !PROJECT_FILE.equals(child.getFileName().toString()));
+    }
+  }
+
   private static String ensureGitHead(Path root) throws ProjectApplicationException {
     try {
       if (!Files.exists(root.resolve(".git"))) {
@@ -366,6 +408,7 @@ public final class ProjectApplicationService {
       Path synesis = current.resolve(SYNESIS_DIRECTORY);
       Path metadata = synesis.resolve(PROJECT_FILE);
       if (Files.exists(metadata)) {
+        ensureMetadataStorage(current);
         ProjectLocation location = readLocation(current, synesis, metadata);
         try {
           RepositoryPrivateStateService.ensure(location.root());
@@ -400,6 +443,7 @@ public final class ProjectApplicationService {
       throw new ProjectApplicationException("NOT_FOUND",
           "No initialized Synesis project was found at the requested path");
     }
+    ensureMetadataStorage(root);
     ProjectLocation location = readLocation(root, root.resolve(SYNESIS_DIRECTORY), metadata);
     try {
       RepositoryPrivateStateService.ensure(location.root());
@@ -493,6 +537,7 @@ public final class ProjectApplicationService {
     Path synesis = root.resolve(SYNESIS_DIRECTORY);
     Path metadata = synesis.resolve(PROJECT_FILE);
     if (Files.exists(synesis)) {
+      ensureMetadataStorage(root);
       if (Files.exists(metadata)) {
         ProjectLocation existing = readLocation(root, synesis, metadata);
         try {
@@ -519,15 +564,14 @@ public final class ProjectApplicationService {
           "Existing .synesis state is partial or malformed");
     }
 
-    UUID projectId = UUID.randomUUID();
+    ProjectIdentity projectIdentity = new ProjectIdentity(UUID.randomUUID(), Instant.now());
     try {
       // Install the exact common-directory exclusions before creating
       // any project-local or coordination runtime paths. The exclusions
       // are Git-private and do not create .synesis state.
       RepositoryPrivateStateService.ensure(root);
       Path profile = synesis.resolve("local/profile");
-      Instant createdAt = Instant.now();
-      String metadataContent = metadataJson(projectId, createdAt);
+      String metadataContent = metadataJson(projectIdentity);
       String agentsContent = managedAgentsContent(root);
       String gitHeadStatus;
       if (Files.exists(root.resolve(".git"))) {
@@ -540,16 +584,14 @@ public final class ProjectApplicationService {
         // Internal non-Git fixtures intentionally bypass the
         // user-facing Git preflight and therefore have no baseline
         // transaction to create the project directory.
-        Files.createDirectories(synesis);
-        writeMetadata(metadata, projectId);
+        ensureMetadataStorage(root);
+        writeMetadata(metadata, projectIdentity, false);
         ensureAgentsFile(root);
         gitHeadStatus = "GIT_HEAD_UNAVAILABLE";
       }
-      Files.createDirectories(synesis.resolve("shared/records"));
-      Files.createDirectories(synesis.resolve("local/providers"));
-      Files.createDirectories(synesis.resolve("local/runtime"));
-      Files.createDirectories(profile.resolve("records"));
-      NodeIdentity identity = identity(profile);
+      ensureMetadataStorage(root);
+      initializeLocalState(synesis);
+      NodeIdentity nodeIdentity = identity(profile);
       ProjectLocation location = readLocation(root, synesis, metadata);
       RepositoryPrivateStateService.ensure(root);
       try {
@@ -562,13 +604,147 @@ public final class ProjectApplicationService {
         }
       } catch (Exception ignored) {
       }
-      return new InitResult(InitStatus.SUCCESS, location, identity, true, gitHeadStatus);
+      return new InitResult(InitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus);
     } catch (ManagedBaselineTransactionService.BaselineFailure failure) {
       throw new ProjectApplicationException(failure.code(),
           "Managed baseline transaction failed: " + failure.getMessage(), failure);
     } catch (Exception failure) {
       throw new ProjectApplicationException("CONFLICT", "Could not initialize project state",
           failure);
+    }
+  }
+
+  /**
+   * Materializes a local replica from portable identity material.
+   *
+   * <p>The target may already contain the canonical {@code project.json}, as
+   * happens after a normal Git checkout. Only that portable record is reused;
+   * any existing {@code .synesis} child besides {@code project.json} is
+   * rejected so private state cannot be copied accidentally.</p>
+   *
+   * @param projectRoot target project directory
+   * @param projectIdentity existing portable project identity
+   * @return initialization result with fresh local node/profile state
+   * @throws ProjectApplicationException if the target is malformed, mismatched, or private state
+   *                                     is present
+   */
+  public InitResult initReplica(Path projectRoot, ProjectIdentity projectIdentity)
+      throws ProjectApplicationException {
+    return initReplica(projectRoot, projectIdentity, true);
+  }
+
+  /**
+   * Materializes a local replica with optional provider configuration.
+   *
+   * @param projectRoot          target project directory
+   * @param projectIdentity      existing portable project identity
+   * @param configureProviderMcp whether provider MCP configuration should be ensured
+   * @return initialization result with fresh local node/profile state
+   * @throws ProjectApplicationException if the target is malformed, mismatched, or private state
+   *                                     is present
+   */
+  public InitResult initReplica(Path projectRoot, ProjectIdentity projectIdentity,
+      boolean configureProviderMcp) throws ProjectApplicationException {
+    Objects.requireNonNull(projectIdentity, "project identity");
+    Path root = directory(projectRoot, "project directory");
+    Path synesis = root.resolve(SYNESIS_DIRECTORY);
+    Path metadata = synesis.resolve(PROJECT_FILE);
+    try {
+      if (Files.exists(synesis)) {
+        ensureMetadataStorage(root);
+        if (!Files.exists(metadata)) {
+          throw new ProjectApplicationException("CONFLICT",
+              "Existing .synesis state is partial or malformed");
+        }
+        ProjectLocation existing = readLocation(root, synesis, metadata);
+        if (!existing.identity().matches(projectIdentity)) {
+          throw new ProjectApplicationException("IDENTITY_MISMATCH",
+              "Replica identity does not match canonical project identity");
+        }
+        if (hasReplicaPrivateState(synesis)) {
+          throw new ProjectApplicationException("PRIVATE_STATE_PRESENT",
+              "Replica target already contains private Synesis state");
+        }
+      } else {
+        ensureMetadataStorage(root);
+        writeMetadata(metadata, projectIdentity, false);
+      }
+      RepositoryPrivateStateService.ensure(root);
+      ensureAgentsFile(root);
+      initializeLocalState(synesis);
+      NodeIdentity nodeIdentity = identity(synesis.resolve("local/profile"));
+      ProjectLocation location = readLocation(root, synesis, metadata);
+      if (configureProviderMcp) {
+        try {
+          ProviderApplicationService providerService = new ProviderApplicationService();
+          providerService.ensureMcpConfig(location,
+              org.synesis.workspace.provider.ProviderRegistry.find("codex"),
+              providerService.launcherPath());
+        } catch (Exception ignored) {
+          // Provider installation is optional; canonical identity and local state are not.
+        }
+      }
+      String gitHeadStatus = Files.exists(root.resolve(".git"))
+          ? ensureGitHead(root) : "GIT_HEAD_UNAVAILABLE";
+      return new InitResult(InitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus);
+    } catch (ProjectApplicationException failure) {
+      throw failure;
+    } catch (Exception failure) {
+      throw new ProjectApplicationException("CONFLICT",
+          "Could not materialize project replica", failure);
+    }
+  }
+
+  /**
+   * Explicitly forks an initialized copy into a new logical project.
+   *
+   * <p>The operation requires a target containing only portable project
+   * metadata. It intentionally replaces that metadata with a fresh UUID and
+   * creates fresh private state; it never infers a fork from a path, remote, or
+   * Git comparison.</p>
+   *
+   * @param projectRoot initialized copy to fork
+   * @return initialization result for the new logical project
+   * @throws ProjectApplicationException if the target is not a safe fork input
+   */
+  public InitResult fork(Path projectRoot) throws ProjectApplicationException {
+    return fork(projectRoot, true);
+  }
+
+  /**
+   * Explicitly forks an initialized copy with optional provider configuration.
+   *
+   * @param projectRoot          initialized copy to fork
+   * @param configureProviderMcp whether provider MCP configuration should be ensured
+   * @return initialization result for the new logical project
+   * @throws ProjectApplicationException if the target is not a safe fork input
+   */
+  public InitResult fork(Path projectRoot, boolean configureProviderMcp)
+      throws ProjectApplicationException {
+    Path root = directory(projectRoot, "project directory");
+    Path synesis = root.resolve(SYNESIS_DIRECTORY);
+    Path metadata = synesis.resolve(PROJECT_FILE);
+    try {
+      if (Files.exists(synesis)) {
+        ensureMetadataStorage(root);
+      }
+      if (!Files.exists(metadata)) {
+        throw new ProjectApplicationException("NOT_FOUND",
+            "An initialized project copy is required for an explicit fork");
+      }
+      readLocation(root, synesis, metadata);
+      if (hasReplicaPrivateState(synesis)) {
+        throw new ProjectApplicationException("PRIVATE_STATE_PRESENT",
+            "Fork input contains private Synesis state");
+      }
+      ProjectIdentity forkIdentity = new ProjectIdentity(UUID.randomUUID(), Instant.now());
+      writeMetadata(metadata, forkIdentity, true);
+      ensureMetadataStorage(root);
+      return initReplica(root, forkIdentity, configureProviderMcp);
+    } catch (ProjectApplicationException failure) {
+      throw failure;
+    } catch (Exception failure) {
+      throw new ProjectApplicationException("CONFLICT", "Could not create project fork", failure);
     }
   }
 
@@ -602,7 +778,8 @@ public final class ProjectApplicationService {
           .resolve("project.conf");
       if (Files.exists(configPath)) {
         ProjectConfig existing = ProjectConfig.load(configPath);
-        if (existing.peerNodeIds()
+        if (existing.projectId().equals(location.projectId())
+            && existing.peerNodeIds()
             .size() == 1 && existing.peerNodeIds()
             .contains(peerNodeId)) {
           return new ProjectCreateResult(existing.projectId(), identity.nodeId(), peerNodeId,
@@ -686,6 +863,15 @@ public final class ProjectApplicationService {
           .normalize();
       Objects.requireNonNull(projectId, "project ID");
       Objects.requireNonNull(createdAt, "created at");
+    }
+
+    /**
+     * Returns the portable identity represented by this location.
+     *
+     * @return immutable project identity
+     */
+    public ProjectIdentity identity() {
+      return new ProjectIdentity(projectId, createdAt);
     }
   }
 

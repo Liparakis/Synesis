@@ -43,14 +43,36 @@ public final class RecoverySnapshotService {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       for (String relative : paths) {
-        digest.update(relative.getBytes(StandardCharsets.UTF_8));
-        digest.update(Files.readAllBytes(root.resolve(relative)));
+        Path relativePath = safeRelativePath(relative);
+        digest.update(relativePath.toString()
+            .replace('\\', '/')
+            .getBytes(StandardCharsets.UTF_8));
+        digest.update(Files.readAllBytes(root.resolve(relativePath)));
       }
       return HexFormat.of()
           .formatHex(digest.digest());
     } catch (Exception failure) {
       throw new IOException("RECOVERY_SNAPSHOT_HASH_FAILED", failure);
     }
+  }
+
+  private static Path safeRelativePath(String value) throws IOException {
+    Path relative = Path.of(value).normalize();
+    if (relative.isAbsolute() || relative.getNameCount() == 0
+        || relative.startsWith(Path.of("..")) || isProtectedPath(relative)) {
+      throw new IOException("RECOVERY_PATH_INVALID");
+    }
+    return relative;
+  }
+
+  private static boolean isProtectedPath(Path relative) {
+    for (Path segment : relative) {
+      String name = segment.toString();
+      if (name.equals(".git") || name.equals(".synesis")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -104,13 +126,10 @@ public final class RecoverySnapshotService {
     try (var stream = Files.walk(source)) {
       for (Path path : stream.filter(Files::isRegularFile)
           .toList()) {
-        if (path.toString()
-            .contains(java.io.File.separator + ".git" + java.io.File.separator)
-            || path.toString()
-            .contains(java.io.File.separator + ".synesis" + java.io.File.separator)) {
+        Path relative = source.relativize(path);
+        if (isProtectedPath(relative)) {
           continue;
         }
-        Path relative = source.relativize(path);
         Path target = staging.resolve(relative)
             .normalize();
         if (!target.startsWith(staging)) {
@@ -164,12 +183,12 @@ public final class RecoverySnapshotService {
       if (relative.equals("manifest.json")) {
         continue;
       }
-      Path source = root.resolve(relative)
+      Path relativePath = safeRelativePath(relative);
+      Path source = root.resolve(relativePath)
           .normalize();
-      Path destination = target.resolve(relative)
+      Path destination = target.resolve(relativePath)
           .normalize();
-      if (!destination.startsWith(target) || relative.startsWith(".git/") || relative.startsWith(
-          ".synesis/")) {
+      if (!destination.startsWith(target)) {
         throw new IOException("RECOVERY_PATH_INVALID");
       }
       if (!Files.isRegularFile(source)) {

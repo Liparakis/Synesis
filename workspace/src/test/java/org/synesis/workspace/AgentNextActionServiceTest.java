@@ -12,8 +12,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
@@ -34,6 +37,8 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.test.ProviderTestSupport;
+import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
+import org.synesis.coordination.application.WorkIntentService;
 
 /**
  * Exercises durable next-action projection and exact lifecycle guidance.
@@ -95,6 +100,309 @@ class AgentNextActionServiceTest {
     String json = response.toJson();
     assertTrue(json.contains("\"pending\":0"));
     assertFalse(json.contains(controlRoot.toString()));
+  }
+
+  @Test
+  void freshParticipantSeesReadOnlyContinuationActionForRecoveryHeldLane() throws Exception {
+    prepareSessionAndTrust("codex", "continuation-owner");
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var claim = collaboration.announce(controlRoot, "codex", "continuation-owner",
+        "Implement the product change", "Publish the completed product change",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var ownerBinding = bindings.find(location, "codex", "continuation-owner")
+        .orElseThrow();
+    RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location,
+        ownerBinding.sessionId());
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    var identity = new IdentityBootstrap(location.profile()
+        .resolve("link"))
+        .loadOrCreate()
+        .identity();
+    WorkIntentService intentService = new WorkIntentService(store, identity);
+    intentService.suspend(claim.intent().participant());
+    intentService.holdRecovery(claim.intent().participant(), snapshot.root()
+        .toString() + "#" + snapshot.contentHash());
+    long eventsBeforePoll = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId()).headSequence();
+
+    prepareSessionAndTrust("codex", "continuation-successor");
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex",
+            "continuation-successor"));
+
+    assertEquals(AgentStatus.READY, response.status(), response.toJson());
+    assertEquals(AgentReason.CONTINUATION_AVAILABLE, response.reason(), response.toJson());
+    assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction(), response.toJson());
+    Map<?, ?> result = (Map<?, ?>) response.result();
+    assertEquals("RECOVERY_CONTINUATION_AVAILABLE", result.get("state"));
+    assertEquals("continuation", result.get("nextProtocolKind"));
+    Map<?, ?> payload = (Map<?, ?>) result.get("nextProtocolPayload");
+    assertEquals(claim.intent().intentId().toString(), payload.get("intentId"));
+    assertEquals(claim.intent().version(), ((Number) payload.get("claimEpoch")).longValue());
+    java.util.List<?> candidates = (java.util.List<?>) result.get("continuationCandidates");
+    Map<?, ?> candidate = (Map<?, ?>) candidates.getFirst();
+    Map<?, ?> continuationRequest = (Map<?, ?>) candidate.get("continuationRequest");
+    assertEquals("continuation", continuationRequest.get("kind"));
+    assertEquals(Map.of("intentId", claim.intent().intentId().toString(),
+        "claimEpoch", claim.intent().version()), continuationRequest.get("payload"));
+    Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+    assertEquals("RECOVER", workflow.get("type"));
+    assertEquals("request_coordination", workflow.get("recommendedTool"));
+    Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
+    assertEquals("continuation", arguments.get("kind"));
+    Map<?, ?> projectedPayload = (Map<?, ?>) arguments.get("payload");
+    assertFalse(projectedPayload.containsKey("grantId"));
+    assertFalse(response.toJson().contains(snapshot.root().toString()));
+    assertFalse(response.toJson().contains("recoverySnapshotReference"));
+    assertEquals(eventsBeforePoll,
+        new PredictionEventStore(location.root()
+            .resolve(".synesis/coordination"), location.projectId()).headSequence());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void mandatoryReviewCandidatesAreSnapshotSpecificAndNotAutoSelected() throws Exception {
+    prepareSessionAndTrust("codex", "mandatory-review-owner-a");
+    prepareSessionAndTrust("codex", "mandatory-review-owner-b");
+    prepareSessionAndTrust("claude", "mandatory-reviewer");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    UUID groupId = UUID.randomUUID();
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    collaboration.createWorkGroup(controlRoot, groupId, "Build a board",
+        "CRUD and persistence", ReviewPolicy.mandatoryIndependent());
+    var ownerA = collaboration.announce(controlRoot, "codex", "mandatory-review-owner-a",
+        "Implement board creation", "Publish the board creation lane",
+        List.of(ResourceSelector.pathExact("src/BoardCreate.java")), groupId);
+    var ownerB = collaboration.announce(controlRoot, "codex", "mandatory-review-owner-b",
+        "Implement board listing", "Publish the board listing lane",
+        List.of(ResourceSelector.pathExact("src/BoardList.java")), groupId);
+    collaboration.announce(controlRoot, "claude", "mandatory-reviewer",
+        "Review board changes", "Record an independent review",
+        List.of(ResourceSelector.pathExact("docs/review-report.md")), groupId,
+        WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathSubtree("src")));
+
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var bindingA = bindings.find(location, "codex", "mandatory-review-owner-a").orElseThrow();
+    var bindingB = bindings.find(location, "codex", "mandatory-review-owner-b").orElseThrow();
+    var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate()
+        .identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    appendMandatorySnapshot(store, identity, bindingA, ownerA.intent(),
+        "snap_mandatory_create", "src/BoardCreate.java");
+    appendMandatorySnapshot(new PredictionEventStore(location.root()
+            .resolve(".synesis/coordination"), location.projectId()), identity, bindingB,
+        ownerB.intent(), "snap_mandatory_list", "src/BoardList.java");
+    long eventsBeforePoll = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId()).headSequence();
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "claude",
+            "mandatory-reviewer"));
+
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    assertTrue(result.containsKey("reviewCandidates"), response.toJson());
+    List<Map<String, Object>> candidates = (List<Map<String, Object>>) result
+        .get("reviewCandidates");
+    assertEquals(2, candidates.size(), response.toJson());
+    assertEquals(Boolean.TRUE, result.get("reviewCandidateSelectionRequired"));
+    assertEquals("Choose an exact candidate explicitly; Synesis does not select one for you.",
+        result.get("reviewCandidateSelectionInstruction"));
+    assertTrue(((List<?>) result.get("reviewActions")).isEmpty(), response.toJson());
+    assertEquals(2, candidates.stream()
+        .map(candidate -> candidate.get("snapshotId"))
+        .distinct().count());
+    for (Map<String, Object> candidate : candidates) {
+      Map<String, Object> reviewerIntent = (Map<String, Object>) candidate.get("reviewerIntent");
+      assertEquals(candidate.get("snapshotId"), reviewerIntent.get("snapshotId"));
+      assertEquals("ensure_session", reviewerIntent.get("tool"));
+      Map<String, Object> ensureArguments = (Map<String, Object>) reviewerIntent.get("arguments");
+      Map<String, Object> reviewerTask = (Map<String, Object>) ensureArguments.get("task");
+      assertEquals("reviewer", reviewerTask.get("role"));
+      assertEquals(groupId.toString(), reviewerTask.get("workGroupId"));
+      assertFalse(((List<?>) reviewerTask.get("reviewTargets")).isEmpty());
+      Map<String, Object> claimRequirement =
+          (Map<String, Object>) reviewerIntent.get("claimRequirement");
+      assertEquals("task.claims", claimRequirement.get("field"));
+      assertEquals(Boolean.TRUE, claimRequirement.get("required"));
+      assertEquals(List.of("producer snapshot paths", "all active claims"),
+          claimRequirement.get("mustBeDisjointFrom"));
+      Map<String, Object> request = (Map<String, Object>) candidate.get("requestCoordination");
+      assertEquals("work_group_join", request.get("kind"));
+      Map<String, Object> payload = (Map<String, Object>) request.get("payload");
+      assertEquals(candidate.get("snapshotId"), payload.get("snapshotId"));
+      assertEquals(groupId.toString(), payload.get("workGroupId"));
+    }
+    assertEquals(eventsBeforePoll,
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()).headSequence());
+  }
+
+  private static void appendMandatorySnapshot(PredictionEventStore store,
+      org.synesis.link.identity.NodeIdentity identity,
+      ProviderSessionBindingService.Binding binding, WorkIntent intent, String snapshotId,
+      String changedPath) throws Exception {
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    SnapshotProvenance provenance = new SnapshotProvenance(intent.workGroupId(), intent.intentId(),
+        intent.authorityLineageId(), participant, binding.sessionId(), intent.version(), List.of(),
+        List.of(), List.of("PATH_EXACT:" + changedPath),
+        "refs/synesis/snapshots/" + snapshotId, "integrity-" + snapshotId,
+        "manifest-" + snapshotId);
+    TaskSnapshotPayload snapshot = new TaskSnapshotPayload(intent.taskId(), snapshotId,
+        identity.nodeId(), binding.supervisorId(), binding.workerId(), binding.sessionId(),
+        binding.baseCommit(), binding.baseCommit(), List.of(changedPath), List.of(),
+        "Published candidate", provenance, true);
+    store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+        identity.nodeId(), snapshot.encode(), identity);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void pendingOwnerResponsePrecedesUnrelatedRecoveryContinuation() throws Exception {
+    prepareSessionAndTrust("codex", "owner-response-priority");
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-response-priority",
+        "Implement the product change", "Publish the completed product change",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    prepareSessionAndTrust("codex", "requesting-reviewer-priority");
+    var requestingReviewer = collaboration.announce(controlRoot, "codex",
+        "requesting-reviewer-priority", "Review the product change",
+        "Admit an independent review", List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
+        ownerClaim.intent().workGroupId(), WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    CoordinationRequest request = collaboration.request(controlRoot, "codex",
+        "requesting-reviewer-priority", ownerClaim.intent().intentId(),
+        CoordinationRequest.Kind.REVIEW, "Review the completed product snapshot");
+    assertEquals(ownerClaim.intent().workGroupId(), requestingReviewer.intent().workGroupId());
+
+    prepareSessionAndTrust("codex", "recoverable-reviewer-priority");
+    var recoverableReviewer = collaboration.announce(controlRoot, "codex",
+        "recoverable-reviewer-priority", "Review the product change",
+        "Record an independent review", List.of(ResourceSelector.pathExact("review-report.md")),
+        ownerClaim.intent().workGroupId(), WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var recoverableBinding = bindings.find(location, "codex", "recoverable-reviewer-priority")
+        .orElseThrow();
+    RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location,
+        recoverableBinding.sessionId());
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    WorkIntentService intentService = new WorkIntentService(store, identity);
+    intentService.suspend(recoverableReviewer.intent().participant());
+    intentService.holdRecovery(recoverableReviewer.intent().participant(), snapshot.root()
+        .toString() + "#" + snapshot.contentHash());
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex",
+            "owner-response-priority"));
+
+    assertEquals(AgentStatus.READY, response.status(), response.toJson());
+    assertEquals(AgentReason.OWNER_REQUEST_PENDING, response.reason(), response.toJson());
+    assertEquals(AgentNextAction.RESPOND_COORDINATION, response.nextAction(), response.toJson());
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    assertEquals(request.requestId().toString(),
+        ((Map<String, Object>) ((List<?>) result.get("pendingCoordination")).getFirst())
+            .get("requestId"));
+    assertEquals("respond_coordination",
+        ((Map<String, Object>) result.get("workflow")).get("recommendedTool"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void pendingContractsExposeOwnerContextWithoutAssigningNonOwnerResponse() throws Exception {
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    prepareSessionAndTrust("codex", "contract-owner");
+    var owner = collaboration.announce(controlRoot, "codex", "contract-owner",
+        "Implement the product", "Publish the product",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    prepareSessionAndTrust("codex", "contract-requester");
+    var requester = collaboration.announce(controlRoot, "codex", "contract-requester",
+        "Implement a consumer", "Publish the consumer",
+        List.of(ResourceSelector.pathExact("src/Consumer.java")));
+    prepareSessionAndTrust("claude", "contract-observer");
+    collaboration.announce(controlRoot, "claude", "contract-observer",
+        "Document the product", "Publish documentation",
+        List.of(ResourceSelector.pathExact("docs/Product.md")));
+    CoordinationRequest first = collaboration.request(controlRoot, "codex", "contract-requester",
+        owner.intent().intentId(), CoordinationRequest.Kind.CONTRACT, "Define the return type");
+    CoordinationRequest second = collaboration.request(controlRoot, "claude", "contract-observer",
+        owner.intent().intentId(), CoordinationRequest.Kind.CONTRACT, "Define the error contract");
+    var location = new ProjectApplicationService().locate(controlRoot);
+    var binding = new ProviderSessionBindingService().find(location, "codex", "contract-owner")
+        .orElseThrow();
+    var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate()
+        .identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    TaskSnapshotPayload snapshot = new TaskSnapshotPayload(owner.intent().taskId(),
+        "snap_contract_fence", identity.nodeId(), binding.supervisorId(), binding.workerId(),
+        binding.sessionId(), binding.baseCommit(), binding.baseCommit(),
+        List.of("src/Product.java"), List.of(), "Published product",
+        new SnapshotProvenance(owner.intent().workGroupId(), owner.intent().intentId(),
+            owner.intent().authorityLineageId(), owner.intent().participant(), binding.sessionId(),
+            owner.intent().version(), List.of(), List.of(), List.of("PATH_EXACT:src/Product.java"),
+            "refs/synesis/snapshots/snap_contract_fence", "integrity-contract", "manifest-contract"));
+    store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+        identity.nodeId(), snapshot.encode(), identity);
+    long eventsBeforePoll = store.headSequence();
+
+    AgentNextActionService service = new AgentNextActionService();
+    AgentResponse ownerResponse = service.getNextAction(new AgentNextActionService.NextActionRequest(
+        controlRoot, "codex", "contract-owner"));
+    assertEquals(AgentReason.OWNER_REQUEST_PENDING, ownerResponse.reason(), ownerResponse.toJson());
+    assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerResponse.nextAction());
+    Map<String, Object> envelope = (Map<String, Object>) ProviderJson.parse(ownerResponse.toJson());
+    Map<String, Object> result = (Map<String, Object>) envelope.get("result");
+    Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+    assertEquals("REVIEW_CONTRACT", workflow.get("type"));
+    assertEquals("respond_coordination", workflow.get("recommendedTool"));
+    assertEquals(Map.of(), workflow.get("arguments"), "CONTRACT requires the owner's judgment");
+    List<Map<String, Object>> pending = (List<Map<String, Object>>) result.get("pendingCoordination");
+    assertEquals(2, pending.size());
+    assertEquals(java.util.Set.of(first.requestId().toString(), second.requestId().toString()),
+        pending.stream().map(item -> item.get("requestId")).collect(java.util.stream.Collectors.toSet()));
+    for (Map<String, Object> item : pending) {
+      CoordinationRequest expected = item.get("requestId").equals(first.requestId().toString())
+          ? first : second;
+      assertEquals(expected.requester(), item.get("requester"));
+      assertEquals(owner.intent().participant(), item.get("target"));
+      assertEquals(owner.intent().intentId().toString(), item.get("conflictingIntentId"));
+      assertEquals("CONTRACT", item.get("kind"));
+      assertEquals(expected.proposal(), item.get("proposal"));
+      assertEquals("PENDING", item.get("status"));
+      assertEquals(owner.intent().workGroupId().toString(), item.get("workGroupId"));
+      assertEquals(owner.intent().version(), ((Number) item.get("claimEpoch")).longValue());
+    }
+    assertFalse(result.containsKey("nextProtocolPayload"));
+    assertEquals(pending, ((Map<?, ?>) workflow.get("payload")).get("pendingCoordination"));
+
+    AgentResponse nonOwnerResponse = service.getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex", "contract-requester"));
+    assertEquals(AgentStatus.WAITING, nonOwnerResponse.status(), nonOwnerResponse.toJson());
+    assertEquals(AgentReason.INTEGRATION_PENDING, nonOwnerResponse.reason());
+    assertEquals(AgentNextAction.WAIT, nonOwnerResponse.nextAction());
+    Map<?, ?> nonOwnerResult = (Map<?, ?>) nonOwnerResponse.result();
+    assertEquals(2, nonOwnerResult.get("pending"));
+    assertFalse(nonOwnerResult.containsKey("request"));
+    assertEquals("get_next_action", ((Map<?, ?>) nonOwnerResult.get("workflow")).get("recommendedTool"));
+    assertEquals(Map.of(), ((Map<?, ?>) nonOwnerResult.get("workflow")).get("arguments"));
+    var reloaded = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    assertEquals(eventsBeforePoll, reloaded.headSequence());
+    assertTrue(new WorkIntentService(reloaded, identity).requests().stream()
+        .allMatch(request -> request.status() == CoordinationRequest.Status.PENDING));
+    assertFalse(requester.intent().participant().equals(owner.intent().participant()));
   }
 
   @Test
@@ -174,6 +482,25 @@ class AgentNextActionServiceTest {
             + ", diff=" + org.synesis.workspace.test.TestGit.output(worker, "diff", "--name-only",
             claim.intent()
                 .baseCommit(), "HEAD"));
+
+    prepareSessionAndTrust("codex", "unrelated-recovery-reviewer");
+    var recoverableReviewer = collaboration.announce(controlRoot, "codex",
+        "unrelated-recovery-reviewer", "Review the product change",
+        "Record an independent review", List.of(ResourceSelector.pathExact("review-report.md")),
+        claim.intent().workGroupId(), WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    var recoverableBinding = bindingService.find(location, "codex",
+        "unrelated-recovery-reviewer").orElseThrow();
+    RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location,
+        recoverableBinding.sessionId());
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    WorkIntentService intentService = new WorkIntentService(store, identity);
+    intentService.suspend(recoverableReviewer.intent().participant());
+    intentService.holdRecovery(recoverableReviewer.intent().participant(), recovery.root()
+        .toString() + "#" + recovery.contentHash());
 
     AgentResponse completionRequest = nextActionService.getNextAction(
         new AgentNextActionService.NextActionRequest(controlRoot, "codex", "committed-producer",
@@ -534,6 +861,356 @@ class AgentNextActionServiceTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  void selfReviewGrantIsNotProjectedAsAnExecutableReviewAction() throws Exception {
+    prepareSessionAndTrust("codex", "same-participant-review");
+
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var producer = collaboration.announce(controlRoot, "codex", "same-participant-review",
+        "Implement source", "Publish source",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var binding = bindings.find(location, "codex", "same-participant-review").orElseThrow();
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    UUID reviewerIntentId = UUID.randomUUID();
+    WorkIntent reviewer = new WorkIntent(reviewerIntentId, producer.intent().projectId(),
+        participant, "codex", UUID.randomUUID(), "Review source",
+        "Review the immutable source snapshot", producer.intent().baseCommit(),
+        List.of(ResourceSelector.pathExact("tests/ProductTest.java")), 1,
+        producer.intent().workGroupId(), WorkIntent.defaultAuthorityLineage(reviewerIntentId),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")), List.of());
+    store.append(reviewer.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED,
+        identity.nodeId(), CollaborationCodec.encodeIntent(reviewer), identity);
+    assertEquals(producer.intent().workGroupId(), reviewer.workGroupId());
+    LaneGrant selfGrant = new LaneGrant(UUID.randomUUID(), producer.intent().workGroupId(),
+        producer.intent().intentId(), participant, producer.intent().version(), true);
+    store.append(selfGrant.grantId(), PredictionEventType.LANE_GRANT_ISSUED,
+        identity.nodeId(), CollaborationCodec.encodeLaneGrant(selfGrant), identity);
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex",
+            "same-participant-review"));
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    Object projectedReviews = result.get("reviewActions");
+    if (projectedReviews instanceof List<?> reviews) {
+      assertTrue(reviews.isEmpty(), response.toJson());
+    }
+    assertFalse(response.toJson().contains("review_decision"), response.toJson());
+    assertFalse(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"), response.toJson());
+  }
+
+  @Test
+  void reviewerSelfGrantDoesNotBecomePendingReviewObligation() throws Exception {
+    prepareSessionAndTrust("codex", "reviewer-continuation-obligation");
+
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var producer = collaboration.announce(controlRoot, "codex",
+        "reviewer-continuation-obligation",
+        "Implement source", "Publish source", List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var binding = bindings.find(location, "codex", "reviewer-continuation-obligation").orElseThrow();
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+
+    UUID reviewerIntentId = UUID.randomUUID();
+    WorkIntent reviewer = new WorkIntent(reviewerIntentId, producer.intent().projectId(),
+        participant, "codex", UUID.randomUUID(), "Review source", "Review the snapshot",
+        producer.intent().baseCommit(), List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
+        1, producer.intent().workGroupId(), WorkIntent.defaultAuthorityLineage(reviewerIntentId),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")), List.of());
+    store.append(reviewer.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED,
+        identity.nodeId(), CollaborationCodec.encodeIntent(reviewer), identity);
+
+    LaneGrant continuationGrant = new LaneGrant(UUID.randomUUID(), reviewer.workGroupId(),
+        reviewer.intentId(), participant, reviewer.version(), true);
+    store.append(continuationGrant.grantId(), PredictionEventType.LANE_GRANT_ISSUED,
+        identity.nodeId(), CollaborationCodec.encodeLaneGrant(continuationGrant), identity);
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex",
+            "reviewer-continuation-obligation"));
+    assertFalse(response.toJson().contains("REVIEWER_PENDING"), response.toJson());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void predecessorReviewPendingSnapshotDoesNotFenceSuccessorRevision() throws Exception {
+    prepareSessionAndTrust("codex", "predecessor-review-pending");
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var predecessor = collaboration.announce(controlRoot, "codex",
+        "predecessor-review-pending", "Implement source", "Publish source",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().locate(
+        controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var predecessorBinding = bindings.find(location, "codex", "predecessor-review-pending")
+        .orElseThrow();
+    String predecessorParticipant = WorkspaceCollaborationService.participantHandle(
+        predecessorBinding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    SnapshotProvenance predecessorProvenance = new SnapshotProvenance(
+        predecessor.intent().workGroupId(), predecessor.intent().intentId(), predecessorParticipant,
+        predecessorBinding.sessionId(), predecessor.intent().version(), List.of(), List.of(),
+        List.of("PATH_EXACT:src/Product.java"), "refs/synesis/snap_predecessor_review_pending",
+        "predecessor-review-pending-integrity");
+    TaskSnapshotPayload predecessorSnapshot = new TaskSnapshotPayload(
+        predecessor.intent().taskId(), "snap_predecessor_review_pending", identity.nodeId(),
+        predecessorBinding.supervisorId(), predecessorBinding.workerId(), predecessorBinding.sessionId(),
+        predecessorBinding.baseCommit(), predecessorBinding.baseCommit(),
+        List.of("src/Product.java"), List.of(), "Published predecessor", predecessorProvenance, true);
+    store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(),
+        predecessorSnapshot.encode(), identity);
+
+    RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location,
+        predecessorBinding.sessionId());
+    WorkIntentService intentService = new WorkIntentService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()),
+        identity);
+    intentService.suspend(predecessorParticipant);
+    String recoveryReference = recovery.root().toString() + "#" + recovery.contentHash();
+    intentService.holdRecovery(predecessorParticipant, recoveryReference);
+
+    prepareSessionAndTrust("codex", "successor-review-pending");
+    var successorBinding = bindings.find(location, "codex", "successor-review-pending")
+        .orElseThrow();
+    String successorParticipant = WorkspaceCollaborationService.participantHandle(
+        successorBinding.sessionId());
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), location.projectId(),
+        successorParticipant, "codex", predecessor.intent().taskId(), predecessor.intent().goal(),
+        predecessor.intent().acceptance(), predecessor.intent().baseCommit(), predecessor.intent().selectors(),
+        predecessor.intent().version() + 1, predecessor.intent().workGroupId(),
+        predecessor.intent().authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.PRODUCER, predecessor.intent().reviewTargetSelectors(),
+        predecessor.intent().knownDependencies());
+    UUID continuationGrantId = UUID.randomUUID();
+    new org.synesis.coordination.application.WorkGroupService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()),
+        identity).issue(new LaneGrant(continuationGrantId, predecessor.intent().workGroupId(),
+        successor.intentId(), successorParticipant, predecessor.intent().version(), true));
+    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+        predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
+        predecessor.intent().version(), recoveryReference));
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex",
+            "successor-review-pending"));
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+    assertEquals("IMPLEMENT", workflow.get("type"), response.toJson());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void latePredecessorReviewGrantCannotFenceSuccessorReviewAction() throws Exception {
+    prepareSessionAndTrust("codex", "late-review-producer");
+    prepareSessionAndTrust("codex", "late-review-successor");
+    prepareSessionAndTrust("codex", "late-reviewer");
+
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    var predecessor = collaboration.announce(controlRoot, "codex", "late-review-producer",
+        "Implement source", "Publish source",
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+    var reviewerClaim = collaboration.announce(controlRoot, "codex", "late-reviewer",
+        "Review source", "Validate source",
+        List.of(ResourceSelector.pathExact("tests/ProductTest.java")),
+        predecessor.intent().workGroupId(), WorkIntent.Role.REVIEWER,
+        List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService()
+        .locate(controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var predecessorBinding = bindings.find(location, "codex", "late-review-producer")
+        .orElseThrow();
+    var successorBinding = bindings.find(location, "codex", "late-review-successor")
+        .orElseThrow();
+    var reviewerBinding = bindings.find(location, "codex", "late-reviewer")
+        .orElseThrow();
+    String predecessorParticipant = WorkspaceCollaborationService.participantHandle(
+        predecessorBinding.sessionId());
+    String successorParticipant = WorkspaceCollaborationService.participantHandle(
+        successorBinding.sessionId());
+    String reviewerParticipant = WorkspaceCollaborationService.participantHandle(
+        reviewerBinding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    LaneGrant originalGrant = new LaneGrant(UUID.randomUUID(), predecessor.intent().workGroupId(),
+        predecessor.intent().intentId(), reviewerParticipant, predecessor.intent().version(), true);
+    store.append(originalGrant.grantId(), PredictionEventType.LANE_GRANT_ISSUED,
+        identity.nodeId(), CollaborationCodec.encodeLaneGrant(originalGrant), identity);
+
+    RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location,
+        predecessorBinding.sessionId());
+    WorkIntentService intentService = new WorkIntentService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()), identity);
+    intentService.suspend(predecessorParticipant);
+    String recoveryReference = recovery.root().toString() + "#" + recovery.contentHash();
+    intentService.holdRecovery(predecessorParticipant, recoveryReference);
+
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), location.projectId(),
+        successorParticipant, "codex", predecessor.intent().taskId(), predecessor.intent().goal(),
+        predecessor.intent().acceptance(), predecessor.intent().baseCommit(),
+        predecessor.intent().selectors(), predecessor.intent().version() + 1,
+        predecessor.intent().workGroupId(), predecessor.intent().authorityLineageId(),
+        WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER,
+        predecessor.intent().reviewTargetSelectors(), predecessor.intent().knownDependencies());
+    UUID continuationGrantId = UUID.randomUUID();
+    new org.synesis.coordination.application.WorkGroupService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()), identity).issue(new LaneGrant(continuationGrantId,
+        predecessor.intent().workGroupId(), successor.intentId(), successorParticipant,
+        predecessor.intent().version(), true));
+    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+        predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
+        predecessor.intent().version(), recoveryReference));
+
+    UUID lateGrantId = UUID.randomUUID();
+    LaneGrant lateGrant = new LaneGrant(lateGrantId, predecessor.intent().workGroupId(),
+        predecessor.intent().intentId(), reviewerParticipant, predecessor.intent().version(), true);
+    PredictionEventStore afterContinuation = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    afterContinuation.append(lateGrantId, PredictionEventType.LANE_GRANT_ISSUED,
+        identity.nodeId(), CollaborationCodec.encodeLaneGrant(lateGrant), identity);
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "codex", "late-reviewer"));
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get(
+        "reviewActions");
+    assertTrue(reviewActions.stream().noneMatch(action -> lateGrantId.toString()
+        .equals(action.get("grantId"))), response.toJson());
+    assertTrue(reviewActions.stream().anyMatch(action -> {
+      Map<String, Object> payload = (Map<String, Object>) action.get("nextProtocolPayload");
+      return successor.intentId().toString().equals(payload.get("intentId"));
+    }), response.toJson());
+    assertEquals(reviewerClaim.intent().workGroupId(), successor.workGroupId());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void exactPendingSnapshotGrantRemainsProjectedAfterProducerContinuation() throws Exception {
+    prepareSessionAndTrust("codex", "snapshot-review-producer");
+    prepareSessionAndTrust("codex", "snapshot-review-successor");
+    prepareSessionAndTrust("claude", "snapshot-reviewer");
+
+    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+    UUID groupId = UUID.randomUUID();
+    collaboration.createWorkGroup(controlRoot, groupId, "Publish a product change",
+        "Independently review the immutable change", ReviewPolicy.mandatoryIndependent());
+    var predecessor = collaboration.announce(controlRoot, "codex", "snapshot-review-producer",
+        "Implement source", "Publish source",
+        List.of(ResourceSelector.pathExact("src/Product.java")), groupId);
+    collaboration.announce(controlRoot, "claude", "snapshot-reviewer", "Review source",
+        "Validate the immutable source",
+        List.of(ResourceSelector.pathExact("tests/ProductTest.java")), groupId,
+        WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("src/Product.java")));
+
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService()
+        .locate(controlRoot);
+    ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+    var predecessorBinding = bindings.find(location, "codex", "snapshot-review-producer")
+        .orElseThrow();
+    var successorBinding = bindings.find(location, "codex", "snapshot-review-successor")
+        .orElseThrow();
+    var reviewerBinding = bindings.find(location, "claude", "snapshot-reviewer")
+        .orElseThrow();
+    String predecessorParticipant = WorkspaceCollaborationService.participantHandle(
+        predecessorBinding.sessionId());
+    String successorParticipant = WorkspaceCollaborationService.participantHandle(
+        successorBinding.sessionId());
+    String reviewerParticipant = WorkspaceCollaborationService.participantHandle(
+        reviewerBinding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate()
+        .identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    String snapshotId = "snap_snapshot_review_after_producer_continuation";
+    appendMandatorySnapshot(store, identity, predecessorBinding, predecessor.intent(), snapshotId,
+        "src/Product.java");
+
+    LaneGrant reviewGrant = new LaneGrant(UUID.randomUUID(), groupId,
+        predecessor.intent().intentId(), reviewerParticipant, predecessor.intent().version(), true,
+        snapshotId);
+    new org.synesis.coordination.application.WorkGroupService(store, identity).issue(reviewGrant);
+
+    RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location,
+        predecessorBinding.sessionId());
+    WorkIntentService intentService = new WorkIntentService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()), identity);
+    intentService.suspend(predecessorParticipant);
+    String recoveryReference = recovery.root().toString() + "#" + recovery.contentHash();
+    intentService.holdRecovery(predecessorParticipant, recoveryReference);
+
+    WorkIntent successor = new WorkIntent(UUID.randomUUID(), location.projectId(),
+        successorParticipant, "codex", predecessor.intent().taskId(), predecessor.intent().goal(),
+        predecessor.intent().acceptance(), predecessor.intent().baseCommit(),
+        predecessor.intent().selectors(), predecessor.intent().version() + 1, groupId,
+        predecessor.intent().authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+        WorkIntent.Role.PRODUCER, predecessor.intent().reviewTargetSelectors(),
+        predecessor.intent().knownDependencies());
+    UUID continuationGrantId = UUID.randomUUID();
+    new org.synesis.coordination.application.WorkGroupService(
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()), identity).issue(new LaneGrant(continuationGrantId, groupId,
+        successor.intentId(), successorParticipant, predecessor.intent().version(), true));
+    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+        predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
+        predecessor.intent().version(), recoveryReference));
+
+    AgentResponse response = new AgentNextActionService().getNextAction(
+        new AgentNextActionService.NextActionRequest(controlRoot, "claude", "snapshot-reviewer"));
+
+    assertEquals(AgentStatus.READY, response.status(), response.toJson());
+    assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason(), response.toJson());
+    assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction(), response.toJson());
+    Map<String, Object> result = (Map<String, Object>) response.result();
+    List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get(
+        "reviewActions");
+    Map<String, Object> reviewAction = reviewActions.stream()
+        .filter(action -> {
+          Map<String, Object> actionPayload = (Map<String, Object>) action.get(
+              "nextProtocolPayload");
+          return reviewGrant.grantId().toString().equals(actionPayload.get("grantId"));
+        })
+        .findFirst()
+        .orElseThrow(() -> new AssertionError(response.toJson()));
+    assertEquals("GRANT_AVAILABLE", reviewAction.get("state"));
+    Map<String, Object> snapshot = (Map<String, Object>) reviewAction.get("snapshot");
+    assertEquals(snapshotId, snapshot.get("snapshotId"));
+    Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+    assertEquals("request_coordination", workflow.get("recommendedTool"));
+    Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+    assertEquals("work_group_join", arguments.get("kind"));
+    Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+    assertEquals(reviewGrant.grantId().toString(), payload.get("grantId"));
+    assertEquals(predecessor.intent().intentId().toString(), payload.get("intentId"));
+    assertEquals(reviewerParticipant, payload.get("targetParticipant"));
+    assertEquals(predecessor.intent().version(), ((Number) payload.get("claimEpoch")).longValue());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void pendingReviewAdmissionProjectsWaitInsteadOfReplayingRequest() throws Exception {
     new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
     prepareSessionAndTrust("codex", "pending-review-owner");
@@ -686,8 +1363,17 @@ class AgentNextActionServiceTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
-  void completedParticipantProjectsReviewOnlyAdmissionForActiveSiblingGroup() throws Exception {
+  void completedReviewerDoesNotProjectAdmissionWithoutAnActiveReviewerIntent() throws Exception {
+    assertCompletedParticipantDoesNotAssumeReviewAuthority(WorkIntent.Role.REVIEWER);
+  }
+
+  @Test
+  void completedProducerDoesNotProjectAdmissionWithoutAnActiveReviewerIntent() throws Exception {
+    assertCompletedParticipantDoesNotAssumeReviewAuthority(WorkIntent.Role.PRODUCER);
+  }
+
+  private void assertCompletedParticipantDoesNotAssumeReviewAuthority(WorkIntent.Role role)
+      throws Exception {
     new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
 
     AgentSessionService sessionService = new AgentSessionService();
@@ -707,8 +1393,9 @@ class AgentNextActionServiceTest {
     var completedClaim = collaboration.announce(controlRoot, "codex", "completed-reviewer",
         "Review the sibling implementation", "Review the immutable sibling snapshot",
         List.of(ResourceSelector.pathExact("tests/completed_review.py")), null,
-        WorkIntent.Role.REVIEWER,
-        List.of(ResourceSelector.pathExact("src/sibling.py")));
+        role,
+        role == WorkIntent.Role.REVIEWER
+            ? List.of(ResourceSelector.pathExact("src/sibling.py")) : List.of());
     var ownerClaim = collaboration.announce(controlRoot,
         "codex",
         "active-owner",
@@ -746,49 +1433,15 @@ class AgentNextActionServiceTest {
     AgentResponse response = new AgentNextActionService().getNextAction(
         new AgentNextActionService.NextActionRequest(controlRoot, "codex", "completed-reviewer"));
 
-    assertEquals(AgentStatus.READY, response.status());
-    assertEquals(AgentReason.VALIDATION_REQUIRED, response.reason());
-    assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
-    Map<String, Object> result = (Map<String, Object>) response.result();
-    assertEquals(Boolean.TRUE, result.get("reviewOnly"));
-    List<Map<String, Object>> reviewActions = (List<Map<String, Object>>) result.get(
-        "reviewActions");
-    assertEquals(1, reviewActions.size());
-    assertEquals("REVIEW_ADMISSION_REQUIRED",
-        reviewActions.getFirst()
-            .get("state"));
-    Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
-    assertEquals("request_coordination", workflow.get("recommendedTool"));
-    Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
-    assertEquals("work_group_join", arguments.get("kind"));
-    Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
-    assertEquals(ownerClaim.intent()
-        .workGroupId()
-        .toString(), payload.get("workGroupId"));
-    assertEquals(ownerClaim.intent()
-        .intentId()
-        .toString(), payload.get("intentId"));
-
-    var request = collaboration.request(controlRoot, "codex", "completed-reviewer",
-        ownerClaim.intent()
-            .intentId(),
-        org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW,
-        "Review the sibling immutable snapshot");
-    assertEquals(WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()),
-        request.target());
-
-    AgentResponse pending = new AgentNextActionService().getNextAction(
-        new AgentNextActionService.NextActionRequest(controlRoot, "codex", "completed-reviewer"));
-    assertEquals(AgentStatus.WAITING, pending.status());
-    assertEquals(AgentReason.OWNER_RESPONSE_PENDING, pending.reason());
-    assertEquals(AgentNextAction.WAIT, pending.nextAction());
-    Map<String, Object> pendingResult = (Map<String, Object>) pending.result();
-    assertEquals(Boolean.TRUE, pendingResult.get("reviewRequestPending"));
-    Map<String, Object> pendingRequest = (Map<String, Object>) pendingResult.get("reviewRequest");
-    assertEquals(request.requestId()
-        .toString(), pendingRequest.get("requestId"));
-    assertEquals("get_next_action",
-        ((Map<String, Object>) pendingResult.get("workflow")).get("recommendedTool"));
+    assertEquals(AgentStatus.WAITING, response.status(), response.toJson());
+    assertEquals(AgentNextAction.WAIT, response.nextAction(), response.toJson());
+    assertFalse(response.toJson().contains("REVIEW_ADMISSION_REQUIRED"), response.toJson());
+    assertEquals("COMPLETED", bindings.find(location, "codex", "completed-reviewer")
+        .orElseThrow().status());
+    assertEquals(WorkIntent.Status.ANNOUNCED,
+        new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+            location.projectId()).collaborationProjection()
+            .intent(ownerClaim.intent().intentId()).orElseThrow().status());
 
     AgentResponse mutation = new org.synesis.workspace.application.workspace.WorkspacePatchService().applyPatch(
         new org.synesis.workspace.application.workspace.WorkspacePatchService.PatchRequest(

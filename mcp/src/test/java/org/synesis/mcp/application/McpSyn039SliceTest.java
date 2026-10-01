@@ -28,6 +28,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
 
 /**
  * Locks the SYN-039 reviewer and integration evidence boundaries.
@@ -88,6 +89,14 @@ final class McpSyn039SliceTest {
         .workGroupId(),
         claim.intent()
             .intentId());
+    var reviewerIntent = new WorkspaceCollaborationService().announce(project, "codex",
+        "syn039-reviewer-publication", "Review Todo",
+        "Review the completed Todo snapshot",
+        List.of(ResourceSelector.pathExact("review-report.md")), ids.groupId,
+        WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("todo.py")));
+    if (!reviewerIntent.acquired()) {
+      throw new IllegalStateException("reviewer intent was not acquired");
+    }
     McpProtocolHandler owner = new McpProtocolHandler(sessions, project, "codex",
         "syn039-owner-publication");
     McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex",
@@ -118,7 +127,74 @@ final class McpSyn039SliceTest {
             + "\"claimEpoch\":" + grant.get("claimEpoch") + ","
             + "\"targetParticipant\":\"" + grant.get("targetParticipant") + "\"}}"));
     return new ReviewFixture(project, Path.of(ownerBinding.worktreePath()), owner, reviewer,
-        ids.groupId, ids.intentId);
+        ids.groupId, ids.intentId, reviewerIntent.intent().intentId());
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String publishOwnerCandidate(ReviewFixture fixture) throws Exception {
+    Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
+        "def add_todo(items, item):\n    return [*items, item]\n\n"
+            + "def remove_todo(items, item):\n"
+            + "    return [value for value in items if value != item]\n");
+    Map<String, Object> projection = innerResult(fixture.owner.handleMessage(toolCall(
+        "get_next_action", "{\"completionRequested\":true}")));
+    assertEquals("snapshot_publication_required", projection.get("reason"),
+        projection.toString());
+    Map<String, Object> result = (Map<String, Object>) projection.get("result");
+    Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+    Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+    Map<String, Object> published = innerResult(fixture.owner.handleMessage(toolCall("finish_lane",
+        ProviderJson.write(arguments))));
+    assertEquals("waiting", published.get("status"), published.toString());
+    Map<String, Object> publishedResult = (Map<String, Object>) published.get("result");
+    assertEquals("REVIEW_PENDING", publishedResult.get("snapshotState"), published.toString());
+    return String.valueOf(publishedResult.get("snapshotId"));
+  }
+
+  private static McpProtocolHandler independentReviewer(Path project, String connectionId,
+      UUID workGroupId, String reviewTarget) throws Exception {
+    AgentSessionService sessions = new AgentSessionService();
+    sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        project, "codex", connectionId, null, false));
+    var location = new ProjectApplicationService().locate(project);
+    var bindings = new ProviderSessionBindingService();
+    var binding = bindings.find(location, "codex", connectionId).orElseThrow();
+    if (binding.worktreePath() == null) {
+      throw new IllegalStateException("reviewer worktree was not assigned");
+    }
+    bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(),
+        Path.of(binding.worktreePath()));
+    var intent = new WorkspaceCollaborationService().announce(project, "codex", connectionId,
+        "Review the independent artifact", "Publish an independent review report",
+        List.of(ResourceSelector.pathExact("independent-review-report.md")), workGroupId,
+        WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact(reviewTarget)));
+    if (!intent.acquired()) {
+      throw new IllegalStateException("independent reviewer intent was not acquired");
+    }
+    return new McpProtocolHandler(sessions, project, "codex", connectionId);
+  }
+
+  private static ProducerLane independentProducer(Path project, String connectionId,
+      UUID workGroupId, String claimPath) throws Exception {
+    AgentSessionService sessions = new AgentSessionService();
+    sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        project, "codex", connectionId, null, false));
+    var location = new ProjectApplicationService().locate(project);
+    var bindings = new ProviderSessionBindingService();
+    var binding = bindings.find(location, "codex", connectionId).orElseThrow();
+    if (binding.worktreePath() == null) {
+      throw new IllegalStateException("producer worktree was not assigned");
+    }
+    Path worktree = Path.of(binding.worktreePath());
+    bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+    var intent = new WorkspaceCollaborationService().announce(project, "codex", connectionId,
+        "Publish the independent review artifact", "Publish the reviewer artifact snapshot",
+        List.of(ResourceSelector.pathExact(claimPath)), workGroupId);
+    if (!intent.acquired()) {
+      throw new IllegalStateException("independent producer intent was not acquired");
+    }
+    return new ProducerLane(new McpProtocolHandler(sessions, project, "codex", connectionId),
+        intent.intent().intentId(), worktree);
   }
 
   private static String toolCall(String name, String arguments) {
@@ -664,14 +740,6 @@ final class McpSyn039SliceTest {
   void completedLaneProjectsReciprocalReviewAdmissionWhileSiblingRemainsActive(
       @TempDir Path temp) throws Exception {
     ReviewFixture fixture = prepareReviewFixture(temp);
-    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-    var reviewerClaim = collaboration.announce(fixture.project, "codex",
-        "syn039-reviewer-publication", "Add Todo coverage",
-        "Publish and validate the reviewer snapshot",
-        List.of(ResourceSelector.pathExact("test_todo.py")));
-    assertEquals(fixture.groupId,
-        reviewerClaim.intent()
-            .workGroupId());
 
     Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
         "def add_todo(items, item):\n    return [*items, item]\n\n"
@@ -698,6 +766,42 @@ final class McpSyn039SliceTest {
   }
 
   @Test
+  void claimedDirtyProducerRecoversThroughPublicEnsureAndResumesCommands(@TempDir Path temp)
+      throws Exception {
+    ReviewFixture fixture = prepareReviewFixture(temp);
+    ProducerLane lane = independentProducer(fixture.project, "dirty-public-recovery",
+        fixture.groupId, "owned-notes.txt");
+    Map<String, Object> created = innerResult(lane.handler.handleMessage(toolCall("apply_patch",
+        ProviderJson.write(Map.of("path", "owned-notes.txt", "create", true,
+            "content", "unfinished producer work\n")))));
+    assertEquals("completed", created.get("status"), created.toString());
+    var location = new ProjectApplicationService().locate(fixture.project);
+    var bindings = new ProviderSessionBindingService();
+    var before = bindings.find(location, "codex", "dirty-public-recovery").orElseThrow();
+    Files.writeString(fixture.project.resolve("peer.txt"), "integrated peer\n");
+    git(fixture.project, "add", "peer.txt");
+    git(fixture.project, "commit", "-m", "integrate peer");
+    Map<String, Object> ensured = innerResult(lane.handler.handleMessage(
+        toolCall("ensure_session", "{}")));
+    assertEquals("ready", ensured.get("status"), ensured.toString());
+    var after = bindings.find(location, "codex", "dirty-public-recovery").orElseThrow();
+    assertEquals(before.sessionId(), after.sessionId());
+    assertNotEquals(before.worktreePath(), after.worktreePath());
+    assertEquals("unfinished producer work\n", Files.readString(
+        Path.of(after.worktreePath()).resolve("owned-notes.txt")));
+    assertEquals("unfinished producer work\n", Files.readString(
+        Path.of(before.worktreePath()).resolve("owned-notes.txt")));
+    Map<String, Object> resumed = innerResult(lane.handler.handleMessage(toolCall("run_command",
+        "{\"argv\":[\"git\",\"status\",\"--porcelain\"]}")));
+    assertEquals("completed", resumed.get("status"), resumed.toString());
+    Map<String, Object> repeated = innerResult(lane.handler.handleMessage(
+        toolCall("ensure_session", "{}")));
+    assertEquals("ready", repeated.get("status"), repeated.toString());
+    assertEquals(after.worktreePath(), bindings.find(location, "codex", "dirty-public-recovery")
+        .orElseThrow().worktreePath());
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void reviewerRecoveryPreservesConsumedGrantAfterControlCheckoutAdvances(@TempDir Path temp)
       throws Exception {
@@ -717,8 +821,8 @@ final class McpSyn039SliceTest {
 
     Map<String, Object> stale = innerResult(
         fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
-    assertEquals("workspace_stale", stale.get("reason"), stale.toString());
-    assertEquals("ensure_session", stale.get("nextAction"), stale.toString());
+    assertEquals("validation_required", stale.get("reason"), stale.toString());
+    assertEquals("review_decision", stale.get("nextAction"), stale.toString());
 
     Map<String, Object> ensured = innerResult(
         fixture.reviewer.handleMessage(toolCall("ensure_session", "{}")));
@@ -727,6 +831,14 @@ final class McpSyn039SliceTest {
         .orElseThrow();
     assertEquals(before.sessionId(), after.sessionId());
     assertNotEquals(before.worktreePath(), after.worktreePath(), after.toString());
+
+    Map<String, Object> repeatedEnsure = innerResult(
+        fixture.reviewer.handleMessage(toolCall("ensure_session", "{}")));
+    assertEquals("ready", repeatedEnsure.get("status"), repeatedEnsure.toString());
+    var repeatedBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
+        .orElseThrow();
+    assertEquals(after.sessionId(), repeatedBinding.sessionId());
+    assertEquals(after.worktreePath(), repeatedBinding.worktreePath());
 
     Map<String, Object> validation = innerResult(
         fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
@@ -763,7 +875,8 @@ final class McpSyn039SliceTest {
 
     Map<String, Object> stale = innerResult(
         fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
-    assertEquals("workspace_stale", stale.get("reason"), stale.toString());
+    assertEquals("validation_required", stale.get("reason"), stale.toString());
+    assertEquals("review_decision", stale.get("nextAction"), stale.toString());
     Map<String, Object> ensured = innerResult(
         fixture.reviewer.handleMessage(toolCall("ensure_session", "{}")));
     assertEquals("ready", ensured.get("status"), ensured.toString());
@@ -806,7 +919,7 @@ final class McpSyn039SliceTest {
     var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
         .orElseThrow();
     Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
-    Path legitimateReviewerChange = reviewerWorktree.resolve("reviewer-notes.txt");
+    Path legitimateReviewerChange = reviewerWorktree.resolve("review-report.md");
     Files.writeString(legitimateReviewerChange, "review before integration\n");
 
     appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
@@ -852,7 +965,7 @@ final class McpSyn039SliceTest {
     var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
         .orElseThrow();
     Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
-    Path reviewerWork = reviewerWorktree.resolve("reviewer-notes.txt");
+    Path reviewerWork = reviewerWorktree.resolve("review-report.md");
     Files.writeString(reviewerWork, "legitimate review notes\n");
 
     appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
@@ -929,24 +1042,12 @@ final class McpSyn039SliceTest {
   void dirtyParticipantReceivesPendingReviewAcceptanceAfterControlCheckoutAdvances(
       @TempDir Path temp) throws Exception {
     ReviewFixture fixture = prepareReviewFixture(temp);
-    var location = new ProjectApplicationService().locate(fixture.project);
-    var bindings = new ProviderSessionBindingService();
-    var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
-        .orElseThrow();
-    Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+    ProducerLane reviewerClaim = independentProducer(fixture.project,
+        "syn039-reviewer-artifact", fixture.groupId, "reviewer-notes.txt");
+    Path reviewerWorktree = reviewerClaim.worktreePath();
     WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-
-    // Keep the reviewer intent active before accepting the owner's snapshot.
-    // A new intent must not be appended to a WorkGroup after that group has
-    // reached a terminal state; the active sibling is the existing-model
-    // continuation this fixture is intended to exercise.
-    var reviewerClaim = collaboration.announce(fixture.project, "codex",
-        "syn039-reviewer-publication", "Add reviewer regression coverage",
-        "Publish the reviewer test snapshot after owner admission",
-        List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
-    assertEquals(fixture.groupId,
-        reviewerClaim.intent()
-            .workGroupId());
+    McpProtocolHandler independentReviewer = independentReviewer(fixture.project,
+        "syn039-owner-reviewer", fixture.groupId, "reviewer-notes.txt");
 
     appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
         currentParticipant(fixture.project));
@@ -964,11 +1065,10 @@ final class McpSyn039SliceTest {
         "respond_coordination", ProviderJson.write(validationArguments)));
     assertTrue(accepted.contains("ACCEPTED"), accepted);
 
-    String reviewRequest = fixture.owner.handleMessage(toolCall("request_coordination",
+    String reviewRequest = independentReviewer.handleMessage(toolCall("request_coordination",
         "{\"kind\":\"work_group_join\",\"payload\":{"
             + "\"workGroupId\":\"" + fixture.groupId + "\","
-            + "\"intentId\":\"" + reviewerClaim.intent()
-            .intentId() + "\","
+            + "\"intentId\":\"" + reviewerClaim.intentId() + "\","
             + "\"proposal\":\"Review the reviewer snapshot\"}}"));
     String requestId = nestedField(reviewRequest);
     assertNotNull(requestId, reviewRequest);
@@ -980,7 +1080,7 @@ final class McpSyn039SliceTest {
     git(fixture.project, "commit", "-m", "integrated snapshot");
 
     Map<String, Object> next = innerResult(
-        fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        reviewerClaim.handler().handleMessage(toolCall("get_next_action", "{}")));
     assertEquals("owner_request_pending", next.get("reason"), next.toString());
     assertEquals("respond_coordination", next.get("nextAction"), next.toString());
     Map<String, Object> result = (Map<String, Object>) next.get("result");
@@ -998,18 +1098,12 @@ final class McpSyn039SliceTest {
   void activeImplementerCanContinueBeforeReciprocalReviewerConsumesGrant(
       @TempDir Path temp) throws Exception {
     ReviewFixture fixture = prepareReviewFixture(temp);
-    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-    var reviewerClaim = collaboration.announce(fixture.project, "codex",
-        "syn039-reviewer-publication", "Add reviewer regression coverage",
-        "Publish the reviewer test snapshot after owner admission",
-        List.of(ResourceSelector.pathExact("reviewer-notes.txt")));
-    assertEquals(fixture.groupId,
-        reviewerClaim.intent()
-            .workGroupId());
+    ProducerLane reviewerClaim = independentProducer(fixture.project,
+        "syn039-reviewer-artifact", fixture.groupId, "reviewer-notes.txt");
+    McpProtocolHandler independentReviewer = independentReviewer(fixture.project,
+        "syn039-owner-reviewer", fixture.groupId, "reviewer-notes.txt");
 
-    appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
-        currentParticipant(fixture.project));
-    collaboration.release(fixture.project, "codex", "syn039-owner-publication");
+    publishOwnerCandidate(fixture);
 
     Map<String, Object> validation = innerResult(
         fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
@@ -1024,16 +1118,15 @@ final class McpSyn039SliceTest {
         "respond_coordination", ProviderJson.write(validationArguments)));
     assertTrue(accepted.contains("ACCEPTED"), accepted);
 
-    String reviewRequest = fixture.owner.handleMessage(toolCall("request_coordination",
+    String reviewRequest = independentReviewer.handleMessage(toolCall("request_coordination",
         "{\"kind\":\"work_group_join\",\"payload\":{"
             + "\"workGroupId\":\"" + fixture.groupId + "\","
-            + "\"intentId\":\"" + reviewerClaim.intent()
-            .intentId() + "\","
+            + "\"intentId\":\"" + reviewerClaim.intentId() + "\","
             + "\"proposal\":\"Review the reviewer snapshot\"}}"));
     assertNotNull(nestedField(reviewRequest), reviewRequest);
 
     Map<String, Object> ownerRequest = innerResult(
-        fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        reviewerClaim.handler().handleMessage(toolCall("get_next_action", "{}")));
     Map<String, Object> ownerRequestResult = (Map<String, Object>) ownerRequest.get("result");
     Map<String, Object> ownerRequestWorkflow =
         (Map<String, Object>) ownerRequestResult.get("workflow");
@@ -1041,21 +1134,19 @@ final class McpSyn039SliceTest {
         (Map<String, Object>) ownerRequestWorkflow.get("arguments");
     assertEquals("respond_coordination", ownerRequestWorkflow.get("recommendedTool"),
         ownerRequestWorkflow.toString());
-    String ownerAccepted = fixture.reviewer.handleMessage(toolCall(
+    String ownerAccepted = reviewerClaim.handler().handleMessage(toolCall(
         "respond_coordination", ProviderJson.write(responseArguments)));
     assertTrue(ownerAccepted.contains("ACCEPTED"), ownerAccepted);
 
     Map<String, Object> continuation = innerResult(
-        fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        reviewerClaim.handler().handleMessage(toolCall("get_next_action", "{}")));
     assertEquals("ready", continuation.get("status"), continuation.toString());
     assertFalse(continuation.containsKey("nextAction"), continuation.toString());
     assertFalse(continuation.containsKey("reason"), continuation.toString());
     Map<String, Object> continuationResult = (Map<String, Object>) continuation.get("result");
     Map<String, Object> currentIntent =
         (Map<String, Object>) continuationResult.get("currentIntent");
-    assertEquals(reviewerClaim.intent()
-            .intentId()
-            .toString(), currentIntent.get("intentId"),
+    assertEquals(reviewerClaim.intentId().toString(), currentIntent.get("intentId"),
         continuation.toString());
     assertFalse(continuationResult.containsKey("reviewGrantPending"), continuation.toString());
     Map<String, Object> workflow = (Map<String, Object>) continuationResult.get("workflow");
@@ -1184,13 +1275,7 @@ final class McpSyn039SliceTest {
   void acceptedReviewDoesNotReprojectAdmissionForActiveReviewerLane(@TempDir Path temp)
       throws Exception {
     ReviewFixture fixture = prepareReviewFixture(temp);
-    WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-    collaboration.announce(fixture.project, "codex", "syn039-reviewer-publication",
-        "Add the review regression", "Publish the reviewer test snapshot",
-        List.of(ResourceSelector.pathExact("test_todo.py")), fixture.groupId);
-
-    appendReviewableSnapshot(fixture.project, new UUIDs(fixture.groupId, fixture.intentId),
-        currentParticipant(fixture.project));
+    String snapshotId = publishOwnerCandidate(fixture);
     Map<String, Object> validation = innerResult(fixture.reviewer.handleMessage(
         toolCall("get_next_action", "{}")));
     Map<String, Object> validationResult = (Map<String, Object>) validation.get("result");
@@ -1205,6 +1290,17 @@ final class McpSyn039SliceTest {
         ProviderJson.write(arguments)));
     assertTrue(accepted.contains("ACCEPTED"), accepted);
 
+    assertEquals(snapshotId, payload.get("snapshotId"));
+    var location = new ProjectApplicationService().locate(fixture.project);
+    var replayedStore = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    assertEquals("REVIEW_ACCEPTED", replayedStore.taskCompletionProjection()
+        .snapshotState(snapshotId).orElseThrow().name());
+    var recordedDecision = replayedStore.workGroupProjection()
+        .reviewValidationForSnapshot(snapshotId).orElseThrow();
+    assertEquals(String.valueOf(payload.get("grantId")), recordedDecision.grantId().toString());
+    assertEquals("ACCEPTED", recordedDecision.result());
+
     Map<String, Object> afterAcceptance = innerResult(fixture.reviewer.handleMessage(
         toolCall("get_next_action", "{}")));
     assertEquals("ready", afterAcceptance.get("status"), afterAcceptance.toString());
@@ -1214,6 +1310,289 @@ final class McpSyn039SliceTest {
     assertFalse(afterResult.toString()
         .contains("REVIEW_ADMISSION_REQUIRED"), afterResult.toString());
     assertTrue(((List<?>) afterResult.get("reviewActions")).isEmpty(), afterResult.toString());
+    List<Map<String, Object>> snapshots = (List<Map<String, Object>>) afterResult.get("snapshots");
+    Map<String, Object> projectedSnapshot = snapshots.stream()
+        .filter(candidate -> snapshotId.equals(candidate.get("snapshotId")))
+        .findFirst().orElseThrow();
+    Map<String, Object> projectedDecision =
+        (Map<String, Object>) projectedSnapshot.get("reviewDecision");
+    assertEquals(snapshotId, projectedDecision.get("snapshotId"));
+    assertEquals(String.valueOf(payload.get("grantId")), projectedDecision.get("grantId"));
+    assertEquals("ACCEPTED", projectedDecision.get("result"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void acceptedReviewSurvivesReviewerRecoveryWithoutDuplicateReview(@TempDir Path temp)
+      throws Exception {
+    ReviewFixture fixture = prepareReviewFixture(temp);
+    String snapshotId = publishOwnerCandidate(fixture);
+
+    Map<String, Object> review = innerResult(fixture.reviewer.handleMessage(
+        toolCall("get_next_action", "{}")));
+    Map<String, Object> reviewResult = (Map<String, Object>) review.get("result");
+    Map<String, Object> reviewPayload = new LinkedHashMap<>(
+        (Map<String, Object>) reviewResult.get("nextProtocolPayload"));
+    reviewPayload.put("result", "accepted");
+    Map<String, Object> reviewArguments = new LinkedHashMap<>();
+    reviewArguments.put("kind", "review_validation");
+    reviewArguments.put("payload", reviewPayload);
+    String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+        ProviderJson.write(reviewArguments)));
+    assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+    assertEquals(snapshotId, reviewPayload.get("snapshotId"));
+    UUID reviewGrantId = UUID.fromString(String.valueOf(reviewPayload.get("grantId")));
+    var location = new ProjectApplicationService().locate(fixture.project);
+    var bindings = new ProviderSessionBindingService();
+    var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
+        .orElseThrow();
+    Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+    Files.writeString(reviewerWorktree.resolve("review-report.md"),
+        "The immutable candidate was accepted before reviewer recovery.\n");
+
+    RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location,
+        reviewerBinding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    String formerParticipant = WorkspaceCollaborationService.participantHandle(
+        reviewerBinding.sessionId());
+    var lifecycle = new org.synesis.coordination.application.WorkIntentService(store, identity);
+    lifecycle.suspend(formerParticipant);
+    lifecycle.holdRecovery(formerParticipant,
+        recovery.root() + "#" + recovery.contentHash());
+
+    var replayed = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId());
+    assertEquals("REVIEW_ACCEPTED", replayed.taskCompletionProjection()
+        .snapshotState(snapshotId).orElseThrow().name());
+    assertEquals("ACCEPTED", replayed.workGroupProjection()
+        .reviewValidationForSnapshot(snapshotId).orElseThrow().result());
+
+    String successorConnection = "syn039-review-successor";
+    AgentSessionService successorSessions = new AgentSessionService();
+    successorSessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        fixture.project, "codex", successorConnection, null, false));
+    var successorBinding = bindings.find(location, "codex", successorConnection).orElseThrow();
+    bindings.verifyWorkspaceTrust(location, "codex", successorBinding.sessionId(),
+        Path.of(successorBinding.worktreePath()));
+    McpProtocolHandler successor = new McpProtocolHandler(successorSessions, fixture.project,
+        "codex", successorConnection);
+
+    Map<String, Object> discovery = innerResult(successor.handleMessage(
+        toolCall("get_next_action", "{}")));
+    Map<String, Object> discoveryResult = (Map<String, Object>) discovery.get("result");
+    assertEquals("request_coordination", discovery.get("nextAction"), discovery.toString());
+    assertEquals("continuation", discoveryResult.get("nextProtocolKind"));
+    assertTrue(((List<?>) discoveryResult.get("reviewActions")).isEmpty(), discovery.toString());
+    assertTrue(((List<?>) discoveryResult.get("reviewCandidates")).isEmpty(), discovery.toString());
+    List<Map<String, Object>> snapshots = (List<Map<String, Object>>) discoveryResult.get(
+        "snapshots");
+    Map<String, Object> projectedSnapshot = snapshots.stream()
+        .filter(candidate -> snapshotId.equals(candidate.get("snapshotId")))
+        .findFirst().orElseThrow();
+    assertEquals("INTEGRATED", projectedSnapshot.get("snapshotState"));
+    Map<String, Object> decision = (Map<String, Object>) projectedSnapshot.get("reviewDecision");
+    assertEquals(reviewGrantId.toString(), decision.get("grantId"));
+    assertEquals(snapshotId, decision.get("snapshotId"));
+    assertEquals("ACCEPTED", decision.get("result"));
+
+    Map<String, Object> continuationArguments = new LinkedHashMap<>();
+    continuationArguments.put("kind", discoveryResult.get("nextProtocolKind"));
+    continuationArguments.put("payload", discoveryResult.get("nextProtocolPayload"));
+    Map<String, Object> continued = innerResult(successor.handleMessage(toolCall(
+        "request_coordination", ProviderJson.write(continuationArguments))));
+    assertEquals("completed", continued.get("status"), continued.toString());
+    Map<String, Object> continuationResult = (Map<String, Object>) continued.get("result");
+    assertEquals("CONTINUED", continuationResult.get("status"), continued.toString());
+
+    var afterContinuation = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    assertFalse(afterContinuation.workGroupProjection().grantSuperseded(reviewGrantId));
+    assertTrue(afterContinuation.workGroupProjection()
+        .reviewValidationForGrant(reviewGrantId).isPresent());
+    assertEquals(1, afterContinuation.workGroupProjection().grants().stream()
+        .filter(grant -> reviewGrantId.equals(grant.grantId())).count());
+
+    assertTrue(Files.exists(Path.of(successorBinding.worktreePath()).resolve("review-report.md")));
+    Map<String, Object> publication = innerResult(successor.handleMessage(toolCall(
+        "get_next_action", "{\"completionRequested\":true}")));
+    assertEquals("snapshot_publication_required", publication.get("reason"),
+        publication.toString());
+    Map<String, Object> publicationResult = (Map<String, Object>) publication.get("result");
+    Map<String, Object> workflow = (Map<String, Object>) publicationResult.get("workflow");
+    Map<String, Object> finishArguments = (Map<String, Object>) workflow.get("arguments");
+    Map<String, Object> completed = innerResult(successor.handleMessage(toolCall("finish_lane",
+        ProviderJson.write(finishArguments))));
+    assertEquals("completed", completed.get("status"), completed.toString());
+    assertEquals("COMPLETED", new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId())
+            .workGroupProjection().group(fixture.groupId).orElseThrow().status().name());
+    assertEquals("ACCEPTED", new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId())
+            .workGroupProjection().reviewValidationForSnapshot(snapshotId).orElseThrow().result());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void reviewerEnsureSessionRequiresAClaimBeforeAdmission(@TempDir Path temp) throws Exception {
+    ReviewFixture fixture = prepareReviewFixture(temp);
+    String connectionId = "syn039-claimless-reviewer";
+    AgentSessionService sessions = new AgentSessionService();
+    sessions.ensureSession(new AgentSessionService.SessionResolutionRequest(
+        fixture.project, "codex", connectionId, null, false));
+    McpProtocolHandler reviewer = new McpProtocolHandler(sessions, fixture.project, "codex",
+        connectionId);
+    Map<String, Object> task = new LinkedHashMap<>();
+    task.put("goal", "Review the Todo snapshot");
+    task.put("acceptance", "Publish an independent review report");
+    task.put("workGroupId", fixture.groupId.toString());
+    task.put("role", "reviewer");
+    task.put("reviewTargets", List.of(Map.of("kind", "path_exact", "path", "todo.py")));
+    task.put("claims", List.of());
+
+    Map<String, Object> blocked = innerResult(reviewer.handleMessage(toolCall("ensure_session",
+        ProviderJson.write(Map.of("refresh", true, "task", task)))));
+    assertEquals("blocked", blocked.get("status"), blocked.toString());
+    assertEquals("REVIEW_CLAIM_REQUIRED", ((Map<String, Object>) blocked.get("result"))
+        .get("reason"), blocked.toString());
+
+    var location = new ProjectApplicationService().locate(fixture.project);
+    var binding = new ProviderSessionBindingService().find(location, "codex", connectionId)
+        .orElseThrow();
+    PredictionEventStore store = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    assertTrue(store.collaborationProjection().activeIntents().stream()
+        .noneMatch(intent -> intent.participant().equals(participant)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void reviewerOwnedArtifactCompletesThroughPublishIntegrationAndGroupClosure(
+      @TempDir Path temp) throws Exception {
+    ReviewFixture fixture = prepareReviewFixture(temp);
+    var location = new ProjectApplicationService().locate(fixture.project);
+    var bindings = new ProviderSessionBindingService();
+    var reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
+        .orElseThrow();
+    Path reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+    UUID reviewerIntentId = fixture.reviewerIntentId;
+    Files.writeString(fixture.ownerWorktree.resolve("todo.py"),
+        "def add_todo(items, item):\n"
+            + "    return [*items, item]\n\n"
+            + "def remove_todo(items, item):\n"
+            + "    return [value for value in items if value != item]\n");
+
+    Map<String, Object> ownerProjection = innerResult(fixture.owner.handleMessage(
+        toolCall("get_next_action", "{\"completionRequested\":true}")));
+    assertEquals("snapshot_publication_required", ownerProjection.get("reason"),
+        ownerProjection.toString());
+    Map<String, Object> ownerWorkflow = (Map<String, Object>) ((Map<String, Object>)
+        ownerProjection.get("result")).get("workflow");
+    Map<String, Object> ownerFinish = (Map<String, Object>) ownerWorkflow.get("arguments");
+    Map<String, Object> ownerPublished = innerResult(fixture.owner.handleMessage(
+        toolCall("finish_lane", ProviderJson.write(ownerFinish))));
+    assertEquals("waiting", ownerPublished.get("status"), ownerPublished.toString());
+    assertEquals("REVIEW_PENDING",
+        ((Map<String, Object>) ownerPublished.get("result")).get("snapshotState"),
+        ownerPublished.toString());
+    String ownerSnapshotId = String.valueOf(
+        ((Map<String, Object>) ownerPublished.get("result")).get("snapshotId"));
+
+    Map<String, Object> reviewProjection = innerResult(fixture.reviewer.handleMessage(
+        toolCall("get_next_action", "{}")));
+    assertEquals("review_decision", reviewProjection.get("nextAction"),
+        reviewProjection.toString());
+    Map<String, Object> reviewResult = (Map<String, Object>) reviewProjection.get("result");
+    Map<String, Object> reviewPayload = new LinkedHashMap<>(
+        (Map<String, Object>) reviewResult.get("nextProtocolPayload"));
+    reviewPayload.put("result", "accepted");
+    Map<String, Object> reviewArguments = new LinkedHashMap<>();
+    reviewArguments.put("kind", "review_validation");
+    reviewArguments.put("payload", reviewPayload);
+    String accepted = fixture.reviewer.handleMessage(toolCall("respond_coordination",
+        ProviderJson.write(reviewArguments)));
+    assertTrue(accepted.contains("ACCEPTED"), accepted);
+
+    // Integration may converge immediately after the decision, before the reviewer finishes
+    // the separately claimed report lane.  The later publication projection must still work.
+    innerResult(fixture.owner.handleMessage(toolCall("get_next_action", "{}")));
+    PredictionEventStore integratedBeforeReport = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    assertEquals("INTEGRATED", integratedBeforeReport.taskCompletionProjection()
+        .snapshotState(ownerSnapshotId).orElseThrow().name());
+    assertEquals("ACCEPTED", integratedBeforeReport.workGroupProjection()
+        .reviewValidationForSnapshot(ownerSnapshotId).orElseThrow().result());
+    assertEquals("ACTIVE", integratedBeforeReport.workGroupProjection()
+        .group(fixture.groupId).orElseThrow().status().name());
+    String reviewerIntentBaseCommit = integratedBeforeReport.collaborationProjection()
+        .intent(reviewerIntentId).orElseThrow().baseCommit();
+
+    Map<String, Object> refreshedReviewer = innerResult(fixture.reviewer.handleMessage(
+        toolCall("ensure_session", "{\"refresh\":true}")));
+    assertEquals("ready", refreshedReviewer.get("status"), refreshedReviewer.toString());
+    reviewerBinding = bindings.find(location, "codex", "syn039-reviewer-publication")
+        .orElseThrow();
+    reviewerWorktree = Path.of(reviewerBinding.worktreePath());
+    String reviewerAssignedBaseCommit = reviewerBinding.baseCommit();
+    assertNotEquals(reviewerIntentBaseCommit, reviewerBinding.baseCommit(),
+        "refresh should expose the stale intent/worktree baseline mismatch");
+
+    Map<String, Object> unclaimedCreate = innerResult(fixture.reviewer.handleMessage(
+        toolCall("apply_patch", ProviderJson.write(Map.of(
+            "path", "unclaimed-review-notes.md",
+            "create", true,
+            "content", "This path is outside the active reviewer claim.\n")))));
+    assertNotEquals("completed", unclaimedCreate.get("status"), unclaimedCreate.toString());
+    assertFalse(Files.exists(reviewerWorktree.resolve("unclaimed-review-notes.md")));
+
+    Map<String, Object> reportCreate = innerResult(fixture.reviewer.handleMessage(
+        toolCall("apply_patch", ProviderJson.write(Map.of(
+            "path", "review-report.md",
+            "create", true,
+            "content", "Independent review: accepted.\n")))));
+    assertEquals("completed", reportCreate.get("status"), reportCreate.toString());
+    assertTrue(Files.exists(reviewerWorktree.resolve("review-report.md")));
+    PredictionEventStore reportPending = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    assertEquals("ACTIVE", reportPending.workGroupProjection().group(fixture.groupId)
+        .orElseThrow().status().name());
+    Map<String, Object> reviewerProjection = innerResult(fixture.reviewer.handleMessage(
+        toolCall("get_next_action", "{\"completionRequested\":true}")));
+    assertEquals("snapshot_publication_required", reviewerProjection.get("reason"),
+        reviewerProjection.toString());
+    Map<String, Object> reviewerWorkflow = (Map<String, Object>) ((Map<String, Object>)
+        reviewerProjection.get("result")).get("workflow");
+    Map<String, Object> reviewerFinish = (Map<String, Object>) reviewerWorkflow.get("arguments");
+    assertEquals(reviewerIntentId.toString(), reviewerFinish.get("intentId"));
+    Map<String, Object> reviewerCompleted = innerResult(fixture.reviewer.handleMessage(
+        toolCall("finish_lane", ProviderJson.write(reviewerFinish))));
+    assertEquals("completed", reviewerCompleted.get("status"), reviewerCompleted.toString());
+    assertEquals("integrated",
+        ((Map<String, Object>) reviewerCompleted.get("result")).get("integrationState"),
+        reviewerCompleted.toString());
+
+    PredictionEventStore completedStore = new PredictionEventStore(
+        location.root().resolve(".synesis/coordination"), location.projectId());
+    assertTrue(completedStore.collaborationProjection().activeIntents().isEmpty(),
+        completedStore.collaborationProjection().activeIntents().toString());
+    assertEquals("COMPLETED", completedStore.workGroupProjection().group(fixture.groupId)
+        .orElseThrow().status().name());
+    assertEquals(2, completedStore.taskCompletionProjection().allSnapshots().size());
+    assertTrue(completedStore.taskCompletionProjection().allSnapshots().stream().allMatch(snapshot ->
+        "INTEGRATED".equals(completedStore.taskCompletionProjection()
+            .snapshotState(snapshot.snapshotId())
+            .orElseThrow().name())));
+    var reviewerSnapshot = completedStore.taskCompletionProjection().allSnapshots().stream()
+        .filter(snapshot -> snapshot.provenance().laneId().equals(reviewerIntentId))
+        .findFirst()
+        .orElseThrow();
+    assertEquals(List.of("review-report.md"), reviewerSnapshot.changedPaths());
+    assertEquals(reviewerAssignedBaseCommit, reviewerSnapshot.baseCommit());
+    assertTrue(Files.exists(fixture.project.resolve("review-report.md")));
   }
 
   /**
@@ -1227,7 +1606,12 @@ final class McpSyn039SliceTest {
    * Holds the owner and review-side handlers for snapshot admission tests.
    */
   private record ReviewFixture(Path project, Path ownerWorktree, McpProtocolHandler owner,
-                               McpProtocolHandler reviewer, UUID groupId, UUID intentId) {
+                               McpProtocolHandler reviewer, UUID groupId, UUID intentId,
+                               UUID reviewerIntentId) {
+
+  }
+
+  private record ProducerLane(McpProtocolHandler handler, UUID intentId, Path worktreePath) {
 
   }
 }

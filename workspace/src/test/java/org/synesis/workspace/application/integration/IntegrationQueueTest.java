@@ -10,11 +10,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -128,6 +131,7 @@ class IntegrationQueueTest {
         .orchestrateIntegration(root, store, identity)
         .status();
     assertEquals(AgentStatus.COMPLETED, status);
+    store = new PredictionEventStore(store.rootDirectory(), store.projectId());
     assertEquals(TaskCompletionState.INTEGRATION_BLOCKED,
         store.taskCompletionProjection()
             .taskState(badTask));
@@ -142,6 +146,81 @@ class IntegrationQueueTest {
     assertTrue(store.taskCompletionProjection()
         .eligibleSnapshots()
         .isEmpty());
+  }
+
+  @Test
+  void readySnapshotsFromOneWorkGroupShareTheIntegrationGate(@TempDir Path root) throws Exception {
+    git(root, "init");
+    git(root, "config", "user.name", "Test");
+    git(root, "config", "user.email", "test@example.invalid");
+    Files.writeString(root.resolve("README.md"), "base\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "base");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    String base = gitOutput(root, "rev-parse", "HEAD");
+    String modelCommit = commitFile(root, base, "src/model.py", "model\n", "model");
+    String testCommit = commitFile(root, base, "tests/test_model.py", "test\n", "test");
+
+    NodeIdentity identity = new IdentityBootstrap(location.profile()
+        .resolve("link")).loadOrCreate()
+        .identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    UUID group = UUID.randomUUID();
+    UUID modelLane = UUID.randomUUID();
+    UUID testLane = UUID.randomUUID();
+    UUID modelTask = UUID.randomUUID();
+    UUID testTask = UUID.randomUUID();
+    new WorkIntentService(store, identity).announce(
+        new WorkIntent(modelLane, location.projectId(), "agt_model",
+            "codex", modelTask, "model", "model and tests integrate", base,
+            List.of(ResourceSelector.pathExact("src/model.py")), 1, group,
+            WorkIntent.Status.ANNOUNCED));
+    store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    new WorkIntentService(store, identity).announce(
+        new WorkIntent(testLane, location.projectId(), "agt_tests",
+            "codex", testTask, "tests", "model and tests integrate", base,
+            List.of(ResourceSelector.pathExact("tests/test_model.py")), 1, group,
+            WorkIntent.Status.ANNOUNCED));
+    store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+
+    publishSnapshot(store, identity, root, modelTask, "snap_group_model", modelLane, group,
+        modelCommit, "agt_model", "src/model.py", "PATH_EXACT:src/model.py", modelLane,
+        List.of());
+    store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    publishSnapshot(store, identity, root, testTask, "snap_group_test", testLane, group,
+        testCommit, "agt_tests", "tests/test_model.py", "PATH_EXACT:tests/test_model.py", testLane,
+        List.of());
+    store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+
+    PredictionEventStore staleCaller = new PredictionEventStore(store.rootDirectory(),
+        store.projectId());
+    AgentStatus status = new IntegrationOrchestrationService()
+        .orchestrateIntegration(root, store, identity)
+        .status();
+
+    assertEquals(AgentStatus.COMPLETED, status);
+    store = new PredictionEventStore(store.rootDirectory(), store.projectId());
+    assertEquals(TaskCompletionState.INTEGRATED,
+        store.taskCompletionProjection().taskState(modelTask));
+    assertEquals(TaskCompletionState.INTEGRATED,
+        store.taskCompletionProjection().taskState(testTask));
+    assertEquals("model", gitOutput(root, "show", "HEAD:src/model.py").trim());
+    assertEquals("test", gitOutput(root, "show", "HEAD:tests/test_model.py").trim());
+    long integratedEventCount = store.events().size();
+    assertEquals(AgentStatus.READY, new IntegrationOrchestrationService()
+        .orchestrateIntegration(root, staleCaller, identity).status());
+    var replayed = new PredictionEventStore(store.rootDirectory(), store.projectId());
+    assertEquals(integratedEventCount, replayed.events().size());
+    assertEquals(TaskCompletionState.INTEGRATED,
+        replayed.taskCompletionProjection().taskState(modelTask));
+    assertEquals(TaskCompletionState.INTEGRATED,
+        replayed.taskCompletionProjection().taskState(testTask));
   }
 
   @Test
@@ -223,6 +302,7 @@ class IntegrationQueueTest {
     assertEquals(AgentStatus.COMPLETED,
         service.orchestrateIntegration(root, store, identity)
             .status());
+    store = new PredictionEventStore(store.rootDirectory(), store.projectId());
     assertEquals(TaskCompletionState.INTEGRATION_PENDING,
         store.taskCompletionProjection()
             .taskState(dependentTask));
@@ -235,8 +315,74 @@ class IntegrationQueueTest {
     assertEquals(AgentStatus.COMPLETED,
         service.orchestrateIntegration(root, store, identity)
             .status());
+    store = new PredictionEventStore(store.rootDirectory(), store.projectId());
     assertEquals(TaskCompletionState.INTEGRATED,
         store.taskCompletionProjection()
             .taskState(dependentTask));
+  }
+
+  @Test
+  void publishedPredecessorSnapshotIntegratesAndReleasesSuccessorLane(@TempDir Path root)
+      throws Exception {
+    git(root, "init");
+    git(root, "config", "user.name", "Test");
+    git(root, "config", "user.email", "test@example.invalid");
+    Files.writeString(root.resolve("README.md"), "base\n");
+    git(root, "add", "README.md");
+    git(root, "commit", "-m", "base");
+    ProjectApplicationService.ProjectLocation location = new ProjectApplicationService().init(root)
+        .location();
+    String base = gitOutput(root, "rev-parse", "HEAD");
+    String ownerCommit = commitFile(root, base, "src/recovered.py", "recovered\n", "owner");
+
+    NodeIdentity identity = new IdentityBootstrap(location.profile()
+        .resolve("link"))
+        .loadOrCreate()
+        .identity();
+    PredictionEventStore store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    UUID group = UUID.randomUUID();
+    UUID ownerLane = UUID.randomUUID();
+    UUID task = UUID.randomUUID();
+    WorkIntent owner = new WorkIntent(ownerLane, location.projectId(), "agt_owner", "codex", task,
+        "recover", "integrated", base,
+        List.of(ResourceSelector.pathExact("src/recovered.py")), 1, group,
+        WorkIntent.Status.ANNOUNCED);
+    WorkIntentService intentService = new WorkIntentService(store, identity);
+    assertTrue(intentService.announce(owner).acquired());
+    intentService.suspend(owner.participant());
+    String recoveryReference = root.resolve("recovery").toAbsolutePath() + "#hash";
+    intentService.holdRecovery(owner.participant(), recoveryReference);
+
+    UUID successorLane = UUID.randomUUID();
+    UUID grantId = UUID.randomUUID();
+    WorkIntent successor = new WorkIntent(successorLane, location.projectId(), "agt_successor",
+        "codex", task, owner.goal(), owner.acceptance(), base, owner.selectors(), 2, group,
+        owner.authorityLineageId(), WorkIntent.Status.ANNOUNCED, owner.role(),
+        owner.reviewTargetSelectors(), owner.knownDependencies());
+    new WorkGroupService(new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId()), identity).issue(new LaneGrant(
+            grantId, group, successorLane, successor.participant(), owner.version(), true));
+    intentService.continueFromRecovery(new CollaborationCodec.Continuation(grantId, ownerLane,
+        successor, owner.participant(), successor.participant(), owner.version(), recoveryReference));
+
+    store = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    publishSnapshot(store, identity, root, task, "snap_predecessor", ownerLane, group, ownerCommit,
+        owner.participant(), "src/recovered.py", "PATH_EXACT:src/recovered.py", ownerLane,
+        List.of());
+
+    var integration = new IntegrationOrchestrationService().orchestrateIntegration(root,
+        new PredictionEventStore(location.root()
+            .resolve(".synesis/coordination"), location.projectId()), identity);
+    assertEquals(AgentStatus.COMPLETED, integration.status(), integration.toJson());
+    PredictionEventStore completed = new PredictionEventStore(location.root()
+        .resolve(".synesis/coordination"), location.projectId());
+    assertEquals(TaskCompletionState.INTEGRATED,
+        completed.taskCompletionProjection().taskState(task));
+    assertTrue(completed.collaborationProjection().intent(successorLane).isEmpty());
+    assertEquals(org.synesis.coordination.domain.collaboration.WorkGroup.Status.COMPLETED,
+        completed.workGroupProjection().group(group).orElseThrow().status());
+    assertEquals("recovered", gitOutput(root, "show", "HEAD:src/recovered.py").trim());
   }
 }

@@ -1,4 +1,91 @@
-# Current operator goal — 2026-09-14
+# Current operator goal — 2026-09-23 process-crash continuation verification
+
+- Task ID: SYN-082
+- Status: ACTIVE. Continuation is persisted as one `LANE_CONTINUATION_ACCEPTED`
+  event. A new child-JVM fault test now halts the process before the event's
+  atomic move, after the durable move, and after projection but before the
+  caller receives a result. Restart/retry yields either a recovery-held source
+  with no continuation or one detached predecessor and one successor. The
+  reviewer-before-producer regression was repaired using the durable
+  continuation-grant marker; its targeted test, full ordering class, and
+  focused MCP continuation tests pass.
+- Verification boundary: full coordination suite passed in the serial combined
+  run. The full workspace suite completed 432 tests with one reviewer-wait
+  failure before the repair; rerun it after the repair. The earlier full MCP
+  attempt was interrupted and has no result; rerun it. Phases 2 and 3 remain
+  PARTIAL, with no review-enabled WorkGroup/goal terminal result.
+- Exact next action: run the complete serial `:workspace:test` suite with the
+  command recorded in `docs/agent/NEXT_SESSION.md`.
+
+# Current operator goal — 2026-09-20 review-recovery admission and hostile boundary
+
+- Task ID: SYN-082
+- Status: ACTIVE; the source-backed recovery-held reviewer admission seam is
+  implemented and focused verification is green. The fresh target
+  `SynesisReviewRecoveryFixed-20260920` proved concurrent blind lanes,
+  process-tree loss, ordinary reconciliation, disjoint producer successors,
+  and a reviewer successor reaching the projected `SNAPSHOT_PENDING` /
+  `review_validation` gate. It did not reach an independent review decision,
+  reviewer publication, review integration, WorkGroup completion, or goal
+  closure. The final later blind launch produced mixed/stale role evidence,
+  so terminal convergence is explicitly not claimed.
+- Boundary: Phase 1 crash-safe successor authority is PASS; Phase 2 hostile
+  A/B/C recovery is PARTIAL; Phase 3 mandatory review/reviewer-loss recovery
+  is PARTIAL/NOT REACHED. No manual target repair, source `.synesis`, source
+  Synesis coordination, commit, or push was used.
+- Exact next action: finish the full serial MCP regression and strict quality
+  gates, then run `scripts/agent-checkpoint.ps1` and preserve the explicit
+  review-enabled acceptance gap.
+
+# Current operator goal — 2026-09-20 lawful continuation
+
+- Task ID: SYN-082
+- Status: ACTIVE; the fresh real target `SynesisSuccessorTarget-20260920`
+  passed the bounded crash-safe single-successor path end to end: blind A
+  crashed before completion, ordinary reconciliation completed, blind B
+  discovered the server-projected continuation, acquired a new participant /
+  intent under its own authority, restored the assigned artifact, passed 3
+  tests, integrated the result, and closed the WorkGroup/goal. A later fresh
+  participant did not reclaim A's historical lane. The source-level and
+  focused verification remain PASS. Hostile concurrent multi-lane recovery is
+  PARTIAL, and mandatory independent review/reviewer-loss terminal convergence
+  remains PARTIAL/NOT REACHED.
+- User authorization: investigate and repair the supplied fresh-project,
+  cache-loss, and blind interruption lifecycle failures in this source
+  checkout, preserve the existing security/authority boundaries and ten-tool
+  MCP contract, run real disposable acceptance after focused verification,
+  and do not commit or push. The Synesis source checkout is managed directly
+  with ordinary Git/human authority; do not use Synesis coordination/MCP or
+  edit its `.synesis` state.
+- Exact next action: run `powershell -ExecutionPolicy Bypass -File
+  scripts/agent-checkpoint.ps1`, then preserve the fresh-target evidence and
+  explicit review-enabled acceptance gap. The clean review target now also
+  requires a source-backed review of recovery-held reviewer admission before
+  any further blind launch; do not bypass the retained reviewer claim.
+
+# Current operator goal — 2026-09-19 overnight continuation
+
+- Task ID: SYN-082
+- Status: ACTIVE; source repair, lawful recovery continuation, artifact restore, targeted real completion, and WorkGroup/goal closure PASS for the bounded single-successor case. The current user-authorized overnight objective continues SYN-082 through crash-safe successor semantics, hostile concurrent A/B/C multi-lane recovery, and mandatory independent-review/reviewer-loss recovery. Source-level successor-scoped publication, reviewer-grant succession, producer pending-review retargeting, and continuation-grant self-review rejection are verified. The current-build hostile target proved process-tree loss and three exact successor continuations; the extended unchanged-prompt target recovered a failed integration with an epoch-2 successor and integrated a later 42-test correction. All real snapshots still projected `reviewRequired:false`, so mandatory review, reviewer loss, and review-enabled closure remain NOT REACHED.
+- User authorization: investigate and repair the supplied fresh-project, cache-loss, and blind interruption lifecycle failures in this source checkout, preserve the existing security/authority boundaries and ten-tool MCP contract, run real disposable acceptance after focused verification, and do not commit or push. The Synesis source checkout is managed directly with ordinary Git/human authority; do not use Synesis coordination/MCP or edit its `.synesis` state.
+- Boundary: the Windows path-alias false negative is repaired at the existing physical-identity seam. The lifecycle follow-up adds only the missing ordinary-MCP admission trigger for the existing bounded reconciliation plan and stale-plan terminal revalidation. The explicitly activated ADR-0083 continuation slice may expose recovery-held eligibility through `get_next_action` and execute an explicit successor request through the existing generic coordination action. The overnight extension may add crash-prefix/replay proof, concurrent multi-lane recovery fencing, and reviewer-loss continuation through existing review semantics; it does not weaken timeouts or claims, auto-assign successors, auto-review, add tools, bypass review/integration, or fabricate authority.
+- Evidence target: `docs/evidence/SYN-082-lifecycle-recovery-2026-09-18.md`, `docs/evidence/SYN-082-lawful-recovery-continuation-2026-09-19.md`, `docs/evidence/SYN-082-overnight-successor-recovery-2026-09-19.md`, ADR-0083, and ADR-0085; checkpoint required.
+- Exact next action: run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1`, then use the rebuilt current distribution in a fresh disposable target to exercise one uniquely selected producer revision through the existing review-request path before testing reviewer loss. Keep the blind producer prompt unchanged; do not infer review policy from README prose, fabricate a claim, or auto-assign a reviewer.
+
+- Task ID: SYN-081
+- Status: DONE; make `.synesis/` the invisible, canonical home for Synesis project metadata
+- User authorization: pursue the supplied filesystem-boundary and UX-hygiene goal in the existing Synesis source checkout, preserving visible user/agent project files, the current Link/MCP/security boundaries, and no push.
+- Architecture: ADR-0081; one project-storage seam owns `.synesis` creation/validation and best-effort Windows Hidden presentation, while identity, authorization, Git, and registry semantics remain independent.
+- Exact next action: run `powershell -ExecutionPolicy Bypass -File scripts/agent-resume.ps1` before any future task; preserve the verified uncommitted slice and do not publish without explicit authorization.
+- Evidence target: `docs/evidence/SYN-081-invisible-project-metadata-2026-09-18.md`; no commit or push.
+
+# 2026-09-18 — Completed predecessor
+
+- Task ID: SYN-080
+- Status: DONE; bounded universal portable project identity and replica model complete
+- Evidence: `docs/evidence/SYN-080-portable-project-identity-2026-09-18.md`; no commit or push.
+
+# 2026-09-14 — Previous operator goal
 
 - Task ID: SYN-079 (existing task; no new task created)
 - Status: COMPLETE; operator-scoped installer roadmap complete. Native fixture verification and package freshness checks passed after the result-screen cleanup, uninstall layout, gradient and smooth-rendering follow-ups.
@@ -781,3 +868,23 @@ lane in this slice.
   measurement; the polling harness lost the Codex transcript and native EOF/
   child exit evidence. Keep SYN-039/SYN-040 closed and `SYN-014E` paused; no
   lease or Doctor change is authorized.
+
+## 2026-09-24 — SYN-082 overnight acceptance status
+
+The overnight continuation objective remains open. Source crash-prefix and
+replay coverage passes, including the single durable continuation event and
+fresh-authority invariant. In the latest disposable acceptance, a real agent
+process tree was killed and fresh blind participants lawfully continued the
+storage lane under new participant/intent identities. The strict Phase 2
+survivor-at-acquisition condition was missed, and the WorkGroup did not reach
+terminal state. A blind participant also published a CLI snapshot, but
+Synesis blocked integration and pytest ran against a mismatched package
+workspace. Phase 3 remains incomplete: no accepted independent decision,
+reviewer-loss successor, integration, or terminal convergence was observed.
+
+Keep the three phase verdicts separate: Phase 1 PASS with the stated real-MCP
+crash limitation; Phase 2 PARTIAL; Phase 3 PARTIAL, with the mandatory hostile
+review path not reached. The full test and tool-gate evidence, build versions,
+disposable project/WorkGroup identities, and next action are recorded in the
+SYN-082 evidence addendum. No source Synesis session, source .synesis state,
+commit, or push was used.

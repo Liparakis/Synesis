@@ -1,5 +1,6 @@
 package org.synesis.workspace.application.provider;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,9 @@ class ProviderManualServiceTest {
       ProviderManualService service = new ProviderManualService();
       assertFalse(service.attest("codex")
           .valid());
+      assertEquals(tempHome.resolve(".codex/skills/synesis-provider-manual"),
+          service.skillDirectory("codex"));
+      assertFalse(Files.exists(tempHome.resolve(".codex/skills/synesis-manual")));
       assertTrue(service.install("codex")
           .valid());
       Path manual = service.skillDirectory("codex")

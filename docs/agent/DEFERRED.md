@@ -1,3 +1,64 @@
+## 2026-09-19 — SYN-082 continuation-authority scope review
+
+The explicit successor-authority goal activates the bounded continuation slice
+under the existing active task `SYN-082` and ADR-0083. The user-authorized
+overnight extension additionally activates crash-prefix/replay proof, hostile
+multi-lane recovery fencing, and mandatory independent-review/reviewer-loss
+continuation through existing review semantics. It permits only read-only
+recovery eligibility projection, explicit successor acquisition through the
+existing generic coordination action, exact binding/epoch/scope fencing,
+immutable snapshot access, and evidence through review/integration closure.
+It does not activate automatic assignment, claim release, automatic review,
+new MCP tools, grace-period changes, remote recovery, or source-repository
+Synesis coordination.
+
+## 2026-09-18 — SYN-082 lifecycle review
+
+The supplied blind interruption evidence activated a bounded review of the
+existing ordinary-MCP recovery trigger. The implemented slice only connects
+ordinary admission to the existing lease reconciliation plan and prevents
+terminal participants or stale plans from being mutated. Automatic assignment,
+claim release, auto-review, new MCP tools, changed grace periods, and any
+remote/hosted recovery capability remain outside this task.
+
+Evidence: `docs/evidence/SYN-082-lifecycle-recovery-2026-09-18.md`; ADR-0082;
+continuation scope: ADR-0083.
+
+## 2026-09-18 — SYN-081 promotion review
+
+The supplied `.synesis` canonical-storage and Windows Hidden requirement is
+promoted into the sole active task `SYN-081` under ADR-0081. This is a bounded
+filesystem-boundary and UX-hygiene evolution. It does not activate new
+coordination, security, cloud, installer, Link, MCP, Git, or replica behavior.
+The deferred register was reviewed; no deferred capability is promoted.
+
+Implementation status: the bounded storage/visibility slice is implemented and
+verified; no deferred capability was activated or expanded. Checkpoint
+`CP-0973` records closure evidence.
+
+## SYN-081 — Invisible canonical project metadata boundary
+
+**Status:** PROMOTED TO ACTIVE TASK; ADR-0081; 2026-09-18
+**Area:** Project-local storage, visibility normalization, root hygiene
+**Activation trigger:** Explicit requirement that Synesis bookkeeping remain beneath `.synesis`, stay hidden by convention/attribute, and never be confused with user project content or authorization.
+**Scope gate:** Reuse existing `.synesis` paths and lifecycle/storage code; add only a narrow shared seam, focused evidence, and documentation. Keep external host admin/workspace/runtime roots and visible `AGENTS.md` as explicit exceptions.
+
+## 2026-09-18 — SYN-080 promotion review
+
+The user-supplied universal project identity and replica requirement is
+promoted into the sole active task `SYN-080` under ADR-0080. This promotion
+authorizes only the bounded identity, replica, registry, and project-facing
+admission slices described there. Core Link remains project-agnostic; no
+cloud/relay/federation, source `.synesis` state surgery, or MCP catalog change
+is activated.
+
+## SYN-080 — Universal portable project identity and replica model
+
+**Status:** PROMOTED TO ACTIVE TASK; ADR-0080; 2026-09-18
+**Area:** Workspace identity, replicas, discovery, and project-facing admission
+**Activation trigger:** Explicit requirement that the same logical Synesis project survive local path/machine/Git-state changes while identity remains separate from membership and authority.
+**Scope gate:** Existing project identity storage is reused; core Link remains a physical authenticated-session module; all project context is higher-level and post-authentication.
+
 ## 2026-09-14 — SYN-079 result-screen cleanup review
 
 No deferred capability is activated. This continuation changes only result layout, concise failure presentation and diagnostic disclosure. Existing backend operations, ownership and data boundaries remain unchanged.

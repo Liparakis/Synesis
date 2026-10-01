@@ -86,6 +86,14 @@ public final class AgentNextActionService {
         Map.of("state", "SESSION_TERMINAL", "lane", sessionId));
   }
 
+  private static AgentResponse terminalStateUnavailableResponse(Exception failure) {
+    Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+    return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+        AgentNextAction.REQUEST_HUMAN_HELP,
+        Map.of("reason", "SESSION_TERMINAL_STATE_UNAVAILABLE",
+            "causeType", cause.getClass().getSimpleName()));
+  }
+
   /**
    * Returns whether the exact bound session owns an active intent.
    *
@@ -119,7 +127,8 @@ public final class AgentNextActionService {
    * Projects the exact correction revision after a reviewed snapshot was rejected.
    */
   private static AgentResponse revisionRequiredAction(
-      org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+      org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+      Path assignedWorktree, TaskSnapshotService snapshotService) {
     if (participantId == null || participantId.isBlank()) {
       return null;
     }
@@ -155,9 +164,6 @@ public final class AgentNextActionService {
           .filter(snapshot -> snapshot.taskId()
               .equals(intent.taskId()))
           .filter(snapshot -> snapshot.provenance()
-              .laneId()
-              .equals(intent.intentId()))
-          .filter(snapshot -> snapshot.provenance()
               .authorityLineageId()
               .equals(intent.authorityLineageId()))
           .filter(snapshot -> snapshot.provenance()
@@ -169,6 +175,18 @@ public final class AgentNextActionService {
               .claimEpoch()))
           .orElse(null);
       if (rejected == null || hasCurrentReviewGrant(store, intent)) {
+        continue;
+      }
+      boolean revised = false;
+      if (assignedWorktree != null && snapshotService != null) {
+        try {
+          revised = snapshotService.hasRevisionPublishableChanges(assignedWorktree,
+              intent.selectors(), intent.baseCommit(), rejected);
+        } catch (Exception ignored) {
+          // A failed comparison must keep the revision gate closed.
+        }
+      }
+      if (revised) {
         continue;
       }
       Map<String, Object> payload = new LinkedHashMap<>();
@@ -200,7 +218,7 @@ public final class AgentNextActionService {
       result.put("state", "REVISION_REQUIRED");
       result.put("revisionRequired", true);
       result.put("currentIntent", intentMap(intent));
-      result.put("rejectedSnapshot", snapshotMap(rejected));
+      result.put("rejectedSnapshot", snapshotMap(rejected, store));
       result.put("latestRejectedSnapshotId", rejected.snapshotId());
       result.put("workGroupId",
           intent.workGroupId()
@@ -232,12 +250,26 @@ public final class AgentNextActionService {
           || intent.role() != WorkIntent.Role.PRODUCER) {
         continue;
       }
+      // A continuation preserves authority lineage, but a predecessor snapshot is not the
+      // successor's executable review revision.  Review waits must therefore remain bound to
+      // the exact current intent and epoch; otherwise a migrated review grant can be stranded
+      // behind an older REVIEW_PENDING snapshot.
       TaskSnapshotRecord snapshot = store.taskCompletionProjection()
           .findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version())
           .orElse(null);
       if (snapshot == null || store.taskCompletionProjection()
           .snapshotState(snapshot.snapshotId())
           .orElse(TaskCompletionState.ACTIVE) != TaskCompletionState.REVIEW_PENDING) {
+        continue;
+      }
+      boolean pendingReviewAdmission = store.collaborationProjection()
+          .requests()
+          .stream()
+          .anyMatch(request -> pendingReviewAdmissionTargets(store, request, intent,
+              participantId));
+      if (pendingReviewAdmission) {
+        // Let the owner answer the migrated review-admission request first. The immutable
+        // snapshot wait is only meaningful after a reviewer has been admitted.
         continue;
       }
       Map<String, Object> payload = new LinkedHashMap<>();
@@ -257,7 +289,7 @@ public final class AgentNextActionService {
       Map<String, Object> result = new LinkedHashMap<>();
       result.put("state", TaskCompletionState.REVIEW_PENDING.name());
       result.put("reviewPending", true);
-      result.put("snapshot", snapshotMap(snapshot));
+      result.put("snapshot", snapshotMap(snapshot, store));
       result.put("currentIntent", intentMap(intent));
       result.put("workGroupId",
           intent.workGroupId()
@@ -273,6 +305,159 @@ public final class AgentNextActionService {
   }
 
   /**
+   * Projects recovery-held work that a different current participant may explicitly continue.
+   *
+   * <p>This is a read-only projection. It never issues a grant, changes claims, or exposes the
+   * internal snapshot reference. The continuation request derives its target identity from the
+   * exact authenticated caller and revalidates every field under the project append lock.</p>
+   *
+   * @param store         current project projection
+   * @param participantId exact current caller participant
+   * @return deterministic public-safe continuation candidates
+   */
+  private static List<Map<String, Object>> continuationCandidates(
+      org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+    List<Map<String, Object>> candidates = new ArrayList<>();
+    for (WorkIntent intent : store.collaborationProjection()
+        .activeIntents()) {
+      if (store.collaborationProjection()
+          .participantState(intent.participant())
+          .orElse(null) != Participant.State.RECOVERY_HELD
+          || store.collaborationProjection()
+          .recoverySnapshotReference(intent.participant())
+          .isEmpty()) {
+        continue;
+      }
+      WorkGroup group = store.workGroupProjection()
+          .group(intent.workGroupId())
+          .orElse(null);
+      if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
+        continue;
+      }
+      boolean sameParticipant = intent.participant()
+          .equals(participantId);
+      boolean scopeConflict = !sameParticipant && store.collaborationProjection()
+          .activeIntents()
+          .stream()
+          .filter(existing -> existing.participant()
+              .equals(participantId))
+          .anyMatch(existing -> existing.selectors()
+              .stream()
+              .anyMatch(existingSelector -> intent.selectors()
+                  .stream()
+                  .anyMatch(existingSelector::overlaps)));
+      Map<String, Object> candidate = new LinkedHashMap<>();
+      candidate.put("sourceIntentId", intent.intentId().toString());
+      candidate.put("intentId", intent.intentId().toString());
+      candidate.put("taskId", intent.taskId().toString());
+      candidate.put("workGroupId", intent.workGroupId().toString());
+      candidate.put("goal", intent.goal());
+      candidate.put("acceptance", intent.acceptance());
+      candidate.put("selectors", intent.selectors().stream()
+          .map(AgentNextActionService::selectorMap)
+          .toList());
+      candidate.put("claimEpoch", intent.version());
+      candidate.put("role", intent.role().wireValue());
+      candidate.put("knownDependencies", intent.knownDependencies());
+      candidate.put("formerOwner", intent.participant());
+      candidate.put("formerOwnerState", Participant.State.RECOVERY_HELD.name());
+      candidate.put("workGroup", workGroupMap(group));
+      candidate.put("unfinished", true);
+      candidate.put("blocksWorkGroupCompletion", true);
+      candidate.put("durableArtifactsAvailable", true);
+      candidate.put("available", !sameParticipant && !scopeConflict);
+      candidate.put("continuationRequest", Map.of(
+          "kind", "continuation",
+          "payload", Map.of(
+              "intentId", intent.intentId().toString(),
+              "claimEpoch", intent.version())));
+      if (sameParticipant) {
+        candidate.put("blockedReason", "CURRENT_PARTICIPANT_IS_FORMER_OWNER");
+      } else if (scopeConflict) {
+        candidate.put("blockedReason", "OVERLAPPING_CLAIM");
+      }
+      candidates.add(candidate);
+    }
+    candidates.sort(java.util.Comparator.comparing(candidate ->
+        String.valueOf(candidate.get("sourceIntentId"))));
+    return List.copyOf(candidates);
+  }
+
+  /**
+   * Returns the highest-priority explicit successor action for the current participant.
+   *
+   * @param store             current project projection
+   * @param participantId     exact caller participant
+   * @param collaboration    public collaboration projection
+   * @return continuation action, or {@code null} when no candidate is available
+   */
+  private static AgentResponse continuationAction(
+      org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+      Map<String, Object> collaboration) {
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> projected = (List<Map<String, Object>>) collaboration.getOrDefault(
+        "continuationCandidates", List.of());
+    List<Map<String, Object>> available = projected.stream()
+        .filter(candidate -> Boolean.TRUE.equals(candidate.get("available")))
+        .toList();
+    if (available.isEmpty()) {
+      return null;
+    }
+    Map<String, Object> selected = available.getFirst();
+    Map<String, Object> result = new LinkedHashMap<>(collaboration);
+    result.put("state", "RECOVERY_CONTINUATION_AVAILABLE");
+    result.put("continuationAvailable", true);
+    result.put("continuationSelectionRequired", available.size() > 1);
+    result.put("nextProtocolAction", "request_coordination");
+    result.put("nextProtocolKind", "continuation");
+    if (available.size() == 1) {
+      result.put("selectedContinuation", selected);
+      result.put("nextProtocolPayload", Map.of(
+          "intentId", selected.get("sourceIntentId"),
+          "claimEpoch", selected.get("claimEpoch")));
+    } else {
+      result.put("selectionInstruction",
+          "Choose one continuation candidate explicitly; no candidate is auto-assigned.");
+    }
+    result.put("continuationParticipant", participantId);
+    return new AgentResponse(AgentStatus.READY, AgentReason.CONTINUATION_AVAILABLE,
+        AgentNextAction.REQUEST_COORDINATION, result);
+  }
+
+  private static boolean hasAvailableReviewerReviewContinuation(
+      org.synesis.coordination.persistence.PredictionEventStore store,
+      Map<String, Object> collaboration) {
+    Object projected = collaboration.get("continuationCandidates");
+    if (!(projected instanceof List<?> candidates)) {
+      return false;
+    }
+    Set<String> availableReviewerIntents = new LinkedHashSet<>();
+    for (Object value : candidates) {
+      if (value instanceof Map<?, ?> candidate
+          && Boolean.TRUE.equals(candidate.get("available"))
+          && "reviewer".equals(candidate.get("role"))
+          && candidate.get("sourceIntentId") instanceof String intentId) {
+        availableReviewerIntents.add(intentId);
+      }
+    }
+    if (availableReviewerIntents.isEmpty()) {
+      return false;
+    }
+    List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection()
+        .pendingReviewSnapshots();
+    return store.collaborationProjection()
+        .activeIntents()
+        .stream()
+        .filter(intent -> availableReviewerIntents.contains(intent.intentId().toString()))
+        .filter(intent -> hasUnresolvedReviewObligation(store, intent))
+        .anyMatch(reviewer -> pendingReviews.stream()
+            .filter(snapshot -> snapshot.provenance()
+                .workGroupId()
+                .equals(reviewer.workGroupId()))
+            .anyMatch(snapshot -> reviewTargetsMatch(reviewer, snapshot)));
+  }
+
+  /**
    * Returns whether the current lane revision has an exact review grant.
    */
   private static boolean hasCurrentReviewGrant(
@@ -285,6 +470,9 @@ public final class AgentNextActionService {
         .filter(grant -> grant.targetIntentId()
             .equals(intent.intentId()))
         .filter(grant -> grant.claimEpoch() == intent.version())
+        .filter(grant -> !store.workGroupProjection()
+            .grantSuperseded(grant.grantId()))
+        .filter(grant -> !selfReviewGrant(store, grant))
         .anyMatch(grant -> store.workGroupProjection()
             .grantAvailable(grant.grantId())
             || store.workGroupProjection()
@@ -332,6 +520,11 @@ public final class AgentNextActionService {
           || !hasUnresolvedReviewObligation(store, reviewer)) {
         continue;
       }
+      if (hasMandatoryReviewCandidate(store, reviewer)) {
+        // The candidate list carries one exact request payload per immutable snapshot. Let the
+        // reviewer choose explicitly instead of projecting a generic wait or selecting one.
+        continue;
+      }
       Map<String, Object> payload = new LinkedHashMap<>();
       payload.put("workGroupId",
           reviewer.workGroupId()
@@ -366,6 +559,26 @@ public final class AgentNextActionService {
     return null;
   }
 
+  private static boolean hasMandatoryReviewCandidate(
+      org.synesis.coordination.persistence.PredictionEventStore store, WorkIntent reviewer) {
+    boolean mandatory = store.workGroupProjection()
+        .group(reviewer.workGroupId())
+        .map(group -> group.reviewPolicy().mandatory())
+        .orElse(false);
+    if (!mandatory) {
+      return false;
+    }
+    Set<String> candidateIds = reviewCandidates(store).stream()
+        .filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get("workGroupId")))
+        .map(candidate -> (String) candidate.get("snapshotId"))
+        .collect(java.util.stream.Collectors.toSet());
+    return store.taskCompletionProjection()
+        .allSnapshots()
+        .stream()
+        .filter(snapshot -> candidateIds.contains(snapshot.snapshotId()))
+        .anyMatch(snapshot -> reviewTargetsMatch(reviewer, snapshot));
+  }
+
   /**
    * Returns whether a reviewer still lacks a resolved current producer review.
    */
@@ -381,6 +594,14 @@ public final class AgentNextActionService {
             .equals(reviewer.workGroupId()))
         .filter(grant -> grant.targetParticipant()
             .equals(reviewer.participant()))
+        .filter(grant -> !grantTargetsSupersededIntent(store, grant))
+        .filter(grant -> !store.workGroupProjection()
+            .grantSuperseded(grant.grantId()))
+        // A reviewer continuation is represented by a consumed grant addressed
+        // to the successor reviewer.  That grant authorizes continuation of the
+        // reviewer lane; it is explicitly not a review obligation and must not
+        // strand the successor in REVIEWER_PENDING.
+        .filter(grant -> !selfReviewGrant(store, grant))
         .anyMatch(grant -> store.workGroupProjection()
             .reviewValidationForGrant(grant.grantId())
             .isEmpty());
@@ -403,19 +624,109 @@ public final class AgentNextActionService {
           .filter(producer -> reviewTargetsMatch(reviewer, producer))
           .toList();
     if (matching.isEmpty()) {
-      return store.workGroupProjection()
+      List<LaneGrant> reviewerGrants = store.workGroupProjection()
           .grants()
           .stream()
           .filter(grant -> grant.workGroupId()
               .equals(reviewer.workGroupId()))
           .filter(grant -> grant.targetParticipant()
               .equals(reviewer.participant()))
-          .noneMatch(grant -> store.workGroupProjection()
-              .reviewValidationForGrant(grant.grantId())
-              .isPresent());
+              .filter(grant -> !grantTargetsSupersededIntent(store, grant))
+              .filter(grant -> !store.workGroupProjection()
+                  .grantSuperseded(grant.grantId()))
+              .toList();
+      if (reviewerGrants.stream()
+          .anyMatch(grant -> store.workGroupProjection()
+              .continuationGrant(grant.grantId()))) {
+        return false;
+      }
+      // With no producer yet, an empty review-grant list means the reviewer is
+      // waiting for review work to emerge. A continuation grant is handled
+      // above because it restores the reviewer lane, not a review obligation.
+      // Open review grants were handled by unresolvedGrant above. Any grant
+      // left here is self-review or already validated, so it does not imply
+      // that future review work is pending.
+      return reviewerGrants.isEmpty();
     }
     return matching.stream()
         .anyMatch(producer -> !hasCompletedReview(store, reviewer, producer));
+  }
+
+  private static boolean pendingReviewAdmissionTargets(
+      org.synesis.coordination.persistence.PredictionEventStore store,
+      CoordinationRequest request, WorkIntent intent, String participantId) {
+    if (request.status() != CoordinationRequest.Status.PENDING
+        || request.kind() != CoordinationRequest.Kind.REVIEW
+        || !request.target().equals(participantId)) {
+      return false;
+    }
+    return request.conflictingIntentId().equals(intent.intentId())
+        || store.collaborationProjection()
+            .successorIntent(request.conflictingIntentId())
+            .map(intent.intentId()::equals)
+            .orElse(false);
+  }
+
+  private static boolean selfReviewGrant(
+      org.synesis.coordination.persistence.PredictionEventStore store, LaneGrant grant) {
+    boolean activeSelfReview = store.collaborationProjection()
+        .intent(grant.targetIntentId())
+        .map(intent -> intent.participant()
+            .equals(grant.targetParticipant()))
+        .orElse(false);
+    if (activeSelfReview) {
+      return true;
+    }
+    return store.taskCompletionProjection()
+        .allSnapshots()
+        .stream()
+        .filter(snapshot -> snapshot.provenance()
+            .laneId()
+            .equals(grant.targetIntentId()))
+        .filter(snapshot -> snapshot.provenance()
+            .claimEpoch() == grant.claimEpoch())
+        .anyMatch(snapshot -> snapshot.provenance()
+            .participant()
+            .equals(grant.targetParticipant()));
+  }
+
+  /**
+   * Returns whether a grant names an obsolete intent without a live exact review snapshot.
+   *
+   * <p>A snapshot-bound review grant remains actionable after producer continuation only while
+   * that exact mandatory review is still pending. Ordinary grants to the replaced intent remain
+   * stale.</p>
+   *
+   * @param store durable project projection
+   * @param grant grant under consideration
+   * @return {@code true} when the grant cannot authorize current work
+   */
+  private static boolean grantTargetsSupersededIntent(
+      org.synesis.coordination.persistence.PredictionEventStore store, LaneGrant grant) {
+    if (store.collaborationProjection()
+        .successorIntent(grant.targetIntentId())
+        .isEmpty()) {
+      return false;
+    }
+    if (grant.snapshotId() == null) {
+      return true;
+    }
+    return store.taskCompletionProjection()
+        .allSnapshots()
+        .stream()
+        .filter(snapshot -> snapshot.snapshotId().equals(grant.snapshotId()))
+        .filter(snapshot -> snapshot.provenance()
+            .workGroupId()
+            .equals(grant.workGroupId()))
+        .filter(snapshot -> snapshot.provenance()
+            .laneId()
+            .equals(grant.targetIntentId()))
+        .filter(snapshot -> snapshot.provenance()
+            .claimEpoch() == grant.claimEpoch())
+        .filter(TaskSnapshotRecord::reviewRequired)
+        .noneMatch(snapshot -> store.taskCompletionProjection()
+            .snapshotState(snapshot.snapshotId())
+            .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_PENDING);
   }
 
   /**
@@ -472,6 +783,8 @@ public final class AgentNextActionService {
         .filter(grant -> grant.targetIntentId()
             .equals(producer.intentId()))
         .filter(grant -> grant.claimEpoch() == producer.version())
+        .filter(grant -> !store.workGroupProjection()
+            .grantSuperseded(grant.grantId()))
         .anyMatch(grant -> store.workGroupProjection()
             .reviewValidationForGrant(grant.grantId())
             .isPresent());
@@ -607,6 +920,10 @@ public final class AgentNextActionService {
     List<WorkIntent> activeIntents = store.collaborationProjection()
         .activeIntents();
     for (LaneGrant grant : projection.grants()) {
+      if (projection.grantSuperseded(grant.grantId())
+          || grantTargetsSupersededIntent(store, grant)) {
+        continue;
+      }
       if (!grant.targetParticipant()
           .equals(participantId)) {
         continue;
@@ -622,6 +939,8 @@ public final class AgentNextActionService {
       TaskSnapshotRecord snapshot = store.taskCompletionProjection()
           .allSnapshots()
           .stream()
+          .filter(value -> grant.snapshotId() == null
+              || grant.snapshotId().equals(value.snapshotId()))
           .filter(value -> value.provenance()
               .workGroupId()
               .equals(grant.workGroupId()))
@@ -641,6 +960,12 @@ public final class AgentNextActionService {
       String reviewedParticipant = reviewedIntent == null
           ? snapshot.provenance()
             .participant() : reviewedIntent.participant();
+      // A malformed or historical grant must not turn a producer into its own reviewer.
+      // Keep the durable record available for audit, but fail closed in the agent-facing
+      // projection so it cannot be used for self-approval.
+      if (reviewedParticipant.equals(participantId)) {
+        continue;
+      }
       boolean activeReviewer = activeIntents.stream()
           .anyMatch(intent -> intent.participant()
               .equals(participantId)
@@ -708,6 +1033,9 @@ public final class AgentNextActionService {
       payload.put("reviewedParticipantId", reviewedParticipant);
       payload.put("reviewerParticipant", grant.targetParticipant());
       payload.put("claimEpoch", grant.claimEpoch());
+      if (snapshot != null) {
+        payload.put("snapshotId", snapshot.snapshotId());
+      }
       if (projection.grantAvailable(grant.grantId())) {
         payload.put("workGroupId",
             grant.workGroupId()
@@ -715,7 +1043,6 @@ public final class AgentNextActionService {
         payload.put("targetParticipant", grant.targetParticipant());
       } else {
         TaskSnapshotRecord reviewedSnapshot = Objects.requireNonNull(snapshot, "review snapshot");
-        payload.put("snapshotId", reviewedSnapshot.snapshotId());
         action.put("reviewDecision", Map.of(
             "required", true,
             "field", "result",
@@ -738,7 +1065,7 @@ public final class AgentNextActionService {
       action.put("nextProtocolPayload", payload);
       action.put("grant", laneGrantMap(grant));
       if (snapshot != null) {
-        action.put("snapshot", snapshotMap(snapshot));
+        action.put("snapshot", snapshotMap(snapshot, store));
       }
       actions.add(action);
     }
@@ -748,6 +1075,7 @@ public final class AgentNextActionService {
       for (LaneGrant grant : projection.grants()) {
         if (grant.targetParticipant()
             .equals(participantId)
+            && !grantTargetsSupersededIntent(store, grant)
             && projection.reviewValidationForGrant(grant.grantId())
             .isPresent()) {
           completedReviewRevisions.add(grant.targetIntentId() + ":" + grant.claimEpoch());
@@ -769,29 +1097,15 @@ public final class AgentNextActionService {
           .filter(intent -> reviewGroupFilter == null
               || reviewGroupFilter.contains(intent.workGroupId()))
           .toList();
-      if (callerReviewers.isEmpty() && reviewGroupFilter != null) {
-        for (UUID groupId : reviewGroupFilter) {
-          WorkGroup group = projection.group(groupId)
-              .orElse(null);
-          if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
-            continue;
-          }
-          WorkIntent owner = selectUniqueProducerTarget(activeIntents, groupId,
-              participantId, completedReviewRevisions, pendingReviewIntents);
-          if (owner != null) {
-            actions.add(reviewAdmissionAction(group, owner, participantId));
-          }
-        }
-      }
       for (WorkIntent reviewer : callerReviewers) {
         WorkGroup group = projection.group(reviewer.workGroupId())
             .orElse(null);
         if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
           continue;
         }
-        WorkIntent owner = selectReviewTarget(activeIntents, reviewer, participantId,
+        WorkIntent owner = selectReviewTarget(store, activeIntents, reviewer, participantId,
             completedReviewRevisions, pendingReviewIntents);
-        if (owner == null) {
+        if (owner == null || group.reviewPolicy().mandatory()) {
           continue;
         }
         actions.add(reviewAdmissionAction(group, owner, participantId));
@@ -800,11 +1114,154 @@ public final class AgentNextActionService {
     return List.copyOf(actions);
   }
 
+  private static List<Map<String, Object>> reviewCandidates(
+      org.synesis.coordination.persistence.PredictionEventStore store) {
+    var collaboration = store.collaborationProjection();
+    var workGroups = store.workGroupProjection();
+    var completion = store.taskCompletionProjection();
+    return completion.allSnapshots().stream()
+        .filter(TaskSnapshotRecord::reviewRequired)
+        .filter(snapshot -> completion.snapshotState(snapshot.snapshotId())
+            .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_PENDING)
+        .filter(snapshot -> workGroups.group(snapshot.provenance().workGroupId())
+            .map(group -> group.status() == WorkGroup.Status.ACTIVE)
+            .orElse(false))
+        .filter(snapshot -> reviewProducerIntent(store, snapshot) != null)
+        .filter(snapshot -> workGroups.grants().stream()
+            .noneMatch(grant -> !workGroups.grantSuperseded(grant.grantId())
+                && !workGroups.continuationGrant(grant.grantId())
+                && (snapshot.snapshotId().equals(grant.snapshotId())
+                    || (grant.snapshotId() == null
+                        && grant.workGroupId().equals(snapshot.provenance().workGroupId())
+                        && grant.targetIntentId().equals(snapshot.provenance().laneId())
+                        && grant.claimEpoch() == snapshot.provenance().claimEpoch()))
+                && (workGroups.grantAvailable(grant.grantId())
+                    || workGroups.grantConsumed(grant.grantId()))))
+        .filter(snapshot -> collaboration.requests().stream()
+            .noneMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW
+                && snapshot.snapshotId().equals(request.snapshotId())
+                && (request.status() == CoordinationRequest.Status.PENDING
+                    || request.status() == CoordinationRequest.Status.ACCEPTED)))
+        .sorted(java.util.Comparator.comparing(TaskSnapshotRecord::snapshotId))
+        .map(snapshot -> {
+          WorkGroup group = workGroups.group(snapshot.provenance().workGroupId()).orElseThrow();
+          WorkIntent producer = reviewProducerIntent(store, snapshot);
+          Map<String, Object> candidate = new LinkedHashMap<>(snapshotMap(snapshot, store));
+          candidate.put("candidateState", "AVAILABLE");
+          candidate.put("authorityLineageId",
+              snapshot.provenance().authorityLineageId().toString());
+          candidate.put("reviewPolicy", Map.of(
+              "mandatory", group.reviewPolicy().mandatory(),
+              "independenceRequired", group.reviewPolicy().independenceRequired()));
+          candidate.put("reviewerIntent", reviewerIntentGuidance(group, snapshot));
+          candidate.put("requestCoordination", Map.of(
+              "kind", "work_group_join",
+              "payload", Map.of(
+                  "workGroupId", snapshot.provenance().workGroupId().toString(),
+                  "intentId", producer.intentId().toString(),
+                  "snapshotId", snapshot.snapshotId(),
+                  "proposal", "Review this exact immutable snapshot")));
+          return candidate;
+        })
+        .toList();
+  }
+
+  private static List<Map<String, Object>> actionableReviewCandidates(
+      org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
+      List<Map<String, Object>> candidates) {
+    WorkIntent reviewer = store.collaborationProjection()
+        .activeIntents()
+        .stream()
+        .filter(intent -> intent.participant().equals(participantId))
+        .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER)
+        .findFirst()
+        .orElse(null);
+    if (reviewer == null) {
+      return List.of();
+    }
+    return candidates.stream()
+        .filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get("workGroupId")))
+        .filter(candidate -> store.taskCompletionProjection()
+            .findSnapshotById(String.valueOf(candidate.get("snapshotId")))
+            .filter(snapshot -> reviewTargetsMatch(reviewer, snapshot))
+            .isPresent())
+        .toList();
+  }
+
+  private static WorkIntent reviewProducerIntent(
+      org.synesis.coordination.persistence.PredictionEventStore store,
+      TaskSnapshotRecord snapshot) {
+    var collaboration = store.collaborationProjection();
+    var provenance = snapshot.provenance();
+    UUID intentId = provenance.laneId();
+    Set<UUID> visited = new LinkedHashSet<>();
+    while (visited.add(intentId)) {
+      var successor = collaboration.successorIntent(intentId);
+      if (successor.isEmpty()) {
+        return collaboration.intent(intentId)
+            .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
+            .filter(intent -> intent.workGroupId().equals(provenance.workGroupId()))
+            .filter(intent -> intent.taskId().equals(snapshot.taskId()))
+            .filter(intent -> intent.authorityLineageId().equals(provenance.authorityLineageId()))
+            .filter(intent -> intent.version() >= provenance.claimEpoch())
+            .orElse(null);
+      }
+      intentId = successor.orElseThrow();
+    }
+    return null;
+  }
+
+  private static Map<String, Object> reviewerIntentGuidance(WorkGroup group,
+      TaskSnapshotRecord snapshot) {
+    Map<String, Object> task = new LinkedHashMap<>();
+    task.put("goal", "Independently review this candidate against the WorkGroup acceptance criteria");
+    task.put("acceptance", group.acceptance());
+    task.put("workGroupId", group.workGroupId().toString());
+    task.put("role", WorkIntent.Role.REVIEWER.wireValue());
+    task.put("reviewTargets", snapshotReviewTargets(snapshot));
+
+    Map<String, Object> claimRequirement = new LinkedHashMap<>();
+    claimRequirement.put("field", "task.claims");
+    claimRequirement.put("required", true);
+    claimRequirement.put("purpose", "review report or test evidence");
+    claimRequirement.put("selectorKinds", List.of("path_exact", "path_subtree"));
+    claimRequirement.put("mustBeDisjointFrom", List.of("producer snapshot paths",
+        "all active claims"));
+    claimRequirement.put("guidance",
+        "Choose a report or test path to claim; Synesis will validate that the claim is disjoint.");
+
+    return Map.of("snapshotId", snapshot.snapshotId(), "tool", "ensure_session",
+        "arguments", Map.of("task", task), "claimRequirement", claimRequirement);
+  }
+
+  private static List<Map<String, Object>> snapshotReviewTargets(TaskSnapshotRecord snapshot) {
+    List<Map<String, Object>> targets = new ArrayList<>();
+    for (String encoded : snapshot.provenance().claimSelectors()) {
+      int separator = encoded.indexOf(':');
+      if (separator <= 0 || separator == encoded.length() - 1) {
+        continue;
+      }
+      try {
+        ResourceSelector selector = new ResourceSelector(
+            ResourceSelector.Kind.valueOf(encoded.substring(0, separator)),
+            encoded.substring(separator + 1));
+        targets.add(Map.of("kind", selector.kind().name().toLowerCase(java.util.Locale.ROOT),
+            "path", selector.value()));
+      } catch (IllegalArgumentException ignored) {
+        // Invalid historical selectors are omitted from agent guidance; server-side review
+        // admission still validates the immutable snapshot provenance.
+      }
+    }
+    return List.copyOf(targets);
+  }
+
   /**
    * Selects one semantically identified producer without using arrival order as a fallback.
    */
-  private static WorkIntent selectReviewTarget(List<WorkIntent> activeIntents, WorkIntent reviewer,
-      String reviewerParticipant, Set<String> completedReviewRevisions,
+  private static WorkIntent selectReviewTarget(
+      org.synesis.coordination.persistence.PredictionEventStore store,
+      List<WorkIntent> activeIntents, WorkIntent reviewer, String reviewerParticipant,
+      Set<String> completedReviewRevisions,
       Set<UUID> pendingReviewIntents) {
     List<WorkIntent> candidates = activeIntents.stream()
         .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
@@ -816,6 +1273,12 @@ public final class AgentNextActionService {
             intent.intentId() + ":" + intent.version()))
         .filter(intent -> !pendingReviewIntents.contains(intent.intentId()))
         .toList();
+    List<WorkIntent> publishedReviewCandidates = candidates.stream()
+        .filter(candidate -> hasPublishedReviewRequiredSnapshot(store, candidate))
+        .toList();
+    if (!publishedReviewCandidates.isEmpty()) {
+      candidates = publishedReviewCandidates;
+    }
     if (reviewer.reviewTargetSelectors()
         .isEmpty()) {
       return candidates.size() == 1 ? candidates.getFirst() : null;
@@ -830,24 +1293,19 @@ public final class AgentNextActionService {
     return matching.size() == 1 ? matching.getFirst() : null;
   }
 
-  /**
-   * Selects a single producer for a completed review-only participant.
-   */
-  private static WorkIntent selectUniqueProducerTarget(List<WorkIntent> activeIntents,
-      UUID workGroupId,
-      String reviewerParticipant, Set<String> completedReviewRevisions,
-      Set<UUID> pendingReviewIntents) {
-    List<WorkIntent> candidates = activeIntents.stream()
-        .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
-        .filter(intent -> intent.workGroupId()
-            .equals(workGroupId))
-        .filter(intent -> !intent.participant()
-            .equals(reviewerParticipant))
-        .filter(intent -> !completedReviewRevisions.contains(
-            intent.intentId() + ":" + intent.version()))
-        .filter(intent -> !pendingReviewIntents.contains(intent.intentId()))
-        .toList();
-    return candidates.size() == 1 ? candidates.getFirst() : null;
+  private static boolean hasPublishedReviewRequiredSnapshot(
+      org.synesis.coordination.persistence.PredictionEventStore store, WorkIntent producer) {
+    return store.taskCompletionProjection()
+        .allSnapshots()
+        .stream()
+        .filter(snapshot -> snapshot.taskId()
+            .equals(producer.taskId()))
+        .filter(snapshot -> snapshot.provenance()
+            .authorityLineageId()
+            .equals(producer.authorityLineageId()))
+        .filter(snapshot -> snapshot.provenance()
+            .claimEpoch() <= producer.version())
+        .anyMatch(org.synesis.coordination.domain.task.TaskSnapshotRecord::reviewRequired);
   }
 
   /**
@@ -946,17 +1404,46 @@ public final class AgentNextActionService {
     };
   }
 
+  /**
+   * Collects active claims owned by other participants so restored durable content can remain
+   * visible without becoming this participant's publication authority.
+   */
+  private static List<ResourceSelector> foreignClaims(
+      org.synesis.coordination.persistence.PredictionEventStore store, String participantId) {
+    return store.collaborationProjection()
+        .activeIntents()
+        .stream()
+        .filter(intent -> !intent.participant()
+            .equals(participantId))
+        .flatMap(intent -> intent.selectors()
+            .stream())
+        .distinct()
+        .toList();
+  }
+
   private static Map<String, Object> snapshotPublicationAction(
       org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
-      Path assignedWorktree, TaskSnapshotService snapshotService,
+      Path assignedWorktree, TaskSnapshotService snapshotService, String bindingBaseCommit,
       String nodeId, String supervisorId, String workerId) {
     var collaboration = store.collaborationProjection();
     var completion = store.taskCompletionProjection();
+    List<ResourceSelector> participantClaims = collaboration.activeIntents()
+        .stream()
+        .filter(candidate -> candidate.participant()
+            .equals(participantId))
+        .flatMap(candidate -> candidate.selectors()
+            .stream())
+        .distinct()
+        .toList();
+    List<ResourceSelector> foreignClaims = foreignClaims(store, participantId);
     for (var intent : collaboration.activeIntents()) {
       if (!intent.participant()
-          .equals(participantId) || intent.role() != WorkIntent.Role.PRODUCER) {
+          .equals(participantId)) {
         continue;
       }
+      // Reviewer lanes may publish only their own claimed report or test artifact.  The
+      // role-independent snapshot path is safe here because the lane claims and the foreign
+      // claim fence below still exclude another participant's source changes.
       // REVIEW grant consumption authorizes publication but does not
       // manufacture implementation work.  Keep the projection
       // executable by applying the same read-only source/artifact gate
@@ -965,8 +1452,11 @@ public final class AgentNextActionService {
         continue;
       }
       try {
-        if (!snapshotService.hasPublishableChanges(assignedWorktree, intent.selectors(),
-            intent.baseCommit())) {
+        String snapshotBaseCommit = snapshotService.snapshotBaseForBoundWorktree(
+            assignedWorktree, intent.baseCommit(), bindingBaseCommit);
+        boolean publishable = snapshotService.hasScopedPublishableChanges(assignedWorktree,
+            intent.selectors(), participantClaims, foreignClaims, snapshotBaseCommit);
+        if (!publishable) {
           continue;
         }
       } catch (Exception ignored) {
@@ -984,9 +1474,15 @@ public final class AgentNextActionService {
               && grant.claimEpoch() == intent.version()
               && !grant.targetParticipant()
               .equals(participantId)
+              && !store.workGroupProjection()
+              .grantSuperseded(grant.grantId())
               && store.workGroupProjection()
               .grantConsumed(grant.grantId()));
-      if (!reviewGrantConsumed
+      boolean mandatoryPolicyReview = store.workGroupProjection()
+          .group(intent.workGroupId())
+          .map(group -> group.reviewPolicy().mandatory())
+          .orElse(false);
+      if (!reviewGrantConsumed && !mandatoryPolicyReview
           && AgentTaskCompletionService.reviewRequired(store, intent, participantId)) {
         continue;
       }
@@ -1123,10 +1619,20 @@ public final class AgentNextActionService {
 
   private static Map<String, Object> pendingReviewGrantAction(
       org.synesis.coordination.persistence.PredictionEventStore store, String participantId,
-      Path assignedWorktree, TaskSnapshotService snapshotService) {
+      Path assignedWorktree, TaskSnapshotService snapshotService, String bindingBaseCommit) {
     var collaboration = store.collaborationProjection();
     var workGroups = store.workGroupProjection();
     var completion = store.taskCompletionProjection();
+    List<ResourceSelector> participantClaims = collaboration.activeIntents()
+        .stream()
+        .filter(candidate -> candidate.participant()
+            .equals(participantId))
+        .filter(candidate -> candidate.role() == WorkIntent.Role.PRODUCER)
+        .flatMap(candidate -> candidate.selectors()
+            .stream())
+        .distinct()
+        .toList();
+    List<ResourceSelector> foreignClaims = foreignClaims(store, participantId);
     for (WorkIntent intent : collaboration.activeIntents()) {
       if (!intent.participant()
           .equals(participantId) || intent.role() != WorkIntent.Role.PRODUCER) {
@@ -1151,6 +1657,7 @@ public final class AgentNextActionService {
             || grant.claimEpoch() != intent.version()
             || grant.targetParticipant()
             .equals(participantId)
+            || workGroups.grantSuperseded(grant.grantId())
             || !workGroups.grantAvailable(grant.grantId())
             || workGroups.reviewValidationForGrant(grant.grantId())
             .isPresent()) {
@@ -1164,9 +1671,11 @@ public final class AgentNextActionService {
         // remains gated on reviewer admission and consumption.
         if (assignedWorktree != null) {
           try {
-            if (!snapshotService.hasPublishableChanges(assignedWorktree,
-                intent.selectors(),
-                intent.baseCommit())) {
+            String snapshotBaseCommit = snapshotService.snapshotBaseForBoundWorktree(
+                assignedWorktree, intent.baseCommit(), bindingBaseCommit);
+            boolean publishable = snapshotService.hasScopedPublishableChanges(assignedWorktree,
+                intent.selectors(), participantClaims, foreignClaims, snapshotBaseCommit);
+            if (!publishable) {
               continue;
             }
           } catch (Exception ignored) {
@@ -1283,6 +1792,9 @@ public final class AgentNextActionService {
         request.kind()
             .name());
     map.put("proposal", request.proposal());
+    if (request.snapshotId() != null) {
+      map.put("snapshotId", request.snapshotId());
+    }
     map.put("status",
         request.status()
             .name());
@@ -1304,33 +1816,30 @@ public final class AgentNextActionService {
         group.version(),
         "status",
         group.status()
-            .name());
+            .name(),
+        "reviewPolicy",
+        Map.of("mandatory", group.reviewPolicy().mandatory(),
+            "independenceRequired", group.reviewPolicy().independenceRequired()));
   }
 
   private static Map<String, Object> laneGrantMap(LaneGrant grant) {
-    return Map.of("grantId",
-        grant.grantId()
-            .toString(),
-        "workGroupId",
-        grant.workGroupId()
-            .toString(),
-        "targetIntentId",
-        grant.targetIntentId()
-            .toString(),
-        "reviewedIntentId",
-        grant.targetIntentId()
-            .toString(),
-        "targetParticipant",
-        grant.targetParticipant(),
-        "reviewerParticipant",
-        grant.targetParticipant(),
-        "claimEpoch",
-        grant.claimEpoch(),
-        "singleUse",
-        grant.singleUse());
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("grantId", grant.grantId().toString());
+    map.put("workGroupId", grant.workGroupId().toString());
+    map.put("targetIntentId", grant.targetIntentId().toString());
+    map.put("reviewedIntentId", grant.targetIntentId().toString());
+    map.put("targetParticipant", grant.targetParticipant());
+    map.put("reviewerParticipant", grant.targetParticipant());
+    map.put("claimEpoch", grant.claimEpoch());
+    map.put("singleUse", grant.singleUse());
+    if (grant.snapshotId() != null) {
+      map.put("snapshotId", grant.snapshotId());
+    }
+    return map;
   }
 
-  private static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot) {
+  private static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot,
+      org.synesis.coordination.persistence.PredictionEventStore store) {
     Map<String, Object> map = new LinkedHashMap<>();
     map.put("taskId",
         snapshot.taskId()
@@ -1356,6 +1865,15 @@ public final class AgentNextActionService {
         snapshot.provenance()
             .participant());
     map.put("reviewRequired", snapshot.reviewRequired());
+    store.taskCompletionProjection()
+        .snapshotState(snapshot.snapshotId())
+        .ifPresent(state -> map.put("snapshotState", state.name()));
+    store.workGroupProjection()
+        .reviewValidationForSnapshot(snapshot.snapshotId())
+        .ifPresent(decision -> map.put("reviewDecision", Map.of(
+            "grantId", decision.grantId().toString(),
+            "snapshotId", decision.snapshotId(),
+            "result", decision.result())));
     return map;
   }
 
@@ -1504,7 +2022,7 @@ public final class AgentNextActionService {
       Map<String, Object> result = new LinkedHashMap<>();
       result.put("state", state.name());
       result.put("snapshotAlreadyPublished", true);
-      result.put("snapshot", snapshotMap(snapshot));
+      result.put("snapshot", snapshotMap(snapshot, store));
       result.put("currentIntent", intentMap(intent));
       result.put("nextProtocolAction", "finish_lane");
       result.put("nextProtocolKind", "snapshot_completion");
@@ -1547,9 +2065,15 @@ public final class AgentNextActionService {
       location = projectService.locate(root);
       exactBinding = bindingService.find(
           location, request.provider(), request.connectionInstanceId());
-      if (exactBinding.isPresent() && sessionIsTerminal(location, exactBinding.get())) {
-        return terminalSessionResponse(exactBinding.get()
-            .sessionId());
+      if (exactBinding.isPresent()) {
+        try {
+          if (sessionIsTerminal(location, exactBinding.get())) {
+            return terminalSessionResponse(exactBinding.get()
+                .sessionId());
+          }
+        } catch (Exception failure) {
+          return terminalStateUnavailableResponse(failure);
+        }
       }
       if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get()
           .status())) {
@@ -1639,9 +2163,15 @@ public final class AgentNextActionService {
               location.projectId());
           exactBinding = bindingService.find(location, request.provider(),
               request.connectionInstanceId());
-          if (exactBinding.isPresent() && sessionIsTerminal(location, exactBinding.get())) {
-            return terminalSessionResponse(exactBinding.get()
-                .sessionId());
+          if (exactBinding.isPresent()) {
+            try {
+              if (sessionIsTerminal(location, exactBinding.get())) {
+                return terminalSessionResponse(exactBinding.get()
+                    .sessionId());
+              }
+            } catch (Exception failure) {
+              return terminalStateUnavailableResponse(failure);
+            }
           }
           if (exactBinding.isPresent() && "COMPLETED".equals(exactBinding.get()
               .status())) {
@@ -1676,7 +2206,8 @@ public final class AgentNextActionService {
         if (reviewerPendingResponse != null) {
           return reviewerPendingResponse;
         }
-        AgentResponse revisionResponse = revisionRequiredAction(store, callerParticipant);
+        AgentResponse revisionResponse = revisionRequiredAction(store, callerParticipant,
+            assignedWorktree, snapshotService);
         if (revisionResponse != null) {
           return revisionResponse;
         }
@@ -1694,11 +2225,10 @@ public final class AgentNextActionService {
             ownerAction.putAll(reviewAcceptance);
           }
           return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
-              AgentNextAction.RESPOND_COORDINATION, ownerAction);
+                AgentNextAction.RESPOND_COORDINATION, ownerAction);
         }
-
         Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(
-            store, callerParticipant, assignedWorktree, snapshotService);
+            store, callerParticipant, assignedWorktree, snapshotService, binding.baseCommit());
         if (pendingReviewGrant != null) {
           Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
           ownerWait.putAll(pendingReviewGrant);
@@ -1714,7 +2244,7 @@ public final class AgentNextActionService {
                 AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
           }
           Map<String, Object> publicationAction = snapshotPublicationAction(
-              store, callerParticipant, assignedWorktree, snapshotService,
+              store, callerParticipant, assignedWorktree, snapshotService, binding.baseCommit(),
               callerNodeId, binding.supervisorId(), binding.workerId());
           if (publicationAction != null) {
             return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
@@ -1727,6 +2257,31 @@ public final class AgentNextActionService {
             return new AgentResponse(AgentStatus.READY, null,
                 AgentNextAction.FINISH_LANE, noChangeAction);
           }
+        }
+
+        // Keep a nonterminal integration result visible when no higher-priority review,
+        // coordination, completion, or review-candidate discovery action is available. A
+        // pending candidate must remain visible so a new reviewer can lawfully select it.
+        boolean reviewCandidateSelectionRequired = Boolean.TRUE.equals(
+            collaboration.get("reviewCandidateSelectionRequired"));
+        boolean reviewerContinuationForPendingReview = hasAvailableReviewerReviewContinuation(
+            store, collaboration);
+        if (integrationPump.status() != AgentStatus.READY
+            && integrationPump.status() != AgentStatus.COMPLETED
+            && !reviewCandidateSelectionRequired
+            && !reviewerContinuationForPendingReview) {
+          return integrationPump;
+        }
+
+        // A request addressed to this participant is a durable inbox item and an explicit
+        // completion request is a durable request to close this participant's own lane.  Both
+        // must remain reachable even when an unrelated recovery-held lane is also available.
+        // Continuing first can select an opposite-role lane and make the required owner response
+        // or snapshot publication unreachable (or trigger REVIEW_SELF_NOT_ALLOWED).
+        AgentResponse continuationResponse = continuationAction(store, callerParticipant,
+            collaboration);
+        if (continuationResponse != null) {
+          return continuationResponse;
         }
 
         // A session that has not established its own active intent is
@@ -2217,7 +2772,15 @@ public final class AgentNextActionService {
         return null;
       }
       Map<String, Object> collaboration = collaborationDetails(store, sessionId, completedGroups);
-      return reviewActionResponse(collaboration, true);
+      AgentResponse reviewResponse = reviewActionResponse(collaboration, true);
+      if (reviewResponse != null) {
+        return reviewResponse;
+      }
+      boolean groupActive = completedGroups.stream()
+          .anyMatch(groupId -> store.workGroupProjection().group(groupId)
+              .filter(group -> group.status() == WorkGroup.Status.ACTIVE).isPresent());
+      return groupActive
+          ? new AgentResponse(AgentStatus.WAITING, null, AgentNextAction.WAIT, collaboration) : null;
     } catch (Exception ignored) {
       return null;
     }
@@ -2250,7 +2813,10 @@ public final class AgentNextActionService {
       if (reviewerPendingResponse != null) {
         return reviewerPendingResponse;
       }
-      AgentResponse revisionResponse = revisionRequiredAction(store, participant);
+      Path assignedWorktree = binding.worktreePath() == null
+          ? null : Path.of(binding.worktreePath());
+      AgentResponse revisionResponse = revisionRequiredAction(store, participant,
+          assignedWorktree, snapshotService);
       if (revisionResponse != null) {
         return revisionResponse;
       }
@@ -2258,8 +2824,6 @@ public final class AgentNextActionService {
       if (reviewPendingResponse != null) {
         return reviewPendingResponse;
       }
-      Path assignedWorktree = binding.worktreePath() == null
-          ? null : Path.of(binding.worktreePath());
 
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> pendingCoordination =
@@ -2273,7 +2837,7 @@ public final class AgentNextActionService {
       }
 
       Map<String, Object> pendingReviewGrant = pendingReviewGrantAction(
-          store, participant, assignedWorktree, snapshotService);
+          store, participant, assignedWorktree, snapshotService, binding.baseCommit());
       if (pendingReviewGrant != null) {
         Map<String, Object> ownerWait = new LinkedHashMap<>(collaboration);
         ownerWait.putAll(pendingReviewGrant);
@@ -2294,7 +2858,7 @@ public final class AgentNextActionService {
               AgentNextAction.FINISH_LANE, publishedSnapshotCompletion);
         }
         Map<String, Object> publicationAction = snapshotPublicationAction(
-            store, participant, assignedWorktree, snapshotService,
+            store, participant, assignedWorktree, snapshotService, binding.baseCommit(),
             callerIdentity.nodeId(), binding.supervisorId(), binding.workerId());
         if (publicationAction != null) {
           return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
@@ -2411,11 +2975,21 @@ public final class AgentNextActionService {
         store.taskCompletionProjection()
             .allSnapshots()
             .stream()
-            .map(AgentNextActionService::snapshotMap)
+            .map(snapshot -> snapshotMap(snapshot, store))
             .toList());
     result.put("currentParticipant", participantId);
     result.put("currentIntent", currentIntent);
     result.put("pendingCoordination", enrichedPending);
+    result.put("continuationCandidates", continuationCandidates(store, participantId));
+    List<Map<String, Object>> reviewCandidates = reviewCandidates(store);
+    result.put("reviewCandidates", reviewCandidates);
+    result.put("reviewCandidateSelectionRequired", !reviewCandidates.isEmpty());
+    result.put("actionableReviewCandidates",
+        actionableReviewCandidates(store, participantId, reviewCandidates));
+    if (!reviewCandidates.isEmpty()) {
+      result.put("reviewCandidateSelectionInstruction",
+          "Choose an exact candidate explicitly; Synesis does not select one for you.");
+    }
     result.put("reviewActions", reviewActions(store, participantId, reviewGroupFilter));
     result.put("claimConflicts", List.of());
     return result;

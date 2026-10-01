@@ -12,6 +12,8 @@ import java.util.UUID;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
@@ -306,17 +308,24 @@ public final class IntegrationOrchestrationService {
       if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
         failures.add("STALE_BASE:" + snapshot.snapshotId());
       }
-      var laneIntent = store.collaborationProjection()
-          .intent(snapshot.provenance()
+      WorkIntent laneIntent = currentIntentForSnapshot(store, snapshot);
+      boolean exactLane = laneIntent != null && laneIntent.intentId()
+          .equals(snapshot.provenance()
               .laneId());
-      if (laneIntent.isEmpty()
-          || !laneIntent.get()
-          .authorityLineageId()
+      if (laneIntent == null
+          || !laneIntent.taskId()
+          .equals(snapshot.taskId())
+          || !laneIntent.workGroupId()
+          .equals(snapshot.provenance()
+              .workGroupId())
+          || !laneIntent.authorityLineageId()
           .equals(snapshot.provenance()
               .authorityLineageId())
-          || laneIntent.get()
-          .version() != snapshot.provenance()
-          .claimEpoch()) {
+          || (exactLane
+          ? laneIntent.version() != snapshot.provenance()
+              .claimEpoch()
+          : laneIntent.version() <= snapshot.provenance()
+              .claimEpoch())) {
         failures.add("STALE_CLAIM_EPOCH:" + snapshot.snapshotId());
       }
       for (String path : snapshot.changedPaths()) {
@@ -418,6 +427,32 @@ public final class IntegrationOrchestrationService {
     return List.copyOf(failures);
   }
 
+  private static WorkIntent currentIntentForSnapshot(PredictionEventStore store,
+      TaskSnapshotRecord snapshot) {
+    WorkIntent exact = store.collaborationProjection()
+        .intent(snapshot.provenance()
+            .laneId())
+        .orElse(null);
+    if (exact != null) {
+      return exact;
+    }
+    return store.collaborationProjection()
+        .activeIntents()
+        .stream()
+        .filter(intent -> intent.taskId()
+            .equals(snapshot.taskId()))
+        .filter(intent -> intent.workGroupId()
+            .equals(snapshot.provenance()
+                .workGroupId()))
+        .filter(intent -> intent.authorityLineageId()
+            .equals(snapshot.provenance()
+                .authorityLineageId()))
+        .filter(intent -> intent.version() > snapshot.provenance()
+            .claimEpoch())
+        .min(java.util.Comparator.comparingLong(WorkIntent::version))
+        .orElse(null);
+  }
+
   private static boolean isAncestor(Path workdir, String base, String head) {
     try {
       return GitProcessRunner.runResult(workdir, "merge-base", "--is-ancestor", base, head)
@@ -450,7 +485,16 @@ public final class IntegrationOrchestrationService {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
             AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
       }
-      return orchestrateIntegrationLocked(lock, controlRoot, store, identity);
+      // A peer may integrate while this caller waits for the project lock.
+      // Eligibility and append validation must use the durable state after acquisition.
+      PredictionEventStore current;
+      try {
+        current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+      } catch (IOException | java.security.GeneralSecurityException failure) {
+        return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+            AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
+      }
+      return orchestrateIntegrationLocked(lock, controlRoot, current, identity);
     } catch (IOException failure) {
       return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
           AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
@@ -525,22 +569,25 @@ public final class IntegrationOrchestrationService {
       // the active collaboration graph is unresolved.  This check is
       // intentionally before attempt allocation so a blocked negotiation
       // cannot leave a misleading started attempt behind.
-      var pendingRequests = new org.synesis.coordination.application.WorkIntentService(store,
-          identity)
+      PredictionEventStore coordinationStore;
+      try {
+        coordinationStore = new PredictionEventStore(store.rootDirectory(), store.projectId());
+      } catch (Exception failure) {
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT,
+            AgentNextAction.RETRY, Map.of("failure", "COORDINATION_STATE_UNAVAILABLE"));
+      }
+      var pendingRequests = new WorkIntentService(coordinationStore, identity)
           .requests()
           .stream()
           .filter(request -> request.status()
               == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING)
+          .filter(request -> liveCoordinationRequest(coordinationStore, request))
           .toList();
       if (!pendingRequests.isEmpty()) {
-        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OWNER_REQUEST_PENDING,
-            AgentNextAction.RESPOND_COORDINATION,
-            Map.of("pending",
-                pendingRequests.size(),
-                "request",
-                pendingRequests.getFirst()
-                    .requestId()
-                    .toString()));
+        // This pump has no participant binding. Only the caller's inbox
+        // can project an owned request as a response obligation.
+        return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+            AgentNextAction.WAIT, Map.of("pending", pendingRequests.size()));
       }
 
       CapabilityRequestProjection capProj = store.capabilityRequestProjection();
@@ -559,10 +606,11 @@ public final class IntegrationOrchestrationService {
             null);
       }
 
-      // Pick the oldest dependency-ready candidate.  Structurally
+      // Pick the oldest dependency-ready work group. Structurally
       // invalid candidates are durably blocked and removed from the
-      // eligible queue; unrelated candidates are still considered in
-      // the same pump invocation.
+      // eligible queue; compatible ready snapshots from that same
+      // work group travel through one guarded integration attempt so a
+      // project gate can validate their complete change set together.
       List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection()
           .allSnapshots();
       List<TaskSnapshotRecord> eligible = store.taskCompletionProjection()
@@ -583,69 +631,54 @@ public final class IntegrationOrchestrationService {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
             AgentNextAction.REQUEST_HUMAN_HELP, result);
       }
-      TaskSnapshotRecord selected = null;
-      while (selected == null) {
-        boolean sawPendingDependency = false;
-        for (TaskSnapshotRecord candidate : eligible) {
-          CandidateResolution resolution = resolveCandidate(candidate, allSnapshots, capProj,
-              store.taskCompletionProjection());
-          if (!resolution.structuralFailures()
-              .isEmpty()) {
-            if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead,
-                resolution.structuralFailures())) {
-              return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
-                  AgentNextAction.REQUEST_HUMAN_HELP,
-                  Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
-            }
-            continue;
-          }
-          if (!resolution.ready()) {
-            sawPendingDependency = true;
-            continue;
-          }
-          List<String> metadataFailures = validateSnapshotMetadata(controlRoot,
-              List.of(candidate), expectedControlHead, store);
-          if (!metadataFailures.isEmpty()) {
-            if (blockedCandidateAppendFailed(store,
-                identity,
-                candidate,
-                expectedControlHead,
-                metadataFailures)) {
-              return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
-                  AgentNextAction.REQUEST_HUMAN_HELP,
-                  Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
-            }
-            continue;
-          }
-          selected = candidate;
-          break;
-        }
-        if (selected == null) {
-          eligible = store.taskCompletionProjection()
-              .eligibleSnapshots()
-              .stream()
-              .filter(snapshot -> reviewAccepted(snapshot, store))
-              .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis)
-                  .thenComparing(TaskSnapshotRecord::snapshotId))
-              .toList();
-          if (eligible.isEmpty()) {
-            if (sawPendingDependency) {
-              return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
-                  AgentNextAction.WAIT, Map.of("pendingDependencies", 1));
-            }
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+      List<TaskSnapshotRecord> readyCandidates = new ArrayList<>();
+      boolean sawPendingDependency = false;
+      for (TaskSnapshotRecord candidate : eligible) {
+        CandidateResolution resolution = resolveCandidate(candidate, allSnapshots, capProj,
+            store.taskCompletionProjection());
+        if (!resolution.structuralFailures()
+            .isEmpty()) {
+          if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead,
+              resolution.structuralFailures())) {
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
                 AgentNextAction.REQUEST_HUMAN_HELP,
-                Map.of("state", "integration_blocked"));
+                Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
           }
-          // The remaining candidates are all pending dependencies or
-          // were just durably blocked.  Do not spin in one request.
-          if (sawPendingDependency) {
-            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
-                AgentNextAction.WAIT, Map.of("pendingDependencies", eligible.size()));
-          }
+          continue;
         }
+        if (!resolution.ready()) {
+          sawPendingDependency = true;
+          continue;
+        }
+        List<String> metadataFailures = validateSnapshotMetadata(controlRoot,
+            List.of(candidate), expectedControlHead, store);
+        if (!metadataFailures.isEmpty()) {
+          if (blockedCandidateAppendFailed(store,
+              identity,
+              candidate,
+              expectedControlHead,
+              metadataFailures)) {
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
+                AgentNextAction.REQUEST_HUMAN_HELP,
+                Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
+          }
+          continue;
+        }
+        readyCandidates.add(candidate);
       }
-      snapshots = List.of(Objects.requireNonNull(selected, "selected candidate"));
+      if (readyCandidates.isEmpty()) {
+        if (sawPendingDependency) {
+          return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING,
+              AgentNextAction.WAIT, Map.of("pendingDependencies", eligible.size()));
+        }
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED,
+            AgentNextAction.REQUEST_HUMAN_HELP,
+            Map.of("state", "integration_blocked"));
+      }
+      UUID selectedWorkGroup = readyCandidates.getFirst().provenance().workGroupId();
+      snapshots = readyCandidates.stream()
+          .filter(candidate -> candidate.provenance().workGroupId().equals(selectedWorkGroup))
+          .toList();
       List<TaskSnapshotRecord> ordered;
       try {
         ordered = sortSnapshotsTopologically(snapshots, capProj);
@@ -820,6 +853,38 @@ public final class IntegrationOrchestrationService {
   }
 
   /**
+   * Keeps integration blocked only for a pending request that still has an authorized participant
+   * capable of responding. Requests owned entirely by terminal participants are historical
+   * evidence; leaving them pending must not make an active work group permanently unintegrable.
+   *
+   * @param store   current project event store
+   * @param request pending coordination request
+   * @return {@code true} when the request still belongs to a live collaboration edge
+   */
+  private static boolean liveCoordinationRequest(PredictionEventStore store,
+      CoordinationRequest request) {
+    return liveParticipant(store, request.requester())
+        && liveParticipant(store, request.target());
+  }
+
+  /**
+   * Treats unknown participants conservatively while excluding only explicit terminal states.
+   *
+   * @param store       current project event store
+   * @param participant participant handle
+   * @return {@code true} when the participant may still answer a request
+   */
+  private static boolean liveParticipant(PredictionEventStore store, String participant) {
+    return store.collaborationProjection()
+        .participantState(participant)
+        .map(state -> state != Participant.State.REVOKED
+            && state != Participant.State.COMPLETED
+            && state != Participant.State.CANCELLED
+            && state != Participant.State.DETACHED)
+        .orElse(true);
+  }
+
+  /**
    * Finalizes only lanes whose exact immutable snapshots have integrated.
    */
   private void finalizeIntegratedLanes(ProjectAppendLock appendLock, Path controlRoot,
@@ -828,11 +893,8 @@ public final class IntegrationOrchestrationService {
     ProjectApplicationService.ProjectLocation location = projectService.locate(controlRoot);
     WorkIntentService intentService = new WorkIntentService(store, identity);
     for (TaskSnapshotRecord snapshot : snapshots) {
-      String provider = store.collaborationProjection()
-          .intent(snapshot.provenance()
-              .laneId())
-          .map(WorkIntent::provider)
-          .orElse(null);
+      WorkIntent currentIntent = currentIntentForSnapshot(store, snapshot);
+      String provider = currentIntent == null ? null : currentIntent.provider();
       intentService.releaseAfterIntegration(appendLock, snapshot);
       if (provider != null) {
         bindingService.completeBySessionId(location, provider, snapshot.providerSessionId());
