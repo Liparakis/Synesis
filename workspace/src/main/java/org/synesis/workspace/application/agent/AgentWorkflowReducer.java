@@ -178,7 +178,7 @@ public final class AgentWorkflowReducer {
           return Map.of("tool", "respond_coordination", "arguments", Map.of(
               "kind", kind, "payload", payload));
         }
-        return Map.of("tool", "respond_coordination", "arguments", Map.of());
+        return null;
       }
       case FINISH_LANE -> {
         Map<String, Object> arguments = new LinkedHashMap<>();

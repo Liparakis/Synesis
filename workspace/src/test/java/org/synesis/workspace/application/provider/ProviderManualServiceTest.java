@@ -35,6 +35,10 @@ class ProviderManualServiceTest {
       assertTrue(content.contains("visible assigned worktree"));
       assertTrue(content.contains("Do not inspect `.synesis/**`"));
       assertTrue(content.contains("Do not call `finish_lane` or another lifecycle tool"));
+      assertTrue(content.contains("workflow.decision.required"));
+      assertTrue(content.contains("responseTemplates"));
+      assertTrue(content.contains("fill payload.coordinationStatus"));
+      assertTrue(content.contains("Never execute an incomplete template"));
       assertTrue(content.contains("Execute `finish_lane` only when `get_next_action` projects it"));
       assertTrue(content.contains("exact tool with those exact arguments"));
       assertTrue(content.contains("do not end the session"));

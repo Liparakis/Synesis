@@ -16,6 +16,19 @@ import org.synesis.workspace.application.agent.AgentWorkflowReducer;
 final class AgentWorkflowReducerTest {
 
   @Test
+  void ownerJudgmentDoesNotProjectAnEmptyExecutableResponse() {
+    var request = new AgentNextActionService.NextActionRequest(Path.of("."), "codex", "owner");
+    var response = new AgentWorkflowReducer().decorate(request,
+        new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
+            AgentNextAction.RESPOND_COORDINATION, Map.of("reviewDecision",
+                Map.of("required", true, "field", "coordinationStatus"))));
+    var workflow = (Map<?, ?>) ((Map<?, ?>) response.result()).get("workflow");
+    assertFalse(workflow.containsKey("recommendedTool"));
+    assertFalse(workflow.containsKey("arguments"));
+    assertTrue(workflow.containsKey("decision"));
+  }
+
+  @Test
   void staleFinishEvidenceProjectsAnExplicitFreshCompletionPoll() {
     AgentWorkflowReducer reducer = new AgentWorkflowReducer();
     var request = new AgentNextActionService.NextActionRequest(

@@ -2223,6 +2223,18 @@ public final class AgentNextActionService {
           Map<String, Object> reviewAcceptance = reviewAcceptanceAction(pendingCoordination);
           if (reviewAcceptance != null) {
             ownerAction.putAll(reviewAcceptance);
+          } else {
+            ownerAction.put("reviewDecision", Map.of(
+                "required", true,
+                "tool", "respond_coordination",
+                "field", "coordinationStatus",
+                "allowedResults", List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED"),
+                "optionalFields", List.of("proposal"),
+                "responseTemplates", pendingCoordination.stream()
+                    .map(item -> Map.of("kind", "coordination_response", "payload",
+                        Map.of("coordinationRequest", item.get("requestId"))))
+                    .toList(),
+                "instruction", "Choose an owned request template and supply coordinationStatus after judgment; the template is not executable until that decision is filled."));
           }
           return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_REQUEST_PENDING,
                 AgentNextAction.RESPOND_COORDINATION, ownerAction);
@@ -2259,6 +2271,16 @@ public final class AgentNextActionService {
           }
         }
 
+        AgentResponse continuationResponse = continuationAction(store, callerParticipant,
+            collaboration);
+        // A recovery-held owner cannot resolve the request fencing integration until
+        // a successor can discover its continuation. This projection transfers no authority.
+        if (integrationPump.status() == AgentStatus.WAITING
+            && integrationPump.reason() == AgentReason.INTEGRATION_PENDING
+            && continuationResponse != null) {
+          return continuationResponse;
+        }
+
         // Keep a nonterminal integration result visible when no higher-priority review,
         // coordination, completion, or review-candidate discovery action is available. A
         // pending candidate must remain visible so a new reviewer can lawfully select it.
@@ -2278,8 +2300,6 @@ public final class AgentNextActionService {
         // must remain reachable even when an unrelated recovery-held lane is also available.
         // Continuing first can select an opposite-role lane and make the required owner response
         // or snapshot publication unreachable (or trigger REVIEW_SELF_NOT_ALLOWED).
-        AgentResponse continuationResponse = continuationAction(store, callerParticipant,
-            collaboration);
         if (continuationResponse != null) {
           return continuationResponse;
         }

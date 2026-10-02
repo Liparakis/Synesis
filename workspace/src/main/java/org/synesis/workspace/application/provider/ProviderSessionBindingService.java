@@ -1184,14 +1184,7 @@ public final class ProviderSessionBindingService {
         return false;
       }
       Binding binding = read(bindingPath);
-      if ("COMPLETED".equals(binding.status())) {
-        return true;
-      }
-      if (!"BOUND".equals(binding.status()) && !"SUSPENDED".equals(binding.status())) {
-        return false;
-      }
-      write(bindingPath, binding.complete());
-      return true;
+      return completeIfIdle(location, binding, bindingPath, null);
     } catch (BindingException failure) {
       throw failure;
     } catch (Exception failure) {
@@ -1217,6 +1210,22 @@ public final class ProviderSessionBindingService {
   public synchronized boolean completeBySessionId(
       ProjectApplicationService.ProjectLocation location,
       String provider, String sessionId) throws BindingException {
+    return completeBySessionId(location, provider, sessionId, null);
+  }
+
+  /**
+   * Completes an exact binding under the integration caller's held project append lock.
+   *
+   * @param location initialized project
+   * @param provider exact provider
+   * @param sessionId exact session
+   * @param appendLock held project lock, or null to acquire it here
+   * @return true only when the session has no remaining owned intents and is complete
+   * @throws BindingException when state or locking cannot be verified
+   */
+  public synchronized boolean completeBySessionId(
+      ProjectApplicationService.ProjectLocation location,
+      String provider, String sessionId, ProjectAppendLock appendLock) throws BindingException {
     Objects.requireNonNull(location, "location");
     requireText(provider, "provider");
     requireText(sessionId, "sessionId");
@@ -1232,12 +1241,6 @@ public final class ProviderSessionBindingService {
         throw new BindingException("SESSION_IDENTITY_MISMATCH",
             "Stored provider binding does not match the requested provider");
       }
-      if ("COMPLETED".equals(binding.status())) {
-        return true;
-      }
-      if (!"BOUND".equals(binding.status()) && !"SUSPENDED".equals(binding.status())) {
-        return false;
-      }
       Path bindingPath = location.synesisDirectory()
           .resolve("local")
           .resolve(SESSIONS_DIRECTORY)
@@ -1245,14 +1248,57 @@ public final class ProviderSessionBindingService {
       if (!Files.isRegularFile(bindingPath)) {
         return false;
       }
-      write(bindingPath, binding.complete());
-      return true;
+      return completeIfIdle(location, binding, bindingPath, appendLock);
     } catch (BindingException failure) {
       throw failure;
     } catch (Exception failure) {
       throw new BindingException("SESSION_COMPLETE_FAILED",
           "Could not complete provider connection binding", failure);
     }
+  }
+
+  /**
+   * Checks fresh ownership for this exact session without transferring or releasing claims.
+   *
+   * @param location initialized project
+   * @param binding exact authenticated binding
+   * @return whether any announced intent still belongs to this binding's participant
+   * @throws Exception when authoritative coordination state cannot be read or authenticated
+   */
+  public boolean hasActiveIntent(ProjectApplicationService.ProjectLocation location, Binding binding)
+      throws Exception {
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    return new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+        location.projectId()).collaborationProjection().activeIntents().stream()
+        .anyMatch(intent -> intent.participant().equals(participant));
+  }
+
+  private boolean completeIfIdle(ProjectApplicationService.ProjectLocation location, Binding binding,
+      Path bindingPath, ProjectAppendLock appendLock) throws Exception {
+    if (appendLock == null) {
+      try (ProjectAppendLock acquired = ProjectAppendLock.acquire(
+          location.root().resolve(".synesis/coordination"))) {
+        return completeIfIdle(location, binding, bindingPath, acquired);
+      }
+    }
+    if (!appendLock.isHeld()) {
+      throw new IOException("event append lock unavailable");
+    }
+    Binding current = read(bindingPath);
+    if (!current.sessionId().equals(binding.sessionId())) {
+      throw new IOException("SESSION_IDENTITY_MISMATCH");
+    }
+    if (hasActiveIntent(location, current)) {
+      return false;
+    }
+    if ("COMPLETED".equals(current.status())) {
+      return true;
+    }
+    if (!"BOUND".equals(current.status()) && !"SUSPENDED".equals(current.status())) {
+      return false;
+    }
+    write(bindingPath, current.complete());
+    return true;
   }
 
   /**

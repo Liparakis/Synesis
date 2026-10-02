@@ -297,7 +297,8 @@ public final class IntegrationOrchestrationService {
         .requests()
         .stream()
         .anyMatch(request -> request.status()
-            == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING)) {
+            == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING
+            && liveCoordinationRequest(store, request))) {
       failures.add("UNRESOLVED_COORDINATION_REQUEST");
     }
     for (TaskSnapshotRecord snapshot : snapshots) {
@@ -897,7 +898,7 @@ public final class IntegrationOrchestrationService {
       String provider = currentIntent == null ? null : currentIntent.provider();
       intentService.releaseAfterIntegration(appendLock, snapshot);
       if (provider != null) {
-        bindingService.completeBySessionId(location, provider, snapshot.providerSessionId());
+        bindingService.completeBySessionId(location, provider, snapshot.providerSessionId(), appendLock);
       }
     }
   }

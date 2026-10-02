@@ -84,6 +84,16 @@ class IntegrationQueueTest {
 
   @Test
   void blockedOldCandidateDoesNotPreventLaterEligibleSnapshot(@TempDir Path root) throws Exception {
+    assertEligibleSnapshotIntegrates(root, false);
+  }
+
+  @Test
+  void detachedHistoricalRequestDoesNotInvalidateLiveSnapshot(@TempDir Path root) throws Exception {
+    assertEligibleSnapshotIntegrates(root, true);
+  }
+
+  private static void assertEligibleSnapshotIntegrates(Path root, boolean historicalRequest)
+      throws Exception {
     git(root, "init");
     git(root, "config", "user.name", "Test");
     git(root, "config", "user.email", "test@example.invalid");
@@ -122,6 +132,25 @@ class IntegrationQueueTest {
     store = new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId());
 
+    if (historicalRequest) {
+      UUID historicalLane = UUID.randomUUID();
+      WorkIntentService intents = new WorkIntentService(store, identity);
+      assertTrue(intents.announce(new WorkIntent(historicalLane, location.projectId(),
+          "agt_historical_owner", "codex", UUID.randomUUID(), "historical", "historical",
+          base, List.of(ResourceSelector.pathExact("history/owner.py")), 1,
+          UUID.randomUUID(), WorkIntent.Status.ANNOUNCED)).acquired());
+      assertTrue(intents.announce(new WorkIntent(UUID.randomUUID(), location.projectId(),
+          "agt_historical_requester", "codex", UUID.randomUUID(), "historical", "historical",
+          base, List.of(ResourceSelector.pathExact("history/requester.py")), 1,
+          UUID.randomUUID(), WorkIntent.Status.ANNOUNCED)).acquired());
+      intents.request("agt_historical_requester", historicalLane,
+          org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.CONTRACT,
+          "historical API decision");
+      intents.detach("agt_historical_owner");
+      intents.detach("agt_historical_requester");
+      store = new PredictionEventStore(store.rootDirectory(), store.projectId());
+    }
+
     publishSnapshot(store, identity, root, badTask, "snap_000_bad", badLane, group, badCommit,
         "agt_bad", "src/bad.py", "PATH_EXACT:src/not-claimed.py", badLane, List.of());
     publishSnapshot(store, identity, root, goodTask, "snap_999_good", goodLane, group, goodCommit,
@@ -146,6 +175,11 @@ class IntegrationQueueTest {
     assertTrue(store.taskCompletionProjection()
         .eligibleSnapshots()
         .isEmpty());
+    if (historicalRequest) {
+      assertEquals(1, store.collaborationProjection().requests().size());
+      assertEquals(org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING,
+          store.collaborationProjection().requests().getFirst().status());
+    }
   }
 
   @Test

@@ -437,15 +437,6 @@ public final class AgentTaskCompletionService {
         integrationResult.nextAction(), result);
   }
 
-  private static void releaseClaims(CompleteTaskRequest request,
-      WorkspaceCollaborationService service) {
-    try {
-      service.release(request.projectRoot(), request.provider(), request.connectionInstanceId());
-    } catch (Exception ignored) {
-      // The task result remains authoritative; reconciliation can retry release.
-    }
-  }
-
   private static UUID findActiveTaskId(PredictionEventStore store,
       String callerNodeId,
       String callerWorkerId,
@@ -730,7 +721,6 @@ public final class AgentTaskCompletionService {
         AgentResponse result = completionResult(store, existingOpt.get(), participantHandle,
             new AgentResponse(AgentStatus.COMPLETED, null, null,
                 Map.of("task", "already_integrated")), null);
-        releaseClaims(request, collaborationService);
         bindingService.complete(location, request.provider(), request.connectionInstanceId());
         AgentResponse terminalResult = terminalSessionResult(result, request, location, binding,
             identity);
@@ -959,7 +949,6 @@ public final class AgentTaskCompletionService {
       result = completionResult(completionStore, snapshot, participantHandle, result,
           prePublicationValidation);
       if (result.status() == AgentStatus.COMPLETED) {
-        releaseClaims(request, collaborationService);
         // Complete only the exact calling connection.  Keeping the
         // binding terminal (and retaining its worktree) prevents the
         // next inbox read from attempting to reuse a stale lane.
@@ -1067,7 +1056,8 @@ public final class AgentTaskCompletionService {
           return noChangeDenied("NO_CHANGE_COMPLETION_CONFLICT", validation);
         }
         if (!bindingService.complete(location, request.provider(),
-            request.connectionInstanceId())) {
+            request.connectionInstanceId())
+            && !bindingService.hasActiveIntent(location, readiness.binding())) {
           return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
               AgentNextAction.REQUEST_HUMAN_HELP,
               Map.of("reason", "SESSION_COMPLETE_FAILED"));
@@ -1105,7 +1095,8 @@ public final class AgentTaskCompletionService {
           request.expectedIntentId(), request.expectedWorkGroupId(),
           request.expectedClaimEpoch(), request.expectedWorkGroupVersion(),
           request.expectedRevision(), request.expectedParticipant(), request.summary());
-      if (!bindingService.complete(location, request.provider(), request.connectionInstanceId())) {
+      if (!bindingService.complete(location, request.provider(), request.connectionInstanceId())
+          && !bindingService.hasActiveIntent(location, binding)) {
         return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE,
             AgentNextAction.REQUEST_HUMAN_HELP,
             Map.of("reason", "SESSION_COMPLETE_FAILED"));

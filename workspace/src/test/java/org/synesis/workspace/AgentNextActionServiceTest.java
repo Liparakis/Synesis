@@ -104,6 +104,21 @@ class AgentNextActionServiceTest {
 
   @Test
   void freshParticipantSeesReadOnlyContinuationActionForRecoveryHeldLane() throws Exception {
+    assertReadOnlyRecoveryContinuation(false, false);
+  }
+
+  @Test
+  void recoveryHeldContractOwnerRemainsDiscoverableWhileIntegrationWaits() throws Exception {
+    assertReadOnlyRecoveryContinuation(true, false);
+  }
+
+  @Test
+  void pendingIntegrationRetainsExplicitSelectionBetweenRecoveryCandidates() throws Exception {
+    assertReadOnlyRecoveryContinuation(true, true);
+  }
+
+  private void assertReadOnlyRecoveryContinuation(boolean pendingContract, boolean multipleCandidates)
+      throws Exception {
     prepareSessionAndTrust("codex", "continuation-owner");
     WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
     var claim = collaboration.announce(controlRoot, "codex", "continuation-owner",
@@ -114,6 +129,28 @@ class AgentNextActionServiceTest {
     ProviderSessionBindingService bindings = new ProviderSessionBindingService();
     var ownerBinding = bindings.find(location, "codex", "continuation-owner")
         .orElseThrow();
+    CoordinationRequest contract = null;
+    if (pendingContract) {
+      prepareSessionAndTrust("codex", "continuation-requester");
+      collaboration.announce(controlRoot, "codex", "continuation-requester",
+          "Implement a consumer", "Publish the consumer",
+          List.of(ResourceSelector.pathExact("src/Consumer.java")), claim.intent().workGroupId());
+      contract = collaboration.request(controlRoot, "codex", "continuation-requester",
+          claim.intent().intentId(), CoordinationRequest.Kind.CONTRACT, "Agree on the product API");
+      var snapshotStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+          location.projectId());
+      var signer = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+      var queued = new TaskSnapshotPayload(claim.intent().taskId(), "snap_recovery_contract_fence",
+          signer.nodeId(), ownerBinding.supervisorId(), ownerBinding.workerId(), ownerBinding.sessionId(),
+          ownerBinding.baseCommit(), ownerBinding.baseCommit(), List.of("src/Product.java"), List.of(),
+          "Published product", new SnapshotProvenance(claim.intent().workGroupId(),
+              claim.intent().intentId(), claim.intent().authorityLineageId(), claim.intent().participant(),
+              ownerBinding.sessionId(), claim.intent().version(), List.of(), List.of(),
+              List.of("PATH_EXACT:src/Product.java"), "refs/synesis/snapshots/snap_recovery_contract_fence",
+              "integrity", "manifest"));
+      snapshotStore.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+          signer.nodeId(), queued.encode(), signer);
+    }
     RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location,
         ownerBinding.sessionId());
     PredictionEventStore store = new PredictionEventStore(location.root()
@@ -126,6 +163,14 @@ class AgentNextActionServiceTest {
     intentService.suspend(claim.intent().participant());
     intentService.holdRecovery(claim.intent().participant(), snapshot.root()
         .toString() + "#" + snapshot.contentHash());
+    if (multipleCandidates) {
+      var requesterBinding = bindings.find(location, "codex", "continuation-requester").orElseThrow();
+      var requesterSnapshot = new RecoverySnapshotService().materialize(location,
+          requesterBinding.sessionId());
+      intentService.suspend(contract.requester());
+      intentService.holdRecovery(contract.requester(), requesterSnapshot.root()
+          .toString() + "#" + requesterSnapshot.contentHash());
+    }
     long eventsBeforePoll = new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId()).headSequence();
 
@@ -141,26 +186,51 @@ class AgentNextActionServiceTest {
     assertEquals("RECOVERY_CONTINUATION_AVAILABLE", result.get("state"));
     assertEquals("continuation", result.get("nextProtocolKind"));
     Map<?, ?> payload = (Map<?, ?>) result.get("nextProtocolPayload");
-    assertEquals(claim.intent().intentId().toString(), payload.get("intentId"));
-    assertEquals(claim.intent().version(), ((Number) payload.get("claimEpoch")).longValue());
+    if (multipleCandidates) {
+      assertEquals(Boolean.TRUE, result.get("continuationSelectionRequired"));
+      assertFalse(result.containsKey("selectedContinuation"));
+      assertFalse(result.containsKey("nextProtocolPayload"));
+    } else {
+      assertEquals(claim.intent().intentId().toString(), payload.get("intentId"));
+      assertEquals(claim.intent().version(), ((Number) payload.get("claimEpoch")).longValue());
+    }
     java.util.List<?> candidates = (java.util.List<?>) result.get("continuationCandidates");
+    assertEquals(multipleCandidates ? 2 : 1, candidates.size());
     Map<?, ?> candidate = (Map<?, ?>) candidates.getFirst();
     Map<?, ?> continuationRequest = (Map<?, ?>) candidate.get("continuationRequest");
     assertEquals("continuation", continuationRequest.get("kind"));
-    assertEquals(Map.of("intentId", claim.intent().intentId().toString(),
-        "claimEpoch", claim.intent().version()), continuationRequest.get("payload"));
+    assertEquals(Map.of("intentId", candidate.get("sourceIntentId"),
+        "claimEpoch", candidate.get("claimEpoch")), continuationRequest.get("payload"));
     Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
     assertEquals("RECOVER", workflow.get("type"));
-    assertEquals("request_coordination", workflow.get("recommendedTool"));
-    Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
-    assertEquals("continuation", arguments.get("kind"));
-    Map<?, ?> projectedPayload = (Map<?, ?>) arguments.get("payload");
-    assertFalse(projectedPayload.containsKey("grantId"));
+    if (multipleCandidates) {
+      assertFalse(workflow.containsKey("recommendedTool"));
+      assertFalse(workflow.containsKey("arguments"));
+    } else {
+      assertEquals("request_coordination", workflow.get("recommendedTool"));
+      Map<?, ?> arguments = (Map<?, ?>) workflow.get("arguments");
+      assertEquals("continuation", arguments.get("kind"));
+      Map<?, ?> projectedPayload = (Map<?, ?>) arguments.get("payload");
+      assertFalse(projectedPayload.containsKey("grantId"));
+    }
     assertFalse(response.toJson().contains(snapshot.root().toString()));
     assertFalse(response.toJson().contains("recoverySnapshotReference"));
     assertEquals(eventsBeforePoll,
         new PredictionEventStore(location.root()
             .resolve(".synesis/coordination"), location.projectId()).headSequence());
+    if (pendingContract) {
+      var unchanged = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+          location.projectId());
+      UUID contractId = contract.requestId();
+      assertEquals(CoordinationRequest.Status.PENDING, unchanged.collaborationProjection().requests()
+          .stream().filter(request -> request.requestId().equals(contractId))
+          .findFirst().orElseThrow().status());
+      assertEquals(org.synesis.coordination.domain.collaboration.Participant.State.RECOVERY_HELD,
+          unchanged.collaborationProjection().participantState(claim.intent().participant()).orElseThrow());
+      assertTrue(((List<?>) result.get("pendingCoordination")).isEmpty());
+      assertEquals(org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_PENDING,
+          unchanged.taskCompletionProjection().snapshotState("snap_recovery_contract_fence").orElseThrow());
+    }
   }
 
   @Test
@@ -366,8 +436,23 @@ class AgentNextActionServiceTest {
     Map<String, Object> result = (Map<String, Object>) envelope.get("result");
     Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
     assertEquals("REVIEW_CONTRACT", workflow.get("type"));
-    assertEquals("respond_coordination", workflow.get("recommendedTool"));
-    assertEquals(Map.of(), workflow.get("arguments"), "CONTRACT requires the owner's judgment");
+    assertFalse(workflow.containsKey("recommendedTool"));
+    assertFalse(workflow.containsKey("arguments"), "CONTRACT requires the owner's judgment");
+    Map<?, ?> decision = (Map<?, ?>) workflow.get("decision");
+    assertEquals(true, decision.get("required"));
+    assertEquals("coordinationStatus", decision.get("field"));
+    assertEquals("respond_coordination", decision.get("tool"));
+    assertEquals(List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED"),
+        decision.get("allowedResults"));
+    List<Map<?, ?>> templates = (List<Map<?, ?>>) decision.get("responseTemplates");
+    assertEquals(2, templates.size());
+    assertEquals(java.util.Set.of(first.requestId().toString(), second.requestId().toString()),
+        templates.stream().map(template -> ((Map<?, ?>) template.get("payload"))
+            .get("coordinationRequest")).collect(java.util.stream.Collectors.toSet()));
+    for (Map<?, ?> template : templates) {
+      assertEquals("coordination_response", template.get("kind"));
+      assertFalse(((Map<?, ?>) template.get("payload")).containsKey("coordinationStatus"));
+    }
     List<Map<String, Object>> pending = (List<Map<String, Object>>) result.get("pendingCoordination");
     assertEquals(2, pending.size());
     assertEquals(java.util.Set.of(first.requestId().toString(), second.requestId().toString()),
@@ -394,6 +479,7 @@ class AgentNextActionServiceTest {
     assertEquals(AgentNextAction.WAIT, nonOwnerResponse.nextAction());
     Map<?, ?> nonOwnerResult = (Map<?, ?>) nonOwnerResponse.result();
     assertEquals(2, nonOwnerResult.get("pending"));
+    assertFalse(nonOwnerResult.containsKey("reviewDecision"));
     assertFalse(nonOwnerResult.containsKey("request"));
     assertEquals("get_next_action", ((Map<?, ?>) nonOwnerResult.get("workflow")).get("recommendedTool"));
     assertEquals(Map.of(), ((Map<?, ?>) nonOwnerResult.get("workflow")).get("arguments"));

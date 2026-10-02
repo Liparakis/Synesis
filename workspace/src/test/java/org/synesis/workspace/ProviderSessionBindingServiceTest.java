@@ -1,6 +1,7 @@
 package org.synesis.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,6 +136,75 @@ final class ProviderSessionBindingServiceTest {
     try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
       assertEquals(3, paths.count());
     }
+  }
+
+  @Test
+  void completionRetainsBindingForRemainingOwnedIntent() throws Exception {
+    assertCompletionWaitsForOwnedIntents(false);
+  }
+
+  @Test
+  void integrationCompletionRetainsBindingForRemainingOwnedIntent() throws Exception {
+    assertCompletionWaitsForOwnedIntents(true);
+  }
+
+  @Test
+  void integrationCompletionReusesHeldProjectLock() throws Exception {
+    assertCompletionWaitsForOwnedIntents(true, true);
+  }
+
+  private static void assertCompletionWaitsForOwnedIntents(boolean bySession) throws Exception {
+    assertCompletionWaitsForOwnedIntents(bySession, false);
+  }
+
+  private static void assertCompletionWaitsForOwnedIntents(boolean bySession, boolean heldLock)
+      throws Exception {
+    Path root = Files.createTempDirectory("synesis-session-multiple-intents-");
+    git(root, "init");
+    var location = new ProjectApplicationService().init(root).location();
+    Files.writeString(root.resolve("README.md"), "baseline\n");
+    git(root, "add", "README.md");
+    git(root, "config", "user.email", "multiple@example.invalid");
+    git(root, "config", "user.name", "Multiple Intents Test");
+    git(root, "commit", "-m", "baseline");
+    var service = new ProviderSessionBindingService();
+    var binding = service.ensure(location, "codex", "multiple-intents").binding();
+    String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+    var identity = new IdentityBootstrap(location.profile().resolve("link"))
+        .loadOrCreate().identity();
+    var store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+    var intents = new WorkIntentService(store, identity);
+    UUID first = UUID.randomUUID();
+    UUID second = UUID.randomUUID();
+    for (UUID id : List.of(first, second)) {
+      assertTrue(intents.announce(new WorkIntent(id, location.projectId(), participant, "codex",
+          UUID.randomUUID(), "shared goal", "complete owned responsibility", binding.baseCommit(),
+          List.of(ResourceSelector.pathExact(id + ".py")), 1, UUID.randomUUID(),
+          WorkIntent.Status.ANNOUNCED)).acquired());
+    }
+    intents.release(first, participant);
+    boolean completed = completeBinding(service, location, binding.sessionId(), bySession, heldLock);
+    assertFalse(completed, "one released lane cannot terminalize its sibling's exact binding");
+    assertEquals("BOUND", service.find(location, "codex", "multiple-intents").orElseThrow().status());
+    assertEquals(second, new PredictionEventStore(store.rootDirectory(), location.projectId())
+        .collaborationProjection().activeIntents().getFirst().intentId());
+    intents.release(second, participant);
+    assertTrue(completeBinding(service, location, binding.sessionId(), bySession, heldLock));
+    assertEquals("COMPLETED",
+        service.find(location, "codex", "multiple-intents").orElseThrow().status());
+  }
+
+  private static boolean completeBinding(ProviderSessionBindingService service,
+      ProjectApplicationService.ProjectLocation location, String sessionId, boolean bySession,
+      boolean heldLock) throws Exception {
+    if (heldLock) {
+      try (var lock = org.synesis.coordination.persistence.ProjectAppendLock.acquire(
+          location.root().resolve(".synesis/coordination"))) {
+        return service.completeBySessionId(location, "codex", sessionId, lock);
+      }
+    }
+    return bySession ? service.completeBySessionId(location, "codex", sessionId)
+        : service.complete(location, "codex", "multiple-intents");
   }
 
   @Test
