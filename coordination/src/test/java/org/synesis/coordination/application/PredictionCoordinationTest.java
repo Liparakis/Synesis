@@ -35,7 +35,9 @@ import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.domain.prediction.PredictionContract;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.prediction.PredictionIntegrationGate;
 import org.synesis.coordination.domain.prediction.PredictionState;
+import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.TaskClaim;
@@ -174,6 +176,14 @@ class PredictionCoordinationTest {
 
         assertTrue(service.validationContext(handle).isEmpty());
         assertTrue(service.validationContext("invalid").isEmpty());
+    }
+
+    @Test
+    void integrationGateRequiresResolvedPredictionAndCleanSpeculation() {
+        SpeculationGateResult clean = new SpeculationGateResult(true, "PASS", "clean");
+        assertFalse(PredictionIntegrationGate.evaluate(false, clean).accepted());
+        assertFalse(PredictionIntegrationGate.evaluate(true, new SpeculationGateResult(false, "REJECT", "whitespace error")).accepted());
+        assertTrue(PredictionIntegrationGate.evaluate(true, clean).accepted());
     }
 
     @Test
