@@ -24,10 +24,10 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.WorkspaceVerificationResult;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationRequest;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.Decision;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationRequest;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**

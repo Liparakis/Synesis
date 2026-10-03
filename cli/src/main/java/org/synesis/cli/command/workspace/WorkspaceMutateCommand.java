@@ -1,5 +1,9 @@
 package org.synesis.cli.command.workspace;
 
+import org.synesis.workspace.application.workspace.mutation.TranslatedOutcome;
+
+import org.synesis.workspace.application.workspace.mutation.AgentOutcomeTranslator;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,10 +19,10 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.Decision;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationRequest;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.Decision;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationRequest;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import picocli.CommandLine.Command;
@@ -167,8 +171,8 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
 
             String jsonOutput = ProviderJson.write(output);
             if ("agent".equalsIgnoreCase(outputMode)) {
-                org.synesis.workspace.application.workspace.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.AgentOutcomeTranslator();
-                org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateMutationResult(res, target);
+                org.synesis.workspace.application.workspace.mutation.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.mutation.AgentOutcomeTranslator();
+                org.synesis.workspace.application.workspace.mutation.TranslatedOutcome translated = translator.translateMutationResult(res, target);
                 runtime.terminal().stdout(translated.publicResponse().toJson().trim());
             } else {
                 runtime.terminal().stdout(jsonOutput.trim());
@@ -199,8 +203,8 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
 
     private void emitError(String result, String reasonCode, String message, String projectId, String sessionId, String worktree) {
         if ("agent".equalsIgnoreCase(outputMode)) {
-            org.synesis.workspace.application.workspace.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.AgentOutcomeTranslator();
-            org.synesis.workspace.application.workspace.TranslatedOutcome translated = translator.translateException(new IllegalArgumentException(message != null ? message : reasonCode));
+            org.synesis.workspace.application.workspace.mutation.AgentOutcomeTranslator translator = new org.synesis.workspace.application.workspace.mutation.AgentOutcomeTranslator();
+            org.synesis.workspace.application.workspace.mutation.TranslatedOutcome translated = translator.translateException(new IllegalArgumentException(message != null ? message : reasonCode));
             runtime.terminal().stdout(translated.publicResponse().toJson().trim());
             return;
         }

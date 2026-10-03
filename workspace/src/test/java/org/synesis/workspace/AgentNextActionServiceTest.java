@@ -1,5 +1,9 @@
 package org.synesis.workspace;
 
+import org.synesis.workspace.application.workspace.mutation.WorkspacePatchService;
+
+import org.synesis.workspace.application.workspace.mutation.PatchRequest;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1396,7 +1400,7 @@ class AgentNextActionServiceTest {
         assertEquals(WorkIntent.Status.ANNOUNCED,
                 new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection().intent(ownerClaim.intent().intentId()).orElseThrow().status());
 
-        AgentResponse mutation = new org.synesis.workspace.application.workspace.WorkspacePatchService().applyPatch(new org.synesis.workspace.application.workspace.PatchRequest(controlRoot,
+        AgentResponse mutation = new org.synesis.workspace.application.workspace.mutation.WorkspacePatchService().applyPatch(new org.synesis.workspace.application.workspace.mutation.PatchRequest(controlRoot,
                 "codex",
                 "completed-reviewer",
                 "src/forbidden.py",

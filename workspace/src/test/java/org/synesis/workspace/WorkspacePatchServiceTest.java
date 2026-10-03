@@ -26,9 +26,9 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.workspace.PatchEdit;
-import org.synesis.workspace.application.workspace.PatchRequest;
-import org.synesis.workspace.application.workspace.WorkspacePatchService;
+import org.synesis.workspace.application.workspace.mutation.PatchEdit;
+import org.synesis.workspace.application.workspace.mutation.PatchRequest;
+import org.synesis.workspace.application.workspace.mutation.WorkspacePatchService;
 import org.synesis.workspace.test.ProviderTestSupport;
 
 /**

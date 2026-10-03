@@ -11,7 +11,7 @@ import java.util.Objects;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.workspace.WorkspaceMutationBroker;
+import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
 
 /**
  * Routes supported Codex native patches through the Synesis mutation broker.

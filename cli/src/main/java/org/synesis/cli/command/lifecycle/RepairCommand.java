@@ -1,5 +1,7 @@
 package org.synesis.cli.command.lifecycle;
 
+import org.synesis.workspace.application.project.execution.ExecutionResult;
+
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Callable;

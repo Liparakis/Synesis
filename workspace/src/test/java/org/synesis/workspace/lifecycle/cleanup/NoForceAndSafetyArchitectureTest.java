@@ -21,7 +21,7 @@ class NoForceAndSafetyArchitectureTest {
     }
     assertTrue(Files.isDirectory(srcDir), "Cleanup source directory must exist");
 
-    try (var stream = Files.list(srcDir)) {
+    try (var stream = Files.walk(srcDir)) {
       List<Path> javaFiles = stream.filter(p -> p.getFileName()
               .toString()
               .endsWith(".java"))

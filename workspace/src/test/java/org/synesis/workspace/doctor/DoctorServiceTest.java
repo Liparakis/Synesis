@@ -1,5 +1,7 @@
 package org.synesis.workspace.doctor;
 
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,7 +82,7 @@ public class DoctorServiceTest {
     ProjectApplicationService projectService = new ProjectApplicationService();
     projectService.init(tempDir);
 
-    Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(
+    Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier.resolveWorkspaceRoot(
         tempDir);
     Path adminDir = workspaceRoot.resolve("admin");
     Files.createDirectories(adminDir);

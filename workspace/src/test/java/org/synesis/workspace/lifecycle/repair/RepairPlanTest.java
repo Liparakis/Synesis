@@ -1,5 +1,9 @@
 package org.synesis.workspace.lifecycle.repair;
 
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+
+import org.synesis.workspace.application.project.execution.ExecutionResult;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -21,7 +25,7 @@ public class RepairPlanTest {
     ProjectApplicationService projectService = new ProjectApplicationService();
     projectService.init(tempDir);
 
-    Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier.resolveWorkspaceRoot(
+    Path workspaceRoot = org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier.resolveWorkspaceRoot(
         tempDir);
     Path adminDir = workspaceRoot.resolve("admin");
     Files.createDirectories(adminDir);

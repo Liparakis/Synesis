@@ -126,12 +126,18 @@ class WorkspacePackageArchitectureTest {
     Path sources = Path.of("src/main/java/org/synesis/workspace");
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/GitProcessRunner.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/SemanticIndexFingerprint.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/cleanup/inventory/LifecycleInventoryService.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/cleanup/plan/CleanupPlanService.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/cleanup/execution/CleanupExecutionService.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/CodexAppServerProtocolClient.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/LifecycleControlRequestEnvelope.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/http/CodexLifecycleHttpAdapter.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/state/CodexLifecycleStateStore.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/runtime/CodexManagedRuntimeHome.java")));
     assertTrue(Files.isRegularFile(sources.resolve("application/provider/session/ProviderSessionCommand.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("application/project/execution/ProjectProcessExecutor.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("application/workspace/read/WorkspaceReadService.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("application/workspace/mutation/WorkspacePatchService.java")));
     assertTrue(Files.isRegularFile(sources.resolve("transport/control/network/LinkNetworkProjection.java")));
   }
 }

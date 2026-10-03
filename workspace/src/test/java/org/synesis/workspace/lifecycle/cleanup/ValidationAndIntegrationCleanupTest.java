@@ -1,5 +1,23 @@
 package org.synesis.workspace.lifecycle.cleanup;
 
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupClassification;
+
+import org.synesis.workspace.lifecycle.cleanup.plan.PersistedCleanupPlan;
+
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupPlan;
+
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupPlanStore;
+
+import org.synesis.workspace.lifecycle.cleanup.execution.CleanupExecutionService;
+
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupPlanEntry;
+
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceFingerprint;
+
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceType;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 

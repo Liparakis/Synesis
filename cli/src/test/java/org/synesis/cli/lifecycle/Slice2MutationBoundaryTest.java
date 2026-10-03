@@ -23,7 +23,7 @@ import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 /**
  * Verifies the bounded lifecycle mutation command contract.

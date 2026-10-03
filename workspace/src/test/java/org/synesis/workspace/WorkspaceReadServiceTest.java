@@ -17,8 +17,8 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.workspace.ReadRequest;
-import org.synesis.workspace.application.workspace.WorkspaceReadService;
+import org.synesis.workspace.application.workspace.read.ReadRequest;
+import org.synesis.workspace.application.workspace.read.WorkspaceReadService;
 import org.synesis.workspace.test.ProviderTestSupport;
 
 /**

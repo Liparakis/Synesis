@@ -12,7 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.lifecycle.cleanup.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 /**
  * Exercises reconciliation-plan integrity and lifecycle bounds.

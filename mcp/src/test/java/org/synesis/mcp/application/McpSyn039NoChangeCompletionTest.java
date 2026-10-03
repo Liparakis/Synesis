@@ -1,5 +1,9 @@
 package org.synesis.mcp.application;
 
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleInventoryService;
+
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupEligibilityService;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -179,8 +183,8 @@ final class McpSyn039NoChangeCompletionTest {
         assertEquals(org.synesis.workspace.lifecycle.lease.SessionLeaseState.TERMINAL_DISCONNECTED, abnormal);
 
         var doctor = new DoctorService(new ProjectApplicationService(),
-                new org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService(),
-                new org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService(),
+                new org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleInventoryService(),
+                new org.synesis.workspace.lifecycle.cleanup.plan.CleanupEligibilityService(),
                 new SessionLeaseService(new SessionLeaseStore(), _ -> java.util.Optional.empty()),
                 new SessionLeaseStore(),
                 _ -> java.util.Optional.empty()).diagnose(fixture.project);
@@ -196,8 +200,8 @@ final class McpSyn039NoChangeCompletionTest {
         rejectedProbe.close();
         assertEquals(abnormalHistory, new SessionLeaseStore().load(fixture.project, fixture.connection).orElseThrow());
         var doctorAfterProbe = new DoctorService(new ProjectApplicationService(),
-                new org.synesis.workspace.lifecycle.cleanup.LifecycleInventoryService(),
-                new org.synesis.workspace.lifecycle.cleanup.CleanupEligibilityService(),
+                new org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleInventoryService(),
+                new org.synesis.workspace.lifecycle.cleanup.plan.CleanupEligibilityService(),
                 new SessionLeaseService(new SessionLeaseStore(), _ -> java.util.Optional.empty()),
                 new SessionLeaseStore(),
                 _ -> java.util.Optional.empty()).diagnose(fixture.project);
