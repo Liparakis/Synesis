@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.codex;
+package org.synesis.workspace.lifecycle.codex.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord;
+import org.synesis.workspace.lifecycle.codex.ManagedProcessTreeSupervisor;
 
 /**
  * Verifies the broker's immutable exact-thread pin.

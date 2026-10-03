@@ -24,7 +24,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
-import org.synesis.workspace.lifecycle.codex.CodexEvidenceJournal;
+import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
 /**

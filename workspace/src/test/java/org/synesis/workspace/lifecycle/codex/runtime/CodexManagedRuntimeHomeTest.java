@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.codex;
+package org.synesis.workspace.lifecycle.codex.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

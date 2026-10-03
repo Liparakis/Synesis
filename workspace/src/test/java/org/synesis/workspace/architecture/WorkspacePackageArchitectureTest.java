@@ -119,7 +119,7 @@ class WorkspacePackageArchitectureTest {
   }
 
   /**
-   * Keeps Codex protocol and control-plane network internals grouped under their owners.
+   * Keeps Codex, process, and control-plane internals grouped under their owners.
    */
   @Test
   void supportingImplementationsStayInFocusedPackages() {
@@ -129,6 +129,8 @@ class WorkspacePackageArchitectureTest {
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/CodexAppServerProtocolClient.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/LifecycleControlRequestEnvelope.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/http/CodexLifecycleHttpAdapter.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/state/CodexLifecycleStateStore.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/runtime/CodexManagedRuntimeHome.java")));
     assertTrue(Files.isRegularFile(sources.resolve("application/provider/session/ProviderSessionCommand.java")));
     assertTrue(Files.isRegularFile(sources.resolve("transport/control/network/LinkNetworkProjection.java")));
   }

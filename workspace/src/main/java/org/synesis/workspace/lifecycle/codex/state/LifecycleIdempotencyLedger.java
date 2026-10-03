@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.codex;
+package org.synesis.workspace.lifecycle.codex.state;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 

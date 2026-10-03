@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.codex.CodexEvidenceJournal;
+import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
 /**
