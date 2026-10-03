@@ -25,7 +25,7 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.ProviderSessionTerminalizationService;
+import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.test.ProviderTestSupport;

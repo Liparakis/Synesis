@@ -21,7 +21,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.codex.CodexEvidenceJournal;
-import org.synesis.workspace.lifecycle.codex.LifecycleControlRequestEnvelope;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
 /**
  * Bounded JSONL Codex App Server protocol client.

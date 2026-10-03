@@ -1,4 +1,6 @@
-package org.synesis.workspace.application.provider;
+package org.synesis.workspace.application.provider.session;
+
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

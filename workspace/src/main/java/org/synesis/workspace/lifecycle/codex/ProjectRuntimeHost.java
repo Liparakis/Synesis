@@ -1,5 +1,11 @@
 package org.synesis.workspace.lifecycle.codex;
 
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpAdapter;
+
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;

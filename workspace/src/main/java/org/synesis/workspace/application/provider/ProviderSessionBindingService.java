@@ -23,16 +23,17 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
+import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.task.SnapshotArtifactPolicy;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
 

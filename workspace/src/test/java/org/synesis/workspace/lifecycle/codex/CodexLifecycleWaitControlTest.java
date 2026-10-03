@@ -1,5 +1,9 @@
 package org.synesis.workspace.lifecycle.codex;
 
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

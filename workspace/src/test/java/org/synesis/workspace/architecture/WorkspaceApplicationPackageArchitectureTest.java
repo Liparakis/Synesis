@@ -55,5 +55,6 @@ final class WorkspaceApplicationPackageArchitectureTest {
     assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/session")));
     assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/workflow")));
     assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/completion")));
+    assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("provider/session")));
   }
 }

@@ -44,7 +44,7 @@ import org.synesis.workspace.application.integration.IntegrationOrchestrationSer
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.ProviderSessionTerminalizationService;
+import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;

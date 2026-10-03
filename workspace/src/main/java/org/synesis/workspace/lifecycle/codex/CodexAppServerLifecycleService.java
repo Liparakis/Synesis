@@ -1,5 +1,9 @@
 package org.synesis.workspace.lifecycle.codex;
 
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -22,7 +26,7 @@ import java.util.Set;
 
 import org.synesis.workspace.lifecycle.codex.protocol.CodexAppServerProtocolClient;
 import org.synesis.workspace.lifecycle.codex.protocol.CodexAppServerProtocolSchema;
-import org.synesis.workspace.lifecycle.codex.LifecycleControlRequestEnvelope.AuthorityContext;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.AuthorityContext;
 
 /**
  * Codex-only App Server lifecycle state machine.

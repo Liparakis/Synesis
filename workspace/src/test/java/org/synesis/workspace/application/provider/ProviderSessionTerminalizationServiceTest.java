@@ -1,5 +1,11 @@
 package org.synesis.workspace.application.provider;
 
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+
+import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+
+import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

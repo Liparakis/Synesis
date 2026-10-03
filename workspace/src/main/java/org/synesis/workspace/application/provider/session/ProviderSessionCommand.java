@@ -1,4 +1,6 @@
-package org.synesis.workspace.application.provider;
+package org.synesis.workspace.application.provider.session;
+
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import java.io.IOException;
 import java.net.URI;
@@ -21,8 +23,8 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.lifecycle.codex.CodexLifecycleHttpClient;
-import org.synesis.workspace.lifecycle.codex.LifecycleControlRequestEnvelope;
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
 /**
  * Production caller boundary for Codex lifecycle commands.

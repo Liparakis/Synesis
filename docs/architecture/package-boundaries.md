@@ -35,13 +35,18 @@ Agent session admission lives under `application.agent.session`. The
 next-action and task-completion services and their package-local no-change
 eligibility rule stay together in `application.agent.workflow`. Cancellation
 and completion request/outcome types live in `application.agent.completion`.
+Provider session commands, authority resolution, and terminalization live
+under `application.provider.session`. The shared binding service remains in
+`application.provider` because its hook materialization path uses the provider
+application service's package-private helper.
 
 The local control-plane's Link, membership, route, relay, and network DTOs live
 under `org.synesis.workspace.transport.control.network`; HTTP routing and
 control-plane operation ownership remain under `transport.control`. Codex App
-Server framing, schema, and JSONL client code live under
-`org.synesis.workspace.lifecycle.codex.protocol`, next to the Codex runtime
-that owns and consumes that protocol.
+Server framing, schema, request envelope, and JSONL client code live under
+`org.synesis.workspace.lifecycle.codex.protocol`; the loopback HTTP adapter
+and client live under `org.synesis.workspace.lifecycle.codex.http`. Both stay
+inside the Codex lifecycle boundary that owns their protocol and runtime.
 
 `lifecycle.process` groups the shared Git command runner with the semantic
 index fingerprint. The fingerprint uses a package-private bounded-output

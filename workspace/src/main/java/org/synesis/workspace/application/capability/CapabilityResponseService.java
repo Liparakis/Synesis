@@ -28,7 +28,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 
 /**
  * Application service for capability owners to respond to capability requests.

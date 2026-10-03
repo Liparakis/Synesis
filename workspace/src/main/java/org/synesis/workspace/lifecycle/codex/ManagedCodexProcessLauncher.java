@@ -1,5 +1,7 @@
 package org.synesis.workspace.lifecycle.codex;
 
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;

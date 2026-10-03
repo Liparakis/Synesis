@@ -34,7 +34,7 @@ import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRe
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 
 /**
  * Verifies project-scoped provider session identity and trust bootstrap.

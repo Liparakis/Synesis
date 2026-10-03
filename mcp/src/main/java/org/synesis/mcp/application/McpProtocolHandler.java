@@ -59,7 +59,7 @@ import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRe
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 import org.synesis.workspace.application.workspace.PatchEdit;
 import org.synesis.workspace.application.workspace.PatchRequest;
 import org.synesis.workspace.application.workspace.ReadinessResult;

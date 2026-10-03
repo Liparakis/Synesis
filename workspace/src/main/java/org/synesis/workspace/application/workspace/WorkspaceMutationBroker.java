@@ -16,7 +16,7 @@ import java.util.UUID;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.SessionAuthorityResolver;
+import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.project.ActionGuardrail;
 import org.synesis.workspace.project.ProjectPathResolver;

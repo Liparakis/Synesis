@@ -1,5 +1,9 @@
 package org.synesis.workspace.architecture;
 
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpAdapter;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -123,6 +127,9 @@ class WorkspacePackageArchitectureTest {
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/GitProcessRunner.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/SemanticIndexFingerprint.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/CodexAppServerProtocolClient.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/LifecycleControlRequestEnvelope.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/http/CodexLifecycleHttpAdapter.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("application/provider/session/ProviderSessionCommand.java")));
     assertTrue(Files.isRegularFile(sources.resolve("transport/control/network/LinkNetworkProjection.java")));
   }
 }
