@@ -13,6 +13,7 @@ import org.synesis.coordination.domain.prediction.PredictionProjection;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+import org.synesis.coordination.domain.prediction.PredictionIntegrationResult;
 
 /**
  * Evaluates prediction resolution plus the local Git safety gate.
@@ -67,7 +68,7 @@ public final class IntegrationGateCommand implements Callable<Integer> {
               .resolve("local"),
           prediction,
           base);
-      PredictionIntegrationGate.Result result = PredictionIntegrationGate.evaluate(
+      PredictionIntegrationResult result = PredictionIntegrationGate.evaluate(
           projection.state(prediction)
               .map(Enum::name)
               .filter("AVAILABLE"::equals)

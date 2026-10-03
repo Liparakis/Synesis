@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -11,9 +12,20 @@ import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import org.synesis.coordination.domain.identity.CommandId;
+import org.synesis.coordination.domain.identity.NodeId;
+import org.synesis.coordination.domain.identity.PredictionId;
+import org.synesis.coordination.domain.identity.ProjectId;
+import org.synesis.coordination.domain.identity.SupervisorId;
+import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.exception.CoordinationArgumentException;
+import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.CoordinationInvariantError;
+import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -22,333 +34,453 @@ import org.synesis.link.identity.NodeIdentity;
 @SuppressWarnings("DuplicatedCode")
 public final class CoordinationCommand {
 
-  private static final int MAGIC = 0x53434331;
-  private static final int MAX_BYTES = 64 * 1024;
-  private final UUID commandId;
-  private final UUID projectId;
-  private final UUID predictionId;
-  private final PredictionEventType type;
-  private final String actorNodeId;
-  private final String actorSupervisorId;
-  private final String actorWorkerId;
-  private final byte[] payload;
-  private final byte[] signerPublicKey;
-  private final byte[] signature;
+    private static final int MAGIC = 0x53434331;
+    private static final int MAX_BYTES = 64 * 1024;
+    private final UUID commandId;
+    private final UUID projectId;
+    private final UUID predictionId;
+    private final PredictionEventType type;
+    private final String actorNodeId;
+    private final String actorSupervisorId;
+    private final String actorWorkerId;
+    private final byte[] payload;
+    private final byte[] signerPublicKey;
+    private final byte[] signature;
 
-  private CoordinationCommand(UUID commandId, UUID projectId, UUID predictionId,
-      PredictionEventType type,
-      String actorNodeId, String actorSupervisorId, String actorWorkerId, byte[] payload,
-      byte[] signerPublicKey, byte[] signature) {
-    this.commandId = Objects.requireNonNull(commandId, "command ID");
-    this.projectId = Objects.requireNonNull(projectId, "project ID");
-    this.predictionId = Objects.requireNonNull(predictionId, "prediction ID");
-    this.type = Objects.requireNonNull(type, "event type");
-    this.actorNodeId = Objects.requireNonNull(actorNodeId, "actor node ID");
-    this.actorSupervisorId = actorSupervisorId;
-    this.actorWorkerId = actorWorkerId;
-    this.payload = Objects.requireNonNull(payload, "payload")
-        .clone();
-    this.signerPublicKey = Objects.requireNonNull(signerPublicKey, "signer public key")
-        .clone();
-    this.signature = Objects.requireNonNull(signature, "signature")
-        .clone();
-    if (payload.length > MAX_BYTES || signerPublicKey.length == 0 || signature.length == 0) {
-      throw new IllegalArgumentException("command exceeds bounds");
+    /**
+     * Validates and initializes this coordination command.
+     */
+    private CoordinationCommand(UUID commandId,
+            UUID projectId,
+            UUID predictionId,
+            PredictionEventType type,
+            String actorNodeId,
+            String actorSupervisorId,
+            String actorWorkerId,
+            byte[] payload,
+            byte[] signerPublicKey,
+            byte[] signature) {
+        this.commandId = CoordinationNullException.requireNonNull(commandId, "command ID");
+        this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
+        this.predictionId = CoordinationNullException.requireNonNull(predictionId, "prediction ID");
+        this.type = CoordinationNullException.requireNonNull(type, "event type");
+        this.actorNodeId = CoordinationNullException.requireNonNull(actorNodeId, "actor node ID");
+        this.actorSupervisorId = actorSupervisorId;
+        this.actorWorkerId = actorWorkerId;
+        this.payload = CoordinationNullException.requireNonNull(payload, "payload").clone();
+        this.signerPublicKey = CoordinationNullException.requireNonNull(signerPublicKey, "signer public key").clone();
+        this.signature = CoordinationNullException.requireNonNull(signature, "signature").clone();
+        if (payload.length > MAX_BYTES || signerPublicKey.length == 0 || signature.length == 0) {
+            throw new CoordinationArgumentException("command exceeds bounds");
+        }
     }
-  }
 
-  /**
-   * Creates and signs a command with a node identity.
-   *
-   * @param commandId    idempotency identifier
-   * @param projectId    project identifier
-   * @param predictionId prediction identifier
-   * @param type         event type
-   * @param actorNodeId  actor node identifier
-   * @param payload      command payload
-   * @param signer       signing identity
-   * @return signed command
-   * @throws GeneralSecurityException when signing fails
-   */
-  public static CoordinationCommand create(UUID commandId, UUID projectId, UUID predictionId,
-      PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer)
-      throws GeneralSecurityException {
-    Objects.requireNonNull(signer, "signer");
-    if (!signer.nodeId()
-        .equals(actorNodeId)) {
-      throw new IllegalArgumentException("actor does not match signer");
+    /**
+     * Creates and signs a command with a node identity.
+     *
+     * @param commandId    idempotency identifier
+     * @param projectId    project identifier
+     * @param predictionId prediction identifier
+     * @param type         event type
+     * @param actorNodeId  actor node identifier
+     * @param payload      command payload
+     * @param signer       signing identity
+     * @return signed command
+     * @throws GeneralSecurityException when signing fails
+     */
+    public static CoordinationCommand create(UUID commandId,
+            UUID projectId,
+            UUID predictionId,
+            PredictionEventType type,
+            String actorNodeId,
+            byte[] payload,
+            NodeIdentity signer) throws GeneralSecurityException {
+        CoordinationNullException.requireNonNull(signer, "signer");
+        if (!signer.nodeId().equals(actorNodeId)) {
+            throw new CoordinationArgumentException("actor does not match signer");
+        }
+        CoordinationCommand unsigned = new CoordinationCommand(commandId,
+                projectId,
+                predictionId,
+                type,
+                actorNodeId,
+                null,
+                null,
+                payload,
+                signer.publicKeyEncoded(),
+                new byte[]{1});
+        return new CoordinationCommand(commandId,
+                projectId,
+                predictionId,
+                type,
+                actorNodeId,
+                null,
+                null,
+                payload,
+                signer.publicKeyEncoded(),
+                signer.sign(unsigned.canonical()));
     }
-    CoordinationCommand unsigned = new CoordinationCommand(commandId, projectId, predictionId, type,
-        actorNodeId, null, null, payload, signer.publicKeyEncoded(), new byte[]{1});
-    return new CoordinationCommand(commandId, projectId, predictionId, type, actorNodeId, null,
-        null, payload,
-        signer.publicKeyEncoded(), signer.sign(unsigned.canonical()));
-  }
 
-  /**
-   * Creates a signed command with explicit logical supervisor and worker identity.
-   *
-   * @param commandId         idempotency identifier
-   * @param projectId         project identifier
-   * @param predictionId      target task or prediction
-   * @param type              event type
-   * @param actorNodeId       authenticated node identity
-   * @param actorSupervisorId logical supervisor identity
-   * @param actorWorkerId     logical worker identity
-   * @param payload           command payload
-   * @param signer            signing identity
-   * @return signed version-two command
-   * @throws GeneralSecurityException when signing fails
-   */
-  public static CoordinationCommand createAs(UUID commandId, UUID projectId, UUID predictionId,
-      PredictionEventType type, String actorNodeId, String actorSupervisorId, String actorWorkerId,
-      byte[] payload, NodeIdentity signer) throws GeneralSecurityException {
-    Objects.requireNonNull(actorSupervisorId, "actor supervisor ID");
-    Objects.requireNonNull(actorWorkerId, "actor worker ID");
-    if (actorSupervisorId.isBlank() || actorWorkerId.isBlank()) {
-      throw new IllegalArgumentException("actor identity blank");
+    /**
+     * Creates a signed command with explicit logical supervisor and worker identity.
+     *
+     * @param commandId         idempotency identifier
+     * @param projectId         project identifier
+     * @param predictionId      target task or prediction
+     * @param type              event type
+     * @param actorNodeId       authenticated node identity
+     * @param actorSupervisorId logical supervisor identity
+     * @param actorWorkerId     logical worker identity
+     * @param payload           command payload
+     * @param signer            signing identity
+     * @return signed version-two command
+     * @throws GeneralSecurityException when signing fails
+     */
+    public static CoordinationCommand createAs(UUID commandId,
+            UUID projectId,
+            UUID predictionId,
+            PredictionEventType type,
+            String actorNodeId,
+            String actorSupervisorId,
+            String actorWorkerId,
+            byte[] payload,
+            NodeIdentity signer) throws GeneralSecurityException {
+        CoordinationNullException.requireNonNull(actorSupervisorId, "actor supervisor ID");
+        CoordinationNullException.requireNonNull(actorWorkerId, "actor worker ID");
+        if (actorSupervisorId.isBlank() || actorWorkerId.isBlank()) {
+            throw new CoordinationArgumentException("actor identity blank");
+        }
+        if (!signer.nodeId().equals(actorNodeId)) {
+            throw new CoordinationArgumentException("actor does not match signer");
+        }
+        CoordinationCommand unsigned = new CoordinationCommand(commandId,
+                projectId,
+                predictionId,
+                type,
+                actorNodeId,
+                actorSupervisorId,
+                actorWorkerId,
+                payload,
+                signer.publicKeyEncoded(),
+                new byte[]{1});
+        return new CoordinationCommand(commandId,
+                projectId,
+                predictionId,
+                type,
+                actorNodeId,
+                actorSupervisorId,
+                actorWorkerId,
+                payload,
+                signer.publicKeyEncoded(),
+                signer.sign(unsigned.canonical()));
     }
-    if (!signer.nodeId()
-        .equals(actorNodeId)) {
-      throw new IllegalArgumentException("actor does not match signer");
+
+    /**
+     * Decodes a command envelope.
+     *
+     * @param encoded bytes
+     * @return command
+     * @throws IOException malformed input
+     */
+    public static CoordinationCommand decode(byte[] encoded) throws IOException {
+        CoordinationNullException.requireNonNull(encoded, "encoded command");
+        if (encoded.length > MAX_BYTES) {
+            throw new CoordinationException("command exceeds bound");
+        }
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC) {
+                throw new CoordinationException("unsupported command format");
+            }
+            int version = in.readInt();
+            if (version != 1 && version != 2) {
+                throw new CoordinationException("unsupported command format");
+            }
+            UUID commandId = readUuid(in), projectId = readUuid(in), predictionId = readUuid(in);
+            int ordinal = in.readInt();
+            if (ordinal < 0 || ordinal >= PredictionEventType.values().length) {
+                throw new CoordinationException("event type");
+            }
+            String actor = readText(in);
+            String supervisor = version == 2 ? readText(in) : null;
+            String worker = version == 2 ? readText(in) : null;
+            byte[] payload = readBytes(in), key = readBytes(in), signature = readBytes(in);
+            if (in.available() != 0) {
+                throw new CoordinationException("trailing command bytes");
+            }
+            return new CoordinationCommand(commandId,
+                    projectId,
+                    predictionId,
+                    PredictionEventType.values()[ordinal],
+                    actor,
+                    supervisor,
+                    worker,
+                    payload,
+                    key,
+                    signature);
+        } catch (RuntimeException | EOFException failure) {
+            throw new CoordinationException("malformed coordination command", failure);
+        }
     }
-    CoordinationCommand unsigned = new CoordinationCommand(commandId, projectId, predictionId, type,
-        actorNodeId, actorSupervisorId, actorWorkerId, payload, signer.publicKeyEncoded(),
-        new byte[]{1});
-    return new CoordinationCommand(commandId, projectId, predictionId, type, actorNodeId,
-        actorSupervisorId,
-        actorWorkerId, payload, signer.publicKeyEncoded(), signer.sign(unsigned.canonical()));
-  }
 
-  /**
-   * Decodes a command envelope.
-   *
-   * @param encoded bytes
-   * @return command
-   * @throws IOException malformed input
-   */
-  public static CoordinationCommand decode(byte[] encoded) throws IOException {
-    Objects.requireNonNull(encoded, "encoded command");
-    if (encoded.length > MAX_BYTES) {
-      throw new IOException("command exceeds bound");
+    /**
+     * Writes a UUID in the canonical binary payload format.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
+        out.writeLong(value.getMostSignificantBits());
+        out.writeLong(value.getLeastSignificantBits());
     }
-    try {
-      DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-      if (in.readInt() != MAGIC) {
-        throw new IOException("unsupported command format");
-      }
-      int version = in.readInt();
-      if (version != 1 && version != 2) {
-        throw new IOException("unsupported command format");
-      }
-      UUID commandId = readUuid(in), projectId = readUuid(in), predictionId = readUuid(in);
-      int ordinal = in.readInt();
-      if (ordinal < 0 || ordinal >= PredictionEventType.values().length) {
-        throw new IOException("event type");
-      }
-      String actor = readText(in);
-      String supervisor = version == 2 ? readText(in) : null;
-      String worker = version == 2 ? readText(in) : null;
-      byte[] payload = readBytes(in), key = readBytes(in), signature = readBytes(in);
-      if (in.available() != 0) {
-        throw new IOException("trailing command bytes");
-      }
-      return new CoordinationCommand(commandId, projectId, predictionId,
-          PredictionEventType.values()[ordinal], actor, supervisor, worker, payload, key,
-          signature);
-    } catch (RuntimeException | java.io.EOFException failure) {
-      throw new IOException("malformed coordination command", failure);
+
+    /**
+     * Reads a UUID from the canonical binary payload format.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static UUID readUuid(DataInputStream in) throws IOException {
+        return new UUID(in.readLong(), in.readLong());
     }
-  }
 
-  private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-    out.writeLong(value.getMostSignificantBits());
-    out.writeLong(value.getLeastSignificantBits());
-  }
-
-  private static UUID readUuid(DataInputStream in) throws IOException {
-    return new UUID(in.readLong(), in.readLong());
-  }
-
-  private static void writeText(DataOutputStream out, String value) throws IOException {
-    byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-    if (bytes.length > 8192) {
-      throw new IOException("text bound");
+    /**
+     * Writes bounded UTF-8 text in the canonical payload format.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static void writeText(DataOutputStream out, String value) throws IOException {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 8192) {
+            throw new CoordinationException("text bound");
+        }
+        out.writeInt(bytes.length);
+        out.write(bytes);
     }
-    out.writeInt(bytes.length);
-    out.write(bytes);
-  }
 
-  private static String readText(DataInputStream in) throws IOException {
-    return new String(readBytes(in), StandardCharsets.UTF_8);
-  }
-
-  private static void writeBytes(DataOutputStream out, byte[] value) throws IOException {
-    if (value.length > MAX_BYTES) {
-      throw new IOException("byte bound");
+    /**
+     * Reads bounded UTF-8 text and validates its encoded length.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static String readText(DataInputStream in) throws IOException {
+        return new String(readBytes(in), StandardCharsets.UTF_8);
     }
-    out.writeInt(value.length);
-    out.write(value);
-  }
 
-  private static byte[] readBytes(DataInputStream in) throws IOException {
-    int length = in.readInt();
-    if (length < 0 || length > MAX_BYTES) {
-      throw new IOException("byte bound");
+    /**
+     * Writes a length-bounded byte field.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static void writeBytes(DataOutputStream out, byte[] value) throws IOException {
+        if (value.length > MAX_BYTES) {
+            throw new CoordinationException("byte bound");
+        }
+        out.writeInt(value.length);
+        out.write(value);
     }
-    byte[] value = in.readNBytes(length);
-    if (value.length != length) {
-      throw new IOException("truncated command");
+
+    /**
+     * Reads a length-bounded byte field.
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private static byte[] readBytes(DataInputStream in) throws IOException {
+        int length = in.readInt();
+        if (length < 0 || length > MAX_BYTES) {
+            throw new CoordinationException("byte bound");
+        }
+        byte[] value = in.readNBytes(length);
+        if (value.length != length) {
+            throw new CoordinationException("truncated command");
+        }
+        return value;
     }
-    return value;
-  }
 
-  /**
-   * Returns the command identifier used for idempotency.
-   *
-   * @return command ID
-   */
-  public UUID commandId() {
-    return commandId;
-  }
-
-  /**
-   * Returns the project identifier.
-   *
-   * @return project ID
-   */
-  public UUID projectId() {
-    return projectId;
-  }
-
-  /**
-   * Returns the prediction identifier.
-   *
-   * @return prediction ID
-   */
-  public UUID predictionId() {
-    return predictionId;
-  }
-
-  /**
-   * Returns the requested event type.
-   *
-   * @return event type
-   */
-  public PredictionEventType type() {
-    return type;
-  }
-
-  /**
-   * Returns the authenticated actor node identifier.
-   *
-   * @return node ID
-   */
-  public String actorNodeId() {
-    return actorNodeId;
-  }
-
-  /**
-   * Returns the logical supervisor actor, when supplied by a version-two command.
-   *
-   * @return supervisor identity, or null for version one
-   */
-  public String actorSupervisorId() {
-    return actorSupervisorId;
-  }
-
-  /**
-   * Returns the logical worker actor, when supplied by a version-two command.
-   *
-   * @return worker identity, or null for version one
-   */
-  public String actorWorkerId() {
-    return actorWorkerId;
-  }
-
-  /**
-   * Returns a copy of the command payload.
-   *
-   * @return payload copy
-   */
-  public byte[] payload() {
-    return payload.clone();
-  }
-
-  /**
-   * Verifies signer binding and command signature.
-   *
-   * @return true when valid
-   * @throws GeneralSecurityException when verification cannot be performed
-   */
-  public boolean verify() throws GeneralSecurityException {
-    PublicKey key = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(signerPublicKey));
-    if (!NodeIdentity.deriveNodeId(signerPublicKey)
-        .equals(actorNodeId)) {
-      return false;
+    /**
+     * Returns the idempotency key with its command-specific type.
+     *
+     * @return command identity used for durable idempotency
+     */
+    public CommandId identity() {
+        return new CommandId(commandId);
     }
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(key);
-    verifier.update(canonical());
-    return verifier.verify(signature);
-  }
 
-  /**
-   * Encodes this command for HTTP transport or durable audit.
-   *
-   * @return encoded command
-   */
-  public byte[] encoded() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      DataOutputStream out = new DataOutputStream(bytes);
-      out.writeInt(MAGIC);
-      out.writeInt(formatVersion());
-      writeUuid(out, commandId);
-      writeUuid(out, projectId);
-      writeUuid(out, predictionId);
-      out.writeInt(type.ordinal());
-      writeText(out, actorNodeId);
-      if (formatVersion() == 2) {
-        writeText(out, actorSupervisorId);
-        writeText(out, actorWorkerId);
-      }
-      writeBytes(out, payload);
-      writeBytes(out, signerPublicKey);
-      writeBytes(out, signature);
-      out.flush();
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
+    /**
+     * Returns the project identity without conflating it with task or event IDs.
+     *
+     * @return typed project namespace
+     */
+    public ProjectId projectIdentity() {
+        return new ProjectId(projectId);
     }
-  }
 
-  private byte[] canonical() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      DataOutputStream out = new DataOutputStream(bytes);
-      out.writeInt(MAGIC);
-      out.writeInt(formatVersion());
-      writeUuid(out, commandId);
-      writeUuid(out, projectId);
-      writeUuid(out, predictionId);
-      out.writeInt(type.ordinal());
-      writeText(out, actorNodeId);
-      if (formatVersion() == 2) {
-        writeText(out, actorSupervisorId);
-        writeText(out, actorWorkerId);
-      }
-      writeBytes(out, payload);
-      writeBytes(out, signerPublicKey);
-      out.flush();
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
+    /**
+     * Returns the prediction identifier.
+     *
+     * @return prediction ID
+     */
+    public UUID predictionId() {
+        return predictionId;
     }
-  }
 
-  private int formatVersion() {
-    return actorSupervisorId == null ? 1 : 2;
-  }
+    /**
+     * Returns the prediction stream identity.
+     *
+     * @return typed prediction identity
+     */
+    public PredictionId predictionIdentity() {
+        return new PredictionId(predictionId);
+    }
+
+    /**
+     * Returns the aggregate UUID as a task identity for task-scoped event types.
+     *
+     * @return typed task identity for task-scoped commands
+     */
+    public TaskId taskIdentity() {
+        return new TaskId(predictionId);
+    }
+
+    /**
+     * Returns the requested event type.
+     *
+     * @return event type
+     */
+    public PredictionEventType type() {
+        return type;
+    }
+
+    /**
+     * Returns the authenticated actor node identity.
+     *
+     * @return authenticated node identity
+     */
+    public NodeId actorNode() {
+        return new NodeId(actorNodeId);
+    }
+
+    /**
+     * Returns the logical supervisor actor, when supplied by a version-two command.
+     *
+     * @return supervisor identity, or null for version one
+     */
+    public String actorSupervisorId() {
+        return actorSupervisorId;
+    }
+
+    /**
+     * Returns the optional logical supervisor identity.
+     *
+     * @return supervisor identity, when supplied by a version-two command
+     */
+    public Optional<SupervisorId> actorSupervisor() {
+        return Optional.ofNullable(actorSupervisorId).map(SupervisorId::new);
+    }
+
+    /**
+     * Returns the logical worker actor, when supplied by a version-two command.
+     *
+     * @return worker identity, or null for version one
+     */
+    public String actorWorkerId() {
+        return actorWorkerId;
+    }
+
+    /**
+     * Returns the optional logical worker identity.
+     *
+     * @return worker identity, when supplied by a version-two command
+     */
+    public Optional<WorkerId> actorWorker() {
+        return Optional.ofNullable(actorWorkerId).map(WorkerId::new);
+    }
+
+    /**
+     * Returns a copy of the command payload.
+     *
+     * @return payload copy
+     */
+    public byte[] payload() {
+        return payload.clone();
+    }
+
+    /**
+     * Verifies signer binding and command signature.
+     *
+     * @return true when valid
+     * @throws GeneralSecurityException when verification cannot be performed
+     */
+    public boolean verify() throws GeneralSecurityException {
+        PublicKey key = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(signerPublicKey));
+        if (!NodeIdentity.deriveNodeId(signerPublicKey).equals(actorNodeId)) {
+            return false;
+        }
+        Signature verifier = Signature.getInstance("Ed25519");
+        verifier.initVerify(key);
+        verifier.update(canonical());
+        return verifier.verify(signature);
+    }
+
+    /**
+     * Encodes this command for HTTP transport or durable audit.
+     *
+     * @return encoded command
+     */
+    public byte[] encoded() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(formatVersion());
+            writeUuid(out, commandId);
+            writeUuid(out, projectId);
+            writeUuid(out, predictionId);
+            out.writeInt(type.ordinal());
+            writeText(out, actorNodeId);
+            if (formatVersion() == 2) {
+                writeText(out, actorSupervisorId);
+                writeText(out, actorWorkerId);
+            }
+            writeBytes(out, payload);
+            writeBytes(out, signerPublicKey);
+            writeBytes(out, signature);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new CoordinationInvariantError(impossible);
+        }
+    }
+
+    /**
+     * Produces the canonical event bytes used for signing and hashing.
+     */
+    private byte[] canonical() {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeInt(MAGIC);
+            out.writeInt(formatVersion());
+            writeUuid(out, commandId);
+            writeUuid(out, projectId);
+            writeUuid(out, predictionId);
+            out.writeInt(type.ordinal());
+            writeText(out, actorNodeId);
+            if (formatVersion() == 2) {
+                writeText(out, actorSupervisorId);
+                writeText(out, actorWorkerId);
+            }
+            writeBytes(out, payload);
+            writeBytes(out, signerPublicKey);
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException impossible) {
+            throw new CoordinationInvariantError(impossible);
+        }
+    }
+
+    /**
+     * Selects the command payload version from its logical identity fields.
+     */
+    private int formatVersion() {
+        return actorSupervisorId == null ? 1 : 2;
+    }
 }

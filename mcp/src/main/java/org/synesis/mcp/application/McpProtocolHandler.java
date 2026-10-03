@@ -7,13 +7,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.synesis.coordination.application.ContinuationResult;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
-import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.Participant;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -29,6 +30,8 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.AgentNextActionService;
 import org.synesis.workspace.application.agent.AgentSessionService;
+import org.synesis.workspace.application.agent.AgentTaskCancellationService;
+import org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest;
 import org.synesis.workspace.application.agent.AgentTaskCompletionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
@@ -283,7 +286,7 @@ public final class McpProtocolHandler {
     this.validationService = new ImplementationValidationService();
     this.reviewValidationService = new ReviewValidationService();
     this.taskCompletionService = new AgentTaskCompletionService();
-    this.taskCancellationService = new org.synesis.workspace.application.agent.AgentTaskCancellationService();
+    this.taskCancellationService = new AgentTaskCancellationService();
     this.collaborationService = new WorkspaceCollaborationService();
     this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
     this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
@@ -2149,7 +2152,7 @@ public final class McpProtocolHandler {
                 UUID sourceIntentId = UUID.fromString(String.valueOf(arguments.get(
                     "collaborationSourceIntentId")));
                 long epoch = ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue();
-                WorkIntentService.ContinuationResult continuationOutcome = collaborationService.continueLane(
+                ContinuationResult continuationOutcome = collaborationService.continueLane(
                     activeProjectRoot, provider, connectionInstanceId, grantId, sourceIntentId,
                     epoch);
                 Map<String, Object> continuationResult = new LinkedHashMap<>();
@@ -2327,7 +2330,7 @@ public final class McpProtocolHandler {
       }
       case "synesis." + McpToolCatalog.CANCEL_LANE -> {
         String reason = arguments != null ? (String) arguments.get("reason") : null;
-        org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest cancelReq = new org.synesis.workspace.application.agent.AgentTaskCancellationService.CancelTaskRequest(
+        CancelTaskRequest cancelReq = new CancelTaskRequest(
             activeProjectRoot, provider, connectionInstanceId, reason);
         agentResponse = taskCancellationService.cancelTask(cancelReq);
       }

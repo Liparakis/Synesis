@@ -13,6 +13,7 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 
 /**
  * Runs the local speculation gate and records requester validation.
@@ -66,7 +67,7 @@ public final class SpeculationValidateCommand implements Callable<Integer> {
       SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(),
           location.synesisDirectory()
               .resolve("local"), prediction, readBaseCommit(location, prediction));
-      SpeculationWorkspace.GateResult gate = workspace.gate();
+      SpeculationGateResult gate = workspace.gate();
       runtime.terminal()
           .stdout(gate.status());
       if (!gate.accepted()) {

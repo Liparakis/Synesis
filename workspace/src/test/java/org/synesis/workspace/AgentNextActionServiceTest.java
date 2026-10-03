@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -1091,7 +1092,7 @@ class AgentNextActionServiceTest {
         new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()),
         identity).issue(new LaneGrant(continuationGrantId, predecessor.intent().workGroupId(),
         successor.intentId(), successorParticipant, predecessor.intent().version(), true));
-    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+    intentService.continueFromRecovery(new LaneContinuation(continuationGrantId,
         predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
         predecessor.intent().version(), recoveryReference));
 
@@ -1166,7 +1167,7 @@ class AgentNextActionServiceTest {
             location.projectId()), identity).issue(new LaneGrant(continuationGrantId,
         predecessor.intent().workGroupId(), successor.intentId(), successorParticipant,
         predecessor.intent().version(), true));
-    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+    intentService.continueFromRecovery(new LaneContinuation(continuationGrantId,
         predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
         predecessor.intent().version(), recoveryReference));
 
@@ -1260,7 +1261,7 @@ class AgentNextActionServiceTest {
         new PredictionEventStore(location.root().resolve(".synesis/coordination"),
             location.projectId()), identity).issue(new LaneGrant(continuationGrantId, groupId,
         successor.intentId(), successorParticipant, predecessor.intent().version(), true));
-    intentService.continueFromRecovery(new CollaborationCodec.Continuation(continuationGrantId,
+    intentService.continueFromRecovery(new LaneContinuation(continuationGrantId,
         predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
         predecessor.intent().version(), recoveryReference));
 

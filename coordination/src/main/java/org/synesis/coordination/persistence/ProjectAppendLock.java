@@ -7,93 +7,101 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
+import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
  * Bounded project-local lock for serializing event-log appends across processes.
  *
  * <p>The handle protects the complete read, validate, and append sequence, not
- * merely the final file write. Callers must retain it while deriving state from the event log and
- * while appending the event that depends on that state.</p>
+ * merely the final file write. Callers must retain it while deriving state from the event log and while appending the
+ * event that depends on
+ * that state.</p>
  */
 public final class ProjectAppendLock implements AutoCloseable {
 
-  /**
-   * File channel whose operating-system lock coordinates local processes.
-   */
-  private final FileChannel channel;
-  /**
-   * The exclusive lock held for the lifetime of this handle.
-   */
-  private final FileLock lock;
+    /**
+     * File channel whose operating-system lock coordinates local processes.
+     */
+    private final FileChannel channel;
+    /**
+     * The exclusive lock held for the lifetime of this handle.
+     */
+    private final FileLock lock;
 
-  private ProjectAppendLock(FileChannel channel, FileLock lock) {
-    this.channel = channel;
-    this.lock = lock;
-  }
+    /**
+     * Validates and initializes this project append lock.
+     *
+     * @param lock already-held project append lock
+     */
+    private ProjectAppendLock(FileChannel channel, FileLock lock) {
+        this.channel = channel;
+        this.lock = lock;
+    }
 
-  /**
-   * Acquires the project append lock with bounded retry.
-   *
-   * @param root project coordination root containing {@code append.lock}
-   * @return lock handle
-   * @throws IOException when the lock cannot be acquired within two seconds or the acquisition
-   *                     thread is interrupted
-   */
-  public static ProjectAppendLock acquire(Path root) throws IOException {
-    Objects.requireNonNull(root, "root");
-    Files.createDirectories(root);
-    FileChannel channel = FileChannel.open(root.resolve("append.lock"), StandardOpenOption.CREATE,
-        StandardOpenOption.WRITE);
-    long deadline = System.nanoTime() + 2_000_000_000L;
-    try {
-      while (true) {
+    /**
+     * Acquires the project append lock with bounded retry.
+     *
+     * @param root project coordination root containing {@code append.lock}
+     * @return lock handle
+     * @throws IOException when the lock cannot be acquired within two seconds or the acquisition thread is interrupted
+     */
+    public static ProjectAppendLock acquire(Path root) throws IOException {
+        CoordinationNullException.requireNonNull(root, "root");
+        Files.createDirectories(root);
+        FileChannel channel = FileChannel.open(root.resolve("append.lock"),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE);
+        long deadline = System.nanoTime() + 2_000_000_000L;
         try {
-          FileLock lock = channel.tryLock();
-          if (lock != null) {
-            return new ProjectAppendLock(channel, lock);
-          }
-        } catch (OverlappingFileLockException ignored) {
-          // Another local thread owns the project lock.
+            while (true) {
+                try {
+                    FileLock lock = channel.tryLock();
+                    if (lock != null) {
+                        return new ProjectAppendLock(channel, lock);
+                    }
+                } catch (OverlappingFileLockException ignored) {
+                    // Another local thread owns the project lock.
+                }
+                if (System.nanoTime() >= deadline) {
+                    throw new CoordinationException("event append lock timeout");
+                }
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
+                if (Thread.interrupted()) {
+                    Thread.currentThread().interrupt();
+                    throw new CoordinationException("event append lock interrupted");
+                }
+            }
+        } catch (IOException failure) {
+            channel.close();
+            throw failure;
         }
-        if (System.nanoTime() >= deadline) {
-          throw new IOException("event append lock timeout");
-        }
-        java.util.concurrent.locks.LockSupport.parkNanos(
-            java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10L));
-        if (Thread.interrupted()) {
-          Thread.currentThread()
-              .interrupt();
-          throw new IOException("event append lock interrupted");
-        }
-      }
-    } catch (IOException failure) {
-      channel.close();
-      throw failure;
     }
-  }
 
-  /**
-   * Returns whether this handle currently owns the project lock.
-   *
-   * @return true while held
-   */
-  public boolean isHeld() {
-    return lock.isValid();
-  }
-
-  /**
-   * Releases the operating-system lock and its channel.
-   *
-   * <p>Closing the handle ends the caller's read/validate/write critical
-   * section; no durable operation should depend on the lock after this call.</p>
-   */
-  @Override
-  public void close() throws IOException {
-    try {
-      lock.release();
-    } finally {
-      channel.close();
+    /**
+     * Returns whether this handle currently owns the project lock.
+     *
+     * @return true while held
+     */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
+    public boolean isHeld() {
+        return lock.isValid();
     }
-  }
+
+    /**
+     * Releases the operating-system lock and its channel.
+     *
+     * <p>Closing the handle ends the caller's read/validate/write critical
+     * section; no durable operation should depend on the lock after this call.</p>
+     */
+    @Override
+    public void close() throws IOException {
+        try {
+            lock.release();
+        } finally {
+            channel.close();
+        }
+    }
 }

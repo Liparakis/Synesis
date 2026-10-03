@@ -9,14 +9,14 @@
 - crash-safe per-project event files and deterministic lifecycle projection;
 - loopback HTTP command endpoint and replayable SSE subscriptions;
 - semantic ownership registry, policy-first `REQUEST_OWNER` guardrail outcome,
-  and foreground `SupervisorInbox` facade with local event copies;
+  and foreground CLI event following with a durable cursor;
 - focused restart/replay and illegal-transition test.
 
 ## Delivered acceptance slice
 
 1. ~~Add signed command envelopes and an idempotent coordinator service.~~
 2. ~~Expose loopback HTTP commands and ordered SSE replay with reconnect cursors.~~
-3. ~~Add foreground supervisor state/inbox and provider `REQUEST_OWNER` details.~~
+3. ~~Add foreground supervisor event following and provider `REQUEST_OWNER` details.~~
 4. ~~Add bounded worktree/speculation metadata and Git acceptance gates.~~
 5. ~~Run the exact two-node scenario with independent identities and preserve
    the event/commit/test transcript.~~ Evidence:

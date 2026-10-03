@@ -14,6 +14,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ProviderSessionTerminalPayload;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ProviderSessionId;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskCompletionState;
@@ -161,8 +162,8 @@ public final class ProviderSessionTerminalizationService {
       boolean exact = snapshot.providerSessionId()
           .equals(binding.sessionId())
           || snapshot.provenance()
-          .bindingIdentity()
-          .equals(binding.sessionId())
+          .bindingSessionIdentity()
+          .equals(new ProviderSessionId(binding.sessionId()))
           || snapshot.provenance()
           .participant()
           .equals(participant);

@@ -17,6 +17,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.ImplementationEventPayload;
@@ -397,7 +398,7 @@ class IntegrationQueueTest {
     new WorkGroupService(new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId()), identity).issue(new LaneGrant(
             grantId, group, successorLane, successor.participant(), owner.version(), true));
-    intentService.continueFromRecovery(new CollaborationCodec.Continuation(grantId, ownerLane,
+    intentService.continueFromRecovery(new LaneContinuation(grantId, ownerLane,
         successor, owner.participant(), successor.participant(), owner.version(), recoveryReference));
 
     store = new PredictionEventStore(location.root()

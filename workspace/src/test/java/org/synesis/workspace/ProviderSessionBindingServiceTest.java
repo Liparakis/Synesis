@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -562,7 +563,7 @@ final class ProviderSessionBindingServiceTest {
         source.selectors(), source.version() + 1, source.workGroupId(),
         source.authorityLineageId(), WorkIntent.Status.ANNOUNCED, source.role(),
         source.reviewTargetSelectors(), source.knownDependencies());
-    intents.continueEligibleFromRecovery(new CollaborationCodec.Continuation(UUID.randomUUID(),
+    intents.continueEligibleFromRecovery(new LaneContinuation(UUID.randomUUID(),
         source.intentId(), successor, source.participant(), participant, source.version(),
         recoveryReference));
 

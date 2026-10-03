@@ -1,6 +1,8 @@
 package org.synesis.cli.command.coordination;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipRegistry;
 import org.synesis.coordination.domain.prediction.PredictionContract;
@@ -29,6 +32,9 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+import org.synesis.coordination.domain.ownership.OwnershipOwner;
+import org.synesis.coordination.domain.prediction.PredictionIntegrationResult;
+import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 
 /**
  * Real-process coordinator/supervisor harness for the SYN-012 acceptance run.
@@ -152,7 +158,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
   private int coordinator() throws Exception {
     NodeIdentity identity = identity();
     var store = new PredictionEventStore(data, projectId);
-    var service = new org.synesis.coordination.application.CoordinationService(store, identity);
+    var service = new CoordinationService(store, identity);
     try (CoordinationHttpServer server = new CoordinationHttpServer(service,
         new InetSocketAddress("127.0.0.1", port))) {
       server.start();
@@ -165,7 +171,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
       if (durationSeconds > 0) {
         Thread.sleep(durationSeconds * 1000L);
       } else {
-        try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in,
+        try (var reader = new BufferedReader(new InputStreamReader(System.in,
             StandardCharsets.UTF_8))) {
           while (reader.readLine() != null) {
             Thread.onSpinWait();
@@ -223,7 +229,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
   private ClaudeCodeHookAdapter.Result getResult(NodeIdentity identity, Path protectedScope) {
     OwnershipRegistry ownership = new OwnershipRegistry();
     ownership.claim("workspace.prediction-query",
-        new OwnershipRegistry.Owner(ownerNode, ownerSupervisor, 1));
+        new OwnershipOwner(ownerNode, ownerSupervisor, 1));
     ClaudeCodeHookAdapter hook = new ClaudeCodeHookAdapter(profile, ownership, identity.nodeId());
     String hookJson = "{\"tool_name\":\"Edit\",\"cwd\":\""
         + worktree.toString()
@@ -274,8 +280,8 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
     Files.deleteIfExists(predictionRoot.getParent());
     Files.deleteIfExists(worktree.resolve(".synesis/local/speculation.path"));
     run(worktree, ".\\gradlew.bat", ":workspace:compileJava", "--no-daemon");
-    PredictionIntegrationGate.Result accepted = PredictionIntegrationGate.evaluate(true,
-        new SpeculationWorkspace.GateResult(true, "SPECULATION_GATE=PASS", "resolved"));
+    PredictionIntegrationResult accepted = PredictionIntegrationGate.evaluate(true,
+        new SpeculationGateResult(true, "SPECULATION_GATE=PASS", "resolved"));
     System.out.println(
         "timestamp=" + now() + " " + accepted.status() + " REASON=" + accepted.reason());
     client.submit(
@@ -367,7 +373,7 @@ public final class CoordinationDemoCommand implements Callable<Integer> {
         "Synesis-Prediction: " + predictionId,
         "-m",
         "Synesis-Base-Sequence: " + sequence);
-    PredictionIntegrationGate.Result rejected = PredictionIntegrationGate.evaluate(false,
+    PredictionIntegrationResult rejected = PredictionIntegrationGate.evaluate(false,
         speculation.gate());
     System.out.println(
         "timestamp=" + now() + " " + rejected.status() + " REASON=" + rejected.reason());

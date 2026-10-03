@@ -1780,8 +1780,8 @@ implementation | required | NOT CLAIMED | SYN-014E |
 `PredictionCoordinationTest.loopbackHttpAcceptsCommandsAndReplaysSse` | pass | PASS | SYN-012-CP-0137 |
 | Semantic ownership returns `REQUEST_OWNER` without transferring a foreign claim | coordination unit test |
 `PredictionCoordinationTest.ownershipNeverTransfersWhenRequesterIsForeign` | pass | PASS | SYN-012-CP-0138 |
-| Two foreground supervisor inboxes submit, receive, accept, and locally replay one prediction | coordination
-integration test | `PredictionCoordinationTest.twoForegroundSupervisorsCoordinateWithoutTransferringOwnership` | pass |
+| Two foreground supervisors submit, receive, and accept over loopback HTTP, then replay the same durable events |
+coordination integration test | `PredictionCoordinationTest.twoForegroundSupervisorsCoordinateOverHttpWithoutTransferringOwnership` | pass |
 PASS | SYN-012-CP-0138 |
 | Detached speculation worktree metadata and fail-closed Git gate reject whitespace errors | coordination integration
 test | `PredictionCoordinationTest.speculationWorktreeIsolatedAndGateFailsOnWhitespace` | pass | PASS |

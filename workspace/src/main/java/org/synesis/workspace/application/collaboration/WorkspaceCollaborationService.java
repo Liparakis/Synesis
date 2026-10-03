@@ -10,8 +10,10 @@ import java.util.UUID;
 import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.application.ContinuationResult;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
@@ -20,6 +22,15 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ClaimEpoch;
+import org.synesis.coordination.domain.identity.ContractId;
+import org.synesis.coordination.domain.identity.ContractRevision;
+import org.synesis.coordination.domain.identity.LaneGrantId;
+import org.synesis.coordination.domain.identity.ParticipantId;
+import org.synesis.coordination.domain.identity.ProviderSessionId;
+import org.synesis.coordination.domain.identity.WorkGroupId;
+import org.synesis.coordination.domain.identity.WorkGroupVersion;
+import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.task.TaskCompletionState;
@@ -928,7 +939,8 @@ public final class WorkspaceCollaborationService {
         new IdentityBootstrap(location.profile()
             .resolve("link")).loadOrCreate()
             .identity())
-        .consume(grantId, participant, intentId, epoch);
+        .consume(new LaneGrantId(grantId), new ParticipantId(participant),
+            new WorkIntentId(intentId), new ClaimEpoch(epoch));
   }
 
   /**
@@ -945,7 +957,7 @@ public final class WorkspaceCollaborationService {
     new WorkGroupService(store,
         new IdentityBootstrap(location.profile()
             .resolve("link")).loadOrCreate()
-            .identity()).revoke(grantId);
+            .identity()).revoke(new LaneGrantId(grantId));
   }
 
   /**
@@ -960,7 +972,7 @@ public final class WorkspaceCollaborationService {
    * @return durable continuation result, including idempotent replay state
    * @throws Exception when authority, snapshot, or grant validation fails
    */
-  public WorkIntentService.ContinuationResult continueLane(Path projectRoot, String provider,
+  public ContinuationResult continueLane(Path projectRoot, String provider,
       String connectionInstanceId,
       UUID grantId, UUID sourceIntentId, long claimEpoch) throws Exception {
     manualService.requireAttested(provider);
@@ -984,7 +996,7 @@ public final class WorkspaceCollaborationService {
           .orElseThrow(() -> new IOException("CONTINUATION_SUCCESSOR_NOT_FOUND"));
       boolean callerOwnsSuccessor = successor.participant()
           .equals(targetParticipant);
-      return new WorkIntentService.ContinuationResult(
+      return new ContinuationResult(
           callerOwnsSuccessor ? "COMMITTED" : "ALREADY_COMMITTED",
           successor.intentId(), successor.participant(), callerOwnsSuccessor);
     }
@@ -1028,7 +1040,7 @@ public final class WorkspaceCollaborationService {
         source.version() + 1, source.workGroupId(), source.authorityLineageId(),
         WorkIntent.Status.ANNOUNCED,
         source.role(), source.reviewTargetSelectors(), source.knownDependencies());
-    CollaborationCodec.Continuation continuation = new CollaborationCodec.Continuation(
+    LaneContinuation continuation = new LaneContinuation(
         grantId,
         sourceIntentId,
         target,
@@ -1064,7 +1076,7 @@ public final class WorkspaceCollaborationService {
         new IdentityBootstrap(location.profile()
             .resolve("link")).loadOrCreate()
             .identity())
-        .close(groupId, status, expectedVersion);
+        .close(new WorkGroupId(groupId), status, new WorkGroupVersion(expectedVersion));
   }
 
   /**
@@ -1090,8 +1102,8 @@ public final class WorkspaceCollaborationService {
         .identity();
     PredictionEventStore store = new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId());
-    return new ContractService(store, identity).publish(contractId,
-        participantHandle(binding.sessionId()),
+    return new ContractService(store, identity).publish(new ContractId(contractId),
+        new ParticipantId(participantHandle(binding.sessionId())),
         body,
         selectors);
   }
@@ -1117,10 +1129,9 @@ public final class WorkspaceCollaborationService {
         .identity();
     PredictionEventStore store = new PredictionEventStore(location.root()
         .resolve(".synesis/coordination"), location.projectId());
-    new ContractService(store, identity).bind(intentId,
-        participantHandle(binding.sessionId()),
-        contractId,
-        revision);
+    new ContractService(store, identity).bind(new WorkIntentId(intentId),
+        new ParticipantId(participantHandle(binding.sessionId())), new ContractId(contractId),
+        new ContractRevision(revision));
   }
 
   /**
@@ -1210,8 +1221,8 @@ public final class WorkspaceCollaborationService {
           .allSnapshots()
           .stream()
           .filter(snapshot -> snapshot.provenance()
-              .bindingIdentity()
-              .equals(binding.sessionId())
+              .bindingSessionIdentity()
+              .equals(new ProviderSessionId(binding.sessionId()))
               || snapshot.provenance()
               .participant()
               .equals(participant))
