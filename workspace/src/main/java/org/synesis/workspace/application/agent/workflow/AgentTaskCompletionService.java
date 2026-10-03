@@ -1,4 +1,4 @@
-package org.synesis.workspace.application.agent;
+package org.synesis.workspace.application.agent.workflow;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,14 +10,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
-import org.synesis.coordination.domain.identity.ProviderSessionId;
-import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ProviderSessionId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
@@ -26,21 +27,29 @@ import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
+
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
+
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
+import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
+import org.synesis.workspace.application.project.ExecutionRequest;
+import org.synesis.workspace.application.project.ExecutionResult;
+import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.ProjectProcessExecutor;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.provider.SessionAuthorityResolver;
 import org.synesis.workspace.application.task.TaskSnapshotService;
+import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 /**
@@ -96,31 +105,21 @@ public final class AgentTaskCompletionService {
         return new AgentResponse(continuation.status(), continuation.reason(), continuation.nextAction(), result);
     }
 
-    private static AgentResponse noChangeCompletionResult(PredictionEventStore store, NoChangeCompletion completion, ProjectProcessExecutor.ExecutionResult validation) {
+    private static AgentResponse noChangeCompletionResult(PredictionEventStore store, NoChangeCompletion completion, ExecutionResult validation) {
         Map<String, Object> result = new LinkedHashMap<>();
-        var group = store.workGroupProjection()
-                .group(completion.workGroupId())
-                .orElse(null);
+        var group = store.workGroupProjection().group(completion.workGroupId()).orElse(null);
         result.put("outcome", "NO_CHANGE");
         result.put("participant", completion.participant());
-        result.put("intentId",
-                completion.intentId()
-                        .toString());
-        result.put("laneId",
-                completion.intentId()
-                        .toString());
-        result.put("workGroupId",
-                completion.workGroupId()
-                        .toString());
+        result.put("intentId", completion.intentId().toString());
+        result.put("laneId", completion.intentId().toString());
+        result.put("workGroupId", completion.workGroupId().toString());
         result.put("claimEpoch", completion.claimEpoch());
         result.put("workGroupVersion", completion.workGroupVersion());
         result.put("expectedRevision", completion.expectedRevision());
         result.put("snapshotState", "NOT_REQUIRED");
         result.put("integrationState", "NOT_REQUIRED");
         result.put("claimsReleased", true);
-        result.put("workGroupState",
-                group == null ? "UNKNOWN" : group.status()
-                                            .name());
+        result.put("workGroupState", group == null ? "UNKNOWN" : group.status().name());
         result.put("summary", completion.summary());
         if (validation != null) {
             result.put("prePublicationValidation", validation.toMap());
@@ -130,13 +129,11 @@ public final class AgentTaskCompletionService {
 
     private static boolean noChangeEvidenceMatches(CompleteTaskRequest request, ProviderSessionBindingService.Binding binding, NoChangeCompletion completion) {
         return request.outcome() == CompletionOutcome.NO_CHANGE && request.expectedIntentId() != null && request.expectedWorkGroupId() != null && request.expectedClaimEpoch() != null
-                && request.expectedWorkGroupVersion() != null && request.expectedRevision() != null && request.expectedParticipant() != null && request.expectedIntentId()
-                .equals(completion.intentId()) && request.expectedWorkGroupId()
-                .equals(completion.workGroupId()) && request.expectedClaimEpoch() == completion.claimEpoch() && request.expectedWorkGroupVersion() == completion.workGroupVersion()
-                && request.expectedRevision() == completion.expectedRevision() && request.expectedParticipant()
-                .equals(completion.participant()) && request.provider()
-                .equals(completion.provider()) && new ProviderSessionId(binding.sessionId()).equals(completion.bindingSessionIdentity()) && binding.baseCommit()
-                .equals(completion.workspaceCommit()) && normalizedSummary(request.summary()).equals(completion.summary());
+                && request.expectedWorkGroupVersion() != null && request.expectedRevision() != null && request.expectedParticipant() != null && request.expectedIntentId().equals(completion.intentId())
+                && request.expectedWorkGroupId().equals(completion.workGroupId()) && request.expectedClaimEpoch() == completion.claimEpoch() && request.expectedWorkGroupVersion() == completion.workGroupVersion()
+                && request.expectedRevision() == completion.expectedRevision() && request.expectedParticipant().equals(completion.participant()) && request.provider().equals(completion.provider())
+                && new ProviderSessionId(binding.sessionId()).equals(completion.bindingSessionIdentity()) && binding.baseCommit().equals(completion.workspaceCommit()) && normalizedSummary(request.summary()).equals(
+                completion.summary());
     }
 
     private static String normalizedSummary(String summary) {
@@ -144,11 +141,11 @@ public final class AgentTaskCompletionService {
     }
 
     private static boolean isNoChangeDenial(String reason) {
-        return reason.startsWith("NO_CHANGE_") || reason.equals("NO_ACTIVE_INTENT") || reason.equals("WORK_GROUP_NOT_FOUND") || reason.equals("WORK_GROUP_NOT_ACTIVE") || reason.equals(
-                "WORK_GROUP_VERSION_STALE") || reason.equals("COMPLETION_REVISION_STALE") || reason.equals("INTENT_NOT_FOUND");
+        return reason.startsWith("NO_CHANGE_") || reason.equals("NO_ACTIVE_INTENT") || reason.equals("WORK_GROUP_NOT_FOUND") || reason.equals("WORK_GROUP_NOT_ACTIVE") || reason.equals("WORK_GROUP_VERSION_STALE")
+                || reason.equals("COMPLETION_REVISION_STALE") || reason.equals("INTENT_NOT_FOUND");
     }
 
-    private static AgentResponse noChangeDenied(String reason, ProjectProcessExecutor.ExecutionResult validation) {
+    private static AgentResponse noChangeDenied(String reason, ExecutionResult validation) {
         AgentReason publicReason;
         AgentNextAction nextAction;
         AgentStatus status;
@@ -156,8 +153,7 @@ public final class AgentTaskCompletionService {
             publicReason = reason.contains("GENERATION") ? AgentReason.WORKSPACE_GENERATION_CHANGED : AgentReason.TASK_NOT_READY;
             nextAction = AgentNextAction.RETRY;
             status = AgentStatus.RETRY_REQUIRED;
-        } else if (reason.equals("NO_CHANGE_NOT_AUTHORIZED") || reason.contains("PARTICIPANT_MISMATCH") || reason.contains("EVIDENCE_REQUIRED") || reason.contains("EVIDENCE_MISMATCH")
-                || reason.contains("CONFLICT")) {
+        } else if (reason.equals("NO_CHANGE_NOT_AUTHORIZED") || reason.contains("PARTICIPANT_MISMATCH") || reason.contains("EVIDENCE_REQUIRED") || reason.contains("EVIDENCE_MISMATCH") || reason.contains("CONFLICT")) {
             publicReason = AgentReason.POLICY_DENIED;
             nextAction = AgentNextAction.REQUEST_HUMAN_HELP;
             status = AgentStatus.BLOCKED;
@@ -178,40 +174,26 @@ public final class AgentTaskCompletionService {
      * Validates optional server-issued finish evidence for the current lane revision.
      */
     private static AgentResponse validateSnapshotEvidence(CompleteTaskRequest request, WorkIntent intent, PredictionEventStore store, String participantHandle) {
-        boolean evidencePresent = request.expectedIntentId() != null || request.expectedWorkGroupId() != null || request.expectedParticipant() != null || (request.expectedClaimEpoch() != null
-                && request.expectedClaimEpoch() != 1L) || (request.expectedWorkGroupVersion() != null && request.expectedWorkGroupVersion() != 1L) || (request.expectedRevision() != null
-                && request.expectedRevision() != 0L);
-        boolean correctionRequired = store.taskCompletionProjection()
-                .allSnapshots()
-                .stream()
-                .anyMatch(snapshot -> snapshot.taskId()
-                        .equals(intent.taskId()) && snapshot.provenance()
-                        .authorityLineageId()
-                        .equals(intent.authorityLineageId()) && snapshot.provenance()
-                        .claimEpoch() < intent.version() && store.taskCompletionProjection()
-                        .snapshotState(snapshot.snapshotId())
-                        .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
+        boolean evidencePresent =
+                request.expectedIntentId() != null || request.expectedWorkGroupId() != null || request.expectedParticipant() != null || (request.expectedClaimEpoch() != null && request.expectedClaimEpoch() != 1L) || (
+                        request.expectedWorkGroupVersion() != null && request.expectedWorkGroupVersion() != 1L) || (request.expectedRevision() != null && request.expectedRevision() != 0L);
+        boolean correctionRequired = store.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version()
+                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
         if (!evidencePresent && !correctionRequired) {
             return null;
         }
-        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null
-                || request.expectedRevision() == null || request.expectedParticipant() == null) {
+        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null || request.expectedRevision() == null
+                || request.expectedParticipant() == null) {
             return snapshotEvidenceDenied(request, "SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED");
         }
-        WorkGroup group = store.workGroupProjection()
-                .group(intent.workGroupId())
-                .orElse(null);
+        WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
         if (group == null) {
             return snapshotEvidenceDenied(request, "WORK_GROUP_NOT_FOUND");
         }
-        if (!request.expectedIntentId()
-                .equals(intent.intentId()) || !request.expectedWorkGroupId()
-                .equals(intent.workGroupId()) || !request.expectedClaimEpoch()
-                .equals(intent.version()) || !request.expectedWorkGroupVersion()
-                .equals(group.version()) || !request.expectedRevision()
-                .equals(store.headSequence()) || !request.expectedParticipant()
-                .equals(participantHandle) || !intent.participant()
-                .equals(participantHandle) || intent.status() != WorkIntent.Status.ANNOUNCED) {
+        if (!request.expectedIntentId().equals(intent.intentId()) || !request.expectedWorkGroupId().equals(intent.workGroupId()) || !request.expectedClaimEpoch().equals(intent.version())
+                || !request.expectedWorkGroupVersion().equals(group.version()) || !request.expectedRevision().equals(store.headSequence()) || !request.expectedParticipant().equals(participantHandle)
+                || !intent.participant().equals(participantHandle) || intent.status() != WorkIntent.Status.ANNOUNCED) {
             return snapshotEvidenceDenied(request, "SNAPSHOT_COMPLETION_EVIDENCE_STALE");
         }
         return null;
@@ -224,64 +206,37 @@ public final class AgentTaskCompletionService {
         if (intent.role() != WorkIntent.Role.PRODUCER) {
             return false;
         }
-        if (store.workGroupProjection()
-                .group(intent.workGroupId())
-                .map(group -> group.reviewPolicy()
-                        .mandatory())
-                .orElse(false)) {
+        if (store.workGroupProjection().group(intent.workGroupId()).map(group -> group.reviewPolicy().mandatory()).orElse(false)) {
             return true;
         }
-        boolean exactGrant = store.workGroupProjection()
-                .grants()
-                .stream()
-                .filter(grant -> grantAppliesToIntent(store, grant, intent))
-                .filter(grant -> !grant.targetParticipant()
-                        .equals(participantHandle))
-                .filter(grant -> !store.workGroupProjection()
-                        .grantSuperseded(grant.grantId()))
-                .anyMatch(grant -> store.workGroupProjection()
-                        .grantAvailable(grant.grantId()) || store.workGroupProjection()
-                        .grantConsumed(grant.grantId()));
+        boolean exactGrant = store.workGroupProjection().grants().stream().filter(grant -> grantAppliesToIntent(store, grant, intent)).filter(grant -> !grant.targetParticipant().equals(participantHandle))
+                .filter(grant -> !store.workGroupProjection().grantSuperseded(grant.grantId()))
+                .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId()) || store.workGroupProjection().grantConsumed(grant.grantId()));
         if (exactGrant) {
             return true;
         }
-        boolean requested = store.collaborationProjection()
-                .requests()
-                .stream()
-                .anyMatch(request -> request.kind() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(store,
-                        request.conflictingIntentId(),
-                        intent) && (request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING
-                        || request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.ACCEPTED));
+        boolean requested = store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.kind() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(store, request.conflictingIntentId(), intent) && (
+                        request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING
+                                || request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.ACCEPTED));
         if (requested) {
             return true;
         }
-        return store.taskCompletionProjection()
-                .allSnapshots()
-                .stream()
-                .anyMatch(snapshot -> snapshot.taskId()
-                        .equals(intent.taskId()) && snapshot.provenance()
-                        .authorityLineageId()
-                        .equals(intent.authorityLineageId()) && snapshot.provenance()
-                        .claimEpoch() < intent.version() && store.taskCompletionProjection()
-                        .snapshotState(snapshot.snapshotId())
-                        .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
+        return store.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version()
+                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
     }
 
     private static boolean grantAppliesToIntent(PredictionEventStore store, LaneGrant grant, WorkIntent intent) {
-        if (!grant.workGroupId()
-                .equals(intent.workGroupId())) {
+        if (!grant.workGroupId().equals(intent.workGroupId())) {
             return false;
         }
-        if (!grant.targetIntentId()
-                .equals(intent.intentId()) && store.collaborationProjection()
-                .successorIntent(grant.targetIntentId())
-                .isPresent()) {
+        if (!grant.targetIntentId().equals(intent.intentId()) && store.collaborationProjection().successorIntent(grant.targetIntentId()).isPresent()) {
             // A late historical grant must not become review authority for the successor.  The
             // continuation projection creates a current-epoch grant for the successor when needed.
             return false;
         }
-        if (grant.targetIntentId()
-                .equals(intent.intentId())) {
+        if (grant.targetIntentId().equals(intent.intentId())) {
             return grant.claimEpoch() == intent.version();
         }
         if (grant.claimEpoch() >= intent.version()) {
@@ -290,9 +245,7 @@ public final class AgentTaskCompletionService {
         UUID cursor = grant.targetIntentId();
         for (int depth = 0; depth < 128; depth++) {
 
-            UUID successor = store.collaborationProjection()
-                    .successorIntent(cursor)
-                    .orElse(null);
+            UUID successor = store.collaborationProjection().successorIntent(cursor).orElse(null);
 
             if (successor == null) {
                 return false;
@@ -313,18 +266,14 @@ public final class AgentTaskCompletionService {
             return true;
         }
 
-        if (store.collaborationProjection()
-                .successorIntent(historicalIntentId)
-                .isPresent()) {
+        if (store.collaborationProjection().successorIntent(historicalIntentId).isPresent()) {
             // Requests created after a continuation against the predecessor are stale; only the
             // explicitly retargeted successor request remains actionable.
             return false;
         }
         UUID cursor = historicalIntentId;
         for (int depth = 0; depth < 128; depth++) {
-            UUID successor = store.collaborationProjection()
-                    .successorIntent(cursor)
-                    .orElse(null);
+            UUID successor = store.collaborationProjection().successorIntent(cursor).orElse(null);
             if (successor == null) {
                 return false;
             }
@@ -341,66 +290,44 @@ public final class AgentTaskCompletionService {
      */
     private static AgentResponse snapshotEvidenceDenied(CompleteTaskRequest request, String reason) {
         AgentResponse response = new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", reason));
-        return "SNAPSHOT_COMPLETION_EVIDENCE_STALE".equals(reason) ? new AgentWorkflowReducer().decorate(new AgentNextActionService.NextActionRequest(request.projectRoot(),
-                request.provider(),
-                request.connectionInstanceId()), response) : response;
+        return "SNAPSHOT_COMPLETION_EVIDENCE_STALE".equals(reason) ? new AgentWorkflowReducer().decorate(new NextActionRequest(request.projectRoot(), request.provider(), request.connectionInstanceId()), response)
+                : response;
     }
 
-    private static AgentResponse completionResult(PredictionEventStore store,
-            TaskSnapshotRecord snapshot,
-            String participantHandle,
-            AgentResponse integrationResult,
-            ProjectProcessExecutor.ExecutionResult prePublicationValidation) {
+    private static AgentResponse completionResult(PredictionEventStore store, TaskSnapshotRecord snapshot, String participantHandle, AgentResponse integrationResult, ExecutionResult prePublicationValidation) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (integrationResult.result() instanceof Map<?, ?> map) {
             map.forEach((key, value) -> result.put(String.valueOf(key), value));
         }
         result.put("participant", participantHandle);
-        result.put("laneId",
-                snapshot.provenance()
-                        .laneId()
-                        .toString());
-        result.put("claimEpoch",
-                snapshot.provenance()
-                        .claimEpoch());
+        result.put("laneId", snapshot.provenance().laneId().toString());
+        result.put("claimEpoch", snapshot.provenance().claimEpoch());
         result.put("snapshotId", snapshot.snapshotId());
-        TaskCompletionState state = store.taskCompletionProjection()
-                .snapshotState(snapshot.snapshotId())
-                .orElse(TaskCompletionState.ACTIVE);
+        TaskCompletionState state = store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
         result.put("snapshotState",
-                snapshot.reviewRequired() ? state.value()
-                                            .toUpperCase(java.util.Locale.ROOT) : state == TaskCompletionState.INTEGRATED ? "PUBLISHED" : state.value()
-                                                                                                                                          .toUpperCase(java.util.Locale.ROOT));
+                snapshot.reviewRequired() ? state.value().toUpperCase(java.util.Locale.ROOT) : state == TaskCompletionState.INTEGRATED ? "PUBLISHED" : state.value().toUpperCase(java.util.Locale.ROOT));
         result.put("reviewRequired", snapshot.reviewRequired());
         result.put("integrationState", state.value());
         if (prePublicationValidation != null) {
             result.put("prePublicationValidation", prePublicationValidation.toMap());
         }
         if (integrationResult.nextAction() != null) {
-            result.put("nextAction",
-                    integrationResult.nextAction()
-                            .value());
+            result.put("nextAction", integrationResult.nextAction().value());
         }
         return new AgentResponse(integrationResult.status(), integrationResult.reason(), integrationResult.nextAction(), result);
     }
 
     private static UUID findActiveTaskId(PredictionEventStore store, String callerNodeId, String callerWorkerId, ProviderSessionBindingService.Binding binding) {
         String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        for (WorkIntent intent : store.collaborationProjection()
-                .activeIntents()) {
-            if (intent.participant()
-                    .equals(participant)) {
+        for (WorkIntent intent : store.collaborationProjection().activeIntents()) {
+            if (intent.participant().equals(participant)) {
                 return intent.taskId();
             }
         }
-        var tasks = store.coordinationProjection()
-                .tasks();
+        var tasks = store.coordinationProjection().tasks();
         for (var entry : tasks.entrySet()) {
-            var claim = entry.getValue()
-                    .claim();
-            if (claim != null && claim.ownerNodeId()
-                    .equals(callerNodeId) && claim.ownerWorkerId()
-                    .equals(callerWorkerId)) {
+            var claim = entry.getValue().claim();
+            if (claim != null && claim.ownerNodeId().equals(callerNodeId) && claim.ownerWorkerId().equals(callerWorkerId)) {
                 return entry.getKey();
             }
         }
@@ -408,12 +335,9 @@ public final class AgentTaskCompletionService {
     }
 
     private static UUID deriveTaskId(ProviderSessionBindingService.Binding binding) {
-        if (binding.sessionId() != null && binding.sessionId()
-                .length() >= 36) {
+        if (binding.sessionId() != null && binding.sessionId().length() >= 36) {
             try {
-                return UUID.fromString(binding.sessionId()
-                        .substring(binding.sessionId()
-                                .length() - 36));
+                return UUID.fromString(binding.sessionId().substring(binding.sessionId().length() - 36));
             } catch (Exception ignored) {
             }
         }
@@ -434,9 +358,7 @@ public final class AgentTaskCompletionService {
     public AgentResponse completeTask(CompleteTaskRequest request) {
         Objects.requireNonNull(request, "request");
 
-        Path root = request.projectRoot()
-                .toAbsolutePath()
-                .normalize();
+        Path root = request.projectRoot().toAbsolutePath().normalize();
         try {
             manualService.requireAttested(request.provider());
         } catch (Exception failure) {
@@ -446,7 +368,7 @@ public final class AgentTaskCompletionService {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
 
-        ProjectApplicationService.ProjectLocation location;
+        ProjectLocation location;
         ProviderSessionBindingService.Binding binding;
         boolean terminalRetry = false;
         NodeIdentity identity;
@@ -461,9 +383,7 @@ public final class AgentTaskCompletionService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            identity = new IdentityBootstrap(location.profile()
-                    .resolve("link")).loadOrCreate()
-                    .identity();
+            identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
@@ -471,45 +391,31 @@ public final class AgentTaskCompletionService {
         String callerNodeId = identity.nodeId();
         String callerSupervisorId = binding.supervisorId();
         String callerWorkerId = binding.workerId();
-        Path workerWorktreePath = Path.of(binding.worktreePath())
-                .toAbsolutePath()
-                .normalize();
+        Path workerWorktreePath = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
 
         try {
-            Path coordDir = location.root()
-                    .resolve(".synesis/coordination");
+            Path coordDir = location.root().resolve(".synesis/coordination");
             PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
-            ProjectProcessExecutor.ExecutionResult prePublicationValidation = null;
+            ExecutionResult prePublicationValidation = null;
 
             if (terminalRetry) {
                 if (request.outcome() == CompletionOutcome.NO_CHANGE) {
                     UUID completedIntentId = deriveIntentId(binding, request.provider());
-                    Optional<org.synesis.coordination.domain.collaboration.NoChangeCompletion> completed = store.collaborationProjection()
-                            .noChangeCompletion(completedIntentId);
+                    Optional<org.synesis.coordination.domain.collaboration.NoChangeCompletion> completed = store.collaborationProjection().noChangeCompletion(completedIntentId);
                     if (completed.isPresent() && noChangeEvidenceMatches(request, binding, completed.get())) {
                         return noChangeCompletionResult(store, completed.get(), null);
                     }
                     return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_NO_CHANGE_COMPLETION"));
                 }
                 UUID completedTaskId = deriveTaskId(binding);
-                Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection()
-                        .findSnapshotForTask(completedTaskId);
+                Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection().findSnapshotForTask(completedTaskId);
                 if (completedSnapshot.isPresent()) {
-                    TaskCompletionState completedState = store.taskCompletionProjection()
-                            .snapshotState(completedSnapshot.get()
-                                    .snapshotId())
-                            .orElse(TaskCompletionState.ACTIVE);
+                    TaskCompletionState completedState = store.taskCompletionProjection().snapshotState(completedSnapshot.get().snapshotId()).orElse(TaskCompletionState.ACTIVE);
                     if (completedState != TaskCompletionState.INTEGRATED) {
                         return new AgentResponse(AgentStatus.BLOCKED,
                                 AgentReason.TASK_NOT_READY,
                                 AgentNextAction.REQUEST_HUMAN_HELP,
-                                Map.of("reason",
-                                        "COMPLETED_BINDING_WITHOUT_INTEGRATED_SNAPSHOT",
-                                        "snapshotId",
-                                        completedSnapshot.get()
-                                                .snapshotId(),
-                                        "snapshotState",
-                                        completedState.value()));
+                                Map.of("reason", "COMPLETED_BINDING_WITHOUT_INTEGRATED_SNAPSHOT", "snapshotId", completedSnapshot.get().snapshotId(), "snapshotState", completedState.value()));
                     }
                     return completionResult(store,
                             completedSnapshot.get(),
@@ -521,11 +427,8 @@ public final class AgentTaskCompletionService {
             }
 
             // 1. Completion Readiness Check: Unresolved capability requests
-            List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection()
-                    .findAllForRequester(callerNodeId)
-                    .stream()
-                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
-                    .toList();
+            List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)).toList();
             List<CapabilityRequestRecord> callerPending = new ArrayList<>();
             for (CapabilityRequestRecord r : reqPending) {
                 if (r.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)) {
@@ -543,8 +446,7 @@ public final class AgentTaskCompletionService {
             }
 
             // Check if active validation context is open for this requester
-            var validationContexts = store.capabilityRequestProjection()
-                    .allValidationContexts();
+            var validationContexts = store.capabilityRequestProjection().allValidationContexts();
             if (!validationContexts.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", validationContexts.size());
@@ -552,59 +454,40 @@ public final class AgentTaskCompletionService {
             }
 
             // 3. Create or recover immutable task snapshot
-            String summaryText = (request.summary() != null && !request.summary()
-                    .isBlank()) ? request.summary()
-                                  .trim() : "Completed task implementation";
+            String summaryText = (request.summary() != null && !request.summary().isBlank()) ? request.summary().trim() : "Completed task implementation";
 
-            List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection()
-                    .findAllForRequester(callerNodeId)
-                    .stream()
-                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
-                    .toList();
+            List<CapabilityRequestRecord> workerCapabilities = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)).toList();
             // Collaboration participants are derived from the verified durable
             // session binding, never from the transient MCP connection ID.
             // Using the connection here made an otherwise valid claimed lane
             // appear unowned at completion time.
             String participantHandle = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            List<WorkIntent> participantIntents = store.collaborationProjection()
-                    .activeIntents()
-                    .stream()
-                    .filter(intent -> intent.participant()
-                            .equals(participantHandle))
-                    .toList();
+            List<WorkIntent> participantIntents = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantHandle)).toList();
             Optional<WorkIntent> laneIntent;
             if (request.expectedIntentId() != null) {
-                WorkIntent exact = store.collaborationProjection()
-                        .intent(request.expectedIntentId())
-                        .orElse(null);
-                if (exact == null || !exact.participant()
-                        .equals(participantHandle)) {
+                WorkIntent exact = store.collaborationProjection().intent(request.expectedIntentId()).orElse(null);
+                if (exact == null || !exact.participant().equals(participantHandle)) {
                     return snapshotEvidenceDenied(request, "SNAPSHOT_COMPLETION_EVIDENCE_STALE");
                 }
                 laneIntent = Optional.of(exact);
             } else if (participantIntents.size() > 1) {
                 return snapshotEvidenceDenied(request, "SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED");
             } else {
-                laneIntent = participantIntents.stream()
-                        .findFirst();
+                laneIntent = participantIntents.stream().findFirst();
             }
-            UUID taskId = laneIntent.map(WorkIntent::taskId)
-                    .orElse(null);
+            UUID taskId = laneIntent.map(WorkIntent::taskId).orElse(null);
             if (taskId == null) {
                 taskId = findActiveTaskId(store, callerNodeId, callerWorkerId, binding);
             }
-            if (store.collaborationProjection()
-                    .activated() && laneIntent.isEmpty()) {
+            if (store.collaborationProjection().activated() && laneIntent.isEmpty()) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
             }
             UUID completionTaskId = taskId;
-            List<ResourceSelector> currentClaims = laneIntent.map(WorkIntent::selectors)
-                    .orElse(List.of());
-            Optional<TaskSnapshotRecord> existingOpt = laneIntent.flatMap(intent -> store.taskCompletionProjection()
-                    .findSnapshotForTaskRevision(completionTaskId, intent.intentId(), intent.version()));
+            List<ResourceSelector> currentClaims = laneIntent.map(WorkIntent::selectors).orElse(List.of());
+            Optional<TaskSnapshotRecord> existingOpt = laneIntent.flatMap(intent -> store.taskCompletionProjection().findSnapshotForTaskRevision(completionTaskId, intent.intentId(), intent.version()));
             if (laneIntent.isEmpty()) {
-                existingOpt = store.taskCompletionProjection()
-                        .findSnapshotForTask(taskId);
+                existingOpt = store.taskCompletionProjection().findSnapshotForTask(taskId);
             }
 
             if (request.outcome() == CompletionOutcome.NO_CHANGE) {
@@ -618,10 +501,7 @@ public final class AgentTaskCompletionService {
                 }
             }
 
-            if (existingOpt.isPresent() && store.taskCompletionProjection()
-                    .snapshotState(existingOpt.get()
-                            .snapshotId())
-                    .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED) {
+            if (existingOpt.isPresent() && store.taskCompletionProjection().snapshotState(existingOpt.get().snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED) {
                 AgentResponse result = completionResult(store, existingOpt.get(), participantHandle, new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_integrated")), null);
                 bindingService.complete(location, request.provider(), request.connectionInstanceId());
                 AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
@@ -629,7 +509,7 @@ public final class AgentTaskCompletionService {
                     return terminalResult;
                 }
                 try {
-                    AgentResponse continuation = nextActionService.getNextAction(new AgentNextActionService.NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
+                    AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
                     if (continuation.nextAction() != null) {
                         return continuationWithCompletion(terminalResult, continuation);
                     }
@@ -640,36 +520,15 @@ public final class AgentTaskCompletionService {
                 return terminalResult;
             }
 
-            boolean reviewRequired = laneIntent.map(intent -> reviewRequired(store, intent, participantHandle))
-                    .orElse(false);
-            List<ResourceSelector> participantClaims = store.collaborationProjection()
-                    .activeIntents()
-                    .stream()
-                    .filter(intent -> intent.participant()
-                            .equals(participantHandle))
-                    .flatMap(intent -> intent.selectors()
-                            .stream())
-                    .distinct()
-                    .toList();
-            List<ResourceSelector> foreignClaims = store.collaborationProjection()
-                    .activeIntents()
-                    .stream()
-                    .filter(intent -> !intent.participant()
-                            .equals(participantHandle))
-                    .flatMap(intent -> intent.selectors()
-                            .stream())
-                    .distinct()
-                    .toList();
-            boolean sharedProducerWorktree = store.collaborationProjection()
-                    .activeIntents()
-                    .stream()
-                    .filter(intent -> intent.participant()
-                            .equals(participantHandle))
-                    .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
-                    .count() > 1;
+            boolean reviewRequired = laneIntent.map(intent -> reviewRequired(store, intent, participantHandle)).orElse(false);
+            List<ResourceSelector> participantClaims = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantHandle))
+                    .flatMap(intent -> intent.selectors().stream()).distinct().toList();
+            List<ResourceSelector> foreignClaims = store.collaborationProjection().activeIntents().stream().filter(intent -> !intent.participant().equals(participantHandle)).flatMap(intent -> intent.selectors().stream())
+                    .distinct().toList();
+            boolean sharedProducerWorktree =
+                    store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantHandle)).filter(intent -> intent.role() == WorkIntent.Role.PRODUCER).count() > 1;
             boolean scopeToLane = laneIntent.isPresent() && (sharedProducerWorktree || !foreignClaims.isEmpty());
-            String snapshotBaseCommit = laneIntent.map(WorkIntent::baseCommit)
-                    .orElse(null);
+            String snapshotBaseCommit = laneIntent.map(WorkIntent::baseCommit).orElse(null);
             if (laneIntent.isPresent()) {
                 try {
                     snapshotBaseCommit = snapshotService.snapshotBaseForBoundWorktree(workerWorktreePath, snapshotBaseCommit, binding.baseCommit());
@@ -692,7 +551,7 @@ public final class AgentTaskCompletionService {
             // authenticated lane worktree, before any snapshot can become
             // prepared or visible to integration.
             if (location.validation() != null) {
-                prePublicationValidation = processExecutor.execute(ProjectProcessExecutor.ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
+                prePublicationValidation = processExecutor.execute(ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
                 if (!prePublicationValidation.succeeded()) {
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("phase", "pre_publication");
@@ -714,16 +573,12 @@ public final class AgentTaskCompletionService {
                         existingOpt,
                         workerCapabilities,
                         currentClaims,
-                        laneIntent.map(WorkIntent::workGroupId)
-                                .orElse(taskId),
-                        laneIntent.map(WorkIntent::intentId)
-                                .orElse(taskId),
+                        laneIntent.map(WorkIntent::workGroupId).orElse(taskId),
+                        laneIntent.map(WorkIntent::intentId).orElse(taskId),
                         participantHandle,
                         binding.sessionId(),
-                        laneIntent.map(WorkIntent::version)
-                                .orElse(1L),
-                        laneIntent.map(WorkIntent::authorityLineageId)
-                                .orElse(org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(taskId)),
+                        laneIntent.map(WorkIntent::version).orElse(1L),
+                        laneIntent.map(WorkIntent::authorityLineageId).orElse(org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(taskId)),
                         List.of(),
                         reviewRequired,
                         snapshotBaseCommit,
@@ -738,8 +593,7 @@ public final class AgentTaskCompletionService {
             // clean lane is not a valid implementation snapshot: accepting it
             // would create an apparently successful, empty integration and
             // release the caller's authority without preserving any work.
-            if (snapshot.changedPaths()
-                    .isEmpty()) {
+            if (snapshot.changedPaths().isEmpty()) {
                 if (existingOpt.isEmpty()) {
                     snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
                 }
@@ -750,25 +604,18 @@ public final class AgentTaskCompletionService {
             // indicate that two lanes produced the same canonical snapshot
             // identity, so fail closed rather than advertising another task
             // record over the immutable snapshot ID.
-            var sameIdentity = store.taskCompletionProjection()
-                    .findSnapshotById(snapshot.snapshotId());
-            if (sameIdentity.isPresent() && !sameIdentity.get()
-                    .taskId()
-                    .equals(snapshot.taskId())) {
+            var sameIdentity = store.taskCompletionProjection().findSnapshotById(snapshot.snapshotId());
+            if (sameIdentity.isPresent() && !sameIdentity.get().taskId().equals(snapshot.taskId())) {
                 if (existingOpt.isEmpty()) {
                     snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
                 }
-                return new AgentResponse(AgentStatus.BLOCKED,
-                        AgentReason.TASK_NOT_READY,
-                        AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("reason", "SNAPSHOT_ID_COLLISION", "snapshotId", snapshot.snapshotId()));
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SNAPSHOT_ID_COLLISION", "snapshotId", snapshot.snapshotId()));
             }
 
             // 4. Pin the exact prepared tree and fence this lane before the
             // snapshot becomes visible to the integration queue.
-            String completionId = "cmp_" + java.util.UUID.nameUUIDFromBytes((snapshot.provenance()
-                    .laneId() + "\n" + snapshot.provenance()
-                    .claimEpoch() + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String completionId =
+                    "cmp_" + java.util.UUID.nameUUIDFromBytes((snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch() + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             if (existingOpt.isEmpty()) {
                 // Direct callers may create a provisional ref; completion moves
                 // that ref behind a durable prepared phase.
@@ -776,19 +623,11 @@ public final class AgentTaskCompletionService {
             }
             String preparedRef = snapshotService.pinPreparedRef(workerWorktreePath, snapshot, completionId);
             String preparedTreeHash = snapshotService.treeHash(workerWorktreePath, snapshot.commitSha());
-            if (store.taskCompletionProjection()
-                    .findPrepared(taskId,
-                            snapshot.provenance()
-                                    .laneId(),
-                            snapshot.provenance()
-                                    .claimEpoch())
-                    .isEmpty()) {
+            if (store.taskCompletionProjection().findPrepared(taskId, snapshot.provenance().laneId(), snapshot.provenance().claimEpoch()).isEmpty()) {
                 CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
                         completionId,
-                        snapshot.provenance()
-                                .laneId(),
-                        snapshot.provenance()
-                                .claimEpoch(),
+                        snapshot.provenance().laneId(),
+                        snapshot.provenance().claimEpoch(),
                         snapshot.baseCommit(),
                         preparedRef,
                         preparedTreeHash,
@@ -796,11 +635,7 @@ public final class AgentTaskCompletionService {
                 store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, callerNodeId, prepared.encode(), identity);
             }
 
-            snapshotService.promotePreparedRef(workerWorktreePath,
-                    preparedRef,
-                    snapshot.provenance()
-                            .snapshotRef(),
-                    snapshot.commitSha());
+            snapshotService.promotePreparedRef(workerWorktreePath, preparedRef, snapshot.provenance().snapshotRef(), snapshot.commitSha());
 
             // 5. Persist TASK_SNAPSHOT_CREATED if new
             if (existingOpt.isEmpty()) {
@@ -839,7 +674,7 @@ public final class AgentTaskCompletionService {
                 // review an active sibling.  Project that existing review
                 // protocol before returning a terminal result, so the
                 // provider remains engaged without retaining write ownership.
-                AgentResponse continuation = nextActionService.getNextAction(new AgentNextActionService.NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
+                AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
                 if (continuation.nextAction() != null) {
                     return continuationWithCompletion(result, continuation);
                 }
@@ -848,37 +683,29 @@ public final class AgentTaskCompletionService {
 
         } catch (Exception ex) {
             Map<String, Object> failure = new LinkedHashMap<>();
-            failure.put("error",
-                    ex.getClass()
-                            .getSimpleName());
+            failure.put("error", ex.getClass().getSimpleName());
             failure.put("message", ex.getMessage() == null ? "unknown completion failure" : ex.getMessage());
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, failure);
         }
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    private AgentResponse completeNoChangeTask(CompleteTaskRequest request,
-            ProjectApplicationService.ProjectLocation location,
-            NodeIdentity identity,
-            String participantHandle,
-            Optional<WorkIntent> laneIntent) {
-        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null
-                || request.expectedRevision() == null || request.expectedParticipant() == null) {
+    private AgentResponse completeNoChangeTask(CompleteTaskRequest request, ProjectLocation location, NodeIdentity identity, String participantHandle, Optional<WorkIntent> laneIntent) {
+        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null || request.expectedRevision() == null
+                || request.expectedParticipant() == null) {
             return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_REQUIRED", null);
         }
         if (laneIntent.isEmpty()) {
             return noChangeDenied("NO_ACTIVE_INTENT", null);
         }
         WorkIntent announced = laneIntent.get();
-        if (!request.expectedIntentId()
-                .equals(announced.intentId()) || !request.expectedWorkGroupId()
-                .equals(announced.workGroupId()) || request.expectedClaimEpoch() != announced.version() || !participantHandle.equals(request.expectedParticipant())) {
+        if (!request.expectedIntentId().equals(announced.intentId()) || !request.expectedWorkGroupId().equals(announced.workGroupId()) || request.expectedClaimEpoch() != announced.version() || !participantHandle.equals(
+                request.expectedParticipant())) {
             return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH", null);
         }
 
-        WorkspaceReadinessService.ReadinessResult readiness =
-                request.outcome() == CompletionOutcome.NO_CHANGE ? readinessService.assessNoChange(location, request.provider(), request.connectionInstanceId())
-                        : readinessService.assess(location, request.provider(), request.connectionInstanceId());
+        ReadinessResult readiness = request.outcome() == CompletionOutcome.NO_CHANGE ? readinessService.assessNoChange(location, request.provider(), request.connectionInstanceId())
+                : readinessService.assess(location, request.provider(), request.connectionInstanceId());
         if (!readiness.ready()) {
             return readiness.response();
         }
@@ -889,10 +716,10 @@ public final class AgentTaskCompletionService {
             return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH", null);
         }
 
-        ProjectProcessExecutor.ExecutionResult validation = null;
+        ExecutionResult validation = null;
         if (location.validation() != null) {
             try {
-                validation = processExecutor.execute(ProjectProcessExecutor.ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
+                validation = processExecutor.execute(ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
             } catch (Exception failure) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED, AgentNextAction.RETRY, Map.of("phase", "pre_publication", "reason", "VALIDATION_EXECUTION_FAILED"));
             }
@@ -905,11 +732,8 @@ public final class AgentTaskCompletionService {
         }
 
         try {
-            PredictionEventStore current = new PredictionEventStore(location.root()
-                    .resolve(".synesis/coordination"), location.projectId());
-            NoChangeCompletion alreadyCompleted = current.collaborationProjection()
-                    .noChangeCompletion(request.expectedIntentId())
-                    .orElse(null);
+            PredictionEventStore current = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            NoChangeCompletion alreadyCompleted = current.collaborationProjection().noChangeCompletion(request.expectedIntentId()).orElse(null);
             if (alreadyCompleted != null) {
                 if (!noChangeEvidenceMatches(request, readiness.binding(), alreadyCompleted)) {
                     return noChangeDenied("NO_CHANGE_COMPLETION_CONFLICT", validation);
@@ -920,14 +744,12 @@ public final class AgentTaskCompletionService {
                 return noChangeCompletionWithContinuation(location, request, current, alreadyCompleted, validation, readiness.binding(), identity);
             }
 
-            Optional<WorkIntent> currentIntent = current.collaborationProjection()
-                    .intent(request.expectedIntentId());
+            Optional<WorkIntent> currentIntent = current.collaborationProjection().intent(request.expectedIntentId());
             if (currentIntent.isEmpty()) {
                 return noChangeDenied("NO_ACTIVE_INTENT", validation);
             }
             WorkIntent exactIntent = currentIntent.get();
-            if (!exactIntent.workGroupId()
-                    .equals(request.expectedWorkGroupId()) || exactIntent.version() != request.expectedClaimEpoch() || current.headSequence() != request.expectedRevision()) {
+            if (!exactIntent.workGroupId().equals(request.expectedWorkGroupId()) || exactIntent.version() != request.expectedClaimEpoch() || current.headSequence() != request.expectedRevision()) {
                 return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_STALE", validation);
             }
             NoChangeCompletionEligibility.Result eligibility = NoChangeCompletionEligibility.assess(current,
@@ -941,9 +763,7 @@ public final class AgentTaskCompletionService {
             if (!eligibility.eligible()) {
                 return noChangeDenied(eligibility.reason(), validation);
             }
-            var group = current.workGroupProjection()
-                    .group(request.expectedWorkGroupId())
-                    .orElse(null);
+            var group = current.workGroupProjection().group(request.expectedWorkGroupId()).orElse(null);
             if (group == null || group.version() != request.expectedWorkGroupVersion()) {
                 return noChangeDenied("WORK_GROUP_VERSION_STALE", validation);
             }
@@ -960,8 +780,7 @@ public final class AgentTaskCompletionService {
             if (!bindingService.complete(location, request.provider(), request.connectionInstanceId()) && !bindingService.hasActiveIntent(location, binding)) {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SESSION_COMPLETE_FAILED"));
             }
-            PredictionEventStore completedStore = new PredictionEventStore(location.root()
-                    .resolve(".synesis/coordination"), location.projectId());
+            PredictionEventStore completedStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
             return noChangeCompletionWithContinuation(location, request, completedStore, completion, validation, binding, identity);
         } catch (Exception failure) {
             String reason = failure.getMessage() == null ? "NO_CHANGE_COMPLETION_FAILED" : failure.getMessage();
@@ -969,19 +788,17 @@ public final class AgentTaskCompletionService {
                 return noChangeDenied(reason, validation);
             }
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("error",
-                    failure.getClass()
-                            .getSimpleName());
+            result.put("error", failure.getClass().getSimpleName());
             result.put("reason", reason);
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, result);
         }
     }
 
-    private AgentResponse noChangeCompletionWithContinuation(ProjectApplicationService.ProjectLocation location,
+    private AgentResponse noChangeCompletionWithContinuation(ProjectLocation location,
             CompleteTaskRequest request,
             PredictionEventStore store,
             NoChangeCompletion completion,
-            ProjectProcessExecutor.ExecutionResult validation,
+            ExecutionResult validation,
             ProviderSessionBindingService.Binding binding,
             NodeIdentity identity) {
         AgentResponse result = noChangeCompletionResult(store, completion, validation);
@@ -991,7 +808,7 @@ public final class AgentTaskCompletionService {
         }
         result = terminalResult;
         try {
-            AgentResponse continuation = nextActionService.getNextAction(new AgentNextActionService.NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
+            AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
             if (continuation.nextAction() != null) {
                 return continuationWithCompletion(result, continuation);
             }
@@ -1002,11 +819,7 @@ public final class AgentTaskCompletionService {
         return result;
     }
 
-    private AgentResponse terminalSessionResult(AgentResponse completion,
-            CompleteTaskRequest request,
-            ProjectApplicationService.ProjectLocation location,
-            ProviderSessionBindingService.Binding binding,
-            NodeIdentity identity) {
+    private AgentResponse terminalSessionResult(AgentResponse completion, CompleteTaskRequest request, ProjectLocation location, ProviderSessionBindingService.Binding binding, NodeIdentity identity) {
         if (!request.terminalSession()) {
             return completion;
         }
@@ -1022,11 +835,8 @@ public final class AgentTaskCompletionService {
         } else if (completion.result() != null) {
             result.put("completion", completion.result());
         }
-        result.put("sessionTermination",
-                seal.outcome()
-                        .name());
-        if (!seal.blockers()
-                .isEmpty()) {
+        result.put("sessionTermination", seal.outcome().name());
+        if (!seal.blockers().isEmpty()) {
             result.put("sessionTerminationBlockers", seal.blockers());
         }
         if (seal.eventSequence() >= 0L) {
@@ -1047,37 +857,26 @@ public final class AgentTaskCompletionService {
         Objects.requireNonNull(request, "request");
         try {
             manualService.requireAttested(request.provider());
-            Path root = request.projectRoot()
-                    .toAbsolutePath()
-                    .normalize();
-            ProjectApplicationService.ProjectLocation location = projectService.locate(root);
+            Path root = request.projectRoot().toAbsolutePath().normalize();
+            ProjectLocation location = projectService.locate(root);
             ProviderSessionBindingService.Binding binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            NodeIdentity identity = new IdentityBootstrap(location.profile()
-                    .resolve("link")).loadOrCreate()
-                    .identity();
-            PredictionEventStore store = new PredictionEventStore(location.root()
-                    .resolve(".synesis/coordination"), location.projectId());
+            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
             UUID taskId = deriveTaskId(binding);
-            var preparedOpt = store.taskCompletionProjection()
-                    .findPrepared(taskId);
+            var preparedOpt = store.taskCompletionProjection().findPrepared(taskId);
             if (preparedOpt.isEmpty()) {
-                if (store.taskCompletionProjection()
-                        .findSnapshotForTask(taskId)
-                        .isPresent()) {
+                if (store.taskCompletionProjection().findSnapshotForTask(taskId).isPresent()) {
                     return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "PUBLISHED_LANE_NOT_UNWINDABLE"));
                 }
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "NO_PREPARED_COMPLETION"));
             }
             CompletionPreparedPayload prepared = preparedOpt.get();
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            WorkIntent currentIntent = store.collaborationProjection()
-                    .intent(prepared.laneId())
-                    .orElseThrow(() -> new java.io.IOException("UNWIND_INTENT_NOT_FOUND"));
-            if (!currentIntent.participant()
-                    .equals(participant) || currentIntent.version() != prepared.claimEpoch()) {
+            WorkIntent currentIntent = store.collaborationProjection().intent(prepared.laneId()).orElseThrow(() -> new java.io.IOException("UNWIND_INTENT_NOT_FOUND"));
+            if (!currentIntent.participant().equals(participant) || currentIntent.version() != prepared.claimEpoch()) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "UNWIND_CALLER_MISMATCH"));
             }
             WorkIntent replacement = new WorkIntent(currentIntent.intentId(),
@@ -1097,16 +896,12 @@ public final class AgentTaskCompletionService {
                     currentIntent.reviewTargetSelectors(),
                     currentIntent.knownDependencies());
             CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
-            try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root()
-                    .resolve(".synesis/coordination"))) {
+            try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
                 if (!lock.isHeld()) {
                     throw new java.io.IOException("event append lock unavailable");
                 }
-                PredictionEventStore currentStore = new PredictionEventStore(location.root()
-                        .resolve(".synesis/coordination"), location.projectId());
-                if (currentStore.taskCompletionProjection()
-                        .findPrepared(taskId)
-                        .isEmpty()) {
+                PredictionEventStore currentStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+                if (currentStore.taskCompletionProjection().findPrepared(taskId).isEmpty()) {
                     return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_unwound", "claimEpoch", replacement.version()));
                 }
                 currentStore.append(taskId, PredictionEventType.COMPLETION_UNWOUND, identity.nodeId(), payload.encode(), identity);
@@ -1114,151 +909,16 @@ public final class AgentTaskCompletionService {
             try {
                 snapshotService.removePreparedRef(Path.of(binding.worktreePath()), prepared.preparedRef());
             } catch (Exception cleanupFailure) {
-                return new AgentResponse(AgentStatus.FAILED,
-                        AgentReason.INTERNAL_FAILURE,
-                        AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("error", "PREPARED_REF_CLEANUP_FAILED", "message", cleanupFailure.getMessage()));
+                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "PREPARED_REF_CLEANUP_FAILED", "message", cleanupFailure.getMessage()));
             }
             return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "completion_unwound", "claimEpoch", replacement.version()));
         } catch (Exception failure) {
             return new AgentResponse(AgentStatus.FAILED,
                     AgentReason.INTERNAL_FAILURE,
                     AgentNextAction.REQUEST_HUMAN_HELP,
-                    Map.of("error",
-                            failure.getClass()
-                                    .getSimpleName(),
-                            "message",
-                            failure.getMessage() == null ? "unwind failed" : failure.getMessage()));
+                    Map.of("error", failure.getClass().getSimpleName(), "message", failure.getMessage() == null ? "unwind failed" : failure.getMessage()));
         }
     }
 
-    /**
-     * Explicit terminal outcome accepted by {@code finish_lane}.
-     */
-    public enum CompletionOutcome {
-        /**
-         * Publish the normal immutable snapshot and integration candidate.
-         */
-        SNAPSHOT("snapshot"),
-        /**
-         * Complete a declared clean, no-mutation intent.
-         */
-        NO_CHANGE("no_change");
 
-        private final String wireValue;
-
-        CompletionOutcome(String wireValue) {
-            this.wireValue = wireValue;
-        }
-
-        /**
-         * Parses a protocol completion outcome.
-         *
-         * @param value wire value
-         * @return outcome
-         * @throws IllegalArgumentException for an unknown value
-         */
-        public static CompletionOutcome fromWire(String value) {
-            Objects.requireNonNull(value, "completion outcome");
-            return switch (value.trim()
-                    .toLowerCase(java.util.Locale.ROOT)) {
-                case "snapshot" -> SNAPSHOT;
-                case "no_change" -> NO_CHANGE;
-                default -> throw new IllegalArgumentException("unknown completion outcome: " + value);
-            };
-        }
-
-        /**
-         * Returns the stable protocol representation.
-         *
-         * @return wire value
-         */
-        @SuppressWarnings("unused")
-        public String wireValue() {
-            return wireValue;
-        }
-    }
-
-    /**
-     * Request payload for task completion.
-     *
-     * @param projectRoot              control project root path
-     * @param provider                 provider identifier
-     * @param connectionInstanceId     connection instance identifier
-     * @param summary                  human-readable task completion summary (optional)
-     * @param outcome                  completion outcome
-     * @param expectedIntentId         server-issued intent identity observed by the caller
-     * @param expectedWorkGroupId      server-issued work-group identity observed by the caller
-     * @param expectedClaimEpoch       current claim epoch observed by the caller
-     * @param expectedWorkGroupVersion current work-group version observed by the caller
-     * @param expectedRevision         current event-log revision observed by the caller
-     * @param expectedParticipant      exact participant handle observed by the caller
-     * @param terminalSession          explicit opt-in to seal the exact provider session after lane
-     *                                 completion
-     */
-    public record CompleteTaskRequest(Path projectRoot, String provider, String connectionInstanceId, String summary, CompletionOutcome outcome, UUID expectedIntentId, UUID expectedWorkGroupId,
-                                      Long expectedClaimEpoch, Long expectedWorkGroupVersion, Long expectedRevision, String expectedParticipant, boolean terminalSession) {
-
-        /**
-         * Validates non-null core parameters.
-         */
-        public CompleteTaskRequest {
-            Objects.requireNonNull(projectRoot, "projectRoot");
-            Objects.requireNonNull(provider, "provider");
-            Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-            outcome = outcome == null ? CompletionOutcome.SNAPSHOT : outcome;
-        }
-
-        /**
-         * Constructs the existing snapshot completion request shape.
-         *
-         * @param projectRoot          control project root
-         * @param provider             provider identifier
-         * @param connectionInstanceId connection instance identifier
-         * @param summary              completion summary
-         */
-        public CompleteTaskRequest(Path projectRoot, String provider, String connectionInstanceId, String summary) {
-            this(projectRoot, provider, connectionInstanceId, summary, CompletionOutcome.SNAPSHOT, null, null, null, null, null, null, false);
-        }
-
-        /**
-         * Constructs the pre-terminal-session request shape with terminal sealing disabled.
-         *
-         * @param projectRoot              control project root
-         * @param provider                 provider identifier
-         * @param connectionInstanceId     provider connection instance
-         * @param summary                  completion summary
-         * @param outcome                  completion outcome
-         * @param expectedIntentId         exact intent evidence
-         * @param expectedWorkGroupId      exact work-group evidence
-         * @param expectedClaimEpoch       exact claim epoch
-         * @param expectedWorkGroupVersion exact work-group version
-         * @param expectedRevision         exact event revision
-         * @param expectedParticipant      exact participant evidence
-         */
-        public CompleteTaskRequest(Path projectRoot,
-                String provider,
-                String connectionInstanceId,
-                String summary,
-                CompletionOutcome outcome,
-                UUID expectedIntentId,
-                UUID expectedWorkGroupId,
-                Long expectedClaimEpoch,
-                Long expectedWorkGroupVersion,
-                Long expectedRevision,
-                String expectedParticipant) {
-            this(projectRoot,
-                    provider,
-                    connectionInstanceId,
-                    summary,
-                    outcome,
-                    expectedIntentId,
-                    expectedWorkGroupId,
-                    expectedClaimEpoch,
-                    expectedWorkGroupVersion,
-                    expectedRevision,
-                    expectedParticipant,
-                    false);
-        }
-    }
 }

@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
-import org.synesis.workspace.lifecycle.GitProcessRunner;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Compares provider-advertised roots with an explicitly pinned MCP control checkout without

@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Verifies journaled managed-baseline preparation and provenance fencing.

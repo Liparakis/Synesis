@@ -1,19 +1,24 @@
 package org.synesis.cli.command.speculation;
 
-
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.UUID;
+
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
+
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
+
+import org.synesis.workspace.application.project.ProjectLocation;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 
 /**
  * Runs the local speculation gate and records requester validation.
@@ -22,69 +27,55 @@ import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 @SuppressWarnings("resource")
 public final class SpeculationValidateCommand implements Callable<Integer> {
 
-  private final CliRuntime runtime;
-  @Option(names = "--project")
-  private Path project;
-  @Option(names = "--endpoint", required = true)
-  private URI endpoint;
-  @Option(names = "--profile", required = true)
-  private Path profile;
-  @Option(names = "--prediction", required = true)
-  private UUID prediction;
+    private final CliRuntime runtime;
+    @Option(names = "--project")
+    private Path project;
+    @Option(names = "--endpoint", required = true)
+    private URI endpoint;
+    @Option(names = "--profile", required = true)
+    private Path profile;
+    @Option(names = "--prediction", required = true)
+    private UUID prediction;
 
-  /**
-   * Creates a validation command.
-   *
-   * @param runtime composed CLI runtime
-   */
-  public SpeculationValidateCommand(CliRuntime runtime) {
-    this.runtime = runtime;
-  }
-
-  private static String readBaseCommit(
-      org.synesis.workspace.application.ProjectApplicationService.ProjectLocation location,
-      UUID prediction) throws java.io.IOException {
-    Path metadata = location.synesisDirectory()
-        .resolve("local")
-        .resolve("speculation")
-        .resolve(prediction.toString())
-        .resolve("speculation.meta");
-    for (String line : java.nio.file.Files.readAllLines(metadata)) {
-      if (line.startsWith("baseCommit=")) {
-        return line.substring(11);
-      }
+    /**
+     * Creates a validation command.
+     *
+     * @param runtime composed CLI runtime
+     */
+    public SpeculationValidateCommand(CliRuntime runtime) {
+        this.runtime = runtime;
     }
-    throw new IllegalArgumentException("SPECULATION_METADATA_INVALID");
-  }
 
-  /**
-   * Gates the worktree and appends validation when the gate passes. @return stable exit code
-   */
-  @Override
-  public Integer call() {
-    try {
-      var location = CoordinationCliSupport.project(runtime, project);
-      SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(),
-          location.synesisDirectory()
-              .resolve("local"), prediction, readBaseCommit(location, prediction));
-      SpeculationGateResult gate = workspace.gate();
-      runtime.terminal()
-          .stdout(gate.status());
-      if (!gate.accepted()) {
-        return ExitCodes.LOCAL_CONFIGURATION;
-      }
-      var identity = CoordinationCliSupport.loadIdentity(profile);
-      CoordinationCliSupport.submit(endpoint,
-          CoordinationCommand.create(UUID.randomUUID(), location.projectId(),
-              prediction, PredictionEventType.VALIDATION_STARTED, identity.nodeId(), new byte[0],
-              identity));
-      runtime.terminal()
-          .stdout("VALIDATION_STARTED=true");
-      return ExitCodes.OK;
-    } catch (Exception failure) {
-      runtime.terminal()
-          .stderr("SPECULATION_ERROR=" + failure.getMessage());
-      return ExitCodes.LOCAL_CONFIGURATION;
+    private static String readBaseCommit(ProjectLocation location, UUID prediction) throws java.io.IOException {
+        Path metadata = location.synesisDirectory().resolve("local").resolve("speculation").resolve(prediction.toString()).resolve("speculation.meta");
+        for (String line : Files.readAllLines(metadata)) {
+            if (line.startsWith("baseCommit=")) {
+                return line.substring(11);
+            }
+        }
+        throw new IllegalArgumentException("SPECULATION_METADATA_INVALID");
     }
-  }
+
+    /**
+     * Gates the worktree and appends validation when the gate passes. @return stable exit code
+     */
+    @Override
+    public Integer call() {
+        try {
+            var location = CoordinationCliSupport.project(runtime, project);
+            SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(), location.synesisDirectory().resolve("local"), prediction, readBaseCommit(location, prediction));
+            SpeculationGateResult gate = workspace.gate();
+            runtime.terminal().stdout(gate.status());
+            if (!gate.accepted()) {
+                return ExitCodes.LOCAL_CONFIGURATION;
+            }
+            var identity = CoordinationCliSupport.loadIdentity(profile);
+            CoordinationCliSupport.submit(endpoint, CoordinationCommand.create(UUID.randomUUID(), location.projectId(), prediction, PredictionEventType.VALIDATION_STARTED, identity.nodeId(), new byte[0], identity));
+            runtime.terminal().stdout("VALIDATION_STARTED=true");
+            return ExitCodes.OK;
+        } catch (Exception failure) {
+            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
+            return ExitCodes.LOCAL_CONFIGURATION;
+        }
+    }
 }

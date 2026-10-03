@@ -6,24 +6,28 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
+import java.util.Optional;
+
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.daemon.DaemonClient;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.ui.StaticResourceHandler;
+
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
+
 import org.synesis.link.onboarding.Onboarding;
+
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
 import org.synesis.workspace.transport.control.ControlPlaneEventHub;
 import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
 import org.synesis.workspace.transport.control.ControlPlaneReadModel;
-import org.synesis.workspace.transport.control.LinkNetworkProjection;
 import org.synesis.workspace.transport.control.LinkRuntimeOwner;
-import org.synesis.workspace.discovery.KnownProjectRegistry;
+import org.synesis.workspace.transport.control.network.LinkNetworkProjection;
 
 /**
  * Shared composition for the coordination server and the installed browser UI command.

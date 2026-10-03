@@ -3,7 +3,7 @@ package org.synesis.workspace.test;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import org.synesis.workspace.lifecycle.GitProcessRunner;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Shared deterministic Git setup helper for workspace tests.

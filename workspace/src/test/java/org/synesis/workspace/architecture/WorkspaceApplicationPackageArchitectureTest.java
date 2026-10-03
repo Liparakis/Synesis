@@ -52,5 +52,8 @@ final class WorkspaceApplicationPackageArchitectureTest {
     assertTrue(directories.containsAll(Set.of(
         "agent", "capability", "constraint", "control", "guardrail", "hook",
         "integration", "project", "sync", "task", "workspace")));
+    assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/session")));
+    assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/workflow")));
+    assertTrue(Files.isDirectory(APPLICATION_ROOT.resolve("agent/completion")));
   }
 }

@@ -113,4 +113,16 @@ class WorkspacePackageArchitectureTest {
     assertTrue(dosAttributeUsers.getFirst()
         .contains("package org.synesis.workspace.infrastructure.filesystem;"));
   }
+
+  /**
+   * Keeps Codex protocol and control-plane network internals grouped under their owners.
+   */
+  @Test
+  void supportingImplementationsStayInFocusedPackages() {
+    Path sources = Path.of("src/main/java/org/synesis/workspace");
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/GitProcessRunner.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/process/SemanticIndexFingerprint.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/protocol/CodexAppServerProtocolClient.java")));
+    assertTrue(Files.isRegularFile(sources.resolve("transport/control/network/LinkNetworkProjection.java")));
+  }
 }
