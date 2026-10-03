@@ -1,56 +1,33 @@
 package org.synesis.workspace.application.agent.workflow;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.UUID;
 
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
-import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
-import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
-
-import org.synesis.link.identity.IdentityBootstrap;
-import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
-import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
-import org.synesis.workspace.application.task.TaskSnapshotService;
-import org.synesis.workspace.application.workspace.ReadinessResult;
-import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
-import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
 /**
  * Projects review requests, grants, snapshots, and read-only review actions.
@@ -58,7 +35,6 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
  * <p>These helpers read the already-loaded durable projection. They create, consume,
  * validate, and integrate no coordination state themselves.
  */
-@SuppressWarnings("DuplicatedCode")
 final class AgentReviewActionProjection {
 
     static boolean hasAvailableReviewerReviewContinuation(PredictionEventStore store, Map<String, Object> collaboration) {

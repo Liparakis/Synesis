@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.locks.LockSupport;
-import java.util.Optional;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.daemon.DaemonClient;
@@ -94,8 +93,7 @@ final class CoordinationServerLauncher {
       }
       var eventHub = new ControlPlaneEventHub();
       var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish);
-      var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, Optional.empty(),
-          eventHub::publish, location.identity());
+      var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, null, eventHub::publish, location.identity());
       var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(),
           new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
       var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub,

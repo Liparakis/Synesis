@@ -15,7 +15,6 @@ import java.util.HexFormat;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Issues, authenticates, and atomically rotates managed attachment proofs.
@@ -375,8 +374,8 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         } catch (OverlappingFileLockException | IOException failure) {
             try {
                 channel.close();
-            } catch (IOException ignored) {
-                failure.addSuppressed(ignored);
+            } catch (IOException closeFailure) {
+                failure.addSuppressed(closeFailure);
             }
             if (failure instanceof OverlappingFileLockException) {
                 throw new IOException("managed_transport_already_connected", failure);

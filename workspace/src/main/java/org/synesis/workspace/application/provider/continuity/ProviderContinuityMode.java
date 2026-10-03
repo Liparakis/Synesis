@@ -8,16 +8,16 @@ package org.synesis.workspace.application.provider.continuity;
  * thread happens to exist.</p>
  */
 public enum ProviderContinuityMode {
-  /**
-   * One transport connection owns one session binding.
-   */
-  SESSION_BOUND,
-  /**
-   * Synesis authenticates a replacement managed runtime attachment.
-   */
-  MANAGED_CONTINUITY,
-  /**
-   * A future provider-native assertion profile.
-   */
-  NATIVE_CONTINUITY
+    /**
+     * One transport connection owns one session binding.
+     */
+    SESSION_BOUND,
+    /**
+     * Synesis authenticates a replacement managed runtime attachment.
+     */
+    MANAGED_CONTINUITY,
+    /**
+     * A future provider-native assertion profile.
+     */
+    NATIVE_CONTINUITY
 }

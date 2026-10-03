@@ -146,7 +146,8 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         try {
             encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(value);
         } catch (RuntimeException failure) {
-            return omit(category);
+            omit(category);
+            return false;
         }
         byte[] bytes = encoded.getBytes(StandardCharsets.UTF_8);
         if (persistedBytes >= MAX_JOURNAL_BYTES) {
@@ -164,13 +165,15 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         Entry entry = new Entry(category, encoded + System.lineSeparator(), terminal);
         synchronized (queueLock) {
             if (closedRequested) {
-                return omit(category);
+                omit(category);
+                return false;
             }
             if (terminal && criticalQueue.size() < MAX_CRITICAL_QUEUE_ENTRIES) {
                 if (queue.size() + criticalQueue.size() >= MAX_QUEUE_ENTRIES) {
                     Entry low = queue.stream().filter(item -> !item.terminal()).findFirst().orElse(null);
                     if (low == null) {
-                        return omit(category);
+                        omit(category);
+                        return false;
                     }
                     queue.remove(low);
                     countDrop(low.category());
@@ -185,7 +188,8 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                     queue.remove(low);
                     countDrop(low.category());
                 } else {
-                    return omit(category);
+                    omit(category);
+                    return false;
                 }
             }
             queue.addLast(entry);
@@ -245,6 +249,16 @@ public final class CodexEvidenceJournal implements AutoCloseable {
     }
 
     /**
+     * Returns the path for the generation journal.
+     *
+     * @return journal path
+     */
+    @SuppressWarnings("SameReturnValue") // The path is stable for this journal's lifetime.
+    public Path journal() {
+        return journal;
+    }
+
+    /**
      * Marks this generation incomplete when closing metadata cannot be persisted or an external owner
      * observes a journal failure.
      */
@@ -253,15 +267,6 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             complete = false;
             overflowMarker = true;
         }
-    }
-
-    /**
-     * Returns the generation journal path.
-     *
-     * @return journal path
-     */
-    public Path journal() {
-        return journal;
     }
 
     /**
@@ -334,13 +339,12 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         }
     }
 
-    private boolean omit(String category) {
+    private void omit(String category) {
         synchronized (accountingLock) {
             complete = false;
             overflowMarker = true;
             eventsDropped++;
             dropped.merge(category, 1L, Long::sum);
-            return false;
         }
     }
 

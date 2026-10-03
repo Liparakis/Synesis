@@ -1,18 +1,19 @@
 package org.synesis.mcp;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.UUID;
-
 import org.synesis.mcp.application.McpProtocolHandler;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
-
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
@@ -20,25 +21,60 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.
  *
  * <p>Parses launch arguments ({@code --provider}, {@code --project},
- * {@code --connection-instance-id}),
- * initializes ambient session resolution, and starts the stdio event loop.
+ * {@code --connection-instance-id}), initializes ambient session resolution, and starts the stdio
+ * event loop. Environment variables supply defaults; arguments override them.
  *
  * @since 1.0
  */
 public final class SynesisMcpServer {
 
-    /** Utility entrypoint; instances do not hold server state. */
+    /**
+     * Provider assumed when neither the environment nor the arguments name one.
+     */
+    private static final String DEFAULT_PROVIDER = "codex";
+
+    /**
+     * The only provider for which managed continuity is supported.
+     */
+    private static final String MANAGED_CONTINUITY_PROVIDER = "codex";
+
+    /**
+     * Exit code for a launch the server refuses to start.
+     */
+    private static final int EXIT_REJECTED = 2;
+
+    /**
+     * Longest environment value accepted; longer values are treated as absent.
+     */
+    private static final int MAX_ENVIRONMENT_LENGTH = 8_192;
+
+    /**
+     * Version reported in the startup banner.
+     */
+    private static final String VERSION = "0.1.0-SNAPSHOT";
+
+    /**
+     * Build commit reported in the startup banner.
+     */
+    private static final String COMMIT = "bc334ac";
+
+    /**
+     * Utility class; the process is started through {@link #execute(String[])}.
+     */
     private SynesisMcpServer() {
     }
 
     /**
      * Executes the MCP server process.
      *
+     * <p>Refusals are reported on stderr as {@code SYNESIS_MCP_STARTUP_REJECTED=<code>} so stdout
+     * stays reserved for protocol frames.
+     *
      * @param arguments command-line launch arguments
-     * @return process exit code
+     * @return process exit code: the stdio loop's result, or {@value #EXIT_REJECTED} when startup is refused
      */
     public static int execute(String[] arguments) {
-        String provider = boundedEnvironment("SYNESIS_MCP_PROVIDER", "codex");
+        String provider = boundedEnvironment("SYNESIS_MCP_PROVIDER", DEFAULT_PROVIDER);
         String configuredProject = boundedEnvironmentOrNull("SYNESIS_MCP_PROJECT");
         boolean projectRootPinned = configuredProject != null;
         Path projectRoot = Path.of(configuredProject == null ? "." : configuredProject).toAbsolutePath().normalize();
@@ -50,15 +86,13 @@ public final class SynesisMcpServer {
                 provider = arguments[++i].trim();
             } else if ("--project".equals(arg)) {
                 if (i + 1 >= arguments.length || arguments[i + 1].isBlank() || arguments[i + 1].startsWith("--")) {
-                    System.err.println("SYNESIS_MCP_STARTUP_REJECTED=PROJECT_ARGUMENT_REQUIRED");
-                    return 2;
+                    return reject("PROJECT_ARGUMENT_REQUIRED");
                 }
                 try {
                     projectRoot = Path.of(arguments[++i]).toAbsolutePath().normalize();
                     projectRootPinned = true;
                 } catch (RuntimeException invalidProject) {
-                    System.err.println("SYNESIS_MCP_STARTUP_REJECTED=PROJECT_ARGUMENT_INVALID");
-                    return 2;
+                    return reject("PROJECT_ARGUMENT_INVALID");
                 }
             } else if ("--connection-instance-id".equals(arg) && i + 1 < arguments.length) {
                 connectionInstanceId = arguments[++i].trim();
@@ -77,28 +111,20 @@ public final class SynesisMcpServer {
                 transportLease = new ManagedAttachmentService().acquireTransport(location, managedAttachment.bindingSessionId(), managedAttachment.generation());
                 continuityMode = managedAttachment.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION ? "MANAGED_CONTINUITY_QUARANTINED" : "MANAGED_CONTINUITY";
             } catch (Exception rejected) {
-                System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_ATTACHMENT_REJECTED");
-                return 2;
+                return reject("MANAGED_ATTACHMENT_REJECTED");
             }
         } else {
             try {
                 rejectProoflessManagedAttachment(projectRoot, provider, connectionInstanceId);
             } catch (Exception rejected) {
-                System.err.println("SYNESIS_MCP_STARTUP_REJECTED=MANAGED_PROOF_REQUIRED");
-                return 2;
+                return reject("MANAGED_PROOF_REQUIRED");
             }
         }
-        System.err.println("SYNESIS_MCP_STARTUP pid=" + pid + " version=0.1.0-SNAPSHOT commit=bc334ac conn=" + connectionInstanceId + " provider=" + provider + " continuityMode=" + continuityMode + " cwd=" + Path.of(".")
-                .toAbsolutePath().normalize());
+        System.err.println(
+                "SYNESIS_MCP_STARTUP pid=" + pid + " version=" + VERSION + " commit=" + COMMIT + " conn=" + connectionInstanceId + " provider=" + provider + " continuityMode=" + continuityMode + " cwd=" + Path.of(".")
+                        .toAbsolutePath().normalize());
 
-        try {
-            ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
-            new KnownProjectRegistry().observe(location);
-        } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
-            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
-        } catch (ProjectApplicationService.ProjectApplicationException invalidProject) {
-            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + invalidProject.code());
-        }
+        observeProject(projectRoot);
 
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
@@ -108,19 +134,56 @@ public final class SynesisMcpServer {
         try {
             return server.run();
         } finally {
-            if (transportLease != null) {
-                try {
-                    transportLease.close();
-                } catch (Exception ignored) {
-                    // The MCP result is already determined by the stdio loop.
-                }
-            }
+            closeTransportLease(transportLease);
         }
     }
 
-    /** Authenticates the exact managed attachment proof before opening a transport lease. */
+    /**
+     * Entrypoint for standalone process execution.
+     *
+     * @param arguments launch arguments
+     */
+    //noinspection RedundantModifier
+    static void main(String[] arguments) {
+        System.exit(execute(arguments));
+    }
+
+    /**
+     * Prevents an exact managed binding from silently downgrading to ordinary session-bound admission
+     * when its process-private proof is absent.
+     *
+     * @param projectRoot          control project root
+     * @param provider             provider identifier
+     * @param connectionInstanceId exact connection selector
+     * @throws Exception when a managed attachment exists without proof
+     */
+    static void rejectProoflessManagedAttachment(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
+        if (!MANAGED_CONTINUITY_PROVIDER.equals(provider)) {
+            return;
+        }
+        ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider, connectionInstanceId).orElse(null);
+        if (binding == null) {
+            return;
+        }
+        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read().orElse(null);
+        if (record != null && record.mode() == ProviderContinuityMode.MANAGED_CONTINUITY) {
+            throw new IllegalStateException("managed_attachment_proof_required");
+        }
+    }
+
+    /**
+     * Authenticates the proof-bearing transport against the exact managed binding and attachment.
+     *
+     * @param projectRoot          control project root
+     * @param provider             provider identifier
+     * @param connectionInstanceId exact connection selector
+     * @param attachmentProof      process-private attachment proof
+     * @return the authenticated attachment record
+     * @throws Exception when the provider is unsupported, the binding or attachment is missing or inactive, or the proof is rejected
+     */
     private static ManagedAttachmentRecord authorizeManagedAttachment(Path projectRoot, String provider, String connectionInstanceId, String attachmentProof) throws Exception {
-        if (!"codex".equals(provider)) {
+        if (!MANAGED_CONTINUITY_PROVIDER.equals(provider)) {
             throw new IllegalArgumentException("managed continuity provider unsupported");
         }
         ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
@@ -136,57 +199,86 @@ public final class SynesisMcpServer {
     }
 
     /**
-     * Prevents an exact managed binding from silently downgrading to ordinary session-bound admission
-     * when its process-private proof is absent.
+     * Records the project in the installation-local discovery index. Failure is reported on stderr
+     * and never prevents startup.
      *
-     * @param projectRoot          control project root
-     * @param provider             provider identifier
-     * @param connectionInstanceId exact connection selector
-     * @throws Exception when a managed attachment exists without proof
+     * @param projectRoot control project root
      */
-    static void rejectProoflessManagedAttachment(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        if (!"codex".equals(provider)) {
-            return;
+    private static void observeProject(Path projectRoot) {
+        try {
+            ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
+            new KnownProjectRegistry().observe(location);
+        } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
+        } catch (ProjectApplicationService.ProjectApplicationException invalidProject) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + invalidProject.code());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider, connectionInstanceId).orElse(null);
-        if (binding == null) {
-            return;
-        }
-        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read().orElse(null);
-        if (record != null && record.mode() == org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY) {
-            throw new IllegalStateException("managed_attachment_proof_required");
-        }
-    }
-
-    /** Reads a bounded nonblank environment setting or returns its default. */
-    private static String boundedEnvironment(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() || value.length() > 8_192 ? fallback : value.trim();
-    }
-
-    /** Reads a bounded nonblank environment setting when present. */
-    private static String boundedEnvironmentOrNull(String name) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() || value.length() > 8_192 ? null : value.trim();
-    }
-
-    /** Captures one immutable process identity for lease and termination fencing. */
-    private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
-        ProcessHandle.Info info = ProcessHandle.current().info();
-        String executable = info.command().orElse("unknown");
-        String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(java.time.Instant::toEpochMilli).orElse(System.currentTimeMillis());
-        return new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start, connectionInstanceId + ":" + UUID.randomUUID());
     }
 
     /**
-     * Entrypoint for standalone process execution.
+     * Reports a refused launch on stderr.
      *
-     * @param arguments launch arguments
+     * @param code stable rejection code
+     * @return {@value #EXIT_REJECTED}, for the caller to return as the exit code
      */
-    //noinspection RedundantModifier
-    static void main(String[] arguments) {
-        System.exit(execute(arguments));
+    private static int reject(String code) {
+        System.err.println("SYNESIS_MCP_STARTUP_REJECTED=" + code);
+        return EXIT_REJECTED;
+    }
+
+    /**
+     * Releases the managed transport lease, if any, discarding close failures.
+     *
+     * @param transportLease lease to release, or {@code null}
+     */
+    private static void closeTransportLease(ManagedAttachmentService.TransportLease transportLease) {
+        if (transportLease == null) {
+            return;
+        }
+        try {
+            transportLease.close();
+        } catch (Exception ignored) {
+            // The MCP result is already determined by the stdio loop.
+        }
+    }
+
+    /**
+     * Reads an environment variable, falling back when it is unset, blank, or over-long.
+     *
+     * @param name     variable name
+     * @param fallback value returned when the variable is unusable
+     * @return the trimmed value, or {@code fallback} as given
+     */
+    private static String boundedEnvironment(String name, String fallback) {
+        String value = boundedEnvironmentOrNull(name);
+        return value == null ? fallback : value;
+    }
+
+    /**
+     * Reads an environment variable, treating unset, blank, or over-long values as absent.
+     *
+     * @param name variable name
+     * @return the trimmed value, or {@code null} when unusable
+     */
+    private static String boundedEnvironmentOrNull(String name) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() || value.length() > MAX_ENVIRONMENT_LENGTH ? null : value.trim();
+    }
+
+    /**
+     * Captures this process's identity for session lease ownership.
+     *
+     * @param connectionInstanceId connection selector, combined with a random suffix into the identity nonce
+     * @return identity with the process id, command, start time, and nonce
+     */
+    private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
+        ProcessHandle self = ProcessHandle.current();
+        ProcessHandle.Info info = self.info();
+        String executable = info.command().orElse("unknown");
+        String commandLine = info.commandLine().orElse(executable);
+        long start = info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
+        return new SessionProcessIdentity(self.pid(), executable, commandLine, start, connectionInstanceId + ":" + UUID.randomUUID());
     }
 }

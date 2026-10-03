@@ -381,28 +381,12 @@ public final class DoctorService {
         }
     }
 
-    @SuppressWarnings("ExtractMethodRecommender")
     private void checkCommandNamespace(List<DoctorFinding> findings) {
         ProjectCommandDiagnostics.Report report = ProjectCommandDiagnostics.inspect(AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
         if (!report.present()) {
             return;
         }
-        Map<String, String> details = new java.util.LinkedHashMap<>();
-        details.put("newerObjects", String.valueOf(report.newerObjectCount()));
-        details.put("olderFormats", String.valueOf(report.olderFormatCount()));
-        details.put("corruptObjects", String.valueOf(report.corruptObjectCount()));
-        details.put("permanentLocks", String.valueOf(report.permanentLockCount()));
-        details.put("scopes", String.valueOf(report.scopeCount()));
-        details.put("anchors", String.valueOf(report.anchorCount()));
-        details.put("requests", String.valueOf(report.requestCount()));
-        details.put("liveAtCapacity", String.valueOf(report.liveAtCapacityCount()));
-        details.put("deadAnchors", String.valueOf(report.deadAnchorCount()));
-        details.put("terminalEligible", String.valueOf(report.eligibleTerminalCount()));
-        details.put("pinnedEvidence", String.valueOf(report.pinnedEvidenceCount()));
-        details.put("staleIndex", String.valueOf(report.staleIndexCount()));
-        details.put("temporaryArtifacts", String.valueOf(report.temporaryArtifactCount()));
-        details.put("terminalHistoryCompactions", String.valueOf(report.terminalHistoryCompactionCount()));
-        details.put("enumerationComplete", String.valueOf(report.enumerationComplete()));
+        Map<String, String> details = report.doctorDetails();
         if (!report.formatValid() || report.newerObjectCount() > 0 || report.corruptObjectCount() > 0) {
             findings.add(new DoctorFinding(DoctorFindingCode.COMMAND_NAMESPACE_UNSAFE,
                     DoctorSeverity.ERROR,

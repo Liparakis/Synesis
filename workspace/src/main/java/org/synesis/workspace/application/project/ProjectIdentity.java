@@ -17,25 +17,24 @@ import java.util.UUID;
  */
 public record ProjectIdentity(UUID projectId, Instant createdAt) {
 
-  /**
-   * Validates portable identity material.
-   *
-   * @param projectId stable logical project identifier
-   * @param createdAt immutable project-genesis timestamp
-   */
-  public ProjectIdentity {
-    Objects.requireNonNull(projectId, "project ID");
-    Objects.requireNonNull(createdAt, "created at");
-  }
+    /**
+     * Validates portable identity material.
+     *
+     * @param projectId stable logical project identifier
+     * @param createdAt immutable project-genesis timestamp
+     */
+    public ProjectIdentity {
+        Objects.requireNonNull(projectId, "project ID");
+        Objects.requireNonNull(createdAt, "created at");
+    }
 
-  /**
-   * Compares identity material without consulting local paths or mutable state.
-   *
-   * @param other candidate identity
-   * @return {@code true} when both immutable identity fields match
-   */
-  public boolean matches(ProjectIdentity other) {
-    return other != null && projectId.equals(other.projectId)
-        && createdAt.equals(other.createdAt);
-  }
+    /**
+     * Compares identity material without consulting local paths or mutable state.
+     *
+     * @param other candidate identity
+     * @return {@code true} when both immutable identity fields match
+     */
+    public boolean matches(ProjectIdentity other) {
+        return other != null && projectId.equals(other.projectId) && createdAt.equals(other.createdAt);
+    }
 }

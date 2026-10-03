@@ -1,5 +1,6 @@
 package org.synesis.cli.command;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
@@ -74,6 +75,8 @@ public final class ConstraintCreateCommand implements Callable<Integer> {
         } catch (RuntimeException failure) {
             runtime.terminal().stderr("ERROR=RECORD_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

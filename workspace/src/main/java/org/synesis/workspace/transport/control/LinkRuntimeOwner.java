@@ -149,12 +149,12 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      *
      * @param onboarding      Link-owned onboarding facade
      * @param localIdentity   local authenticated node identity
-     * @param membership      explicitly verified signed membership, or empty when overlay membership
-     *                        is not configured
+     * @param membership      explicitly verified signed membership, or {@code null} when overlay
+     *                        membership is not configured
      * @param events          safe Link event sink
      * @param projectIdentity canonical local project identity
      */
-    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
+    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
         this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"));
     }
 
@@ -163,21 +163,20 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      *
      * @param onboarding      Link-owned onboarding facade
      * @param localIdentity   local authenticated node identity
-     * @param membership      explicitly verified signed membership, or empty when not configured
+     * @param membership      explicitly verified signed membership, or {@code null} when not configured
      * @param events          safe Link event sink
      * @param clock           time source
      * @param projectIdentity canonical local project identity, or {@code null} to skip the project-context exchange
      * @throws IllegalArgumentException when the local node is not in the membership, or the
      *                                  membership belongs to a different project
      */
-    private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Optional<OverlayMembershipSnapshot> membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity) {
+    private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity) {
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
         this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.projectIdentity = projectIdentity;
-        Optional<OverlayMembershipSnapshot> initial = Objects.requireNonNull(membership, "membership");
-        this.membership = initial.map(OverlayMembershipView::new).orElse(null);
+        this.membership = membership == null ? null : new OverlayMembershipView(membership);
         if (this.membership != null && !this.membership.current().allows(localIdentity.nodeId())) {
             throw new IllegalArgumentException("local identity is not in the supplied membership");
         }

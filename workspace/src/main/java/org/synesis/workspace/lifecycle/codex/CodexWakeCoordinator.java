@@ -7,10 +7,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Event-driven, project-local wake relay owned by the existing Codex lifecycle host.
@@ -34,7 +34,7 @@ final class CodexWakeCoordinator implements AutoCloseable {
     private final Thread thread;
     private volatile boolean closed;
     private volatile String lastDiagnostic = "";
-    private volatile long scanCount;
+    private final AtomicLong scanCount = new AtomicLong();
 
     /**
      * Creates a relay for one project lifecycle owner.
@@ -106,7 +106,7 @@ final class CodexWakeCoordinator implements AutoCloseable {
      * @return scan count
      */
     long scanCount() {
-        return scanCount;
+        return scanCount.get();
     }
 
     private void run() {
@@ -150,7 +150,7 @@ final class CodexWakeCoordinator implements AutoCloseable {
         }
         try {
             scanAction.run();
-            scanCount++;
+            scanCount.incrementAndGet();
             lastDiagnostic = "";
         } catch (Exception failure) {
             lastDiagnostic = diagnostic(failure);

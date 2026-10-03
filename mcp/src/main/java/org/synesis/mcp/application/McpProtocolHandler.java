@@ -2,34 +2,34 @@ package org.synesis.mcp.application;
 
 import static org.synesis.mcp.application.McpCollaborationProjection.collaborationStatusMap;
 import static org.synesis.mcp.application.McpCollaborationProjection.contractMap;
-import static org.synesis.mcp.application.McpCollaborationProjection.dependencyMap;
-import static org.synesis.mcp.application.McpCollaborationProjection.laneGrantMap;
 import static org.synesis.mcp.application.McpCollaborationProjection.requestMap;
-import static org.synesis.mcp.application.McpCollaborationProjection.snapshotMap;
-import static org.synesis.mcp.application.McpCollaborationProjection.workGroupMap;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.synesis.coordination.application.ContinuationResult;
-import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
-import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.contract.ContractDependency;
-import org.synesis.coordination.domain.contract.ContractRecord;
-import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 
 import org.synesis.link.identity.IdentityBootstrap;
 
@@ -51,7 +51,6 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.CapabilityResponseService;
-import org.synesis.workspace.application.collaboration.CollaborationSnapshot;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
@@ -65,6 +64,7 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
@@ -114,44 +114,130 @@ public final class McpProtocolHandler {
      * MCP protocol versions accepted by the handshake.
      */
     private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25");
+    /**
+     * Version reported in {@code serverInfo}.
+     */
+    private static final String SERVER_VERSION = "0.1.0-SNAPSHOT";
+    /**
+     * Prefix of internal dispatch names; the wire contract advertises raw tool names only.
+     */
+    private static final String TOOL_PREFIX = "synesis.";
+    /**
+     * Project metadata file whose presence marks an initialized Synesis project.
+     */
+    private static final String PROJECT_METADATA = ".synesis/project.json";
+    /**
+     * Environment variables scanned for a workspace root when initialize yields none, in priority order.
+     */
+    private static final List<String> FALLBACK_ROOT_ENVIRONMENT_KEYS = List.of("WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR", "PROJECT_ROOT", "PROJECT_DIR", "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD");
+    /**
+     * Maximum number of {@code knownDependencies} entries.
+     */
+    private static final int MAX_KNOWN_DEPENDENCIES = 50;
+    /**
+     * Maximum length of one {@code knownDependencies} entry.
+     */
+    private static final int MAX_DEPENDENCY_LENGTH = 128;
+    /**
+     * Largest accepted {@code run_command} timeout, in seconds.
+     */
+    private static final int MAX_COMMAND_TIMEOUT_SECONDS = 3600;
+    /**
+     * JSON-RPC 2.0 error code: the message was not valid JSON.
+     */
+    private static final int PARSE_ERROR = -32700;
+    /**
+     * JSON-RPC 2.0 error code: the message was not a valid request object.
+     */
+    private static final int INVALID_REQUEST = -32600;
+    /**
+     * JSON-RPC 2.0 error code: the method does not exist.
+     */
+    private static final int METHOD_NOT_FOUND = -32601;
+    /**
+     * JSON-RPC 2.0 error code: the method parameters were invalid.
+     */
+    private static final int INVALID_PARAMS = -32602;
+    /**
+     * JSON-RPC 2.0 error code: the handler failed internally.
+     */
+    private static final int INTERNAL_ERROR = -32603;
 
-    /** Service that resolves and admits the provider's session. */
+    /**
+     * Service that resolves and admits the provider's session.
+     */
     private final AgentSessionService sessionService;
-    /** Service that reads project files under the admitted workspace authority. */
+    /**
+     * Service that reads project files under the admitted workspace authority.
+     */
     private final WorkspaceReadService readService;
-    /** Service that applies workspace edits under the admitted workspace authority. */
+    /**
+     * Service that applies workspace edits under the admitted workspace authority.
+     */
     private final WorkspacePatchService patchService;
-    /** Service that admits durable project commands before execution. */
+    /**
+     * Service that admits durable project commands before execution.
+     */
     private final ProjectCommandAdmissionService commandAdmissionService;
-    /** Service that projects the durable next action for the bound participant. */
+    /**
+     * Service that projects the durable next action for the bound participant.
+     */
     private final AgentNextActionService nextActionService;
-    /** Service that creates capability requests. */
+    /**
+     * Service that creates capability requests.
+     */
     private final CapabilityRequestService capabilityRequestService;
-    /** Service that processes capability-owner responses. */
+    /**
+     * Service that processes capability-owner responses.
+     */
     private final CapabilityResponseService capabilityResponseService;
-    /** Service that publishes capability implementations. */
+    /**
+     * Service that publishes capability implementations.
+     */
     private final ImplementationPublicationService publicationService;
-    /** Service that validates published implementations. */
+    /**
+     * Service that validates published implementations.
+     */
     private final ImplementationValidationService validationService;
-    /** Service that validates immutable review snapshots. */
+    /**
+     * Service that validates immutable review snapshots.
+     */
     private final ReviewValidationService reviewValidationService;
-    /** Service that completes a participant's current task. */
+    /**
+     * Service that completes a participant's current task.
+     */
     private final AgentTaskCompletionService taskCompletionService;
-    /** Service that cancels a participant's current task. */
+    /**
+     * Service that cancels a participant's current task.
+     */
     private final AgentTaskCancellationService taskCancellationService;
-    /** Service that reads and mutates durable collaboration state. */
+    /**
+     * Service that reads and mutates durable collaboration state.
+     */
     private final WorkspaceCollaborationService collaborationService;
-    /** Service that grants reads of immutable review snapshots. */
+    /**
+     * Service that grants reads of immutable review snapshots.
+     */
     private final ReviewSnapshotAccessService reviewSnapshotAccessService;
-    /** Resolves the exact provider and connection binding used for authority checks. */
+    /**
+     * Resolves the exact provider and connection binding used for authority checks.
+     */
     private final SessionAuthorityResolver authorityResolver;
-    /** Persists and closes this connection's session lease. */
+    /**
+     * Persists and closes this connection's session lease.
+     */
     private final SessionLeaseService leaseService;
-    /** Policy used to bound session-lease behavior. */
+    /**
+     * Policy used to bound session-lease behavior.
+     */
     private final SessionLeasePolicy leasePolicy;
-    /** Reconciles eligible durable work after this connection is admitted. */
+    /**
+     * Reconciles eligible durable work after this connection is admitted.
+     */
     private final ReconciliationService reconciliationService;
-    /** Validates provider manual attestation before authority-increasing calls. */
+    /**
+     * Validates provider manual attestation before authority-increasing calls.
+     */
     private final ProviderManualService manualService;
     /**
      * Project root supplied by the launcher before MCP roots are resolved.
@@ -181,7 +267,9 @@ public final class McpProtocolHandler {
      * Binding and generation authenticated for a managed process-local connection.
      */
     private final String managedBindingSessionId;
-    /** Authenticated generation of the managed attachment for this connection. */
+    /**
+     * Authenticated generation of the managed attachment for this connection.
+     */
     private final long managedAttachmentGeneration;
     /**
      * Project root selected from the initialized request or roots notification.
@@ -229,6 +317,15 @@ public final class McpProtocolHandler {
         this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, false);
     }
 
+    /**
+     * Creates an MCP protocol handler for tests that pin the root and capture process identity themselves.
+     *
+     * @param sessionService       application session service
+     * @param projectRoot          initial launcher project root path
+     * @param provider             stable provider name
+     * @param connectionInstanceId unique process connection-instance ID
+     * @param projectRootPinned    whether {@code projectRoot} came from an explicit launcher setting
+     */
     McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId, boolean projectRootPinned) {
         this(sessionService, projectRoot, provider, connectionInstanceId, captureProcessIdentity(connectionInstanceId), projectRootPinned, false);
     }
@@ -345,16 +442,17 @@ public final class McpProtocolHandler {
         }
 
         String trimmed = input.trim();
-        try {
-            if (trimmed.startsWith("file:")) {
-                return Path.of(java.net.URI.create(trimmed)).toAbsolutePath().normalize();
+        if (trimmed.startsWith("file:")) {
+            try {
+                return Path.of(URI.create(trimmed)).toAbsolutePath().normalize();
+            } catch (Exception ignored) {
+                // Not a usable file URI; fall back to treating the text as a path.
             }
-        } catch (Exception ignored) {
         }
 
         try {
-            return Path.of(java.net.URLDecoder.decode(trimmed, java.nio.charset.StandardCharsets.UTF_8)).toAbsolutePath().normalize();
-        } catch (Exception ex) {
+            return Path.of(URLDecoder.decode(trimmed, StandardCharsets.UTF_8)).toAbsolutePath().normalize();
+        } catch (Exception invalid) {
             return null;
         }
     }
@@ -369,10 +467,9 @@ public final class McpProtocolHandler {
         ProcessHandle.Info info = ProcessHandle.current().info();
         String executable = info.command().orElse("unknown");
         String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(java.time.Instant::toEpochMilli).orElse(System.currentTimeMillis());
+        long start = info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
         return new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start, connectionInstanceId + ":" + UUID.randomUUID());
     }
-
 
     /**
      * Reads the bounded validation evidence accepted by the integration-check compatibility adapter.
@@ -399,7 +496,7 @@ public final class McpProtocolHandler {
         Object tests = check.get("tests");
         if (tests instanceof List<?> entries) {
             return entries.stream().anyMatch(entry -> entry instanceof String text && passingTestText(text)) && entries.stream()
-                    .noneMatch(entry -> entry instanceof String text && text.toLowerCase(java.util.Locale.ROOT).matches("(?s).*\\b(?:failed|failure|error|errors|exit\\s*code\\s*[1-9]\\d*)\\b.*"));
+                    .noneMatch(entry -> entry instanceof String text && text.toLowerCase(Locale.ROOT).matches("(?s).*\\b(?:failed|failure|error|errors|exit\\s*code\\s*[1-9]\\d*)\\b.*"));
         }
         return false;
     }
@@ -411,12 +508,17 @@ public final class McpProtocolHandler {
      * @return whether the text unambiguously reports a passing run
      */
     private static boolean passingTestText(String text) {
-        String normalized = text.toLowerCase(java.util.Locale.ROOT);
+        String normalized = text.toLowerCase(Locale.ROOT);
         return normalized.matches("(?s).*\\b\\d+\\s+passed\\b.*") && !normalized.matches("(?s).*\\b(?:failed|failure|error|errors|exit\\s*code\\s*[1-9]\\d*)\\b.*");
     }
 
-
-    /** Reads a nonblank string field from the nested task object when present. */
+    /**
+     * Reads a nonblank string field from the nested task object when present.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param field     field name inside the {@code task} object
+     * @return the field value, or {@code null} when absent, blank, or not a string
+     */
     private static String taskField(Map<String, Object> arguments, String field) {
         if (arguments == null || !(arguments.get("task") instanceof Map<?, ?> taskMap)) {
             return null;
@@ -425,7 +527,13 @@ public final class McpProtocolHandler {
         return value instanceof String text && !text.isBlank() ? text : null;
     }
 
-    /** Reads the required nonblank finish outcome field. */
+    /**
+     * Reads the required nonblank finish outcome field.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @return the outcome text
+     * @throws IllegalArgumentException when the outcome is missing, blank, or not a string
+     */
     private static String requiredStringArgument(Map<String, Object> arguments) {
         if (arguments == null || !(arguments.get("outcome") instanceof String value) || value.isBlank()) {
             throw new IllegalArgumentException("invalid outcome");
@@ -433,7 +541,14 @@ public final class McpProtocolHandler {
         return value;
     }
 
-    /** Reads an optional string argument and rejects values of any other JSON type. */
+    /**
+     * Reads an optional string argument and rejects values of any other JSON type.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param key       argument name
+     * @return the value, or {@code null} when absent or JSON null
+     * @throws IllegalArgumentException when the value is not a string
+     */
     private static String optionalStringArgument(Map<String, Object> arguments, String key) {
         if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
             return null;
@@ -444,7 +559,15 @@ public final class McpProtocolHandler {
         return value;
     }
 
-    /** Reads an optional boolean argument, using {@code false} when omitted. */
+    /**
+     * Reads an optional boolean argument, using {@code false} when omitted.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param key       argument name
+     * @return the value, or {@code false} when absent or JSON null
+     * @throws IllegalArgumentException when the value is not a boolean
+     */
+    @SuppressWarnings("SameParameterValue")
     private static boolean optionalBooleanArgument(Map<String, Object> arguments, String key) {
         if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
             return false;
@@ -455,7 +578,14 @@ public final class McpProtocolHandler {
         return value;
     }
 
-    /** Parses an optional UUID string while preserving the argument name in validation errors. */
+    /**
+     * Parses an optional UUID string while preserving the argument name in validation errors.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param key       argument name
+     * @return the parsed UUID, or {@code null} when absent
+     * @throws IllegalArgumentException when the value is not a string holding a UUID
+     */
     private static UUID optionalUuidArgument(Map<String, Object> arguments, String key) {
         String value = optionalStringArgument(arguments, key);
         if (value == null) {
@@ -468,7 +598,15 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Reads an optional integral JSON number constrained by a caller-supplied minimum. */
+    /**
+     * Reads an optional integral JSON number constrained by a caller-supplied minimum.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param key       argument name
+     * @param minimum   smallest accepted value
+     * @return the value, or {@code null} when absent
+     * @throws IllegalArgumentException when the value is not an integral number or is below {@code minimum}
+     */
     private static Long optionalLongArgument(Map<String, Object> arguments, String key, long minimum) {
         if (arguments == null || !arguments.containsKey(key) || arguments.get(key) == null) {
             return null;
@@ -508,26 +646,38 @@ public final class McpProtocolHandler {
         return value instanceof String string && !string.isBlank() ? string : null;
     }
 
-    /** Determines whether this operation can increase authority and therefore needs attestation. */
+    /**
+     * Determines whether this operation can increase authority and therefore needs attestation.
+     *
+     * @param name      internal dispatch name, including the tool prefix
+     * @param arguments tool arguments, possibly {@code null}
+     * @return {@code true} when the call needs a valid provider manual attestation
+     */
     private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
         return switch (name) {
-            case "synesis." + McpToolCatalog.APPLY_PATCH, "synesis." + McpToolCatalog.RUN_COMMAND, "synesis." + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, "synesis." + McpToolCatalog.FINISH_LANE -> true;
-            case "synesis." + McpToolCatalog.ENSURE_SESSION ->
+            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH, TOOL_PREFIX + McpToolCatalog.RUN_COMMAND, TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> true;
+            case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION ->
                     arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
-            case "synesis." + McpToolCatalog.REQUEST_COORDINATION -> {
+            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> {
                 // Status/discovery is a safe read.  Contract, scope, handoff,
                 // continuation, and join operations increase authority.
                 String operation = arguments == null ? null : String.valueOf(arguments.get("collaborationOperation"));
                 String kind = arguments == null ? null : String.valueOf(arguments.get("kind"));
                 yield !("status".equals(operation) || "status".equals(arguments == null ? null : arguments.get("coordinationRequest"))) && (kind == null || !kind.isBlank() || operation == null || !operation.isBlank());
             }
-            case "synesis." + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
+            case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
             default -> false;
         };
     }
 
-    /** Validates the strict coordination request schema and maps its operation to dispatch fields. */
-    @SuppressWarnings({"unchecked", "ExtractMethodRecommender"})
+    /**
+     * Validates the strict coordination request schema and maps its operation to dispatch fields.
+     *
+     * @param arguments top-level request_coordination arguments
+     * @return the payload fields plus the dispatch fields derived from the kind
+     * @throws IllegalArgumentException when the kind is unknown or the payload has a missing, extra, or inconsistent field
+     */
+    @SuppressWarnings({"unchecked"})
     private static Map<String, Object> normalizeStrictCoordination(Map<String, Object> arguments) {
         Object kindValue = arguments.get("kind");
         Object payloadValue = arguments.get("payload");
@@ -633,7 +783,13 @@ public final class McpProtocolHandler {
         return normalized;
     }
 
-    /** Validates the strict coordination-response schema before service invocation. */
+    /**
+     * Validates the strict coordination-response schema before service invocation.
+     *
+     * @param arguments top-level respond_coordination arguments
+     * @return the validated {@code kind} and {@code payload}
+     * @throws IllegalArgumentException when the kind is unknown or the payload fails validation
+     */
     @SuppressWarnings({"unchecked", "ExtractMethodRecommender"})
     private static Map<String, Object> normalizeStrictResponse(Map<String, Object> arguments) {
         Object kindValue = arguments.get("kind");
@@ -712,7 +868,14 @@ public final class McpProtocolHandler {
         return normalized;
     }
 
-    /** Ensures a supplied provider-facing alias exactly matches its canonical field. */
+    /**
+     * Ensures a supplied provider-facing alias exactly matches its canonical field.
+     *
+     * @param payload   request payload
+     * @param canonical canonical field name
+     * @param alias     provider-facing alias
+     * @throws IllegalArgumentException when both fields are present and differ or either is blank
+     */
     private static void requireMatchingAlias(Map<String, Object> payload, String canonical, String alias) {
         if (!payload.containsKey(alias) || !payload.containsKey(canonical)) {
             return;
@@ -724,13 +887,25 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Validates that an optional payload field, when present, is nonblank text. */
+    /**
+     * Validates that an optional payload field, when present, is nonblank text.
+     *
+     * @param payload request payload
+     * @param key     field name
+     * @throws IllegalArgumentException when the field is present but not nonblank text
+     */
     private static void requireOptionalText(Map<String, Object> payload, String key) {
         if (payload.containsKey(key) && (!(payload.get(key) instanceof String value) || value.isBlank())) {
             throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + key);
         }
     }
 
+    /**
+     * Keeps the string entries of a JSON array, silently dropping everything else.
+     *
+     * @param value untrusted value, possibly {@code null}
+     * @return the string entries, empty when the value is not an array
+     */
     private static List<String> strings(Object value) {
         if (!(value instanceof List<?> list)) {
             return List.of();
@@ -753,7 +928,7 @@ public final class McpProtocolHandler {
         if (!(value instanceof List<?> entries)) {
             throw new IllegalArgumentException(field + " must be an array");
         }
-        List<String> strings = new java.util.ArrayList<>(entries.size());
+        List<String> strings = new ArrayList<>(entries.size());
         for (Object entry : entries) {
             if (!(entry instanceof String text)) {
                 throw new IllegalArgumentException(field + " entries must be strings");
@@ -763,7 +938,12 @@ public final class McpProtocolHandler {
         return List.copyOf(strings);
     }
 
-    /** Returns whether a parsed JSON number has an integral representation. */
+    /**
+     * Returns whether a parsed JSON number has an integral representation.
+     *
+     * @param number parsed JSON number
+     * @return {@code true} for a non-floating-point number whose value is exactly integral
+     */
     private static boolean isStrictInteger(Number number) {
         if (number instanceof Double || number instanceof Float) {
             return false;
@@ -772,9 +952,15 @@ public final class McpProtocolHandler {
         return number.doubleValue() == value;
     }
 
-    /** Restricts completed managed connections to the three permitted review coordination calls. */
+    /**
+     * Restricts completed managed connections to the three permitted review coordination calls.
+     *
+     * @param toolName internal dispatch name
+     * @return {@code true} for get_next_action, request_coordination, and respond_coordination
+     */
     private static boolean completedReviewTool(String toolName) {
-        return ("synesis." + McpToolCatalog.GET_NEXT_ACTION).equals(toolName) || ("synesis." + McpToolCatalog.REQUEST_COORDINATION).equals(toolName) || ("synesis." + McpToolCatalog.RESPOND_COORDINATION).equals(toolName);
+        return (TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION).equals(toolName) || (TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION).equals(toolName) || (TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION).equals(
+                toolName);
     }
 
     /**
@@ -791,12 +977,12 @@ public final class McpProtocolHandler {
         if (!(rawDependencies instanceof List<?> entries)) {
             throw new IllegalArgumentException("knownDependencies must be an array");
         }
-        if (entries.size() > 50) {
+        if (entries.size() > MAX_KNOWN_DEPENDENCIES) {
             throw new IllegalArgumentException("knownDependencies exceeds 50 items");
         }
-        List<String> dependencies = new java.util.ArrayList<>(entries.size());
+        List<String> dependencies = new ArrayList<>(entries.size());
         for (Object entry : entries) {
-            if (!(entry instanceof String dependency) || dependency.isBlank() || dependency.length() > 128) {
+            if (!(entry instanceof String dependency) || dependency.isBlank() || dependency.length() > MAX_DEPENDENCY_LENGTH) {
                 throw new IllegalArgumentException("knownDependencies entries must be bounded strings");
             }
             dependencies.add(dependency);
@@ -815,14 +1001,12 @@ public final class McpProtocolHandler {
 
     /**
      * Renews the exact session lease after verified MCP activity.
+     *
+     * @return {@code true} when the lease was renewed, {@code false} for an unbound connection
      */
     private boolean renewLease() {
         try {
-            ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
-            var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
-            String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
-            leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider, connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
-            collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);
+            renewLeaseAndHeartbeat();
             return true;
         } catch (Exception ignored) {
             // Unbound requests are handled by the session and workspace policy paths.
@@ -897,11 +1081,11 @@ public final class McpProtocolHandler {
         } catch (Throwable parseFailure) {
             System.err.println("[synesis-mcp] Parse error: " + parseFailure);
             parseFailure.printStackTrace(System.err);
-            return createErrorResponse(null, -32700, "Parse error: " + parseFailure.getMessage());
+            return createErrorResponse(null, PARSE_ERROR, "Parse error: " + parseFailure.getMessage());
         }
 
         if (!(parsed instanceof Map<?, ?> map)) {
-            return createErrorResponse(null, -32600, "Invalid Request: expected JSON object");
+            return createErrorResponse(null, INVALID_REQUEST, "Invalid Request: expected JSON object");
         }
 
         Map<String, Object> request = (Map<String, Object>) map;
@@ -910,7 +1094,7 @@ public final class McpProtocolHandler {
 
         if (method == null || method.isBlank()) {
             if (id != null) {
-                return createErrorResponse(id, -32600, "Invalid Request: missing method");
+                return createErrorResponse(id, INVALID_REQUEST, "Invalid Request: missing method");
             }
             return null;
         }
@@ -927,16 +1111,21 @@ public final class McpProtocolHandler {
                 case "tools/list" -> handleToolsList(id);
                 case "tools/call" -> handleToolsCall(id, request.get("params"));
                 case "roots/list" -> handleRootsList(id);
-                default -> createErrorResponse(id, -32601, "Method not found: " + method);
+                default -> createErrorResponse(id, METHOD_NOT_FOUND, "Method not found: " + method);
             };
         } catch (Throwable failure) {
             System.err.println("[synesis-mcp] Error handling method " + method + ": " + failure);
             failure.printStackTrace(System.err);
-            return createErrorResponse(id, -32603, "Internal error: " + failure.getMessage());
+            return createErrorResponse(id, INTERNAL_ERROR, "Internal error: " + failure.getMessage());
         }
     }
 
-    /** Applies an early roots notification only while this connection remains unbound. */
+    /**
+     * Applies an early roots notification only while this connection remains unbound.
+     *
+     * @param paramsObj notification params, possibly {@code null}
+     * @return always {@code null}; notifications get no response
+     */
     @SuppressWarnings("unchecked")
     private String handleRootsListChanged(Object paramsObj) {
         if (!isSessionBound && paramsObj instanceof Map<?, ?> pMap) {
@@ -949,7 +1138,13 @@ public final class McpProtocolHandler {
         return null;
     }
 
-    /** Creates the initialize response and resolves the initial project root before session binding. */
+    /**
+     * Creates the initialize response and resolves the initial project root before session binding.
+     *
+     * @param id     JSON-RPC request identifier
+     * @param params initialize params, possibly {@code null}
+     * @return the initialize result response
+     */
     private String handleInitialize(Object id, Map<String, Object> params) {
         if (!isSessionBound) {
             // Primary: extract from MCP params (rootUri, workspaceFolders, roots)
@@ -969,7 +1164,7 @@ public final class McpProtocolHandler {
 
         Map<String, Object> serverInfo = new LinkedHashMap<>();
         serverInfo.put("name", "synesis");
-        serverInfo.put("version", "0.1.0-SNAPSHOT");
+        serverInfo.put("version", SERVER_VERSION);
 
         Map<String, Object> capabilities = new LinkedHashMap<>();
         capabilities.put("tools", new LinkedHashMap<>());
@@ -999,7 +1194,12 @@ public final class McpProtocolHandler {
         return DEFAULT_PROTOCOL_VERSION;
     }
 
-    /** Returns the one project root currently selected for this connection. */
+    /**
+     * Returns the one project root currently selected for this connection.
+     *
+     * @param id JSON-RPC request identifier
+     * @return the roots/list result response
+     */
     private String handleRootsList(Object id) {
         Map<String, Object> rootItem = new LinkedHashMap<>();
         rootItem.put("uri", activeProjectRoot.toUri().toString());
@@ -1017,6 +1217,7 @@ public final class McpProtocolHandler {
      * create coordination state and the same connection becomes eligible only after trusted lifecycle
      * activation.</p>
      *
+     * @param toolName internal dispatch name of the requested tool
      * @return current managed admission state
      */
     private ManagedAdmissionState managedAdmissionState(String toolName) {
@@ -1034,8 +1235,7 @@ public final class McpProtocolHandler {
                 return ManagedAdmissionState.REJECTED;
             }
             ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, managedBindingSessionId).read().orElse(null);
-            if (record == null || record.mode() != org.synesis.workspace.application.provider.continuity.ProviderContinuityMode.MANAGED_CONTINUITY || record.generation() != managedAttachmentGeneration
-                    || !provider.equals(record.provider())) {
+            if (record == null || record.mode() != ProviderContinuityMode.MANAGED_CONTINUITY || record.generation() != managedAttachmentGeneration || !provider.equals(record.provider())) {
                 return ManagedAdmissionState.REJECTED;
             }
             if (completed) {
@@ -1054,6 +1254,10 @@ public final class McpProtocolHandler {
     /**
      * Creates the deterministic response for a quarantined or fenced managed transport without
      * invoking any application mutation service.
+     *
+     * @param id    JSON-RPC request identifier
+     * @param state the non-admissible state, {@code PENDING} or {@code REJECTED}
+     * @return serialized error result
      */
     private String managedAdmissionResponse(Object id, ManagedAdmissionState state) {
         String reason = state == ManagedAdmissionState.PENDING ? "managed_attachment_pending" : "managed_attachment_rejected";
@@ -1069,7 +1273,7 @@ public final class McpProtocolHandler {
      * @return list of parsed candidate paths from protocol params
      */
     public List<Path> extractCandidateRoots(Map<String, Object> params) {
-        List<Path> candidates = new java.util.ArrayList<>();
+        List<Path> candidates = new ArrayList<>();
         if (params == null) {
             return candidates;
         }
@@ -1082,28 +1286,31 @@ public final class McpProtocolHandler {
         }
 
         if (params.get("workspaceFolders") instanceof List<?> folders) {
-            for (Object item : folders) {
-                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                    Path p = parseUriOrPath(uriStr);
-                    if (p != null && !candidates.contains(p)) {
-                        candidates.add(p);
-                    }
-                }
-            }
+            addUris(folders, candidates);
         }
 
         if (params.get("roots") instanceof List<?> rootsList) {
-            for (Object item : rootsList) {
-                if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
-                    Path p = parseUriOrPath(uriStr);
-                    if (p != null && !candidates.contains(p)) {
-                        candidates.add(p);
-                    }
-                }
-            }
+            addUris(rootsList, candidates);
         }
 
         return candidates;
+    }
+
+    /**
+     * Adds the parseable, not yet present {@code uri} of each folder or root entry.
+     *
+     * @param entries    JSON array of objects that may carry a {@code uri} string
+     * @param candidates list receiving the parsed paths
+     */
+    private static void addUris(List<?> entries, List<Path> candidates) {
+        for (Object item : entries) {
+            if (item instanceof Map<?, ?> map && map.get("uri") instanceof String uriStr) {
+                Path p = parseUriOrPath(uriStr);
+                if (p != null && !candidates.contains(p)) {
+                    candidates.add(p);
+                }
+            }
+        }
     }
 
     /**
@@ -1114,14 +1321,13 @@ public final class McpProtocolHandler {
      * @return list of fallback candidate paths
      */
     List<Path> extractFallbackCandidates() {
-        if (initialProjectRoot != null && java.nio.file.Files.exists(initialProjectRoot.resolve(".synesis/project.json"))) {
+        if (Files.exists(initialProjectRoot.resolve(PROJECT_METADATA))) {
             return List.of(initialProjectRoot.toAbsolutePath().normalize());
         }
-        List<Path> candidates = new java.util.ArrayList<>();
+        List<Path> candidates = new ArrayList<>();
 
         // Environment variables
-        String[] envKeys = {"WORKSPACE_ROOT", "WORKSPACE_FOLDER", "WORKSPACE_DIR", "PROJECT_ROOT", "PROJECT_DIR", "VSCODE_WORKSPACE_FOLDER", "INIT_CWD", "PWD"};
-        for (String envKey : envKeys) {
+        for (String envKey : FALLBACK_ROOT_ENVIRONMENT_KEYS) {
             String envVal = System.getenv(envKey);
             if (envVal != null && !envVal.isBlank()) {
                 Path p = parseUriOrPath(envVal);
@@ -1132,7 +1338,7 @@ public final class McpProtocolHandler {
         }
 
         // Explicit initial project root (e.g. --project argument)
-        if (initialProjectRoot != null && !candidates.contains(initialProjectRoot)) {
+        if (!candidates.contains(initialProjectRoot)) {
             candidates.add(initialProjectRoot.toAbsolutePath().normalize());
         }
 
@@ -1143,6 +1349,7 @@ public final class McpProtocolHandler {
                 candidates.add(cwd);
             }
         } catch (Exception ignored) {
+            // No usable working directory; the other candidates stand.
         }
 
         return candidates;
@@ -1174,7 +1381,7 @@ public final class McpProtocolHandler {
             return null;
         }
 
-        List<Path> initializedRoots = new java.util.ArrayList<>();
+        List<Path> initializedRoots = new ArrayList<>();
 
         for (Path candidate : candidates) {
             try {
@@ -1192,6 +1399,7 @@ public final class McpProtocolHandler {
                     initializedRoots.add(mainCheckout);
                 }
             } catch (Exception ignored) {
+                // An unreadable candidate is skipped; the others decide the root.
             }
         }
 
@@ -1209,12 +1417,23 @@ public final class McpProtocolHandler {
         return null;
     }
 
-    /** Returns the authoritative tool catalog without exposing internal dispatch names. */
+    /**
+     * Returns the authoritative tool catalog without exposing internal dispatch names.
+     *
+     * @param id JSON-RPC request identifier
+     * @return the tools/list result response
+     */
     private String handleToolsList(Object id) {
         return createResultResponse(id, Map.of("tools", McpToolCatalog.toolsList()));
     }
 
-    /** Admits, executes, and records one command under the refreshed session authority fence. */
+    /**
+     * Admits, executes, and records one command under the refreshed session authority fence.
+     *
+     * @param request   validated command request
+     * @param requestId JSON-RPC request identifier
+     * @return the command outcome, or a retry or blocked response when authority cannot be verified
+     */
     private AgentResponse runDurableCommand(ProjectCommandService.CommandRequest request, Object requestId) {
         if (projectRootAuthorityFailure != null) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, Map.of("error", projectRootAuthorityFailure));
@@ -1238,12 +1457,18 @@ public final class McpProtocolHandler {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION, Map.of("error", "WORKTREE_IDENTITY_UNVERIFIED"));
         }
         if (commandProcessAnchor == null) {
-            commandProcessAnchor = ProjectCommandProcessAnchor.capture(worktree.locator(), commandProcessIdentity, java.time.Instant.now().toEpochMilli());
+            commandProcessAnchor = ProjectCommandProcessAnchor.capture(worktree.locator(), commandProcessIdentity, Instant.now().toEpochMilli());
         } else if (!commandProcessAnchor.scopeLocator().equals(worktree.locator())) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COMMAND_ADMISSION_STALE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "MCP_PROCESS_SCOPE_CHANGED"));
         }
         ProjectCommandAuthoritySnapshot before = captureAuthoritySnapshot(readiness, worktree);
-        return commandAdmissionService.execute(request, requestId, commandProcessAnchor, worktree, before, () -> renewLeaseForCommand(worktree));
+        return commandAdmissionService.execute(request, requestId, commandProcessAnchor, worktree, before, () -> {
+            try {
+                return renewLeaseForCommand(worktree);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     /**
@@ -1271,13 +1496,30 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Renews the connection lease and captures the authority snapshot required for command admission. */
-    private ProjectCommandAuthoritySnapshot renewLeaseForCommand(PhysicalWorktreeIdentity worktree) throws Exception {
+    /**
+     * Resolves the exact bound session, renews its lease, and heartbeats its collaboration lane.
+     *
+     * @return the located project
+     * @throws Exception when the project, binding, identity, or lease cannot be resolved or persisted
+     */
+    private ProjectLocation renewLeaseAndHeartbeat() throws Exception {
         ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
         var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
         String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
         leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider, connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
         collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);
+        return location;
+    }
+
+    /**
+     * Renews the connection lease and captures the authority snapshot required for command admission.
+     *
+     * @param worktree verified physical worktree identity
+     * @return authority snapshot taken after the renewal
+     * @throws IllegalArgumentException when the lease cannot be renewed or the workspace is no longer ready
+     */
+    private ProjectCommandAuthoritySnapshot renewLeaseForCommand(PhysicalWorktreeIdentity worktree) throws Exception {
+        ProjectLocation location = renewLeaseAndHeartbeat();
         ReadinessResult readiness = new WorkspaceReadinessService().assess(location, provider, connectionInstanceId);
         if (!readiness.ready()) {
             throw new IllegalStateException("COMMAND_AUTHORITY_REFRESH_FAILED");
@@ -1285,7 +1527,13 @@ public final class McpProtocolHandler {
         return captureAuthoritySnapshot(readiness, worktree);
     }
 
-    /** Captures the current readiness, worktree identity, and exact lease for durable command checks. */
+    /**
+     * Captures the current readiness, worktree identity, and exact lease for durable command checks.
+     *
+     * @param readiness current workspace readiness
+     * @param worktree  verified physical worktree identity
+     * @return snapshot used to fence the command
+     */
     private ProjectCommandAuthoritySnapshot captureAuthoritySnapshot(ReadinessResult readiness, PhysicalWorktreeIdentity worktree) {
         SessionLeaseRecord lease = new SessionLeaseStore().load(activeProjectRoot, connectionInstanceId).orElse(null);
         return ProjectCommandAuthoritySnapshot.capture(readiness.binding(), worktree, lease, "none");
@@ -1294,7 +1542,7 @@ public final class McpProtocolHandler {
     /**
      * Validates and dispatches one tools/call envelope after enforcing connection authority.
      *
-     * @param id JSON-RPC request identifier, or {@code null} for a notification
+     * @param id     JSON-RPC request identifier, or {@code null} for a notification
      * @param params untrusted parsed JSON value from the request's params field
      * @return JSON-RPC response, or {@code null} when no response is required
      */
@@ -1303,18 +1551,16 @@ public final class McpProtocolHandler {
         try {
             call = McpToolCall.decode(params);
         } catch (IllegalArgumentException invalidCall) {
-            return createErrorResponse(id, -32602, invalidCall.getMessage());
+            return createErrorResponse(id, INVALID_PARAMS, invalidCall.getMessage());
         }
 
-        String name = call.name();
         // The wire contract advertises raw names only; the prefix is internal dispatch notation.
-        name = "synesis." + name;
+        String name = TOOL_PREFIX + call.name();
         Map<String, Object> arguments = call.arguments().orElse(null);
 
         if (projectRootAuthorityFailure != null) {
             AgentResponse mismatch = new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, Map.of("error", projectRootAuthorityFailure));
-            Map<String, Object> textContent = Map.of("type", "text", "text", mismatch.toJson());
-            return createResultResponse(id, Map.of("content", List.of(textContent)));
+            return textResultResponse(id, mismatch.toJson());
         }
 
         ManagedAdmissionState managedState = managedAdmissionState(name);
@@ -1323,9 +1569,9 @@ public final class McpProtocolHandler {
         }
 
         AgentResponse agentResponse;
-        boolean durableCommand = name.equals("synesis." + McpToolCatalog.RUN_COMMAND);
-        boolean noChangeCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE) && arguments != null && arguments.get("outcome") instanceof String outcome && "no_change".equalsIgnoreCase(outcome);
-        boolean snapshotCompletion = name.equals("synesis." + McpToolCatalog.FINISH_LANE);
+        boolean durableCommand = name.equals(TOOL_PREFIX + McpToolCatalog.RUN_COMMAND);
+        boolean noChangeCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE) && arguments != null && arguments.get("outcome") instanceof String outcome && "no_change".equalsIgnoreCase(outcome);
+        boolean snapshotCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE);
         // finish_lane carries an optimistic event-log revision in its
         // projected evidence.  The ordinary lease heartbeat appends a
         // collaboration event, so doing it before completion would invalidate
@@ -1336,16 +1582,18 @@ public final class McpProtocolHandler {
             renewLease();
         }
 
-        if (requiresManualAttestation(name, arguments) && !manualService.attest(provider).valid()) {
-            Map<String, Object> details = new LinkedHashMap<>();
-            details.put("manual", manualService.attest(provider).reason());
-            details.put("authorityReductionAllowed", true);
-            return createResultResponse(id,
-                    Map.of("content", List.of(Map.of("type", "text", "text", "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"details\":" + ProviderJson.write(details) + "}"))));
+        if (requiresManualAttestation(name, arguments)) {
+            var attestation = manualService.attest(provider);
+            if (!attestation.valid()) {
+                Map<String, Object> details = new LinkedHashMap<>();
+                details.put("manual", attestation.reason());
+                details.put("authorityReductionAllowed", true);
+                return textResultResponse(id, "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"details\":" + ProviderJson.write(details) + "}");
+            }
         }
 
         switch (name) {
-            case "synesis." + McpToolCatalog.ENSURE_SESSION -> {
+            case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION -> {
                 AgentTaskIntent taskIntent;
                 try {
                     taskIntent = parseTaskIntent(arguments);
@@ -1357,7 +1605,7 @@ public final class McpProtocolHandler {
                 boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
                 if (!parseClaimSelectors(arguments).isEmpty() && !manualService.attest(provider).valid()) {
-                    return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text", "text", "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"claims\":\"REJECTED\"}"))));
+                    return textResultResponse(id, "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"claims\":\"REJECTED\"}");
                 }
 
                 SessionResolutionRequest resolutionRequest = new SessionResolutionRequest(activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh, managedAdmission);
@@ -1407,7 +1655,7 @@ public final class McpProtocolHandler {
                     if (refresh && claimsSpecified && selectors.isEmpty()) {
                         try {
                             collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
-                        } catch (java.io.IOException missing) {
+                        } catch (IOException missing) {
                             if ("INTENT_NOT_FOUND".equals(missing.getMessage()) && taskIntent != null && taskIntent.role() == WorkIntent.Role.REVIEWER) {
                                 agentResponse = reviewerClaimRequiredResponse();
                             } else if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
@@ -1453,7 +1701,7 @@ public final class McpProtocolHandler {
                     }
                 }
             }
-            case "synesis." + McpToolCatalog.READ_FILE -> {
+            case TOOL_PREFIX + McpToolCatalog.READ_FILE -> {
                 String path = stringArgument(arguments, "path", "relativePath");
                 Integer startLine = (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
                 Integer endLine = (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
@@ -1462,13 +1710,13 @@ public final class McpProtocolHandler {
                 ReadRequest readReq = new ReadRequest(activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
                 agentResponse = readService.readFile(readReq);
             }
-            case "synesis." + McpToolCatalog.APPLY_PATCH -> {
+            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH -> {
                 String path = stringArgument(arguments, "path", "relativePath");
                 boolean create = arguments != null && Boolean.TRUE.equals(arguments.get("create"));
                 String content = stringArgument(arguments, "content", "newContent");
                 String expectedHash = stringArgument(arguments, "expectedHash", "expectedRevision");
 
-                List<PatchEdit> patchEdits = new java.util.ArrayList<>();
+                List<PatchEdit> patchEdits = new ArrayList<>();
                 if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
                     for (Object item : editsList) {
                         if (item instanceof Map<?, ?> editMap) {
@@ -1485,8 +1733,8 @@ public final class McpProtocolHandler {
                 PatchRequest patchReq = new PatchRequest(activeProjectRoot, provider, connectionInstanceId, path, create, content, expectedHash, patchEdits);
                 agentResponse = patchService.applyPatch(patchReq);
             }
-            case "synesis." + McpToolCatalog.RUN_COMMAND -> {
-                List<String> argv = new java.util.ArrayList<>();
+            case TOOL_PREFIX + McpToolCatalog.RUN_COMMAND -> {
+                List<String> argv = new ArrayList<>();
                 boolean unsupportedField = arguments != null && arguments.keySet().stream().anyMatch(key -> !Set.of("argv", "workingDirectory", "timeoutSeconds").contains(key));
                 if (arguments != null && arguments.get("argv") instanceof List<?> list) {
                     for (Object item : list) {
@@ -1505,7 +1753,7 @@ public final class McpProtocolHandler {
                 boolean malformedTimeout = false;
                 if (arguments != null && arguments.containsKey("timeoutSeconds")) {
                     Object rawTimeout = arguments.get("timeoutSeconds");
-                    if (rawTimeout instanceof Number number && isStrictInteger(number) && number.longValue() >= 1 && number.longValue() <= 3600) {
+                    if (rawTimeout instanceof Number number && isStrictInteger(number) && number.longValue() >= 1 && number.longValue() <= MAX_COMMAND_TIMEOUT_SECONDS) {
                         timeoutSeconds = number.intValue();
                     } else {
                         malformedTimeout = true;
@@ -1527,7 +1775,7 @@ public final class McpProtocolHandler {
                     }
                 }
             }
-            case "synesis." + McpToolCatalog.GET_NEXT_ACTION -> {
+            case TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION -> {
                 boolean completionRequested;
                 try {
                     completionRequested = optionalBooleanArgument(arguments, "completionRequested");
@@ -1556,7 +1804,7 @@ public final class McpProtocolHandler {
                     agentResponse = nextActionService.getNextAction(nextReq);
                 }
             }
-            case "synesis." + McpToolCatalog.REQUEST_COORDINATION -> {
+            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> {
                 if (arguments == null || !arguments.containsKey("kind")) {
                     agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
                     break;
@@ -1606,7 +1854,7 @@ public final class McpProtocolHandler {
                             }
                             case "request", "request_coordination" -> {
                                 UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
-                                CoordinationRequest.Kind kind = CoordinationRequest.Kind.valueOf(String.valueOf(arguments.getOrDefault("collaborationRequestKind", "CONTRACT")).toUpperCase(java.util.Locale.ROOT));
+                                CoordinationRequest.Kind kind = CoordinationRequest.Kind.valueOf(String.valueOf(arguments.getOrDefault("collaborationRequestKind", "CONTRACT")).toUpperCase(Locale.ROOT));
                                 String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
                                 var request = collaborationService.request(activeProjectRoot,
                                         provider,
@@ -1682,7 +1930,7 @@ public final class McpProtocolHandler {
                             }
                             case "work_group_close" -> {
                                 UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
-                                WorkGroup.Status status = WorkGroup.Status.valueOf(String.valueOf(arguments.getOrDefault("groupStatus", "COMPLETED")).toUpperCase(java.util.Locale.ROOT));
+                                WorkGroup.Status status = WorkGroup.Status.valueOf(String.valueOf(arguments.getOrDefault("groupStatus", "COMPLETED")).toUpperCase(Locale.ROOT));
                                 long version = ((Number) arguments.getOrDefault("groupVersion", 1)).longValue();
                                 collaborationService.closeWorkGroup(activeProjectRoot, groupId, status, version);
                                 yield Map.of("workGroupId", groupId.toString(), "status", status.name());
@@ -1698,7 +1946,7 @@ public final class McpProtocolHandler {
                 }
                 throw new IllegalStateException("strict coordination request did not produce an operation");
             }
-            case "synesis." + McpToolCatalog.RESPOND_COORDINATION -> {
+            case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> {
                 if (arguments != null && arguments.get("kind") instanceof String) {
                     try {
                         Map<String, Object> strict = normalizeStrictResponse(arguments);
@@ -1763,7 +2011,7 @@ public final class McpProtocolHandler {
                 }
                 agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
             }
-            case "synesis." + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> {
+            case TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> {
                 String reqHandle = arguments != null ? (String) arguments.get("capabilityRequestHandle") : null;
                 String summary = arguments != null ? (String) arguments.get("summary") : null;
 
@@ -1774,7 +2022,7 @@ public final class McpProtocolHandler {
                     agentResponse = publicationService.publishImplementation(pubReq);
                 }
             }
-            case "synesis." + McpToolCatalog.FINISH_LANE -> {
+            case TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> {
                 try {
                     String summary = optionalStringArgument(arguments, "summary");
                     CompletionOutcome outcome = arguments != null && arguments.containsKey("outcome") ? CompletionOutcome.fromWire(requiredStringArgument(arguments)) : CompletionOutcome.SNAPSHOT;
@@ -1802,7 +2050,7 @@ public final class McpProtocolHandler {
                     agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "INVALID_FINISH_LANE_ARGUMENTS"));
                 }
             }
-            case "synesis." + McpToolCatalog.CANCEL_LANE -> {
+            case TOOL_PREFIX + McpToolCatalog.CANCEL_LANE -> {
                 String reason = arguments != null ? (String) arguments.get("reason") : null;
                 CancelTaskRequest cancelReq = new CancelTaskRequest(activeProjectRoot, provider, connectionInstanceId, reason);
                 agentResponse = taskCancellationService.cancelTask(cancelReq);
@@ -1814,9 +2062,7 @@ public final class McpProtocolHandler {
             }
         }
 
-        Map<String, Object> textContent = Map.of("type", "text", "text", agentResponse.toJson());
-        Map<String, Object> result = Map.of("content", List.of(textContent));
-        return createResultResponse(id, result);
+        return textResultResponse(id, agentResponse.toJson());
     }
 
     /**
@@ -1837,8 +2083,8 @@ public final class McpProtocolHandler {
         List<String> requiredBehavior;
         List<String> acceptanceTests;
         try {
-            requiredBehavior = java.util.Objects.requireNonNullElse(nullableStringList(map.get("requiredBehavior"), "requiredBehavior"), List.of());
-            acceptanceTests = java.util.Objects.requireNonNullElse(nullableStringList(map.get("acceptanceTests"), "acceptanceTests"), List.of());
+            requiredBehavior = Objects.requireNonNullElse(nullableStringList(map.get("requiredBehavior"), "requiredBehavior"), List.of());
+            acceptanceTests = Objects.requireNonNullElse(nullableStringList(map.get("acceptanceTests"), "acceptanceTests"), List.of());
         } catch (IllegalArgumentException invalid) {
             return null;
         }
@@ -1863,7 +2109,7 @@ public final class McpProtocolHandler {
         Object taskObj = arguments.get("task");
         Map<?, ?> map;
         if (taskObj instanceof Map<?, ?> taskMap) {
-            if (List.of("goal", "acceptance", "likelyScopes", "knownDependencies", "workGroupId", "role", "reviewTargets", "claims").stream().anyMatch(arguments::containsKey)) {
+            if (Stream.of("goal", "acceptance", "likelyScopes", "knownDependencies", "workGroupId", "role", "reviewTargets", "claims").anyMatch(arguments::containsKey)) {
                 throw new IllegalArgumentException("TASK_FIELDS_MUST_BE_NESTED");
             }
             map = taskMap;
@@ -1908,7 +2154,12 @@ public final class McpProtocolHandler {
         return new AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies, workGroupId, role, reviewTargetSelectors);
     }
 
-    /** Validates the bounded two-boolean review policy accepted by work-group creation. */
+    /**
+     * Validates the bounded two-boolean review policy accepted by work-group creation.
+     *
+     * @param rawPolicy untrusted review policy value, possibly {@code null}
+     * @throws IllegalArgumentException when the policy is not an object with exactly boolean {@code mandatory} and {@code independenceRequired}
+     */
     private static void validateReviewPolicyPayload(Object rawPolicy) {
         if (rawPolicy == null) {
             return;
@@ -1924,7 +2175,13 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Converts a validated review policy object into the domain policy value. */
+    /**
+     * Converts a validated review policy object into the domain policy value.
+     *
+     * @param rawPolicy untrusted review policy value, possibly {@code null}
+     * @return the parsed policy, or {@link ReviewPolicy#none()} when absent
+     * @throws IllegalArgumentException when the payload is invalid or the policy is unsupported
+     */
     private static ReviewPolicy parseReviewPolicy(Object rawPolicy) {
         if (rawPolicy == null) {
             return ReviewPolicy.none();
@@ -1938,7 +2195,13 @@ public final class McpProtocolHandler {
         }
     }
 
-    /** Parses the bounded non-ownership selectors used to identify review targets. */
+    /**
+     * Parses the bounded non-ownership selectors used to identify review targets.
+     *
+     * @param rawSelectors untrusted review target array, possibly {@code null}
+     * @return immutable review-target selectors, empty when absent
+     * @throws IllegalArgumentException when the shape, path, or kind is invalid
+     */
     private List<ResourceSelector> parseSelectorList(Object rawSelectors) {
         if (rawSelectors == null) {
             return List.of();
@@ -1946,7 +2209,7 @@ public final class McpProtocolHandler {
         if (!(rawSelectors instanceof List<?> entries)) {
             throw new IllegalArgumentException("reviewTargets must be an array");
         }
-        List<ResourceSelector> selectors = new java.util.ArrayList<>();
+        List<ResourceSelector> selectors = new ArrayList<>();
         for (Object item : entries) {
             if (!(item instanceof Map<?, ?> selector)) {
                 throw new IllegalArgumentException("review target selector must be an object");
@@ -1959,7 +2222,7 @@ public final class McpProtocolHandler {
                 throw new IllegalArgumentException("review target selector path is required");
             }
             Object rawKind = selector.get("kind");
-            String kind = rawKind == null ? "path_exact" : rawKind instanceof String kindValue ? kindValue.toLowerCase(java.util.Locale.ROOT) : null;
+            String kind = rawKind == null ? "path_exact" : rawKind instanceof String kindValue ? kindValue.toLowerCase(Locale.ROOT) : null;
             if (kind == null) {
                 throw new IllegalArgumentException("review target selector kind must be a string");
             }
@@ -1984,7 +2247,12 @@ public final class McpProtocolHandler {
                 Map.of("reason", "REVIEW_CLAIM_REQUIRED", "message", "A reviewer must explicitly claim a disjoint report or test path; " + "reviewTargets identify evidence to inspect but do not grant ownership."));
     }
 
-    /** Parses explicitly requested ownership claims without treating likelyScopes as authority. */
+    /**
+     * Parses explicitly requested ownership claims without treating likelyScopes as authority.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @return immutable claim selectors, empty when none were supplied
+     */
     private List<ResourceSelector> parseClaimSelectors(Map<String, Object> arguments) {
         if (arguments == null) {
             return List.of();
@@ -1994,14 +2262,14 @@ public final class McpProtocolHandler {
         if (!(claimsObj instanceof List<?> claims)) {
             return List.of();
         }
-        List<ResourceSelector> selectors = new java.util.ArrayList<>();
+        List<ResourceSelector> selectors = new ArrayList<>();
         for (Object item : claims) {
             if (item instanceof Map<?, ?> claim) {
                 Object path = claim.get("path");
                 if (!(path instanceof String)) {
                     path = claim.get("relativePath");
                 }
-                String kind = claim.get("kind") instanceof String value ? value.toLowerCase(java.util.Locale.ROOT) : "path_exact";
+                String kind = claim.get("kind") instanceof String value ? value.toLowerCase(Locale.ROOT) : "path_exact";
                 if (path instanceof String value) {
                     selectors.add("path_subtree".equals(kind) ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
                 }
@@ -2010,7 +2278,12 @@ public final class McpProtocolHandler {
         return List.copyOf(selectors);
     }
 
-    /** Distinguishes an omitted claims field from an explicitly supplied claims array. */
+    /**
+     * Distinguishes an omitted claims field from an explicitly supplied claims array.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @return {@code true} when a {@code claims} key is present, in the nested task object if there is one
+     */
     private boolean claimsFieldSpecified(Map<String, Object> arguments) {
         if (arguments == null) {
             return false;
@@ -2018,7 +2291,13 @@ public final class McpProtocolHandler {
         return arguments.get("task") instanceof Map<?, ?> taskMap ? taskMap.containsKey("claims") : arguments.containsKey("claims");
     }
 
-    /** Encodes one successful JSON-RPC response envelope. */
+    /**
+     * Encodes one successful JSON-RPC response envelope.
+     *
+     * @param id     JSON-RPC request identifier
+     * @param result result object
+     * @return serialized response frame
+     */
     private String createResultResponse(Object id, Map<String, Object> result) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("jsonrpc", "2.0");
@@ -2027,7 +2306,14 @@ public final class McpProtocolHandler {
         return ProviderJson.write(response);
     }
 
-    /** Encodes one JSON-RPC error response envelope. */
+    /**
+     * Encodes one JSON-RPC error response envelope.
+     *
+     * @param id      JSON-RPC request identifier, possibly {@code null}
+     * @param code    JSON-RPC error code
+     * @param message error message
+     * @return serialized response frame
+     */
     private String createErrorResponse(Object id, int code, String message) {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", code);
@@ -2038,6 +2324,18 @@ public final class McpProtocolHandler {
         response.put("id", id);
         response.put("error", error);
         return ProviderJson.write(response);
+    }
+
+    /**
+     * Encodes a successful tool result carrying one text content item.
+     *
+     * @param id   JSON-RPC request identifier
+     * @param text text content
+     * @return serialized response frame
+     */
+    private String textResultResponse(Object id, String text) {
+        Map<String, Object> content = Map.of("type", "text", "text", text);
+        return createResultResponse(id, Map.of("content", List.of(content)));
     }
 
     /**

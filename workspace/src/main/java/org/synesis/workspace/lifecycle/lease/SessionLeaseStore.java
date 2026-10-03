@@ -66,7 +66,7 @@ public final class SessionLeaseStore {
     }
 
     @SuppressWarnings("unchecked")
-    private static SessionLeaseRecord fromSerializableMap(String rawJson) throws IOException {
+    private static SessionLeaseRecord fromSerializableMap(String rawJson) {
         Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(rawJson);
         int schemaVersion = ((Number) map.get("schemaVersion")).intValue();
         String projectId = (String) map.get("projectId");

@@ -31,7 +31,7 @@ class ManagedBaselineTransactionServiceTest {
         new AdministrativeStateLocator(temp.resolve("admin-state")),
         new ManagedPathPolicy(), phase -> {
       if (phase == crashAfter) {
-        throw new IOException("injected process loss");
+        throw new IllegalStateException("injected process loss");
       }
     });
   }

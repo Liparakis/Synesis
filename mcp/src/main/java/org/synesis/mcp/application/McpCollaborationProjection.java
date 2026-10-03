@@ -1,6 +1,8 @@
 package org.synesis.mcp.application;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -11,21 +13,28 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.collaboration.CollaborationSnapshot;
 
 /**
  * Converts typed collaboration projections into JSON-compatible MCP result objects.
  *
- * <p>JSON objects remain maps only at the wire boundary; source values enter each mapper as
- * their domain type so protocol serialization does not perform unchecked domain casts.</p>
+ * <p>JSON objects remain maps only at the wire boundary; source values enter each mapper as their
+ * domain type so protocol serialization does not perform unchecked domain casts.
  */
 final class McpCollaborationProjection {
+
+    /**
+     * Utility class; projections are exposed as static mappers.
+     */
+    private McpCollaborationProjection() {
+    }
 
     /**
      * Converts a typed contract record into the JSON object used by MCP discovery results.
      *
      * @param contract authoritative contract projection
-     * @return JSON-safe contract fields
+     * @return JSON-safe contract fields; {@code supersedes} is {@code null} for a first revision
      */
     static Map<String, Object> contractMap(ContractRecord contract) {
         Map<String, Object> map = new LinkedHashMap<>();
@@ -99,7 +108,9 @@ final class McpCollaborationProjection {
     }
 
     /**
-     * Converts one lane grant while retaining the response aliases expected by clients.
+     * Converts one lane grant while retaining the response aliases expected by clients:
+     * {@code reviewedIntentId} repeats {@code targetIntentId} and {@code reviewerParticipant} repeats
+     * {@code targetParticipant}.
      *
      * @param grant typed lane-grant state
      * @return JSON-safe grant fields
@@ -131,15 +142,7 @@ final class McpCollaborationProjection {
      */
     static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot) {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("taskId", snapshot.taskId().toString());
-        result.put("snapshotId", snapshot.snapshotId());
-        result.put("baseCommit", snapshot.baseCommit());
-        result.put("commitSha", snapshot.commitSha());
-        result.put("changedPaths", snapshot.changedPaths());
-        result.put("summary", snapshot.summary());
-        result.put("createdAtMillis", snapshot.createdAtMillis());
-        result.put("laneId", snapshot.provenance().laneId().toString());
-        result.put("claimEpoch", snapshot.provenance().claimEpoch());
+        CollaborationResponseMapper.appendSnapshotIdentityFields(result, snapshot);
         return result;
     }
 
@@ -159,13 +162,13 @@ final class McpCollaborationProjection {
         result.put("goal", intent.goal());
         result.put("acceptance", intent.acceptance());
         result.put("baseCommit", intent.baseCommit());
-        result.put("selectors", intent.selectors().stream().map(McpCollaborationProjection::selectorMap).toList());
+        result.put("selectors", selectorMaps(intent.selectors()));
         result.put("version", intent.version());
         result.put("workGroupId", intent.workGroupId().toString());
         result.put("authorityLineageId", intent.authorityLineageId().toString());
         result.put("status", intent.status().name());
         result.put("role", intent.role().wireValue());
-        result.put("reviewTargets", intent.reviewTargetSelectors().stream().map(McpCollaborationProjection::selectorMap).toList());
+        result.put("reviewTargets", selectorMaps(intent.reviewTargetSelectors()));
         result.put("knownDependencies", intent.knownDependencies());
         return result;
     }
@@ -177,19 +180,16 @@ final class McpCollaborationProjection {
      * @return JSON-safe participant fields
      */
     static Map<String, Object> participantMap(Participant participant) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", participant.id());
-        result.put("provider", participant.provider());
-        result.put("goal", participant.goal());
-        result.put("state", participant.state().name());
-        result.put("lastVerifiedActivity", participant.lastVerifiedActivity());
-        result.put("claims", participant.claims().stream().map(McpCollaborationProjection::selectorMap).toList());
+        Map<String, Object> result = CollaborationResponseMapper.participantFields(participant);
+        result.put("claims", selectorMaps(participant.claims()));
         result.put("recoveryHeld", participant.state() == Participant.State.RECOVERY_HELD);
         return result;
     }
 
     /**
-     * Converts one coordination request into its discovery response shape.
+     * Converts one coordination request into its discovery response shape. The {@code reviewed*} and
+     * {@code reviewerParticipant} fields are aliases of {@code conflictingIntentId}, {@code target}
+     * and {@code requester} for review-oriented clients.
      *
      * @param request typed coordination request
      * @return JSON-safe request fields
@@ -198,12 +198,7 @@ final class McpCollaborationProjection {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("requestId", request.requestId().toString());
         result.put("projectId", request.projectId().toString());
-        result.put("requester", request.requester());
-        result.put("target", request.target());
-        result.put("conflictingIntentId", request.conflictingIntentId().toString());
-        result.put("reviewedIntentId", request.conflictingIntentId().toString());
-        result.put("reviewedParticipantId", request.target());
-        result.put("reviewerParticipant", request.requester());
+        CollaborationResponseMapper.appendRequestIdentityFields(result, request);
         result.put("kind", request.kind().name());
         result.put("proposal", request.proposal());
         result.put("status", request.status().name());
@@ -218,5 +213,15 @@ final class McpCollaborationProjection {
      */
     static Map<String, Object> selectorMap(ResourceSelector selector) {
         return Map.of("kind", selector.kind().name(), "path", selector.value());
+    }
+
+    /**
+     * Converts a selector collection, preserving its order.
+     *
+     * @param selectors typed resource selectors
+     * @return JSON-safe selector fields, one entry per selector
+     */
+    private static List<Map<String, Object>> selectorMaps(Collection<? extends ResourceSelector> selectors) {
+        return selectors.stream().map(McpCollaborationProjection::selectorMap).toList();
     }
 }

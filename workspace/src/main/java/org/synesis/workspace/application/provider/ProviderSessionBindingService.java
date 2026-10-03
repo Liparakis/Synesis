@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +24,6 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
@@ -286,7 +286,7 @@ public final class ProviderSessionBindingService {
         return value;
     }
 
-    private static String fingerprint(String value) throws Exception {
+    private static String fingerprint(String value) throws NoSuchAlgorithmException {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
     }
 
@@ -935,8 +935,6 @@ public final class ProviderSessionBindingService {
             }
             Binding binding = read(bindingPath);
             return completeIfIdle(location, binding, bindingPath, null);
-        } catch (BindingException failure) {
-            throw failure;
         } catch (Exception failure) {
             throw new BindingException("SESSION_COMPLETE_FAILED", "Could not complete provider connection binding", failure);
         }

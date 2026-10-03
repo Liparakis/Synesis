@@ -3,7 +3,6 @@ package org.synesis.workspace.application.provider.continuity;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Provider-neutral seam for authenticating a runtime attachment to an existing logical provider

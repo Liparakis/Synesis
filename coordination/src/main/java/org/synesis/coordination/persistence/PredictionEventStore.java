@@ -166,11 +166,7 @@ public final class PredictionEventStore {
      * @throws IOException              when the event cannot be persisted
      * @throws GeneralSecurityException when signing or verification fails
      */
-    public synchronized PredictionEvent append(UUID predictionId,
-            PredictionEventType type,
-            String actorNodeId,
-            byte[] payload,
-            NodeIdentity signer) throws IOException, GeneralSecurityException {
+    public synchronized PredictionEvent append(UUID predictionId, PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(predictionId, "prediction ID");
         // A caller may hold a long-lived store while another connection
         // appends through a fresh instance.  Derive the append head from the
@@ -203,13 +199,7 @@ public final class PredictionEventStore {
      * @return signed event for the next sequence
      * @throws GeneralSecurityException when event signing fails
      */
-    private PredictionEvent createEvent(UUID predictionId,
-            PredictionEventType type,
-            String actorNodeId,
-            byte[] payload,
-            NodeIdentity signer,
-            Head durableHead,
-            long sequence) throws GeneralSecurityException {
+    private PredictionEvent createEvent(UUID predictionId, PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer, Head durableHead, long sequence) throws GeneralSecurityException {
         return PredictionEvent.create(new ProjectId(projectId),
                 new PredictionId(predictionId),
                 new EventSequence(sequence),
@@ -248,9 +238,7 @@ public final class PredictionEventStore {
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
-            try (FileChannel channel = FileChannel.open(temporary,
-                    StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 ByteBuffer encoded = ByteBuffer.wrap(event.encoded());
                 while (encoded.hasRemaining()) {
                     if (channel.write(encoded) <= 0) {
@@ -313,11 +301,9 @@ public final class PredictionEventStore {
         long sequence = 0L;
         byte[] digest = new byte[32];
         try (var files = Files.list(eventsDirectory)) {
-            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".sce"))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).toList()) {
+            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList()) {
                 PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L
-                        || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
+                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
                     throw new CoordinationException("invalid coordination event log");
                 }
                 sequence = event.sequence();
@@ -453,16 +439,13 @@ public final class PredictionEventStore {
     private void load() throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
-            files = stream.filter(path -> path.getFileName().toString().endsWith(".sce"))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
+            files = stream.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
         }
         EventSequence expected = new EventSequence(1);
         byte[] previous = new byte[32];
         for (Path file : files) {
             PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-            if (!event.projectId().equals(projectId) || !event.sequenceIdentity().equals(expected) || !Arrays.equals(
-                    event.previousDigest(),
-                    previous) || !event.verify()) {
+            if (!event.projectId().equals(projectId) || !event.sequenceIdentity().equals(expected) || !Arrays.equals(event.previousDigest(), previous) || !event.verify()) {
                 throw new CoordinationException("invalid coordination event log");
             }
             projection.apply(event);

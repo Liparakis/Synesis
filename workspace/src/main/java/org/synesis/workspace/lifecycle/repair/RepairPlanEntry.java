@@ -5,7 +5,7 @@ import java.util.Objects;
 import org.synesis.workspace.doctor.DoctorFindingCode;
 
 /**
- * Single entry inside an immutable persisted repair plan.
+ * Single entry in a persisted repair plan.
  *
  * @param schemaVersion     schema version (1)
  * @param entryId           stable entry identifier
@@ -19,29 +19,19 @@ import org.synesis.workspace.doctor.DoctorFindingCode;
  * @param backupRequired    {@code true} if pre-mutation backup is required
  * @since 1.0
  */
-public record RepairPlanEntry(
-    int schemaVersion,
-    String entryId,
-    DoctorFindingCode findingCode,
-    RepairAction action,
-    String targetPath,
-    String targetFingerprint,
-    boolean executable,
-    List<String> reasons,
-    String summary,
-    boolean backupRequired
-) {
+public record RepairPlanEntry(int schemaVersion, String entryId, DoctorFindingCode findingCode, RepairAction action, String targetPath, String targetFingerprint, boolean executable, List<String> reasons, String summary,
+                              boolean backupRequired) {
 
-  /**
-   * Invariant validation.
-   */
-  public RepairPlanEntry {
-    Objects.requireNonNull(entryId, "entryId");
-    Objects.requireNonNull(findingCode, "findingCode");
-    Objects.requireNonNull(action, "action");
-    Objects.requireNonNull(targetPath, "targetPath");
-    Objects.requireNonNull(targetFingerprint, "targetFingerprint");
-    Objects.requireNonNull(reasons, "reasons");
-    Objects.requireNonNull(summary, "summary");
-  }
+    /**
+     * Requires non-null entry ID, finding, action, target path/fingerprint, reasons, and summary.
+     */
+    public RepairPlanEntry {
+        Objects.requireNonNull(entryId, "entryId");
+        Objects.requireNonNull(findingCode, "findingCode");
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(targetPath, "targetPath");
+        Objects.requireNonNull(targetFingerprint, "targetFingerprint");
+        Objects.requireNonNull(reasons, "reasons");
+        Objects.requireNonNull(summary, "summary");
+    }
 }

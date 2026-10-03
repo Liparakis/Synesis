@@ -370,8 +370,9 @@ public final class ProjectApplicationService {
      * @param start directory from which discovery begins
      * @return discovered project location
      * @throws ProjectApplicationException if no project exists or metadata is malformed
+     * @throws IOException if repository-private exclusions cannot be maintained
      */
-    public ProjectLocation locate(Path start) throws ProjectApplicationException {
+    public ProjectLocation locate(Path start) throws ProjectApplicationException, IOException {
         Path current = directory(start, "start directory");
         while (current != null) {
             Path synesis = current.resolve(SYNESIS_DIRECTORY);
@@ -379,11 +380,7 @@ public final class ProjectApplicationService {
             if (Files.exists(metadata)) {
                 ensureMetadataStorage(current);
                 ProjectLocation location = readLocation(current, synesis, metadata);
-                try {
-                    RepositoryPrivateStateService.ensure(location.root());
-                } catch (IOException failure) {
-                    throw new ProjectApplicationException("PRIVATE_STATE_UNAVAILABLE", "Could not maintain repository-private Synesis exclusions", failure);
-                }
+                RepositoryPrivateStateService.ensure(location.root());
                 return location;
             }
             if (Files.exists(synesis)) {
@@ -401,8 +398,9 @@ public final class ProjectApplicationService {
      * @param projectRoot explicit project directory
      * @return discovered project location
      * @throws ProjectApplicationException if the path or metadata is invalid
+     * @throws IOException if repository-private exclusions cannot be maintained
      */
-    public ProjectLocation require(Path projectRoot) throws ProjectApplicationException {
+    public ProjectLocation require(Path projectRoot) throws ProjectApplicationException, IOException {
         Path root = directory(projectRoot, "project directory");
         Path metadata = root.resolve(SYNESIS_DIRECTORY).resolve(PROJECT_FILE);
         if (!Files.exists(metadata)) {
@@ -410,11 +408,7 @@ public final class ProjectApplicationService {
         }
         ensureMetadataStorage(root);
         ProjectLocation location = readLocation(root, root.resolve(SYNESIS_DIRECTORY), metadata);
-        try {
-            RepositoryPrivateStateService.ensure(location.root());
-        } catch (IOException failure) {
-            throw new ProjectApplicationException("PRIVATE_STATE_UNAVAILABLE", "Could not maintain repository-private Synesis exclusions", failure);
-        }
+        RepositoryPrivateStateService.ensure(location.root());
         return location;
     }
 

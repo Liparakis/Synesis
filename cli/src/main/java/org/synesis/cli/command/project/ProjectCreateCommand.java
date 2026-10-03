@@ -1,5 +1,6 @@
 package org.synesis.cli.command.project;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
@@ -58,6 +59,8 @@ public final class ProjectCreateCommand implements Callable<Integer> {
         } catch (RuntimeException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

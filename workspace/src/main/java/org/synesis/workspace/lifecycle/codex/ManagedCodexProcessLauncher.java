@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentStore;
@@ -47,7 +46,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     private final ManagedProcessTreeSupervisor processTreeSupervisor;
     private final ManagedRuntimeDeathReceiptStore deathReceiptStore;
     private final Map<String, PreparedLaunch> prepared = new ConcurrentHashMap<>();
-    private final Map<String, CodexAppServerLifecycleService.AppServerProcess> activeProcesses = new ConcurrentHashMap<>();
+    private final Map<String, ActiveProcess> activeProcesses = new ConcurrentHashMap<>();
 
     /**
      * Creates a managed launcher using the normal Codex executable.
@@ -215,14 +214,15 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
             throw new IOException("managed_attachment_not_prepared");
         }
         List<String> command = configuredCommand(launch.home(), synesisLauncher, location.root(), authority.connectionInstanceId());
-        ProcessBuilder builder = new ProcessBuilder(command).directory(Path.of(authority.realWorktree()).toFile()).redirectError(ProcessBuilder.Redirect.PIPE);
+        Path worktree = Path.of(authority.realWorktree());
+        ProcessBuilder builder = new ProcessBuilder(command).directory(worktree.toFile()).redirectError(ProcessBuilder.Redirect.PIPE);
         Map<String, String> environment = builder.environment();
         environment.put("CODEX_HOME", launch.home().path().toString());
         environment.put("SYNESIS_MCP_PROJECT", authority.controlProjectRoot());
         environment.put("SYNESIS_MCP_CONNECTION_INSTANCE_ID", authority.connectionInstanceId());
         environment.put("SYNESIS_MCP_PROVIDER", authority.provider());
         environment.put(CodexManagedRuntimeHome.ATTACHMENT_PROOF_ENV, launch.proof());
-        Process process = processTreeSupervisor.launch(command, Path.of(authority.realWorktree()), environment);
+        Process process = processTreeSupervisor.launch(command, worktree, environment);
         if (!processTreeSupervisor.owns(process)) {
             try {
                 processTreeSupervisor.teardownAndProveEmpty(process);
@@ -236,7 +236,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         String identity = processDetails.commandLine();
         long started = processDetails.processStartTime();
         CodexAppServerLifecycleService.AppServerProcess attachment = new CodexAppServerLifecycleService.AppServerProcess(process, executable, identity, started, processTreeSupervisor);
-        activeProcesses.put(authority.bindingSessionId(), attachment);
+        activeProcesses.put(authority.bindingSessionId(), new ActiveProcess(attachmentGeneration, attachment));
         return attachment;
     }
 
@@ -379,20 +379,22 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @return true when the owned tree was proven empty
      * @throws Exception when ownership, generation, or liveness is ambiguous
      */
+    @SuppressWarnings("SameReturnValue") // Any failure is exceptional; normal return means the tree was proven empty.
     public boolean teardownAndProveEmpty(LifecycleControlRequestEnvelope.AuthorityContext authority, long expectedGeneration) throws Exception {
         requireAuthority(authority);
         PreparedLaunch preparedLaunch = prepared.get(authority.bindingSessionId());
-        CodexAppServerLifecycleService.AppServerProcess process = activeProcesses.get(authority.bindingSessionId());
-        if (preparedLaunch == null || process == null || preparedLaunch.record().generation() != expectedGeneration) {
+        ActiveProcess activeProcess = activeProcesses.get(authority.bindingSessionId());
+        if (preparedLaunch == null || activeProcess == null || preparedLaunch.record().generation() != expectedGeneration || activeProcess.generation() != expectedGeneration) {
             throw new IOException("managed_process_tree_missing_or_stale");
         }
-        ManagedProcessTreeSupervisor.DeathEvidence evidence = processTreeSupervisor.teardownAndProveEmptyWithEvidence(process.process(),
-                expectedGeneration,
-                process.executable(),
-                process.commandIdentity(),
-                process.startEpochMillis());
+        ManagedProcessTreeSupervisor.DeathEvidence evidence = proveProcessTreeEmpty(activeProcess.process(), expectedGeneration);
         managedTreeStopped(authority, expectedGeneration, evidence);
         return true;
+    }
+
+    /** Proves and returns the death evidence for one exact managed process generation. */
+    private ManagedProcessTreeSupervisor.DeathEvidence proveProcessTreeEmpty(CodexAppServerLifecycleService.AppServerProcess process, long generation) throws IOException {
+        return processTreeSupervisor.teardownAndProveEmptyWithEvidence(process.process(), generation, process.executable(), process.commandIdentity(), process.startEpochMillis());
     }
 
     /**
@@ -407,10 +409,9 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     @Override
     public void managedTreeStopped(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence) throws IOException {
         requireAuthority(authority);
-        if (evidence == null || evidence.generation() != attachmentGeneration) {
-            throw new IOException("managed_process_tree_death_evidence_mismatch");
-        }
-        PreparedLaunch launch = prepared.get(authority.bindingSessionId());
+        CodexAppServerLifecycleService.requireManagedTreeDeathEvidence(attachmentGeneration, evidence);
+        String bindingSessionId = authority.bindingSessionId();
+        PreparedLaunch launch = prepared.get(bindingSessionId);
         if (launch != null && launch.record().generation() == attachmentGeneration) {
             try {
                 ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
@@ -433,8 +434,17 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
             } catch (Exception failure) {
                 throw new IOException("managed_attachment_disconnect_failed", failure);
             }
+            releaseStoppedProcess(bindingSessionId, attachmentGeneration);
         }
-        activeProcesses.remove(authority.bindingSessionId());
+    }
+
+    /** Releases only the process handle whose generation has trusted death evidence. */
+    private void releaseStoppedProcess(String bindingSessionId, long attachmentGeneration) {
+        ActiveProcess stopped = activeProcesses.get(bindingSessionId);
+        if (stopped != null && stopped.generation() == attachmentGeneration && activeProcesses.remove(bindingSessionId, stopped)) {
+            // The process-tree supervisor proved this exact generation empty before this release.
+            stopped.process().close();
+        }
     }
 
     /**
@@ -446,8 +456,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      */
     public void terminalizeAndRelease(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
         requireAuthority(authority);
-        ManagedAttachmentService attachment = attachmentService;
-        attachment.terminalize(ManagedAttachmentService.storeFor(location, authority.bindingSessionId()));
+        attachmentService.terminalize(ManagedAttachmentService.storeFor(location, authority.bindingSessionId()));
         ProviderThreadOwnershipRecord ownership = brokerFor(authority).ownership();
         ownershipStore.release(ownership.provider(), ownership.providerThreadId(), authority.bindingSessionId());
     }
@@ -494,6 +503,10 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
     }
 
     private record PreparedLaunch(CodexManagedRuntimeHome home, String proof, ManagedAttachmentRecord record) {
+
+    }
+
+    private record ActiveProcess(long generation, CodexAppServerLifecycleService.AppServerProcess process) {
 
     }
 }

@@ -44,7 +44,7 @@ the registry authority.
 
 ## Identity and live-state behavior
 
-`ProjectApplicationService.ProjectLocation.projectId()` is the identity. A
+`ProjectLocation.projectId()` is the identity. A
 remembered path is not identity. Reading the registry validates an available
 path using the existing project locator and compares the observed UUID with
 the persisted UUID:

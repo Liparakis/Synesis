@@ -177,7 +177,7 @@ The lists below show every top-level Java type under its declared package. Most 
 
 ## MCP source package map
 
-MCP keeps a root server entrypoint, connection-scoped application logic, and an independent stdio transport. `McpProtocolHandler` owns the persistent connection binding, lease state, JSON-RPC lifecycle, and authority-gated tool dispatch. `McpProjectRootAuthority` isolates root verification; `McpToolCall` validates the untrusted tools/call envelope; and `McpCollaborationProjection` serializes typed collaboration records at the JSON boundary. Collaboration result mapping therefore stays separate from connection authority.
+MCP keeps a root server entrypoint, connection-scoped application logic, and an independent stdio transport. `McpProtocolHandler` owns the persistent connection binding, lease state, JSON-RPC lifecycle, and authority-gated tool dispatch. `McpProjectRootAuthority` isolates root verification; `McpToolCall` validates the untrusted tools/call envelope; and `McpCollaborationProjection` serializes typed collaboration records at the JSON boundary.
 
 ### Production
 

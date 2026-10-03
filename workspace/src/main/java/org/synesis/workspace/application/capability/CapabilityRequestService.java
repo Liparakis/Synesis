@@ -1,7 +1,9 @@
 package org.synesis.workspace.application.capability;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -249,7 +251,7 @@ public final class CapabilityRequestService {
     }
 
     private AgentResponse handleRequesterRevisionResponse(DescribeCapabilityRequest request, PredictionEventStore store, CapabilityRequestProjection projection, String requesterNodeId, NodeIdentity identity)
-            throws Exception {
+            throws GeneralSecurityException, IOException {
 
         String handleStr = request.requestHandle();
         Optional<CapabilityRequestRecord> recOpt = projection.findByHandle(handleStr);

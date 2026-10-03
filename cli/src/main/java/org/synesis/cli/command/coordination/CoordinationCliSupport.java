@@ -1,5 +1,6 @@
 package org.synesis.cli.command.coordination;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
@@ -14,6 +15,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpClient;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
+import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
@@ -33,8 +35,9 @@ public final class CoordinationCliSupport {
      * @param project requested project path, or {@code null}
      * @return resolved project location
      * @throws ProjectApplicationService.ProjectApplicationException if the project is invalid
+     * @throws IOException if project metadata or private repository state cannot be read or updated
      */
-    public static ProjectLocation project(CliRuntime runtime, Path project) throws ProjectApplicationService.ProjectApplicationException {
+    public static ProjectLocation project(CliRuntime runtime, Path project) throws ProjectApplicationException, IOException {
         Objects.requireNonNull(runtime, "runtime");
         ProjectLocation location = runtime.projectService().require(project == null ? Path.of(".") : project);
         try {

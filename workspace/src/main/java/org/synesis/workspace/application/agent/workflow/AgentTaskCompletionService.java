@@ -3,7 +3,6 @@ package org.synesis.workspace.application.agent.workflow;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,12 +230,13 @@ public final class AgentTaskCompletionService {
         if (!grant.workGroupId().equals(intent.workGroupId())) {
             return false;
         }
-        if (!grant.targetIntentId().equals(intent.intentId()) && store.collaborationProjection().successorIntent(grant.targetIntentId()).isPresent()) {
+        boolean targetsCurrentIntent = grant.targetIntentId().equals(intent.intentId());
+        if (!targetsCurrentIntent && store.collaborationProjection().successorIntent(grant.targetIntentId()).isPresent()) {
             // A late historical grant must not become review authority for the successor.  The
             // continuation projection creates a current-epoch grant for the successor when needed.
             return false;
         }
-        if (grant.targetIntentId().equals(intent.intentId())) {
+        if (targetsCurrentIntent) {
             return grant.claimEpoch() == intent.version();
         }
         if (grant.claimEpoch() >= intent.version()) {
@@ -399,58 +399,12 @@ public final class AgentTaskCompletionService {
             ExecutionResult prePublicationValidation = null;
 
             if (terminalRetry) {
-                if (request.outcome() == CompletionOutcome.NO_CHANGE) {
-                    UUID completedIntentId = deriveIntentId(binding, request.provider());
-                    Optional<org.synesis.coordination.domain.collaboration.NoChangeCompletion> completed = store.collaborationProjection().noChangeCompletion(completedIntentId);
-                    if (completed.isPresent() && noChangeEvidenceMatches(request, binding, completed.get())) {
-                        return noChangeCompletionResult(store, completed.get(), null);
-                    }
-                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_NO_CHANGE_COMPLETION"));
-                }
-                UUID completedTaskId = deriveTaskId(binding);
-                Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection().findSnapshotForTask(completedTaskId);
-                if (completedSnapshot.isPresent()) {
-                    TaskCompletionState completedState = store.taskCompletionProjection().snapshotState(completedSnapshot.get().snapshotId()).orElse(TaskCompletionState.ACTIVE);
-                    if (completedState != TaskCompletionState.INTEGRATED) {
-                        return new AgentResponse(AgentStatus.BLOCKED,
-                                AgentReason.TASK_NOT_READY,
-                                AgentNextAction.REQUEST_HUMAN_HELP,
-                                Map.of("reason", "COMPLETED_BINDING_WITHOUT_INTEGRATED_SNAPSHOT", "snapshotId", completedSnapshot.get().snapshotId(), "snapshotState", completedState.value()));
-                    }
-                    return completionResult(store,
-                            completedSnapshot.get(),
-                            WorkspaceCollaborationService.participantHandle(binding.sessionId()),
-                            new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_integrated")),
-                            null);
-                }
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_SNAPSHOT"));
+                return completedBindingResult(request, store, binding);
             }
 
-            // 1. Completion Readiness Check: Unresolved capability requests
-            List<CapabilityRequestRecord> reqPending = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
-                    .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)).toList();
-            List<CapabilityRequestRecord> callerPending = new ArrayList<>();
-            for (CapabilityRequestRecord r : reqPending) {
-                if (r.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)) {
-                    if (r.state() == CapabilityLifecycleState.AWAITING_OWNER || r.state() == CapabilityLifecycleState.REVISION_REQUESTED || r.state() == CapabilityLifecycleState.IMPLEMENTING
-                            || r.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || r.state() == CapabilityLifecycleState.VALIDATING) {
-                        callerPending.add(r);
-                    }
-                }
-            }
-
-            if (!callerPending.isEmpty()) {
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", callerPending.size());
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.UNRESOLVED_DEPENDENCY, AgentNextAction.WAIT, result);
-            }
-
-            // Check if active validation context is open for this requester
-            var validationContexts = store.capabilityRequestProjection().allValidationContexts();
-            if (!validationContexts.isEmpty()) {
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", validationContexts.size());
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, result);
+            AgentResponse readinessFailure = completionReadinessFailure(store, callerNodeId, callerSupervisorId, callerWorkerId);
+            if (readinessFailure != null) {
+                return readinessFailure;
             }
 
             // 3. Create or recover immutable task snapshot
@@ -589,97 +543,7 @@ public final class AgentTaskCompletionService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);
             }
 
-            // A completion transaction must publish a complete lane diff.  A
-            // clean lane is not a valid implementation snapshot: accepting it
-            // would create an apparently successful, empty integration and
-            // release the caller's authority without preserving any work.
-            if (snapshot.changedPaths().isEmpty()) {
-                if (existingOpt.isEmpty()) {
-                    snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
-                }
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "NO_CHANGES_TO_PUBLISH"));
-            }
-
-            // Stable identity collisions are not a second publication.  They
-            // indicate that two lanes produced the same canonical snapshot
-            // identity, so fail closed rather than advertising another task
-            // record over the immutable snapshot ID.
-            var sameIdentity = store.taskCompletionProjection().findSnapshotById(snapshot.snapshotId());
-            if (sameIdentity.isPresent() && !sameIdentity.get().taskId().equals(snapshot.taskId())) {
-                if (existingOpt.isEmpty()) {
-                    snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
-                }
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SNAPSHOT_ID_COLLISION", "snapshotId", snapshot.snapshotId()));
-            }
-
-            // 4. Pin the exact prepared tree and fence this lane before the
-            // snapshot becomes visible to the integration queue.
-            String completionId =
-                    "cmp_" + java.util.UUID.nameUUIDFromBytes((snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch() + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            if (existingOpt.isEmpty()) {
-                // Direct callers may create a provisional ref; completion moves
-                // that ref behind a durable prepared phase.
-                snapshotService.removeSnapshotRef(workerWorktreePath, snapshot);
-            }
-            String preparedRef = snapshotService.pinPreparedRef(workerWorktreePath, snapshot, completionId);
-            String preparedTreeHash = snapshotService.treeHash(workerWorktreePath, snapshot.commitSha());
-            if (store.taskCompletionProjection().findPrepared(taskId, snapshot.provenance().laneId(), snapshot.provenance().claimEpoch()).isEmpty()) {
-                CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
-                        completionId,
-                        snapshot.provenance().laneId(),
-                        snapshot.provenance().claimEpoch(),
-                        snapshot.baseCommit(),
-                        preparedRef,
-                        preparedTreeHash,
-                        snapshot.changedPaths());
-                store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, callerNodeId, prepared.encode(), identity);
-            }
-
-            snapshotService.promotePreparedRef(workerWorktreePath, preparedRef, snapshot.provenance().snapshotRef(), snapshot.commitSha());
-
-            // 5. Persist TASK_SNAPSHOT_CREATED if new
-            if (existingOpt.isEmpty()) {
-                TaskSnapshotPayload snapPayload = new TaskSnapshotPayload(snapshot.taskId(),
-                        snapshot.snapshotId(),
-                        snapshot.nodeId(),
-                        snapshot.supervisorId(),
-                        snapshot.workerId(),
-                        snapshot.providerSessionId(),
-                        snapshot.baseCommit(),
-                        snapshot.commitSha(),
-                        snapshot.changedPaths(),
-                        snapshot.capabilityDependencies(),
-                        snapshot.summary(),
-                        snapshot.provenance(),
-                        snapshot.reviewRequired());
-
-                store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, callerNodeId, snapPayload.encode(), identity);
-            }
-
-            // 6. Trigger integration orchestration
-            AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
-            PredictionEventStore completionStore = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            result = completionResult(completionStore, snapshot, participantHandle, result, prePublicationValidation);
-            if (result.status() == AgentStatus.COMPLETED) {
-                // Complete only the exact calling connection.  Keeping the
-                // binding terminal (and retaining its worktree) prevents the
-                // next inbox read from attempting to reuse a stale lane.
-                bindingService.complete(location, request.provider(), request.connectionInstanceId());
-                AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
-                if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap && "SESSION_TERMINATED".equals(String.valueOf(terminalMap.get("sessionTermination")))) {
-                    return terminalResult;
-                }
-                result = terminalResult;
-                // A completed lane may still be the only participant able to
-                // review an active sibling.  Project that existing review
-                // protocol before returning a terminal result, so the
-                // provider remains engaged without retaining write ownership.
-                AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
-                if (continuation.nextAction() != null) {
-                    return continuationWithCompletion(result, continuation);
-                }
-            }
-            return result;
+            return persistAndIntegrateSnapshot(request, location, binding, identity, store, snapshot, existingOpt.isPresent(), workerWorktreePath, prePublicationValidation);
 
         } catch (Exception ex) {
             Map<String, Object> failure = new LinkedHashMap<>();
@@ -687,6 +551,188 @@ public final class AgentTaskCompletionService {
             failure.put("message", ex.getMessage() == null ? "unknown completion failure" : ex.getMessage());
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, failure);
         }
+    }
+
+    /**
+     * Durably prepares a newly created snapshot and starts its integration workflow.
+     *
+     * @param request                   original completion request
+     * @param location                  verified project location
+     * @param binding                   exact provider session binding
+     * @param identity                  caller's durable node identity
+     * @param store                     project event store
+     * @param snapshot                  immutable snapshot produced for the task
+     * @param snapshotAlreadyExists     whether an immutable snapshot already existed for this lane
+     * @param worktree                  verified worker worktree
+     * @param prePublicationValidation successful owner-defined validation, if configured
+     * @return integration and completion result
+     * @throws Exception when durable preparation or integration orchestration fails
+     */
+    private AgentResponse persistAndIntegrateSnapshot(CompleteTaskRequest request,
+            ProjectLocation location,
+            ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity,
+            PredictionEventStore store,
+            TaskSnapshotRecord snapshot,
+            boolean snapshotAlreadyExists,
+            Path worktree,
+            ExecutionResult prePublicationValidation) throws Exception {
+        String callerNodeId = identity.nodeId();
+        String participantHandle = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        UUID taskId = snapshot.taskId();
+
+        // A completion transaction must publish a complete lane diff. A clean lane cannot create a
+        // useful implementation snapshot or release its authority without preserving any work.
+        if (snapshot.changedPaths().isEmpty()) {
+            if (!snapshotAlreadyExists) {
+                snapshotService.removeSnapshotRef(worktree, snapshot);
+            }
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "NO_CHANGES_TO_PUBLISH"));
+        }
+
+        // A stable identity collision is not a second publication. Fail closed instead of
+        // advertising another task record over the immutable snapshot ID.
+        var sameIdentity = store.taskCompletionProjection().findSnapshotById(snapshot.snapshotId());
+        if (sameIdentity.isPresent() && !sameIdentity.get().taskId().equals(snapshot.taskId())) {
+            if (!snapshotAlreadyExists) {
+                snapshotService.removeSnapshotRef(worktree, snapshot);
+            }
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SNAPSHOT_ID_COLLISION", "snapshotId", snapshot.snapshotId()));
+        }
+
+        // Pin the exact prepared tree and fence the lane before its snapshot becomes visible to
+        // integration.
+        String completionId =
+                "cmp_" + UUID.nameUUIDFromBytes((snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch() + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!snapshotAlreadyExists) {
+            // Direct callers may create a provisional ref; completion moves it behind a durable
+            // prepared phase.
+            snapshotService.removeSnapshotRef(worktree, snapshot);
+        }
+        String preparedRef = snapshotService.pinPreparedRef(worktree, snapshot, completionId);
+        String preparedTreeHash = snapshotService.treeHash(worktree, snapshot.commitSha());
+        if (store.taskCompletionProjection().findPrepared(taskId, snapshot.provenance().laneId(), snapshot.provenance().claimEpoch()).isEmpty()) {
+            CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
+                    completionId,
+                    snapshot.provenance().laneId(),
+                    snapshot.provenance().claimEpoch(),
+                    snapshot.baseCommit(),
+                    preparedRef,
+                    preparedTreeHash,
+                    snapshot.changedPaths());
+            store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, callerNodeId, prepared.encode(), identity);
+        }
+
+        snapshotService.promotePreparedRef(worktree, preparedRef, snapshot.provenance().snapshotRef(), snapshot.commitSha());
+        if (!snapshotAlreadyExists) {
+            TaskSnapshotPayload snapshotPayload = new TaskSnapshotPayload(snapshot.taskId(),
+                    snapshot.snapshotId(),
+                    snapshot.nodeId(),
+                    snapshot.supervisorId(),
+                    snapshot.workerId(),
+                    snapshot.providerSessionId(),
+                    snapshot.baseCommit(),
+                    snapshot.commitSha(),
+                    snapshot.changedPaths(),
+                    snapshot.capabilityDependencies(),
+                    snapshot.summary(),
+                    snapshot.provenance(),
+                    snapshot.reviewRequired());
+            store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, callerNodeId, snapshotPayload.encode(), identity);
+        }
+
+        AgentResponse result = integrationOrchestrationService.orchestrateIntegration(location.root(), store, identity);
+        PredictionEventStore completionStore = new PredictionEventStore(store.rootDirectory(), store.projectId());
+        result = completionResult(completionStore, snapshot, participantHandle, result, prePublicationValidation);
+        if (result.status() != AgentStatus.COMPLETED) {
+            return result;
+        }
+
+        // Complete only the exact calling connection. Retaining its worktree prevents the next
+        // inbox read from reusing stale write authority.
+        bindingService.complete(location, request.provider(), request.connectionInstanceId());
+        AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
+        if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap && "SESSION_TERMINATED".equals(String.valueOf(terminalMap.get("sessionTermination")))) {
+            return terminalResult;
+        }
+
+        // A completed lane may still review an active sibling, so preserve that read-only follow-up
+        // in the returned projection.
+        AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
+        return continuation.nextAction() == null ? terminalResult : continuationWithCompletion(terminalResult, continuation);
+    }
+
+    /**
+     * Reconstructs the durable completion result when the provider binding is already terminal.
+     *
+     * <p>A completed binding cannot publish new work. It may only replay an already durable
+     * no-change completion or integrated snapshot; every other state requires human recovery.</p>
+     *
+     * @param request original completion request
+     * @param store   current durable event store
+     * @param binding completed provider binding
+     * @return the existing completion response, or a blocked response when no valid completion is
+     *         recorded
+     */
+    private static AgentResponse completedBindingResult(CompleteTaskRequest request, PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
+        if (request.outcome() == CompletionOutcome.NO_CHANGE) {
+            UUID completedIntentId = deriveIntentId(binding, request.provider());
+            Optional<NoChangeCompletion> completed = store.collaborationProjection().noChangeCompletion(completedIntentId);
+            if (completed.isPresent() && noChangeEvidenceMatches(request, binding, completed.get())) {
+                return noChangeCompletionResult(store, completed.get(), null);
+            }
+            return new AgentResponse(AgentStatus.BLOCKED,
+                    AgentReason.TASK_NOT_READY,
+                    AgentNextAction.REQUEST_HUMAN_HELP,
+                    Map.of("reason", "COMPLETED_BINDING_WITHOUT_NO_CHANGE_COMPLETION"));
+        }
+        UUID completedTaskId = deriveTaskId(binding);
+        Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection().findSnapshotForTask(completedTaskId);
+        if (completedSnapshot.isEmpty()) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "COMPLETED_BINDING_WITHOUT_SNAPSHOT"));
+        }
+        TaskSnapshotRecord snapshot = completedSnapshot.get();
+        TaskCompletionState completedState = store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
+        if (completedState != TaskCompletionState.INTEGRATED) {
+            return new AgentResponse(AgentStatus.BLOCKED,
+                    AgentReason.TASK_NOT_READY,
+                    AgentNextAction.REQUEST_HUMAN_HELP,
+                    Map.of("reason", "COMPLETED_BINDING_WITHOUT_INTEGRATED_SNAPSHOT", "snapshotId", snapshot.snapshotId(), "snapshotState", completedState.value()));
+        }
+        return completionResult(store,
+                snapshot,
+                WorkspaceCollaborationService.participantHandle(binding.sessionId()),
+                new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_integrated")),
+                null);
+    }
+
+    /**
+     * Returns the first unresolved capability or validation gate that prevents task completion.
+     *
+     * @param store              current durable event store
+     * @param callerNodeId       exact caller node identity
+     * @param callerSupervisorId exact caller supervisor identity
+     * @param callerWorkerId     exact caller worker identity
+     * @return the blocking response, or {@code null} when both readiness checks pass
+     */
+    private static AgentResponse completionReadinessFailure(PredictionEventStore store, String callerNodeId, String callerSupervisorId, String callerWorkerId) {
+        List<CapabilityRequestRecord> pending = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                .filter(record -> record.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
+                .filter(AgentTaskCompletionService::isCompletionBlockingCapability)
+                .toList();
+        if (!pending.isEmpty()) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.UNRESOLVED_DEPENDENCY, AgentNextAction.WAIT, Map.of("pending", pending.size()));
+        }
+        int validationCount = store.capabilityRequestProjection().allValidationContexts().size();
+        if (validationCount > 0) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("pending", validationCount));
+        }
+        return null;
+    }
+
+    private static boolean isCompletionBlockingCapability(CapabilityRequestRecord request) {
+        return request.state() == CapabilityLifecycleState.AWAITING_OWNER || request.state() == CapabilityLifecycleState.REVISION_REQUESTED || request.state() == CapabilityLifecycleState.IMPLEMENTING
+                || request.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || request.state() == CapabilityLifecycleState.VALIDATING;
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")

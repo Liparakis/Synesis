@@ -1,5 +1,7 @@
 package org.synesis.workspace.application.provider;
 
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
@@ -35,7 +37,6 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;

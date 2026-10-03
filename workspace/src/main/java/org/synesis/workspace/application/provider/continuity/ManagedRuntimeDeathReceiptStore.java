@@ -16,7 +16,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -84,6 +83,43 @@ public record ManagedRuntimeDeathReceiptStore(Path root) {
         return number;
     }
 
+    private static ManagedRuntimeDeathReceipt receipt(Map<String, Object> value, String bindingSessionId, long generation) throws IOException {
+        ManagedRuntimeDeathReceipt receipt = new ManagedRuntimeDeathReceipt(number(value, "schemaVersion").intValue(),
+                text(value, "projectId"),
+                text(value, "provider"),
+                text(value, "bindingSessionId"),
+                number(value, "generation").longValue(),
+                number(value, "rootPid").longValue(),
+                number(value, "rootStartEpochMillis").longValue(),
+                text(value, "rootExecutable"),
+                text(value, "rootCommandIdentity"),
+                text(value, "supervisorProvenance"),
+                number(value, "supervisorRevision").longValue(),
+                number(value, "observedAtEpochMillis").longValue());
+        if (!bindingSessionId.equals(receipt.bindingSessionId()) || generation != receipt.generation()) {
+            throw new IOException("managed death receipt identity mismatch");
+        }
+        return receipt;
+    }
+
+    /** Serializes one trusted death receipt into its durable JSON fields. */
+    private static Map<String, Object> receiptFields(ManagedRuntimeDeathReceipt receipt) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("schemaVersion", receipt.schemaVersion());
+        fields.put("projectId", receipt.projectId());
+        fields.put("provider", receipt.provider());
+        fields.put("bindingSessionId", receipt.bindingSessionId());
+        fields.put("generation", receipt.generation());
+        fields.put("rootPid", receipt.rootPid());
+        fields.put("rootStartEpochMillis", receipt.rootStartEpochMillis());
+        fields.put("rootExecutable", receipt.rootExecutable());
+        fields.put("rootCommandIdentity", receipt.rootCommandIdentity());
+        fields.put("supervisorProvenance", receipt.supervisorProvenance());
+        fields.put("supervisorRevision", receipt.supervisorRevision());
+        fields.put("observedAtEpochMillis", receipt.observedAtEpochMillis());
+        return fields;
+    }
+
     /**
      * Reads the receipt for one exact binding generation.
      *
@@ -102,24 +138,7 @@ public record ManagedRuntimeDeathReceiptStore(Path root) {
             if (!(parsed instanceof Map<?, ?> raw)) {
                 throw new IOException("managed death receipt must be an object");
             }
-            Map<String, Object> value = new LinkedHashMap<>();
-            raw.forEach((key, item) -> value.put(String.valueOf(key), item));
-            ManagedRuntimeDeathReceipt receipt = new ManagedRuntimeDeathReceipt(number(value, "schemaVersion").intValue(),
-                    text(value, "projectId"),
-                    text(value, "provider"),
-                    text(value, "bindingSessionId"),
-                    number(value, "generation").longValue(),
-                    number(value, "rootPid").longValue(),
-                    number(value, "rootStartEpochMillis").longValue(),
-                    text(value, "rootExecutable"),
-                    text(value, "rootCommandIdentity"),
-                    text(value, "supervisorProvenance"),
-                    number(value, "supervisorRevision").longValue(),
-                    number(value, "observedAtEpochMillis").longValue());
-            if (!bindingSessionId.equals(receipt.bindingSessionId()) || generation != receipt.generation()) {
-                throw new IOException("managed death receipt identity mismatch");
-            }
-            return Optional.of(receipt);
+            return Optional.of(receipt(ProviderJson.stringKeyedObject(raw), bindingSessionId, generation));
         } catch (RuntimeException failure) {
             throw new IOException("malformed managed death receipt", failure);
         }
@@ -143,21 +162,8 @@ public record ManagedRuntimeDeathReceiptStore(Path root) {
                 return;
             }
             Files.createDirectories(file.getParent());
-            Map<String, Object> value = new LinkedHashMap<>();
-            value.put("schemaVersion", receipt.schemaVersion());
-            value.put("projectId", receipt.projectId());
-            value.put("provider", receipt.provider());
-            value.put("bindingSessionId", receipt.bindingSessionId());
-            value.put("generation", receipt.generation());
-            value.put("rootPid", receipt.rootPid());
-            value.put("rootStartEpochMillis", receipt.rootStartEpochMillis());
-            value.put("rootExecutable", receipt.rootExecutable());
-            value.put("rootCommandIdentity", receipt.rootCommandIdentity());
-            value.put("supervisorProvenance", receipt.supervisorProvenance());
-            value.put("supervisorRevision", receipt.supervisorRevision());
-            value.put("observedAtEpochMillis", receipt.observedAtEpochMillis());
             Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(temporary, ProviderJson.write(value) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            Files.writeString(temporary, ProviderJson.write(receiptFields(receipt)) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
             try {
                 try {
                     Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

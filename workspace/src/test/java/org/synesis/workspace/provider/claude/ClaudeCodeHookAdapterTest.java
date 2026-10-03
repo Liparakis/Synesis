@@ -40,7 +40,6 @@ final class ClaudeCodeHookAdapterTest {
   }
 
   @Test
-  @SuppressWarnings("ExtractMethodRecommender")
   void blocksEditOnConstrainedScopeWithOfficialPreToolUseContract() throws Exception {
     Path tempDir = Files.createTempDirectory("hook-test-official-");
     try {

@@ -14,7 +14,6 @@ import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Service for comparing, verifying, and fast-forwarding the control branch after integration gate

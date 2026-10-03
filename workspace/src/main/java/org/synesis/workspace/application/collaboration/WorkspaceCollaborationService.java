@@ -23,7 +23,6 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.ContractId;
@@ -119,7 +118,7 @@ public final class WorkspaceCollaborationService {
      * @param acceptance           acceptance criteria
      * @param selectors            requested selectors
      * @return claim result
-     * @throws Exception when the project, session, identity, or event store cannot be resolved
+     * @throws Exception if project authority, session state, or event persistence fails
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId, String goal, String acceptance, List<ResourceSelector> selectors) throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, null);
@@ -136,7 +135,7 @@ public final class WorkspaceCollaborationService {
      * @param selectors            claims
      * @param workGroupId          group ID
      * @return claim result
-     * @throws Exception resolution or append failure
+     * @throws Exception if project authority, session state, or event persistence fails
      */
     public ClaimResult announce(Path projectRoot, String provider, String connectionInstanceId, String goal, String acceptance, List<ResourceSelector> selectors, UUID workGroupId) throws Exception {
         return announce(projectRoot, provider, connectionInstanceId, goal, acceptance, selectors, workGroupId, WorkIntent.Role.PRODUCER, List.of(), List.of());

@@ -3,6 +3,8 @@ package org.synesis.workspace.migration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -26,6 +28,14 @@ final class ProjectMigrationRestorationServiceTest {
 
     private static MigrationStep step(MigrationAction action) {
         return action::apply;
+    }
+
+    private static void writeDuringMigration(Path path, String content) {
+        try {
+            Files.writeString(path, content);
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     private static Fixture fixture() throws Exception {
@@ -55,8 +65,8 @@ final class ProjectMigrationRestorationServiceTest {
         String metadata = Files.readString(fixture.location.metadataFile());
         String note = Files.readString(fixture.note);
         Result result = fixture.service.execute(fixture.plan(), step((location) -> {
-            Files.writeString(location.metadataFile(), metadata);
-            Files.writeString(fixture.note, "changed");
+            writeDuringMigration(location.metadataFile(), metadata);
+            writeDuringMigration(fixture.note, "changed");
             throw new MigrationFailure("metadata_write_failed");
         }));
         assertEquals(Outcome.FAILED_RESTORED, result.outcome());
@@ -68,7 +78,7 @@ final class ProjectMigrationRestorationServiceTest {
     void malformedMigrationIsRestoredThroughNormalReaderFailure() throws Exception {
         Fixture fixture = fixture();
         String metadata = Files.readString(fixture.location.metadataFile());
-        Result result = fixture.service.execute(fixture.plan(), step((location) -> Files.writeString(location.metadataFile(), "{broken")));
+        Result result = fixture.service.execute(fixture.plan(), step((location) -> writeDuringMigration(location.metadataFile(), "{broken")));
         assertEquals(Outcome.FAILED_RESTORED, result.outcome());
         assertEquals(metadata, Files.readString(fixture.location.metadataFile()));
     }
@@ -78,7 +88,7 @@ final class ProjectMigrationRestorationServiceTest {
         Fixture fixture = fixture();
         String metadata = Files.readString(fixture.location.metadataFile());
         Result result = fixture.service.execute(fixture.plan(), step((_) -> {
-            Files.writeString(fixture.note, "changed");
+            writeDuringMigration(fixture.note, "changed");
             throw new MigrationFailure("post_migration_replay_mismatch");
         }));
         assertEquals(Outcome.FAILED_RESTORED, result.outcome());
@@ -98,9 +108,7 @@ final class ProjectMigrationRestorationServiceTest {
 
         Files.writeString(fixture.note, "changed-by-migration");
         String changedHash = hash(Files.readAllBytes(fixture.note));
-        var failed = restoration.restore(fixture.admin, manifest, fixture.location, before, Map.of(fixture.note, changedHash), _ -> {
-            throw new java.io.IOException("injected");
-        });
+        var failed = restoration.restore(fixture.admin, manifest, fixture.location, before, Map.of(fixture.note, changedHash), _ -> new java.io.IOException("injected"));
         assertEquals(ProjectMigrationRestorationService.Outcome.REQUIRES_HUMAN_REVIEW, failed.outcome());
         assertNotEquals("original", Files.readString(fixture.note));
     }
@@ -129,7 +137,7 @@ final class ProjectMigrationRestorationServiceTest {
     @FunctionalInterface
     private interface MigrationAction {
 
-        void apply(ProjectLocation location) throws Exception;
+        void apply(ProjectLocation location);
     }
 
     /**

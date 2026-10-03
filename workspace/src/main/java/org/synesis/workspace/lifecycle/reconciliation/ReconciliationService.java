@@ -71,8 +71,9 @@ public final class ReconciliationService {
      * @param controlRoot control project root path
      * @return discovery summary
      * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
+     * @throws IOException if lease or collaboration state cannot be read
      */
-    public ReconciliationDiscoverySummary discover(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException {
+    public ReconciliationDiscoverySummary discover(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Path root = controlRoot.toAbsolutePath().normalize();
         ProjectLocation location = projectService.locate(root);

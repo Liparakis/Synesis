@@ -10,16 +10,22 @@ import java.util.Optional;
  * Validated, typed view of the MCP {@code tools/call} envelope.
  *
  * <p>Unknown tool-specific fields remain JSON values for the owning operation to validate. The
- * envelope itself guarantees a raw tool name and a string-keyed argument object.</p>
+ * envelope itself guarantees a raw tool name and a string-keyed argument object.
  *
- * @param name raw catalog tool name, without the internal {@code synesis.} prefix
+ * @param name      raw catalog tool name, without the internal {@code synesis.} prefix
  * @param arguments optional immutable argument object; absence is distinct from an empty object
  */
 record McpToolCall(String name, Optional<Map<String, Object>> arguments) {
 
-    /** Enforces the record invariants for both decoded and directly constructed values. */
+    /** Prefix reserved for internal tool names; clients must send the raw name. */
+    private static final String INTERNAL_PREFIX = "synesis.";
+
+    /**
+     * Enforces the record invariants for both decoded and directly constructed values, and takes an
+     * unmodifiable copy of the arguments.
+     */
     McpToolCall {
-        if (name == null || name.isBlank() || name.startsWith("synesis.")) {
+        if (!isRawName(name)) {
             throw new IllegalArgumentException("raw MCP tool name required");
         }
         arguments = Objects.requireNonNull(arguments, "arguments")
@@ -37,8 +43,8 @@ record McpToolCall(String name, Optional<Map<String, Object>> arguments) {
         if (!(params instanceof Map<?, ?> values)) {
             throw new IllegalArgumentException("Invalid params: missing params object");
         }
-        Object rawName = values.get("name");
-        if (!(rawName instanceof String name) || name.isBlank() || name.startsWith("synesis.")) {
+        // The name is checked here, ahead of the arguments, so a bad name wins over a bad argument shape.
+        if (!(values.get("name") instanceof String name) || !isRawName(name)) {
             throw new IllegalArgumentException("raw MCP tool name required");
         }
 
@@ -57,6 +63,17 @@ record McpToolCall(String name, Optional<Map<String, Object>> arguments) {
             }
             arguments.put(key, entry.getValue());
         }
-        return new McpToolCall(name, Optional.of(Collections.unmodifiableMap(arguments)));
+        return new McpToolCall(name, Optional.of(arguments));
+    }
+
+    /**
+     * Checks that a tool name is non-blank and not an internal one.
+     *
+     * @param name candidate name, possibly {@code null}
+     * @return {@code true} for a usable raw tool name
+     */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
+    private static boolean isRawName(String name) {
+        return name != null && !name.isBlank() && !name.startsWith(INTERNAL_PREFIX);
     }
 }

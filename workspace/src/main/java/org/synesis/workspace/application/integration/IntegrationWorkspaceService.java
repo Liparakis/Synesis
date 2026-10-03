@@ -8,7 +8,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Manages dedicated Git integration worktrees for task integration.
@@ -112,7 +111,7 @@ public final class IntegrationWorkspaceService {
         org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, args);
     }
 
-    private static Path resolveGitTopLevel(Path path) throws IOException {
+    private static Path resolveGitTopLevel(Path path) {
         try {
             return Path.of(org.synesis.workspace.lifecycle.process.GitProcessRunner.run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
         } catch (IOException failure) {

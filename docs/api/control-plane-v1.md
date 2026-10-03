@@ -21,7 +21,9 @@ COORDINATION_SERVE_READY ... controlPlaneRoute=/api/v1 controlBootstrap=<token>
 `POST /api/v1/session` exchanges that value once for a short-lived session:
 
 ```json
-{"bootstrapToken":"<token>"}
+{
+    "bootstrapToken": "<token>"
+}
 ```
 
 The response contains `sessionToken`, `csrfToken`, and `expiresAt`. The
@@ -55,18 +57,19 @@ missing asset paths do not.
 
 ## Read endpoints
 
-| Method | Path                   | Result                                                      |
-|--------|------------------------|-------------------------------------------------------------|
-| GET    | `/api/v1/health`       | Listener, project ID, and durable sequence health           |
-| GET    | `/api/v1/snapshot`     | Complete bounded public-safe project snapshot               |
-| GET    | `/api/v1/projects`     | Bounded known-project identities and derived statuses       |
-| GET    | `/api/v1/agents`       | Participant and current work summaries                      |
-| GET    | `/api/v1/workgroups`   | WorkGroup status and participant summaries                  |
-| GET    | `/api/v1/claims`       | Work-intent selectors and conflict summaries                |
-| GET    | `/api/v1/capabilities` | Capability handles, lifecycle, and explicit contract fields |
-| GET    | `/api/v1/network`      | Physical Link, overlay, route, and relay read-model seam    |
-| GET    | `/api/v1/diagnostics`  | Safe doctor findings without raw detail maps                |
-| GET    | `/api/v1/events`       | Live SSE updates with an initial snapshot event             |
+| Method | Path                              | Result                                                      |
+|--------|-----------------------------------|-------------------------------------------------------------|
+| GET    | `/api/v1/health`                  | Listener, project ID, and durable sequence health           |
+| GET    | `/api/v1/snapshot`                | Complete bounded public-safe project snapshot               |
+| GET    | `/api/v1/projects`                | Bounded known-project identities and derived statuses       |
+| GET    | `/api/v1/selection/{selectionId}` | Safe projection of one pending local project selection      |
+| GET    | `/api/v1/agents`                  | Participant and current work summaries                      |
+| GET    | `/api/v1/workgroups`              | WorkGroup status and participant summaries                  |
+| GET    | `/api/v1/claims`                  | Work-intent selectors and conflict summaries                |
+| GET    | `/api/v1/capabilities`            | Capability handles, lifecycle, and explicit contract fields |
+| GET    | `/api/v1/network`                 | Physical Link, overlay, route, and relay read-model seam    |
+| GET    | `/api/v1/diagnostics`             | Safe doctor findings without raw detail maps                |
+| GET    | `/api/v1/events`                  | Live SSE updates with an initial snapshot event             |
 
 The snapshot is assembled explicitly from `ProjectApplicationService`, the
 durable coordination projections, provider status, and `DoctorService`.
@@ -104,7 +107,9 @@ They do not duplicate compact or SLO1/SLA2 validation or create a second Link ru
 ### `POST /api/v1/commands/invite`
 
 ```json
-{"expectedPeer":"optional-node-id"}
+{
+    "expectedPeer": "optional-node-id"
+}
 ```
 
 Delegates to the compact one-way `Onboarding.createCompactInvitation` path.
@@ -117,7 +122,9 @@ remains available through the Link API for coordinated compatibility flows.
 ### `POST /api/v1/commands/join`
 
 ```json
-{"inviteUri":"synesis://join/SLB2-..."}
+{
+    "inviteUri": "synesis://join/SLB2-..."
+}
 ```
 
 Delegates to `Onboarding.importInvitation`. For an SLB2 link, the request
@@ -131,7 +138,10 @@ expiry, and `WAITING_FOR_CONNECT` state.
 ### `POST /api/v1/commands/answer`
 
 ```json
-{"operationId":"...","answerUri":"synesis://answer/SLA2-..."}
+{
+    "operationId": "...",
+    "answerUri": "synesis://answer/SLA2-..."
+}
 ```
 
 Delegates to the stored `PreparedHost.importAnswer` for legacy SLO1/SLA2
@@ -142,7 +152,9 @@ compact flow is one-way. The legacy operation closes its one-shot handle and ret
 ### `POST /api/v1/commands/connect`
 
 ```json
-{"operationId":"..."}
+{
+    "operationId": "..."
+}
 ```
 
 Delegates to the stored `PreparedJoin.connect`, then closes the one-shot handle
@@ -151,7 +163,9 @@ and returns `CONNECTED` or a typed redacted onboarding error.
 ### `POST /api/v1/commands/cancel`
 
 ```json
-{"operationId":"..."}
+{
+    "operationId": "..."
+}
 ```
 
 Closes a pending invite or join handle before it is used and returns
@@ -160,6 +174,66 @@ and cannot be cancelled concurrently.
 
 At most 16 pending onboarding handles are retained in memory. Expired or
 completed handles are closed; links are not written to project state.
+
+### Project selection and discovery
+
+These routes use the authenticated session described above. The POST commands
+also require `X-Synesis-Control-CSRF`.
+
+`GET /api/v1/selection/{selectionId}` reads a pending selection from the local
+daemon. Its response is the daemon's bounded safe selection projection; it
+does not include the original invitation. Unknown, expired, consumed, or
+unavailable selections return the corresponding stable error envelope.
+
+`POST /api/v1/commands/select-project` selects an existing project for a
+pending daemon selection:
+
+```json
+{
+    "selectionId": "<uuid>",
+    "projectId": "<uuid>"
+}
+```
+
+The response is the daemon's safe routing result. The command accepts project
+identity, not a raw invitation or filesystem path.
+
+`POST /api/v1/commands/choose-project` opens the native Windows folder picker;
+send an empty JSON object:
+
+```json
+{}
+```
+
+The response is `{"apiVersion":"v1","state":"SELECTED","path":"...","name":"..."}`
+or `{"apiVersion":"v1","state":"CANCELLED","path":"","name":""}`.
+Headless, non-Windows, missing-picker, interrupted, and timed-out requests fail
+with `503 PROJECT_PICKER_UNAVAILABLE`.
+
+`POST /api/v1/commands/register-project` validates and remembers an already
+initialized project in the installation-local discovery registry:
+
+```json
+{
+    "path": "<project-directory>"
+}
+```
+
+The response contains `state: "REGISTERED"` and the refreshed `projects`
+list. It does not initialize the project or change its files.
+
+`POST /api/v1/commands/remove-project` removes only one entry from that local
+registry:
+
+```json
+{
+    "projectId": "<uuid>"
+}
+```
+
+The response contains `state: "REMOVED"`, the selected `projectId`, and the
+refreshed `projects` list. It never removes the project directory or its local
+Synesis state.
 
 ## SSE behavior
 
@@ -185,7 +259,13 @@ coordination listener release its executor and socket.
 Errors use this stable envelope:
 
 ```json
-{"apiVersion":"v1","error":{"code":"...","message":"..."}}
+{
+    "apiVersion": "v1",
+    "error": {
+        "code": "...",
+        "message": "..."
+    }
+}
 ```
 
 Request bodies are capped at 128 KiB. JSON is required for session and command

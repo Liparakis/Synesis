@@ -16,7 +16,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -92,13 +91,13 @@ public final class ProviderThreadOwnershipStore {
         return number;
     }
 
-    private static boolean optionalBoolean(Map<String, Object> value, String key) {
-        Object item = value.get(key);
+    private static boolean optionalPersistenceReady(Map<String, Object> value) {
+        Object item = value.get("persistenceReady");
         if (item == null) {
             return false;
         }
         if (!(item instanceof Boolean flag)) {
-            throw new IllegalArgumentException("invalid " + key);
+            throw new IllegalArgumentException("invalid persistenceReady");
         }
         return flag;
     }
@@ -298,7 +297,7 @@ public final class ProviderThreadOwnershipStore {
                     text(value, "providerThreadId"),
                     text(value, "bindingSessionId"),
                     ProviderThreadOwnershipRecord.Status.valueOf(text(value, "status")),
-                    optionalBoolean(value, "persistenceReady"),
+                    optionalPersistenceReady(value),
                     number(value, "revision").longValue(),
                     number(value, "acquiredAtEpochMillis").longValue(),
                     number(value, "updatedAtEpochMillis").longValue()));

@@ -184,13 +184,11 @@ public final class ProjectMigrationService {
      * @throws IOException if the journal cannot be written
      */
     public Result execute(Plan plan) throws IOException {
-        return executeInternal(plan, null, _ -> {
-        });
+        return executeInternal(plan, null, null);
     }
 
     Result execute(Plan plan, MigrationStep step) throws IOException {
-        return executeInternal(plan, step, _ -> {
-        });
+        return executeInternal(plan, step, null);
     }
 
     @SuppressWarnings("unused")
@@ -401,13 +399,13 @@ public final class ProjectMigrationService {
         /**
          * Applies the disposable migration.
          */
-        void apply(ProjectLocation location) throws Exception;
+        void apply(ProjectLocation location);
     }
 
     /**
      * Test-only bounded failure used to inject a post-mutation diagnostic.
      */
-    static final class MigrationFailure extends Exception {
+    static final class MigrationFailure extends RuntimeException {
 
         @java.io.Serial
         private static final long serialVersionUID = 1L;

@@ -1,7 +1,5 @@
 package org.synesis.workspace.lifecycle.repair;
 
-import org.synesis.workspace.application.project.execution.ExecutionResult;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

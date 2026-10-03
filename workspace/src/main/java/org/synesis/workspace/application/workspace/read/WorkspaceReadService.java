@@ -4,8 +4,6 @@ import org.synesis.workspace.application.workspace.ReadinessResult;
 
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
-import org.synesis.workspace.application.workspace.mutation.WorkspacePatchService;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

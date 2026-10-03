@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Persisted entry record inside an immutable persisted reconciliation plan.
+ * Persisted reconciliation plan entry.
  *
  * @param schemaVersion       schema version (1)
  * @param actionId            stable entry identifier
@@ -15,24 +15,16 @@ import java.util.Objects;
  * @param preconditionSummary summary of re-verified preconditions
  * @since 1.0
  */
-public record ReconciliationPlanEntry(
-    int schemaVersion,
-    String actionId,
-    ReconciliationAction action,
-    String targetResourceId,
-    boolean executable,
-    List<String> reasons,
-    String preconditionSummary
-) {
+public record ReconciliationPlanEntry(int schemaVersion, String actionId, ReconciliationAction action, String targetResourceId, boolean executable, List<String> reasons, String preconditionSummary) {
 
-  /**
-   * Invariant validation.
-   */
-  public ReconciliationPlanEntry {
-    Objects.requireNonNull(actionId, "actionId");
-    Objects.requireNonNull(action, "action");
-    Objects.requireNonNull(targetResourceId, "targetResourceId");
-    Objects.requireNonNull(reasons, "reasons");
-    Objects.requireNonNull(preconditionSummary, "preconditionSummary");
-  }
+    /**
+     * Requires non-null action ID, action, target resource ID, reasons, and precondition summary.
+     */
+    public ReconciliationPlanEntry {
+        Objects.requireNonNull(actionId, "actionId");
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(targetResourceId, "targetResourceId");
+        Objects.requireNonNull(reasons, "reasons");
+        Objects.requireNonNull(preconditionSummary, "preconditionSummary");
+    }
 }

@@ -8,7 +8,6 @@ import java.util.HexFormat;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Resolves one exact provider connection to its authenticated session binding.

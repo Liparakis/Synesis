@@ -17,29 +17,20 @@ import java.util.Objects;
  * @param diagnosticDetails    human-readable diagnostic summary
  * @since 1.0
  */
-public record ReconciliationExecutionRecord(
-    String executionId,
-    String planId,
-    String actionId,
-    ReconciliationAction action,
-    String targetResourceId,
-    String state,
-    String preconditionReason,
-    long timestampEpochMillis,
-    String diagnosticDetails
-) {
+public record ReconciliationExecutionRecord(String executionId, String planId, String actionId, ReconciliationAction action, String targetResourceId, String state, String preconditionReason, long timestampEpochMillis,
+                                            String diagnosticDetails) {
 
-  /**
-   * Invariant validation.
-   */
-  public ReconciliationExecutionRecord {
-    Objects.requireNonNull(executionId, "executionId");
-    Objects.requireNonNull(planId, "planId");
-    Objects.requireNonNull(actionId, "actionId");
-    Objects.requireNonNull(action, "action");
-    Objects.requireNonNull(targetResourceId, "targetResourceId");
-    Objects.requireNonNull(state, "state");
-    Objects.requireNonNull(preconditionReason, "preconditionReason");
-    Objects.requireNonNull(diagnosticDetails, "diagnosticDetails");
-  }
+    /**
+     * Requires non-null execution, plan, action, target, state, reason, and diagnostic values.
+     */
+    public ReconciliationExecutionRecord {
+        Objects.requireNonNull(executionId, "executionId");
+        Objects.requireNonNull(planId, "planId");
+        Objects.requireNonNull(actionId, "actionId");
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(targetResourceId, "targetResourceId");
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(preconditionReason, "preconditionReason");
+        Objects.requireNonNull(diagnosticDetails, "diagnosticDetails");
+    }
 }

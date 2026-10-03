@@ -1,5 +1,7 @@
 package org.synesis.workspace.application.provider;
 
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,7 +15,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;

@@ -50,29 +50,14 @@ public record AgentTaskIntent(String goal, String acceptance, List<String> likel
     }
 
     /**
-     * Constructs a producer task without an explicit parent work group.
+     * Creates a producer intent without an explicit work group or review target.
      *
-     * @param goal              concise goal
-     * @param acceptance        acceptance criteria
-     * @param likelyScopes      descriptive scopes
-     * @param knownDependencies explicitly declared dependencies
+     * @param goal concise task goal
+     * @param acceptance conditions that define completion
+     * @param likelyScopes advisory scopes that do not acquire claims
+     * @param knownDependencies explicitly declared capability dependencies
      */
-    @SuppressWarnings("unused")
     public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes, List<String> knownDependencies) {
         this(goal, acceptance, likelyScopes, knownDependencies, null, WorkIntent.Role.PRODUCER, List.of());
-    }
-
-    /**
-     * Constructs a producer task with an explicit parent work group.
-     *
-     * @param goal              concise goal
-     * @param acceptance        acceptance criteria
-     * @param likelyScopes      descriptive scopes
-     * @param knownDependencies explicitly declared dependencies
-     * @param workGroupId       parent work group
-     */
-    @SuppressWarnings("unused")
-    public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes, List<String> knownDependencies, UUID workGroupId) {
-        this(goal, acceptance, likelyScopes, knownDependencies, workGroupId, WorkIntent.Role.PRODUCER, List.of());
     }
 }

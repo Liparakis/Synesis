@@ -120,6 +120,7 @@ public final class CodexWakeAdmissionService {
         return new ActionableItem("capability-request:" + request.handle().value(), participant);
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private static boolean isDormant(CodexLifecycleStateStore.Checkpoint checkpoint) {
         return Set.of(CodexLifecycleStateStore.State.IDLE, CodexLifecycleStateStore.State.COMPLETED, CodexLifecycleStateStore.State.INTERRUPTED, CodexLifecycleStateStore.State.STOPPED).contains(checkpoint.state());
     }

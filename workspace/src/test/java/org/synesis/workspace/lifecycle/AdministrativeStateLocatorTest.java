@@ -3,6 +3,7 @@ package org.synesis.workspace.lifecycle;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.synesis.workspace.test.TestGit.run;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,17 +17,12 @@ class AdministrativeStateLocatorTest {
 
   private static void init(Path root) throws Exception {
     Files.createDirectories(root);
-    run(root, "git", "init");
-    run(root, "git", "config", "user.name", "Test User");
-    run(root, "git", "config", "user.email", "test@example.com");
+    run(root, "init");
+    run(root, "config", "user.name", "Test User");
+    run(root, "config", "user.email", "test@example.com");
     Files.writeString(root.resolve("README.md"), "baseline\n");
-    run(root, "git", "add", "README.md");
-    run(root, "git", "commit", "-m", "baseline");
-  }
-
-  private static void run(Path directory, String... command) throws Exception {
-    org.synesis.workspace.test.TestGit.run(directory,
-        java.util.Arrays.copyOfRange(command, 1, command.length));
+    run(root, "add", "README.md");
+    run(root, "commit", "-m", "baseline");
   }
 
   @Test

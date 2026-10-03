@@ -22,78 +22,75 @@ import java.util.Objects;
  * @param revision             adapter-private record revision
  * @param updatedAtEpochMillis record update time
  */
-public record ManagedAttachmentRecord(int schemaVersion, String projectId, String provider,
-                                      ProviderContinuityMode mode, String bindingSessionId,
-                                      String threadId, long generation, String proofHash,
-                                      String runtimeHomeId, Status status, long revision,
-                                      long updatedAtEpochMillis) {
+public record ManagedAttachmentRecord(int schemaVersion, String projectId, String provider, ProviderContinuityMode mode, String bindingSessionId, String threadId, long generation, String proofHash, String runtimeHomeId,
+                                      Status status, long revision, long updatedAtEpochMillis) {
 
-  /**
-   * Current durable record format.
-   */
-  public static final int CURRENT_SCHEMA_VERSION = 1;
-
-  /**
-   * Validates the durable format and bounded fields.
-   */
-  public ManagedAttachmentRecord {
-    if (schemaVersion != CURRENT_SCHEMA_VERSION) {
-      throw new IllegalArgumentException("unsupported managed attachment format");
-    }
-    requireText(projectId, "projectId");
-    requireText(provider, "provider");
-    Objects.requireNonNull(mode, "mode");
-    requireText(bindingSessionId, "bindingSessionId");
-    if (threadId == null && status != Status.PENDING_ACTIVATION) {
-      throw new IllegalArgumentException("threadId is required outside pending activation");
-    }
-    if (threadId != null) {
-      requireText(threadId, "threadId");
-    }
-    if (generation < 1) {
-      throw new IllegalArgumentException("generation must be positive");
-    }
-    requireHex(proofHash, "proofHash");
-    requireText(runtimeHomeId, "runtimeHomeId");
-    Objects.requireNonNull(status, "status");
-    if (revision < 1 || updatedAtEpochMillis <= 0) {
-      throw new IllegalArgumentException("invalid managed attachment revision");
-    }
-  }
-
-  private static void requireText(String value, String label) {
-    Objects.requireNonNull(value, label);
-    if (value.isBlank() || value.length() > 8_192) {
-      throw new IllegalArgumentException(label + " is invalid");
-    }
-  }
-
-  private static void requireHex(String value, String label) {
-    requireText(value, label);
-    if (!value.matches("[0-9a-fA-F]{64}")) {
-      throw new IllegalArgumentException(label + " is not a SHA-256 digest");
-    }
-  }
-
-  /**
-   * Durable attachment lifecycle states.
-   */
-  public enum Status {
     /**
-     * Current attachment is accepted.
+     * Current durable record format.
      */
-    ACTIVE,
+    public static final int CURRENT_SCHEMA_VERSION = 1;
+
     /**
-     * Proof exists but the trusted provider-thread join is not complete.
+     * Validates the durable format and bounded fields.
      */
-    PENDING_ACTIVATION,
+    public ManagedAttachmentRecord {
+        if (schemaVersion != CURRENT_SCHEMA_VERSION) {
+            throw new IllegalArgumentException("unsupported managed attachment format");
+        }
+        requireText(projectId, "projectId");
+        requireText(provider, "provider");
+        Objects.requireNonNull(mode, "mode");
+        requireText(bindingSessionId, "bindingSessionId");
+        if (threadId == null && status != Status.PENDING_ACTIVATION) {
+            throw new IllegalArgumentException("threadId is required outside pending activation");
+        }
+        if (threadId != null) {
+            requireText(threadId, "threadId");
+        }
+        if (generation < 1) {
+            throw new IllegalArgumentException("generation must be positive");
+        }
+        requireHex(proofHash);
+        requireText(runtimeHomeId, "runtimeHomeId");
+        Objects.requireNonNull(status, "status");
+        if (revision < 1 || updatedAtEpochMillis <= 0) {
+            throw new IllegalArgumentException("invalid managed attachment revision");
+        }
+    }
+
+    private static void requireText(String value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value.isBlank() || value.length() > 8_192) {
+            throw new IllegalArgumentException(label + " is invalid");
+        }
+    }
+
+    private static void requireHex(String value) {
+        requireText(value, "proofHash");
+        if (!value.matches("[0-9a-fA-F]{64}")) {
+            throw new IllegalArgumentException("proofHash is not a SHA-256 digest");
+        }
+    }
+
     /**
-     * No current process is attached, but replacement may be authenticated.
+     * Durable attachment lifecycle states.
      */
-    DISCONNECTED,
-    /**
-     * Binding or logical session is terminal and cannot be revived.
-     */
-    TERMINAL
-  }
+    public enum Status {
+        /**
+         * Current attachment is accepted.
+         */
+        ACTIVE,
+        /**
+         * Proof exists but the trusted provider-thread join is not complete.
+         */
+        PENDING_ACTIVATION,
+        /**
+         * No current process is attached, but replacement may be authenticated.
+         */
+        DISCONNECTED,
+        /**
+         * Binding or logical session is terminal and cannot be revived.
+         */
+        TERMINAL
+    }
 }

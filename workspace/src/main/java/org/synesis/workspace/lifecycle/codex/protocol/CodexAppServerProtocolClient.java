@@ -290,6 +290,27 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
         // the close and bound the join; a verified hard stop normally releases
         // the pipe, while an unverified attachment is reported rather than
         // stalling the production host.
+        closeStreamsAndWait();
+    }
+
+    /** Closes process pipes off-thread and bounds the reader and closer joins. */
+    private void closeStreamsAndWait() {
+        joinReaderAndStreamCloser(createStreamCloser());
+    }
+
+    /** Starts the pipe closer and bounds waiting for both reader threads. */
+    private void joinReaderAndStreamCloser(Thread streamCloser) {
+        streamCloser.start();
+        try {
+            reader.join(500L);
+            streamCloser.join(500L);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Creates the daemon that closes potentially blocked process-pipe streams off-thread. */
+    private Thread createStreamCloser() {
         Thread streamCloser = new Thread(() -> {
             try {
                 stdout.close();
@@ -303,13 +324,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
             }
         }, "synesis-codex-protocol-stream-closer-" + connectionGeneration);
         streamCloser.setDaemon(true);
-        streamCloser.start();
-        try {
-            reader.join(500L);
-            streamCloser.join(500L);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
+        return streamCloser;
     }
 
     private void readLoop() {

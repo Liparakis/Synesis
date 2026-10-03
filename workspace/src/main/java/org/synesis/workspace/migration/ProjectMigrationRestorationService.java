@@ -28,9 +28,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class ProjectMigrationRestorationService {
 
-    /**
-     * Creates a restoration service.
-     */
+    /** Creates a service for verified project-metadata restoration. */
     public ProjectMigrationRestorationService() {
     }
 
@@ -54,7 +52,12 @@ public final class ProjectMigrationRestorationService {
         } else if (!"MISSING".equals(expectedCurrentHash)) {
             throw new IOException("project_restore_target_changed");
         }
-        injector.beforeReplace(target);
+        if (injector != null) {
+            IOException injectedFailure = injector.failureBeforeReplace(target);
+            if (injectedFailure != null) {
+                throw injectedFailure;
+            }
+        }
         Path temporary = target.resolveSibling(target.getFileName() + ".restore-" + UUID.randomUUID());
         Files.write(temporary, backup, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         if (!hash(Files.readAllBytes(temporary)).equals(file.backupHash())) {
@@ -359,8 +362,7 @@ public final class ProjectMigrationRestorationService {
      * @return bounded restoration result
      */
     public Result restore(Path adminRoot, BackupManifest manifest, ProjectLocation location, PostMigrationReplayVerifier.MigrationSemanticSnapshot before, Map<Path, String> expectedCurrentHashes) {
-        return restore(adminRoot, manifest, location, before, expectedCurrentHashes, _ -> {
-        });
+        return restore(adminRoot, manifest, location, before, expectedCurrentHashes, null);
     }
 
     Result restore(Path adminRoot,
@@ -498,10 +500,12 @@ public final class ProjectMigrationRestorationService {
     interface RestoreFailureInjector {
 
         /**
-         * Invokes before replacing one target. @param target target path @throws IOException injected
-         * failure
+         * Supplies an injected failure before the service replaces one target.
+         *
+         * @param target target path about to be restored
+         * @return injected failure, or {@code null} to allow the restoration
          */
-        void beforeReplace(Path target) throws IOException;
+        IOException failureBeforeReplace(Path target);
     }
 
     /**

@@ -96,6 +96,12 @@ public final class TaskSnapshotService {
         return Optional.of(changedPaths.stream().filter(path -> !manifest.allowedArtifacts().contains(path)).toList());
     }
 
+    /** Inspects a worktree and applies the same artifact policy used by both publication gates. */
+    private Optional<List<String>> publishableWorktreeSourceChanges(Path worktreePath, String laneBaseCommit) throws IOException {
+        List<String> changedPaths = inspectWorktreeChanges(worktreePath, laneBaseCommit, true).changedPaths();
+        return publishableSourceChanges(changedPaths);
+    }
+
     private static List<String> deriveChangedPaths(Path workdir, String baseCommit, boolean includeWorkingTree) {
         if (baseCommit.isBlank()) {
             return List.of();
@@ -329,8 +335,7 @@ public final class TaskSnapshotService {
     public boolean hasPublishableChanges(Path workerWorktreePath, List<ResourceSelector> claims, String laneBaseCommit, boolean allowOtherClaimedChanges) throws IOException {
         Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
         Objects.requireNonNull(claims, "claims");
-        List<String> allChangedPaths = inspectWorktreeChanges(workerWorktreePath, laneBaseCommit, true).changedPaths();
-        Optional<List<String>> publishableChanges = publishableSourceChanges(allChangedPaths);
+        Optional<List<String>> publishableChanges = publishableWorktreeSourceChanges(workerWorktreePath, laneBaseCommit);
         if (publishableChanges.isEmpty()) {
             return false;
         }
@@ -390,8 +395,7 @@ public final class TaskSnapshotService {
         if (foreignClaims.isEmpty()) {
             return hasPublishableChanges(workerWorktreePath, laneClaims, laneBaseCommit, true) && hasPublishableChanges(workerWorktreePath, participantClaims, laneBaseCommit, false);
         }
-        List<String> allChangedPaths = inspectWorktreeChanges(workerWorktreePath, laneBaseCommit, true).changedPaths();
-        Optional<List<String>> publishableChanges = publishableSourceChanges(allChangedPaths);
+        Optional<List<String>> publishableChanges = publishableWorktreeSourceChanges(workerWorktreePath, laneBaseCommit);
         if (publishableChanges.isEmpty()) {
             return false;
         }

@@ -64,16 +64,26 @@ public final class CollaborationResponseMapper {
         return map;
     }
 
+    /**
+     * Appends the fields shared by workspace and MCP coordination-request projections.
+     *
+     * @param fields destination response map
+     * @param request typed coordination request
+     */
+    public static void appendRequestIdentityFields(Map<String, Object> fields, CoordinationRequest request) {
+        fields.put("requester", request.requester());
+        fields.put("target", request.target());
+        fields.put("conflictingIntentId", request.conflictingIntentId().toString());
+        fields.put("reviewedIntentId", request.conflictingIntentId().toString());
+        fields.put("reviewedParticipantId", request.target());
+        fields.put("reviewerParticipant", request.requester());
+    }
+
     static Map<String, Object> requestMap(CoordinationRequest request) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("requestId", request.requestId().toString());
         map.put("inboxItemId", request.requestId().toString());
-        map.put("requester", request.requester());
-        map.put("target", request.target());
-        map.put("conflictingIntentId", request.conflictingIntentId().toString());
-        map.put("reviewedIntentId", request.conflictingIntentId().toString());
-        map.put("reviewedParticipantId", request.target());
-        map.put("reviewerParticipant", request.requester());
+        appendRequestIdentityFields(map, request);
         map.put("kind", request.kind().name());
         map.put("proposal", request.proposal());
         if (request.snapshotId() != null) {
@@ -118,15 +128,7 @@ public final class CollaborationResponseMapper {
 
     static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot, PredictionEventStore store) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("taskId", snapshot.taskId().toString());
-        map.put("snapshotId", snapshot.snapshotId());
-        map.put("baseCommit", snapshot.baseCommit());
-        map.put("commitSha", snapshot.commitSha());
-        map.put("changedPaths", snapshot.changedPaths());
-        map.put("summary", snapshot.summary());
-        map.put("createdAtMillis", snapshot.createdAtMillis());
-        map.put("laneId", snapshot.provenance().laneId().toString());
-        map.put("claimEpoch", snapshot.provenance().claimEpoch());
+        appendSnapshotIdentityFields(map, snapshot);
         map.put("workGroupId", snapshot.provenance().workGroupId().toString());
         map.put("participant", snapshot.provenance().participant());
         map.put("reviewRequired", snapshot.reviewRequired());
@@ -134,6 +136,24 @@ public final class CollaborationResponseMapper {
         store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId())
                 .ifPresent(decision -> map.put("reviewDecision", Map.of("grantId", decision.grantId().toString(), "snapshotId", decision.snapshotId(), "result", decision.result())));
         return map;
+    }
+
+    /**
+     * Appends the stable snapshot fields shared by workspace and MCP projections.
+     *
+     * @param fields destination response map
+     * @param snapshot immutable task snapshot
+     */
+    public static void appendSnapshotIdentityFields(Map<String, Object> fields, TaskSnapshotRecord snapshot) {
+        fields.put("taskId", snapshot.taskId().toString());
+        fields.put("snapshotId", snapshot.snapshotId());
+        fields.put("baseCommit", snapshot.baseCommit());
+        fields.put("commitSha", snapshot.commitSha());
+        fields.put("changedPaths", snapshot.changedPaths());
+        fields.put("summary", snapshot.summary());
+        fields.put("createdAtMillis", snapshot.createdAtMillis());
+        fields.put("laneId", snapshot.provenance().laneId().toString());
+        fields.put("claimEpoch", snapshot.provenance().claimEpoch());
     }
 
     static Map<String, Object> selectorMap(ResourceSelector selector) {

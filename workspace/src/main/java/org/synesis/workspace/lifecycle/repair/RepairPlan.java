@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Immutable persisted repair plan document stored outside control repository under external
+ * Persisted repair plan document stored outside control repository under external
  * workspace root administration directory.
  *
  * @param schemaVersion           schema version (1)
@@ -17,33 +17,23 @@ import java.util.Objects;
  * @param supportedRepairsCount   count of executable supported repair actions
  * @param unsupportedCount        count of unsupported findings
  * @param contentHash             SHA-256 canonical plan content hash
- * @param entries                 immutable list of repair plan entries
+ * @param entries                 repair plan entries in persisted order
  * @since 1.0
  */
-public record RepairPlan(
-    int schemaVersion,
-    String planId,
-    String projectId,
-    String controlRepositoryPath,
-    String externalWorkspaceRoot,
-    long createdAtEpochMillis,
-    String doctorReportFingerprint,
-    int supportedRepairsCount,
-    int unsupportedCount,
-    String contentHash,
-    List<RepairPlanEntry> entries
-) {
+public record RepairPlan(int schemaVersion, String planId, String projectId, String controlRepositoryPath, String externalWorkspaceRoot, long createdAtEpochMillis, String doctorReportFingerprint,
+                         int supportedRepairsCount, int unsupportedCount, String contentHash, List<RepairPlanEntry> entries) {
 
-  /**
-   * Invariant validation.
-   */
-  public RepairPlan {
-    Objects.requireNonNull(planId, "planId");
-    Objects.requireNonNull(projectId, "projectId");
-    Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
-    Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
-    Objects.requireNonNull(doctorReportFingerprint, "doctorReportFingerprint");
-    Objects.requireNonNull(contentHash, "contentHash");
-    Objects.requireNonNull(entries, "entries");
-  }
+    /**
+     * Requires non-null plan/project IDs, repository/workspace paths, doctor fingerprint, content
+     * hash, and entries.
+     */
+    public RepairPlan {
+        Objects.requireNonNull(planId, "planId");
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(controlRepositoryPath, "controlRepositoryPath");
+        Objects.requireNonNull(externalWorkspaceRoot, "externalWorkspaceRoot");
+        Objects.requireNonNull(doctorReportFingerprint, "doctorReportFingerprint");
+        Objects.requireNonNull(contentHash, "contentHash");
+        Objects.requireNonNull(entries, "entries");
+    }
 }

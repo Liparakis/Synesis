@@ -32,7 +32,6 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Application service for owners to publish an immutable implementation snapshot.

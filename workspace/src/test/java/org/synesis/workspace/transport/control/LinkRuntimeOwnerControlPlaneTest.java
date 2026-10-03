@@ -16,7 +16,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.io.TempDir;
@@ -163,7 +162,7 @@ class LinkRuntimeOwnerControlPlaneTest {
                 local);
 
         assertThrows(IllegalArgumentException.class, () -> new LinkRuntimeOwner(new Onboarding(root.resolve(".synesis/local/profile/link"), ignored -> {
-        }), local, Optional.of(membership), ignored -> {
+        }), local, membership, ignored -> {
         }, new ProjectIdentity(UUID.randomUUID(), now)));
     }
 
@@ -183,7 +182,7 @@ class LinkRuntimeOwnerControlPlaneTest {
             CoordinationService coordination = new CoordinationService(new PredictionEventStore(synesis.resolve("coordination"), projectId), identity);
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
             Onboarding onboarding = new Onboarding(profile.resolve("link"), eventHub::publish);
-            owner = new LinkRuntimeOwner(onboarding, identity, Optional.of(membership), eventHub::publish, new ProjectIdentity(projectId, createdAt));
+            owner = new LinkRuntimeOwner(onboarding, identity, membership, eventHub::publish, new ProjectIdentity(projectId, createdAt));
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner));
             handler = new ControlPlaneHttpHandler(readModel, coordination, owner, eventHub);
             server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null, handler);

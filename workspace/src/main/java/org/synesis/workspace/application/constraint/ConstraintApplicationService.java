@@ -15,7 +15,6 @@ import org.synesis.projectrecord.persistence.DecisionStore;
 import org.synesis.projectrecord.security.Ed25519Signer;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
  * Creates and persists typed project constraints without CLI concerns.

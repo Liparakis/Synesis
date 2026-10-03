@@ -583,9 +583,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      *
      * @param request immutable HARD_STOP request
      * @return structured termination response
-     * @throws Exception when checkpoint or evidence persistence fails
+     * @throws IOException if ownership, termination evidence, or lifecycle state cannot be verified
      */
-    public CodexLifecycleHttpClient.Response hardStop(LifecycleControlRequestEnvelope request) throws Exception {
+    public CodexLifecycleHttpClient.Response hardStop(LifecycleControlRequestEnvelope request) throws IOException {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.HARD_STOP);
         synchronized (stateLock) {
             CodexLifecycleStateStore.Checkpoint current = checkpoint();
@@ -626,7 +626,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                             false,
                             System.currentTimeMillis());
                 }
-                current = persistEvidenceCompleteness(current, attachment.journal());
+                persistEvidenceCompleteness(current, attachment.journal());
                 if (active == attachment) {
                     active = null;
                 }
@@ -779,9 +779,8 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      *
      * @param request immutable STATUS request
      * @return bounded status response
-     * @throws IOException when the checkpoint is unreadable
      */
-    public CodexLifecycleHttpClient.Response status(LifecycleControlRequestEnvelope request) throws IOException {
+    public CodexLifecycleHttpClient.Response status(LifecycleControlRequestEnvelope request) {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.STATUS);
         return statusUnchecked();
     }
@@ -1189,9 +1188,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private CodexLifecycleStateStore.Checkpoint persistEvidenceCompleteness(CodexLifecycleStateStore.Checkpoint prior, CodexEvidenceJournal journal) throws IOException {
+    private void persistEvidenceCompleteness(CodexLifecycleStateStore.Checkpoint prior, CodexEvidenceJournal journal) throws IOException {
         if (journal == null || journal.evidenceComplete() || !prior.evidenceComplete()) {
-            return prior;
+            return;
         }
         CodexLifecycleStateStore.Checkpoint incomplete = new CodexLifecycleStateStore.Checkpoint(prior.bindingSessionId(),
                 prior.projectId(),
@@ -1211,7 +1210,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 false,
                 System.currentTimeMillis());
         stateStore.write(incomplete);
-        return incomplete;
     }
 
     private void notifyWaiters(CodexLifecycleStateStore.Checkpoint checkpoint) {
@@ -1272,6 +1270,13 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
+    /** Rejects managed-tree death evidence that does not prove the requested generation stopped. */
+    static void requireManagedTreeDeathEvidence(long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence) throws IOException {
+        if (evidence == null || evidence.generation() != attachmentGeneration) {
+            throw new IOException("managed_process_tree_death_evidence_mismatch");
+        }
+    }
+
     private ProcessTreeTerminator.Result terminateProcessTree(AppServerProcess process, long attachmentGeneration, Duration grace, Instant deadline, CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
         if (process != null && process.supervisor() != null) {
             ManagedProcessTreeSupervisor.DeathEvidence evidence = process.supervisor()
@@ -1321,6 +1326,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @return exact managed thread, or {@code null} for ordinary start
          * @throws IOException when managed pin state is unavailable
          */
+        @SuppressWarnings("RedundantThrows") // Managed launchers can fail when their exact persisted thread pin is unavailable.
         default String expectedInitialThreadId(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration) throws IOException {
             return null;
         }
@@ -1334,6 +1340,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @param returnedThreadId     provider-returned thread selector
          * @throws IOException when the returned selector is not trusted
          */
+        @SuppressWarnings("EmptyMethod") // Ordinary launchers have no managed provider pin to verify.
         default void verifyReturnedThread(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration, String returnedThreadId) throws IOException {
             // Ordinary launchers have no managed provider pin to verify.
         }
@@ -1347,6 +1354,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @param returnedThreadId     exact provider-returned thread selector
          * @throws IOException when the binding cannot be finalized
          */
+        @SuppressWarnings("EmptyMethod") // Ordinary launchers have no managed provider-thread record.
         default void finalizeManagedThread(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration, String returnedThreadId) throws IOException {
             // Ordinary launchers have no managed provider-thread record.
         }
@@ -1360,6 +1368,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @param turnId               exact completed turn, when supplied by the provider
          * @throws IOException when the completion is outside the active scope
          */
+        @SuppressWarnings("EmptyMethod") // Ordinary launchers have no managed persistence boundary.
         default void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration, String threadId, String turnId) throws IOException {
             // Ordinary launchers have no managed persistence boundary.
         }
@@ -1371,6 +1380,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @param attachmentGeneration local attachment generation
          * @throws IOException when managed activation cannot be committed
          */
+        @SuppressWarnings("EmptyMethod") // Ordinary launchers have no managed activation gate.
         default void activateManagedAttachment(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration) throws IOException {
             // Ordinary launchers have no managed activation gate.
         }
@@ -1380,9 +1390,9 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          *
          * @param authority            verified authority context
          * @param attachmentGeneration stopped managed generation
-         * @throws IOException when managed state cannot be updated
          */
-        default void managedTreeStopped(AuthorityContext authority, long attachmentGeneration) throws IOException {
+        @SuppressWarnings({"EmptyMethod", "unused"})
+        default void managedTreeStopped(AuthorityContext authority, long attachmentGeneration) {
             // Ordinary launchers have no managed runtime record.
         }
 
@@ -1395,6 +1405,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
          * @throws IOException when managed state cannot be updated
          */
         default void managedTreeStopped(LifecycleControlRequestEnvelope.AuthorityContext authority, long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence) throws IOException {
+            requireManagedTreeDeathEvidence(attachmentGeneration, evidence);
             managedTreeStopped(authority, attachmentGeneration);
         }
     }

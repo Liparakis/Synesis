@@ -28,7 +28,6 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.command.PhysicalWorktreeIdentity;
 import org.synesis.workspace.lifecycle.command.ProjectCommandStore;

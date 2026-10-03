@@ -50,8 +50,7 @@ public final class ActionGuardrail {
                 java.util.UUID projId = null;
                 Path projectJson = profile.getParent() != null ? profile.getParent().resolve("project.json") : null;
                 if (projectJson != null && Files.exists(projectJson)) {
-                    Object parsed = org.synesis.workspace.infrastructure.json.ProviderJson.parse(Files.readString(
-                            projectJson));
+                    Object parsed = org.synesis.workspace.infrastructure.json.ProviderJson.parse(Files.readString(projectJson));
                     if (parsed instanceof java.util.Map<?, ?> map && map.get("projectId") instanceof String s) {
                         projId = java.util.UUID.fromString(s);
                     }
@@ -93,15 +92,13 @@ public final class ActionGuardrail {
         }
 
         if (blockingConstraint != null) {
-            String denialReason = "Synesis blocked this edit.\n\n" + "Constraint: " + blockingConstraint.title() + "\n"
-                    + "Effect: BLOCK\n" + "Scope: " + String.join(", ", blockingConstraint.scopes()) + "\n" + "Reason: "
+            String denialReason = "Synesis blocked this edit.\n\n" + "Constraint: " + blockingConstraint.title() + "\n" + "Effect: BLOCK\n" + "Scope: " + String.join(", ", blockingConstraint.scopes()) + "\n" + "Reason: "
                     + blockingConstraint.rationale() + "\n\n" + "Re-plan without modifying the protected scope.";
             return new Response(Outcome.BLOCKED, blockingConstraint, warningConstraint, denialReason);
         }
 
         if (warningConstraint != null) {
-            String warnMsg = "Synesis Warning: Active project constraint '" + warningConstraint.title()
-                    + "' applies to this scope. Rationale: " + warningConstraint.rationale();
+            String warnMsg = "Synesis Warning: Active project constraint '" + warningConstraint.title() + "' applies to this scope. Rationale: " + warningConstraint.rationale();
             return new Response(Outcome.WARNING, null, warningConstraint, warnMsg);
         }
 
@@ -117,25 +114,16 @@ public final class ActionGuardrail {
      * @param requesterNodeId authenticated requester node
      * @return policy or ownership response
      */
-    public static Response evaluate(Path profile,
-            Request request,
-            OwnershipRegistry ownership,
-            String requesterNodeId) {
+    public static Response evaluate(Path profile, Request request, OwnershipRegistry ownership, String requesterNodeId) {
         Response policy = evaluate(profile, request);
         if (policy.outcome() != Outcome.ALLOWED && policy.outcome() != Outcome.WARNING) {
             return policy;
         }
-        String capability =
-                request.description() != null && request.description().startsWith("capability=") ? request.description()
-                                                                                                   .substring(
-                                                                                                           "capability=".length())
-                                                                                                   .trim()
-                        : request.toolName();
+        String capability = request.description() != null && request.description().startsWith("capability=") ? request.description().substring("capability=".length()).trim() : request.toolName();
         OwnershipDecision decision = ownership.evaluate(capability, requesterNodeId);
         if (decision.result() == OwnershipRegistry.Result.REQUEST_OWNER) {
-            String message = "REQUEST_OWNER capability=" + capability + " ownerNode=" + decision.owner().nodeId()
-                    + " ownerSupervisor=" + decision.owner().supervisorId() + " intentVersion=" + decision.owner()
-                    .intentVersion();
+            String message =
+                    "REQUEST_OWNER capability=" + capability + " ownerNode=" + decision.owner().nodeId() + " ownerSupervisor=" + decision.owner().supervisorId() + " intentVersion=" + decision.owner().intentVersion();
             return new Response(Outcome.REQUEST_OWNER, null, policy.warningConstraint(), message);
         }
         return policy;
@@ -191,8 +179,7 @@ public final class ActionGuardrail {
      * @param warningConstraint  matched WARN constraint, if any
      * @param message            human readable status explanation or denial reason
      */
-    public record Response(Outcome outcome, ProjectConstraint blockingConstraint, ProjectConstraint warningConstraint,
-                           String message) {
+    public record Response(Outcome outcome, ProjectConstraint blockingConstraint, ProjectConstraint warningConstraint, String message) {
 
     }
 }

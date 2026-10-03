@@ -79,24 +79,24 @@ public final class ValidationWorkspaceService {
     }
 
     private static String gitRevParse(Path workdir) throws IOException {
-        return org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, "rev-parse", "HEAD").trim();
+        return GitProcessRunner.run(workdir, "rev-parse", "HEAD").trim();
     }
 
     private static String gitDiff(Path workdir, String from, String to) throws IOException {
-        return org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, "diff", from, to);
+        return GitProcessRunner.run(workdir, "diff", from, to);
     }
 
     private static void applyPatch(Path worktreeDir, Path patchFile) throws IOException {
-        org.synesis.workspace.lifecycle.process.GitProcessRunner.run(worktreeDir, "apply", "--3way", patchFile.toAbsolutePath().toString());
+        GitProcessRunner.run(worktreeDir, "apply", "--3way", patchFile.toAbsolutePath().toString());
     }
 
     private static void runGit(Path workdir, String... args) throws IOException {
-        org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, args);
+        GitProcessRunner.run(workdir, args);
     }
 
-    private static Path resolveGitTopLevel(Path path) throws IOException {
+    private static Path resolveGitTopLevel(Path path) {
         try {
-            return Path.of(org.synesis.workspace.lifecycle.process.GitProcessRunner.run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
+            return Path.of(GitProcessRunner.run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
         } catch (IOException failure) {
             return path;
         }

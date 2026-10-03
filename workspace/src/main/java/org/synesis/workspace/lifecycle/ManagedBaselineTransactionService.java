@@ -39,8 +39,7 @@ public final class ManagedBaselineTransactionService {
      * Creates a service rooted at the host's Synesis state directory.
      */
     public ManagedBaselineTransactionService() {
-        this(new AdministrativeStateLocator(), new ManagedPathPolicy(), _ -> {
-        });
+        this(new AdministrativeStateLocator(), new ManagedPathPolicy(), null);
     }
 
     /**
@@ -50,8 +49,7 @@ public final class ManagedBaselineTransactionService {
      * @param pathPolicy managed path policy
      */
     public ManagedBaselineTransactionService(AdministrativeStateLocator locator, ManagedPathPolicy pathPolicy) {
-        this(locator, pathPolicy, _ -> {
-        });
+        this(locator, pathPolicy, null);
     }
 
     /**
@@ -63,12 +61,23 @@ public final class ManagedBaselineTransactionService {
      *
      * @param locator    administrative state locator
      * @param pathPolicy managed path policy
-     * @param phaseHook  phase observer used by tests or diagnostics
+     * @param phaseHook  phase observer used by tests or diagnostics, or {@code null} to disable it
      */
     public ManagedBaselineTransactionService(AdministrativeStateLocator locator, ManagedPathPolicy pathPolicy, PhaseHook phaseHook) {
         this.locator = Objects.requireNonNull(locator, "locator");
         this.pathPolicy = Objects.requireNonNull(pathPolicy, "pathPolicy");
-        this.phaseHook = Objects.requireNonNull(phaseHook, "phaseHook");
+        this.phaseHook = phaseHook;
+    }
+
+    /**
+     * Notifies the optional crash-recovery test hook after a durable phase transition.
+     *
+     * @param phase phase durably written
+     */
+    private void notifyPhase(Phase phase) {
+        if (phaseHook != null) {
+            phaseHook.after(phase);
+        }
     }
 
     private static boolean differsDigest(Path path, String expected) throws IOException {
@@ -254,11 +263,11 @@ public final class ManagedBaselineTransactionService {
             Journal journal = new Journal(transactionId, resolution.repositoryIdentity(), originalHead, branchRef(root), Phase.PREPARED, originalIndex, originalIndex.rawIndexDigest(), "", "", "");
             journal = journal.withManagedPaths(states, expected);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.PREPARED);
+            notifyPhase(Phase.PREPARED);
             writeManagedFiles(root, normalizedFiles);
             journal = journal.withPhase(Phase.FILES_WRITTEN);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.FILES_WRITTEN);
+            notifyPhase(Phase.FILES_WRITTEN);
             ManagedPathPolicy.TransactionOwnership ownership = new ManagedPathPolicy.TransactionOwnership(resolution.repositoryIdentity(), transactionId, absent, expected, states);
             ManagedPathPolicy.Report afterWrite = pathPolicy.inspect(root, Optional.of(ownership));
             if (afterWrite.blocked()) {
@@ -272,7 +281,7 @@ public final class ManagedBaselineTransactionService {
             String commit = createAdministrativeCommit(root, originalHead, normalizedFiles.keySet(), transactionId);
             journal = journal.withPhase(Phase.COMMIT_CREATED).withCommit(commit);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.COMMIT_CREATED);
+            notifyPhase(Phase.COMMIT_CREATED);
             ManagedPathPolicy.Report beforeRef = pathPolicy.inspect(root, Optional.of(ownership));
             if (beforeRef.blocked()) {
                 throw failure("MANAGED_PATH_PROVENANCE_MISMATCH", blockingPaths(beforeRef));
@@ -280,20 +289,20 @@ public final class ManagedBaselineTransactionService {
             advanceRef(root, journal.refName(), commit, originalHead);
             journal = journal.withPhase(Phase.REF_ADVANCED);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.REF_ADVANCED);
+            notifyPhase(Phase.REF_ADVANCED);
             synchronizeRealIndex(root, resolution, journal, originalIndex, commit);
             journal = journal.withPhase(Phase.CONTROL_INDEX_SYNCHRONIZED);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.CONTROL_INDEX_SYNCHRONIZED);
+            notifyPhase(Phase.CONTROL_INDEX_SYNCHRONIZED);
             journal = journal.withPhase(Phase.LOCAL_STATE_INITIALIZED);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.LOCAL_STATE_INITIALIZED);
+            notifyPhase(Phase.LOCAL_STATE_INITIALIZED);
             journal = journal.withPhase(Phase.PROVIDERS_REFRESHED);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.PROVIDERS_REFRESHED);
+            notifyPhase(Phase.PROVIDERS_REFRESHED);
             journal = journal.withPhase(Phase.COMPLETE);
             writeJournal(resolution, journal);
-            phaseHook.after(Phase.COMPLETE);
+            notifyPhase(Phase.COMPLETE);
             return new Result(transactionId, journal.phase(), originalHead, commit, resolution.administrativeRoot(), List.of());
         } catch (BaselineFailure failure) {
             throw failure;
@@ -593,9 +602,8 @@ public final class ManagedBaselineTransactionService {
          * Observes a durable phase.
          *
          * @param phase phase just persisted
-         * @throws IOException when the caller wants to simulate process loss
          */
-        void after(Phase phase) throws IOException;
+        void after(Phase phase);
     }
 
     /**

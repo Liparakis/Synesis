@@ -61,6 +61,7 @@ public record ExecutionResult(ProjectProcessExecutor.Outcome outcome, Integer ex
      *
      * @return true only for a completed zero exit
      */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean succeeded() {
         return outcome == ProjectProcessExecutor.Outcome.COMPLETED;
     }

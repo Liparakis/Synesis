@@ -1,5 +1,15 @@
 package org.synesis.workspace.lifecycle.codex;
 
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
+import org.synesis.workspace.lifecycle.codex.CodexAppServerLifecycleService.ProcessLauncher;
+import org.synesis.workspace.lifecycle.codex.CodexWakeAdmissionService.LifecycleDispatcher;
+import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient.Response;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.AuthorityContext;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.Classification;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.Operation;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.SignedEnvelope;
+import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore.Checkpoint;
 import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger;
 
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
@@ -17,14 +27,17 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -43,11 +56,17 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService.BindingException;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import com.sun.net.httpserver.HttpHandler;
+import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger.Disposition;
+import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger.Entry;
+import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger.PrepareResult;
+import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger.State;
 
 /**
  * Long-lived Codex lifecycle owner retained by {@code coordination serve}.
@@ -61,7 +80,7 @@ import com.sun.net.httpserver.HttpHandler;
  * @since 1.0
  */
 @SuppressWarnings({"resource", "DuplicatedCode"})
-public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissionService.LifecycleDispatcher {
+public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatcher {
 
     /**
      * Codex-only loopback route mounted by the existing coordination listener.
@@ -108,7 +127,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
      * @param terminator    process-tree terminator
      * @throws IOException when ownership or durable state cannot be established
      */
-    public ProjectRuntimeHost(ProjectLocation location, NodeIdentity ownerIdentity, CodexAppServerLifecycleService.ProcessLauncher launcher, ProcessTreeTerminator terminator) throws IOException {
+    public ProjectRuntimeHost(ProjectLocation location, NodeIdentity ownerIdentity, ProcessLauncher launcher, ProcessTreeTerminator terminator) throws IOException {
         this.location = Objects.requireNonNull(location, "location");
         this.ownerIdentity = Objects.requireNonNull(ownerIdentity, "ownerIdentity");
         this.launcher = Objects.requireNonNull(launcher, "launcher");
@@ -147,7 +166,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         this.wakeCoordinator.start();
     }
 
-    private static String durableResult(CodexLifecycleHttpClient.Response response) {
+    private static String durableResult(Response response) {
         byte[] encoded = response.encoded();
         if (encoded.length <= 15_000) {
             return new String(encoded, StandardCharsets.UTF_8);
@@ -185,7 +204,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
      * @param incoming authority being dispatched
      * @return whether both authorities describe the same exact runtime
      */
-    static boolean sameRuntimeAuthority(LifecycleControlRequestEnvelope.AuthorityContext retained, LifecycleControlRequestEnvelope.AuthorityContext incoming) {
+    static boolean sameRuntimeAuthority(AuthorityContext retained, AuthorityContext incoming) {
         if (retained.equals(incoming)) {
             return true;
         }
@@ -251,10 +270,11 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
     }
 
     /**
-     * Returns the route path registered on the existing coordination server.
+     * Returns the stable route path used to register this host.
      *
-     * @return Codex lifecycle route
+     * @return lifecycle HTTP route
      */
+    @SuppressWarnings("SameReturnValue") // A host's route cannot change during its lifetime.
     public String route() {
         return CODEX_ROUTE;
     }
@@ -283,12 +303,12 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         try {
             String bindingSessionId = file.getFileName().toString().replaceFirst("\\.json$", "");
             CodexLifecycleStateStore store = new CodexLifecycleStateStore(runtimeRoot.resolve("bindings"));
-            CodexLifecycleStateStore.Checkpoint prior = store.read(bindingSessionId, location.projectId().toString());
+            Checkpoint prior = store.read(bindingSessionId, location.projectId().toString());
             if (prior.state() == CodexLifecycleStateStore.State.NEW || prior.state() == CodexLifecycleStateStore.State.STOPPED || prior.state() == CodexLifecycleStateStore.State.FAILED) {
                 return;
             }
             if (prior.rootPid() <= 0) {
-                store.write(new CodexLifecycleStateStore.Checkpoint(prior.bindingSessionId(),
+                store.write(new Checkpoint(prior.bindingSessionId(),
                         prior.projectId(),
                         prior.provider(),
                         prior.revision() + 1L,
@@ -345,7 +365,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
      * @return bounded lifecycle response
      * @throws Exception when validation, persistence, or lifecycle execution fails
      */
-    public CodexLifecycleHttpClient.Response handle(LifecycleControlRequestEnvelope.SignedEnvelope signed) throws Exception {
+    public CodexLifecycleHttpClient.Response handle(SignedEnvelope signed) throws Exception {
         Objects.requireNonNull(signed, "signed");
         verifyEnvelope(signed);
         if (closed) {
@@ -353,46 +373,46 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         }
         LifecycleControlRequestEnvelope request = signed.request();
         Object requestLock = requestLocks.computeIfAbsent(request.requestId(), ignored -> new Object());
-        CompletableFuture<CodexLifecycleHttpClient.Response> execution;
+        CompletableFuture<Response> execution;
         BindingRuntime runtime;
         ExecutorService executor;
         synchronized (requestLock) {
-            LifecycleIdempotencyLedger.Entry existing = ledger.find(request.requestId()).orElse(null);
+            Entry existing = ledger.find(request.requestId()).orElse(null);
             if (existing != null && !existing.digest().equals(request.digest())) {
                 throw new IOException("lifecycle_idempotency_conflict");
             }
-            if (existing != null && (existing.state() == LifecycleIdempotencyLedger.State.COMPLETED || existing.state() == LifecycleIdempotencyLedger.State.FAILED)) {
+            if (existing != null && (existing.state() == State.COMPLETED || existing.state() == State.FAILED)) {
                 return replay(existing);
             }
-            CompletableFuture<CodexLifecycleHttpClient.Response> prior = inFlight.get(request.requestId());
+            CompletableFuture<Response> prior = inFlight.get(request.requestId());
             if (prior != null) {
                 return prior.get();
             }
-            if (existing == null || existing.state() == LifecycleIdempotencyLedger.State.AMBIGUOUS) {
+            if (existing == null || existing.state() == State.AMBIGUOUS) {
                 verifyAuthority(request);
             }
             runtime = runtime(request.authority().bindingSessionId(), request.authority());
             if (!sameRuntimeAuthority(runtime.authority(), request.authority())) {
                 throw new IOException("lifecycle_binding_mismatch");
             }
-            CodexLifecycleStateStore.Checkpoint before = runtime.stateStore().read(request.authority().bindingSessionId(), request.authority().projectId());
+            Checkpoint before = runtime.stateStore().read(request.authority().bindingSessionId(), request.authority().projectId());
             if (request.expectedLifecycleRevision() != before.revision()) {
                 throw new IOException("lifecycle_revision_stale");
             }
-            LifecycleIdempotencyLedger.PrepareResult prepared = ledger.prepare(request, before.revision());
-            if (prepared.disposition() == LifecycleIdempotencyLedger.Disposition.IN_PROGRESS) {
-                CompletableFuture<CodexLifecycleHttpClient.Response> concurrent = inFlight.get(request.requestId());
+            PrepareResult prepared = ledger.prepare(request, before.revision());
+            if (prepared.disposition() == Disposition.IN_PROGRESS) {
+                CompletableFuture<Response> concurrent = inFlight.get(request.requestId());
                 if (concurrent != null) {
                     return concurrent.get();
                 }
                 throw new IOException("lifecycle_request_ambiguous");
             }
-            if (prepared.disposition() == LifecycleIdempotencyLedger.Disposition.AMBIGUOUS) {
+            if (prepared.disposition() == Disposition.AMBIGUOUS) {
                 throw new IOException("lifecycle_request_ambiguous");
             }
-            if (prepared.disposition() == LifecycleIdempotencyLedger.Disposition.NEW && !ledger.verifyCommitted(request.requestId(), request.digest(), before.revision())) {
+            if (prepared.disposition() == Disposition.NEW && !ledger.verifyCommitted(request.requestId(), request.digest(), before.revision())) {
                 try {
-                    ledger.complete(request.requestId(), LifecycleIdempotencyLedger.State.FAILED, before.revision(), "lifecycle_idempotency_persistence_failed");
+                    ledger.complete(request.requestId(), State.FAILED, before.revision(), "lifecycle_idempotency_persistence_failed");
                 } catch (IOException ignored) {
                     // The original durability failure is the bounded caller diagnostic.
                 }
@@ -400,7 +420,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             }
             execution = new CompletableFuture<>();
             inFlight.put(request.requestId(), execution);
-            executor = request.operation() == LifecycleControlRequestEnvelope.Operation.WAIT ? waitExecutor : controlExecutor;
+            executor = request.operation() == Operation.WAIT ? waitExecutor : controlExecutor;
         }
         try {
             Future<?> task = executor.submit(() -> execute(request, runtime, execution));
@@ -416,7 +436,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             // thread.  Interrupt the actual bounded wait task as well so its
             // finally block removes the registered waiter immediately rather
             // than retaining capacity until the caller deadline.
-            if (request.operation() == LifecycleControlRequestEnvelope.Operation.WAIT) {
+            if (request.operation() == Operation.WAIT) {
                 Future<?> task = executionTasks.get(request.requestId());
                 if (task != null) {
                     task.cancel(true);
@@ -461,20 +481,20 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         }
     }
 
-    private void execute(LifecycleControlRequestEnvelope request, BindingRuntime runtime, CompletableFuture<CodexLifecycleHttpClient.Response> result) {
+    private void execute(LifecycleControlRequestEnvelope request, BindingRuntime runtime, CompletableFuture<Response> result) {
         boolean mutationStarted = false;
         try {
             if (closed) {
                 throw new IOException("owner_shutdown");
             }
-            if (request.classification() == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING) {
+            if (request.classification() == Classification.STATE_CHANGING) {
                 runtime.acquireAttachmentLock();
                 verifyAuthority(request);
                 runtime.claimHostCheckpoint();
                 runtime.recordOwner();
             }
-            mutationStarted = request.classification() == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING;
-            CodexLifecycleHttpClient.Response response = switch (request.operation()) {
+            mutationStarted = request.classification() == Classification.STATE_CHANGING;
+            Response response = switch (request.operation()) {
                 case START -> runtime.service().start(request);
                 case NOTIFY -> runtime.service().notify(request);
                 case STEER -> runtime.service().steer(request);
@@ -484,7 +504,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
                 case RESUME -> runtime.service().resume(request);
                 case STATUS -> runtime.service().status(request);
             };
-            if (request.operation() == LifecycleControlRequestEnvelope.Operation.STATUS) {
+            if (request.operation() == Operation.STATUS) {
                 Map<String, Object> diagnostics = new LinkedHashMap<>(response.result());
                 diagnostics.put("hostInstanceId", hostInstanceId);
                 diagnostics.put("bindingSessionId", runtime.bindingSessionId());
@@ -506,7 +526,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
                 diagnostics.putAll(runtime.service().diagnostics());
                 diagnostics.put("wakeRelayScanCount", wakeCoordinator.scanCount());
                 diagnostics.put("wakeRelayDiagnostic", wakeCoordinator.lastDiagnostic());
-                response = new CodexLifecycleHttpClient.Response(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
+                response = new Response(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
             }
             long revision = runtime.service().statusUnchecked().lifecycleRevision();
             runtime.recordOwner();
@@ -514,24 +534,24 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             result.complete(response);
         } catch (Exception failure) {
             String diagnostic = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-            CodexLifecycleHttpClient.Response failureResponse;
+            Response failureResponse;
             try {
-                CodexLifecycleStateStore.Checkpoint current = runtime.stateStore().read(request.authority().bindingSessionId(), request.authority().projectId());
-                LifecycleIdempotencyLedger.State state =
+                Checkpoint current = runtime.stateStore().read(request.authority().bindingSessionId(), request.authority().projectId());
+                State state =
                         mutationStarted && current.state() != CodexLifecycleStateStore.State.FAILED && current.state() != CodexLifecycleStateStore.State.STOPPED ? LifecycleIdempotencyLedger.State.AMBIGUOUS
                                 : LifecycleIdempotencyLedger.State.FAILED;
-                failureResponse = new CodexLifecycleHttpClient.Response(false, diagnostic, current.state().name(), current.revision(), current.threadId(), current.turnId(), Map.of());
+                failureResponse = new Response(false, diagnostic, current.state().name(), current.revision(), current.threadId(), current.turnId(), Map.of());
                 ledger.complete(request.requestId(), state, current.revision(), durableResult(failureResponse));
             } catch (IOException ignored) {
                 diagnostic = diagnostic + ":lifecycle_idempotency_result_persistence_failed";
-                failureResponse = new CodexLifecycleHttpClient.Response(false, diagnostic, safeState(runtime), safeRevision(runtime), null, null, Map.of());
+                failureResponse = new Response(false, diagnostic, safeState(runtime), safeRevision(runtime), null, null, Map.of());
             }
             result.complete(failureResponse);
         } finally {
             inFlight.remove(request.requestId());
             executionTasks.remove(request.requestId());
             pruneRequestLocks();
-            if (request.operation() == LifecycleControlRequestEnvelope.Operation.HARD_STOP || !runtime.isAlive()) {
+            if (request.operation() == Operation.HARD_STOP || !runtime.isAlive()) {
                 runtime.cleanupEvidence();
                 runtime.releaseLock();
             }
@@ -545,25 +565,26 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         requestLocks.keySet().stream().sorted().filter(id -> !inFlight.containsKey(id) && ledger.find(id).isEmpty()).limit(requestLocks.size() - LifecycleIdempotencyLedger.MAX_HOST_ENTRIES).forEach(requestLocks::remove);
     }
 
-    private BindingRuntime runtime(String bindingSessionId, LifecycleControlRequestEnvelope.AuthorityContext authority) {
-        BindingRuntime existing = bindings.get(bindingSessionId);
-        if (existing != null) {
-            return existing;
-        }
+    private BindingRuntime runtime(String bindingSessionId, AuthorityContext authority) {
+        return bindings.computeIfAbsent(bindingSessionId, id -> createBindingRuntime(id, authority));
+    }
+
+    /**
+     * Creates the lifecycle service and lock paths owned by one binding runtime.
+     */
+    private BindingRuntime createBindingRuntime(String bindingSessionId, AuthorityContext authority) {
         CodexLifecycleStateStore stateStore = new CodexLifecycleStateStore(runtimeRoot.resolve("bindings"));
         Path evidence = runtimeRoot.resolve("evidence").resolve(bindingSessionId);
         CodexAppServerLifecycleService service = new CodexAppServerLifecycleService(authority, stateStore, ledger, launcher, terminator, evidence);
-        BindingRuntime created = new BindingRuntime(bindingSessionId,
+        return new BindingRuntime(bindingSessionId,
                 authority,
                 stateStore,
                 service,
                 runtimeRoot.resolve("bindings").resolve(bindingSessionId + ".attachment.lock"),
                 runtimeRoot.resolve("bindings").resolve(bindingSessionId + ".attachment.owner.json"));
-        BindingRuntime raced = bindings.putIfAbsent(bindingSessionId, created);
-        return raced == null ? created : raced;
     }
 
-    private void verifyEnvelope(LifecycleControlRequestEnvelope.SignedEnvelope signed) throws Exception {
+    private void verifyEnvelope(SignedEnvelope signed) throws IOException, GeneralSecurityException {
         if (!signed.verify() || !ownerIdentity.nodeId().equals(signed.signerNodeId())) {
             throw new IOException("lifecycle_signature_invalid");
         }
@@ -576,29 +597,17 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         }
     }
 
-    private void verifyAuthority(LifecycleControlRequestEnvelope request) throws Exception {
+    private void verifyAuthority(LifecycleControlRequestEnvelope request) throws IOException, GeneralSecurityException, ProjectApplicationException, BindingException {
         ProjectLocation current = new ProjectApplicationService().locate(location.root());
-        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        String connectionIdentity = request.authority().connectionInstanceId();
-        java.util.Optional<ProviderSessionBindingService.Binding> resolved = connectionIdentity.startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX) ? bindingService.findByFingerprint(current,
-                "codex",
-                connectionIdentity.substring(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length())) : bindingService.find(current, "codex", connectionIdentity);
-        ProviderSessionBindingService.Binding binding = resolved.orElseThrow(() -> new IOException("lifecycle_binding_missing"));
-        LifecycleControlRequestEnvelope.AuthorityContext expected = request.authority();
-        if (!location.root().toAbsolutePath().normalize().toString().equals(expected.controlProjectRoot())) {
-            throw new IOException("lifecycle_project_root_mismatch");
-        }
-        boolean completedStatusRead = request.operation() == LifecycleControlRequestEnvelope.Operation.STATUS && "COMPLETED".equals(binding.status());
-        boolean admissibleBindingState = "BOUND".equals(binding.status()) || completedStatusRead;
-        if (!binding.projectId().equals(expected.projectId()) || !"codex".equals(binding.provider()) || !binding.sessionId().equals(expected.bindingSessionId()) || !binding.providerInstanceFingerprint()
-                .equals(expected.bindingFingerprint()) || binding.bindingVersion() != expected.bindingVersion() || !admissibleBindingState || !"VERIFIED".equals(binding.verificationState())
-                || !"VERIFIED".equals(binding.providerTrustState()) || binding.worktreePath() == null) {
-            throw new IOException("lifecycle_binding_stale");
-        }
-        if (binding.controlCheckoutPath() == null || !Path.of(binding.controlCheckoutPath()).toAbsolutePath().normalize().equals(location.root().toAbsolutePath().normalize())) {
-            throw new IOException("lifecycle_project_root_mismatch");
-        }
-        if (!expected.participant().equals(org.synesis.workspace.application.collaboration.WorkspaceCollaborationService.participantHandle(binding.sessionId()))) {
+        ProviderSessionBindingService.Binding binding = resolveBinding(current, request);
+        verifyParticipantAndWorktreeAuthority(binding, request.authority());
+    }
+
+    /**
+     * Checks that the verified binding still owns the exact participant, worktree, and intent.
+     */
+    private void verifyParticipantAndWorktreeAuthority(Binding binding, AuthorityContext expected) throws IOException, GeneralSecurityException {
+        if (!expected.participant().equals(WorkspaceCollaborationService.participantHandle(binding.sessionId()))) {
             throw new IOException("lifecycle_participant_mismatch");
         }
         Path assigned;
@@ -635,10 +644,44 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         new ProviderManualService().requireAttested("codex");
     }
 
-    private CodexLifecycleHttpClient.Response replay(LifecycleIdempotencyLedger.Entry entry) {
+    /**
+     * Resolves and validates the provider binding named by a signed lifecycle request.
+     */
+    private Binding resolveBinding(ProjectLocation current, LifecycleControlRequestEnvelope request) throws IOException, BindingException {
+        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
+        String connectionIdentity = request.authority().connectionInstanceId();
+        Optional<Binding> resolved = connectionIdentity.startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX) ? bindingService.findByFingerprint(current,
+                "codex",
+                connectionIdentity.substring(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length())) : bindingService.find(current, "codex", connectionIdentity);
+        Binding binding = resolved.orElseThrow(() -> new IOException("lifecycle_binding_missing"));
+        validateResolvedBinding(current, request, binding);
+        return binding;
+    }
+
+    /**
+     * Verifies that a resolved binding still matches the signed request's project and trust state.
+     */
+    private void validateResolvedBinding(ProjectLocation current, LifecycleControlRequestEnvelope request, Binding binding) throws IOException {
+        AuthorityContext expected = request.authority();
+        if (!current.root().toAbsolutePath().normalize().toString().equals(expected.controlProjectRoot())) {
+            throw new IOException("lifecycle_project_root_mismatch");
+        }
+        boolean completedStatusRead = request.operation() == Operation.STATUS && "COMPLETED".equals(binding.status());
+        boolean admissibleBindingState = "BOUND".equals(binding.status()) || completedStatusRead;
+        if (!binding.projectId().equals(expected.projectId()) || !"codex".equals(binding.provider()) || !binding.sessionId().equals(expected.bindingSessionId()) || !binding.providerInstanceFingerprint()
+                .equals(expected.bindingFingerprint()) || binding.bindingVersion() != expected.bindingVersion() || !admissibleBindingState || !"VERIFIED".equals(binding.verificationState())
+                || !"VERIFIED".equals(binding.providerTrustState()) || binding.worktreePath() == null) {
+            throw new IOException("lifecycle_binding_stale");
+        }
+        if (binding.controlCheckoutPath() == null || !Path.of(binding.controlCheckoutPath()).toAbsolutePath().normalize().equals(current.root().toAbsolutePath().normalize())) {
+            throw new IOException("lifecycle_project_root_mismatch");
+        }
+    }
+
+    private Response replay(LifecycleIdempotencyLedger.Entry entry) {
         if (entry.result() != null && entry.result().startsWith("{")) {
             try {
-                return CodexLifecycleHttpClient.Response.decode(entry.result().getBytes(StandardCharsets.UTF_8));
+                return Response.decode(entry.result().getBytes(StandardCharsets.UTF_8));
             } catch (IOException ignored) {
                 // Older or truncated entries fall through to the bounded
                 // replay reference below; they remain non-replayable as a
@@ -647,7 +690,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
             }
         }
         Map<String, Object> result = entry.result() == null ? Map.of() : Map.of("resultReference", entry.result());
-        return new CodexLifecycleHttpClient.Response(entry.state() == LifecycleIdempotencyLedger.State.COMPLETED,
+        return new Response(entry.state() == LifecycleIdempotencyLedger.State.COMPLETED,
                 "idempotency_replay",
                 entry.state().name(),
                 entry.revisionAfter(),
@@ -670,7 +713,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, CodexWakeAdmissi
         Files.writeString(temporary, ProviderJson.write(value) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         try {
             Files.move(temporary, ownerRecord, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+        } catch (AtomicMoveNotSupportedException unsupported) {
             Files.move(temporary, ownerRecord, StandardCopyOption.REPLACE_EXISTING);
         }
     }

@@ -2,16 +2,17 @@ package org.synesis.workspace.lifecycle.codex.runtime;
 
 import java.util.Objects;
 import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord;
+import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipRecord.Status;
 
 /**
  * Trusted broker state for one immutable managed Codex provider-thread pin.
  *
  * <p>The broker accepts ownership produced by the durable Synesis store and
  * exposes only the pinned selector. It is not a model-facing App Server protocol passthrough.</p>
+ *
+ * @param ownership durable ownership record for the managed provider thread
  */
-public final class ManagedCodexThreadBroker {
-
-    private final ProviderThreadOwnershipRecord ownership;
+public record ManagedCodexThreadBroker(ProviderThreadOwnershipRecord ownership) {
 
     /**
      * Creates a broker from an active durable ownership record.
@@ -20,7 +21,7 @@ public final class ManagedCodexThreadBroker {
      */
     public ManagedCodexThreadBroker(ProviderThreadOwnershipRecord ownership) {
         this.ownership = Objects.requireNonNull(ownership, "ownership");
-        if (ownership.status() != ProviderThreadOwnershipRecord.Status.ACTIVE || !"codex".equals(ownership.provider())) {
+        if (ownership.status() != Status.ACTIVE || !"codex".equals(ownership.provider())) {
             throw new IllegalArgumentException("managed Codex broker requires active Codex ownership");
         }
     }
@@ -48,6 +49,7 @@ public final class ManagedCodexThreadBroker {
      *
      * @return active provider-thread ownership
      */
+    @Override
     public ProviderThreadOwnershipRecord ownership() {
         return ownership;
     }

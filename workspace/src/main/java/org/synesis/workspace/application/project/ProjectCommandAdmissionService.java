@@ -1,7 +1,5 @@
 package org.synesis.workspace.application.project;
 
-import org.synesis.workspace.application.project.execution.ExecutionResult;
-
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
@@ -275,8 +273,7 @@ public final class ProjectCommandAdmissionService {
          * Renews the existing lease and returns the post-renewal authority snapshot.
          *
          * @return post-renewal authority snapshot
-         * @throws Exception if renewal or authority capture fails
          */
-        ProjectCommandAuthoritySnapshot renew() throws Exception;
+        ProjectCommandAuthoritySnapshot renew();
     }
 }

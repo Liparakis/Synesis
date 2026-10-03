@@ -23,6 +23,8 @@ import org.synesis.workspace.project.ProjectPathResolver;
  */
 public final class ClaudeCodeHookAdapter {
 
+  private static final String EMPTY_JSON = "{}";
+
   private final Path profile;
   private final OwnershipRegistry ownership;
   private final String requesterNodeId;
@@ -82,7 +84,6 @@ public final class ClaudeCodeHookAdapter {
     return paths;
   }
 
-  @SuppressWarnings("DuplicatedCode")
   private static String extractJsonField(String json, String key) {
     String search = "\"" + key + "\":";
     int idx = json.indexOf(search);
@@ -130,10 +131,6 @@ public final class ClaudeCodeHookAdapter {
             "additionalContext": "Synesis Warning: Active constraint '%s' applies to this scope. Rationale: %s"
           }
         }""".formatted(escapeJson(title), escapeJson(rationale));
-  }
-
-  private static String emptyJson() {
-    return "{}";
   }
 
   private static String escapeJson(String text) {
@@ -188,7 +185,7 @@ public final class ClaudeCodeHookAdapter {
       String diagnostic =
           "SYNESIS_HOOK_RESULT=UNSUPPORTED\nTOOL_NAME=" + (toolName == null ? "UNKNOWN" : toolName)
               + "\nREASON=The current adapter does not safely determine affected paths for this tool.";
-      return new Result(Outcome.UNSUPPORTED, emptyJson(), diagnostic);
+      return new Result(Outcome.UNSUPPORTED, EMPTY_JSON, diagnostic);
     }
 
     String cwdStr = extractJsonField(json, "cwd");
@@ -269,8 +266,8 @@ public final class ClaudeCodeHookAdapter {
       }
       case INVALID_INPUT -> new Result(Outcome.INVALID_INPUT, denyJson(finalResponse.message()),
           finalResponse.message());
-      case UNSUPPORTED -> new Result(Outcome.UNSUPPORTED, emptyJson(), finalResponse.message());
-      case ALLOWED -> new Result(Outcome.ALLOWED, emptyJson(), "Allowed");
+      case UNSUPPORTED -> new Result(Outcome.UNSUPPORTED, EMPTY_JSON, finalResponse.message());
+      case ALLOWED -> new Result(Outcome.ALLOWED, EMPTY_JSON, "Allowed");
     };
   }
 

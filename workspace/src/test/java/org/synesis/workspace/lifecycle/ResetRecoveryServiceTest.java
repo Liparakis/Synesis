@@ -86,7 +86,7 @@ class ResetRecoveryServiceTest {
       seedOldNamespace(locator, root, "old-project");
       ResetRecoveryService crashing = new ResetRecoveryService(locator, phase -> {
         if (phase == crashAfter) {
-          throw new IOException("simulated process loss");
+          throw new IllegalStateException("simulated process loss");
         }
       });
 
@@ -117,7 +117,7 @@ class ResetRecoveryServiceTest {
     seedOldNamespace(locator, root, "old-project");
     ResetRecoveryService crashing = new ResetRecoveryService(locator, phase -> {
       if (phase == ResetRecoveryService.Phase.NEW_ID_GENERATED) {
-        throw new IOException("simulated process loss");
+        throw new IllegalStateException("simulated process loss");
       }
     });
 

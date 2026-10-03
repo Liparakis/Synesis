@@ -11,15 +11,14 @@ import java.util.Objects;
  * @param instruction      next action for the agent
  * @since 1.0
  */
-public record AgentWorkspaceGuidance(String controlCheckout, String assignedWorktree,
-                                     String instruction) {
+public record AgentWorkspaceGuidance(String controlCheckout, String assignedWorktree, String instruction) {
 
-  /**
-   * Validates guidance fields.
-   */
-  public AgentWorkspaceGuidance {
-    Objects.requireNonNull(controlCheckout, "controlCheckout");
-    Objects.requireNonNull(assignedWorktree, "assignedWorktree");
-    Objects.requireNonNull(instruction, "instruction");
-  }
+    /**
+     * Validates guidance fields.
+     */
+    public AgentWorkspaceGuidance {
+        Objects.requireNonNull(controlCheckout, "controlCheckout");
+        Objects.requireNonNull(assignedWorktree, "assignedWorktree");
+        Objects.requireNonNull(instruction, "instruction");
+    }
 }

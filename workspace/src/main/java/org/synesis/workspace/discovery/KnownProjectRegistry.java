@@ -243,6 +243,8 @@ public final class KnownProjectRegistry {
                 }
             } catch (ProjectApplicationService.ProjectApplicationException unavailable) {
                 status = unavailable.code().equals("MALFORMED") ? Status.IDENTITY_MISMATCH : Status.UNAVAILABLE;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
         return new ProjectView(entry.projectId(), entry.path(), entry.createdAt(), entry.firstObservedAt(), entry.lastObservedAt(), status);
@@ -253,6 +255,8 @@ public final class KnownProjectRegistry {
             return projectService.require(root);
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
             throw new RegistryException(failure.code(), failure.getMessage(), failure);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -270,7 +274,7 @@ public final class KnownProjectRegistry {
                 throw new IOException("registry root must be an object");
             }
             Map<String, Object> document = stringMap(raw);
-            if (integer(document.get("schemaVersion"), "schemaVersion") != SCHEMA_VERSION) {
+            if (integer(document.get("schemaVersion")) != SCHEMA_VERSION) {
                 throw new IOException("unsupported registry schema");
             }
             Object rawProjects = document.get("projects");
@@ -361,8 +365,6 @@ public final class KnownProjectRegistry {
                 }
                 return operation.run();
             }
-        } catch (RegistryException failure) {
-            throw failure;
         } catch (OverlappingFileLockException | IOException failure) {
             throw new RegistryException("REGISTRY_LOCK_FAILED", "could not access known project registry", failure);
         }
@@ -379,9 +381,9 @@ public final class KnownProjectRegistry {
         return result;
     }
 
-    private static int integer(Object value, String name) throws IOException {
+    private static int integer(Object value) throws IOException {
         if (!(value instanceof Number number) || number.doubleValue() != SCHEMA_VERSION) {
-            throw new IOException("invalid " + name);
+            throw new IOException("invalid schemaVersion");
         }
         return number.intValue();
     }
