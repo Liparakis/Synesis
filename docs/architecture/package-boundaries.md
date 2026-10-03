@@ -65,7 +65,7 @@ overload, keeping that inspection option internal to the process package.
 
 ## Workspace source package map
 
-The lists below show each Java source file under its declared package; the listed name is its primary top-level type. Refresh this section when package ownership changes.
+The lists below show every top-level Java type under its declared package. Most source files contain one top-level type; refresh this section when package ownership changes.
 
 ### Production
 
@@ -147,7 +147,7 @@ They remain outside implementation packages intentionally.
 - `org.synesis.workspace.lifecycle.codex.state`: `CodexEvidenceJournalTest`, `LifecycleIdempotencyLedgerTest`
 - `org.synesis.workspace.lifecycle.command`: `CommandLockProbe`, `ProjectCommandNamespaceSpikeTest`
 - `org.synesis.workspace.lifecycle.lease`: `LeaseTest`, `StaleAndGraceTest`, `TerminalLeaseStateTest`
-- `org.synesis.workspace.lifecycle.process`: `ProcessCommandRunnerTest`, `SemanticIndexFingerprintTest`
+- `org.synesis.workspace.lifecycle.process`: `ProcessCommandRunnerTest`, `ProcessCommandRunnerChild`, `SemanticIndexFingerprintTest`
 - `org.synesis.workspace.lifecycle.reconciliation`: `AbandonmentTest`, `ReconciliationPlanTest`, `RecoveryLifecycleTest`
 - `org.synesis.workspace.lifecycle.recovery`: `RecoverySnapshotServiceTest`
 - `org.synesis.workspace.lifecycle.repair`: `RepairPlanTest`
