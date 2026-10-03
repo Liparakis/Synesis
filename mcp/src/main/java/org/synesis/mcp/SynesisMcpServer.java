@@ -27,6 +27,7 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  */
 public final class SynesisMcpServer {
 
+    /** Utility entrypoint; instances do not hold server state. */
     private SynesisMcpServer() {
     }
 
@@ -117,6 +118,7 @@ public final class SynesisMcpServer {
         }
     }
 
+    /** Authenticates the exact managed attachment proof before opening a transport lease. */
     private static ManagedAttachmentRecord authorizeManagedAttachment(Path projectRoot, String provider, String connectionInstanceId, String attachmentProof) throws Exception {
         if (!"codex".equals(provider)) {
             throw new IllegalArgumentException("managed continuity provider unsupported");
@@ -157,16 +159,19 @@ public final class SynesisMcpServer {
         }
     }
 
+    /** Reads a bounded nonblank environment setting or returns its default. */
     private static String boundedEnvironment(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() || value.length() > 8_192 ? fallback : value.trim();
     }
 
+    /** Reads a bounded nonblank environment setting when present. */
     private static String boundedEnvironmentOrNull(String name) {
         String value = System.getenv(name);
         return value == null || value.isBlank() || value.length() > 8_192 ? null : value.trim();
     }
 
+    /** Captures one immutable process identity for lease and termination fencing. */
     private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
         ProcessHandle.Info info = ProcessHandle.current().info();
         String executable = info.command().orElse("unknown");

@@ -177,16 +177,16 @@ The lists below show every top-level Java type under its declared package. Most 
 
 ## MCP source package map
 
-MCP keeps a root server entrypoint, a connection-scoped application handler, and an independent stdio transport. `McpProtocolHandler` remains one owner of the persistent connection binding, root selection, lease state, JSON-RPC lifecycle and the ten-tool dispatch; moving only tool calls would require passing or widening that shared authority context. Its package-private `McpProjectRootAuthority` helper therefore stays beside it.
+MCP keeps a root server entrypoint, connection-scoped application logic, and an independent stdio transport. `McpProtocolHandler` owns the persistent connection binding, lease state, JSON-RPC lifecycle, and authority-gated tool dispatch. `McpProjectRootAuthority` isolates root verification; `McpToolCall` validates the untrusted tools/call envelope; and `McpCollaborationProjection` serializes typed collaboration records at the JSON boundary. Collaboration result mapping therefore stays separate from connection authority.
 
 ### Production
 
 - `org.synesis.mcp`: `SynesisMcpServer`
-- `org.synesis.mcp.application`: `McpProjectRootAuthority`, `McpProtocolHandler`
+- `org.synesis.mcp.application`: `McpCollaborationProjection`, `McpProjectRootAuthority`, `McpProtocolHandler`, `McpToolCall`
 - `org.synesis.mcp.transport.stdio`: `McpFrameReader`, `McpStdioServer`
 
 ### Tests
 
 - `org.synesis.mcp`: `SynesisMcpServerTest`
-- `org.synesis.mcp.application`: `CodexLinkedWorktreeRootSelectionRegressionTest`, `McpAdmissionRecoveryTest`, `McpMandatoryReviewPolicyTest`, `McpPackageArchitectureTest`, `McpProviderTestSupport`, `McpRecoveryContinuationTest`, `McpServerTest`, `McpStage2BSlice1Test`, `McpSyn028ContractTest`, `McpSyn039NoChangeCompletionTest`, `McpSyn039RejectedContinuationTest`, `McpSyn039SliceTest`, `McpToolCatalogTest`, `Slice4FailureScenariosTest`, `SyntheticTwoProcessCollaborationTest`, `TwoProcessCapabilityNegotiationProcessTest`
+- `org.synesis.mcp.application`: `CodexLinkedWorktreeRootSelectionRegressionTest`, `McpAdmissionRecoveryTest`, `McpMandatoryReviewPolicyTest`, `McpPackageArchitectureTest`, `McpProviderTestSupport`, `McpRecoveryContinuationTest`, `McpServerTest`, `McpStage2BSlice1Test`, `McpSyn028ContractTest`, `McpSyn039NoChangeCompletionTest`, `McpSyn039RejectedContinuationTest`, `McpSyn039SliceTest`, `McpToolCallTest`, `McpToolCatalogTest`, `Slice4FailureScenariosTest`, `SyntheticTwoProcessCollaborationTest`, `TwoProcessCapabilityNegotiationProcessTest`
 - `org.synesis.mcp.transport.stdio`: `McpFrameReaderTest`
