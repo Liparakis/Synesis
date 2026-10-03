@@ -174,3 +174,19 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.provider.codex`: `CodexApplyPatchParserTest`, `CodexHookAdapterTest`, `CodexHookPerformanceTest`
 - `org.synesis.workspace.test`: `PortableTestCommand`, `PortableTestProcess`, `ProviderTestSupport`, `TestGit`
 - `org.synesis.workspace.transport.control`: `ControlPlaneHttpHandlerTest`, `ControlPlaneReadModelTest`, `LinkNetworkProjectionTest`, `LinkRuntimeOwnerControlPlaneTest`
+
+## MCP source package map
+
+MCP keeps a root server entrypoint, a connection-scoped application handler, and an independent stdio transport. `McpProtocolHandler` remains one owner of the persistent connection binding, root selection, lease state, JSON-RPC lifecycle and the ten-tool dispatch; moving only tool calls would require passing or widening that shared authority context. Its package-private `McpProjectRootAuthority` helper therefore stays beside it.
+
+### Production
+
+- `org.synesis.mcp`: `SynesisMcpServer`
+- `org.synesis.mcp.application`: `McpProjectRootAuthority`, `McpProtocolHandler`
+- `org.synesis.mcp.transport.stdio`: `McpFrameReader`, `McpStdioServer`
+
+### Tests
+
+- `org.synesis.mcp`: `SynesisMcpServerTest`
+- `org.synesis.mcp.application`: `CodexLinkedWorktreeRootSelectionRegressionTest`, `McpAdmissionRecoveryTest`, `McpMandatoryReviewPolicyTest`, `McpPackageArchitectureTest`, `McpProviderTestSupport`, `McpRecoveryContinuationTest`, `McpServerTest`, `McpStage2BSlice1Test`, `McpSyn028ContractTest`, `McpSyn039NoChangeCompletionTest`, `McpSyn039RejectedContinuationTest`, `McpSyn039SliceTest`, `McpToolCatalogTest`, `Slice4FailureScenariosTest`, `SyntheticTwoProcessCollaborationTest`, `TwoProcessCapabilityNegotiationProcessTest`
+- `org.synesis.mcp.transport.stdio`: `McpFrameReaderTest`
