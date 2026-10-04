@@ -352,7 +352,8 @@ final class ProviderApplicationServiceTest {
             assertTrue(servers.containsKey("other"));
             Map<?, ?> synesis = (Map<?, ?>) servers.get("synesis");
             assertEquals(service.mcpLauncherPath().toAbsolutePath().normalize().toString(), synesis.get("command"));
-            assertEquals(java.util.List.of("mcp", "--provider", "claude", "--project", root.toAbsolutePath().normalize().toString()), synesis.get("args"));
+            assertEquals(java.util.List.of("mcp", "--provider", "claude"), synesis.get("args"));
+            assertEquals(Map.of("SYNESIS_MCP_PROJECT", root.toAbsolutePath().normalize().toString()), synesis.get("env"));
 
             var reinstalled = service.install(location, "claude-code");
             assertEquals("UNKNOWN_PROVIDER", reinstalled.values().get("PROVIDER_INSTALL_RESULT"));

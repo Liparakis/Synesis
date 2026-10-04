@@ -23,10 +23,15 @@ Windows-specific launcher command.
 Each provider has one canonical MCP scope: Codex uses the user
 `%USERPROFILE%\\.codex\\config.toml`, and Claude Code uses the project
 `.mcp.json`. Installation updates only the canonical Synesis entry and preserves
-unrelated servers. Codex's global entry launches `synesis-mcp` without a
-project argument; each Codex connection resolves its own initialized project
-from workspace context. Installing Codex hooks in another project does not
-retarget the global MCP entry.
+unrelated servers. Neither MCP entry passes `--project` to the CLI. Codex's
+global entry resolves each connection's initialized project from workspace
+context. Claude's project entry supplies its root through the trusted
+`SYNESIS_MCP_PROJECT` server environment. Installing Codex hooks in another
+project does not retarget the global MCP entry.
+
+After upgrading an existing integration, rerun `synesis provider install` for
+each project whose local hook should be updated. The first Codex install also
+migrates the shared MCP entry to the unpinned launch configuration.
 
 Installation performs isolated synthetic block/allow checks. It does not run a
 real provider agent. Claude Code and Codex remain `EXPERIMENTAL`.

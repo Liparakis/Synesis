@@ -60,9 +60,8 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     }
 
     /**
-     * Builds a project-scoped MCP entry. The explicit project is a local configuration fallback for
-     * Claude sessions that do not send MCP roots; it does not alter global provider configuration or
-     * replace root-based resolution when roots are supplied.
+     * Builds a project-scoped MCP entry. The trusted environment root preserves Claude's local
+     * project context without passing a project argument to the shared MCP CLI.
      *
      * @param launcher    generated Synesis MCP launcher
      * @param projectRoot initialized project root
@@ -71,7 +70,8 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     @Override
     public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
         Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher, projectRoot));
-        server.put("args", List.of("mcp", "--provider", id(), "--project", projectRoot.toAbsolutePath().normalize().toString()));
+        server.put("args", List.of("mcp", "--provider", id()));
+        server.put("env", Map.of("SYNESIS_MCP_PROJECT", projectRoot.toAbsolutePath().normalize().toString()));
         return server;
     }
 
