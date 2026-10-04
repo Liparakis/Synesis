@@ -10,6 +10,7 @@ synesis provider uninstall claude
 synesis provider install codex
 synesis provider status codex
 synesis provider uninstall codex
+synesis provider uninstall codex --global
 ```
 
 Use `--project <path>` for an explicit project directory. Provider metadata is
@@ -22,7 +23,10 @@ Windows-specific launcher command.
 Each provider has one canonical MCP scope: Codex uses the user
 `%USERPROFILE%\\.codex\\config.toml`, and Claude Code uses the project
 `.mcp.json`. Installation updates only the canonical Synesis entry and preserves
-unrelated servers.
+unrelated servers. Codex's global entry launches `synesis-mcp` without a
+project argument; each Codex connection resolves its own initialized project
+from workspace context. Installing Codex hooks in another project does not
+retarget the global MCP entry.
 
 Installation performs isolated synthetic block/allow checks. It does not run a
 real provider agent. Claude Code and Codex remain `EXPERIMENTAL`.
@@ -51,8 +55,9 @@ platform stable-root `bin` launcher on Unix. Provider commands never contain a
 `versions/<version>` path.
 
 Malformed configuration is never repaired or overwritten. Review it manually,
-then rerun installation. Uninstall removes only the stable Synesis-managed
-entry and its local metadata.
+then rerun installation. `synesis provider uninstall codex` removes only that
+project's hook and metadata. Use `synesis provider uninstall codex --global` to
+remove the shared user-level MCP entry without changing project hooks.
 
 Claude Code uses the canonical `claude` provider ID for installation, status,
 uninstall, and hook execution.

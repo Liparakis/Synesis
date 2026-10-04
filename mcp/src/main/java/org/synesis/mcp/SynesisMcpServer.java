@@ -1,6 +1,5 @@
 package org.synesis.mcp;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.UUID;
@@ -12,17 +11,15 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
-import org.synesis.workspace.application.provider.continuity.ProviderContinuityMode;
 import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
-import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.
  *
- * <p>Parses launch arguments ({@code --provider}, {@code --project},
- * {@code --connection-instance-id}), initializes ambient session resolution, and starts the stdio
- * event loop. Environment variables supply defaults; arguments override them.
+ * <p>Parses launch arguments ({@code --provider}, {@code --connection-instance-id}), initializes
+ * ambient session resolution, and starts the stdio event loop. Environment variables provide the
+ * project context for managed launches; normal Codex sessions resolve it from their MCP context.
  *
  * @since 1.0
  */
@@ -85,15 +82,7 @@ public final class SynesisMcpServer {
             if ("--provider".equals(arg) && i + 1 < arguments.length) {
                 provider = arguments[++i].trim();
             } else if ("--project".equals(arg)) {
-                if (i + 1 >= arguments.length || arguments[i + 1].isBlank() || arguments[i + 1].startsWith("--")) {
-                    return reject("PROJECT_ARGUMENT_REQUIRED");
-                }
-                try {
-                    projectRoot = Path.of(arguments[++i]).toAbsolutePath().normalize();
-                    projectRootPinned = true;
-                } catch (RuntimeException invalidProject) {
-                    return reject("PROJECT_ARGUMENT_INVALID");
-                }
+                return reject("PROJECT_ARGUMENT_REMOVED");
             } else if ("--connection-instance-id".equals(arg) && i + 1 < arguments.length) {
                 connectionInstanceId = arguments[++i].trim();
             }
@@ -113,18 +102,10 @@ public final class SynesisMcpServer {
             } catch (Exception rejected) {
                 return reject("MANAGED_ATTACHMENT_REJECTED");
             }
-        } else {
-            try {
-                rejectProoflessManagedAttachment(projectRoot, provider, connectionInstanceId);
-            } catch (Exception rejected) {
-                return reject("MANAGED_PROOF_REQUIRED");
-            }
         }
         System.err.println(
                 "SYNESIS_MCP_STARTUP pid=" + pid + " version=" + VERSION + " commit=" + COMMIT + " conn=" + connectionInstanceId + " provider=" + provider + " continuityMode=" + continuityMode + " cwd=" + Path.of(".")
                         .toAbsolutePath().normalize());
-
-        observeProject(projectRoot);
 
         AgentSessionService sessionService = new AgentSessionService();
         SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
@@ -146,30 +127,6 @@ public final class SynesisMcpServer {
     //noinspection RedundantModifier
     static void main(String[] arguments) {
         System.exit(execute(arguments));
-    }
-
-    /**
-     * Prevents an exact managed binding from silently downgrading to ordinary session-bound admission
-     * when its process-private proof is absent.
-     *
-     * @param projectRoot          control project root
-     * @param provider             provider identifier
-     * @param connectionInstanceId exact connection selector
-     * @throws Exception when a managed attachment exists without proof
-     */
-    static void rejectProoflessManagedAttachment(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        if (!MANAGED_CONTINUITY_PROVIDER.equals(provider)) {
-            return;
-        }
-        ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = new ProviderSessionBindingService().find(location, provider, connectionInstanceId).orElse(null);
-        if (binding == null) {
-            return;
-        }
-        ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read().orElse(null);
-        if (record != null && record.mode() == ProviderContinuityMode.MANAGED_CONTINUITY) {
-            throw new IllegalStateException("managed_attachment_proof_required");
-        }
     }
 
     /**
@@ -196,25 +153,6 @@ public final class SynesisMcpServer {
         ManagedAttachmentRecord record = store.read().orElseThrow(() -> new IllegalStateException("managed attachment missing"));
         RuntimeAuthenticator.AttachmentRequest request = new RuntimeAuthenticator.AttachmentRequest(provider, binding.sessionId(), record.threadId(), record.generation(), attachmentProof);
         return service.authenticateTransport(location, request, location.projectId().toString(), store);
-    }
-
-    /**
-     * Records the project in the installation-local discovery index. Failure is reported on stderr
-     * and never prevents startup.
-     *
-     * @param projectRoot control project root
-     */
-    private static void observeProject(Path projectRoot) {
-        try {
-            ProjectLocation location = new ProjectApplicationService().locate(projectRoot);
-            new KnownProjectRegistry().observe(location);
-        } catch (KnownProjectRegistry.RegistryException discoveryFailure) {
-            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
-        } catch (ProjectApplicationService.ProjectApplicationException invalidProject) {
-            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + invalidProject.code());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     /**

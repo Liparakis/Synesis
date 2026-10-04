@@ -439,6 +439,63 @@ class McpServerTest {
     }
 
     @Test
+    void unpinnedConnectionListsToolsBeforeResolvingAProjectRoot() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot.getParent(), "codex", "conn-late-root");
+
+        String listResponse = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
+        assertTrue(listResponse.contains("\"name\":\"ensure_session\""));
+
+        handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{}}");
+        String rootsChanged = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"workspaceFolders\":[{\"uri\":\"" + tempRoot.toUri() + "\"}]}}";
+        handler.handleMessage(rootsChanged);
+        String ready = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+        assertTrue(ready.contains("ready"));
+    }
+
+    @Test
+    void concurrentUnpinnedConnectionsKeepTheirProjectRootsIsolated() throws Exception {
+        Path secondRoot = Files.createTempDirectory("synesis-mcp-second-project-");
+        git(secondRoot, "init");
+        git(secondRoot, "config", "user.name", "Test User");
+        git(secondRoot, "config", "user.email", "test@example.com");
+        Files.writeString(secondRoot.resolve("README.md"), "# Second MCP project\n");
+        git(secondRoot, "add", ".");
+        git(secondRoot, "commit", "-m", "Initial commit");
+        ProjectLocation secondLocation = new ProjectApplicationService().init(secondRoot).location();
+        McpProviderTestSupport.install(secondLocation, "codex");
+
+        McpProtocolHandler first = new McpProtocolHandler(new AgentSessionService(), tempRoot.getParent(), "codex", "conn-project-a");
+        McpProtocolHandler second = new McpProtocolHandler(new AgentSessionService(), tempRoot.getParent(), "codex", "conn-project-b");
+        first.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + tempRoot.toUri() + "\"}}");
+        second.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + secondRoot.toUri() + "\"}}");
+
+        String firstReady = first.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+        String secondReady = second.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+
+        assertEquals(tempRoot, first.activeProjectRoot());
+        assertEquals(secondRoot, second.activeProjectRoot());
+        assertTrue(firstReady.contains("ready"), firstReady);
+        assertTrue(secondReady.contains("ready"), secondReady);
+    }
+
+    @Test
+    void prooflessConnectionCannotDowngradeAnExactManagedBinding() throws Exception {
+        ProjectLocation location = new ProjectApplicationService().locate(tempRoot);
+        String connection = "conn-managed-proofless";
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var owner = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(), "codex", "thread-managed", binding.sessionId());
+        var store = ManagedAttachmentService.storeFor(location, binding.sessionId());
+        var attachment = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(), "codex", binding.sessionId(), "normal-provider-home", owner, store);
+        assertNotNull(attachment.proof());
+
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot.getParent(), "codex", connection, false);
+        handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + tempRoot.toUri() + "\"}}");
+        String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
+
+        assertTrue(response.contains("managed_attachment_proof_required"), response);
+    }
+
+    @Test
     void testInitializeWithWorkspaceFoldersBindsProjectRoot() {
         AgentSessionService sessionService = new AgentSessionService();
         Path dummyCwd = tempRoot.getParent();

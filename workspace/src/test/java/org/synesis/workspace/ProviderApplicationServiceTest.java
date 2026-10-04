@@ -26,6 +26,7 @@ import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**
  * Verifies provider registry and isolated lifecycle behavior.
@@ -150,7 +151,7 @@ final class ProviderApplicationServiceTest {
             Path userMcp = provider.mcpConfigurationPath(root);
             if (userMcp != null) {
                 Files.createDirectories(userMcp.getParent());
-                Files.writeString(userMcp, "notify = [\"keep\"]\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
+                Files.writeString(userMcp, "notify = [\"keep\"]\n\n[[plugin_registry]]\nname = \"keep\"\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
             }
             Path legacyProjectMcp = root.resolve(".codex/mcp.json");
             Files.createDirectories(legacyProjectMcp.getParent());
@@ -163,11 +164,13 @@ final class ProviderApplicationServiceTest {
             assertTrue(Files.exists(userMcp));
             String parsed = Files.readString(userMcp);
             assertTrue(parsed.contains("notify = [\"keep\"]"));
+            assertTrue(parsed.contains("[[plugin_registry]]"));
+            assertTrue(parsed.contains("name = \"keep\""));
             assertTrue(parsed.contains("[mcp_servers.other-server]"));
             assertTrue(parsed.contains("[mcp_servers.synesis]"));
             assertTrue(parsed.contains("command = '" + mcpLauncher.toAbsolutePath().normalize() + "'"));
-            assertTrue(parsed.contains("\"mcp\", \"--provider\", \"codex\", \"--project\""));
-            assertTrue(parsed.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+            assertTrue(parsed.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+            assertFalse(parsed.contains("--project"));
             Map<?, ?> legacy = (Map<?, ?>) ProviderJson.parse(Files.readString(legacyProjectMcp));
             assertTrue(((Map<?, ?>) legacy.get("mcpServers")).containsKey("other"));
             assertFalse(((Map<?, ?>) legacy.get("mcpServers")).containsKey("synesis"));
@@ -186,7 +189,18 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void freshCodexInstallPinsProjectAndIndependentSessionsConverge() throws Exception {
+    void refusesArrayOfTablesForTheManagedSynesisMcpEntry() throws Exception {
+        Path config = Files.createTempFile("codex-mcp-array-entry-", ".toml");
+        Files.writeString(config, "[[mcp_servers.synesis]]\ncommand = \"legacy.cmd\"\n");
+
+        CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(config, null);
+
+        assertEquals(CodexTomlConfiguration.Outcome.UNSUPPORTED_SCHEMA, inspection.outcome());
+        assertEquals("[[mcp_servers.synesis]]\ncommand = \"legacy.cmd\"\n", Files.readString(config));
+    }
+
+    @Test
+    void freshCodexInstallUsesOneGlobalMcpEntryAndIndependentProjectSessions() throws Exception {
         Path root = Files.createTempDirectory("provider-readiness-");
         git(root, "init");
         git(root, "config", "user.name", "Test User");
@@ -208,8 +222,23 @@ final class ProviderApplicationServiceTest {
 
             Path config = ProviderRegistry.find("codex").mcpConfigurationPath(root);
             String configured = Files.readString(config);
-            assertTrue(configured.contains("\"--project\""));
-            assertTrue(configured.contains(root.toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+            assertTrue(configured.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+            assertFalse(configured.contains("--project"));
+
+            Path secondRoot = Files.createTempDirectory("provider-readiness-second-");
+            git(secondRoot, "init");
+            git(secondRoot, "config", "user.name", "Test User");
+            git(secondRoot, "config", "user.email", "test@example.com");
+            Files.writeString(secondRoot.resolve("README.md"), "# Second readiness repo\n");
+            git(secondRoot, "add", ".");
+            git(secondRoot, "commit", "-m", "Initial commit");
+            ProjectLocation secondLocation = new ProjectApplicationService().init(secondRoot).location();
+            service.install(secondLocation, "codex");
+            String secondConfiguration = Files.readString(config);
+            assertTrue(secondConfiguration.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+            assertFalse(secondConfiguration.contains("--project"));
+            assertTrue(secondConfiguration.contains("command = '" + mcpLauncher.toAbsolutePath().normalize() + "'"));
+            assertEquals("UP_TO_DATE", service.status(secondLocation, "codex").values().get("MCP_CONFIG_STATUS"));
 
             AgentSessionService sessions = new AgentSessionService();
             SessionResolutionRequest first = new SessionResolutionRequest(root, "codex", "fresh-agent-a", null, false);
@@ -220,6 +249,44 @@ final class ProviderApplicationServiceTest {
             assertTrue(sessions.resolveSessionContext(first).isIsolatedWorkspace());
             assertTrue(sessions.resolveSessionContext(second).isIsolatedWorkspace());
             assertNotEquals(sessions.resolveSessionContext(first).sessionId(), sessions.resolveSessionContext(second).sessionId());
+
+            SessionResolutionRequest otherProject = new SessionResolutionRequest(secondRoot, "codex", "fresh-agent-c", null, false);
+            assertEquals(AgentStatus.READY, sessions.ensureSession(otherProject).status());
+            assertTrue(sessions.resolveSessionContext(otherProject).isIsolatedWorkspace());
+        } finally {
+            restoreProperty("synesis.launcher", previousLauncher);
+            restoreProperty("synesis.mcp.launcher", previousMcp);
+        }
+    }
+
+    @Test
+    void projectUninstallKeepsGlobalMcpAndGlobalUninstallPreservesProjectHooks() throws Exception {
+        Path root = Files.createTempDirectory("provider-global-uninstall-");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        String previousLauncher = System.getProperty("synesis.launcher");
+        String previousMcp = System.getProperty("synesis.mcp.launcher");
+        System.setProperty("synesis.launcher", launcher.toString());
+        System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
+        try {
+            ProjectLocation location = new ProjectApplicationService().init(root).location();
+            ProviderApplicationService service = new ProviderApplicationService();
+            Path config = ProviderRegistry.find("codex").mcpConfigurationPath(root);
+            Files.createDirectories(config.getParent());
+            Files.writeString(config, "notify = [\"keep\"]\n\n[mcp_servers.other-server]\ncommand = \"other.cmd\"\n");
+            service.install(location, "codex");
+            Path hook = ProviderRegistry.find("codex").configurationPath(root);
+
+            assertEquals("SUCCESS", service.uninstall(location, "codex").values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertTrue(Files.readString(config).contains("[mcp_servers.synesis]"));
+            assertFalse(Files.exists(hook));
+
+            service.install(location, "codex");
+            assertEquals("SUCCESS", service.uninstallGlobalMcpConfiguration("codex").values().get("PROVIDER_UNINSTALL_RESULT"));
+            String remainingConfig = Files.readString(config);
+            assertFalse(remainingConfig.contains("[mcp_servers.synesis]"));
+            assertTrue(remainingConfig.contains("[mcp_servers.other-server]"));
+            assertTrue(Files.exists(hook));
         } finally {
             restoreProperty("synesis.launcher", previousLauncher);
             restoreProperty("synesis.mcp.launcher", previousMcp);

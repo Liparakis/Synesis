@@ -30,19 +30,6 @@ public final class CodexTomlConfiguration {
      * @throws IOException when the file cannot be read
      */
     public static Inspection inspect(Path path, Path launcher) throws IOException {
-        return inspect(path, launcher, null);
-    }
-
-    /**
-     * Inspects the configured Codex TOML for one explicit project root.
-     *
-     * @param path        config path
-     * @param launcher    stable launcher
-     * @param projectRoot initialized project root, or {@code null} for the legacy unpinned shape
-     * @return inspection result
-     * @throws IOException when the file cannot be read
-     */
-    public static Inspection inspect(Path path, Path launcher, Path projectRoot) throws IOException {
         Objects.requireNonNull(path, "path");
         if (!Files.exists(path)) {
             return new Inspection(Outcome.MISSING, "", "", "");
@@ -53,7 +40,7 @@ public final class CodexTomlConfiguration {
         if (parsed.outcome != Outcome.UP_TO_DATE && parsed.outcome != Outcome.MIGRATION_REQUIRED) {
             return new Inspection(parsed.outcome, sha(bytes), parsed.unrelated, parsed.synesis);
         }
-        String desired = canonical(desired(launcher, projectRoot));
+        String desired = canonical(desired(launcher));
         String current = canonical(parsed.parentDirect);
         Outcome outcome = desired.equals(current) ? Outcome.UP_TO_DATE : Outcome.MIGRATION_REQUIRED;
         return new Inspection(outcome, sha(bytes), parsed.unrelated, sha(current.getBytes(StandardCharsets.UTF_8)));
@@ -68,21 +55,8 @@ public final class CodexTomlConfiguration {
      * @throws IOException when the file cannot be safely updated
      */
     public static Inspection upsert(Path path, Path launcher) throws IOException {
-        return upsert(path, launcher, null);
-    }
-
-    /**
-     * Ensures the Synesis table exists and is current for one explicit project root.
-     *
-     * @param path        config path
-     * @param launcher    stable launcher
-     * @param projectRoot initialized project root, or {@code null} for the legacy unpinned shape
-     * @return result after the operation
-     * @throws IOException when the file cannot be safely updated
-     */
-    public static Inspection upsert(Path path, Path launcher, Path projectRoot) throws IOException {
         Objects.requireNonNull(path, "path");
-        Inspection before = inspect(path, launcher, projectRoot);
+        Inspection before = inspect(path, launcher);
         if (before.outcome() == Outcome.UP_TO_DATE) {
             return before;
         }
@@ -94,13 +68,13 @@ public final class CodexTomlConfiguration {
             String text = Files.readString(path);
             newline = text.contains("\r\n") ? "\r\n" : "\n";
             Parsed parsed = parse(text);
-            String updated = parsed.parentStart < 0 ? appendTable(text, desired(launcher, projectRoot), newline) : replaceParent(text, parsed, desired(launcher, projectRoot), newline);
+            String updated = parsed.parentStart < 0 ? appendTable(text, desired(launcher), newline) : replaceParent(text, parsed, desired(launcher), newline);
             atomicWrite(path, updated);
         } else {
             Files.createDirectories(path.toAbsolutePath().normalize().getParent());
-            atomicWrite(path, desired(launcher, projectRoot) + newline);
+            atomicWrite(path, desired(launcher) + newline);
         }
-        return inspect(path, launcher, projectRoot);
+        return inspect(path, launcher);
     }
 
     /**
@@ -155,15 +129,10 @@ public final class CodexTomlConfiguration {
         return text.substring(0, p.parentStart) + header + nl + direct + nl + suffix + text.substring(p.parentEnd);
     }
 
-    private static String desired(Path launcher, Path projectRoot) {
+    private static String desired(Path launcher) {
         String command = launcher != null && Files.isRegularFile(launcher) ? launcher.toAbsolutePath().normalize().toString()
                 : (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "synesis-mcp.exe" : "synesis-mcp");
-        String projectArg = projectRoot == null ? "" : ", \"--project\", \"" + escapeBasic(projectRoot.toAbsolutePath().normalize().toString()) + "\"";
-        return "[mcp_servers.synesis]\n" + "command = '" + escapeLiteral(command) + "'\n" + "args = [\"mcp\", \"--provider\", \"codex\"" + projectArg + "]";
-    }
-
-    private static String escapeBasic(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        return "[mcp_servers.synesis]\n" + "command = '" + escapeLiteral(command) + "'\n" + "args = [\"mcp\", \"--provider\", \"codex\"]";
     }
 
     private static String escapeLiteral(String value) {
@@ -182,10 +151,14 @@ public final class CodexTomlConfiguration {
             String trimmed = stripComment(line).trim();
             boolean headerPosition = !single && !dbl && square == 0 && trimmed.startsWith("[");
             if (headerPosition) {
-                if (!(trimmed.endsWith("]")) || trimmed.startsWith("[[")) {
+                boolean arrayTable = trimmed.startsWith("[[");
+                String closing = arrayTable ? "]]" : "]";
+                int openingLength = arrayTable ? 2 : 1;
+                if (!trimmed.endsWith(closing) || trimmed.length() <= openingLength + closing.length()) {
                     malformed = true;
                 } else {
-                    sections.add(new Section(trimmed.substring(1, trimmed.length() - 1).trim(), offset));
+                    String name = trimmed.substring(openingLength, trimmed.length() - closing.length()).trim();
+                    sections.add(new Section(name, offset, arrayTable));
                 }
             }
             for (int i = 0; i < line.length(); i++) {
@@ -218,7 +191,10 @@ public final class CodexTomlConfiguration {
         if (malformed) {
             return new Parsed(Outcome.MALFORMED, -1, -1, "", "", "");
         }
-        long parentCount = sections.stream().filter(s -> s.name.equals("mcp_servers.synesis")).count();
+        List<Section> synesisSections = sections.stream().filter(section -> section.name.equals("mcp_servers.synesis")).toList();
+        if (synesisSections.stream().anyMatch(Section::arrayTable)) {
+            return new Parsed(Outcome.UNSUPPORTED_SCHEMA, -1, -1, "", "", "");
+        }
         boolean dotted = false;
         for (String line : lines) {
             String key = assignmentKey(line);
@@ -232,7 +208,7 @@ public final class CodexTomlConfiguration {
                 }
             }
         }
-        if (parentCount > 1 || dotted) {
+        if (synesisSections.size() > 1 || dotted) {
             return new Parsed(Outcome.DUPLICATE_SYNSESIS_ENTRY, -1, -1, "", "", "");
         }
         int start = -1, end = text.length();
@@ -394,7 +370,7 @@ public final class CodexTomlConfiguration {
     /**
      * Represents one parsed TOML section and its source offset.
      */
-    private record Section(String name, int offset) {
+    private record Section(String name, int offset, boolean arrayTable) {
 
     }
 

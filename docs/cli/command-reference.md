@@ -9,6 +9,7 @@ synesis
   init [--project <path>]
   identity show
   provider list|install|status|uninstall|migrate <provider>
+  provider uninstall codex --global
   project create
   constraint create
   sync host|join
@@ -44,4 +45,8 @@ same project, provider binding, target, mutation kind, content, preconditions,
 and output mode; reusing it with changed input is rejected.
 
 Provider installation commands are project-local. Provider commands use
-canonical IDs only.
+canonical IDs only. Codex MCP project context comes from the connected workspace
+or process working directory; `synesis mcp --project` is not supported. Managed
+Codex launches carry their pinned project root through trusted server
+configuration. The global MCP registration is removed only with
+`synesis provider uninstall codex --global`.

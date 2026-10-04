@@ -72,6 +72,12 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void mcpUsesConnectionProjectContextInsteadOfAProjectOption() throws Exception {
+        assertEquals(2, SynesisCli.execute(new String[]{"mcp", "--project", "C:/fixture"}, invocation().runtime()));
+        assertEquals(2, SynesisCli.execute(new String[]{"provider", "uninstall", "codex", "--global", "--project", "C:/fixture"}, invocation().runtime()));
+    }
+
+    @Test
     void unhandledCommandFailureUsesRedactedInternalExitMapping() throws Exception {
         Invocation invocation = invocation();
         CommandLine command = new CommandLine(new RootCommand());

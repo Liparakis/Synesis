@@ -706,7 +706,7 @@ public final class ProviderApplicationService {
         if (resolvedProvider != null && "codex".equals(resolvedId)) {
             try {
                 Path path = resolvedProvider.mcpConfigurationPath(location.root());
-                CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path, mcpLauncherPath(), location.root());
+                CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path, mcpLauncherPath());
                 Map<String, String> values = new LinkedHashMap<>(result.values());
                 values.put("MCP_CONFIG_PATH", path.toString());
                 values.put("MCP_CONFIG_STATUS", inspection.outcome().name());
@@ -851,14 +851,16 @@ public final class ProviderApplicationService {
                     }
                 }
             }
-            removeMcpConfig(location, provider);
+            if (!"codex".equals(provider.id())) {
+                removeMcpConfig(location, provider);
+            }
             Files.deleteIfExists(metadata);
             try {
                 new ProviderSessionBindingService().revoke(location, provider.id());
             } catch (ProviderSessionBindingService.BindingException ignored) {
                 // Status exposes a broken binding; managed hook removal remains complete.
             }
-            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0, "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "UNRELATED_CONFIGURATION_PRESERVED", "true");
+            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0, "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "GLOBAL_MCP_CONFIG_PRESERVED", Boolean.toString("codex".equals(provider.id())), "UNRELATED_CONFIGURATION_PRESERVED", "true");
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_UNINSTALL_RESULT", 10);
         } catch (Exception failure) {
@@ -866,6 +868,28 @@ public final class ProviderApplicationService {
                 return failure(id, "PROVIDER_CONFIGURATION_CONFLICT", "PROVIDER_UNINSTALL_RESULT", 10);
             }
             return failure(id, "UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
+        }
+    }
+
+    /**
+     * Removes the shared user-level Codex MCP entry without changing any project hook.
+     *
+     * @param id provider identifier
+     * @return structured global MCP removal result
+     */
+    public ProviderResult uninstallGlobalMcpConfiguration(String id) {
+        ProviderIntegration provider = provider(id);
+        if (provider == null) {
+            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", 2);
+        }
+        if (!"codex".equals(provider.id())) {
+            return failure(id, "GLOBAL_MCP_UNSUPPORTED", "PROVIDER_UNINSTALL_RESULT", 2);
+        }
+        try {
+            String outcome = mcpConfiguration.removeGlobal(provider);
+            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0, "GLOBAL_MCP_CONFIG_STATUS", outcome, "PROJECT_HOOKS_CHANGED", "false");
+        } catch (Exception failure) {
+            return failure(id, "GLOBAL_MCP_UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
         }
     }
 
@@ -892,8 +916,10 @@ public final class ProviderApplicationService {
     private McpHealth probeMcp(Path launcher, String provider, Path project) {
         Process process = null;
         try {
-            List<String> command = List.of(launcher.toAbsolutePath().normalize().toString(), "mcp", "--provider", provider, "--project", project.toAbsolutePath().normalize().toString());
-            process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            List<String> command = List.of(launcher.toAbsolutePath().normalize().toString(), "mcp", "--provider", provider);
+            ProcessBuilder builder = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD);
+            builder.environment().put("SYNESIS_MCP_PROJECT", project.toAbsolutePath().normalize().toString());
+            process = builder.start();
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
                     BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 writer.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{" + "\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"

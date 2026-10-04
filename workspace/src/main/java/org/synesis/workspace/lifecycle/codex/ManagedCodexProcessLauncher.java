@@ -104,15 +104,17 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
         this.deathReceiptStore = ManagedRuntimeDeathReceiptStore.storeFor(location);
     }
 
-    private static List<String> configuredCommand(CodexManagedRuntimeHome home, Path launcher, Path projectRoot, String connectionInstanceId) {
+    static List<String> configuredCommand(CodexManagedRuntimeHome home, Path launcher, Path projectRoot, String connectionInstanceId) {
         String configured = System.getenv("SYNESIS_CODEX_APP_SERVER_COMMAND");
         List<String> command = configured == null || configured.isBlank() ? new ArrayList<>(List.of("codex", "app-server", "--stdio")) : new ArrayList<>(List.of(configured.trim().split("\\s+")));
         command.add("-c");
         command.add("mcp_servers.synesis.command=" + tomlString(launcher));
         command.add("-c");
-        command.add("mcp_servers.synesis.args=[\"mcp\",\"--provider\",\"codex\",\"--project\"," + tomlString(projectRoot) + "]");
+        command.add("mcp_servers.synesis.args=[\"mcp\",\"--provider\",\"codex\"]");
         command.add("-c");
         command.add("mcp_servers.synesis.env_vars=[\"" + CodexManagedRuntimeHome.ATTACHMENT_PROOF_ENV + "\"]");
+        command.add("-c");
+        command.add("mcp_servers.synesis.env.SYNESIS_MCP_PROJECT=" + tomlString(projectRoot));
         // Codex's selected env_vars carrier is used for the secret proof, but
         // the non-secret connection selector must be an explicit per-server
         // override: stock App Server versions do not consistently forward

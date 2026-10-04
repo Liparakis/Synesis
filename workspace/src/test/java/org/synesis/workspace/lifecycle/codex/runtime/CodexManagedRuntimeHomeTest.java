@@ -28,6 +28,10 @@ final class CodexManagedRuntimeHomeTest {
       first.writeConfiguration(launcher, Path.of("C:/fixture"),
           CodexManagedAuthentication.Strategy.SHARED_KEYRING);
       String config = Files.readString(first.configPath());
+      assertTrue(config.contains("args = [\"mcp\", \"--provider\", \"codex\"]"));
+      assertFalse(config.contains("--project"));
+      assertTrue(config.contains("SYNESIS_MCP_PROJECT ="));
+      assertTrue(config.contains(Path.of("C:/fixture").toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
       assertTrue(config.contains("env_vars = [\"SYNESIS_ATTACH_PROOF\"]"));
       assertFalse(config.contains("secret-proof"));
       assertEquals(first.path()

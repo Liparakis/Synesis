@@ -23,8 +23,6 @@ public final class McpCommand implements Callable<Integer> {
     private final CliRuntime runtime;
     @Option(names = {"--provider"}, description = "Provider name (default: codex)", defaultValue = "codex")
     private String provider;
-    @Option(names = {"--project"}, description = "Project root directory")
-    private String project;
     @Option(names = {"--connection-instance-id"}, description = "Process connection instance ID")
     private String connectionInstanceId;
 
@@ -45,10 +43,6 @@ public final class McpCommand implements Callable<Integer> {
             if (provider != null && !provider.isBlank()) {
                 argsList.add("--provider");
                 argsList.add(provider);
-            }
-            if (project != null && !project.isBlank()) {
-                argsList.add("--project");
-                argsList.add(project);
             }
             if (connectionInstanceId != null && !connectionInstanceId.isBlank()) {
                 argsList.add("--connection-instance-id");

@@ -68,6 +68,7 @@ import org.synesis.workspace.application.provider.continuity.ProviderContinuityM
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.application.workspace.mutation.PatchEdit;
 import org.synesis.workspace.application.workspace.mutation.PatchRequest;
 import org.synesis.workspace.application.workspace.ReadinessResult;
@@ -275,6 +276,10 @@ public final class McpProtocolHandler {
      * Project root selected from the initialized request or roots notification.
      */
     private Path activeProjectRoot;
+    /** Whether this connection resolved one initialized project root. */
+    private boolean projectRootResolved;
+    /** Whether the selected project was recorded in the installation-local discovery index. */
+    private boolean projectObserved;
     /**
      * Whether initialize has successfully bound this connection to a session.
      */
@@ -427,6 +432,12 @@ public final class McpProtocolHandler {
         this.managedAttachmentGeneration = managedAttachment == null ? 0L : managedAttachment.generation();
         if (managedAttachment != null && managedAttachment.status() != ManagedAttachmentRecord.Status.ACTIVE && managedAttachment.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
             throw new IllegalArgumentException("managed attachment is not transport-admissible");
+        }
+        Path launchRoot = resolveProjectRootFromCandidates(projectRootPinned ? List.of() : List.of(projectRoot));
+        if (launchRoot != null && projectRootAuthorityFailure == null) {
+            this.activeProjectRoot = launchRoot;
+            this.projectRootResolved = true;
+            observeProjectRoot();
         }
     }
 
@@ -1133,6 +1144,8 @@ public final class McpProtocolHandler {
             Path resolved = resolveProjectRootFromCandidates(candidates);
             if (resolved != null) {
                 this.activeProjectRoot = resolved;
+                this.projectRootResolved = true;
+                observeProjectRoot();
             }
         }
         return null;
@@ -1159,6 +1172,8 @@ public final class McpProtocolHandler {
 
             if (resolved != null) {
                 this.activeProjectRoot = resolved;
+                this.projectRootResolved = true;
+                observeProjectRoot();
             }
         }
 
@@ -1201,12 +1216,37 @@ public final class McpProtocolHandler {
      * @return the roots/list result response
      */
     private String handleRootsList(Object id) {
+        if (!projectRootResolved) {
+            return createResultResponse(id, Map.of("roots", List.of()));
+        }
         Map<String, Object> rootItem = new LinkedHashMap<>();
         rootItem.put("uri", activeProjectRoot.toUri().toString());
         rootItem.put("name", activeProjectRoot.getFileName() != null ? activeProjectRoot.getFileName().toString() : "root");
 
         Map<String, Object> result = Map.of("roots", List.of(rootItem));
         return createResultResponse(id, result);
+    }
+
+    /**
+     * Records the selected project without making discovery-index availability a startup gate.
+     */
+    private void observeProjectRoot() {
+        if (!projectRootResolved || projectObserved) {
+            return;
+        }
+        projectObserved = true;
+        try {
+            ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+            new KnownProjectRegistry().observe(location);
+        } catch (KnownProjectRegistry.RegistryException failure) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + failure.code());
+        } catch (ProjectApplicationService.ProjectApplicationException failure) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + failure.code());
+        } catch (IOException failure) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=IO");
+        } catch (Exception failure) {
+            System.err.println("SYNESIS_MCP_PROJECT_DISCOVERY_ERROR=" + failure.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -1222,7 +1262,7 @@ public final class McpProtocolHandler {
      */
     private ManagedAdmissionState managedAdmissionState(String toolName) {
         if (!managedAdmission) {
-            return ManagedAdmissionState.ACTIVE;
+            return prooflessManagedAdmissionState();
         }
         try {
             ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
@@ -1252,6 +1292,38 @@ public final class McpProtocolHandler {
     }
 
     /**
+     * Prevents an ordinary provider connection from reusing an exact binding reserved for managed
+     * continuity without presenting its launch proof.
+     *
+     * <p>This check runs after MCP root resolution so a user-level unpinned launcher can start
+     * before Codex advertises the project context. The exact provider connection ID remains the
+     * selector; another connection's managed record is never treated as authority.</p>
+     *
+     * @return the admission state for this exact provider connection
+     */
+    private ManagedAdmissionState prooflessManagedAdmissionState() {
+        if (!"codex".equals(provider)) {
+            return ManagedAdmissionState.ACTIVE;
+        }
+        if (!projectRootResolved) {
+            return ManagedAdmissionState.ACTIVE;
+        }
+        try {
+            ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+            var binding = new ProviderSessionBindingService().find(location, provider, connectionInstanceId).orElse(null);
+            if (binding == null) {
+                return ManagedAdmissionState.ACTIVE;
+            }
+            ManagedAttachmentRecord record = ManagedAttachmentService.storeFor(location, binding.sessionId()).read().orElse(null);
+            return record != null && record.mode() == ProviderContinuityMode.MANAGED_CONTINUITY
+                    ? ManagedAdmissionState.PROOF_REQUIRED
+                    : ManagedAdmissionState.ACTIVE;
+        } catch (Exception rejected) {
+            return ManagedAdmissionState.REJECTED;
+        }
+    }
+
+    /**
      * Creates the deterministic response for a quarantined or fenced managed transport without
      * invoking any application mutation service.
      *
@@ -1260,7 +1332,11 @@ public final class McpProtocolHandler {
      * @return serialized error result
      */
     private String managedAdmissionResponse(Object id, ManagedAdmissionState state) {
-        String reason = state == ManagedAdmissionState.PENDING ? "managed_attachment_pending" : "managed_attachment_rejected";
+        String reason = switch (state) {
+            case PENDING -> "managed_attachment_pending";
+            case PROOF_REQUIRED -> "managed_attachment_proof_required";
+            case ACTIVE, REVIEW_ONLY, REJECTED -> "managed_attachment_rejected";
+        };
         Map<String, Object> text = Map.of("status", "blocked", "reason", reason);
         return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text", "text", ProviderJson.write(text))), "isError", true));
     }
@@ -1314,8 +1390,8 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Collects fallback candidate project roots from supported environment variables, the explicit
-     * {@code --project} argument, and the process working directory. Only called when MCP
+     * Collects fallback candidate project roots from supported environment variables, a trusted
+     * launcher-provided root, and the process working directory. Only called when MCP
      * {@code initialize} params yield no initialized root.
      *
      * @return list of fallback candidate paths
@@ -1337,7 +1413,7 @@ public final class McpProtocolHandler {
             }
         }
 
-        // Explicit initial project root (e.g. --project argument)
+        // Trusted initial project root (for example, managed continuity).
         if (!candidates.contains(initialProjectRoot)) {
             candidates.add(initialProjectRoot.toAbsolutePath().normalize());
         }
@@ -1562,7 +1638,6 @@ public final class McpProtocolHandler {
             AgentResponse mismatch = new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, Map.of("error", projectRootAuthorityFailure));
             return textResultResponse(id, mismatch.toJson());
         }
-
         ManagedAdmissionState managedState = managedAdmissionState(name);
         if (managedState != ManagedAdmissionState.ACTIVE && managedState != ManagedAdmissionState.REVIEW_ONLY) {
             return managedAdmissionResponse(id, managedState);
@@ -2354,6 +2429,8 @@ public final class McpProtocolHandler {
          * The proof-bearing transport is connected but has no authority.
          */
         PENDING,
+        /** The exact provider binding is managed and requires its process-private proof. */
+        PROOF_REQUIRED,
         /**
          * The attachment or exact binding is no longer admissible.
          */

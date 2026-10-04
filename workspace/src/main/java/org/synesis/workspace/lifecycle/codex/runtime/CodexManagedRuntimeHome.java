@@ -118,9 +118,9 @@ public final class CodexManagedRuntimeHome {
             throw new IOException("MANAGED_CODEX_AUTH_UNAVAILABLE");
         }
         String command = quote(launcher);
-        String project = quote(projectRoot.toAbsolutePath().normalize());
         String text = "cli_auth_credentials_store = \"keyring\"\n\n" + "[mcp_servers.synesis]\n" + "command = '" + launcher.toAbsolutePath().normalize().toString().replace("'", "''") + "'\n"
-                + "args = [\"mcp\", \"--provider\", \"codex\", \"--project\", " + project + "]\n" + "env_vars = [\"" + ATTACHMENT_PROOF_ENV + "\"]\n";
+                + "args = [\"mcp\", \"--provider\", \"codex\"]\n" + "env_vars = [\"" + ATTACHMENT_PROOF_ENV + "\"]\n"
+                + "[mcp_servers.synesis.env]\nSYNESIS_MCP_PROJECT = " + quote(projectRoot.toAbsolutePath().normalize()) + "\n";
         atomicWrite(configPath(), text);
         if (Files.readString(configPath()).contains(ATTACHMENT_PROOF_ENV + "=\"")) {
             throw new IOException("managed configuration contains raw attachment assignment");

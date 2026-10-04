@@ -9,7 +9,7 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * Removes only one provider's managed project configuration and metadata.
+ * Removes one provider's project configuration, or its shared user-level Codex MCP entry.
  */
 @Command(name = "uninstall", description = "Uninstall a provider integration.", mixinStandardHelpOptions = true)
 public final class ProviderUninstallCommand implements Callable<Integer> {
@@ -20,6 +20,8 @@ public final class ProviderUninstallCommand implements Callable<Integer> {
     private String provider;
     @Option(names = "--project", description = "Project directory.")
     private String project;
+    @Option(names = "--global", description = "Remove only the shared user-level Codex MCP entry.")
+    private boolean global;
 
     /**
      * Creates the command.
@@ -31,10 +33,19 @@ public final class ProviderUninstallCommand implements Callable<Integer> {
     }
 
     /**
-     * Uninstalls the provider. @return exit code
+     * Uninstalls the selected project hook or shared MCP entry. @return exit code
      */
     @Override
     public Integer call() {
+        if (global) {
+            if (project != null) {
+                runtime.terminal().stderr("ERROR=CONFLICTING_UNINSTALL_SCOPE");
+                return ExitCodes.USAGE;
+            }
+            var result = runtime.providerService().uninstallGlobalMcpConfiguration(provider);
+            result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
+            return result.exitCode();
+        }
         try {
             var location = runtime.projectService().require(Path.of(project == null ? "." : project));
             var result = runtime.providerService().uninstall(location, provider);

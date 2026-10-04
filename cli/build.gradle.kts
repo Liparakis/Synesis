@@ -32,6 +32,22 @@ val hostPlatform = when {
 }
 val isWindows = hostPlatform.startsWith("windows")
 
+fun isolateSmokeUserProfile(processBuilder: ProcessBuilder, smokeRoot: File) {
+    val smokeHome = smokeRoot.resolve("user-home")
+    val smokeLocalAppData = smokeRoot.resolve("local-app-data")
+    require(smokeHome.isDirectory || smokeHome.mkdirs()) { "Unable to create smoke user home: $smokeHome" }
+    require(smokeLocalAppData.isDirectory || smokeLocalAppData.mkdirs()) { "Unable to create smoke local app data: $smokeLocalAppData" }
+    val environment = processBuilder.environment()
+    environment["USERPROFILE"] = smokeHome.absolutePath
+    environment["HOME"] = smokeHome.absolutePath
+    environment["LOCALAPPDATA"] = smokeLocalAppData.absolutePath
+    environment["APPDATA"] = smokeHome.resolve("AppData/Roaming").absolutePath
+    environment["XDG_DATA_HOME"] = smokeHome.resolve(".local/share").absolutePath
+    val existingJavaOptions = environment["JAVA_TOOL_OPTIONS"].orEmpty().trim()
+    val userHomeOption = "-Duser.home=\"${smokeHome.absolutePath}\""
+    environment["JAVA_TOOL_OPTIONS"] = listOf(existingJavaOptions, userHomeOption).filter { it.isNotBlank() }.joinToString(" ")
+}
+
 val bundlePlatform = providers.gradleProperty("bundlePlatform").orElse(hostPlatform)
 val bundleVersion = providers.gradleProperty("synesisVersion")
     .orElse(providers.environmentVariable("SYNESIS_VERSION").orElse("0.1.0-dev.local"))
@@ -751,10 +767,11 @@ val protectionLiteBundleSmokeTest = tasks.register("protectionLiteBundleSmokeTes
             else mutableListOf(launcher.absolutePath)).apply { addAll(arguments) }
 
         fun runWithExit(expectedExitCode: Int, vararg arguments: String): String {
-            val process = ProcessBuilder(launcherCommand(*arguments)).directory(smokeRoot)
+            val processBuilder = ProcessBuilder(launcherCommand(*arguments)).directory(smokeRoot)
                 .redirectErrorStream(true)
-                .apply { environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath }
-                .start()
+            isolateSmokeUserProfile(processBuilder, smokeRoot)
+            processBuilder.environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath
+            val process = processBuilder.start()
             val output = process.inputStream.bufferedReader().readText()
             require(process.waitFor() == expectedExitCode) {
                 "Protection-lite command failed: ${arguments.joinToString(" ")}\n$output"
@@ -831,12 +848,13 @@ val protectionLiteBundleSmokeTest = tasks.register("protectionLiteBundleSmokeTes
             run("doctor", "--project", project.absolutePath)
             run("ui", "--project", project.absolutePath, "--duration-seconds", "1", "--no-browser")
 
-            val mcpProcess = ProcessBuilder(
+            val mcpProcessBuilder = ProcessBuilder(
                 launcherCommand(
-                    "mcp", "--provider", "codex", "--project", project.absolutePath,
-                    "--connection-instance-id", "protection-smoke-1",
+                    "mcp", "--provider", "codex", "--connection-instance-id", "protection-smoke-1",
                 ),
-            ).directory(smokeRoot).start()
+            ).directory(project)
+            isolateSmokeUserProfile(mcpProcessBuilder, smokeRoot)
+            val mcpProcess = mcpProcessBuilder.start()
             val mcpWriter = mcpProcess.outputStream.bufferedWriter(Charsets.UTF_8)
             val mcpReader = mcpProcess.inputStream.bufferedReader(Charsets.UTF_8)
             mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n")
@@ -1807,6 +1825,7 @@ tasks.register("bundleSmokeTest") {
             else mutableListOf(launcher.absolutePath)).apply { addAll(arguments) }
             val processBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
             processBuilder.redirectInput(ProcessBuilder.Redirect.from(nullInput))
+            isolateSmokeUserProfile(processBuilder, smokeRoot)
             processBuilder.environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath
             val result = processBuilder.start()
             val output = captureProcess(result,
@@ -1822,8 +1841,9 @@ tasks.register("bundleSmokeTest") {
             } else {
                 mutableListOf(standaloneInstaller.absolutePath, "version")
             }
-            val standaloneProcess = ProcessBuilder(standaloneCommand).directory(smokeRoot)
-                .redirectErrorStream(true).start()
+            val standaloneBuilder = ProcessBuilder(standaloneCommand).directory(smokeRoot).redirectErrorStream(true)
+            isolateSmokeUserProfile(standaloneBuilder, smokeRoot)
+            val standaloneProcess = standaloneBuilder.start()
             val standaloneOutput = captureProcess(standaloneProcess, "Single-file installer version")
             require("SYNESIS_BOOTSTRAP_VERSION=" in standaloneOutput) {
                 "Single-file installer version check failed:\n$standaloneOutput"
@@ -1837,6 +1857,7 @@ tasks.register("bundleSmokeTest") {
             val installerBuilder = ProcessBuilder(installerCommand).directory(smokeRoot)
                 .redirectErrorStream(true)
                 .redirectInput(ProcessBuilder.Redirect.from(nullInput))
+            isolateSmokeUserProfile(installerBuilder, smokeRoot)
             val installerResult = installerBuilder.start()
             val installerOutput = captureProcess(installerResult, "Native installer version")
             require("SYNESIS_BOOTSTRAP_VERSION=" in installerOutput) {
@@ -1885,15 +1906,15 @@ tasks.register("bundleSmokeTest") {
                         "mcp",
                         "--provider",
                         "codex",
-                        "--project",
-                        project.absolutePath,
                         "--connection-instance-id",
                         "smoke-conn-1"
                     )
                 )
             }
-            val mcpProcess = ProcessBuilder(mcpCommand).directory(smokeRoot)
-                .redirectError(ProcessBuilder.Redirect.DISCARD).start()
+            val mcpProcessBuilder = ProcessBuilder(mcpCommand).directory(project)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+            isolateSmokeUserProfile(mcpProcessBuilder, smokeRoot)
+            val mcpProcess = mcpProcessBuilder.start()
             val mcpInput = listOf(
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}",

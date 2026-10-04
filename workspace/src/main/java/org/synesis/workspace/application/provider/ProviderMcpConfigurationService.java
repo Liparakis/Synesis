@@ -30,11 +30,12 @@ final class ProviderMcpConfigurationService {
         }
         try {
             if ("codex".equals(provider.id())) {
-                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher, location.root());
-                if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY) {
+                CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher);
+                if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY
+                        || before.outcome() == CodexTomlConfiguration.Outcome.UNSUPPORTED_SCHEMA) {
                     return "MALFORMED_CONFIG";
                 }
-                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher, location.root());
+                CodexTomlConfiguration.Inspection after = CodexTomlConfiguration.upsert(configPath, launcher);
                 cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
                 return before.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE && after.outcome() == CodexTomlConfiguration.Outcome.UP_TO_DATE ? "UNCHANGED" : "INSTALLED";
             }
@@ -72,6 +73,25 @@ final class ProviderMcpConfigurationService {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    /**
+     * Removes only Codex's user-wide Synesis MCP entry.
+     */
+    String removeGlobal(ProviderIntegration provider) throws IOException {
+        Path configPath = provider.mcpConfigurationPath(Path.of("."));
+        if (configPath == null || !Files.exists(configPath)) {
+            return "NOT_PRESENT";
+        }
+        if (!"codex".equals(provider.id())) {
+            throw new IllegalArgumentException("global MCP removal is only supported for Codex");
+        }
+        CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(configPath, null);
+        if (inspection.outcome() == CodexTomlConfiguration.Outcome.MALFORMED || inspection.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY
+                || inspection.outcome() == CodexTomlConfiguration.Outcome.UNSUPPORTED_SCHEMA) {
+            throw new IOException("Codex MCP configuration is not safe to edit");
+        }
+        return CodexTomlConfiguration.remove(configPath) ? "REMOVED" : "NOT_PRESENT";
     }
 
     private void removeEntry(Path path) throws IOException {
