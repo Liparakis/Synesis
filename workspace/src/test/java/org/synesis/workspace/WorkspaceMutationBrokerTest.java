@@ -3,11 +3,14 @@ package org.synesis.workspace;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
@@ -299,6 +302,70 @@ class WorkspaceMutationBrokerTest {
         assertEquals(Decision.SESSION_UNBOUND, result.decision());
         assertEquals("EXACT_SESSION_REQUIRED", result.reasonCode());
         assertFalse(Files.exists(location.root().resolve("src/no-identity.txt")));
+    }
+
+    @Test
+    void protectedConfigurationTargetsAreCaseInsensitive() throws Exception {
+        setVerifiedTrustState();
+        var binding = bindingService.list(location, "codex").getLast();
+
+        MutationResult result = broker.applyMutation(new MutationRequest(location, "codex",
+                binding.sessionId(), ".SyNeSiS/local/private.json", "write_file", "content",
+                true, false));
+
+        assertFalse(result.success());
+        assertEquals(Decision.DENY_POLICY, result.decision());
+        assertEquals("PROTECTED_CONFIGURATION_TARGET", result.reasonCode());
+        assertFalse(Files.exists(Path.of(binding.worktreePath()).resolve(
+                ".synesis/local/private.json")));
+    }
+
+    @Test
+    void previousHashIsCheckedByTheBrokerBeforeApplyingTheMutation() throws Exception {
+        setVerifiedTrustState();
+        var binding = bindingService.list(location, "codex").getLast();
+        Path target = Path.of(binding.worktreePath()).resolve("src/precondition.txt");
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, "before");
+        String expectedHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest("before".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+        MutationResult stale = broker.applyMutation(new MutationRequest(location, "codex",
+                binding.sessionId(), "src/precondition.txt", "write_file", "rejected", true,
+                false, "0".repeat(64), false));
+        assertFalse(stale.success());
+        assertEquals(Decision.STALE_CONTEXT, stale.decision());
+        assertEquals("HASH_MISMATCH", stale.reasonCode());
+        assertEquals("before", Files.readString(target));
+        MutationResult otherStale = broker.applyMutation(new MutationRequest(location, "codex",
+                binding.sessionId(), "src/precondition.txt", "write_file", "rejected", true,
+                false, "1".repeat(64), false));
+        assertNotEquals(stale.interceptionEvidence(), otherStale.interceptionEvidence());
+
+        MutationResult accepted = broker.applyMutation(new MutationRequest(location, "codex",
+                binding.sessionId(), "src/precondition.txt", "write_file", "after", true,
+                false, expectedHash, false));
+        assertTrue(accepted.success(), "applyMutation failed: " + accepted.message());
+        assertEquals("after", Files.readString(target));
+        assertEquals(64, accepted.updatedRevision().length());
+    }
+
+    @Test
+    void createOnlyTreatsAnExistingTargetAsStaleContext() throws Exception {
+        setVerifiedTrustState();
+        var binding = bindingService.list(location, "codex").getLast();
+        Path target = Path.of(binding.worktreePath()).resolve("src/create-only.txt");
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, "already here");
+
+        MutationResult result = broker.applyMutation(new MutationRequest(location, "codex",
+                binding.sessionId(), "src/create-only.txt", "write_file", "replacement", true,
+                false, null, true));
+
+        assertFalse(result.success());
+        assertEquals(Decision.STALE_CONTEXT, result.decision());
+        assertEquals("FILE_ALREADY_EXISTS", result.reasonCode());
+        assertEquals("already here", Files.readString(target));
     }
 
     private void setVerifiedTrustState() throws Exception {

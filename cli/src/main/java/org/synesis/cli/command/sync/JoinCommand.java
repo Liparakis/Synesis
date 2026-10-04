@@ -14,32 +14,32 @@ import picocli.CommandLine.Parameters;
 @Command(name = "join", description = "Verify a compact or legacy invitation and start direct onboarding.", mixinStandardHelpOptions = true)
 public final class JoinCommand implements Callable<Integer> {
 
-  private final CliRuntime runtime;
-  @Parameters(index = "0", description = "Exact signed invitation link.")
-  @SuppressWarnings("unused")
-  private String link;
+    private final CliRuntime runtime;
+    @Parameters(index = "0", description = "Exact signed invitation link.")
+    @SuppressWarnings("unused")
+    private String link;
 
-  /**
-   * Creates a join command with one manually composed runtime.
-   *
-   * @param runtime manually composed CLI runtime
-   */
-  public JoinCommand(CliRuntime runtime) {
-    this.runtime = runtime;
-  }
-
-  /**
-   * Runs the bounded join operation. @return stable exit code
-   */
-  @Override
-  public Integer call() {
-    try {
-      runtime.onboarding().join(link);
-      return ExitCodes.OK;
-    } catch (OnboardingFailure failure) {
-      return FailureMapper.map(failure, runtime.terminal());
-    } catch (RuntimeException failure) {
-      return FailureMapper.internal(runtime.terminal());
+    /**
+     * Creates a join command with one manually composed runtime.
+     *
+     * @param runtime manually composed CLI runtime
+     */
+    public JoinCommand(CliRuntime runtime) {
+        this.runtime = runtime;
     }
-  }
+
+    /**
+     * Runs the bounded join operation. @return stable exit code
+     */
+    @Override
+    public Integer call() {
+        try {
+            runtime.onboarding().join(link);
+            return ExitCodes.OK;
+        } catch (OnboardingFailure failure) {
+            return FailureMapper.map(failure, runtime.terminal());
+        } catch (RuntimeException failure) {
+            return FailureMapper.internal(runtime.terminal());
+        }
+    }
 }

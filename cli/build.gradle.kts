@@ -1,6 +1,8 @@
 import org.gradle.internal.os.OperatingSystem
+import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -1723,6 +1725,76 @@ tasks.register("bundleSmokeTest") {
         val installer =
             bundleRoot.resolve("bin").resolve(if (isWindows) "synesis-installer.exe" else "synesis-installer")
         require(installer.isFile) { "Native installer missing from bundle: $installer" }
+        val nullInput = File(if (isWindows) "NUL" else "/dev/null")
+        fun stopProcess(process: Process) {
+            val descendants = process.toHandle().descendants().toList()
+            descendants.forEach { it.destroy() }
+            process.destroy()
+            try {
+                if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                    descendants.forEach { it.destroyForcibly() }
+                    process.destroyForcibly()
+                    process.waitFor(2, TimeUnit.SECONDS)
+                }
+            } catch (interrupted: InterruptedException) {
+                descendants.forEach { it.destroyForcibly() }
+                process.destroyForcibly()
+                Thread.currentThread().interrupt()
+            }
+            try { process.inputStream.close() } catch (_: IOException) { }
+            try { process.errorStream.close() } catch (_: IOException) { }
+            try { process.outputStream.close() } catch (_: IOException) { }
+            if (process.isAlive) throw GradleException("Unable to stop timed-out smoke process")
+        }
+
+        fun captureProcess(
+            process: Process,
+            description: String,
+            expectedExitCode: Int = 0,
+            timeoutSeconds: Long = 120,
+            input: String? = null,
+        ): String {
+            val output = CompletableFuture.supplyAsync {
+                process.inputStream.use { stream ->
+                    val captured = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var capturedBytes = 0
+                    var truncated = false
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        val retained = minOf(count, 1024 * 1024 - capturedBytes)
+                        if (retained > 0) {
+                            captured.write(buffer, 0, retained)
+                            capturedBytes += retained
+                        }
+                        truncated = truncated || retained < count
+                    }
+                    String(captured.toByteArray(), StandardCharsets.UTF_8) +
+                        if (truncated) "\n[smoke output truncated]" else ""
+                }
+            }
+            try {
+                process.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { writer ->
+                    if (input != null) writer.write(input)
+                }
+                if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                    stopProcess(process)
+                    val diagnostic = output.get(5, TimeUnit.SECONDS)
+                    throw GradleException("$description timed out after ${timeoutSeconds}s:\n$diagnostic")
+                }
+                val diagnostic = output.get(5, TimeUnit.SECONDS)
+                require(process.exitValue() == expectedExitCode) {
+                    "$description exited ${process.exitValue()}, expected $expectedExitCode:\n$diagnostic"
+                }
+                return diagnostic
+            } catch (interrupted: InterruptedException) {
+                stopProcess(process)
+                Thread.currentThread().interrupt()
+                throw GradleException("$description was interrupted", interrupted)
+            }
+        }
+
         if (!isWindows) {
             require(launcher.setExecutable(true)) { "Unable to restore Unix launcher permissions after extraction" }
             require(installer.setExecutable(true)) { "Unable to restore Unix installer permissions after extraction" }
@@ -1734,10 +1806,11 @@ tasks.register("bundleSmokeTest") {
             val command = (if (isWindows) mutableListOf("cmd.exe", "/c", launcher.absolutePath)
             else mutableListOf(launcher.absolutePath)).apply { addAll(arguments) }
             val processBuilder = ProcessBuilder(command).directory(smokeRoot).redirectErrorStream(true)
+            processBuilder.redirectInput(ProcessBuilder.Redirect.from(nullInput))
             processBuilder.environment()["JAVA_HOME"] = smokeRoot.resolve("missing-java").absolutePath
             val result = processBuilder.start()
-            val output = result.inputStream.bufferedReader().readText()
-            require(result.waitFor() == expectedExitCode) { "Bundle command failed: ${arguments.joinToString(" ")}\n$output" }
+            val output = captureProcess(result,
+                "Bundle command ${arguments.joinToString(" ")}", expectedExitCode)
             if (arguments.firstOrNull() == "version") require("SYNESIS_VERSION=" in output)
         }
 
@@ -1745,16 +1818,15 @@ tasks.register("bundleSmokeTest") {
         fun run(expectedExitCode: Int, vararg arguments: String) = runWithExit(expectedExitCode, arguments)
         try {
             val standaloneCommand = if (isWindows) {
-                mutableListOf("cmd.exe", "/c", standaloneInstaller.absolutePath)
+                mutableListOf("cmd.exe", "/c", standaloneInstaller.absolutePath, "version")
             } else {
-                mutableListOf(standaloneInstaller.absolutePath)
+                mutableListOf(standaloneInstaller.absolutePath, "version")
             }
             val standaloneProcess = ProcessBuilder(standaloneCommand).directory(smokeRoot)
                 .redirectErrorStream(true).start()
-            standaloneProcess.outputStream.bufferedWriter().use { it.write("4\n") }
-            val standaloneOutput = standaloneProcess.inputStream.bufferedReader().readText()
-            require(standaloneProcess.waitFor() == 0 && "Synesis Installer" in standaloneOutput) {
-                "Single-file installer smoke test failed:\n$standaloneOutput"
+            val standaloneOutput = captureProcess(standaloneProcess, "Single-file installer version")
+            require("SYNESIS_BOOTSTRAP_VERSION=" in standaloneOutput) {
+                "Single-file installer version check failed:\n$standaloneOutput"
             }
             run("version")
             val installerCommand = if (isWindows) {
@@ -1762,10 +1834,12 @@ tasks.register("bundleSmokeTest") {
             } else {
                 mutableListOf(installer.absolutePath, "version")
             }
-            val installerResult =
-                ProcessBuilder(installerCommand).directory(smokeRoot).redirectErrorStream(true).start()
-            val installerOutput = installerResult.inputStream.bufferedReader().readText()
-            require(installerResult.waitFor() == 0 && "SYNESIS_BOOTSTRAP_VERSION=" in installerOutput) {
+            val installerBuilder = ProcessBuilder(installerCommand).directory(smokeRoot)
+                .redirectErrorStream(true)
+                .redirectInput(ProcessBuilder.Redirect.from(nullInput))
+            val installerResult = installerBuilder.start()
+            val installerOutput = captureProcess(installerResult, "Native installer version")
+            require("SYNESIS_BOOTSTRAP_VERSION=" in installerOutput) {
                 "Native installer version check failed:\n$installerOutput"
             }
             val project = smokeRoot.resolve("project")
@@ -1786,23 +1860,8 @@ tasks.register("bundleSmokeTest") {
                     ),
                 )
                 val gitProcess = gitProcessBuilder.start()
-                gitProcess.outputStream.close()
-                val output = CompletableFuture.supplyAsync {
-                    val bytes = gitProcess.inputStream.readAllBytes()
-                    String(bytes, StandardCharsets.UTF_8)
-                }
-                if (!gitProcess.waitFor(30, TimeUnit.SECONDS)) {
-                    gitProcess.toHandle().descendants().forEach { it.destroyForcibly() }
-                    gitProcess.destroyForcibly()
-                    val diagnostic = output.get(5, TimeUnit.SECONDS)
-                    throw GradleException(
-                        "Smoke Git command timed out: ${command.joinToString(" ")}\n$diagnostic",
-                    )
-                }
-                val gitOutput = output.get(5, TimeUnit.SECONDS)
-                require(gitProcess.exitValue() == 0) {
-                    "Smoke Git command failed: ${command.joinToString(" ")}\n$gitOutput"
-                }
+                captureProcess(gitProcess, "Smoke Git command ${command.joinToString(" ")}",
+                    timeoutSeconds = 30)
             }
             git("init")
             git("config", "user.name", "Synesis Bundle Smoke")
@@ -1833,19 +1892,19 @@ tasks.register("bundleSmokeTest") {
                     )
                 )
             }
-            val mcpProcess = ProcessBuilder(mcpCommand).directory(smokeRoot).start()
-            val mcpWriter = mcpProcess.outputStream.bufferedWriter(Charsets.UTF_8)
-            val mcpReader = mcpProcess.inputStream.bufferedReader(Charsets.UTF_8)
-            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n")
-            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n")
-            mcpWriter.write("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}\n")
-            mcpWriter.flush()
-            mcpWriter.close()
-
-            val line1 = mcpReader.readLine()
-            val line2 = mcpReader.readLine()
-            val line3 = mcpReader.readLine()
-            require(mcpProcess.waitFor() == 0) { "MCP process failed to exit 0" }
+            val mcpProcess = ProcessBuilder(mcpCommand).directory(smokeRoot)
+                .redirectError(ProcessBuilder.Redirect.DISCARD).start()
+            val mcpInput = listOf(
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}",
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}",
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}",
+            ).joinToString("\n", postfix = "\n")
+            val mcpOutput = captureProcess(mcpProcess, "Installed stdio MCP", timeoutSeconds = 30,
+                input = mcpInput)
+            val responses = mcpOutput.lineSequence().filter { it.isNotBlank() }.toList()
+            val line1 = responses.getOrNull(0)
+            val line2 = responses.getOrNull(1)
+            val line3 = responses.getOrNull(2)
             require(line1 != null && line1.contains("protocolVersion")) { "MCP initialize failed: $line1" }
             require(line2 != null && line2.contains("\"name\":\"ensure_session\"")) { "MCP tools/list failed: $line2" }
             require(line3 != null && line3.contains("ready")) { "MCP ensure_session failed: $line3" }

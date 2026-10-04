@@ -115,8 +115,7 @@ public final class WorkspacePatchService {
         }
 
         // Protected internal target check (.synesis, .codex, .git)
-        String normTarget = resolvedRelative.replace('\\', '/').toLowerCase();
-        if (normTarget.startsWith(".synesis/") || normTarget.startsWith(".codex/") || normTarget.startsWith(".git/") || normTarget.equals(".synesis") || normTarget.equals(".codex") || normTarget.equals(".git")) {
+        if (WorkspaceMutationBroker.isProtectedTarget(resolvedRelative)) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROTECTED_CONFIGURATION, null, null);
         }
 
@@ -126,25 +125,16 @@ public final class WorkspacePatchService {
         }
 
         Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();
-        if (!targetFile.startsWith(assignedWorktree)) {
+        try {
+            if (!WorkspaceMutationBroker.targetResolvesWithinWorktree(assignedWorktree,
+                    targetFile)) {
+                return AgentResponse.blocked(AgentReason.INVALID_PATH);
+            }
+        } catch (IOException invalidTarget) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
         if (!Files.exists(targetFile) && Files.exists(root.resolve(resolvedRelative))) {
             return workspaceMismatch(root, assignedWorktree);
-        }
-
-        // Symlink Escape Check on Parent
-        try {
-            Path canonicalAssigned = assignedWorktree.toRealPath();
-            Path existingParent = targetFile;
-            while (!Files.exists(existingParent) && existingParent.getParent() != null) {
-                existingParent = existingParent.getParent();
-            }
-            if (!existingParent.toRealPath().startsWith(canonicalAssigned)) {
-                return AgentResponse.blocked(AgentReason.INVALID_PATH);
-            }
-        } catch (IOException ex) {
-            return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
         String proposedNewContent;
@@ -217,6 +207,8 @@ public final class WorkspacePatchService {
                     proposedNewContent,
                     proposedBytes,
                     true,
+                    false,
+                    request.expectedHash().trim(),
                     false);
             WorkspaceMutationBroker.MutationResult mutResult = mutationBroker.applyMutation(mutReq);
             TranslatedOutcome outcome = translator.translateMutationResult(mutResult, resolvedRelative);
@@ -232,7 +224,9 @@ public final class WorkspacePatchService {
                 proposedNewContent,
                 null,
                 true,  // hookIntercepted = true
-                false  // isSyntheticCheck = false
+                false, // isSyntheticCheck = false
+                null,
+                true
         );
 
         WorkspaceMutationBroker.MutationResult mutResult = mutationBroker.applyMutation(mutReq);

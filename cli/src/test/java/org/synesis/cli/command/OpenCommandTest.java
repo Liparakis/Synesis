@@ -19,59 +19,53 @@ import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
 import picocli.CommandLine;
 
-/** Tests the short-lived URI activation command as an argv boundary. */
+/**
+ * Tests the short-lived URI activation command as an argv boundary.
+ */
 final class OpenCommandTest {
 
-  @Test
-  void forwardsOneArgumentByteForByteWithoutChoosingAProject() throws Exception {
-    Path profile = Files.createTempDirectory("synesis-open-test").resolve("profile");
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-    CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)),
-        terminal, new ReadinessInspector(profile));
-    AtomicReference<String> received = new AtomicReference<>();
-    String uri = "synesis://join/a%2Fb?x=a%26b+%25#frag with & | ;";
-    OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> {
-      received.set(supplied);
-      return Map.of("ok", true, "state", "PROJECT_SELECTION_REQUIRED");
-    });
+    private static PrintStream stream(ByteArrayOutputStream target) {
+        return new PrintStream(target, true, StandardCharsets.UTF_8);
+    }
 
-    assertEquals(ExitCodes.OK, new CommandLine(command).execute(uri));
-    assertEquals(uri, received.get());
-    assertTrue(out.toString(StandardCharsets.UTF_8).contains(
-        "SYNESIS_OPEN_RESULT=PROJECT_SELECTION_REQUIRED"));
-    assertTrue(err.toString(StandardCharsets.UTF_8).isEmpty());
-  }
+    @Test
+    void forwardsOneArgumentByteForByteWithoutChoosingAProject() throws Exception {
+        Path profile = Files.createTempDirectory("synesis-open-test").resolve("profile");
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        AtomicReference<String> received = new AtomicReference<>();
+        String uri = "synesis://join/a%2Fb?x=a%26b+%25#frag with & | ;";
+        OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> {
+            received.set(supplied);
+            return Map.of("ok", true, "state", "PROJECT_SELECTION_REQUIRED");
+        });
 
-  @Test
-  void requiresExactlyOneUriArgument() throws Exception {
-    Path profile = Files.createTempDirectory("synesis-open-arity").resolve("profile");
-    ConsoleTerminal terminal = new ConsoleTerminal();
-    CliRuntime runtime = new CliRuntime(new Onboarding(profile,
-        new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
-    OpenCommand command = new OpenCommand(runtime, (ignored, supplied) ->
-        Map.of("ok", true, "state", "DISPATCHED"));
+        assertEquals(ExitCodes.OK, new CommandLine(command).execute(uri));
+        assertEquals(uri, received.get());
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("SYNESIS_OPEN_RESULT=PROJECT_SELECTION_REQUIRED"));
+        assertTrue(err.toString(StandardCharsets.UTF_8).isEmpty());
+    }
 
-    assertEquals(ExitCodes.USAGE, new CommandLine(command).execute());
-    assertEquals(ExitCodes.USAGE, new CommandLine(command).execute("synesis://a",
-        "synesis://b"));
-  }
+    @Test
+    void requiresExactlyOneUriArgument() throws Exception {
+        Path profile = Files.createTempDirectory("synesis-open-arity").resolve("profile");
+        ConsoleTerminal terminal = new ConsoleTerminal();
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> Map.of("ok", true, "state", "DISPATCHED"));
 
-  @Test
-  void mapsUnresolvedRoutingToBoundedFailure() throws Exception {
-    Path profile = Files.createTempDirectory("synesis-open-unresolved").resolve("profile");
-    ConsoleTerminal terminal = new ConsoleTerminal();
-    CliRuntime runtime = new CliRuntime(new Onboarding(profile,
-        new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
-    OpenCommand command = new OpenCommand(runtime, (ignored, supplied) ->
-        Map.of("ok", true, "state", "URI_UNRESOLVED"));
+        assertEquals(ExitCodes.USAGE, new CommandLine(command).execute());
+        assertEquals(ExitCodes.USAGE, new CommandLine(command).execute("synesis://a", "synesis://b"));
+    }
 
-    assertEquals(ExitCodes.LOCAL_CONFIGURATION,
-        new CommandLine(command).execute("synesis://join/invalid"));
-  }
+    @Test
+    void mapsUnresolvedRoutingToBoundedFailure() throws Exception {
+        Path profile = Files.createTempDirectory("synesis-open-unresolved").resolve("profile");
+        ConsoleTerminal terminal = new ConsoleTerminal();
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> Map.of("ok", true, "state", "URI_UNRESOLVED"));
 
-  private static PrintStream stream(ByteArrayOutputStream target) {
-    return new PrintStream(target, true, StandardCharsets.UTF_8);
-  }
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, new CommandLine(command).execute("synesis://join/invalid"));
+    }
 }

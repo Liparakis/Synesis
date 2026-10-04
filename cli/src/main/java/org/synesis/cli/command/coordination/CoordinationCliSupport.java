@@ -35,7 +35,7 @@ public final class CoordinationCliSupport {
      * @param project requested project path, or {@code null}
      * @return resolved project location
      * @throws ProjectApplicationService.ProjectApplicationException if the project is invalid
-     * @throws IOException if project metadata or private repository state cannot be read or updated
+     * @throws IOException                                           if project metadata or private repository state cannot be read or updated
      */
     public static ProjectLocation project(CliRuntime runtime, Path project) throws ProjectApplicationException, IOException {
         Objects.requireNonNull(runtime, "runtime");

@@ -67,7 +67,8 @@ public final class SyncJoinCommand implements Callable<Integer> {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            runtime.terminal().stderr("ERROR=PROJECT_STORAGE_FAILED");
+            return ExitCodes.LOCAL_CONFIGURATION;
         }
     }
 }

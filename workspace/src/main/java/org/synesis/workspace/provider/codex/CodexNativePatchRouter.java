@@ -2,15 +2,20 @@ package org.synesis.workspace.provider.codex;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
+import org.synesis.workspace.project.ProjectPathResolver;
 
 /**
  * Routes supported Codex native patches through the Synesis mutation broker.
@@ -79,6 +84,14 @@ public final class CodexNativePatchRouter {
         return String.join("\n", current);
     }
 
+    private static String sha256(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException unavailable) {
+            throw new IllegalStateException("SHA-256 is required by the runtime", unavailable);
+        }
+    }
+
     private static void applyHunk(List<String> current, List<String> oldLines, List<String> newLines) {
         if (oldLines.isEmpty() && newLines.isEmpty()) {
             return;
@@ -128,12 +141,29 @@ public final class CodexNativePatchRouter {
         List<String> lines = Arrays.asList(patch.replace("\r", "").split("\n", -1));
         for (CodexApplyPatchParser.FileChange change : parsed.changes()) {
             String section = section(lines, change.sourcePath());
-            Path target = worktree.resolve(change.sourcePath()).normalize();
+            String resolvedRelative = ProjectPathResolver.resolve(worktree, change.sourcePath());
+            if (WorkspaceMutationBroker.isProtectedTarget(resolvedRelative)) {
+                return new RouteResult(false, "Native patch target is protected by Synesis");
+            }
+            Path target = worktree.resolve(resolvedRelative).normalize();
             if (!target.startsWith(worktree)) {
                 return new RouteResult(false, "Native patch target escapes the assigned worktree");
             }
             try {
-                String before = Files.exists(target) ? Files.readString(target, StandardCharsets.UTF_8) : "";
+                if (!WorkspaceMutationBroker.targetResolvesWithinWorktree(worktree, target)) {
+                    return new RouteResult(false,
+                            "Native patch target escapes the assigned worktree");
+                }
+                boolean createOnly = change.operation() == CodexApplyPatchParser.Operation.ADD;
+                byte[] beforeBytes = null;
+                if (!createOnly && Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                    if (!Files.isRegularFile(target)) {
+                        return new RouteResult(false, "Native patch target is not a regular file");
+                    }
+                    beforeBytes = Files.readAllBytes(target);
+                }
+                String before = beforeBytes == null ? ""
+                        : new String(beforeBytes, StandardCharsets.UTF_8);
                 String after = change.operation() == CodexApplyPatchParser.Operation.ADD ? addedContent(section) : updatedContent(before, section);
                 WorkspaceMutationBroker.MutationResult result = broker.applyMutation(new WorkspaceMutationBroker.MutationRequest(location,
                         "codex",
@@ -142,7 +172,9 @@ public final class CodexNativePatchRouter {
                         "apply_patch",
                         after,
                         true,
-                        false));
+                        false,
+                        beforeBytes == null ? null : sha256(beforeBytes),
+                        createOnly));
                 if (!result.success()) {
                     return new RouteResult(false, result.message());
                 }

@@ -1,14 +1,15 @@
 package org.synesis.cli.command;
 
 import picocli.CommandLine.Command;
+import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Spec;
 
 /**
  * Root Picocli command; no arguments prints help.
  */
-@Command(name = "synesis", mixinStandardHelpOptions = true, version = "synesis 0.1.0-SNAPSHOT")
-public final class RootCommand implements Runnable {
+@Command(name = "synesis", mixinStandardHelpOptions = true, versionProvider = RootCommand.class)
+public final class RootCommand implements Runnable, IVersionProvider {
 
   @Spec
   private CommandSpec spec;
@@ -27,5 +28,10 @@ public final class RootCommand implements Runnable {
     spec.commandLine()
         .usage(spec.commandLine()
             .getOut());
+  }
+
+  @Override
+  public String[] getVersion() {
+    return new String[]{"synesis " + BuildInfo.version()};
   }
 }

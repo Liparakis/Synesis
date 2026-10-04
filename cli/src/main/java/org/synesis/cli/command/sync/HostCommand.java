@@ -14,33 +14,33 @@ import picocli.CommandLine.Option;
 @Command(name = "host", description = "Create a compact invite and wait for one direct session.", mixinStandardHelpOptions = true)
 public final class HostCommand implements Callable<Integer> {
 
-  private final CliRuntime runtime;
-  @Option(names = "--expect-peer", description = "Require this authenticated peer node ID.")
-  private String expectedPeer;
+    private final CliRuntime runtime;
+    @Option(names = "--expect-peer", description = "Require this authenticated peer node ID.")
+    private String expectedPeer;
 
-  /**
-   * Creates a host command with one manually composed runtime.
-   *
-   * @param runtime manually composed CLI runtime
-   */
-  public HostCommand(CliRuntime runtime) {
-    this.runtime = runtime;
-  }
-
-  /**
-   * Runs the bounded host operation. @return stable exit code
-   */
-  @Override
-  public Integer call() {
-    try {
-      try (var host = runtime.onboarding().createCompactInvitation(expectedPeer)) {
-        host.awaitConnection();
-      }
-      return ExitCodes.OK;
-    } catch (OnboardingFailure failure) {
-      return FailureMapper.map(failure, runtime.terminal());
-    } catch (RuntimeException failure) {
-      return FailureMapper.internal(runtime.terminal());
+    /**
+     * Creates a host command with one manually composed runtime.
+     *
+     * @param runtime manually composed CLI runtime
+     */
+    public HostCommand(CliRuntime runtime) {
+        this.runtime = runtime;
     }
-  }
+
+    /**
+     * Runs the bounded host operation. @return stable exit code
+     */
+    @Override
+    public Integer call() {
+        try {
+            try (var host = runtime.onboarding().createCompactInvitation(expectedPeer)) {
+                host.awaitConnection();
+            }
+            return ExitCodes.OK;
+        } catch (OnboardingFailure failure) {
+            return FailureMapper.map(failure, runtime.terminal());
+        } catch (RuntimeException failure) {
+            return FailureMapper.internal(runtime.terminal());
+        }
+    }
 }

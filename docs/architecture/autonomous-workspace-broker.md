@@ -29,6 +29,17 @@ session, or transition uncertainty return `WORKSPACE_UNVERIFIED`; no mutation
 is permitted. A hidden runtime crash can be restarted with the same session
 token after revalidating the worktree and cursor.
 
+## Workspace mutation admission
+
+CLI, workspace patch, and native Codex patch mutations converge on
+`WorkspaceMutationBroker`. It resolves the exact bound session, verifies its
+assigned worktree and trust state, and checks target containment before reading
+or replacing a target. Mutations in one assigned worktree serialize through a
+bounded OS lock under `.synesis/local/mutation-locks`; expected-hash and
+create-only conditions are rechecked while that lock is held. This serializes
+Synesis broker callers. Filesystem edits made outside those callers do not take
+the lock and are not claimed to be compare-and-swap operations.
+
 ## MCP connection and text contract
 
 One persistent MCP subprocess represents one provider connection. Calls within

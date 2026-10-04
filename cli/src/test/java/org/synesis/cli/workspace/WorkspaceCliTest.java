@@ -2,6 +2,7 @@ package org.synesis.cli.workspace;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -12,6 +13,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,20 +122,125 @@ class WorkspaceCliTest {
         String key = "idempotent-key-" + UUID.randomUUID();
 
         Invocation inv1 = createInvocation(location.profile());
-        int exit1 = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--target", "src/idempotent.txt", "--content", "first write",
-                "--idempotency-key", key}, inv1.runtime());
+        int exit1 = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--target", "src/idempotent.txt", "--content", "first write", "--session",
+                binding.sessionId(), "--idempotency-key", key}, inv1.runtime());
 
         assertEquals(0, exit1);
         String output1 = inv1.output();
         assertTrue(output1.contains("\"RESULT\":\"SUCCESS\""));
 
         Invocation inv2 = createInvocation(location.profile());
-        int exit2 = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--target", "src/idempotent.txt", "--content", "second write",
-                "--idempotency-key", key}, inv2.runtime());
+        int exit2 = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--target", "src/idempotent.txt", "--content", "first write", "--session",
+                binding.sessionId(), "--idempotency-key", key}, inv2.runtime());
 
         assertEquals(0, exit2);
         String output2 = inv2.output();
         assertEquals(output1, output2);
+    }
+
+    @Test
+    void requiresAnExactSessionInsteadOfSelectingTheNewestBinding() {
+        Invocation invocation = createInvocation(location.profile());
+        int exit = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--target", "src/session-required.txt", "--content", "content"}, invocation.runtime());
+
+        assertEquals(2, exit);
+        assertFalse(Files.exists(location.root().resolve("src/session-required.txt")));
+    }
+
+    @Test
+    void rejectsReusingOneIdempotencyKeyForDifferentMutationContent() throws Exception {
+        var binding = bindingService.list(location, "codex").getLast();
+        Path worktree = Path.of(binding.worktreePath());
+        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+        String key = "reused-key-" + UUID.randomUUID();
+
+        Invocation first = createInvocation(location.profile());
+        int firstExit = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target", "src/idempotency-conflict.txt",
+                "--content", "first", "--idempotency-key", key}, first.runtime());
+        assertEquals(0, firstExit);
+
+        Invocation second = createInvocation(location.profile());
+        int secondExit = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target",
+                "src/idempotency-conflict.txt", "--content", "different", "--idempotency-key", key}, second.runtime());
+
+        assertEquals(2, secondExit);
+        assertTrue(second.output().contains("IDEMPOTENCY_KEY_REUSED"));
+        assertEquals("first", Files.readString(worktree.resolve("src/idempotency-conflict.txt")));
+    }
+
+    @Test
+    void concurrentRequestsWithOneKeyApplyAtMostOneDistinctMutation() throws Exception {
+        var binding = bindingService.list(location, "codex").getLast();
+        Path worktree = Path.of(binding.worktreePath());
+        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+        String key = "concurrent-key-" + UUID.randomUUID();
+        Invocation first = createInvocation(location.profile());
+        Invocation second = createInvocation(location.profile());
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            var firstRun = workers.submit(() -> {
+                start.await();
+                return SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target",
+                        "src/concurrent-idempotency.txt", "--content", "first", "--idempotency-key", key}, first.runtime());
+            });
+            var secondRun = workers.submit(() -> {
+                start.await();
+                return SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target",
+                        "src/concurrent-idempotency.txt", "--content", "second", "--idempotency-key", key}, second.runtime());
+            });
+            start.countDown();
+            int firstExit = firstRun.get(30, TimeUnit.SECONDS);
+            int secondExit = secondRun.get(30, TimeUnit.SECONDS);
+            assertEquals(1, (firstExit == 0 ? 1 : 0) + (secondExit == 0 ? 1 : 0));
+            assertTrue(first.output().contains("IDEMPOTENCY_KEY_REUSED") || second.output().contains("IDEMPOTENCY_KEY_REUSED"));
+            String persisted = Files.readString(worktree.resolve("src/concurrent-idempotency.txt"));
+            assertTrue("first".equals(persisted) || "second".equals(persisted));
+        } finally {
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
+    void traversalPreconditionsAreEvaluatedOnlyAfterBrokerPathValidation() throws Exception {
+        var binding = bindingService.list(location, "codex").getLast();
+        Path worktree = Path.of(binding.worktreePath());
+        bindingService.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+        Path outsideFile = location.root().resolve("outside-worktree.json");
+        Files.writeString(outsideFile, "private marker");
+        String target = worktree.relativize(outsideFile).toString();
+        Invocation invocation = createInvocation(location.profile());
+
+        int exit = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target", target, "--create-only"},
+                invocation.runtime());
+
+        assertEquals(2, exit);
+        assertTrue(invocation.output().contains("PATH_TRAVERSAL_REJECTED"));
+        assertFalse(invocation.output().contains("FILE_ALREADY_EXISTS"));
+        assertEquals("private marker", Files.readString(outsideFile));
+    }
+
+    @Test
+    void idempotencyKeyCannotTraverseIntoAnotherJsonFile() throws Exception {
+        Path evidenceDirectory = location.synesisDirectory().resolve("local/evidence/codex").toAbsolutePath().normalize();
+        Path sentinel = location.root().resolve("cache-sentinel.json").toAbsolutePath().normalize();
+        String sentinelContents = "{\"PRIVATE_CACHE_MARKER\":true}";
+        Files.writeString(sentinel, sentinelContents);
+        Path relative = evidenceDirectory.relativize(sentinel);
+        long parents = java.util.stream.StreamSupport.stream(relative.spliterator(), false).filter(part -> "..".equals(part.toString())).count();
+        String separator = evidenceDirectory.getFileSystem().getSeparator();
+        String traversalKey = String.join(separator, java.util.Collections.nCopies(Math.toIntExact(parents + 2), "..")) + separator + "cache-sentinel";
+        Path oldCacheResolution = evidenceDirectory.resolve("idempotency-" + traversalKey + ".json").normalize();
+        assertEquals(sentinel, oldCacheResolution);
+
+        var binding = bindingService.list(location, "codex").getLast();
+        Invocation invocation = createInvocation(location.profile());
+        int exit = SynesisCli.execute(new String[]{"workspace", "mutate", "--project", location.root().toString(), "--provider", "codex", "--session", binding.sessionId(), "--target", "src/cache-probe.txt", "--content",
+                "probe", "--idempotency-key", traversalKey}, invocation.runtime());
+
+        assertFalse(invocation.output().contains(sentinelContents));
+        assertEquals(sentinelContents, Files.readString(sentinel));
+        assertTrue(exit != 0);
     }
 
     /**

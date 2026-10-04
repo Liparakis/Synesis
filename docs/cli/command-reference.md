@@ -18,7 +18,6 @@ synesis
   doctor | cleanup | reconcile | repair | migrate
   mcp --provider <codex|claude>
   collaboration announce|acknowledge|status|release|request|respond|handoff|contract|readiness
-  coordination-demo
   coordination serve|status
   task create|claim|show
   ownership claim|show|release
@@ -35,6 +34,14 @@ isolated process tests and cross-profile experiments. Hook JSON stays on
 stdout; diagnostics stay on stderr and hook exit code remains 0 for provider
 contract responses.
 
-Provider installation commands are project-local. `synesis version` is safe to
-run without a project and reports embedded build metadata. Provider commands
-use canonical IDs only.
+`synesis --version` and `synesis version` report the same embedded build
+version. Lifecycle workflows accept one operation mode per invocation;
+combining dry-run, prepare, inspect, execute, or rollback modes is a usage
+error. `workspace mutate` requires the exact `--session`; `--create-only` and
+`--previous-hash` are exclusive preconditions checked under the assigned
+worktree's cross-process mutation lock. An idempotency key replays only the
+same project, provider binding, target, mutation kind, content, preconditions,
+and output mode; reusing it with changed input is rejected.
+
+Provider installation commands are project-local. Provider commands use
+canonical IDs only.

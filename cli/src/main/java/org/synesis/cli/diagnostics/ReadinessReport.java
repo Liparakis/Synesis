@@ -15,27 +15,24 @@ import java.util.Objects;
  * @param quicDetail      redacted QUIC detail
  * @since 1.0
  */
-public record ReadinessReport(boolean javaReady, boolean profileReady, boolean identityReady,
-                              boolean candidatesReady, boolean quicReady, String identityDetail,
-                              String candidateDetail,
-                              String quicDetail) {
+public record ReadinessReport(boolean javaReady, boolean profileReady, boolean identityReady, boolean candidatesReady, boolean quicReady, String identityDetail, String candidateDetail, String quicDetail) {
 
-  /**
-   * Validates safe report strings.
-   */
-  public ReadinessReport {
-    Objects.requireNonNull(identityDetail, "identityDetail");
-    Objects.requireNonNull(candidateDetail, "candidateDetail");
-    Objects.requireNonNull(quicDetail, "quicDetail");
-  }
+    /**
+     * Validates safe report strings.
+     */
+    public ReadinessReport {
+        Objects.requireNonNull(identityDetail, "identityDetail");
+        Objects.requireNonNull(candidateDetail, "candidateDetail");
+        Objects.requireNonNull(quicDetail, "quicDetail");
+    }
 
-  /**
-   * Returns whether all required local checks passed.
-   *
-   * @return true when the report is ready
-   */
-  @SuppressWarnings("unused")
-  public boolean ready() {
-    return javaReady && profileReady && identityReady && candidatesReady && quicReady;
-  }
+    /**
+     * Returns whether all required local checks passed.
+     *
+     * @return true when the report is ready
+     */
+    @SuppressWarnings("unused")
+    public boolean ready() {
+        return javaReady && profileReady && identityReady && candidatesReady && quicReady;
+    }
 }
