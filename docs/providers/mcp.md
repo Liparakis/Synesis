@@ -38,10 +38,49 @@ the exact existing binding, thread, generation, and server-issued proof. The
 proof is delivered through the allow-listed process environment and is never
 written to configuration, repository state, prompts, output, or diagnostics.
 
+Capability requests, requester revision replies, and owner replies are decided
+and appended under the project event-log lock against a freshly replayed
+projection, so concurrent MCP processes cannot record two active requests for
+the same requester and capability or two different replies to one contract
+revision. A reply that loses that race is answered from the recorded state: the
+identical decision is idempotent, and any other reply is `stale_request`. If the
+lock cannot be acquired within its bounded wait, the call returns `blocked` /
+`task_not_ready` with `reason: EVENT_APPEND_LOCK_UNAVAILABLE` and `retry`;
+nothing was appended. Only the session whose supervisor and worker scope is
+stored as the request's owner may answer it or see it in its inbox. Local
+sessions share one node identity, so a sibling session on the same node receives
+`policy_denied`.
+
+When the owner asks for a contract revision, the requester's `get_next_action`
+returns `revise_capability_request` with the capability name, the revised
+contract, its `contractRevision`, and `acceptRevision`: the exact
+`request_coordination` call that accepts it. Accepting, countering, or cancelling
+remains the requester's decision, so that call is offered and not recommended. A
+reply that does not match the recorded request returns `stale_request` with a
+`reason` of `CAPABILITY_CONTRACT_REVISION_STALE`, `CAPABILITY_NAME_MISMATCH`,
+`CAPABILITY_REVISION_NOT_PENDING`, or `CAPABILITY_CONTRACT_MISMATCH`.
+
+After the requester validates a published implementation, the owner's ordinary
+`get_next_action` returns `implementationValidated: true` and recommends
+`get_next_action` with `completionRequested: true`. The dependent lane cannot
+integrate until the owner's own lane snapshot exists, so this takes precedence
+over the shared integration wait.
+
+The `finish_lane` arguments projected by a completion request carry
+`expectedRevision`, the event-log revision at projection time. They stay valid
+while only participant heartbeats are appended after that revision, so another
+agent's polling does not invalidate them. Any other event does, and the call
+then returns `SNAPSHOT_COMPLETION_EVIDENCE_STALE` (or the no-change equivalent)
+with a recommended fresh completion request.
+
 If Synesis cannot load the durable terminal fence for the exact bound session,
 `ensure_session` and `get_next_action` fail closed with
-`SESSION_TERMINAL_STATE_UNAVAILABLE`. The response includes only the cause's
-exception type; it does not include paths or exception messages. The workflow
-marks this as non-retryable recovery with no recommended MCP tool. The symbolic
+`SESSION_TERMINAL_STATE_UNAVAILABLE`. For diagnosis, the response reports the
+cause's exception type (`causeType`) and a bounded `causeCode`:
+`event_log_verification_failure` for coordination event-log integrity failures,
+or `durable_state_ambiguous` when durable state cannot be classified more
+precisely. It does not include paths or exception messages. The workflow marks
+this as non-retryable recovery with no recommended MCP tool; it does not
+authorize rewriting or restoring the event log. The symbolic
 `request_human_help` action is not an MCP tool; stop and request operator
 intervention before retrying session operations.

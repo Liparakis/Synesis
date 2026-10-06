@@ -83,3 +83,33 @@ artifact-restore, review, and integration tests precede a fresh real Codex
 targeted acceptance. The unchanged blind full acceptance remains a separate
 gate and must not be reported as passed until WorkGroup and durable goal
 closure are observed.
+
+## 2026-10-05 implementation clarification
+
+Clean transport EOF is not lane completion. Reconciliation now marks the exact
+closed lease and immediately fences and snapshots an unfinished participant;
+it never releases that lane's claims. Abrupt loss continues to require verified
+process absence plus the existing grace period. `get_next_action` re-evaluates
+recovery eligibility on each ordinary poll, while live and ambiguous process
+evidence remain ineligible. A fenced predecessor heartbeat cannot reactivate
+the participant or its lease.
+
+The versioned continuation event also transfers capability owner/requester
+actor scopes derived from the exact provider bindings. It preserves request,
+contract, implementation, and completed validation history. A requester
+continued during validation must inspect the same immutable implementation
+revision again under its successor session. The continuation decoder remains
+compatible with existing v1 payloads.
+
+An exact retry of `finish_lane(outcome=no_change)` may pass the MCP recovery
+precheck only for the same completed, nonterminal provider binding. The
+completion service still requires a matching durable no-change record and the
+original request evidence; this exception does not grant new work or mutation
+authority.
+
+Focused coordination/workspace/MCP/catalog tests passed. A versioned installed
+bundle passed its smoke test. A fresh external target was bootstrapped, but a
+post-interruption inbox read found no WorkGroup or acceptance participants;
+ordinary two-agent acceptance, requester inspection, integration, and terminal
+WorkGroup completion were not reached. This is not real agent acceptance and
+does not satisfy the acceptance gate above.

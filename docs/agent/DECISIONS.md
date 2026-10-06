@@ -1,3 +1,53 @@
+## 2026-10-05 — Capability publication and bounded inbox delivery
+
+An accepted owner implements normally and explicitly signals readiness with
+`get_next_action({completionRequested:true})`. The inbox then projects the
+existing `publish_capability_implementation` tool with the exact request,
+contract revision, intent, claim epoch, and captured source-tree hash. Ordinary
+polls do not declare implementation complete or authorize publication.
+
+Publication captures claimed dirty and untracked source through the existing
+TaskSnapshotService, preserving HEAD, the normal index, and working files.
+Stable snapshot refs retain the same immutable commit for later lane completion.
+Publication authority and source evidence are checked again at the mutation
+boundary; unchanged retries reuse the exact immutable implementation.
+
+Inbox delivery remains at least once. Workflow action identity includes contract
+and implementation revisions and exact continuation payloads, with retry hints
+of 5 seconds and at most 3 unchanged follow-up responses. Generated provider
+instructions stop and report that condition, including executable WAIT polling;
+these hints do not revoke claims or close a WorkGroup and are not a server-side
+counter of model calls.
+
+## 2026-10-05 — ADR-0087 capability requests negotiate APIs after claim conflicts
+
+Keep repository claims exclusive. A conflicting `ensure_session` denies the
+claim without creating reciprocal free-text conflict requests, and reports the
+exact owning intent lineage. The losing participant must establish a disjoint
+consumer lane and declare the capability in `task.knownDependencies`, then use
+the existing MCP `capability_request` lifecycle to negotiate a complete API
+contract. No MCP tool or second prediction lifecycle is added.
+
+Contract changes are event-sequenced revisions. Owner responses and requester
+acceptance/counters are fenced to the exact revision observed; a requester must
+accept an owner revision before its lane can build against that contract. After
+acceptance, both lanes can implement. Requests with an active owner intent retain
+its exact bound supervisor and worker scope; node identity alone cannot distinguish
+two lanes in the same project. The owner lane cannot complete before it publishes
+the exact capability implementation. A dependent lane cannot complete or integrate
+before requester validation, and integration also waits for the matching owner
+task snapshot. Existing v1-v3 capability payloads remain decodable; new requests
+use v4 for full API terms and revision fencing.
+
+This reuses capability ownership, publication, validation, isolated worktrees,
+and integration rather than adding prediction-specific state. Claim authority
+does not transfer during negotiation.
+
+## ADR index update
+
+- ADR-0087: Capability API negotiation after claim conflicts — accepted on
+  2026-10-05.
+
 ## 2026-09-20 — ADR-0086 recovery-continuation admission
 
 Fresh replacement admission now has a read-only recovery-continuation

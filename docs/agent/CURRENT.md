@@ -1,3 +1,334 @@
+# 2026-10-06 — SynesisTest73 on `0.1.0-dev.lifecycle-fixes-20261006`: WorkGroup COMPLETED
+
+Real current-build acceptance, user-run with two Codex agents from an empty project
+(`Desktop\SynesisTest73`), build activated 2026-10-06T04:30:47Z from the uncommitted working tree. The
+68-event log was copied and replayed read-only; every event passed chain, signature, and projection
+checks.
+
+Demonstrated: admission; concurrent claims (`task_store.py` granted to one lane, the other denied and
+re-claimed `task_cli.py`); capability request and owner acceptance at contract revision 10; publication
+of implementation revision 1; requester inspection and `CAPABILITY_IMPLEMENTATION_VALIDATED`; completion
+of both lanes; two integration attempts, each ending in `CONTROL_BRANCH_ADVANCED` and `TASK_INTEGRATED`;
+both sessions finalized and intents released; `WORK_GROUP_STATUS_CHANGED` to `COMPLETED`. Exactly two
+participants appear in the log, both `COMPLETED`. The control checkout is clean at the second snapshot
+commit and contains `task_store.py` and `task_cli.py`.
+
+NOT REACHED in this run: an owner contract revision and the requester's accept of it (the owner accepted
+the request as proposed; the requester's extra accept returned `CAPABILITY_REVISION_NOT_PENDING`),
+participant loss, recovery continuation, and review. Whether the heartbeat-tolerant finish envelope or
+the owner completion prompt was what let the lanes finish is not established from the log.
+
+The agents did not run CLI behavior checks. A copy of the two integrated files, exercised outside the
+project, added, listed, completed, and deleted tasks and returned exit 1 for an unknown id and a blank
+title; new tasks are stored with status `queued`.
+
+# 2026-10-06 — Three lifecycle gaps from the SynesisTest72 run closed in source
+
+The gaps are described in the next entry. Source changes:
+
+1. Completion envelopes tolerate heartbeats. `PredictionEventStore.unchangedSince(revision)` reports
+   whether only `PARTICIPANT_HEARTBEAT` events follow a revision. The snapshot finish check
+   (`AgentTaskCompletionService.validateSnapshotEvidence`) and the three no-change checks
+   (`AgentTaskCompletionService`, `WorkspaceCollaborationService`, `WorkIntentService.completeNoChange`)
+   use it in place of head equality. `CollaborationProjection` tracks the newest non-heartbeat sequence
+   and validates a recorded no-change completion against it on replay. Any event other than a heartbeat
+   still stales the envelope, and intent, claim epoch, WorkGroup version, and participant are checked as
+   before. Existing logs replay unchanged because they satisfy the rule with equality. A no-change
+   completion written with heartbeats between projection and finish is rejected on replay by builds
+   older than this change; snapshot completions are not affected because that check was never part of
+   replay.
+2. `AgentNextActionService` projects `implementationValidated` with the completion request to a producer
+   whose owned capability requests in its lineage are all settled, at least one `VALIDATED`, and whose
+   lane has no snapshot yet. It runs after the explicit completion stage and before the integration pump
+   result, which otherwise answers the shared `INTEGRATION_PENDING` wait to the owner too. The reducer
+   makes that completion request the recommended tool.
+3. The requester's `REVISE_CAPABILITY_REQUEST` projection carries the capability name and
+   `acceptRevision`, the exact accept call. `CapabilityRequestService` names which part of a stale reply
+   differs.
+
+`SyntheticTwoProcessCollaborationTest` gained an end-to-end case in the order the real run took: owner
+revision, requester accept using only the projected call, publication, inspection and validation,
+requester lane finished first, owner prompted, requester poll between the owner's finish projection and
+its `finish_lane`, both task snapshots integrated, WorkGroup `COMPLETED`. `NoChangeCompletionTest`
+covers heartbeats versus a state change after projection, including replay. The "before" evidence for
+these gaps is the real runs below, not a controlled revert of each change.
+
+Full source suites after these changes: `:coordination:test` 111, `:workspace:test` 484 (1 skip),
+`:mcp:test` 120, `:mcp-contract:test` 15, all with 0 failures and 0 errors. Javadoc for the four
+modules, `formatCheck`, and `architectureCheck` pass; `:coordination:javadoc` first failed on missing
+tags in `LaneContinuation` and `CapabilityActorScope` from the earlier patch, which were added after
+the suite run as comment-only edits.
+
+# 2026-10-06 — Fresh-project runs on `0.1.0-dev.capability-lock-20261006`: PARTIAL
+
+Evidence is from user-run Codex sessions against the installed build; each project's event log was
+copied and replayed read-only, and every log passed chain, signature, and projection checks.
+
+`Desktop\SynesisTest72` (61 events, two participants, no extra lanes): concurrent claims, capability
+request, owner revision, requester acceptance at contract revision 18, publication of implementation
+revision 1, requester inspection, and `CAPABILITY_IMPLEMENTATION_VALIDATED` were all reached. The
+requester lane then finished and its snapshot is `INTEGRATION_PENDING` with the capability dependency.
+NOT REACHED: owner lane completion, integration, terminal WorkGroup. The owner's last activity before
+validation was at publication; it polled once after validation and recorded no completion. In source,
+`finish_lane` is projected only for `get_next_action({completionRequested:true})`, and the owner inbox
+carries that `completionRequest` hint only while the request is `ACCEPTED` or `IMPLEMENTING`; after
+publication and validation nothing tells the owner to request completion.
+
+A follow-up resume of SynesisTest72 had the owner call `get_next_action({completionRequested:true})` and
+then the projected `finish_lane`, which returned `SNAPSHOT_COMPLETION_EVIDENCE_STALE` until the
+unchanged-action limit. The log grew only by heartbeats (events 62-67): owner at 04:12:47Z, requester at
+04:12:50Z, then owner at 04:12:53Z, 04:12:59Z, 04:13:09Z, and 04:13:27Z; no completion event. The
+projected finish payload carries `expectedRevision = store.headSequence()`, and
+`AgentTaskCompletionService.validateSnapshotEvidence` requires it to equal the head at completion. Every
+non-finish, non-command MCP call appends a `PARTICIPANT_HEARTBEAT`, so any poll by any participant
+between projection and finish invalidates the envelope. The requester's poll three seconds after the
+owner's projection explains the first rejection. The later rejections are consistent with the owner's
+own intervening polls but cannot be established, because rejected calls leave no durable record. The
+earlier successful requester finish had no event between its projection (event 54) and completion (55).
+Owner lane completion, integration, and terminal WorkGroup remain NOT REACHED.
+
+`Desktop\SynesisTest71` (41 events): stopped at `REVISION_REQUESTED`, contract revision 19. The same
+controller prompt was sent twice in one project; the second pair of agents connected as new sessions and
+could not act on the first pair's lanes or request (`policy_denied`). A `stale_request` on accept was
+also reported there, and an initial denied accept in SynesisTest72. The requester's
+`REVISE_CAPABILITY_REQUEST` projection carries handle, revision, and contract but neither the capability
+name nor a ready payload, while the accept requires all of them to match; whether that caused the
+rejections is not established because rejected calls are not recorded.
+
+`Desktop\SynesisTest70` (54 events, older build) is a separate target from
+`C:\t\SynesisTest70-RecoveryFix-20261005-1`: two agents became four participants with four lanes and
+three requests for one capability, none published.
+
+# 2026-10-06 — Capability negotiation serialized under the project append lock
+
+`CapabilityRequestService` and `CapabilityResponseService` previously resolved the binding, read the
+capability projection, and appended without holding `ProjectAppendLock`. `PredictionEventStore.append`
+refreshes the durable head but validates against that instance's in-memory projection, so two MCP
+processes could each record an active request for the same requester and capability, or each append a
+reply decided from the same contract revision. A conflicting pair either replaced one event file at
+the same sequence while both callers were told they succeeded, or left an accept/reject pair that no
+longer replays.
+
+Both services now acquire the lock before opening the store, resolve the exact active binding and
+replay a fresh projection under it, and hold it through authorization, the revision and idempotency
+checks, and the append. A bounded lock timeout returns `blocked` / `task_not_ready` with
+`EVENT_APPEND_LOCK_UNAVAILABLE` and `retry` instead of `internal_failure`. The owner reply is now
+authorized against the stored owner supervisor and worker scope, as publication already was, and the
+owner inbox projects pending replies and validation revisions with the same scope, so a sibling session
+on the shared node identity is neither offered nor allowed the reply.
+
+`CapabilityNegotiationTest` gained concurrent duplicate-request, concurrent same-revision
+accept/reject, and sibling-owner-scope cases; all three fail when the lock is made per-call and the
+owner check is reduced to the node identity. Its legacy semantic-ownership fixture, and the one in
+`TwoProcessCapabilityNegotiationProcessTest`, now name the bound codex session's own supervisor and
+worker instead of synthetic identifiers.
+
+That fixture change reflects a behavior change on the legacy path. A request routed through a
+semantic-ownership claim stores the claim's supervisor as its owner scope. When that supervisor is not
+the supervisor of any provider binding, no MCP session is offered or allowed the owner reply.
+Previously any session on the node could accept such a request and was then refused at publication,
+which already required the stored scope. Requests routed through an active owner intent are unaffected:
+they store the exact owner binding's supervisor and worker.
+
+These are in-process thread tests over separate service instances and a shared project directory; no
+multi-process run and no real current-build acceptance was performed for this change.
+
+Full source suites after the change: `:workspace:test` 484 tests (0 failures, 0 errors, 1 skip),
+`:coordination:test` 109, `:mcp-contract:test` 15, and `:mcp:test` 119, all with 0 failures and 0
+errors. The first `:mcp:test` run had one failure, the synthetic-owner fixture described above; the
+rerun after the fixture change passed 119/119. `:workspace:javadoc` initially failed on missing tags for
+`AgentTaskIntent`'s seven-argument constructor and `WorkspaceCollaborationService.recoveryFenced`, both
+from the earlier uncommitted patch; the tags were added and `javadoc`, `formatCheck`,
+`architectureCheck`, and `staticAnalysis` pass. The workspace suite was not rerun after those
+comment-only edits.
+
+# 2026-10-06 — SynesisTest70 lockout cause: installed build cannot read V2 continuations
+
+A copy of the target's `.synesis/coordination/events` (91 events) was replayed outside the target. With
+the current source every event passes project, sequence, hash-chain, and signature checks and all seven
+projections accept it. The event log is intact; no backup or restore is needed.
+
+With the installed build's own `coordination` jar
+(`0.1.0-dev.capability-validation-20261005-83ff8461212a`, activated 2026-10-05 18:53 local) replay stops
+at event 30, `LANE_CONTINUATION_ACCEPTED`, with `unsupported continuation format`. Events 30, 44, 61,
+75, and 83 carry the `SCN2` continuation magic that the uncommitted source introduced; the installed
+codec only knows `SCN1`. The run that wrote those events therefore used a build of the working tree,
+and the two sessions bound at 01:56 and 01:58 on 2026-10-06 ran the older installed build through the
+global Codex MCP entry. Their terminal-fence check opens the event store, fails at event 30, and
+surfaces as `SESSION_TERMINAL_STATE_UNAVAILABLE`. Which launcher started the earlier sessions was not
+determined. The capability-negotiation race fixed above is not the cause for this target.
+
+Replayed with the current source, the log ends with the `task-store-api` request `VALIDATED` at contract
+revision 15 and both participants suspended with recovery snapshots held (events 88-91). The target
+holds 14 codex session bindings for two agent threads. Whether the lanes can continue to integration
+under a build that reads V2 has not been tried; the target itself was only read and copied.
+
+Installer rebuilt from the uncommitted working tree as `0.1.0-dev.capability-lock-20261006` and
+installed with `synesis-windows-x64.exe install`; the previous `capability-validation-20261005` payload
+is retained as the rollback version. The installed build's `coordination` jar replays the copied
+SynesisTest70 log with no rejected events, and `synesis --version` reports the new version. Two
+`mcp --provider codex` processes started from the previous payload before the install were left
+running. No resume of SynesisTest70 and no fresh-project run has been made against this build.
+
+# 2026-10-06 — SynesisTest70 resumed acceptance status
+
+The existing disposable target
+`C:\t\SynesisTest70-RecoveryFix-20261005-1` was resumed with its original two Codex agent threads. The
+overlapping `task_store.py` claim led to the accepted `task-store-api` contract at revision 15:
+`create_task(title, *, status="queued")` plus `list_tasks()`. The owner published implementation
+revision 1, and the requester inspected and accepted that exact snapshot. The requester CLI check could
+not import `task_store` because the owner snapshot had not yet integrated.
+
+After the recovery continuations, the requester lane was restored, but its inbox remained
+`needs_capability / owner_required` without a request handle or contract revision. The owner’s projected
+`ensure_session` failed with `internal_failure`; the next inbox read returned
+`SESSION_TERMINAL_STATE_UNAVAILABLE`, `retrySafe=false`, and no permitted operation. The requester’s
+projected `ensure_session` failed the same way. No integration or terminal WorkGroup state was reached.
+The acceptance remains PARTIAL.
+
+Terminal-state failures now include a bounded `causeCode` shared with Doctor: verified event-log
+integrity failures map to `event_log_verification_failure`, while other unreadable or rejected state maps
+to `durable_state_ambiguous`. The fail-closed response still offers no mutation action and remains
+non-retryable. `SessionTerminalStateUnavailableTest` passed 2/2 after this change.
+
+Identity investigation confirmed that each agent shell sees a distinct, stable `CODEX_THREAD_ID`, but the
+ordinary desktop `codex.exe` parent and its Synesis MCP children have neither `CODEX_THREAD_ID` nor
+`CODEX_SESSION_ID`; the configured server has `env_vars=[]`. A disposable fake-MCP probe confirmed
+`env_vars` forwards values present in the launching process, but does not provide the desktop with a
+per-thread value. No Synesis-side identity fallback or global Codex configuration change was made;
+stable reconnect identity still needs a host-provided per-thread MCP value or equivalent supported
+metadata.
+
+Managed-default source tracing found that production `ProjectRuntimeHost` construction still uses the
+ordinary App Server launcher; `ManagedCodexProcessLauncher.prepareFirst`/`prepareReplacement` have no
+production caller. The isolated managed-home path requires keyring authentication, unavailable with the
+current file-backed login, while the shared-home path failed worker/thread isolation. No managed-default
+switch or credential change was made. A verified backup for the existing event log is not known, and the
+current repair workflow does not restore coordination logs; if Doctor confirms log corruption and no
+verified backup exists, the original target cannot be safely restored and must remain evidence.
+
+The follow-up full source suites passed: `:workspace:test` 481 tests (0 failures, 0 errors, 1
+skip), `:coordination:test` 109 tests, `:mcp-contract:test` 15 tests, and `:mcp:test` 119 tests;
+all reported 0 failures and 0 errors. The broad MCP rerun took 12m33s through Git-backed fixtures.
+Its first run exposed two stale lifecycle expectations and a completed no-change replay blocked by
+the recovery precheck. The tests now assert clean-EOF recovery preservation and dirty-worktree
+refresh; only an exact nonterminal completed binding can reach the existing evidence-checked
+no-change replay path. `git diff --check` passes, with only existing CRLF conversion notices.
+
+These are source-level results, not real current-build acceptance. SynesisTest70 still has no
+verified terminal WorkGroup, integration, or same-target recovery evidence. The current task did not
+mutate the disposable target. The source checkout remains without `.synesis`; no commit or push was
+made.
+
+# 2026-10-05 — Recovery-preserving transport closure and capability succession
+
+Clean MCP EOF no longer detaches an unfinished lane. The exact session lease is
+marked closed, and reconciliation fences the participant and captures an
+immutable recovery snapshot immediately. Abrupt process loss still requires
+verified process absence and the existing five-minute grace; ordinary
+`get_next_action` polling re-evaluates eligibility so recovery is not limited
+to one admission attempt. Ambiguous or live process evidence remains
+non-recoverable. Suspended and recovery-held participants cannot be revived by
+old heartbeats, and MCP dispatch blocks the exact fenced binding before a
+mutation can run. The lease is checked only after collaboration heartbeat
+authority succeeds, preventing stale sessions from refreshing a closed lease.
+
+Workflow responses expose `recoveryDeadlineEpochMillis` only when the exact
+process is verified absent and the grace deadline is still in the future. The
+deadline participates in action identity, and provider guidance instructs an
+intentional wait until that deadline without consuming the unchanged-action
+poll limit.
+
+The versioned continuation payload now carries verified source and successor
+capability actor scopes while retaining v1 event decoding. The same signed
+`LANE_CONTINUATION_ACCEPTED` event transfers only exact matching owner or
+requester scopes. Request handles, accepted contract revisions, immutable
+implementation revisions, and completed validation verdicts remain intact. A
+requester recovered from `VALIDATING` loses its old inspection context and the
+same immutable implementation is projected for a fresh successor inspection.
+
+Focused verification passed: coordination 38/38, workspace 34/34, MCP recovery
+4/4, and MCP contract catalog 15/15, with no reported failures or skips.
+`git diff --check` passed with existing line-ending notices. The versioned
+installer `0.1.0-recovery-continuation-20261005-1` built, its bundle smoke test
+passed, installation under `C:\t\SynesisRecoveryInstall-20261005-1` completed,
+and the installed CLI reported that exact version.
+
+After a host interruption, the existing external target
+`C:\t\SynesisTest70-RecoveryFix-20261005-1` was inspected through its installed
+MCP process. `ensure_session` returned ready and `get_next_action` returned
+`IMPLEMENT` with action `22800316-f6ae-3b77-a346-16e7f4ba4726`; there was no
+WorkGroup or participant state. No owner/requester acceptance lanes or source
+files had been created before the interruption, and no acceptance request,
+publication, inspection, validation, integration, or terminal WorkGroup result
+exists. The live MCP process found on the machine belongs to the Synesis source
+checkout and was not reused. Ordinary Codex-agent acceptance therefore remains
+NOT REACHED; the installed-build observer check is the only external-runtime
+evidence. No commit or push was made in the Synesis source checkout, which
+remains without `.synesis`.
+
+# 2026-10-05 — Capability publication continuation and bounded polling
+
+A fresh two-agent task-tracker run accepted the API contract and allowed both
+lanes to implement, but remained ACTIVE because the owner could not obtain a
+publication action. Ordinary inbox polling kept returning implementationPending;
+completion gates already required capability publication. Publication also used
+HEAD instead of the visible dirty/untracked implementation.
+
+The source now projects publish_capability_implementation after the owner
+explicitly requests completion. Exact contract revision, intent, claim epoch,
+and source-tree evidence fence publication. TaskSnapshotService captures claimed
+source without altering HEAD/index/worktree and reuses the immutable commit at
+later lane completion. The service validates current binding incarnation, trust,
+workspace, and owner authority under the project append lock; exact retries do
+not create another implementation revision.
+
+Workflow action IDs include contract/implementation revisions and canonical
+continuation payloads. Runtime retry hints and generated provider instructions
+bound unchanged polling to three follow-ups with a five-second default delay.
+This is provider guidance; it does not revoke authority or count calls server-side.
+
+Requester validation now has an explicit inspect stage. get_next_action
+projects result=inspect; the requester opens a detached worktree at the exact
+published commit, then uses the existing read_file and run_command tools with
+the request handle and implementation revision. Those calls require the exact
+active requester session and a matching durable validation context. A verdict is
+rejected before inspection or when workspace setup fails. Validation worktree
+creation checks out the immutable commit directly rather than patching it onto a
+different working tree. Implementation event format v3 now correctly round-trips
+both owner lineage and requester session identity.
+
+The fresh selected test runs passed 45 tests across coordination (3), workspace
+(20), MCP (7), and the MCP contract catalog (15), with no failures or skips. They
+cover exact requester/owner separation, dirty and committed publication, stable
+snapshot reuse, inspection read and command access, unauthorized-session denial,
+failed verdict before inspect, revision loops, and two independent MCP processes.
+Strict Javadocs, compiler diagnostics, formatting, and architecture gates passed.
+git diff --check and the deferred-register check pass.
+
+Installer rebuilt as 0.1.0-dev.capability-validation-20261005. The Windows
+installer and versioned bundle are under cli/build/distributions. A fresh
+disposable-project run against the rebuilt installer remains unverified. No
+commit or push was made; this source checkout remains without .synesis.
+
+# 2026-10-05 — Capability negotiation after overlapping claims
+
+The source now routes a denied overlapping claim into the existing MCP
+capability-request lifecycle. Conflict results expose the exact owner lineage;
+the requester must create a disjoint consumer claim and submit a complete API
+contract. Owner revisions carry event-sequenced contract revisions, and the
+requester must accept the exact revision before implementation work is exposed.
+Both lanes can implement after acceptance. Owner completion waits for
+capability publication, dependent completion waits for requester validation,
+and dependent integration waits for the matching owner snapshot.
+
+This is a source implementation only. `git diff --check` passes, and Java 25
+compiled the changed production sources plus adjusted test sources against the
+existing module outputs. Gradle could not start its single-use JVM because it
+failed to establish a loopback connection; no tests or real disposable-project
+acceptance were run. No commit or push was made, and the Synesis source
+checkout remains without `.synesis`.
+
 # 2026-09-29 — SYN-082 accepted-review artifact continuation
 
 Source policy distinguishes mandatory independent review of an exact candidate
