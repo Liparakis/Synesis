@@ -322,7 +322,8 @@ func TestInstallerVisualPreview(t *testing.T) {
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`, bundle: `C:\Example\Bundle`, action: installerActionInstall}
+	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`, bundle: `C:\Example\Bundle`, action: installerActionInstall,
+		bundleVersion: "0.1.0-dev.lifecycle-fixes-20261006", installedVersion: "0.1.0-dev.capability-lock-20261006"}
 	if err := w.createWindow(); err != nil {
 		t.Fatal(err)
 	}
@@ -636,5 +637,196 @@ func TestInstallerWindowVisibilityIsDeferredUntilMessageLoop(t *testing.T) {
 	}
 	if installerMessageShow <= wmUser || installerMessageShow == installerMessageDone || installerMessageRefresh == installerMessageShow || installerMessageRefresh == installerMessageDone {
 		t.Fatalf("installerMessageShow = %#x, want a distinct private window message", installerMessageShow)
+	}
+}
+
+func TestInstallerDescribesVersionsAndOutcome(t *testing.T) {
+	const kept = "Your identity, projects, and workspace data are kept."
+	w := &installerWizard{installed: true}
+	for _, test := range []struct {
+		installed                bool
+		bundle, existing, expect string
+	}{
+		{true, "", "1.1.0", "Keep your identity, projects, and workspace data."},
+		{false, "1.2.0", "", "Install Synesis 1.2.0."},
+		{true, "1.2.0", "", "Install Synesis 1.2.0. " + kept},
+		{true, "1.2.0", "1.2.0", "Reinstall 1.2.0. " + kept},
+		{true, "1.2.0", "1.1.0", "Update 1.1.0 to 1.2.0."},
+	} {
+		w.installed, w.bundleVersion, w.installedVersion = test.installed, test.bundle, test.existing
+		if got := w.installActionDetail(); got != test.expect {
+			t.Fatalf("install detail for bundle %q over %q = %q, want %q", test.bundle, test.existing, got, test.expect)
+		}
+	}
+
+	bundle := t.TempDir()
+	if installerBundleVersion(bundle) != "" {
+		t.Fatal("a bundle without a VERSION file reported a version")
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "VERSION"), []byte("1.2.0-dev.build_7\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := installerBundleVersion(bundle); got != "1.2.0-dev.build_7" {
+		t.Fatalf("bundle version = %q", got)
+	}
+	// The value is painted into the window; anything that is not a plain version is dropped.
+	if err := os.WriteFile(filepath.Join(bundle, "VERSION"), []byte("1.2.0\nsecond line"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := installerBundleVersion(bundle); got != "" {
+		t.Fatalf("malformed bundle version was accepted: %q", got)
+	}
+
+	w = &installerWizard{page: installerPageResult, action: installerActionInstall}
+	if kind, _ := w.resultBadge(); kind != "badge-done" || !w.showsNextSteps() {
+		t.Fatal("a successful install does not show success and next steps")
+	}
+	w.resultDetailsOpen = true
+	if w.showsNextSteps() {
+		t.Fatal("next steps stay visible underneath open details")
+	}
+	w.resultDetailsOpen = false
+	w.result.warning = "link handler not registered"
+	if kind, _ := w.resultBadge(); kind != "badge-warning" || !w.showsNextSteps() {
+		t.Fatal("a warning hides the next steps or is shown as plain success")
+	}
+	w.result.err = errors.New("failed")
+	if kind, _ := w.resultBadge(); kind != "badge-failed" || w.showsNextSteps() {
+		t.Fatal("a failed install is not marked failed or still offers next steps")
+	}
+	w.result = installerOperationResult{}
+	w.action = installerActionUninstall
+	if w.showsNextSteps() {
+		t.Fatal("an uninstall offers install next steps")
+	}
+}
+
+func TestInstallerInstallAndResultPagesKeepAddedContentClear(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`, action: installerActionInstall,
+		bundleVersion: "1.2.0", installedVersion: "1.1.0", steps: installerOperationSteps(installerActionInstall, false)}
+	if err := w.createWindow(); err != nil {
+		t.Fatal(err)
+	}
+	defer installerDestroyWindow.Call(w.hwnd)
+	windowRect := func(id int) installerRect {
+		var rect installerRect
+		installerUser32.NewProc("GetWindowRect").Call(w.controls[id], uintptr(unsafe.Pointer(&rect)))
+		return rect
+	}
+	visible := func(id int) bool {
+		value, _, _ := installerUser32.NewProc("GetWindowLongW").Call(w.controls[id], uintptr(uint32(0xfffffff0)))
+		return value&wsVisible != 0
+	}
+
+	w.showPage(installerPageInstall)
+	if getInstallerText(w.controls[controlTitle]) != "Choose install location" {
+		t.Fatal("install page title is not sentence case like the other pages")
+	}
+	want := map[int]string{
+		controlCapabilities:      "Setup will",
+		controlCapabilityInstall: "Install Synesis 1.2.0 in this folder",
+		controlCapabilityLink:    "Register the synesis:// link handler",
+		controlCapabilityData:    "Add the Synesis bin folder to your user PATH",
+	}
+	for id, text := range want {
+		if !visible(id) || getInstallerText(w.controls[id]) != text {
+			t.Fatalf("install page control %d = %q (visible %v), want %q", id, getInstallerText(w.controls[id]), visible(id), text)
+		}
+	}
+	if windowRect(controlInstallHint).bottom > windowRect(controlCapabilities).top {
+		t.Fatal("install hint overlaps the list of changes")
+	}
+	previous := windowRect(controlCapabilities)
+	for _, id := range []int{controlCapabilityInstall, controlCapabilityLink, controlCapabilityData} {
+		row := windowRect(id)
+		if previous.bottom > row.top {
+			t.Fatalf("install page row %d overlaps the row above it", id)
+		}
+		previous = row
+	}
+	if previous.bottom+w.scaled(48) > windowRect(controlBack).top {
+		t.Fatal("list of changes crowds the footer")
+	}
+
+	w.reportProgress("verify", "done", "Local bundle verified")
+	w.showPage(installerPageResult)
+	if getInstallerText(w.controls[controlDescription]) != "Synesis 1.2.0 is ready to use." {
+		t.Fatalf("result description = %q", getInstallerText(w.controls[controlDescription]))
+	}
+	if !visible(controlResultNextTitle) || !visible(controlResultNext) || !visible(controlResultDetailsToggle) {
+		t.Fatal("a successful install does not show next steps beside its details link")
+	}
+	for _, phrase := range []string{"new terminal", "synesis --version", "synesis init"} {
+		if !strings.Contains(getInstallerText(w.controls[controlResultNext]), phrase) {
+			t.Fatalf("next steps do not mention %q", phrase)
+		}
+	}
+	if windowRect(controlTitle).left != windowRect(controlDescription).left || windowRect(controlTitle).left <= windowRect(controlResult).left {
+		t.Fatal("result header is not one block clear of the status badge")
+	}
+	if windowRect(controlResultNextTitle).bottom > windowRect(controlResultNext).top ||
+		windowRect(controlResultNext).bottom > windowRect(controlResultDetailsToggle).top ||
+		windowRect(controlResultDetailsToggle).bottom > windowRect(controlCancel).top {
+		t.Fatal("next steps, details link and footer overlap")
+	}
+	w.handleCommand(uint16(controlResultDetailsToggle), bnClicked)
+	if visible(controlResultNextTitle) || visible(controlResultNext) || !visible(controlResultDetails) {
+		t.Fatal("open details do not replace the next steps")
+	}
+	if windowRect(controlResultDetailsToggle).bottom > windowRect(controlResultDetails).top {
+		t.Fatal("details link overlaps the open details")
+	}
+	w.handleCommand(uint16(controlResultDetailsToggle), bnClicked)
+	if !visible(controlResultNext) || visible(controlResultDetails) {
+		t.Fatal("closing details did not restore the next steps")
+	}
+
+	w.result.err = errors.New("failed")
+	w.showPage(installerPageResult)
+	if visible(controlResultNextTitle) || visible(controlResultNext) {
+		t.Fatal("a failed install still offers next steps")
+	}
+}
+
+func TestInstallerOutcomeBadgesAreTintedDiscsWithSolidGlyphs(t *testing.T) {
+	const size = 40
+	for _, kind := range []string{"badge-done", "badge-failed", "badge-warning", "dot"} {
+		pixels := make([]byte, size*size*4)
+		paintInstallerIcon(pixels, size, kind, installerPaintColor{91, 212, 150})
+		alphaAt := func(x, y int) byte { return pixels[(y*size+x)*4+3] }
+		if alphaAt(0, 0) != 0 {
+			t.Fatalf("%s paints outside its disc", kind)
+		}
+		for i := 0; i < len(pixels); i += 4 {
+			if pixels[i] > pixels[i+3] || pixels[i+1] > pixels[i+3] || pixels[i+2] > pixels[i+3] {
+				t.Fatalf("%s is not premultiplied at byte %d", kind, i)
+			}
+		}
+		if kind == "dot" {
+			if alphaAt(size/2, size/2) != 255 {
+				t.Fatal("dot is not solid at its center")
+			}
+			continue
+		}
+		// Left of the glyph and inside the ring only the tint shows.
+		if tint := alphaAt(8, size/2-6); tint == 0 || tint > 96 {
+			t.Fatalf("%s interior alpha = %d, want a light tint", kind, tint)
+		}
+		if alphaAt(size/2, 1) < 128 {
+			t.Fatalf("%s has no solid ring", kind)
+		}
+		solid := 0
+		for y := size / 4; y < 3*size/4; y++ {
+			for x := size / 4; x < 3*size/4; x++ {
+				if alphaAt(x, y) == 255 {
+					solid++
+				}
+			}
+		}
+		if solid < 12 {
+			t.Fatalf("%s has no solid glyph", kind)
+		}
 	}
 }

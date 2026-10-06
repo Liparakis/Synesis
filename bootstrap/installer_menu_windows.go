@@ -168,6 +168,8 @@ const (
 	controlResult
 	controlResultDetailsToggle
 	controlResultDetails
+	controlResultNextTitle
+	controlResultNext
 	controlBack
 	controlNext
 	controlCancel
@@ -283,6 +285,8 @@ func installerOperationSteps(action installerAction, metadata bool) []installerS
 type installerWizard struct {
 	art               map[string]installerArt
 	bundle            string
+	bundleVersion     string
+	installedVersion  string
 	installRoot       string
 	installDraft      string
 	scale             float64
@@ -318,6 +322,7 @@ type installerWizard struct {
 	buttonFont        uintptr
 	cardTitleFont     uintptr
 	cardDetailFont    uintptr
+	stepDetailFont    uintptr
 	iconFont          uintptr
 	wordmarkFont      uintptr
 	windowIconLarge   uintptr
@@ -451,13 +456,85 @@ func newInstallerWizard(bundle string) (*installerWizard, error) {
 		return nil, err
 	}
 	return &installerWizard{
-		bundle:      bundle,
-		installRoot: paths.root,
-		installed:   fileExists(paths.root),
-		action:      installerActionInstall,
-		page:        installerPageAction,
-		controls:    make(map[int]uintptr),
+		bundle:           bundle,
+		bundleVersion:    installerBundleVersion(bundle),
+		installedVersion: installerInstalledVersion(paths),
+		installRoot:      paths.root,
+		installed:        fileExists(paths.root),
+		action:           installerActionInstall,
+		page:             installerPageAction,
+		controls:         make(map[int]uintptr),
 	}, nil
+}
+
+// installerBundleVersion reads the version a bundle declares about itself. It is
+// display text only: activation verifies the bundle through its manifest, never
+// through this file.
+func installerBundleVersion(bundle string) string {
+	data, err := os.ReadFile(filepath.Join(bundle, "VERSION"))
+	if err != nil {
+		return ""
+	}
+	version := strings.TrimSpace(string(data))
+	if !validVersion(version) {
+		return ""
+	}
+	return version
+}
+
+// installerInstalledVersion reports the active version of an existing
+// installation, or "" when none can be read. A missing or damaged pointer only
+// removes the version from the copy; install and repair handle it themselves.
+func installerInstalledVersion(paths installPaths) string {
+	pointer, _, err := readLoosePointer(paths, paths.current)
+	if err != nil || pointer == nil {
+		return ""
+	}
+	return pointer.Version
+}
+
+// installActionDetail describes what the primary action will do to the version
+// already on this machine, when both versions are known.
+func (w *installerWizard) installActionDetail() string {
+	const kept = "Your identity, projects, and workspace data are kept."
+	switch {
+	case w.bundleVersion == "":
+		return "Keep your identity, projects, and workspace data."
+	case !w.installed:
+		return "Install Synesis " + w.bundleVersion + "."
+	case w.installedVersion == "":
+		return "Install Synesis " + w.bundleVersion + ". " + kept
+	case w.installedVersion == w.bundleVersion:
+		return "Reinstall " + w.bundleVersion + ". " + kept
+	default:
+		return "Update " + w.installedVersion + " to " + w.bundleVersion + "."
+	}
+}
+
+// showsNextSteps reports whether the result page has room for, and reason to
+// show, what to do after a successful install. Open details take that space.
+func (w *installerWizard) showsNextSteps() bool {
+	return w.page == installerPageResult && w.result.err == nil && w.action != installerActionUninstall && !w.resultDetailsOpen
+}
+
+// resultBadge selects the status mark painted beside the result title.
+func (w *installerWizard) resultBadge() (kind string, color uintptr) {
+	switch {
+	case w.result.err != nil:
+		return "badge-failed", installerStatusColor("failed")
+	case w.result.warning != "":
+		return "badge-warning", installerStatusColor("warning")
+	default:
+		return "badge-done", installerStatusColor("done")
+	}
+}
+
+// headerDividerY is the design-space row of the rule under the page header.
+func (w *installerWizard) headerDividerY() int32 {
+	if w.page == installerPageAction {
+		return 192
+	}
+	return 250
 }
 
 // discoverWizardInstallRoot uses only the installer-owned registry marker to
@@ -732,6 +809,8 @@ func (w *installerWizard) createControls() {
 	w.controls[controlResultDetails] = w.addControl(controlResultDetails, "EDIT", "", child|wsTabStop|esReadOnly|0x4|0x40|0x00200000, 74, 668, 1252, 182, 0)
 	windows.NewLazySystemDLL("uxtheme.dll").NewProc("SetWindowTheme").Call(w.controls[controlResultDetails], uintptr(unsafe.Pointer(mustInstallerUTF16("DarkMode_Explorer"))), 0)
 	installerSendMessage.Call(w.controls[controlResultDetails], 0x00c5, 256*1024, 0) // EM_SETLIMITTEXT
+	w.controls[controlResultNextTitle] = w.addControl(controlResultNextTitle, "STATIC", "Next steps", static, 60, 598, 1280, 40, 0)
+	w.controls[controlResultNext] = w.addControl(controlResultNext, "STATIC", "", static, 60, 644, 1280, 126, 0)
 	// Give the compact action row an even rhythm and enough visual weight for
 	// the destructive primary action without changing its command routing.
 	w.controls[controlBack] = w.addControl(controlBack, "BUTTON", "Back", button|bsOwnerDraw, 780, 886, 185, 72, 0)
@@ -751,6 +830,7 @@ func (w *installerWizard) createControls() {
 	w.buttonFont = createInstallerFont(w.scaled(-29), fontWeightNormal)
 	w.cardTitleFont = createInstallerFont(w.scaled(-32), fontWeightBold)
 	w.cardDetailFont = createInstallerFont(w.scaled(-27), fontWeightNormal)
+	w.stepDetailFont = createInstallerFont(w.scaled(-24), fontWeightNormal)
 	w.iconFont = createInstallerFont(w.scaled(-60), fontWeightBold)
 	w.wordmarkFont = createInstallerFont(w.scaled(-16), fontWeightNormal)
 	w.logFont = createInstallerNamedFont(w.scaled(-27), fontWeightNormal, "Consolas")
@@ -781,6 +861,8 @@ func (w *installerWizard) createControls() {
 	setInstallerFont(w.controls[controlResult], w.bodyFont)
 	setInstallerFont(w.controls[controlResultDetailsToggle], w.detailFont)
 	setInstallerFont(w.controls[controlResultDetails], w.logFont)
+	setInstallerFont(w.controls[controlResultNextTitle], w.cardTitleFont)
+	setInstallerFont(w.controls[controlResultNext], w.detailFont)
 	installerSendMessage.Call(w.controls[controlProgressLog], 0x01a0, 0, uintptr(w.scaled(34))) // LB_SETITEMHEIGHT
 	setInstallerFont(w.controls[controlBack], w.buttonFont)
 	setInstallerFont(w.controls[controlNext], w.buttonFont)
@@ -868,12 +950,25 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerText(w.controls[controlCapabilityData], "Existing project and workspace data is kept")
 		setInstallerText(w.controls[controlActionPath], "Installed at "+w.installRoot)
 	case installerPageInstall:
-		title = "Choose Install Location"
+		title = "Choose install location"
 		description = "Choose the folder where Synesis will be installed.\r\nThis is where the application files will be placed."
 		setInstallerVisible(w.controls[controlInstallGroup], true)
 		setInstallerVisible(w.controls[controlInstallEdit], true)
 		setInstallerVisible(w.controls[controlBrowse], true)
 		setInstallerVisible(w.controls[controlInstallHint], true)
+		// Say what will change on this machine before the user commits to it.
+		setInstallerVisible(w.controls[controlCapabilities], true)
+		setInstallerVisible(w.controls[controlCapabilityInstall], true)
+		setInstallerVisible(w.controls[controlCapabilityLink], true)
+		setInstallerVisible(w.controls[controlCapabilityData], true)
+		runtimeLine := "Install the Synesis runtime in this folder"
+		if w.bundleVersion != "" {
+			runtimeLine = "Install Synesis " + w.bundleVersion + " in this folder"
+		}
+		setInstallerText(w.controls[controlCapabilities], "Setup will")
+		setInstallerText(w.controls[controlCapabilityInstall], runtimeLine)
+		setInstallerText(w.controls[controlCapabilityLink], "Register the synesis:// link handler")
+		setInstallerText(w.controls[controlCapabilityData], "Add the Synesis bin folder to your user PATH")
 		setInstallerText(w.controls[controlInstallGroup], "Destination folder")
 		if w.installDraft == "" {
 			w.installDraft = w.installRoot
@@ -922,6 +1017,9 @@ func (w *installerWizard) showPage(page installerPage) {
 		w.progressTimer, _, _ = installerUser32.NewProc("SetTimer").Call(w.hwnd, 1, 16, 0)
 	case installerPageResult:
 		title, description = "Installed", "Synesis is ready to use."
+		if w.bundleVersion != "" {
+			description = "Synesis " + w.bundleVersion + " is ready to use."
+		}
 		if w.action == installerActionUninstall {
 			title, description = "Uninstalled", "The application has been removed."
 		}
@@ -943,6 +1041,11 @@ func (w *installerWizard) showPage(page installerPage) {
 		setInstallerText(w.controls[controlResultDetails], details)
 		setInstallerText(w.controls[controlResultDetailsToggle], "Show details")
 		setInstallerVisible(w.controls[controlResultDetailsToggle], details != "")
+		setInstallerText(w.controls[controlResultNext], "1.  Open a new terminal so the updated PATH is picked up.\r\n"+
+			"2.  Run  synesis --version  to confirm the installation.\r\n"+
+			"3.  In a project folder, run  synesis init  to get started.")
+		setInstallerVisible(w.controls[controlResultNextTitle], w.showsNextSteps())
+		setInstallerVisible(w.controls[controlResultNext], w.showsNextSteps())
 	}
 	setInstallerText(w.controls[controlTitle], title)
 	setInstallerText(w.controls[controlDescription], description)
@@ -1012,7 +1115,11 @@ func (w *installerWizard) layoutPage(page installerPage) {
 		move(controlInstallGroup, 60, 330, 1280, 42)
 		move(controlInstallEdit, 74, 405, 1008, 54)
 		move(controlBrowse, 1120, 390, 220, 82)
-		move(controlInstallHint, 60, 518, 1260, 100)
+		move(controlInstallHint, 60, 496, 1260, 44)
+		move(controlCapabilities, 60, 566, 880, 38)
+		move(controlCapabilityInstall, 120, 610, 1100, 42)
+		move(controlCapabilityLink, 120, 652, 1100, 42)
+		move(controlCapabilityData, 120, 694, 1100, 42)
 		move(controlBack, 785, 825, 175, 72)
 		move(controlNext, 980, 825, 175, 72)
 		move(controlCancel, 1175, 825, 165, 72)
@@ -1023,7 +1130,7 @@ func (w *installerWizard) layoutPage(page installerPage) {
 		move(controlProgressBar, 60, 328, 1050, 36)
 		move(controlProgressCount, 1140, 324, 200, 44)
 		move(controlProgressSteps, 60, 384, 1280, 272)
-		move(controlProgressLogTitle, 60, 674, 1280, 38)
+		move(controlProgressLogTitle, 60, 660, 1280, 50)
 		move(controlProgressLog, 60, 718, 1280, 145)
 		move(controlResult, 60, 300, 1250, 310)
 	}
@@ -1031,7 +1138,17 @@ func (w *installerWizard) layoutPage(page installerPage) {
 		move(controlResult, 88, 320, 1224, 96)
 		move(controlUninstallPathLabel, 88, 432, 1224, 38)
 		move(controlUninstallPath, 102, 494, 1196, 40)
-		move(controlResultDetailsToggle, 60, 596, 300, 52)
+		// The status badge sits in the header's left margin, so the header copy
+		// moves right to stay one aligned block.
+		move(controlTitle, 148, 48, headerWidth-88, 84)
+		move(controlDescription, 148, 132, headerWidth-88, 90)
+		toggleY := int32(596)
+		if w.showsNextSteps() {
+			move(controlResultNextTitle, 60, 598, 1280, 40)
+			move(controlResultNext, 60, 644, 1280, 126)
+			toggleY = 790
+		}
+		move(controlResultDetailsToggle, 60, toggleY, 300, 52)
 		move(controlResultDetails, 74, 668, 1252, 182)
 	}
 	if page == installerPageAction {
@@ -1148,6 +1265,9 @@ func (w *installerWizard) toggleResultDetails() {
 	}
 	setInstallerText(w.controls[controlResultDetailsToggle], label)
 	setInstallerVisible(w.controls[controlResultDetails], w.resultDetailsOpen)
+	w.layoutPage(w.page)
+	setInstallerVisible(w.controls[controlResultNextTitle], w.showsNextSteps())
+	setInstallerVisible(w.controls[controlResultNext], w.showsNextSteps())
 	if w.resultDetailsOpen {
 		// Start with the error summary, even after earlier diagnostic scrolling.
 		installerSendMessage.Call(w.controls[controlResultDetails], 0x00b1, 0, 0) // EM_SETSEL
@@ -1276,11 +1396,9 @@ func drawInstallerChrome(w *installerWizard) {
 
 	linePen, _, _ := installerCreatePen.Call(0, scaledPenWidth(w.scale), installerRGB(35, 43, 54))
 	oldPen, _, _ := installerSelectObject.Call(hdc, linePen)
-	headerDividerY := int32(192)
-	if w.page != installerPageAction {
-		headerDividerY = 250
-	}
-	installerMoveToEx.Call(hdc, uintptr(w.scaled(60)), uintptr(w.scaled(headerDividerY)), 0)
+	headerDividerY := w.headerDividerY()
+	// The rule continues from the accent mark painted into the backdrop.
+	installerMoveToEx.Call(hdc, uintptr(w.scaled(60+installerAccentWidth+14)), uintptr(w.scaled(headerDividerY)), 0)
 	installerLineTo.Call(hdc, uintptr(w.scaled(1030)), uintptr(w.scaled(headerDividerY)))
 	if w.page != installerPageAction {
 		footer := int32(800)
@@ -1302,6 +1420,15 @@ func drawInstallerChrome(w *installerWizard) {
 		{kind: "data", y: 377},
 	} {
 		drawInstallerCapabilityIcon(hdc, w, capability.kind, w.scaled(84), w.scaled(capability.y), w.scaled(28))
+	}
+	if w.page == installerPageInstall {
+		for _, rowCenter := range []int32{631, 673, 715} {
+			w.drawSmoothIcon(hdc, w.scaled(86), w.scaled(rowCenter), w.scaled(7), "dot", installerRGB(81, 178, 250))
+		}
+	}
+	if w.page == installerPageResult {
+		kind, color := w.resultBadge()
+		w.drawSmoothIcon(hdc, w.scaled(98), w.scaled(118), w.scaled(34), kind, color)
 	}
 }
 
@@ -1621,7 +1748,7 @@ func (w *installerWizard) drawActionCard(controlID int, device uintptr) {
 	installerSetTextColor.Call(device, installerRGB(textRed, textGreen, textBlue))
 	installerDrawText.Call(device, uintptr(unsafe.Pointer(mustInstallerUTF16(getInstallerText(control)))), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&titleRect)), dtSingleLine|dtEndEllipsis)
 	installerSelectObject.Call(device, oldFont)
-	detail := "Keep your identity, projects, and workspace data."
+	detail := w.installActionDetail()
 	if controlID == controlActionUninstall {
 		detail = "Remove the application; metadata stays unless you choose otherwise."
 	}
@@ -1659,7 +1786,7 @@ func (w *installerWizard) colorStatic(device, hwnd uintptr) uintptr {
 	case controlDescription:
 		red, green, blue = 174, 186, 207
 	case controlProductDetails, controlActionPath, controlInstallHint, controlUninstallWarning,
-		controlCapabilityInstall, controlCapabilityLink, controlCapabilityData:
+		controlCapabilityInstall, controlCapabilityLink, controlCapabilityData, controlResultNext:
 		red, green, blue = 190, 201, 219
 	case controlUninstallImpact:
 		red, green, blue = 238, 241, 247
@@ -1685,7 +1812,7 @@ func (w *installerWizard) colorEdit(device uintptr) uintptr {
 }
 
 func (w *installerWizard) disposeFonts() {
-	for _, font := range []uintptr{w.titleFont, w.bodyFont, w.detailFont, w.productFont, w.buttonFont, w.cardTitleFont, w.cardDetailFont, w.iconFont, w.wordmarkFont, w.logFont} {
+	for _, font := range []uintptr{w.titleFont, w.bodyFont, w.detailFont, w.productFont, w.buttonFont, w.cardTitleFont, w.cardDetailFont, w.stepDetailFont, w.iconFont, w.wordmarkFont, w.logFont} {
 		if font != 0 {
 			installerDeleteObject.Call(font)
 		}
@@ -1697,6 +1824,7 @@ func (w *installerWizard) disposeFonts() {
 	w.buttonFont = 0
 	w.cardTitleFont = 0
 	w.cardDetailFont = 0
+	w.stepDetailFont = 0
 	w.iconFont = 0
 	w.wordmarkFont = 0
 }
@@ -1865,16 +1993,19 @@ func (w *installerWizard) drawProgressSteps(device uintptr) {
 	for i, step := range steps {
 		y := w.scaled(int32(i) * 68)
 		w.drawStepMarker(device, w.scaled(21), y+w.scaled(19), step.status, i < len(steps)-1)
-		font := w.bodyFont
-		if step.status == "working" {
+		font, titleColor := w.bodyFont, installerRGB(235, 240, 247)
+		switch step.status {
+		case "working":
 			font = w.cardTitleFont
+		case "pending":
+			titleColor = installerRGB(168, 180, 198)
 		}
-		drawInstallerText(device, font, step.title, installerRect{left: w.scaled(68), top: y, right: rect.right, bottom: y + w.scaled(36)}, installerRGB(235, 240, 247))
-		detail := step.detail
+		drawInstallerText(device, font, step.title, installerRect{left: w.scaled(68), top: y, right: rect.right, bottom: y + w.scaled(38)}, titleColor)
+		detail, detailColor := step.detail, installerRGB(150, 166, 188)
 		if detail == "" {
-			detail = "Pending"
+			detail, detailColor = "Pending", installerRGB(112, 126, 146)
 		}
-		drawInstallerText(device, w.detailFont, detail, installerRect{left: w.scaled(68), top: y + w.scaled(35), right: rect.right, bottom: y + w.scaled(66)}, installerRGB(174, 190, 211))
+		drawInstallerText(device, w.stepDetailFont, detail, installerRect{left: w.scaled(68), top: y + w.scaled(36), right: rect.right, bottom: y + w.scaled(64)}, detailColor)
 	}
 }
 

@@ -10,6 +10,10 @@ import (
 
 const installerProgressEase = 500 * time.Millisecond
 
+// installerAccentWidth is the design-space length of the accent mark that
+// starts the rule under every page header.
+const installerAccentWidth = 72
+
 // Motion only interpolates toward an observed completed-stage count. Retarget
 // from the current visual position so bursts of backend events never jump.
 type installerProgressMotion struct {
@@ -159,7 +163,7 @@ func paintInstallerIcon(pixels []byte, size int32, kind string, color installerP
 					fx := float64(x) + (float64(sx)+0.5)/4 - float64(size)/2
 					fy := float64(y) + (float64(sy)+0.5)/4 - float64(size)/2
 					d := math.Hypot(fx, fy)
-					c, visible := color, d <= r && d >= r-1.5
+					c, visible, weight := color, d <= r && d >= r-1.5, 1.0
 					if kind == "alert" {
 						visible = fy >= -r*0.95 && fy <= r*0.8 && math.Abs(fx) <= (fy+r*0.95)*0.55
 						c = installerMix(installerPaintColor{255, 213, 105}, installerPaintColor{242, 170, 45}, (fy+r)/(2*r))
@@ -180,11 +184,25 @@ func paintInstallerIcon(pixels []byte, size int32, kind string, color installerP
 						visible = visible || min(installerSegmentDistance(fx, fy, -r*0.45, 0, -r*0.1, r*0.32), installerSegmentDistance(fx, fy, -r*0.1, r*0.32, r*0.5, -r*0.4)) < 0.85
 					} else if kind == "failed" || kind == "warning" {
 						visible = visible || installerSegmentDistance(fx, fy, 0, -r*0.45, 0, r*0.06) < 0.8 || math.Hypot(fx, fy-r*0.4) < 0.9
+					} else if kind == "dot" {
+						visible = d <= r
+					} else if kind == "badge-done" || kind == "badge-failed" || kind == "badge-warning" {
+						// A tinted disc with a solid ring and glyph: large enough to
+						// read as the page's outcome, quiet enough to sit beside the title.
+						stroke := max(1.1, r*0.085)
+						glyph := installerSegmentDistance(fx, fy, 0, -r*0.46, 0, r*0.08) < stroke || math.Hypot(fx, fy-r*0.42) < stroke*1.15
+						if kind == "badge-done" {
+							glyph = min(installerSegmentDistance(fx, fy, -r*0.42, r*0.02, -r*0.12, r*0.32), installerSegmentDistance(fx, fy, -r*0.12, r*0.32, r*0.46, -r*0.30)) < stroke
+						}
+						visible = d <= r
+						if d < r-stroke*1.3 && !glyph {
+							weight = 0.16
+						}
 					}
 					if visible {
-						alpha++
+						alpha += weight
 						for i := range sum {
-							sum[i] += c[i]
+							sum[i] += c[i] * weight
 						}
 					}
 				}
@@ -272,6 +290,8 @@ func (w *installerWizard) rebuildBackdrop() {
 			panel(60, 656, 1280, 208, installerPaintColor{27, 32, 43}, installerPaintColor{27, 32, 43}, installerPaintColor{49, 62, 77}, 10)
 		}
 	}
+	accentY := w.headerDividerY() - 3
+	panel(60, accentY, installerAccentWidth, 6, installerPaintColor{96, 190, 255}, installerPaintColor{28, 124, 237}, installerPaintColor{60, 160, 248}, 3)
 	w.drawArt(r.device, "ribbon", w.scaled(1100), 0, w.scaled(300), w.scaled(310))
 	w.drawArt(r.device, "brand", client.right-w.scaled(250), w.scaled(40), w.scaled(190), w.scaled(190))
 	installerGDI32.NewProc("GdiFlush").Call()

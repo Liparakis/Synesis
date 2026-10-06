@@ -1,3 +1,27 @@
+# 2026-10-06 — Windows installer: outcome, versions, and pre-install disclosure
+
+The native setup wizard keeps its 912x666 footprint, dark theme, and page flow. Changes:
+
+- Result page: a status badge beside the title (success, warning, failure), the installed version in
+  the description, and "Next steps" after a successful install (new terminal, `synesis --version`,
+  `synesis init`). Open details replace the next steps; closing them restores it.
+- Install-location page: a "Setup will" list naming the three changes made to the machine (runtime in
+  the chosen folder, `synesis://` handler, user PATH entry), and a sentence-case title.
+- Main page: the install card states the transition when both versions are known ("Update X to Y",
+  "Reinstall X", or "Install Synesis X"). The bundle version is read from the bundle's `VERSION` file
+  and the installed version from the active pointer; both are display text only and are dropped when
+  unreadable or not a plain version.
+- Progress page: step status lines are smaller and muted, pending steps are dimmed, and the log
+  heading is no longer clipped by the log.
+- Every page: an accent mark starts the rule under the header.
+
+`go test ./...` passes in `bootstrap`, including new tests for the version copy, the outcome badge
+selection, badge and dot rendering, and the install and result layouts. The six preview pages were
+inspected through the existing no-operation harness. Off-screen `PrintWindow` captures of that harness
+intermittently omit parent-painted chrome or a label; on-screen captures of the same pages were
+complete. The real install, repair, and uninstall operations were not exercised through the new UI.
+Installer rebuilt as `0.1.0-dev.installer-ui-20261006`; not installed.
+
 # 2026-10-06 — SynesisTest73 on `0.1.0-dev.lifecycle-fixes-20261006`: WorkGroup COMPLETED
 
 Real current-build acceptance, user-run with two Codex agents from an empty project
