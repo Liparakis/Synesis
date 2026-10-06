@@ -1,104 +1,144 @@
 package org.synesis.coordination.domain.capability;
 
-
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
- * Bounded immutable specification contract for a requested capability.
+ * Bounded immutable API contract negotiated before a dependent lane builds against a capability.
  *
- * <p>Enforces strict size limits:
- * <ul>
- *   <li>Inputs and Output: 1 to 2,000 characters each</li>
- *   <li>Required behavior: 0 to 16 items, max 1,000 characters per item</li>
- *   <li>Acceptance tests: 0 to 16 items, max 1,000 characters per item</li>
- *   <li>Total payload bound: max 32 KB</li>
- * </ul>
+ * <p>Fields that do not apply must still be stated explicitly, for example as {@code "none"};
+ * this keeps acceptance and implementation decisions tied to one complete contract revision.
  *
- * @param inputs           input parameter specifications
+ * @param purpose          purpose of the capability
+ * @param inputs           input parameter names, types, and constraints
  * @param output           output type and semantics
  * @param requiredBehavior required operational behaviors
- * @param acceptanceTests  acceptance test criteria
+ * @param errorSemantics   failure cases and their observable results
+ * @param sideEffects      externally visible effects of calls
+ * @param invariants       conditions that must remain true
+ * @param compatibility   compatibility and evolution requirements
+ * @param performance     latency or resource requirements
+ * @param concurrency     concurrency and ordering guarantees
+ * @param acceptanceTests acceptance criteria for the published implementation
  * @since 1.0
  */
-public record CapabilityContract(String inputs, String output, List<String> requiredBehavior,
+public record CapabilityContract(String purpose,
+                                 String inputs,
+                                 String output,
+                                 List<String> requiredBehavior,
+                                 String errorSemantics,
+                                 String sideEffects,
+                                 String invariants,
+                                 String compatibility,
+                                 String performance,
+                                 String concurrency,
                                  List<String> acceptanceTests) {
 
+    public static final int MAX_ENCODED_BYTES = 32 * 1024;
     private static final int MAX_FIELD_LENGTH = 2000;
+    private static final int MAX_FIELD_BYTES = 8 * 1024;
     private static final int MAX_LIST_ITEMS = 16;
     private static final int MAX_ITEM_LENGTH = 1000;
-    private static final int MAX_TOTAL_BYTES = 32 * 1024;
+    private static final int MAX_ITEM_BYTES = 2 * 1024;
 
     /**
-     * Compact constructor enforcing strict bounds and immutability.
-     *
-     * @param inputs           input parameter specifications
-     * @param output           output type and semantics
-     * @param requiredBehavior required operational behaviors
-     * @param acceptanceTests  acceptance test criteria
-     * @throws IllegalArgumentException if any field violates contract bounds
+     * Enforces explicit non-empty terms, bounded UTF-8 payload size, and immutable list values.
      */
     public CapabilityContract {
-        CoordinationNullException.requireNonNull(inputs, "inputs cannot be null");
-        CoordinationNullException.requireNonNull(output, "output cannot be null");
-        inputs = inputs.trim();
-        output = output.trim();
+        purpose = boundedText(purpose, "purpose");
+        inputs = boundedText(inputs, "inputs");
+        output = boundedText(output, "output");
+        errorSemantics = boundedText(errorSemantics, "errorSemantics");
+        sideEffects = boundedText(sideEffects, "sideEffects");
+        invariants = boundedText(invariants, "invariants");
+        compatibility = boundedText(compatibility, "compatibility");
+        performance = boundedText(performance, "performance");
+        concurrency = boundedText(concurrency, "concurrency");
+        requiredBehavior = boundedList(requiredBehavior, "requiredBehavior");
+        acceptanceTests = boundedList(acceptanceTests, "acceptanceTests");
 
-        if (inputs.isEmpty() || inputs.length() > MAX_FIELD_LENGTH) {
-            throw new CoordinationArgumentException("inputs must be between 1 and " + MAX_FIELD_LENGTH + " characters");
-        }
-        if (output.isEmpty() || output.length() > MAX_FIELD_LENGTH) {
-            throw new CoordinationArgumentException("output must be between 1 and " + MAX_FIELD_LENGTH + " characters");
-        }
-
-        requiredBehavior = requiredBehavior == null ? List.of() : List.copyOf(requiredBehavior);
-        acceptanceTests = acceptanceTests == null ? List.of() : List.copyOf(acceptanceTests);
-
-        if (requiredBehavior.size() > MAX_LIST_ITEMS) {
-            throw new CoordinationArgumentException("requiredBehavior exceeds maximum item limit of " + MAX_LIST_ITEMS);
-        }
-        for (String item : requiredBehavior) {
-            if (item == null || item.isBlank() || item.length() > MAX_ITEM_LENGTH) {
-                throw new CoordinationArgumentException(
-                        "requiredBehavior items must be 1 to " + MAX_ITEM_LENGTH + " characters");
-            }
-        }
-
-        if (acceptanceTests.size() > MAX_LIST_ITEMS) {
-            throw new CoordinationArgumentException("acceptanceTests exceeds maximum item limit of " + MAX_LIST_ITEMS);
-        }
-        for (String item : acceptanceTests) {
-            if (item == null || item.isBlank() || item.length() > MAX_ITEM_LENGTH) {
-                throw new CoordinationArgumentException(
-                        "acceptanceTests items must be 1 to " + MAX_ITEM_LENGTH + " characters");
-            }
-        }
-
-        int totalLen = inputs.length() + output.length();
-        for (String s : requiredBehavior) {
-            totalLen += s.length();
-        }
-        for (String s : acceptanceTests) {
-            totalLen += s.length();
-        }
-
-        if (totalLen > MAX_TOTAL_BYTES) {
+        int totalBytes = utf8Length(purpose) + utf8Length(inputs) + utf8Length(output) + utf8Length(errorSemantics)
+                + utf8Length(sideEffects) + utf8Length(invariants) + utf8Length(compatibility)
+                + utf8Length(performance) + utf8Length(concurrency);
+        totalBytes += requiredBehavior.stream().mapToInt(CapabilityContract::utf8Length).sum();
+        totalBytes += acceptanceTests.stream().mapToInt(CapabilityContract::utf8Length).sum();
+        if (totalBytes > MAX_ENCODED_BYTES) {
             throw new CoordinationArgumentException("CapabilityContract exceeds 32 KB total payload bound");
         }
     }
 
     /**
-     * Compares structural equivalence of contracts, ignoring whitespace variations in text fields.
+     * Retains the original constructor for local callers and historical fixtures.
+     * New MCP requests use the complete constructor and explicitly fill every term.
      *
-     * @param other target contract
-     * @return {@code true} if structurally equivalent
+     * @param inputs API inputs
+     * @param output API output
+     * @param requiredBehavior observable behavior required of the capability
+     * @param acceptanceTests acceptance checks for the capability
+     */
+    public CapabilityContract(String inputs, String output, List<String> requiredBehavior, List<String> acceptanceTests) {
+        this("unspecified",
+                inputs,
+                output,
+                requiredBehavior,
+                "unspecified",
+                "unspecified",
+                "unspecified",
+                "unspecified",
+                "unspecified",
+                "unspecified",
+                acceptanceTests);
+    }
+
+    /**
+     * Compares all negotiated API terms.
+     *
+     * @param other candidate contract
+     * @return {@code true} only when every term is equivalent
      */
     public boolean isEquivalent(CapabilityContract other) {
         if (other == null) {
             return false;
         }
-        return inputs.equals(other.inputs) && output.equals(other.output)
-                && requiredBehavior.equals(other.requiredBehavior) && acceptanceTests.equals(other.acceptanceTests);
+        return purpose.equals(other.purpose)
+                && inputs.equals(other.inputs)
+                && output.equals(other.output)
+                && requiredBehavior.equals(other.requiredBehavior)
+                && errorSemantics.equals(other.errorSemantics)
+                && sideEffects.equals(other.sideEffects)
+                && invariants.equals(other.invariants)
+                && compatibility.equals(other.compatibility)
+                && performance.equals(other.performance)
+                && concurrency.equals(other.concurrency)
+                && acceptanceTests.equals(other.acceptanceTests);
+    }
+
+    private static String boundedText(String value, String field) {
+        CoordinationNullException.requireNonNull(value, field + " cannot be null");
+        String normalized = value.trim();
+        int bytes = utf8Length(normalized);
+        if (normalized.isEmpty() || normalized.length() > MAX_FIELD_LENGTH || bytes > MAX_FIELD_BYTES) {
+            throw new CoordinationArgumentException(field + " must be 1 to " + MAX_FIELD_LENGTH + " characters and at most " + MAX_FIELD_BYTES + " UTF-8 bytes");
+        }
+        return normalized;
+    }
+
+    private static List<String> boundedList(List<String> values, String field) {
+        List<String> copy = values == null ? List.of() : List.copyOf(values);
+        if (copy.size() > MAX_LIST_ITEMS) {
+            throw new CoordinationArgumentException(field + " exceeds maximum item limit of " + MAX_LIST_ITEMS);
+        }
+        for (String value : copy) {
+            if (value == null || value.isBlank() || value.length() > MAX_ITEM_LENGTH || utf8Length(value) > MAX_ITEM_BYTES) {
+                throw new CoordinationArgumentException(field + " items must be 1 to " + MAX_ITEM_LENGTH + " characters and at most " + MAX_ITEM_BYTES + " UTF-8 bytes");
+            }
+        }
+        return copy;
+    }
+
+    private static int utf8Length(String value) {
+        return value.getBytes(StandardCharsets.UTF_8).length;
     }
 }

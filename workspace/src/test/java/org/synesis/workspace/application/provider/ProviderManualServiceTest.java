@@ -41,17 +41,24 @@ class ProviderManualServiceTest {
       assertTrue(content.contains("Never execute an incomplete template"));
       assertTrue(content.contains("Execute `finish_lane` only when `get_next_action` projects it"));
       assertTrue(content.contains("exact tool with those exact arguments"));
-      assertTrue(content.contains("do not end the session"));
-      assertTrue(content.contains("bounded wait and call `get_next_action` again"));
+      assertTrue(content.contains("compare consecutive `workflow.actionId` values"));
+      assertTrue(content.contains("workflow.retryAfterMs` before polling (default 5000 ms)"));
+      assertTrue(content.contains("workflow.maxUnchangedPolls` unchanged responses (default 3)"));
+      assertTrue(content.contains("workflow.recoveryDeadlineEpochMillis` is present"));
+      assertTrue(content.contains("does not consume the unchanged-poll limit"));
+      assertTrue(content.contains("stop polling until a fresh state-change signal or human input"));
+      assertTrue(content.contains("call `get_next_action` once with `"));
       assertTrue(content.contains(
           "optional `integrationCheck` input only evaluates explicitly supplied compatibility facts"));
-      assertTrue(content.contains("When `get_next_action` projects `WAIT`"));
+      assertTrue(content.contains("For repeated WAIT (including `recommendedTool=get_next_action`)"));
       assertTrue(content.contains(
-          "Do not report success or stop merely because your own lane is complete"));
+          "Do not report success merely because your own lane is complete"));
       assertTrue(content.contains(
           "call `ensure_session` with `task.goal`, `task.acceptance`, and `task.claims`"));
       assertTrue(content.contains("task.knownDependencies"));
       assertTrue(content.contains("NEEDS_CAPABILITY"));
+      assertTrue(content.contains("implementation_validation` action with `result=inspect`"));
+      assertTrue(content.contains("capabilityRequestHandle` and `implementationRevision`"));
       assertTrue(content.contains("{\"completionRequested\":true}"));
       assertTrue(content.contains("request is evaluated for that call only"));
       assertTrue(content.contains("likelyScopes` is descriptive only"));

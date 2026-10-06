@@ -34,16 +34,17 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * @param validationReason      free-text validation failure reason (may be empty)
  * @param failedAcceptanceTests list of failed acceptance test names
  * @param worktreePath          absolute path to validation worktree (empty when not applicable)
+ * @param requesterSessionId    exact requester session that owns the validation worktree
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
 public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID authorityLineageId, int revisionNumber,
                                          String baseCommit, String commitSha, List<String> changedPaths, String summary,
                                          String validationResult, String validationReason,
-                                         List<String> failedAcceptanceTests, String worktreePath) {
+                                         List<String> failedAcceptanceTests, String worktreePath, String requesterSessionId) {
 
     private static final int MAGIC = 0x494D504C; // "IMPL"
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int MAX_TEXT = 64 * 1024;
 
     /**
@@ -72,9 +73,41 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
         failedAcceptanceTests = List.copyOf(CoordinationNullException.requireNonNull(failedAcceptanceTests,
                 "failedAcceptanceTests"));
         CoordinationNullException.requireNonNull(worktreePath, "worktreePath");
+        CoordinationNullException.requireNonNull(requesterSessionId, "requesterSessionId");
         if (revisionNumber < 1) {
             throw new CoordinationArgumentException("revisionNumber must be >= 1");
         }
+    }
+
+    /**
+     * Retains the prior event constructor for non-validation and historical callers. The requester
+     * session is empty, so it cannot establish authority for a new validation workspace.
+     *
+     * @param handle capability request handle
+     * @param authorityLineageId publisher's durable authority lineage
+     * @param revisionNumber implementation revision number
+     * @param baseCommit source base commit
+     * @param commitSha immutable implementation snapshot commit
+     * @param changedPaths source paths in the snapshot
+     * @param summary implementation summary
+     * @param validationResult validation result, or empty before validation
+     * @param validationReason reason for a revision request, or empty
+     * @param failedAcceptanceTests failed acceptance tests
+     * @param worktreePath validation workspace path, or empty before validation
+     */
+    public ImplementationEventPayload(CapabilityRequestHandle handle,
+            UUID authorityLineageId,
+            int revisionNumber,
+            String baseCommit,
+            String commitSha,
+            List<String> changedPaths,
+            String summary,
+            String validationResult,
+            String validationReason,
+            List<String> failedAcceptanceTests,
+            String worktreePath) {
+        this(handle, authorityLineageId, revisionNumber, baseCommit, commitSha, changedPaths, summary, validationResult, validationReason,
+                failedAcceptanceTests, worktreePath, "");
     }
 
     /**
@@ -127,11 +160,11 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             int version = in.readInt();
-            if (magic != MAGIC || (version != 1 && version != 2)) {
+            if (magic != MAGIC || (version != 1 && version != 2 && version != 3)) {
                 throw new CoordinationException("Unsupported implementation event payload format");
             }
             CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
-            UUID authorityLineageId = version == 2 ? readUuid(in) : unresolvedLineage(handle);
+            UUID authorityLineageId = version >= 2 ? readUuid(in) : unresolvedLineage(handle);
             int revisionNumber = in.readInt();
             String baseCommit = readText(in);
             String commitSha = readText(in);
@@ -157,6 +190,7 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
                 failedTests.add(readText(in));
             }
             String worktreePath = readText(in);
+            String requesterSessionId = version >= 3 ? readText(in) : "";
             return new ImplementationEventPayload(handle,
                     authorityLineageId,
                     revisionNumber,
@@ -167,7 +201,8 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
                     validationResult,
                     validationReason,
                     failedTests,
-                    worktreePath);
+                    worktreePath,
+                    requesterSessionId);
         } catch (RuntimeException failure) {
             throw new CoordinationException("Malformed implementation event payload", failure);
         }
@@ -277,6 +312,7 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
                 writeText(out, test);
             }
             writeText(out, worktreePath);
+            writeText(out, requesterSessionId);
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {

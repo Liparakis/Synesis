@@ -33,10 +33,12 @@ class ImplementationLifecycleTest {
     @Test
     void implementationEventPayloadRoundTrip() throws Exception {
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+        UUID ownerLineage = UUID.randomUUID();
         List<String> changedPaths = List.of("src/Foo.java", "src/Bar.java");
         List<String> failedTests = List.of("FooTest.shouldReturnBar");
 
         ImplementationEventPayload payload = new ImplementationEventPayload(handle,
+                ownerLineage,
                 1,
                 "abc123",
                 "def456",
@@ -45,12 +47,14 @@ class ImplementationLifecycleTest {
                 "revision_required",
                 "Test failure",
                 failedTests,
-                "/tmp/validation-worktree");
+                "/tmp/validation-worktree",
+                "requester-session-1");
 
         byte[] encoded = payload.encode();
         ImplementationEventPayload decoded = ImplementationEventPayload.decode(encoded);
 
         assertEquals(handle.value(), decoded.handle().value());
+        assertEquals(ownerLineage, decoded.authorityLineageId());
         assertEquals(1, decoded.revisionNumber());
         assertEquals("abc123", decoded.baseCommit());
         assertEquals("def456", decoded.commitSha());
@@ -60,6 +64,7 @@ class ImplementationLifecycleTest {
         assertEquals("Test failure", decoded.validationReason());
         assertEquals(failedTests, decoded.failedAcceptanceTests());
         assertEquals("/tmp/validation-worktree", decoded.worktreePath());
+        assertEquals("requester-session-1", decoded.requesterSessionId());
     }
 
     @Test

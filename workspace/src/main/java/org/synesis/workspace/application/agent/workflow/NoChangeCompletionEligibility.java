@@ -93,7 +93,9 @@ final class NoChangeCompletionEligibility {
                 return denied("NO_CHANGE_COORDINATION_OBLIGATION");
             }
         }
-        if (hasPendingCapability(store, nodeId, supervisorId, workerId) || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
+        if (hasPendingCapability(store, nodeId, supervisorId, workerId)
+                || AgentReviewActionProjection.ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
+                || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
             return denied("NO_CHANGE_DEPENDENCY_PENDING");
         }
         return new Result(true, null);
@@ -109,7 +111,7 @@ final class NoChangeCompletionEligibility {
 
     private static boolean hasPendingCapability(PredictionEventStore store, String nodeId, String supervisorId, String workerId) {
         return store.capabilityRequestProjection().findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).map(CapabilityRequestRecord::state)
-                .anyMatch(state -> state == CapabilityLifecycleState.AWAITING_OWNER || state == CapabilityLifecycleState.REVISION_REQUESTED || state == CapabilityLifecycleState.IMPLEMENTING
+                .anyMatch(state -> state == CapabilityLifecycleState.AWAITING_OWNER || state == CapabilityLifecycleState.REVISION_REQUESTED || state == CapabilityLifecycleState.ACCEPTED || state == CapabilityLifecycleState.IMPLEMENTING
                         || state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || state == CapabilityLifecycleState.VALIDATING);
     }
 

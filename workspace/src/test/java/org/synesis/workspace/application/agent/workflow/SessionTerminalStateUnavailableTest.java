@@ -9,11 +9,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.link.identity.IdentityBootstrap;
 
@@ -26,6 +29,8 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
+import org.synesis.workspace.doctor.DoctorFindingCode;
+import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.test.ProviderTestSupport;
@@ -58,7 +63,24 @@ class SessionTerminalStateUnavailableTest {
         assertEquals(AgentStatus.READY, sessions.ensureSession(request).status());
         Path events = location.root().resolve(".synesis/coordination/events");
         Files.createDirectories(events);
-        Files.writeString(events.resolve("00000000000000000001.sce"), "corrupt event");
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        byte[] tamperedEvent = PredictionEvent.create(location.projectId(),
+                UUID.randomUUID(),
+                1L,
+                PredictionEventType.DEPENDENCY_INVALIDATED,
+                identity.nodeId(),
+                new byte[0],
+                new byte[32],
+                identity,
+                1L).encoded();
+        tamperedEvent[tamperedEvent.length - 1] ^= 1;
+        Files.write(events.resolve("00000000000000000001.sce"), tamperedEvent);
+        DoctorFindingCode doctorCause = new DoctorService().diagnose(location.root()).findings().stream()
+                .map(finding -> finding.code())
+                .filter(code -> code == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE || code == DoctorFindingCode.DURABLE_STATE_AMBIGUOUS)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE, doctorCause);
 
         var action = new AgentNextActionService().getNextAction(new NextActionRequest(location.root(), "codex", "fresh-connection"));
         assertEquals(AgentStatus.FAILED, action.status());
@@ -67,6 +89,7 @@ class SessionTerminalStateUnavailableTest {
         Map<?, ?> actionResult = (Map<?, ?>) action.result();
         assertEquals("SESSION_TERMINAL_STATE_UNAVAILABLE", actionResult.get("reason"));
         assertNotNull(actionResult.get("causeType"));
+        assertEquals(doctorCause.value(), actionResult.get("causeCode"));
 
         Map<?, ?> workflow = (Map<?, ?>) actionResult.get("workflow");
         assertEquals("RECOVER", workflow.get("type"));
@@ -82,6 +105,7 @@ class SessionTerminalStateUnavailableTest {
         Map<?, ?> retryResult = (Map<?, ?>) retry.result();
         assertEquals("SESSION_TERMINAL_STATE_UNAVAILABLE", retryResult.get("reason"));
         assertNotNull(retryResult.get("causeType"));
+        assertEquals(doctorCause.value(), retryResult.get("causeCode"));
         assertEquals(AgentNextAction.REQUEST_HUMAN_HELP, retry.nextAction());
     }
 
@@ -103,6 +127,11 @@ class SessionTerminalStateUnavailableTest {
 
         assertNotEquals(predecessor.sessionId(), freshContext.sessionId());
         assertEquals(AgentStatus.READY, response.status());
+        var nextAction = new AgentNextActionService().getNextAction(new NextActionRequest(location.root(), "codex", "successor"));
+        assertNotEquals(AgentStatus.FAILED, nextAction.status());
+        if (nextAction.result() instanceof Map<?, ?> result) {
+            assertFalse(result.containsKey("causeCode"));
+        }
         var projection = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection();
         assertTrue(projection.isSessionTerminal(predecessor.sessionId()));
         assertFalse(projection.isSessionTerminal(freshContext.sessionId()));

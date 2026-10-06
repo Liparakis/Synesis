@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
@@ -97,6 +98,7 @@ public final class IntegrationOrchestrationService {
             org.synesis.coordination.domain.task.TaskCompletionProjection completion) {
         List<TaskSnapshotRecord> dependencies = new ArrayList<>();
         List<String> structuralFailures = new ArrayList<>();
+        boolean pendingDependency = false;
         for (String dependencyHandle : candidate.capabilityDependencies()) {
             CapabilityRequestRecord capability = capProj.findByHandle(dependencyHandle).orElse(null);
             if (capability == null) {
@@ -109,8 +111,13 @@ public final class IntegrationOrchestrationService {
                 structuralFailures.add("STALE_CAPABILITY_DEPENDENCY:" + dependencyHandle);
                 continue;
             }
+            if (capability.state() != CapabilityLifecycleState.VALIDATED) {
+                pendingDependency = true;
+                continue;
+            }
             var implementation = capProj.findLatestImplementation(dependencyHandle).orElse(null);
             if (implementation == null) {
+                pendingDependency = true;
                 continue;
             }
             if (!capability.authorityLineageId().equals(implementation.authorityLineageId())) {
@@ -121,24 +128,20 @@ public final class IntegrationOrchestrationService {
                     .filter(snapshot -> snapshot.commitSha().equals(implementation.commitSha())).min(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId))
                     .orElse(null);
             if (ownerSnapshot == null) {
-                // The contract is known but its immutable implementation has
-                // not been published as a task snapshot yet.  This candidate
-                // remains pending and will be reconsidered after publication.
+                // Validation alone does not put the implementation in the
+                // integration history. Keep the consumer pending until its
+                // exact owner commit is published as a task snapshot.
+                pendingDependency = true;
                 continue;
             }
             TaskCompletionState ownerState = completion.snapshotState(ownerSnapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
             if (ownerState == TaskCompletionState.INTEGRATED) {
                 continue;
             }
-            if (ownerState == TaskCompletionState.INTEGRATION_BLOCKED || ownerState == TaskCompletionState.REPAIR_REQUIRED || ownerState == TaskCompletionState.INTEGRATION_FAILED
-                    || ownerState == TaskCompletionState.CANCELLED || ownerState == TaskCompletionState.ABANDONED) {
-                // A failed prerequisite is recoverable through its own lane;
-                // do not permanently invalidate the dependent candidate.
-                continue;
-            }
             dependencies.add(ownerSnapshot);
+            pendingDependency = true;
         }
-        return new CandidateResolution(structuralFailures.isEmpty() && dependencies.isEmpty(), dependencies, structuralFailures);
+        return new CandidateResolution(structuralFailures.isEmpty() && !pendingDependency, dependencies, structuralFailures);
     }
 
     private static boolean blockedCandidateAppendFailed(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord candidate, String expectedControlHead, List<String> failures) {

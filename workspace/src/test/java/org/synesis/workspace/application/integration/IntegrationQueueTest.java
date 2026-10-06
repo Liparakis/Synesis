@@ -350,6 +350,10 @@ class IntegrationQueueTest {
         store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, identity.nodeId(), request.encode(), identity);
         ImplementationEventPayload implementation = new ImplementationEventPayload(handle, ownerLineage, 1, base, ownerCommit, List.of("src/api.py"), "owner", "", "", List.of(), "");
         store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, identity.nodeId(), implementation.encode(), identity);
+        ImplementationEventPayload validationStarted = new ImplementationEventPayload(handle, ownerLineage, 1, base, ownerCommit, List.of("src/api.py"), "owner", "", "", List.of(), "");
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED, identity.nodeId(), validationStarted.encode(), identity);
+        ImplementationEventPayload validationAccepted = new ImplementationEventPayload(handle, ownerLineage, 1, base, ownerCommit, List.of(), "validated", "accepted", "", List.of(), "");
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED, identity.nodeId(), validationAccepted.encode(), identity);
 
         publishSnapshot(store,
                 identity,

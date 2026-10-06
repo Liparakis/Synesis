@@ -3,9 +3,11 @@ package org.synesis.workspace.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -61,6 +63,59 @@ final class AgentWorkflowReducerTest {
         assertTrue((Boolean) workflow.get("retrySafe"));
     }
 
+    @Test
+    void waitWorkflowHintsAGetNextActionPollAndBoundsUnchangedPolling() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        NextActionRequest request = new NextActionRequest(Path.of("."), "codex", "connection-1");
+        AgentResponse waiting = reducer.decorate(request,
+                new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, Map.of("pending", 1)));
+
+        Map<?, ?> result = (Map<?, ?>) waiting.result();
+        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+        assertEquals(5000, workflow.get("retryAfterMs"));
+        assertEquals(3, workflow.get("maxUnchangedPolls"));
+        assertEquals("get_next_action", workflow.get("recommendedTool"));
+        assertEquals(Map.of(), workflow.get("arguments"));
+    }
+
+    @Test
+    void capabilityPublicationActionIdentityCanonicalizesAndTracksItsFences() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        NextActionRequest request = new NextActionRequest(Path.of("."), "codex", "connection-1");
+        AgentResponse first = reducer.decorate(request, capabilityPublication(2, "intent-1", 3, "tree-a", false));
+        AgentResponse reordered = reducer.decorate(request, capabilityPublication(2, "intent-1", 3, "tree-a", true));
+        AgentResponse newRevision = reducer.decorate(request, capabilityPublication(3, "intent-1", 3, "tree-a", true));
+        AgentResponse newTree = reducer.decorate(request, capabilityPublication(2, "intent-1", 3, "tree-b", true));
+
+        assertEquals(((Map<?, ?>) first.result()).get("actionId"), ((Map<?, ?>) reordered.result()).get("actionId"));
+        assertNotEquals(((Map<?, ?>) first.result()).get("actionId"), ((Map<?, ?>) newRevision.result()).get("actionId"));
+        assertNotEquals(((Map<?, ?>) first.result()).get("actionId"), ((Map<?, ?>) newTree.result()).get("actionId"));
+    }
+
+    private static AgentResponse capabilityPublication(long contractRevision, String intentId, long claimEpoch, String treeHash, boolean reverseOrder) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (reverseOrder) {
+            payload.put("expectedTreeHash", treeHash);
+            payload.put("claimEpoch", claimEpoch);
+            payload.put("intentId", intentId);
+            payload.put("contractRevision", contractRevision);
+            payload.put("capabilityRequestHandle", "req_123456789012");
+        } else {
+            payload.put("capabilityRequestHandle", "req_123456789012");
+            payload.put("contractRevision", contractRevision);
+            payload.put("intentId", intentId);
+            payload.put("claimEpoch", claimEpoch);
+            payload.put("expectedTreeHash", treeHash);
+        }
+        return new AgentResponse(AgentStatus.READY,
+                null,
+                AgentNextAction.PUBLISH_CAPABILITY_IMPLEMENTATION,
+                Map.of("capabilityRequestHandle", "req_123456789012",
+                        "contractRevision", contractRevision,
+                        "claimEpoch", claimEpoch,
+                        "nextProtocolPayload", payload));
+    }
+
     /**
      * Terminal and recovery lane states produce autonomous lifecycle actions.
      */
@@ -91,7 +146,31 @@ final class AgentWorkflowReducerTest {
                 new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE, AgentNextAction.WAIT, Map.of("capabilityRequestHandle", "req_123456789012")));
         Map<?, ?> implementationWorkflow = (Map<?, ?>) ((Map<?, ?>) implementation.result()).get("workflow");
         assertEquals("IMPLEMENT", implementationWorkflow.get("type"));
-        assertTrue(((java.util.List<?>) implementationWorkflow.get("permittedOperations")).contains("publish_capability_implementation"));
+        assertFalse(((java.util.List<?>) implementationWorkflow.get("permittedOperations")).contains("publish_capability_implementation"));
+    }
+
+    @Test
+    void acceptedCapabilityPublicationProjectsItsExactFencedArguments() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        NextActionRequest request = new NextActionRequest(Path.of("."), "codex", "connection-1");
+        Map<String, Object> arguments = Map.of("capabilityRequestHandle", "req_123456789012",
+                "contractRevision", 2,
+                "intentId", "intent-1",
+                "claimEpoch", 3,
+                "expectedTreeHash", "tree-hash-1");
+
+        AgentResponse publication = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY,
+                        null,
+                        AgentNextAction.PUBLISH_CAPABILITY_IMPLEMENTATION,
+                        Map.of("capabilityRequestHandle", "req_123456789012", "nextProtocolPayload", arguments)));
+
+        Map<?, ?> result = (Map<?, ?>) publication.result();
+        Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
+        assertEquals("PUBLISH", workflow.get("type"));
+        assertEquals("publish_capability_implementation", workflow.get("recommendedTool"));
+        assertEquals(arguments, workflow.get("arguments"));
+        assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("publish_capability_implementation"));
     }
 
     /**
@@ -162,11 +241,51 @@ final class AgentWorkflowReducerTest {
 
         Map<?, ?> result = (Map<?, ?>) validation.result();
         Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
-        assertEquals("PUBLISH", workflow.get("type"));
+        assertEquals("VALIDATE", workflow.get("type"));
         assertEquals(decision, workflow.get("decision"));
         assertFalse(workflow.containsKey("recommendedTool"));
         assertFalse(workflow.containsKey("arguments"));
         assertTrue(((java.util.List<?>) workflow.get("permittedOperations")).contains("respond_coordination"));
+        assertFalse(((java.util.List<?>) workflow.get("permittedOperations")).contains("publish_capability_implementation"));
+    }
+
+    @Test
+    void implementationValidationProjectsInspectionBeforeAllowingSnapshotReads() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        NextActionRequest request = new NextActionRequest(Path.of("."), "claude", "requester-connection");
+        Map<String, Object> inspectPayload = Map.of("inboxItemId", "cae8868e-4dc9-4aaf-9b31-18cbd48130f0",
+                "capabilityRequestHandle", "req_123456789012",
+                "implementationRevision", 2,
+                "result", "inspect");
+        AgentResponse inspect = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY,
+                        null,
+                        AgentNextAction.VALIDATE_IMPLEMENTATION,
+                        Map.of("capabilityRequestHandle", "req_123456789012",
+                                "revision", 2,
+                                "nextProtocolKind", "implementation_validation",
+                                "nextProtocolPayload", inspectPayload)));
+
+        Map<?, ?> inspectResult = (Map<?, ?>) inspect.result();
+        Map<?, ?> inspectWorkflow = (Map<?, ?>) inspectResult.get("workflow");
+        assertEquals("respond_coordination", inspectWorkflow.get("recommendedTool"));
+        assertEquals(Map.of("kind", "implementation_validation", "payload", inspectPayload), inspectWorkflow.get("arguments"));
+        assertFalse(((java.util.List<?>) inspectWorkflow.get("permittedOperations")).contains("read_file"));
+
+        AgentResponse readyToReview = reducer.decorate(request,
+                new AgentResponse(AgentStatus.READY,
+                        AgentReason.VALIDATION_REQUIRED,
+                        AgentNextAction.VALIDATE_IMPLEMENTATION,
+                        Map.of("capabilityRequestHandle", "req_123456789012",
+                                "revision", 2,
+                                "validationWorkspaceAvailable", true,
+                                "reviewDecision", Map.of("required", true, "field", "result", "allowedResults", java.util.List.of("accepted", "revision_required")))));
+        Map<?, ?> reviewWorkflow = (Map<?, ?>) ((Map<?, ?>) readyToReview.result()).get("workflow");
+        java.util.List<?> permitted = (java.util.List<?>) reviewWorkflow.get("permittedOperations");
+        assertTrue(permitted.contains("read_file"));
+        assertTrue(permitted.contains("run_command"));
+        assertFalse(permitted.contains("publish_capability_implementation"));
+        assertFalse(reviewWorkflow.containsKey("recommendedTool"));
     }
 
     /**

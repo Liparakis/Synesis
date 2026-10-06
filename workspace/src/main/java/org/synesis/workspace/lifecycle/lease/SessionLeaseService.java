@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
@@ -403,5 +404,37 @@ public final class SessionLeaseService {
         }
 
         return SessionLeaseState.AMBIGUOUS;
+    }
+
+    /**
+     * Returns the exact grace-period deadline when process absence is verified and recovery is
+     * waiting only for that deadline. Ambiguous or live process evidence has no projected deadline.
+     *
+     * @param record lease being evaluated
+     * @param policy liveness thresholds and clock
+     * @return a future recovery deadline, or empty when no safe deadline can be projected
+     */
+    public OptionalLong recoveryDeadlineEpochMillis(SessionLeaseRecord record, SessionLeasePolicy policy) {
+        Objects.requireNonNull(record, "record");
+        Objects.requireNonNull(policy, "policy");
+        if (record.leaseState() == SessionLeaseState.CLOSED_CLEANLY
+                || record.leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED
+                || record.leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED) {
+            return OptionalLong.empty();
+        }
+        ProcessEvidenceState evidence = processInspector.evaluateEvidence(record.processIdentity().pid(),
+                record.processIdentity().executableIdentity(),
+                record.processIdentity().commandLine(),
+                record.processIdentity().processStartTime());
+        if (evidence != ProcessEvidenceState.NOT_OBSERVED) {
+            return OptionalLong.empty();
+        }
+        long deadline;
+        try {
+            deadline = Math.addExact(record.lastHeartbeatEpochMillis(), policy.abandonmentGracePeriod().toMillis());
+        } catch (ArithmeticException overflow) {
+            deadline = Long.MAX_VALUE;
+        }
+        return deadline > policy.nowMillis() ? OptionalLong.of(deadline) : OptionalLong.empty();
     }
 }

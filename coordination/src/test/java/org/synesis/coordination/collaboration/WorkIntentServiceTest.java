@@ -29,6 +29,8 @@ import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ClaimEpoch;
+import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
@@ -171,20 +173,121 @@ final class WorkIntentServiceTest {
     }
 
     @Test
-    void conflictCreatesIdempotentInboxItemsForOwnerAndContender(@TempDir Path temp) throws Exception {
+    void scopeExtensionIsIdempotentAndPreservesExistingLaneState(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent original = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_store.py"));
+        assertTrue(service.announce(original).acquired());
+        int initialEventCount = new PredictionEventStore(temp, project).events().size();
+
+        var repeated = service.extendScope(original.identity(), original.participantIdentity(), new ClaimEpoch(1),
+                original.selectors(), null, null, original.knownDependencies());
+        assertTrue(repeated.acquired());
+        assertEquals(1, repeated.intent().version());
+        assertEquals(initialEventCount, new PredictionEventStore(temp, project).events().size());
+
+        ResourceSelector added = ResourceSelector.pathExact("tests/test_task_store.py");
+        var extended = service.extendScope(original.identity(), original.participantIdentity(), new ClaimEpoch(1),
+                List.of(added), "Updated goal", "Updated acceptance", List.of("tasktracker.domain"));
+        assertTrue(extended.acquired());
+        assertEquals(2, extended.intent().version());
+        assertEquals(List.of(original.selectors().getFirst(), added), extended.intent().selectors());
+        assertEquals("Updated goal", extended.intent().goal());
+        assertEquals("Updated acceptance", extended.intent().acceptance());
+        assertEquals(List.of("tasktracker.domain"), extended.intent().knownDependencies());
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(extended.intent(), replayed.collaborationProjection().intent(original.identity()).orElseThrow());
+        assertEquals(1, replayed.events().stream()
+                .filter(event -> event.type() == PredictionEventType.WORK_INTENT_SCOPE_EXTENDED).count());
+    }
+
+    @Test
+    void scopeExtensionRejectsStaleEpochAndForeignOverlapWithoutPartialAcquisition(@TempDir Path temp)
+            throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_store.py"));
+        WorkIntent foreign = intent(project, "agt-foreign", ResourceSelector.pathExact("src/task_cli.py"));
+        assertTrue(service.announce(owner).acquired());
+        assertTrue(service.announce(foreign).acquired());
+        int beforeRejectedAmendment = new PredictionEventStore(temp, project).events().size();
+
+        var conflict = service.extendScope(owner.identity(), owner.participantIdentity(), new ClaimEpoch(1),
+                List.of(ResourceSelector.pathExact("src/task_cli.py"), ResourceSelector.pathExact("tests/new.py")),
+                null, null, List.of());
+        assertFalse(conflict.acquired());
+        PredictionEventStore afterConflict = new PredictionEventStore(temp, project);
+        WorkIntent unchanged = afterConflict.collaborationProjection().intent(owner.identity()).orElseThrow();
+        assertEquals(1, unchanged.version());
+        assertEquals(List.of(owner.selectors().getFirst()), unchanged.selectors());
+        assertEquals(beforeRejectedAmendment, afterConflict.events().size());
+
+        service.extendScope(owner.identity(), owner.participantIdentity(), new ClaimEpoch(1),
+                List.of(ResourceSelector.pathExact("tests/accepted.py")), null, null, List.of());
+        IOException stale = assertThrows(IOException.class, () -> service.extendScope(owner.identity(),
+                owner.participantIdentity(), new ClaimEpoch(1), List.of(ResourceSelector.pathExact("tests/stale.py")),
+                null, null, List.of()));
+        assertEquals("CLAIM_EPOCH_STALE", stale.getMessage());
+    }
+
+    @Test
+    void concurrentScopeExtensionsAtOneEpochAcquireOneCompleteAmendment(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_store.py"));
+        assertTrue(new WorkIntentService(new PredictionEventStore(temp, project), identity).announce(owner).acquired());
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> first = executor.submit(() -> concurrentScopeResult(temp, project, identity, owner,
+                    "tests/first.py", ready, start));
+            Future<Boolean> second = executor.submit(() -> concurrentScopeResult(temp, project, identity, owner,
+                    "tests/second.py", ready, start));
+            ready.await();
+            start.countDown();
+            assertTrue(first.get() ^ second.get());
+        }
+        WorkIntent current = new PredictionEventStore(temp, project).collaborationProjection()
+                .intent(owner.identity()).orElseThrow();
+        assertEquals(2, current.version());
+        assertEquals(2, current.selectors().size());
+    }
+
+    private static boolean concurrentScopeResult(Path temp, UUID project, NodeIdentity identity, WorkIntent owner,
+            String addedPath, CountDownLatch ready, CountDownLatch start) throws Exception {
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        ready.countDown();
+        start.await();
+        try {
+            return service.extendScope(owner.identity(), owner.participantIdentity(), new ClaimEpoch(1),
+                    List.of(ResourceSelector.pathExact(addedPath)), null, null, List.of()).acquired();
+        } catch (IOException stale) {
+            if (!"CLAIM_EPOCH_STALE".equals(stale.getMessage())) {
+                throw stale;
+            }
+            return false;
+        }
+    }
+
+    @Test
+    void conflictDeniesClaimWithoutCreatingReciprocalRequests(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity identity = NodeIdentity.generate();
         WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
         WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
         WorkIntent contender = intent(project, "agt-contender", ResourceSelector.pathExact("src/task_tracker.py"));
         assertTrue(service.announce(owner).acquired());
+        var rejected = service.announce(contender);
+        assertFalse(rejected.acquired());
+        assertEquals(owner.authorityLineageId(), rejected.conflicts().getFirst().ownerAuthorityLineageId());
+        assertTrue(service.requests().isEmpty());
         assertFalse(service.announce(contender).acquired());
-        int firstCount = service.requests().size();
-        assertEquals(2, firstCount);
-        assertTrue(service.requests().stream().anyMatch(request -> request.target().equals("agt-owner")));
-        assertTrue(service.requests().stream().anyMatch(request -> request.target().equals("agt-contender")));
-        assertFalse(service.announce(contender).acquired());
-        assertEquals(firstCount, service.requests().size());
+        assertTrue(service.requests().isEmpty());
     }
 
     @Test

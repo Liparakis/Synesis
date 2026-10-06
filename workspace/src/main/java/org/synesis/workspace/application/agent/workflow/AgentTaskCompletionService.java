@@ -191,7 +191,7 @@ public final class AgentTaskCompletionService {
             return snapshotEvidenceDenied(request, "WORK_GROUP_NOT_FOUND");
         }
         if (!request.expectedIntentId().equals(intent.intentId()) || !request.expectedWorkGroupId().equals(intent.workGroupId()) || !request.expectedClaimEpoch().equals(intent.version())
-                || !request.expectedWorkGroupVersion().equals(group.version()) || !request.expectedRevision().equals(store.headSequence()) || !request.expectedParticipant().equals(participantHandle)
+                || !request.expectedWorkGroupVersion().equals(group.version()) || !store.unchangedSince(request.expectedRevision()) || !request.expectedParticipant().equals(participantHandle)
                 || !intent.participant().equals(participantHandle) || intent.status() != WorkIntent.Status.ANNOUNCED) {
             return snapshotEvidenceDenied(request, "SNAPSHOT_COMPLETION_EVIDENCE_STALE");
         }
@@ -402,7 +402,11 @@ public final class AgentTaskCompletionService {
                 return completedBindingResult(request, store, binding);
             }
 
-            AgentResponse readinessFailure = completionReadinessFailure(store, callerNodeId, callerSupervisorId, callerWorkerId);
+            AgentResponse readinessFailure = completionReadinessFailure(store,
+                    callerNodeId,
+                    callerSupervisorId,
+                    callerWorkerId,
+                    WorkspaceCollaborationService.participantHandle(binding.sessionId()));
             if (readinessFailure != null) {
                 return readinessFailure;
             }
@@ -715,7 +719,11 @@ public final class AgentTaskCompletionService {
      * @param callerWorkerId     exact caller worker identity
      * @return the blocking response, or {@code null} when both readiness checks pass
      */
-    private static AgentResponse completionReadinessFailure(PredictionEventStore store, String callerNodeId, String callerSupervisorId, String callerWorkerId) {
+    private static AgentResponse completionReadinessFailure(PredictionEventStore store,
+            String callerNodeId,
+            String callerSupervisorId,
+            String callerWorkerId,
+            String participant) {
         List<CapabilityRequestRecord> pending = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
                 .filter(record -> record.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
                 .filter(AgentTaskCompletionService::isCompletionBlockingCapability)
@@ -726,6 +734,15 @@ public final class AgentTaskCompletionService {
         int validationCount = store.capabilityRequestProjection().allValidationContexts().size();
         if (validationCount > 0) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("pending", validationCount));
+        }
+        WorkIntent callerIntent = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst().orElse(null);
+        var ownerImplementation = AgentReviewActionProjection.ownerImplementationPending(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId);
+        if (ownerImplementation.isPresent()) {
+            CapabilityRequestRecord request = ownerImplementation.get();
+            return new AgentResponse(AgentStatus.BLOCKED,
+                    AgentReason.UNRESOLVED_DEPENDENCY,
+                    null,
+                    Map.of("capabilityRequestHandle", request.handle().value(), "contractRevision", request.contractRevision()));
         }
         return null;
     }
@@ -795,7 +812,7 @@ public final class AgentTaskCompletionService {
                 return noChangeDenied("NO_ACTIVE_INTENT", validation);
             }
             WorkIntent exactIntent = currentIntent.get();
-            if (!exactIntent.workGroupId().equals(request.expectedWorkGroupId()) || exactIntent.version() != request.expectedClaimEpoch() || current.headSequence() != request.expectedRevision()) {
+            if (!exactIntent.workGroupId().equals(request.expectedWorkGroupId()) || exactIntent.version() != request.expectedClaimEpoch() || !current.unchangedSince(request.expectedRevision())) {
                 return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_STALE", validation);
             }
             NoChangeCompletionEligibility.Result eligibility = NoChangeCompletionEligibility.assess(current,

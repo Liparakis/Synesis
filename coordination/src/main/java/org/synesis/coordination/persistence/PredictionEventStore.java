@@ -341,6 +341,32 @@ public final class PredictionEventStore {
     }
 
     /**
+     * Reports whether an optimistic envelope issued at {@code revision} still describes this log.
+     *
+     * <p>Completion envelopes are fenced by the revision at which they were projected. Every MCP
+     * call from every participant appends a {@link PredictionEventType#PARTICIPANT_HEARTBEAT}, so
+     * requiring that revision to equal the head lets one participant's liveness invalidate another
+     * participant's envelope. A heartbeat records activity only and changes no claim, grant,
+     * snapshot, or capability state, so it does not make the envelope stale; any other event
+     * appended after {@code revision} does.</p>
+     *
+     * @param revision head sequence observed when the envelope was projected
+     * @return true when no event other than a heartbeat has been appended since that revision
+     */
+    public synchronized boolean unchangedSince(long revision) {
+        if (revision < 0L || revision > events.size()) {
+            return false;
+        }
+        // The event with sequence n is stored at index n - 1.
+        for (int index = (int) revision; index < events.size(); index++) {
+            if (events.get(index).type() != PredictionEventType.PARTICIPANT_HEARTBEAT) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns the project namespace served by this store.
      *
      * @return project identifier

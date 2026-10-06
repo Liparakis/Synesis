@@ -15,6 +15,7 @@ import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotReference;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -33,6 +34,11 @@ public final class CollaborationProjection {
     private final Map<WorkIntentId, WorkIntentId> successorIntents = new LinkedHashMap<>();
     private final Set<RequestId> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
+    /**
+     * Sequence of the newest applied event other than a heartbeat. A completion envelope stays
+     * fresh across heartbeats, which record liveness only, and goes stale on anything else.
+     */
+    private long lastStateChangeSequence;
 
     /**
      * Creates an empty collaboration projection.
@@ -137,6 +143,7 @@ public final class CollaborationProjection {
                 activated = true;
                 announce(CollaborationCodec.decodeIntent(event.payload()));
             }
+            case WORK_INTENT_SCOPE_EXTENDED -> extendScope(WorkIntentScopeExtension.decode(event.payload()));
             case WORK_INTENT_RELEASED -> {
                 if (CollaborationCodec.isNoChangeCompletion(event.payload())) {
                     complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), event.sequence());
@@ -169,6 +176,9 @@ public final class CollaborationProjection {
             default -> {
             }
         }
+        if (event.type() != PredictionEventType.PARTICIPANT_HEARTBEAT) {
+            lastStateChangeSequence = event.sequence();
+        }
     }
 
     /**
@@ -187,6 +197,7 @@ public final class CollaborationProjection {
         candidate.successorIntents.putAll(successorIntents);
         candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
         candidate.activated = activated;
+        candidate.lastStateChangeSequence = lastStateChangeSequence;
         candidate.apply(event);
     }
 
@@ -436,17 +447,77 @@ public final class CollaborationProjection {
      * @return conflicts
      */
     public synchronized List<ClaimConflict> conflicts(List<ResourceSelector> selectors) {
+        return conflicts(selectors, null);
+    }
+
+    /**
+     * Finds conflicts while excluding only the exact intent being amended.
+     *
+     * @param selectors requested selectors
+     * @param excludedIntent exact active intent whose claims are being extended, or {@code null}
+     * @return conflicts owned by other intents
+     */
+    public synchronized List<ClaimConflict> conflicts(List<ResourceSelector> selectors, WorkIntentId excludedIntent) {
         List<ClaimConflict> result = new ArrayList<>();
         for (WorkIntent intent : intents.values()) {
+            if (intent.identity().equals(excludedIntent)) {
+                continue;
+            }
             for (ResourceSelector existing : intent.selectors()) {
                 for (ResourceSelector requested : selectors) {
                     if (existing.overlaps(requested)) {
-                        result.add(new ClaimConflict(intent.participantIdentity(), intent.identity(), existing));
+                        result.add(new ClaimConflict(intent, existing));
                     }
                 }
             }
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Applies a fenced scope amendment without changing lane identity or authority lineage.
+     *
+     * @param extension exact amended intent and source epoch
+     * @throws IOException when the source is stale or the amendment would weaken ownership
+     */
+    private void extendScope(WorkIntentScopeExtension extension) throws IOException {
+        WorkIntent amended = extension.intent();
+        WorkIntent current = intents.get(amended.identity());
+        if (current == null) {
+            throw new CoordinationException("INTENT_NOT_FOUND");
+        }
+        if (current.version() != extension.expectedClaimEpoch()) {
+            throw new CoordinationException("CLAIM_EPOCH_STALE");
+        }
+        Participant owner = participantHistory.get(current.participantIdentity());
+        if (owner == null || owner.state() != Participant.State.ACTIVE) {
+            throw new CoordinationException("INTENT_NOT_ACTIVE");
+        }
+        if (!sameLaneIdentity(current, amended) || amended.version() != current.version() + 1
+                || !amended.selectors().containsAll(current.selectors())
+                || !amended.knownDependencies().containsAll(current.knownDependencies())) {
+            throw new CoordinationException("SCOPE_EXTENSION_INVALID");
+        }
+        if (amended.selectors().equals(current.selectors())
+                && amended.knownDependencies().equals(current.knownDependencies())
+                && amended.goal().equals(current.goal()) && amended.acceptance().equals(current.acceptance())) {
+            throw new CoordinationException("SCOPE_EXTENSION_NO_CHANGE");
+        }
+        if (!conflicts(amended.selectors(), current.identity()).isEmpty()) {
+            throw new CoordinationException("OVERLAPPING_CLAIM");
+        }
+        intents.put(amended.identity(), amended);
+        refreshParticipant(amended.participantIdentity(), Participant.State.ACTIVE, amended);
+    }
+
+    private static boolean sameLaneIdentity(WorkIntent current, WorkIntent amended) {
+        return amended.project().equals(current.project()) && amended.task().equals(current.task())
+                && amended.participantIdentity().equals(current.participantIdentity())
+                && amended.providerIdentity().equals(current.providerIdentity())
+                && amended.group().equals(current.group()) && amended.lineage().equals(current.lineage())
+                && amended.baseCommitIdentity().equals(current.baseCommitIdentity())
+                && amended.status() == current.status() && amended.role() == current.role()
+                && amended.reviewTargetSelectors().equals(current.reviewTargetSelectors());
     }
 
     /**
@@ -1007,7 +1078,9 @@ public final class CollaborationProjection {
             }
             return;
         }
-        if (completion.expectedRevision() != eventSequence - 1L) {
+        // Logs written before heartbeats were tolerated always satisfy this with equality at
+        // eventSequence - 1, so they replay unchanged.
+        if (completion.expectedRevision() >= eventSequence || completion.expectedRevision() < lastStateChangeSequence) {
             throw new CoordinationException("COMPLETION_REVISION_STALE");
         }
         WorkIntent current = intents.get(completion.intentIdentity());

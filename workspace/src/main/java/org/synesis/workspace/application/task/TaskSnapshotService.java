@@ -129,6 +129,46 @@ public final class TaskSnapshotService {
         }
     }
 
+    /**
+     * Computes the claimed source tree used by capability publication without changing HEAD,
+     * the normal index, or the working files. Git tree objects may be written to capture it.
+     *
+     * @param worktree worker's assigned worktree
+     * @param laneBaseCommit server-recorded lane baseline
+     * @param claims selectors owned by the publishing lane
+     * @param foreignClaims selectors owned by other active participants
+     * @return Git tree hash for the source paths eligible for this lane's snapshot
+     * @throws IOException if Git inspection or tree preparation fails
+     */
+    public String capabilityPublicationTreeHash(Path worktree, String laneBaseCommit,
+            List<ResourceSelector> claims, List<ResourceSelector> foreignClaims) throws IOException {
+        if (claims == null || claims.isEmpty()) {
+            throw new IOException("CAPABILITY_PUBLICATION_CLAIM_REQUIRED");
+        }
+        WorktreeChanges changes = inspectWorktreeChanges(worktree, laneBaseCommit, true);
+        List<String> paths = materializedPaths(changes.changedPaths(), claims, false, foreignClaims);
+        if (paths.isEmpty()) {
+            throw new IOException("NO_CHANGES_TO_PUBLISH");
+        }
+        return preparedTreeHash(worktree, changes.headCommit(), paths);
+    }
+
+    private List<String> materializedPaths(List<String> changedPaths, List<ResourceSelector> claims,
+            boolean scopeToClaims, List<ResourceSelector> foreignClaims) {
+        SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(changedPaths);
+        if (!manifest.valid()) {
+            throw new IllegalStateException("SNAPSHOT_ARTIFACT_POLICY:" + manifest.rejectedArtifacts());
+        }
+        List<String> sourcePaths = changedPaths.stream().filter(path -> !manifest.allowedArtifacts().contains(path))
+                .filter(path -> foreignClaims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList();
+        if (!scopeToClaims && !claims.isEmpty()
+                && sourcePaths.stream().anyMatch(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
+            throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH");
+        }
+        return scopeToClaims ? sourcePaths.stream()
+                .filter(path -> claims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList() : sourcePaths;
+    }
+
     private static String preparedTreeHash(Path workdir, String parent, List<String> paths) throws IOException {
         Path index = null;
         try {
@@ -173,21 +213,26 @@ public final class TaskSnapshotService {
         return controlRoot.toAbsolutePath().normalize().toString().replace('\\', '/');
     }
 
-    private static String materializeSnapshot(Path workdir, String parent, String snapshotId, List<String> paths) throws IOException {
-        Path index = Files.createTempFile("synesis-snapshot-", ".index");
-        Files.deleteIfExists(index);
+    private static String materializeSnapshot(Path workdir, String parent, String snapshotId, String tree) throws IOException {
+        String ref = "refs/synesis/snapshots/" + snapshotId;
+        String existing;
         try {
-            runGitWithIndex(workdir, index, "read-tree", parent);
-            // Provider/session metadata belongs to the lane runtime, never to a
-            // published source snapshot.  Keep it at the parent tree value.
-            stageSourceIndex(workdir, index, paths);
-            String tree = runGitWithIndexOutput(workdir, index, "write-tree");
-            String commit = runGitWithIndexOutput(workdir, index, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot");
-            runGitOutput(workdir, "update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
-            return commit;
-        } finally {
-            Files.deleteIfExists(index);
+            existing = runGitOutput(workdir, "rev-parse", "--verify", ref);
+        } catch (IOException missing) {
+            existing = null;
         }
+        if (existing != null) {
+            if (!tree.equals(runGitOutput(workdir, "rev-parse", existing + "^{tree}"))
+                    || !parent.equals(runGitOutput(workdir, "rev-parse", existing + "^"))) {
+                throw new IOException("SNAPSHOT_REF_CONTENT_MISMATCH");
+            }
+            return existing;
+        }
+        // Commit the already captured tree, never restage mutable files between
+        // the optimistic tree check and immutable publication.
+        String commit = runGitOutput(workdir, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot " + snapshotId);
+        runGitOutput(workdir, "update-ref", ref, commit, "");
+        return commit;
     }
 
     private static void stageSourceIndex(Path workdir, Path index, List<String> paths) throws IOException {
@@ -951,6 +996,69 @@ public final class TaskSnapshotService {
             String laneBaseCommit,
             boolean scopeToClaims,
             List<ResourceSelector> foreignClaims) throws IOException {
+        return createSnapshot(taskId, nodeId, supervisorId, workerId, providerSessionId, workerWorktreePath,
+                controlRoot, summary, existingOpt, activeCapabilities, claims, workGroupId, laneId, participant,
+                bindingIdentity, claimEpoch, authorityLineageId, handoffLineage, reviewRequired, laneBaseCommit,
+                scopeToClaims, foreignClaims, null);
+    }
+
+    /**
+     * Captures a lane snapshot with an optional optimistic source-tree fence.
+     *
+     * <p>A non-null expected tree comes from the publication projection. The already captured tree
+     * must match before a commit or ref is created. Capability publication materializes even a clean
+     * lane so its immutable identity includes the lane and claim epoch; ordinary completion then
+     * reuses that ref. HEAD, the normal index, and working files remain unchanged.</p>
+     *
+     * @param taskId task identity
+     * @param nodeId publisher node identity
+     * @param supervisorId publisher supervisor identity
+     * @param workerId publisher worker identity
+     * @param providerSessionId exact provider session binding
+     * @param workerWorktreePath assigned worker worktree
+     * @param controlRoot project control root
+     * @param summary immutable snapshot summary
+     * @param existingOpt existing snapshot for this exact task revision, if any
+     * @param activeCapabilities capability dependencies retained by the snapshot
+     * @param claims source selectors owned by this lane
+     * @param workGroupId logical WorkGroup identifier
+     * @param laneId active intent identifier
+     * @param participant exact participant handle
+     * @param bindingIdentity exact provider binding identity
+     * @param claimEpoch active intent epoch
+     * @param authorityLineageId authority lineage for the active intent
+     * @param handoffLineage durable handoff history
+     * @param reviewRequired whether independent review gates integration
+     * @param laneBaseCommit server-recorded source baseline
+     * @param scopeToClaims whether snapshot paths must be covered by this lane's claims
+     * @param foreignClaims selectors owned by other active participants
+     * @param expectedTreeHash projected Git tree hash to revalidate before capture, or {@code null}
+     * @return immutable task snapshot
+     * @throws IOException if Git inspection fails or the projected source tree is stale
+     */
+    public TaskSnapshotRecord createSnapshot(UUID taskId,
+            String nodeId,
+            String supervisorId,
+            String workerId,
+            String providerSessionId,
+            Path workerWorktreePath,
+            Path controlRoot,
+            String summary,
+            Optional<TaskSnapshotRecord> existingOpt,
+            List<CapabilityRequestRecord> activeCapabilities,
+            List<ResourceSelector> claims,
+            UUID workGroupId,
+            UUID laneId,
+            String participant,
+            String bindingIdentity,
+            long claimEpoch,
+            UUID authorityLineageId,
+            List<String> handoffLineage,
+            boolean reviewRequired,
+            String laneBaseCommit,
+            boolean scopeToClaims,
+            List<ResourceSelector> foreignClaims,
+            String expectedTreeHash) throws IOException {
         Objects.requireNonNull(taskId, "taskId");
         Objects.requireNonNull(nodeId, "nodeId");
         Objects.requireNonNull(supervisorId, "supervisorId");
@@ -967,6 +1075,10 @@ public final class TaskSnapshotService {
         if (existingOpt.isPresent()) {
             // A previously published snapshot is authoritative.  Do not inspect
             // or resnapshot a mutable lane during an idempotent retry.
+            if (expectedTreeHash != null && !expectedTreeHash.equals(
+                    runGitOutput(workerWorktreePath, "rev-parse", existingOpt.get().commitSha() + "^{tree}"))) {
+                throw new IOException("CAPABILITY_PUBLICATION_TREE_STALE");
+            }
             return existingOpt.get();
         }
         WorktreeChanges changes = inspectWorktreeChanges(workerWorktreePath, laneBaseCommit, false);
@@ -975,25 +1087,31 @@ public final class TaskSnapshotService {
         String baseCommit = changes.baseCommit();
         List<String> allChangedPaths = changes.changedPaths();
         SnapshotArtifactPolicy.Manifest artifactManifest = artifactPolicy.classify(allChangedPaths);
-        if (!artifactManifest.valid()) {
-            throw new IllegalStateException("SNAPSHOT_ARTIFACT_POLICY:" + artifactManifest.rejectedArtifacts());
-        }
-        List<String> changedPaths = allChangedPaths.stream().filter(path -> !artifactManifest.allowedArtifacts().contains(path)).toList();
-        List<String> nonForeignChangedPaths = changedPaths.stream().filter(path -> foreignClaims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList();
-        if (!scopeToClaims && !claims.isEmpty() && nonForeignChangedPaths.stream().anyMatch(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-            throw new IllegalStateException(
-                    "UNCLAIMED_SNAPSHOT_PATH:" + nonForeignChangedPaths.stream().filter(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).findFirst().orElse("unknown"));
-        }
-        List<String> materializedPaths =
-                scopeToClaims ? nonForeignChangedPaths.stream().filter(path -> claims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList() : nonForeignChangedPaths;
+        List<String> materializedPaths = materializedPaths(allChangedPaths, claims, scopeToClaims, foreignClaims);
         String treeHash = preparedTreeHash(workerWorktreePath, headCommit, materializedPaths);
+        if (expectedTreeHash != null && !expectedTreeHash.equals(treeHash)) {
+            throw new IOException("CAPABILITY_PUBLICATION_TREE_STALE");
+        }
         String snapshotId = "snap_" + stableId(projectIdentity(controlRoot), laneId, claimEpoch, baseCommit, treeHash);
         String commitSha;
-        if (dirty) {
-            commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId, materializedPaths);
+        if (dirty || expectedTreeHash != null) {
+            commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId, treeHash);
         } else {
-            commitSha = headCommit;
-            runGitOutput(workerWorktreePath, "update-ref", "refs/synesis/snapshots/" + snapshotId, commitSha);
+            String ref = "refs/synesis/snapshots/" + snapshotId;
+            String existingCommit;
+            try {
+                existingCommit = runGitOutput(workerWorktreePath, "rev-parse", "--verify", ref);
+            } catch (IOException missing) {
+                existingCommit = null;
+            }
+            // Capability publication also materializes clean lanes. Preserve its
+            // exact identity when ordinary lane completion follows publication.
+            if (existingCommit != null && !existingCommit.equals(headCommit)) {
+                commitSha = materializeSnapshot(workerWorktreePath, headCommit, snapshotId, treeHash);
+            } else {
+                commitSha = headCommit;
+                runGitOutput(workerWorktreePath, "update-ref", ref, commitSha);
+            }
         }
         org.synesis.workspace.lifecycle.RepositoryPortabilityService.Report portability = portabilityService.validateTree(workerWorktreePath, commitSha);
         if (!portability.portable()) {

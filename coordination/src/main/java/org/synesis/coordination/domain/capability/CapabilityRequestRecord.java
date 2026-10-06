@@ -10,6 +10,7 @@ import org.synesis.coordination.domain.identity.CapabilityId;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.SupervisorId;
 import org.synesis.coordination.domain.identity.WorkerId;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -29,13 +30,14 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * @param reason                optional rejection or revision reason
  * @param createdAtEpochMillis  creation timestamp
  * @param updatedAtEpochMillis  last modification timestamp
+ * @param contractRevision      event sequence that last changed the negotiated API contract
  * @since 1.0
  */
 public record CapabilityRequestRecord(CapabilityRequestHandle handle, String capability, String requesterNodeId,
                                       String requesterSupervisorId, String requesterWorkerId, String ownerNodeId,
                                       String ownerSupervisorId, String ownerWorkerId, UUID authorityLineageId,
                                       CapabilityContract contract, CapabilityLifecycleState state, String reason,
-                                      long createdAtEpochMillis, long updatedAtEpochMillis) {
+                                      long createdAtEpochMillis, long updatedAtEpochMillis, long contractRevision) {
 
     /**
      * Compact constructor enforcing nullability checks.
@@ -54,6 +56,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      * @param reason                optional rejection or revision reason
      * @param createdAtEpochMillis  creation timestamp
      * @param updatedAtEpochMillis  last modification timestamp
+     * @param contractRevision      event sequence that last changed the contract
      */
     public CapabilityRequestRecord {
         CoordinationNullException.requireNonNull(handle, "handle");
@@ -67,6 +70,58 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
         CoordinationNullException.requireNonNull(authorityLineageId, "authorityLineageId");
         CoordinationNullException.requireNonNull(contract, "contract");
         CoordinationNullException.requireNonNull(state, "state");
+        if (contractRevision < 0) {
+            throw new CoordinationArgumentException("contractRevision must not be negative");
+        }
+    }
+
+    /**
+     * Retains the previous canonical shape for callers without event-derived revision metadata.
+     *
+     * @param handle public request handle
+     * @param capability requested capability identifier
+     * @param requesterNodeId authenticated requester node
+     * @param requesterSupervisorId authenticated requester supervisor
+     * @param requesterWorkerId authenticated requester worker
+     * @param ownerNodeId assigned owner node
+     * @param ownerSupervisorId assigned owner supervisor
+     * @param ownerWorkerId assigned owner worker
+     * @param authorityLineageId durable authority lineage
+     * @param contract current negotiated API contract
+     * @param state request lifecycle state
+     * @param reason optional rejection or revision reason
+     * @param createdAtEpochMillis creation time
+     * @param updatedAtEpochMillis latest update time
+     */
+    public CapabilityRequestRecord(CapabilityRequestHandle handle,
+            String capability,
+            String requesterNodeId,
+            String requesterSupervisorId,
+            String requesterWorkerId,
+            String ownerNodeId,
+            String ownerSupervisorId,
+            String ownerWorkerId,
+            UUID authorityLineageId,
+            CapabilityContract contract,
+            CapabilityLifecycleState state,
+            String reason,
+            long createdAtEpochMillis,
+            long updatedAtEpochMillis) {
+        this(handle,
+                capability,
+                requesterNodeId,
+                requesterSupervisorId,
+                requesterWorkerId,
+                ownerNodeId,
+                ownerSupervisorId,
+                ownerWorkerId,
+                authorityLineageId,
+                contract,
+                state,
+                reason,
+                createdAtEpochMillis,
+                updatedAtEpochMillis,
+                0);
     }
 
     /**
@@ -112,7 +167,8 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
                 state,
                 reason,
                 createdAtEpochMillis,
-                updatedAtEpochMillis);
+                updatedAtEpochMillis,
+                0);
     }
 
     /**
@@ -150,7 +206,8 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
                 state,
                 reason,
                 createdAtEpochMillis,
-                updatedAtEpochMillis);
+                updatedAtEpochMillis,
+                0);
     }
 
     /**
@@ -295,7 +352,110 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
                 newState,
                 newReason,
                 createdAtEpochMillis,
-                updatedEpochMillis);
+                updatedEpochMillis,
+                contractRevision);
+    }
+
+    /**
+     * Transfers only the exact requester actor fields into a verified successor binding.
+     *
+     * @param successor verified successor actor scope
+     * @return a copy retaining contract, state, and revision history
+     */
+    public CapabilityRequestRecord withRequesterActor(CapabilityActorScope successor) {
+        CoordinationNullException.requireNonNull(successor, "successor");
+        return new CapabilityRequestRecord(handle,
+                capability,
+                successor.nodeId(),
+                successor.supervisorId(),
+                successor.workerId(),
+                ownerNodeId,
+                ownerSupervisorId,
+                ownerWorkerId,
+                authorityLineageId,
+                contract,
+                state,
+                reason,
+                createdAtEpochMillis,
+                updatedAtEpochMillis,
+                contractRevision);
+    }
+
+    /**
+     * Transfers only the exact owner actor fields into a verified successor binding.
+     *
+     * @param successor verified successor actor scope
+     * @return a copy retaining contract, state, and revision history
+     */
+    public CapabilityRequestRecord withOwnerActor(CapabilityActorScope successor) {
+        CoordinationNullException.requireNonNull(successor, "successor");
+        return new CapabilityRequestRecord(handle,
+                capability,
+                requesterNodeId,
+                requesterSupervisorId,
+                requesterWorkerId,
+                successor.nodeId(),
+                successor.supervisorId(),
+                successor.workerId(),
+                authorityLineageId,
+                contract,
+                state,
+                reason,
+                createdAtEpochMillis,
+                updatedAtEpochMillis,
+                contractRevision);
+    }
+
+    /**
+     * Checks whether this request has the exact stored requester actor fields.
+     *
+     * @param scope authenticated actor scope to compare
+     * @return {@code true} when node, supervisor, and worker identities all match
+     */
+    public boolean matchesRequester(CapabilityActorScope scope) {
+        return scope.matches(requesterNodeId, requesterSupervisorId, requesterWorkerId);
+    }
+
+    /**
+     * Checks whether this request has the exact stored owner actor fields.
+     *
+     * @param scope authenticated actor scope to compare
+     * @return {@code true} when node, supervisor, and worker identities all match
+     */
+    public boolean matchesOwner(CapabilityActorScope scope) {
+        return scope.matches(ownerNodeId, ownerSupervisorId, ownerWorkerId);
+    }
+
+    /**
+     * Creates an update whose contract revision is the event sequence that records it.
+     *
+     * @param newState replacement lifecycle state
+     * @param newContract replacement contract, or {@code null} to retain the existing contract
+     * @param newReason replacement reason
+     * @param updatedEpochMillis update timestamp
+     * @param newContractRevision event sequence for the new contract revision
+     * @return updated capability request record
+     */
+    public CapabilityRequestRecord withUpdate(CapabilityLifecycleState newState,
+            CapabilityContract newContract,
+            String newReason,
+            long updatedEpochMillis,
+            long newContractRevision) {
+        return new CapabilityRequestRecord(handle,
+                capability,
+                requesterNodeId,
+                requesterSupervisorId,
+                requesterWorkerId,
+                ownerNodeId,
+                ownerSupervisorId,
+                ownerWorkerId,
+                authorityLineageId,
+                newContract != null ? newContract : contract,
+                newState,
+                newReason,
+                createdAtEpochMillis,
+                updatedEpochMillis,
+                newContractRevision);
     }
 
     /**

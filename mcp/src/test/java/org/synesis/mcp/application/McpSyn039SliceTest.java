@@ -784,7 +784,7 @@ final class McpSyn039SliceTest {
     }
 
     @Test
-    void dirtyReviewerCannotReadAuthorizedImmutableSnapshotAfterControlAdvances(@TempDir Path temp) throws Exception {
+    void dirtyReviewerReadsImmutableSnapshotAndPreservesChangesAfterControlAdvances(@TempDir Path temp) throws Exception {
         ReviewFixture fixture = prepareReviewFixture(temp);
         var location = new ProjectApplicationService().locate(fixture.project);
         var bindings = new ProviderSessionBindingService();
@@ -816,11 +816,14 @@ final class McpSyn039SliceTest {
         assertEquals("snap_reviewable", commandResult.get("reviewSnapshotId"), command);
 
         String recovery = fixture.reviewer.handleMessage(toolCall("ensure_session", "{}"));
-        assertEquals("failed", innerResult(recovery).get("status"), recovery);
-        assertEquals("internal_failure", innerResult(recovery).get("reason"), recovery);
+        Map<String, Object> resumed = innerResult(recovery);
+        assertEquals("ready", resumed.get("status"), recovery);
+        assertEquals("isolated", mapValue(resumed.get("result")).get("workspace"), recovery);
         assertTrue(Files.exists(reviewerWork), "dirty reviewer work must remain intact");
+        assertEquals("legitimate review notes\n", Files.readString(reviewerWork));
         var after = bindings.find(location, "codex", "syn039-reviewer-publication").orElseThrow();
-        assertEquals(reviewerBinding.worktreePath(), after.worktreePath(), "failed recovery must not replace the dirty reviewer worktree");
+        assertNotEquals(reviewerBinding.worktreePath(), after.worktreePath(), "clean control advance should bind the preserved changes to a fresh worktree");
+        assertEquals("legitimate review notes\n", Files.readString(Path.of(after.worktreePath()).resolve("review-report.md")));
 
         ReviewSnapshotAccessService accessService = new ReviewSnapshotAccessService();
         ReviewSnapshotAccessService.AccessResult access = accessService.resolve(fixture.project, "codex", "syn039-reviewer-publication");

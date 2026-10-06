@@ -66,7 +66,10 @@ public enum AgentNextAction {
     /**
      * Publish the current implementation as an immutable lane snapshot.
      */
-    FINISH_LANE("finish_lane");
+    FINISH_LANE("finish_lane"),
+
+    /** Publish the completed negotiated implementation using exact projected source evidence. */
+    PUBLISH_CAPABILITY_IMPLEMENTATION("publish_capability_implementation");
 
     private final String value;
 

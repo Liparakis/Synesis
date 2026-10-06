@@ -11,6 +11,8 @@ import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -69,6 +71,7 @@ public final class CapabilityRequestProjection {
             case CAPABILITY_VALIDATION_STARTED -> processValidationStarted(event);
             case CAPABILITY_IMPLEMENTATION_VALIDATED -> processValidated(event);
             case CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED -> processRevisionRequired(event);
+            case LANE_CONTINUATION_ACCEPTED -> processLaneContinuation(event);
             default -> {
             }
         }
@@ -406,7 +409,8 @@ public final class CapabilityRequestProjection {
                 payload.state(),
                 payload.reason(),
                 event.createdAtEpochMillis(),
-                event.createdAtEpochMillis());
+                event.createdAtEpochMillis(),
+                event.sequence());
         records.put(handleKey, rec);
     }
 
@@ -423,14 +427,22 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
-        if (current.state() == CapabilityLifecycleState.CANCELLED || current.state() == CapabilityLifecycleState.EXPIRED
-                || current.state() == CapabilityLifecycleState.SUPERSEDED) {
+        requireExpectedContractRevision(current, payload);
+        if (payload.expectedContractRevision() >= 0 && (current.state() == CapabilityLifecycleState.CANCELLED || current.state() == CapabilityLifecycleState.EXPIRED
+                || current.state() == CapabilityLifecycleState.SUPERSEDED || current.state() == CapabilityLifecycleState.REJECTED
+                || current.state() == CapabilityLifecycleState.ACCEPTED || current.state() == CapabilityLifecycleState.IMPLEMENTING
+                || current.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || current.state() == CapabilityLifecycleState.VALIDATING
+                || current.state() == CapabilityLifecycleState.VALIDATED)) {
             throw new CoordinationException("TERMINAL_CAPABILITY_REQUEST_CANNOT_BE_REVISED");
+        }
+        if (payload.expectedContractRevision() >= 0 && payload.state() != CapabilityLifecycleState.AWAITING_OWNER && payload.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+            throw new CoordinationException("INVALID_CAPABILITY_CONTRACT_REVISION_STATE");
         }
         CapabilityRequestRecord updated = current.withUpdate(payload.state(),
                 payload.contract(),
                 payload.reason(),
-                event.createdAtEpochMillis());
+                event.createdAtEpochMillis(),
+                event.sequence());
         records.put(handleKey, updated);
     }
 
@@ -446,6 +458,13 @@ public final class CapabilityRequestProjection {
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
+        }
+        requireExpectedContractRevision(current, payload);
+        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+            throw new CoordinationException("STALE_CAPABILITY_REQUEST_ACCEPTANCE");
+        }
+        if (payload.expectedContractRevision() >= 0 && !current.contract().isEquivalent(payload.contract())) {
+            throw new CoordinationException("CAPABILITY_CONTRACT_REVISION_MISMATCH");
         }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.ACCEPTED,
                 payload.contract(),
@@ -467,6 +486,10 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        requireExpectedContractRevision(current, payload);
+        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER) {
+            throw new CoordinationException("STALE_CAPABILITY_REQUEST_REJECTION");
+        }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.REJECTED,
                 null,
                 payload.reason(),
@@ -486,6 +509,10 @@ public final class CapabilityRequestProjection {
         CapabilityRequestRecord current = records.get(handleKey);
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
+        }
+        requireExpectedContractRevision(current, payload);
+        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+            throw new CoordinationException("STALE_CAPABILITY_REQUEST_CANCELLATION");
         }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.CANCELLED,
                 null,
@@ -507,6 +534,7 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        requireExpectedContractRevision(current, payload);
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.SUPERSEDED,
                 null,
                 payload.reason(),
@@ -529,6 +557,14 @@ public final class CapabilityRequestProjection {
         }
         if (!current.authorityLineageIdentity().equals(payload.authorityLineageIdentity())) {
             throw new CoordinationException("CAPABILITY_LINEAGE_MISMATCH");
+        }
+        if (current.state() != CapabilityLifecycleState.ACCEPTED && current.state() != CapabilityLifecycleState.IMPLEMENTING) {
+            throw new CoordinationException("CAPABILITY_REQUEST_NOT_ACCEPTED");
+        }
+        ImplementationRevision latest = latestRevision.get(handleKey);
+        int expectedRevision = latest == null ? 1 : latest.value() + 1;
+        if (payload.revisionNumber() != expectedRevision) {
+            throw new CoordinationException("CAPABILITY_IMPLEMENTATION_REVISION_STALE");
         }
         // Transition to IMPLEMENTATION_AVAILABLE
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
@@ -574,6 +610,7 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        requireCurrentImplementation(current, payload, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, CapabilityLifecycleState.VALIDATING);
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.VALIDATING,
                 null,
                 null,
@@ -585,6 +622,7 @@ public final class CapabilityRequestProjection {
                     new ValidationContextRecord(payload.handle(),
                             payload.revisionNumber(),
                             payload.worktreePath(),
+                            payload.requesterSessionId(),
                             event.createdAtEpochMillis()));
         }
     }
@@ -602,6 +640,7 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING);
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.VALIDATED,
                 null,
                 null,
@@ -623,6 +662,7 @@ public final class CapabilityRequestProjection {
         if (current == null) {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
+        requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING);
         String reason =
                 payload.validationReason().isBlank() ? "Revision required by requester" : payload.validationReason();
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.IMPLEMENTING,
@@ -631,6 +671,80 @@ public final class CapabilityRequestProjection {
                 event.createdAtEpochMillis());
         records.put(handleKey, updated);
         validationContexts.remove(handleKey);
+    }
+
+    private static void requireExpectedContractRevision(CapabilityRequestRecord current,
+            CapabilityRequestPayload payload) throws IOException {
+        long expected = payload.expectedContractRevision();
+        if (expected >= 0 && expected != current.contractRevision()) {
+            throw new CoordinationException("CAPABILITY_CONTRACT_REVISION_STALE");
+        }
+    }
+
+    private void requireCurrentImplementation(CapabilityRequestRecord current,
+            ImplementationEventPayload payload,
+            CapabilityLifecycleState... allowedStates) throws IOException {
+        boolean stateAllowed = false;
+        for (CapabilityLifecycleState allowedState : allowedStates) {
+            stateAllowed |= current.state() == allowedState;
+        }
+        ImplementationRevision latest = latestRevision.get(current.handle());
+        ImplementationRevisionRecord implementation = latest == null ? null : implementations.get(new ImplementationRevisionKey(current.handle(), latest));
+        if (!stateAllowed || latest == null || implementation == null || latest.value() != payload.revisionNumber()
+                || !current.authorityLineageId().equals(payload.authorityLineageId())
+                || !implementation.authorityLineageId().equals(payload.authorityLineageId())
+                || !implementation.commitSha().equals(payload.commitSha())) {
+            throw new CoordinationException("CAPABILITY_VALIDATION_STALE");
+        }
+    }
+
+    /** Transfers actionable capability actors as part of the signed lane continuation event. */
+    private void processLaneContinuation(PredictionEvent event) throws IOException {
+        LaneContinuation continuation = CollaborationCodec.decodeContinuation(event.payload());
+        CapabilityActorScope source = continuation.sourceActorScope();
+        CapabilityActorScope successor = continuation.targetActorScope();
+        if (source == null || successor == null) {
+            return;
+        }
+        for (Map.Entry<CapabilityRequestHandle, CapabilityRequestRecord> entry : List.copyOf(records.entrySet())) {
+            CapabilityRequestRecord current = entry.getValue();
+            if (!hasOpenObligation(current.state())) {
+                continue;
+            }
+            boolean requester = current.matchesRequester(source);
+            boolean owner = current.matchesOwner(source);
+            if (!requester && !owner) {
+                continue;
+            }
+            if (requester && owner) {
+                throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
+            }
+            CapabilityRequestRecord updated = requester
+                    ? current.withRequesterActor(successor)
+                    : current.withOwnerActor(successor);
+            if (updated.matchesRequester(successor) && updated.matchesOwner(successor)) {
+                throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
+            }
+            if (requester && current.state() == CapabilityLifecycleState.VALIDATING) {
+                // A validation workspace belongs to the predecessor session. Keep the exact
+                // implementation revision, but require the successor to inspect it again.
+                updated = updated.withUpdate(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
+                        null,
+                        null,
+                        event.createdAtEpochMillis());
+                validationContexts.remove(current.handle());
+            }
+            records.put(entry.getKey(), updated);
+        }
+    }
+
+    private static boolean hasOpenObligation(CapabilityLifecycleState state) {
+        return state == CapabilityLifecycleState.AWAITING_OWNER
+                || state == CapabilityLifecycleState.REVISION_REQUESTED
+                || state == CapabilityLifecycleState.ACCEPTED
+                || state == CapabilityLifecycleState.IMPLEMENTING
+                || state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
+                || state == CapabilityLifecycleState.VALIDATING;
     }
 
     /**

@@ -89,6 +89,11 @@ class TwoProcessCapabilityNegotiationProcessTest {
             bindingService.verifyWorkspaceTrust(location, "codex", bindings2.getLast().sessionId(), Path.of(bindings2.getLast().worktreePath()));
         }
 
+        // Owner replies are authorized against the stored owner scope, so the semantic owner
+        // must be the bound codex session's own supervisor and worker.
+        var ownerBinding = bindingService.find(location, "codex", "inst-owner-1").orElseThrow();
+        String ownerSupervisor = ownerBinding.supervisorId();
+        String ownerWorker = ownerBinding.workerId();
         var codexIdentity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
@@ -97,16 +102,16 @@ class TwoProcessCapabilityNegotiationProcessTest {
                 "Product Query Task",
                 "catalog.product-query",
                 codexIdentity.nodeId(),
-                "supervisor-owner",
-                "worker-owner");
+                ownerSupervisor,
+                ownerWorker);
         CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
-        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(taskId, codexIdentity.nodeId(), "supervisor-owner", "worker-owner");
+        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(taskId, codexIdentity.nodeId(), ownerSupervisor, ownerWorker);
         CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), "supervisor-owner", List.of("catalog"), 1L);
+        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), ownerSupervisor, List.of("catalog"), 1L);
         CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), claim2.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), cmd3.encoded(), codexIdentity);
 
@@ -134,9 +139,9 @@ class TwoProcessCapabilityNegotiationProcessTest {
 
         // 3. Requester describes required capability
         String descReq = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"inputs\": \"UUID productId\",\n"
+                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
                 + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return exact matching product\", \"Return empty when missing\", \"Reject null input\"],\n"
-                + "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n" + "      }\n" + "      }\n" + "    }\n" + "  }\n" + "}";
+                + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n" + "      }\n" + "      }\n" + "    }\n" + "  }\n" + "}";
 
         String descRespStr = requesterHandler.handleMessage(descReq);
         assertNotNull(descRespStr);
@@ -153,20 +158,21 @@ class TwoProcessCapabilityNegotiationProcessTest {
         assertNotNull(ownerNextResp);
         assertTrue(ownerNextResp.contains("respond_coordination"), "Expected respond_coordination but got: " + ownerNextResp);
         assertTrue(ownerNextResp.contains(handle));
+        long contractRevision = extractContractRevision(ownerNextResp);
 
         // 5. Owner accepts the request
         String acceptReq = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 5,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + handle + "\", \"response\": \"accept\"}\n" + "    }\n" + "  }\n" + "}";
+                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + handle + "\", \"response\": \"accept\", \"contractRevision\": " + contractRevision + "}\n" + "    }\n" + "  }\n" + "}";
 
         String acceptRespStr = ownerHandler.handleMessage(acceptReq);
         assertNotNull(acceptRespStr);
         assertTrue(acceptRespStr.contains("ready"), "Expected ready but got: " + acceptRespStr);
 
-        // 6. Requester calls get_next_action -> receives implementation_unavailable
+        // 6. Requester can implement against the accepted contract while the owner works
         String reqNextReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String reqNextResp = requesterHandler.handleMessage(reqNextReq);
         assertNotNull(reqNextResp);
-        assertTrue(reqNextResp.contains("implementation_unavailable"), "Expected implementation_unavailable but got: " + reqNextResp);
+        assertTrue(reqNextResp.contains("contractAccepted"), "Expected the accepted contract to be available for implementation: " + reqNextResp);
 
         // 7. Verify no internal IDs or absolute paths leak in responses
         assertFalse(descRespStr.contains(projectRoot.toString().replace('\\', '/')));
@@ -198,5 +204,16 @@ class TwoProcessCapabilityNegotiationProcessTest {
         Map<String, Object> agentResp = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerRes = (Map<String, Object>) agentResp.get("result");
         return (String) innerRes.get("capabilityRequestHandle");
+    }
+
+    @SuppressWarnings("unchecked")
+    private long extractContractRevision(String mcpResponseJson) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(mcpResponseJson);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst().get("text");
+        Map<String, Object> agentResponse = (Map<String, Object>) ProviderJson.parse(text);
+        Map<String, Object> response = (Map<String, Object>) agentResponse.get("result");
+        return ((Number) response.get("contractRevision")).longValue();
     }
 }

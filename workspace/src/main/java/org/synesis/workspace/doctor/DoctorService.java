@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -44,6 +45,26 @@ import org.synesis.workspace.migration.ProviderConfigMigrationService;
  * @since 1.0
  */
 public final class DoctorService {
+
+    /**
+     * Maps an event-store read failure to the same bounded categories used by Doctor.
+     *
+     * @param failure failure raised while reading durable coordination state
+     * @return the stable Doctor finding code for that failure
+     */
+    public static DoctorFindingCode classifyDurableStateFailure(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < 32; depth++, current = current.getCause()) {
+            if (current instanceof CoordinationException coordinationFailure
+                    && "invalid coordination event log".equals(coordinationFailure.code())) {
+                return DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE;
+            }
+            if (current instanceof java.security.GeneralSecurityException) {
+                return DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE;
+            }
+        }
+        return DoctorFindingCode.DURABLE_STATE_AMBIGUOUS;
+    }
 
     private final ProjectApplicationService projectService;
     private final LifecycleInventoryService inventoryService;
@@ -242,28 +263,31 @@ public final class DoctorService {
                 UUID pId = UUID.fromString(projectIdStr);
                 new PredictionEventStore(coordDir, pId);
                 // If loaded without exception, store signatures & chain are verified
-            } catch (java.security.GeneralSecurityException secEx) {
-                findings.add(new DoctorFinding(DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE,
-                        DoctorSeverity.CRITICAL,
-                        DoctorConfidence.CONFIRMED,
-                        "Event log verification failure",
-                        "Signed coordination event log cryptographic signature or digest chain verification failed.",
-                        "event_log",
-                        false,
-                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                        computeHash("event_log_fail"),
-                        Map.of()));
             } catch (Exception ex) {
-                findings.add(new DoctorFinding(DoctorFindingCode.DURABLE_STATE_AMBIGUOUS,
-                        DoctorSeverity.ERROR,
-                        DoctorConfidence.AMBIGUOUS,
-                        "Durable state ambiguous",
-                        "Failed to read durable coordination event store.",
-                        "event_log",
-                        false,
-                        DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                        computeHash("durable_ambiguous"),
-                        Map.of()));
+                DoctorFindingCode failureCode = classifyDurableStateFailure(ex);
+                if (failureCode == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE) {
+                    findings.add(new DoctorFinding(failureCode,
+                            DoctorSeverity.CRITICAL,
+                            DoctorConfidence.CONFIRMED,
+                            "Event log verification failure",
+                            "Signed coordination event log cryptographic signature or digest chain verification failed.",
+                            "event_log",
+                            false,
+                            DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                            computeHash("event_log_fail"),
+                            Map.of()));
+                } else {
+                    findings.add(new DoctorFinding(failureCode,
+                            DoctorSeverity.ERROR,
+                            DoctorConfidence.AMBIGUOUS,
+                            "Durable state ambiguous",
+                            "Failed to read durable coordination event store.",
+                            "event_log",
+                            false,
+                            DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                            computeHash("durable_ambiguous"),
+                            Map.of()));
+                }
             }
         }
     }

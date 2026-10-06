@@ -128,6 +128,33 @@ public final class ReconciliationService {
                             "Materialize and reserve immutable recovery evidence"));
                 }
                 case CLOSED_CLEANLY -> {
+                    // EOF proves this exact connection has ended, so unfinished
+                    // claims can be snapshotted immediately without the abrupt-loss
+                    // grace period. Terminal participant states are still filtered
+                    // above; clean transport closure never completes a lane.
+                    recoveryEligibleCount++;
+                    String actionId = "rec-" + lease.connectionInstanceId();
+                    String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
+                    Participant.State participantState = participantStates.get(participant);
+                    if (participantState == null || isTerminalParticipantState(participantState) || participantState == Participant.State.RECOVERY_HELD) {
+                        continue;
+                    }
+                    if (participantState != Participant.State.SUSPENDED) {
+                        entries.add(new ReconciliationPlanEntry(1,
+                                actionId,
+                                ReconciliationAction.MARK_SESSION_SUSPENDED,
+                                lease.sessionId(),
+                                true,
+                                List.of("transport_closed_cleanly"),
+                                "Fence closed connection authority without releasing claims"));
+                    }
+                    entries.add(new ReconciliationPlanEntry(1,
+                            actionId + "-recovery",
+                            ReconciliationAction.HOLD_SUSPENDED_RECOVERY,
+                            lease.sessionId(),
+                            true,
+                            List.of("session_suspended"),
+                            "Materialize and reserve immutable recovery evidence"));
                 }
             }
         }
@@ -173,6 +200,20 @@ public final class ReconciliationService {
      * @throws IOException                                           if planning or execution fails
      */
     public Optional<ReconciliationExecutionSummary> reconcileOnAdmission(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
+        return reconcileEligible(controlRoot);
+    }
+
+    /**
+     * Re-evaluates leases and executes only transitions that are currently recovery-eligible.
+     * Callers may invoke this from admission and inbox polling: process evidence and the durable
+     * participant projection are re-read each time, while completed actions remain idempotent.
+     *
+     * @param controlRoot project root
+     * @return durable execution result when recovery work was found
+     * @throws ProjectApplicationService.ProjectApplicationException when project discovery fails
+     * @throws IOException when planning or execution fails
+     */
+    public Optional<ReconciliationExecutionSummary> reconcileEligible(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
         ReconciliationDiscoverySummary discovery = discover(controlRoot);
         if (discovery.entries().isEmpty()) {
             return Optional.empty();

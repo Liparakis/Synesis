@@ -213,7 +213,7 @@ final class ReviewAdmissionOrderIndependenceTest {
                 "claude",
                 "reviewer-before-producer-reviewer",
                 "Review the producer source",
-                "Inspect the producer snapshot",
+                "Inspect the producer snapshot without repository mutation",
                 List.of(ResourceSelector.pathExact("tests/todo_test.py")),
                 null,
                 WorkIntent.Role.REVIEWER,

@@ -294,7 +294,11 @@ public enum PredictionEventType {
     /**
      * Commits an irreversible fence for one exact provider session.
      */
-    PROVIDER_SESSION_TERMINALIZED;
+    PROVIDER_SESSION_TERMINALIZED,
+    /**
+     * Extends one active intent without releasing its existing claims or dependencies.
+     */
+    WORK_INTENT_SCOPE_EXTENDED;
 
     /**
      * Resolves a stable persisted wire code.
@@ -347,6 +351,7 @@ public enum PredictionEventType {
             case COMPLETION_UNWOUND -> 69;
             case REVIEW_VALIDATION_RECORDED -> 70;
             case PROVIDER_SESSION_TERMINALIZED -> 71;
+            case WORK_INTENT_SCOPE_EXTENDED -> 72;
             default -> ordinal();
         };
     }

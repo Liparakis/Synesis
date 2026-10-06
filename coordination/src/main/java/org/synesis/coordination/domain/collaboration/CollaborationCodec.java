@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.synesis.coordination.domain.capability.CapabilityActorScope;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.ParticipantId;
@@ -44,6 +45,7 @@ public final class CollaborationCodec {
     private static final int MAGIC_GRANT = 0x53475231;
     private static final int MAGIC_GRANT_V2 = 0x53475232;
     private static final int MAGIC_CONTINUATION = 0x53434e31;
+    private static final int MAGIC_CONTINUATION_V2 = 0x53434e32;
 
     /**
      * Validates and initializes this collaboration codec.
@@ -495,7 +497,7 @@ public final class CollaborationCodec {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC_CONTINUATION);
+            out.writeInt(MAGIC_CONTINUATION_V2);
             uuid(out, continuation.grant().value());
             uuid(out, continuation.sourceIntent().value());
             out.writeInt(intent.length);
@@ -504,6 +506,11 @@ public final class CollaborationCodec {
             text(out, continuation.targetOwner().value());
             out.writeLong(continuation.claimEpoch().value());
             text(out, continuation.recoverySnapshot().value());
+            out.writeBoolean(continuation.sourceActorScope() != null);
+            if (continuation.sourceActorScope() != null) {
+                writeActorScope(out, continuation.sourceActorScope());
+                writeActorScope(out, continuation.targetActorScope());
+            }
             out.flush();
             return bytes.toByteArray();
         } catch (IOException impossible) {
@@ -521,7 +528,8 @@ public final class CollaborationCodec {
     public static LaneContinuation decodeContinuation(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC_CONTINUATION) {
+            int magic = in.readInt();
+            if (magic != MAGIC_CONTINUATION && magic != MAGIC_CONTINUATION_V2) {
                 throw new CoordinationException("unsupported continuation format");
             }
             UUID grant = readUuid(in);
@@ -539,6 +547,12 @@ public final class CollaborationCodec {
             String target = readText(in);
             long epoch = in.readLong();
             String snapshot = readText(in);
+            CapabilityActorScope sourceActor = null;
+            CapabilityActorScope targetActor = null;
+            if (magic == MAGIC_CONTINUATION_V2 && in.readBoolean()) {
+                sourceActor = readActorScope(in);
+                targetActor = readActorScope(in);
+            }
             if (in.available() != 0) {
                 throw new CoordinationException("trailing continuation bytes");
             }
@@ -548,10 +562,23 @@ public final class CollaborationCodec {
                     new ParticipantId(source),
                     new ParticipantId(target),
                     new ClaimEpoch(epoch),
-                    new SnapshotReference(snapshot));
+                    new SnapshotReference(snapshot),
+                    sourceActor,
+                    targetActor);
         } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("malformed continuation", failure);
         }
+    }
+
+    private static void writeActorScope(DataOutputStream out, CapabilityActorScope scope) throws IOException {
+        text(out, scope.nodeId());
+        text(out, scope.supervisorId());
+        text(out, scope.workerId());
+        text(out, scope.sessionId());
+    }
+
+    private static CapabilityActorScope readActorScope(DataInputStream in) throws IOException {
+        return new CapabilityActorScope(readText(in), readText(in), readText(in), readText(in));
     }
 
     /**

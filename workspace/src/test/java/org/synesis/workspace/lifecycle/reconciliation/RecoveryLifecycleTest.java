@@ -1,10 +1,12 @@
 package org.synesis.workspace.lifecycle.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,6 +17,7 @@ import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.link.identity.IdentityBootstrap;
@@ -108,6 +111,72 @@ class RecoveryLifecycleTest {
         PredictionEventStore afterReplay = new PredictionEventStore(lane.location.root().resolve(".synesis/coordination"), lane.location.projectId());
         assertEquals(1, afterReplay.events().stream().filter(event -> event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.PARTICIPANT_SUSPENDED).count());
         assertEquals(1, afterReplay.events().stream().filter(event -> event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.RECOVERY_SNAPSHOT_HELD).count());
+    }
+
+    @Test
+    void cleanTransportClosurePreservesUnfinishedClaimsAndSnapshotsImmediately(@TempDir Path tempDir) throws Exception {
+        Path controlRoot = initializedProject(tempDir.resolve("control-repo"));
+        Lane lane = deadLane(controlRoot, "clean-eof-connection");
+        SessionLeaseStore leaseStore = new SessionLeaseStore();
+        SessionLeaseRecord previous = leaseStore.load(controlRoot, "clean-eof-connection").orElseThrow();
+        leaseStore.save(controlRoot,
+                new SessionLeaseRecord(previous.schemaVersion(),
+                        previous.projectId(),
+                        previous.provider(),
+                        previous.connectionInstanceId(),
+                        previous.workerNodeId(),
+                        previous.sessionId(),
+                        previous.processIdentity(),
+                        previous.synesisVersion(),
+                        previous.createdAtEpochMillis(),
+                        System.currentTimeMillis(),
+                        SessionLeaseState.CLOSED_CLEANLY));
+        ReconciliationService service = new ReconciliationService(new ProjectApplicationService(),
+                new SessionLeaseService(leaseStore, _ -> java.util.Optional.empty()),
+                leaseStore,
+                new ReconciliationPlanStore());
+
+        var result = service.reconcileOnAdmission(controlRoot);
+
+        assertTrue(result.isPresent());
+        PredictionEventStore replayed = new PredictionEventStore(lane.location.root().resolve(".synesis/coordination"), lane.location.projectId());
+        assertEquals(Participant.State.RECOVERY_HELD,
+                replayed.collaborationProjection().participantState(lane.participant).orElseThrow());
+        assertTrue(replayed.collaborationProjection().recoverySnapshotReference(lane.participant).orElseThrow().contains("#"));
+        assertEquals(1,
+                replayed.events().stream().filter(event -> event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.PARTICIPANT_SUSPENDED).count());
+        assertEquals(1,
+                replayed.events().stream().filter(event -> event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.RECOVERY_SNAPSHOT_HELD).count());
+        CoordinationException fenced = assertThrows(CoordinationException.class,
+                () -> new WorkIntentService(replayed, lane.identity).heartbeat(lane.participant));
+        assertEquals("SESSION_EPOCH_FENCED", fenced.code());
+    }
+
+    @Test
+    void repeatedReconciliationWaitsForAbruptLossGraceThenHoldsLane(@TempDir Path tempDir) throws Exception {
+        Path controlRoot = initializedProject(tempDir.resolve("control-repo"));
+        Lane lane = deadLane(controlRoot, "grace-dead-connection");
+        SessionLeaseStore leaseStore = new SessionLeaseStore();
+        SessionLeaseRecord previous = leaseStore.load(controlRoot, "grace-dead-connection").orElseThrow();
+        long now = System.currentTimeMillis();
+        leaseStore.save(controlRoot,
+                new SessionLeaseRecord(previous.schemaVersion(), previous.projectId(), previous.provider(), previous.connectionInstanceId(),
+                        previous.workerNodeId(), previous.sessionId(), previous.processIdentity(), previous.synesisVersion(),
+                        previous.createdAtEpochMillis(), now, SessionLeaseState.ACTIVE));
+        ReconciliationService service = new ReconciliationService(new ProjectApplicationService(),
+                new SessionLeaseService(leaseStore, _ -> java.util.Optional.empty()), leaseStore, new ReconciliationPlanStore());
+
+        assertTrue(service.reconcileEligible(controlRoot).isEmpty());
+        PredictionEventStore beforeGrace = new PredictionEventStore(lane.location.root().resolve(".synesis/coordination"), lane.location.projectId());
+        assertEquals(Participant.State.ACTIVE, beforeGrace.collaborationProjection().participantState(lane.participant).orElseThrow());
+
+        leaseStore.save(controlRoot,
+                new SessionLeaseRecord(previous.schemaVersion(), previous.projectId(), previous.provider(), previous.connectionInstanceId(),
+                        previous.workerNodeId(), previous.sessionId(), previous.processIdentity(), previous.synesisVersion(),
+                        previous.createdAtEpochMillis(), now - Duration.ofMinutes(6).toMillis(), SessionLeaseState.ACTIVE));
+        assertTrue(service.reconcileEligible(controlRoot).isPresent());
+        PredictionEventStore afterGrace = new PredictionEventStore(lane.location.root().resolve(".synesis/coordination"), lane.location.projectId());
+        assertEquals(Participant.State.RECOVERY_HELD, afterGrace.collaborationProjection().participantState(lane.participant).orElseThrow());
     }
 
     @Test

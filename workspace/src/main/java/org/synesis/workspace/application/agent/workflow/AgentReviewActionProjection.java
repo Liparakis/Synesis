@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -194,7 +195,27 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
         if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency))) {
             return true;
         }
-        return requesterRequests.stream().anyMatch(request -> request.state() != CapabilityLifecycleState.VALIDATED) || !projection.allValidationContexts().isEmpty();
+        return requesterRequests.stream().anyMatch(request -> request.state() != CapabilityLifecycleState.VALIDATED)
+                || ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
+                || !projection.allValidationContexts().isEmpty();
+    }
+
+    /**
+     * Finds an accepted capability this exact owner lane still needs to publish.
+     */
+    static Optional<CapabilityRequestRecord> ownerImplementationPending(PredictionEventStore store,
+            WorkIntent intent,
+            String nodeId,
+            String supervisorId,
+            String workerId) {
+        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return Optional.empty();
+        }
+        return store.capabilityRequestProjection().records().values().stream()
+                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
+                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
+                .filter(request -> request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING)
+                .findFirst();
     }
 
 /**

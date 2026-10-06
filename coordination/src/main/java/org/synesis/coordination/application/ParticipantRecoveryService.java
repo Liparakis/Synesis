@@ -186,9 +186,12 @@ final class ParticipantRecoveryService {
                 throw new CoordinationException("event append lock unavailable");
             }
             PredictionEventStore current = freshStore();
-            boolean known = current.collaborationProjection().participantKey(participant).isPresent();
-            if (!known) {
+            Optional<Participant.State> participantState = current.collaborationProjection().participantState(participant);
+            if (participantState.isEmpty()) {
                 throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+            }
+            if (participantState.orElseThrow() != Participant.State.ACTIVE) {
+                throw new CoordinationException("SESSION_EPOCH_FENCED");
             }
             ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
                     .orElseThrow(CoordinationMissingElementException::new);

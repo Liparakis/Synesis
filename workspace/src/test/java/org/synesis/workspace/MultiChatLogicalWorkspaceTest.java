@@ -112,8 +112,28 @@ final class MultiChatLogicalWorkspaceTest {
         UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         assertTrue(collaboration.announce(root, "codex", "chat-a", "group", "tests", List.of(ResourceSelector.pathExact("src/a.py"))).acquired());
-        assertTrue(collaboration.announce(root, "codex", "chat-b", "group", "tests", List.of(ResourceSelector.pathExact("src/b.py"))).acquired());
-        assertFalse(collaboration.announce(root, "codex", "chat-b", "overlap", "blocked", List.of(ResourceSelector.pathExact("src/a.py"))).acquired());
+        var chatBClaim = collaboration.announce(root, "codex", "chat-b", "group", "tests", List.of(ResourceSelector.pathExact("src/b.py")));
+        assertTrue(chatBClaim.acquired());
+        var overlap = collaboration.announce(root,
+                "codex",
+                "chat-b",
+                "overlap",
+                "blocked",
+                List.of(ResourceSelector.pathExact("src/a.py")),
+                null,
+                org.synesis.coordination.domain.collaboration.WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of(),
+                chatBClaim.intent().intentId(),
+                chatBClaim.intent().claimEpoch().value());
+        assertFalse(overlap.acquired());
+        assertFalse(overlap.conflicts().isEmpty());
+        var chatBAfterOverlap = collaboration.status(root).intents().stream()
+                .filter(intent -> intent.intentId().equals(chatBClaim.intent().intentId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(chatBClaim.intent().claimEpoch(), chatBAfterOverlap.claimEpoch());
+        assertEquals(List.of(ResourceSelector.pathExact("src/b.py")), chatBAfterOverlap.selectors());
         assertEquals(1, collaboration.status(root).groups().stream().filter(candidate -> candidate.workGroupId().equals(group)).count());
 
         WorkspacePatchService patches = new WorkspacePatchService();

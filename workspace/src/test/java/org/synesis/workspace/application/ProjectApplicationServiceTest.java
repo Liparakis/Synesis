@@ -62,11 +62,14 @@ final class ProjectApplicationServiceTest {
         assertTrue(agents.contains("A mutating Synesis tool may return a required continuation"));
         assertTrue(agents.contains("the continuation is part of the durable protocol, not an optional suggestion"));
         assertTrue(agents.contains("After any completed Synesis mutation, call get_next_action again before ending the turn"));
-        assertTrue(agents.contains("do not end the session when IMPLEMENT has no concrete action"));
-        assertTrue(agents.contains("Perform a bounded wait and call get_next_action again"));
+        assertTrue(agents.contains("call get_next_action once with completionRequested:true"));
+        assertTrue(agents.contains("compare consecutive workflow.actionId values"));
+        assertTrue(agents.contains("workflow.retryAfterMs (default 5000 ms)"));
+        assertTrue(agents.contains("workflow.maxUnchangedPolls unchanged responses (default 3)"));
+        assertTrue(agents.contains("stop polling until a fresh state-change signal or human input"));
         assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
         assertTrue(agents.contains("When get_next_action projects WAIT"));
-        assertTrue(agents.contains("Do not report success or stop merely because your own lane is complete"));
+        assertTrue(agents.contains("Do not report success merely because your own lane is complete"));
         assertTrue(agents.contains("A ready session is not yet an announced collaboration intent"));
         assertTrue(agents.contains("task.claims containing the exact repository-relative files or subtrees"));
         assertTrue(agents.contains("likelyScopes is descriptive only"));

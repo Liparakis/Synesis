@@ -78,16 +78,8 @@ public final class ValidationWorkspaceService {
         return (underscore >= 0 ? value.substring(underscore + 1) : value).toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static String gitRevParse(Path workdir) throws IOException {
-        return GitProcessRunner.run(workdir, "rev-parse", "HEAD").trim();
-    }
-
-    private static String gitDiff(Path workdir, String from, String to) throws IOException {
-        return GitProcessRunner.run(workdir, "diff", from, to);
-    }
-
-    private static void applyPatch(Path worktreeDir, Path patchFile) throws IOException {
-        GitProcessRunner.run(worktreeDir, "apply", "--3way", patchFile.toAbsolutePath().toString());
+    private static Path expectedWorktreePath(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber) {
+        return resolveValidationRoot(projectRoot).resolve(extractToken(handle) + "-r" + revisionNumber).toAbsolutePath().normalize();
     }
 
     private static void runGit(Path workdir, String... args) throws IOException {
@@ -105,55 +97,100 @@ public final class ValidationWorkspaceService {
     /**
      * Creates a disposable Git validation worktree.
      *
-     * <p>The worktree is bound to the request handle and revision number. It is created
-     * outside the control checkout.
+     * <p>The worktree checks out the exact published implementation commit and is created outside
+     * the control checkout. It never rebases or applies a patch to requester code.
      *
      * @param projectRoot           absolute project root path
      * @param handle                capability request handle
      * @param revisionNumber        implementation revision number
-     * @param requesterWorktreePath absolute path to the requester's assigned worktree
      * @param impl                  immutable implementation revision record
      * @return absolute path to the created validation worktree
      * @throws IOException if worktree creation fails
      */
-    public Path createValidationWorktree(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber, Path requesterWorktreePath, ImplementationRevisionRecord impl) throws IOException {
+    public Path createValidationWorktree(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber, ImplementationRevisionRecord impl) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(handle, "handle");
-        Objects.requireNonNull(requesterWorktreePath, "requesterWorktreePath");
         Objects.requireNonNull(impl, "impl");
+        if (revisionNumber < 1 || impl.revisionNumber() != revisionNumber || impl.commitSha().isBlank()) {
+            throw new IOException("VALIDATION_WORKSPACE_REVISION_INVALID");
+        }
 
         String token = extractToken(handle);
         String worktreeName = token + "-r" + revisionNumber;
         Path validationRoot = resolveValidationRoot(projectRoot);
+        Path canonicalRoot = projectRoot.toAbsolutePath().normalize();
+        if (validationRoot.startsWith(canonicalRoot) || canonicalRoot.startsWith(validationRoot)) {
+            throw new IOException("VALIDATION_WORKSPACE_PATH_INVALID");
+        }
         Files.createDirectories(validationRoot);
         Path worktreePath = validationRoot.resolve(worktreeName);
+        if (!worktreePath.startsWith(validationRoot)) {
+            throw new IOException("VALIDATION_WORKSPACE_PATH_INVALID");
+        }
 
         if (Files.exists(worktreePath)) {
-            // Idempotent: already exists from prior session
-            return worktreePath.toAbsolutePath().normalize();
+            return verifyValidationWorktree(projectRoot, handle, revisionNumber, impl.commitSha(), worktreePath.toString());
         }
 
-        // Determine the requester HEAD commit
-        String requesterHead = gitRevParse(requesterWorktreePath);
-
-        // Create the worktree at requester HEAD
-        runGit(projectRoot, "worktree", "add", "--detach", worktreePath.toAbsolutePath().toString(), requesterHead);
-
-        // Generate a diff patch from baseCommit to owner commit
-        String patch = gitDiff(projectRoot, impl.baseCommit(), impl.commitSha());
-
-        if (!patch.isBlank()) {
-            // Write patch to temp file and apply in the validation worktree
-            Path patchFile = Files.createTempFile("synesis-val-", ".patch");
-            try {
-                Files.writeString(patchFile, patch);
-                applyPatch(worktreePath.toAbsolutePath().normalize(), patchFile);
-            } finally {
-                Files.deleteIfExists(patchFile);
-            }
+        try {
+            runGit(projectRoot, "worktree", "add", "--detach", worktreePath.toString(), impl.commitSha());
+            verifyValidationWorktree(projectRoot, handle, revisionNumber, impl.commitSha(), worktreePath.toString());
+            return worktreePath;
+        } catch (IOException | RuntimeException failure) {
+            removeValidationWorktree(worktreePath);
+            throw failure;
         }
+    }
 
-        return worktreePath.toAbsolutePath().normalize();
+    /**
+     * Verifies the durable path, Git root, and exact published commit for one validation workspace.
+     *
+     * @param projectRoot project control checkout
+     * @param handle capability request handle
+     * @param revisionNumber implementation revision number
+     * @param expectedCommit exact published implementation commit
+     * @param recordedPath path retained in the durable validation context
+     * @return verified validation worktree path
+     * @throws IOException if the context path, registered worktree, or commit is stale
+     */
+    public Path verifyValidationWorktree(Path projectRoot,
+            CapabilityRequestHandle handle,
+            int revisionNumber,
+            String expectedCommit,
+            String recordedPath) throws IOException {
+        Objects.requireNonNull(projectRoot, "projectRoot");
+        Objects.requireNonNull(handle, "handle");
+        Objects.requireNonNull(expectedCommit, "expectedCommit");
+        Objects.requireNonNull(recordedPath, "recordedPath");
+        if (revisionNumber < 1) {
+            throw new IOException("VALIDATION_WORKSPACE_REVISION_INVALID");
+        }
+        Path expected = expectedWorktreePath(projectRoot, handle, revisionNumber);
+        Path recorded;
+        try {
+            recorded = Path.of(recordedPath).toAbsolutePath().normalize();
+        } catch (RuntimeException invalidPath) {
+            throw new IOException("VALIDATION_WORKSPACE_PATH_INVALID", invalidPath);
+        }
+        Path validationRoot = resolveValidationRoot(projectRoot);
+        if (validationRoot.startsWith(projectRoot.toAbsolutePath().normalize()) || !recorded.equals(expected) || !recorded.startsWith(validationRoot)
+                || !Files.isDirectory(recorded)) {
+            throw new IOException("VALIDATION_WORKSPACE_PATH_INVALID");
+        }
+        Path gitRoot;
+        try {
+            gitRoot = Path.of(GitProcessRunner.run(recorded, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
+        } catch (IOException failure) {
+            throw new IOException("VALIDATION_WORKSPACE_NOT_A_WORKTREE", failure);
+        }
+        if (!gitRoot.equals(recorded)) {
+            throw new IOException("VALIDATION_WORKSPACE_ROOT_MISMATCH");
+        }
+        String head = GitProcessRunner.run(recorded, "rev-parse", "HEAD").trim();
+        if (!expectedCommit.equals(head)) {
+            throw new IOException("VALIDATION_WORKSPACE_COMMIT_MISMATCH");
+        }
+        return recorded;
     }
 
     /**

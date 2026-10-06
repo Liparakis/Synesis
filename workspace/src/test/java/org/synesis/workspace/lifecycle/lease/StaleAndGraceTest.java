@@ -1,6 +1,7 @@
 package org.synesis.workspace.lifecycle.lease;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -40,6 +41,8 @@ class StaleAndGraceTest {
 
     SessionLeaseState state1 = service.evaluateLiveness(record, policyStale);
     assertEquals(SessionLeaseState.SUSPECTED_STALE, state1);
+    assertEquals(start + Duration.ofMinutes(5).toMillis(),
+        service.recoveryDeadlineEpochMillis(record, policyStale).orElseThrow());
 
     // Process missing, heartbeat beyond grace period (6 min) -> RECOVERY_ELIGIBLE
     Clock clockGrace = Clock.fixed(Instant.ofEpochMilli(start + 360000L),
@@ -51,6 +54,7 @@ class StaleAndGraceTest {
 
     SessionLeaseState state2 = service.evaluateLiveness(record, policyGrace);
     assertEquals(SessionLeaseState.RECOVERY_ELIGIBLE, state2);
+    assertTrue(service.recoveryDeadlineEpochMillis(record, policyGrace).isEmpty());
   }
 
   @Test

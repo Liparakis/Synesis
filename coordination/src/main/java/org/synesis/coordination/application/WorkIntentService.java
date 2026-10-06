@@ -3,6 +3,7 @@ package org.synesis.coordination.application;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -12,10 +13,13 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.RepairLanePayload;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.collaboration.WorkIntentScopeExtension;
+import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
@@ -323,7 +327,6 @@ public final class WorkIntentService {
             PredictionEventStore current = freshStore();
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {
-                appendAutomaticConflictInbox(current, intent, conflicts);
                 return new ClaimResult(false, intent, conflicts);
             }
             WorkGroup existingGroup = current.workGroupProjection().group(intent.group()).orElse(null);
@@ -353,71 +356,98 @@ public final class WorkIntentService {
     }
 
     /**
-     * Appends the automatic conflict inbox event to the durable coordination log.
+     * Extends an active lane under its exact intent and claim-epoch preconditions.
+     * Existing claims and dependencies are retained; task text changes only when supplied.
      *
-     * @param current fresh authoritative project projection
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
+     * @param intentId exact active intent
+     * @param participant exact authenticated participant incarnation
+     * @param expectedEpoch current claim epoch observed by the caller
+     * @param requestedSelectors selectors requested by this declaration
+     * @param goal replacement goal, or {@code null} to retain the current value
+     * @param acceptance replacement acceptance, or {@code null} to retain the current value
+     * @param requestedDependencies explicitly requested capability dependencies
+     * @return acquisition result; conflicts reject the complete extension
+     * @throws IOException persistence or stale-authority failure
+     * @throws GeneralSecurityException event signing failure
      */
-    private void appendAutomaticConflictInbox(PredictionEventStore current,
-            WorkIntent contender,
-            List<ClaimConflict> conflicts) throws IOException, GeneralSecurityException {
-        for (ClaimConflict conflict : conflicts) {
-            if (contender.participantIdentity().equals(conflict.participantIdentity())) {
-                continue;
+    public synchronized ClaimResult extendScope(WorkIntentId intentId,
+            ParticipantId participant,
+            ClaimEpoch expectedEpoch,
+            List<ResourceSelector> requestedSelectors,
+            String goal,
+            String acceptance,
+            List<String> requestedDependencies) throws IOException, GeneralSecurityException {
+        WorkIntentId exactIntent = CoordinationNullException.requireNonNull(intentId, "intent ID");
+        ParticipantId exactParticipant = CoordinationNullException.requireNonNull(participant, "participant");
+        ClaimEpoch exactEpoch = CoordinationNullException.requireNonNull(expectedEpoch, "claim epoch");
+        List<ResourceSelector> selectors =
+                List.copyOf(CoordinationNullException.requireNonNull(requestedSelectors, "selectors"));
+        List<String> dependencies = List.copyOf(CoordinationNullException.requireNonNull(requestedDependencies,
+                "dependencies"));
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                throw new CoordinationException("event append lock unavailable");
             }
-            WorkIntentId conflictingIntentId = conflict.intentIdentity();
-            String proposal =
-                    "Claim overlap detected for " + conflict.selector().kind().name() + " " + conflict.selector()
-                            .value() + "; negotiate contract or scope before mutation.";
-            appendConflictRequest(current,
-                    contender.participantIdentity(),
-                    conflict.participantIdentity(),
-                    conflictingIntentId,
-                    proposal,
-                    contender.identity().value() + "->" + conflictingIntentId.value());
-            appendConflictRequest(current,
-                    conflict.participantIdentity(),
-                    contender.participantIdentity(),
-                    conflictingIntentId,
-                    proposal,
-                    conflictingIntentId.value() + "->" + contender.identity().value());
+            PredictionEventStore currentStore = freshStore();
+            WorkIntent current = currentStore.collaborationProjection().intent(exactIntent)
+                    .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
+            if (!current.participantIdentity().equals(exactParticipant)) {
+                throw new CoordinationException("INTENT_OWNER_MISMATCH");
+            }
+            if (currentStore.collaborationProjection().participantState(exactParticipant)
+                    .filter(state -> state == Participant.State.ACTIVE)
+                    .isEmpty()) {
+                throw new CoordinationException("INTENT_NOT_ACTIVE");
+            }
+            if (current.claimEpoch().value() != exactEpoch.value()) {
+                throw new CoordinationException("CLAIM_EPOCH_STALE");
+            }
+            List<ResourceSelector> mergedSelectors = new ArrayList<>(current.selectors());
+            selectors.stream().filter(selector -> !mergedSelectors.contains(selector)).forEach(mergedSelectors::add);
+            List<String> mergedDependencies = new ArrayList<>(current.knownDependencies());
+            dependencies.stream().filter(dependency -> !mergedDependencies.contains(dependency))
+                    .forEach(mergedDependencies::add);
+            if (mergedSelectors.size() > 128) {
+                throw new CoordinationException("SCOPE_EXTENSION_CLAIM_LIMIT_EXCEEDED");
+            }
+            if (mergedDependencies.size() > 50) {
+                throw new CoordinationException("SCOPE_EXTENSION_DEPENDENCY_LIMIT_EXCEEDED");
+            }
+            String updatedGoal = goal == null ? current.goal() : goal;
+            String updatedAcceptance = acceptance == null ? current.acceptance() : acceptance;
+            if (mergedSelectors.equals(current.selectors()) && mergedDependencies.equals(current.knownDependencies())
+                    && updatedGoal.equals(current.goal()) && updatedAcceptance.equals(current.acceptance())) {
+                return new ClaimResult(true, current, List.of());
+            }
+            WorkIntent amended = new WorkIntent(current.intentId(),
+                    current.projectId(),
+                    current.participant(),
+                    current.provider(),
+                    current.taskId(),
+                    updatedGoal,
+                    updatedAcceptance,
+                    current.baseCommit(),
+                    List.copyOf(mergedSelectors),
+                    current.version() + 1,
+                    current.workGroupId(),
+                    current.authorityLineageId(),
+                    current.status(),
+                    current.role(),
+                    current.reviewTargetSelectors(),
+                    List.copyOf(mergedDependencies));
+            List<ClaimConflict> conflicts = currentStore.collaborationProjection()
+                    .conflicts(amended.selectors(), current.identity());
+            if (!conflicts.isEmpty()) {
+                return new ClaimResult(false, current, conflicts);
+            }
+            WorkIntentScopeExtension extension = new WorkIntentScopeExtension(amended, current.version());
+            currentStore.append(current.identity().value(),
+                    PredictionEventType.WORK_INTENT_SCOPE_EXTENDED,
+                    signer.nodeId(),
+                    extension.encode(),
+                    signer);
+            return new ClaimResult(true, amended, List.of());
         }
-    }
-
-    /**
-     * Appends the conflict request event to the durable coordination log.
-     *
-     * @param current fresh authoritative project projection
-     * @param target  proposed target intent
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private void appendConflictRequest(PredictionEventStore current,
-            ParticipantId requester,
-            ParticipantId target,
-            WorkIntentId conflictingIntentId,
-            String proposal,
-            String direction) throws IOException, GeneralSecurityException {
-        UUID requestId = UUID.nameUUIDFromBytes(("claim-conflict|" + direction).getBytes(StandardCharsets.UTF_8));
-        boolean exists = current.collaborationProjection().requests().stream()
-                .anyMatch(existing -> existing.requestId().equals(requestId));
-        if (exists) {
-            return;
-        }
-        CoordinationRequest request = new CoordinationRequest(requestId,
-                current.projectId(),
-                requester.value(),
-                target.value(),
-                conflictingIntentId.value(),
-                CoordinationRequest.Kind.CONTRACT,
-                proposal,
-                CoordinationRequest.Status.PENDING);
-        current.append(request.requestId(),
-                PredictionEventType.COORDINATION_REQUESTED,
-                signer.nodeId(),
-                CollaborationCodec.encodeRequest(request),
-                signer);
     }
 
     /**
@@ -577,7 +607,7 @@ public final class WorkIntentService {
                 reevaluateNoChangeWorkGroup(current, completion.workGroupIdentity());
                 return previous;
             }
-            if (!completion.expectedRevisionIdentity().equals(current.headSequenceIdentity())) {
+            if (!current.unchangedSince(completion.expectedRevision())) {
                 throw new CoordinationException("COMPLETION_REVISION_STALE");
             }
             WorkIntent intent = validateNoChangeIntent(current, completion);

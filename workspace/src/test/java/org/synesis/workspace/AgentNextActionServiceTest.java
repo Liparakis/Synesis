@@ -8,10 +8,12 @@ import org.synesis.workspace.application.workspace.mutation.PatchRequest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,6 +54,10 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import org.synesis.workspace.test.ProviderTestSupport;
 
 /**
@@ -600,7 +606,7 @@ class AgentNextActionServiceTest {
         assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
         Map<String, Object> result = (Map<String, Object>) response.result();
         assertEquals("tasktracker.domain", result.get("capability"));
-        assertEquals(List.of("inputs", "output", "requiredBehavior", "acceptanceTests"), result.get("requiredFields"));
+        assertEquals(List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests"), result.get("requiredFields"));
         Map<String, Object> currentIntent = (Map<String, Object>) result.get("currentIntent");
         assertEquals(List.of("tasktracker.domain"), currentIntent.get("knownDependencies"));
 
@@ -608,6 +614,144 @@ class AgentNextActionServiceTest {
         assertEquals("REVISE_SCOPE", workflow.get("type"));
         assertFalse(workflow.containsKey("recommendedTool"), response.toJson());
         assertFalse(workflow.containsKey("arguments"), response.toJson());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void ownerResolvesItsAcceptedKnownDependencyLocallyWithExactContract() throws Exception {
+        prepareSessionAndTrust("codex", "local-capability-requester");
+        prepareSessionAndTrust("claude", "local-capability-owner");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requester = collaboration.announce(controlRoot,
+                "codex",
+                "local-capability-requester",
+                "Build the consumer",
+                "Use the negotiated domain API",
+                List.of(ResourceSelector.pathExact("src/Consumer.java")));
+        var owner = collaboration.announce(controlRoot,
+                "claude",
+                "local-capability-owner",
+                "Build the domain API",
+                "Publish its accepted contract",
+                List.of(ResourceSelector.pathExact("src/Domain.java")),
+                requester.intent().workGroupId(),
+                WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of("tasktracker.domain"));
+
+        CapabilityContract contract = new CapabilityContract("Task creation API",
+                "A non-empty title",
+                List.of("Create a task with a generated ID"),
+                List.of("Task defaults to the accepted status"));
+        AgentResponse requested = new CapabilityRequestService().describeRequiredCapability(
+                new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
+                        "codex",
+                        "local-capability-requester",
+                        "tasktracker.domain",
+                        contract,
+                        null,
+                        null,
+                        owner.intent().authorityLineageId(),
+                        -1));
+        assertEquals(AgentStatus.WAITING, requested.status(), requested.toJson());
+
+        AgentNextActionService nextActions = new AgentNextActionService();
+        AgentResponse ownerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot,
+                "claude",
+                "local-capability-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerInbox.nextAction(), ownerInbox.toJson());
+        Map<?, ?> inbox = (Map<?, ?>) ownerInbox.result();
+        String handle = (String) inbox.get("capabilityRequestHandle");
+        long revision = ((Number) inbox.get("contractRevision")).longValue();
+        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(
+                new CapabilityResponseService.OwnerResponseRequest(controlRoot,
+                        "claude",
+                        "local-capability-owner",
+                        handle,
+                        "accept",
+                        null,
+                        null,
+                        revision));
+        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
+
+        var extension = collaboration.announce(controlRoot,
+                "claude",
+                "local-capability-owner",
+                owner.intent().goal(),
+                owner.intent().acceptance(),
+                List.of(ResourceSelector.pathExact("src/Domain.java"), ResourceSelector.pathExact("tests/DomainTest.java")),
+                owner.intent().workGroupId(),
+                owner.intent().role(),
+                owner.intent().reviewTargetSelectors(),
+                owner.intent().knownDependencies(),
+                owner.intent().intentId(),
+                owner.intent().version());
+        assertTrue(extension.acquired());
+        assertEquals(2, extension.intent().version());
+
+        AgentResponse ownerImplementation = nextActions.getNextAction(new NextActionRequest(controlRoot,
+                "claude",
+                "local-capability-owner"));
+        assertEquals(AgentStatus.READY, ownerImplementation.status(), ownerImplementation.toJson());
+        Map<?, ?> resolvedDependencies = (Map<?, ?>) ((Map<?, ?>) ownerImplementation.result())
+                .get("resolvedDependencies");
+        Map<?, ?> resolvedDomain = (Map<?, ?>) resolvedDependencies.get("tasktracker.domain");
+        assertEquals(handle, resolvedDomain.get("capabilityRequestHandle"));
+        assertEquals(contract.purpose(), ((Map<?, ?>) resolvedDomain.get("contract")).get("purpose"));
+        assertFalse(ownerImplementation.toJson().contains("needs_capability"), ownerImplementation.toJson());
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+                location.projectId());
+        assertEquals(1, store.capabilityRequestProjection().records().size());
+
+        prepareSessionAndTrust("codex", "local-capability-requester-two");
+        var secondRequester = collaboration.announce(controlRoot,
+                "codex",
+                "local-capability-requester-two",
+                "Build another consumer",
+                "Use the same capability",
+                List.of(ResourceSelector.pathExact("src/SecondConsumer.java")),
+                owner.intent().workGroupId());
+        assertTrue(secondRequester.acquired());
+        CapabilityContract conflictingContract = new CapabilityContract("Task creation API",
+                "A non-empty title",
+                List.of("Create a task with caller-supplied IDs"),
+                List.of("Task defaults to the accepted status"));
+        AgentResponse secondRequest = new CapabilityRequestService().describeRequiredCapability(
+                new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
+                        "codex",
+                        "local-capability-requester-two",
+                        "tasktracker.domain",
+                        conflictingContract,
+                        null,
+                        null,
+                        owner.intent().authorityLineageId(),
+                        -1));
+        assertEquals(AgentStatus.WAITING, secondRequest.status(), secondRequest.toJson());
+        AgentResponse secondOwnerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot,
+                "claude",
+                "local-capability-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, secondOwnerInbox.nextAction(), secondOwnerInbox.toJson());
+        Map<?, ?> secondInbox = (Map<?, ?>) secondOwnerInbox.result();
+        AgentResponse secondAccepted = new CapabilityResponseService().respondToOwnerRequest(
+                new CapabilityResponseService.OwnerResponseRequest(controlRoot,
+                        "claude",
+                        "local-capability-owner",
+                        (String) secondInbox.get("capabilityRequestHandle"),
+                        "accept",
+                        null,
+                        null,
+                        ((Number) secondInbox.get("contractRevision")).longValue()));
+        assertEquals(AgentStatus.READY, secondAccepted.status(), secondAccepted.toJson());
+        AgentResponse ambiguity = nextActions.getNextAction(new NextActionRequest(controlRoot,
+                "claude",
+                "local-capability-owner"));
+        assertEquals(AgentStatus.BLOCKED, ambiguity.status(), ambiguity.toJson());
+        assertEquals("CAPABILITY_CONTRACT_AMBIGUOUS", ((Map<?, ?>) ambiguity.result()).get("reason"));
+        PredictionEventStore finalStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
+                location.projectId());
+        assertEquals(2, finalStore.capabilityRequestProjection().records().size());
     }
 
     @Test
@@ -659,6 +803,102 @@ class AgentNextActionServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void unrelatedFutureLeaseDoesNotAnnotateCapabilityOwnerWait() throws Exception {
+        String requester = "recovery-deadline-unrelated-requester";
+        String unrelated = "recovery-deadline-unrelated-lane";
+        createCapabilityOwnerWait(requester, "recovery-deadline-owner");
+        prepareSessionAndTrust("claude", unrelated);
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        var unrelatedBinding = new ProviderSessionBindingService().find(location, "claude", unrelated).orElseThrow();
+        saveFutureDeadLease(unrelatedBinding, unrelated);
+
+        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
+
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason(), response.toJson());
+        Map<String, Object> result = (Map<String, Object>) response.result();
+        assertFalse(result.containsKey("recoveryDeadlineEpochMillis"), response.toJson());
+        assertFalse(result.containsKey("intentionalRecoveryWait"), response.toJson());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void capabilityOwnerWaitUsesOnlyItsMatchingRecoveryDeadline() throws Exception {
+        String requester = "recovery-deadline-matching-requester";
+        String owner = "recovery-deadline-matching-owner";
+        var ownerBinding = createCapabilityOwnerWait(requester, owner);
+        long expectedDeadline = saveFutureDeadLease(ownerBinding, owner);
+
+        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
+
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason(), response.toJson());
+        Map<String, Object> result = (Map<String, Object>) response.result();
+        assertEquals(expectedDeadline, ((Number) result.get("recoveryDeadlineEpochMillis")).longValue(), response.toJson());
+        assertEquals(Boolean.TRUE, result.get("intentionalRecoveryWait"), response.toJson());
+    }
+
+    private ProviderSessionBindingService.Binding createCapabilityOwnerWait(String requester, String owner) throws Exception {
+        prepareSessionAndTrust("codex", requester);
+        prepareSessionAndTrust("claude", owner);
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requesterIntent = collaboration.announce(controlRoot,
+                "codex",
+                requester,
+                "Implement the consumer lane",
+                "Use the capability owner API",
+                List.of(ResourceSelector.pathExact("src/consumer")),
+                null,
+                WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of("tasktracker.domain"));
+        collaboration.announce(controlRoot,
+                "claude",
+                owner,
+                "Implement the capability owner lane",
+                "Publish the capability API",
+                List.of(ResourceSelector.pathExact("src/owner")),
+                requesterIntent.intent().workGroupId());
+        CapabilityContract contract = new CapabilityContract("Task inputs",
+                "Task record",
+                List.of("Create valid tasks"),
+                List.of("Invalid tasks are rejected"));
+        new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
+                "codex",
+                requester,
+                "tasktracker.domain",
+                contract,
+                null,
+                null));
+        AgentResponse waiting = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
+        assertEquals(AgentStatus.WAITING, waiting.status(), waiting.toJson());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, waiting.reason(), waiting.toJson());
+        return new ProviderSessionBindingService().find(new ProjectApplicationService().locate(controlRoot), "claude", owner).orElseThrow();
+    }
+
+    private long saveFutureDeadLease(ProviderSessionBindingService.Binding binding, String connectionInstanceId) throws Exception {
+        long heartbeat = System.currentTimeMillis();
+        long deadline = heartbeat + Duration.ofMinutes(5).toMillis();
+        long absentPid = (long) Integer.MAX_VALUE + 10_000;
+        new SessionLeaseStore().save(controlRoot,
+                new SessionLeaseRecord(1,
+                        locationProjectId(),
+                        binding.provider(),
+                        connectionInstanceId,
+                        binding.nodeId(),
+                        binding.sessionId(),
+                        new SessionProcessIdentity(absentPid, "missing-test-process", "missing-test-process", heartbeat, "probe-nonce"),
+                        "test",
+                        heartbeat,
+                        heartbeat,
+                        SessionLeaseState.ACTIVE));
+        return deadline;
+    }
+
+    private String locationProjectId() throws Exception {
+        return new ProjectApplicationService().locate(controlRoot).projectId().toString();
+    }
+
+    @Test
     void sameProviderRequesterDoesNotReceiveCapabilityOwnerAction() throws Exception {
         prepareSessionAndTrust("codex", "same-provider-requester");
         prepareSessionAndTrust("codex", "same-provider-owner");
@@ -706,15 +946,115 @@ class AgentNextActionServiceTest {
         assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
 
         String handle = (String) ((Map<?, ?>) ownerNext.result()).get("capabilityRequestHandle");
-        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(controlRoot, "codex", "same-provider-owner", handle, "accept", null, null));
+        long contractRevision = ((Number) ((Map<?, ?>) ownerNext.result()).get("contractRevision")).longValue();
+        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(controlRoot,
+                "codex",
+                "same-provider-owner",
+                handle,
+                "accept",
+                null,
+                null,
+                contractRevision));
         assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
 
         AgentResponse ownerAfterAccept = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-owner"));
-        assertEquals(AgentStatus.WAITING, ownerAfterAccept.status(), ownerAfterAccept.toJson());
-        assertEquals(AgentReason.IMPLEMENTATION_UNAVAILABLE, ownerAfterAccept.reason());
-        assertEquals(AgentNextAction.WAIT, ownerAfterAccept.nextAction());
+        assertEquals(AgentStatus.READY, ownerAfterAccept.status(), ownerAfterAccept.toJson());
+        assertNull(ownerAfterAccept.nextAction());
         assertEquals(handle, ((Map<?, ?>) ownerAfterAccept.result()).get("capabilityRequestHandle"));
-        assertTrue(ownerAfterAccept.toJson().contains("publish_capability_implementation"), ownerAfterAccept.toJson());
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) ownerAfterAccept.result()).get("implementationPending"));
+    }
+
+    @Test
+    void acceptedCapabilityOwnerNeedsExplicitCompletionPollToPublishAndRequesterCannotPublish() throws Exception {
+        prepareSessionAndTrust("codex", "publication-requester");
+        prepareSessionAndTrust("codex", "publication-owner");
+
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requester = collaboration.announce(controlRoot,
+                "codex",
+                "publication-requester",
+                "Implement a task-tracker service",
+                "Use the accepted task-tracker contract",
+                List.of(ResourceSelector.pathExact("src/Consumer.java")),
+                null,
+                WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of("tasktracker.domain"));
+        var owner = collaboration.announce(controlRoot,
+                "codex",
+                "publication-owner",
+                "Implement task-tracker domain",
+                "Publish the task-tracker capability",
+                List.of(ResourceSelector.pathExact("src/Product.java")),
+                requester.intent().workGroupId());
+
+        CapabilityContract contract = new CapabilityContract("Task title and description",
+                "Task and repository contract",
+                List.of("Create TODO tasks", "Enforce valid status transitions"),
+                List.of("Invalid input is rejected"));
+        AgentResponse created = new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
+                "codex",
+                "publication-requester",
+                "tasktracker.domain",
+                contract,
+                null,
+                null));
+        assertEquals(AgentStatus.WAITING, created.status(), created.toJson());
+
+        AgentNextActionService nextActions = new AgentNextActionService();
+        AgentResponse ownerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerInbox.nextAction(), ownerInbox.toJson());
+        Map<?, ?> ownerInboxResult = (Map<?, ?>) ownerInbox.result();
+        String handle = (String) ownerInboxResult.get("capabilityRequestHandle");
+        long contractRevision = ((Number) ownerInboxResult.get("contractRevision")).longValue();
+        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(controlRoot,
+                "codex",
+                "publication-owner",
+                handle,
+                "accept",
+                null,
+                null,
+                contractRevision));
+        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
+
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "publication-owner").orElseThrow();
+        Path ownerWorktree = Path.of(ownerBinding.worktreePath());
+        Files.writeString(ownerWorktree.resolve("src/Product.java"), "public class Product { int count() { return 1; } }\n");
+
+        AgentResponse ordinaryOwnerPoll = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-owner"));
+        AgentResponse repeatedOwnerPoll = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-owner"));
+        assertEquals(AgentStatus.READY, ordinaryOwnerPoll.status(), ordinaryOwnerPoll.toJson());
+        assertNull(ordinaryOwnerPoll.nextAction(), ordinaryOwnerPoll.toJson());
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) ordinaryOwnerPoll.result()).get("implementationPending"));
+        assertNull(recommendedTool(ordinaryOwnerPoll), ordinaryOwnerPoll.toJson());
+        assertNull(recommendedTool(repeatedOwnerPoll), repeatedOwnerPoll.toJson());
+
+        AgentResponse requesterCompletionPoll = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-requester", true));
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) requesterCompletionPoll.result()).get("contractAccepted"), requesterCompletionPoll.toJson());
+        assertNull(recommendedTool(requesterCompletionPoll), requesterCompletionPoll.toJson());
+
+        AgentResponse ownerCompletionPoll = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-owner", true));
+        assertEquals(AgentStatus.READY, ownerCompletionPoll.status(), ownerCompletionPoll.toJson());
+        assertEquals("publish_capability_implementation", ownerCompletionPoll.nextAction().value(), ownerCompletionPoll.toJson());
+        Map<?, ?> publicationArguments = recommendedArguments(ownerCompletionPoll);
+        assertEquals(handle, publicationArguments.get("capabilityRequestHandle"));
+        assertEquals(contractRevision, ((Number) publicationArguments.get("contractRevision")).longValue());
+        assertEquals(owner.intent().intentId().toString(), publicationArguments.get("intentId"));
+        assertEquals(owner.intent().version(), ((Number) publicationArguments.get("claimEpoch")).longValue());
+        assertTrue(publicationArguments.get("expectedTreeHash") instanceof String hash && !hash.isBlank(), ownerCompletionPoll.toJson());
+    }
+
+    private static Object recommendedTool(AgentResponse response) {
+        Object workflow = ((Map<?, ?>) response.result()).get("workflow");
+        return workflow instanceof Map<?, ?> map ? map.get("recommendedTool") : null;
+    }
+
+    private static Map<?, ?> recommendedArguments(AgentResponse response) {
+        Object workflow = ((Map<?, ?>) response.result()).get("workflow");
+        Object arguments = workflow instanceof Map<?, ?> map ? map.get("arguments") : null;
+        return arguments instanceof Map<?, ?> map ? map : Map.of();
     }
 
     @Test

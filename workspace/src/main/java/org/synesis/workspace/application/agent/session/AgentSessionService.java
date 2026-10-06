@@ -14,6 +14,7 @@ import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRe
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
@@ -175,7 +176,10 @@ public final class AgentSessionService {
             }
             if ("SESSION_TERMINAL_STATE_UNAVAILABLE".equals(ex.code())) {
                 Throwable cause = ex.getCause() == null ? ex : ex.getCause();
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code(), "causeType", cause.getClass().getSimpleName()));
+                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of(
+                        "reason", ex.code(),
+                        "causeType", cause.getClass().getSimpleName(),
+                        "causeCode", DoctorService.classifyDurableStateFailure(cause).value()));
             }
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {

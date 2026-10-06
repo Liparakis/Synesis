@@ -126,6 +126,13 @@ class McpStage2BSlice1Test {
         assertEquals("request_coordination", tools.get(5).get("name"));
         assertEquals("respond_coordination", tools.get(6).get("name"));
         assertEquals("publish_capability_implementation", tools.get(7).get("name"));
+        @SuppressWarnings("unchecked") Map<String, Object> publicationSchema = (Map<String, Object>) tools.get(7).get("inputSchema");
+        assertEquals(List.of("capabilityRequestHandle", "contractRevision", "intentId", "claimEpoch", "expectedTreeHash"), publicationSchema.get("required"));
+        @SuppressWarnings("unchecked") Map<String, Object> publicationProperties = (Map<String, Object>) publicationSchema.get("properties");
+        assertEquals("integer", ((Map<?, ?>) publicationProperties.get("contractRevision")).get("type"));
+        assertEquals("uuid", ((Map<?, ?>) publicationProperties.get("intentId")).get("format"));
+        assertEquals("integer", ((Map<?, ?>) publicationProperties.get("claimEpoch")).get("type"));
+        assertTrue(((Map<?, ?>) publicationProperties.get("expectedTreeHash")).get("pattern").toString().contains("[0-9a-f]"));
         assertEquals("finish_lane", tools.get(8).get("name"));
         assertEquals("cancel_lane", tools.get(9).get("name"));
     }
@@ -133,8 +140,8 @@ class McpStage2BSlice1Test {
     @Test
     void describeRequiredCapabilityCallReturnsConciseResponseWithoutPathLeak() {
         String callJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"inputs\": \"UUID productId\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return exact matching product\"],\n" + "        \"acceptanceTests\": [\"existing product returned\"]\n" + "      }\n"
+                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
+                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return exact matching product\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"existing product returned\"]\n" + "      }\n"
                 + "      }\n" + "    }\n" + "  }\n" + "}";
 
         String res = handler.handleMessage(callJson);

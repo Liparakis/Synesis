@@ -61,6 +61,7 @@ public final class PredictionProjection {
                 || type == PredictionEventType.SESSION_FINALIZED || type == PredictionEventType.SESSION_ABANDONED
                 || type == PredictionEventType.TASK_CANCELLATION_REQUESTED || type == PredictionEventType.TASK_CANCELLED
                 || type == PredictionEventType.WORK_INTENT_ANNOUNCED || type == PredictionEventType.WORK_INTENT_RELEASED
+                || type == PredictionEventType.WORK_INTENT_SCOPE_EXTENDED
                 || type == PredictionEventType.COORDINATION_REQUESTED
                 || type == PredictionEventType.COORDINATION_RESPONDED
                 || type == PredictionEventType.PARTICIPANT_HEARTBEAT
@@ -125,7 +126,7 @@ public final class PredictionProjection {
                  RECOVERY_SNAPSHOT_HELD, PARTICIPANT_REVOKED, INBOX_ITEM_ACKNOWLEDGED, PARTICIPANT_CANCELLED,
                  LANE_CONTINUATION_ACCEPTED, PARTICIPANT_DETACHED, COMPLETION_PREPARED, INTEGRATION_BLOCKED,
                  REPAIR_REQUIRED, REPAIR_LANE_CREATED, COMPLETION_UNWOUND, REVIEW_VALIDATION_RECORDED,
-                 PROVIDER_SESSION_TERMINALIZED -> current;
+                 PROVIDER_SESSION_TERMINALIZED, WORK_INTENT_SCOPE_EXTENDED -> current;
         };
     }
 

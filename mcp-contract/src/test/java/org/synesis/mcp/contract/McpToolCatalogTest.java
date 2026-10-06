@@ -87,19 +87,27 @@ class McpToolCatalogTest {
     assertTrue(descriptor.description()
         .contains("ordinary coding"));
     assertTrue(descriptor.description()
-        .contains("do not end the session"));
+        .contains("completionRequested:true"));
     assertTrue(descriptor.description()
-        .contains("bounded wait"));
+        .contains("Missing or false continues implementation"));
+    assertTrue(descriptor.description()
+        .contains("workflow.actionId"));
+    assertTrue(descriptor.description()
+        .contains("workflow.retryAfterMs (default 5000 ms)"));
+    assertTrue(descriptor.description()
+        .contains("workflow.maxUnchangedPolls unchanged responses (default 3)"));
+    assertTrue(descriptor.description()
+        .contains("stop after workflow.maxUnchangedPolls unchanged responses"));
+    assertTrue(descriptor.description()
+        .contains("Reset the count when actionId changes"));
     assertTrue(descriptor.description()
         .contains(".synesis/**"));
     assertTrue(descriptor.description()
-        .contains("exact tool with those exact arguments"));
+        .contains("concrete recommendedTool with its exact arguments"));
     assertTrue(descriptor.description()
         .contains("integrationCheck"));
     assertTrue(descriptor.description()
         .contains("never advances a lane or WorkGroup"));
-    assertTrue(descriptor.description()
-        .contains("When WAIT projects get_next_action"));
     @SuppressWarnings("unchecked")
     Map<String, Object> properties = (Map<String, Object>) descriptor.inputSchema()
         .get("properties");
@@ -137,6 +145,9 @@ class McpToolCatalogTest {
         .contains("Explicit capability identifiers"));
     assertTrue(String.valueOf(properties.get("likelyScopes"))
         .contains("do not announce intent"));
+    assertTrue(properties.containsKey("intentId"));
+    assertTrue(properties.containsKey("claimEpoch"));
+    assertTrue(descriptor.description().contains("exact task.intentId and task.claimEpoch"));
   }
 
   @Test
@@ -208,6 +219,34 @@ class McpToolCatalogTest {
     assertEquals(List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED"),
         status.get("enum"));
     assertFalse(status.containsKey("default"));
+  }
+
+  @Test
+  void implementationValidationRequiresExactInspectionTargetAndAllowsOnlySupportedStages() {
+    Map<String, Object> payload = payloadForKind(McpToolCatalog.RESPOND_COORDINATION, "implementation_validation");
+    assertEquals(List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result"), payload.get("required"));
+    Map<?, ?> result = (Map<?, ?>) ((Map<?, ?>) payload.get("properties")).get("result");
+    assertTrue(((List<?>) result.get("enum")).containsAll(List.of("inspect", "accepted", "revision_required")));
+  }
+
+  @Test
+  void readAndCommandToolsAcceptExplicitValidationSelectionFields() {
+    Map<String, Object> read = McpToolCatalog.descriptors().stream()
+        .filter(descriptor -> descriptor.wireName().equals(McpToolCatalog.READ_FILE))
+        .findFirst()
+        .orElseThrow()
+        .inputSchema();
+    Map<String, Object> command = McpToolCatalog.descriptors().stream()
+        .filter(descriptor -> descriptor.wireName().equals(McpToolCatalog.RUN_COMMAND))
+        .findFirst()
+        .orElseThrow()
+        .inputSchema();
+    for (Map<String, Object> schema : List.of(read, command)) {
+      Map<?, ?> properties = (Map<?, ?>) schema.get("properties");
+      assertEquals("string", ((Map<?, ?>) properties.get("capabilityRequestHandle")).get("type"));
+      assertEquals("integer", ((Map<?, ?>) properties.get("implementationRevision")).get("type"));
+      assertFalse(((List<?>) schema.get("required")).contains("capabilityRequestHandle"));
+    }
   }
 
   @SuppressWarnings("unchecked")

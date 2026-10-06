@@ -23,11 +23,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
@@ -42,6 +44,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
 
 /**
  * Verifies the explicit no-change completion workflow at the MCP boundary.
@@ -154,6 +157,8 @@ final class McpSyn039NoChangeCompletionTest {
         Map<String, Object> finishArguments = (Map<String, Object>) workflow.get("arguments");
 
         Map<String, Object> first = innerResult(fixture.handler.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments))));
+        assertEquals("COMPLETED", new ProviderSessionBindingService().find(fixture.location, "codex", fixture.connection).orElseThrow().status());
+        assertEquals(1, fixture.store().collaborationProjection().noChangeCompletions().size());
         Map<String, Object> second = innerResult(fixture.handler.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments))));
         assertEquals("completed", first.get("status"), first.toString());
         assertEquals("completed", second.get("status"), second.toString());
@@ -217,7 +222,14 @@ final class McpSyn039NoChangeCompletionTest {
         fixture.handler.close();
 
         PredictionEventStore store = fixture.store();
-        assertTrue(store.collaborationProjection().activeIntents().isEmpty());
+        assertEquals(1, store.collaborationProjection().activeIntents().size());
+        assertEquals(fixture.intentId(), store.collaborationProjection().activeIntents().getFirst().intentId());
+        assertEquals(SessionLeaseState.CLOSED_CLEANLY,
+                new SessionLeaseStore().load(fixture.project, fixture.connection).orElseThrow().leaseState());
+        var binding = new ProviderSessionBindingService().find(fixture.location, "codex", fixture.connection).orElseThrow();
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        assertEquals(Participant.State.RECOVERY_HELD, store.collaborationProjection().participantState(participant).orElseThrow());
+        assertTrue(store.collaborationProjection().recoverySnapshotReference(participant).isPresent());
         assertEquals("ACTIVE", store.workGroupProjection().group(fixture.groupId()).orElseThrow().status().name());
         assertTrue(store.collaborationProjection().noChangeCompletions().isEmpty());
         assertEquals(0, store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_GROUP_STATUS_CHANGED).count());

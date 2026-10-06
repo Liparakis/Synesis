@@ -23,6 +23,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
@@ -48,6 +49,7 @@ import org.synesis.workspace.application.provider.session.SessionAuthorityResolv
 public final class CapabilityRequestService {
 
     private final ProjectApplicationService projectService;
+    private final ProviderSessionBindingService bindingService;
     private final SessionAuthorityResolver authorityResolver;
     private final CapabilityRequestHandleGenerator handleGenerator;
 
@@ -66,8 +68,39 @@ public final class CapabilityRequestService {
      */
     public CapabilityRequestService(CapabilityRequestHandleGenerator handleGenerator) {
         this.projectService = new ProjectApplicationService();
-        this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
+        this.bindingService = new ProviderSessionBindingService();
+        this.authorityResolver = new SessionAuthorityResolver(bindingService);
         this.handleGenerator = Objects.requireNonNull(handleGenerator, "handleGenerator");
+    }
+
+    private Optional<ProviderSessionBindingService.Binding> exactOwnerBinding(ProjectLocation location,
+            PredictionEventStore store,
+            UUID authorityLineageId,
+            String requesterParticipant,
+            String ownerNodeId) throws Exception {
+        List<WorkIntent> ownerIntents = store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> !intent.participant().equals(requesterParticipant))
+                .filter(intent -> intent.authorityLineageId().equals(authorityLineageId))
+                .toList();
+        if (ownerIntents.isEmpty()) {
+            return Optional.empty();
+        }
+        if (ownerIntents.size() != 1) {
+            throw new IllegalStateException("CAPABILITY_OWNER_INTENT_AMBIGUOUS");
+        }
+
+        WorkIntent ownerIntent = ownerIntents.getFirst();
+        List<ProviderSessionBindingService.Binding> matches = bindingService.list(location, ownerIntent.provider()).stream()
+                .filter(candidate -> "BOUND".equals(candidate.status()))
+                .filter(candidate -> "VERIFIED".equals(candidate.providerTrustState()))
+                .filter(candidate -> candidate.worktreePath() != null)
+                .filter(candidate -> candidate.nodeId().equals(ownerNodeId))
+                .filter(candidate -> WorkspaceCollaborationService.participantHandle(candidate.sessionId()).equals(ownerIntent.participant()))
+                .toList();
+        if (matches.size() != 1) {
+            throw new IllegalStateException(matches.isEmpty() ? "CAPABILITY_OWNER_BINDING_UNAVAILABLE" : "CAPABILITY_OWNER_BINDING_AMBIGUOUS");
+        }
+        return Optional.of(matches.getFirst());
     }
 
     private static String resolveOwnerNodeId(PredictionEventStore store, String capability, UUID requestedOwnerLineage, String requesterParticipant, String localNodeId) {
@@ -108,11 +141,41 @@ public final class CapabilityRequestService {
      * @return revision payload
      */
     private static CapabilityRequestPayload revisedPayload(CapabilityRequestRecord activeRec, String capability, String requesterNode, CapabilityContract contract) {
-        return new CapabilityRequestPayload(activeRec.handle(), capability, requesterNode, activeRec.ownerNodeId(), activeRec.authorityLineageId(), contract, CapabilityLifecycleState.AWAITING_OWNER, null);
+        return new CapabilityRequestPayload(activeRec.handle(),
+                capability,
+                requesterNode,
+                activeRec.ownerNodeId(),
+                activeRec.authorityLineageId(),
+                contract,
+                CapabilityLifecycleState.AWAITING_OWNER,
+                null,
+                activeRec.contractRevision());
+    }
+
+    private static Map<String, Object> capabilityContractMap(CapabilityContract contract) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("purpose", contract.purpose());
+        result.put("inputs", contract.inputs());
+        result.put("output", contract.output());
+        result.put("requiredBehavior", contract.requiredBehavior());
+        result.put("errorSemantics", contract.errorSemantics());
+        result.put("sideEffects", contract.sideEffects());
+        result.put("invariants", contract.invariants());
+        result.put("compatibility", contract.compatibility());
+        result.put("performance", contract.performance());
+        result.put("concurrency", contract.concurrency());
+        result.put("acceptanceTests", contract.acceptanceTests());
+        return result;
     }
 
     /**
      * Executes the capability request description or requester revision response.
+     *
+     * <p>The exact binding, the capability projection, the active-request lookup, the revision
+     * checks, and the append all happen under one {@link ProjectAppendLock}. Deciding from a
+     * projection read before the lock would let two processes each record an active request for
+     * the same requester and capability, or append a requester reply to a contract revision a peer
+     * already answered.
      *
      * @param request request payload
      * @return concise agent response
@@ -126,131 +189,186 @@ public final class CapabilityRequestService {
         }
 
         ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
-            if (binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
             identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
 
-        String requesterNodeId = identity.nodeId();
-
+        Path coordDir = location.root().resolve(".synesis/coordination");
+        ProjectAppendLock appendLock;
         try {
-            Path coordDir = location.root().resolve(".synesis/coordination");
+            appendLock = ProjectAppendLock.acquire(coordDir);
+        } catch (IOException unavailable) {
+            return appendLockUnavailable();
+        }
+        try (appendLock) {
+            if (!appendLock.isHeld()) {
+                return appendLockUnavailable();
+            }
+            ProviderSessionBindingService.Binding binding;
+            try {
+                binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
+            } catch (Exception ex) {
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            }
+            if (binding.worktreePath() == null) {
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            }
             PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
-            CapabilityRequestProjection projection = store.capabilityRequestProjection();
-
-            // Mode B: Requester responding to owner revision by handle
-            if (request.requestHandle() != null && !request.requestHandle().isBlank() && request.revisionResponse() != null) {
-                return handleRequesterRevisionResponse(request, store, projection, requesterNodeId, identity);
-            }
-
-            // Mode A: Initial capability description or counter-proposal without handle
-            String capability = request.capability();
-            if (capability == null || capability.isBlank() || capability.length() > 128) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, AgentNextAction.RETRY, null);
-            }
-            if (request.contract() == null) {
-                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
-            }
-
-            String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
-            if (requesterIntent.isEmpty() && store.collaborationProjection().activated()) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
-            }
-            UUID requestedOwnerLineage = request.ownerAuthorityLineageId();
-            UUID inferredOwnerLineage = requestedOwnerLineage != null ? requestedOwnerLineage : requesterIntent.map(intent -> inferUniqueOwnerLineage(store, intent.participant())).orElse(null);
-
-            // First-release collaboration lanes are the authoritative owner
-            // source.  The older semantic-ownership projection is still
-            // honored when present, but a capability request tied to an
-            // active foreign lane must not require a second, unrelated task
-            // ownership record before it can be durably recorded.
-            String ownerNodeId = resolveOwnerNodeId(store, capability, inferredOwnerLineage, requesterParticipant, requesterNodeId);
-            if (ownerNodeId == null || ownerNodeId.isBlank()) {
-                Map<String, Object> result = Map.of("capability", capability);
-                return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
-            }
-
-            UUID ownerLineage = request.ownerAuthorityLineageId() != null ? request.ownerAuthorityLineageId() : requesterIntent.isPresent() ? inferUniqueOwnerLineage(store, requesterIntent.get().participant())
-                    : UUID.nameUUIDFromBytes(("synesis-unscoped-owner-lineage:" + ownerNodeId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            if (ownerLineage == null) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "OWNER_LINEAGE_REQUIRED"));
-            }
-
-            // Check existing active request for (requester, capability)
-            Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId).stream().filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
-                    .filter(record -> record.capability().equals(capability)).filter(record -> record.state() == CapabilityLifecycleState.AWAITING_OWNER || record.state() == CapabilityLifecycleState.REVISION_REQUESTED)
-                    .findFirst();
-
-            if (activeOpt.isPresent()) {
-                CapabilityRequestRecord activeRec = activeOpt.get();
-                if (!activeRec.authorityLineageId().equals(ownerLineage)) {
-                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "CAPABILITY_LINEAGE_REASSIGNMENT_REQUIRED"));
-                }
-                if (activeRec.contract().isEquivalent(request.contract())) {
-                    // Equivalent request exists: return idempotent waiting response
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("capabilityRequestHandle", activeRec.handle().value());
-                    result.put("pending", 1);
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
-                }
-
-                if (activeRec.state() == CapabilityLifecycleState.AWAITING_OWNER) {
-                    // Requester updates contract while editable
-                    CapabilityRequestPayload payload = revisedPayload(activeRec, capability, requesterNodeId, request.contract());
-                    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
-
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("capabilityRequestHandle", activeRec.handle().value());
-                    result.put("pending", 1);
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
-                } else if (activeRec.state() == CapabilityLifecycleState.REVISION_REQUESTED) {
-                    // Owner review has produced revision feedback: contract counter-proposal updates contract back to AWAITING_OWNER
-                    CapabilityRequestPayload payload = revisedPayload(activeRec, capability, requesterNodeId, request.contract());
-                    store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
-
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("capabilityRequestHandle", activeRec.handle().value());
-                    result.put("pending", 1);
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
-                }
-            }
-
-            // Create new capability request
-            CapabilityRequestHandle handle = handleGenerator.generate();
-            CapabilityRequestPayload payload = new CapabilityRequestPayload(handle,
-                    capability,
-                    requesterNodeId,
-                    binding.supervisorId(),
-                    binding.workerId(),
-                    ownerNodeId,
-                    "",
-                    "",
-                    ownerLineage,
-                    request.contract(),
-                    CapabilityLifecycleState.AWAITING_OWNER,
-                    null);
-            store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterNodeId, payload.encode(), identity);
-
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("capabilityRequestHandle", handle.value());
-            result.put("pending", 1);
-            return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
-
+            return describeLocked(request, location, store, binding, identity);
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
         }
     }
 
-    private AgentResponse handleRequesterRevisionResponse(DescribeCapabilityRequest request, PredictionEventStore store, CapabilityRequestProjection projection, String requesterNodeId, NodeIdentity identity)
+    private static AgentResponse appendLockUnavailable() {
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
+    }
+
+    /** Records or revises a request against the projection loaded under the append lock. */
+    private AgentResponse describeLocked(DescribeCapabilityRequest request,
+            ProjectLocation location,
+            PredictionEventStore store,
+            ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity) throws Exception {
+        String requesterNodeId = identity.nodeId();
+        CapabilityRequestProjection projection = store.capabilityRequestProjection();
+
+        // Mode B: Requester responding to owner revision by handle
+        if (request.requestHandle() != null && !request.requestHandle().isBlank() && request.revisionResponse() != null) {
+            return handleRequesterRevisionResponse(request, store, projection, requesterNodeId, binding, identity);
+        }
+
+        // Mode A: initial capability request or an optimistic update to an awaiting request
+        String capability = request.capability();
+        if (capability == null || capability.isBlank() || capability.length() > 128) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, AgentNextAction.RETRY, null);
+        }
+        if (request.contract() == null) {
+            return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
+        }
+
+        String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
+        if (requesterIntent.isEmpty() && store.collaborationProjection().activated()) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
+        }
+        UUID requestedOwnerLineage = request.ownerAuthorityLineageId();
+        UUID inferredOwnerLineage = requestedOwnerLineage != null ? requestedOwnerLineage : requesterIntent.map(intent -> inferUniqueOwnerLineage(store, intent.participant())).orElse(null);
+
+        // First-release collaboration lanes are the authoritative owner
+        // source.  The older semantic-ownership projection is still
+        // honored when present, but a capability request tied to an
+        // active foreign lane must not require a second, unrelated task
+        // ownership record before it can be durably recorded.
+        String ownerNodeId = resolveOwnerNodeId(store, capability, inferredOwnerLineage, requesterParticipant, requesterNodeId);
+        if (ownerNodeId == null || ownerNodeId.isBlank()) {
+            Map<String, Object> result = Map.of("capability", capability);
+            return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
+        }
+
+        UUID ownerLineage = request.ownerAuthorityLineageId() != null ? request.ownerAuthorityLineageId() : requesterIntent.isPresent() ? inferUniqueOwnerLineage(store, requesterIntent.get().participant())
+                : UUID.nameUUIDFromBytes(("synesis-unscoped-owner-lineage:" + ownerNodeId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (ownerLineage == null) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "OWNER_LINEAGE_REQUIRED"));
+        }
+
+        // Check existing active request for (requester, capability)
+        Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId).stream().filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
+                .filter(record -> record.capability().equals(capability)).filter(record -> record.state() == CapabilityLifecycleState.AWAITING_OWNER || record.state() == CapabilityLifecycleState.REVISION_REQUESTED)
+                .findFirst();
+
+        if (activeOpt.isPresent()) {
+            CapabilityRequestRecord activeRec = activeOpt.get();
+            if (!activeRec.authorityLineageId().equals(ownerLineage)) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "CAPABILITY_LINEAGE_REASSIGNMENT_REQUIRED"));
+            }
+            if (activeRec.contract().isEquivalent(request.contract())) {
+                // Equivalent request exists: return idempotent waiting response
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("capabilityRequestHandle", activeRec.handle().value());
+                result.put("contractRevision", activeRec.contractRevision());
+                result.put("pending", 1);
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
+            }
+
+            if (request.contractRevision() < 1 || request.contractRevision() != activeRec.contractRevision()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY,
+                        Map.of("capabilityRequestHandle", activeRec.handle().value(), "expectedContractRevision", activeRec.contractRevision()));
+            }
+            if (activeRec.state() == CapabilityLifecycleState.AWAITING_OWNER) {
+                CapabilityRequestPayload payload = revisedPayload(activeRec, capability, requesterNodeId, request.contract());
+                store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
+
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("capabilityRequestHandle", activeRec.handle().value());
+                result.put("contractRevision", activeRec.contractRevision());
+                result.put("pending", 1);
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
+            }
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY,
+                    Map.of("capabilityRequestHandle", activeRec.handle().value(), "expectedContractRevision", activeRec.contractRevision()));
+        }
+
+        // Create new capability request
+        CapabilityRequestHandle handle = handleGenerator.generate();
+        String ownerSupervisorId = "";
+        String ownerWorkerId = "";
+        Optional<ProviderSessionBindingService.Binding> activeOwnerBinding = exactOwnerBinding(location, store, ownerLineage, requesterParticipant, ownerNodeId);
+        if (activeOwnerBinding.isPresent()) {
+            ownerSupervisorId = activeOwnerBinding.get().supervisorId();
+            ownerWorkerId = activeOwnerBinding.get().workerId();
+        } else {
+            OwnershipClaim ownerClaim = store.coordinationProjection().ownership(capability).orElse(null);
+            if (ownerClaim == null || ownerClaim.ownerSupervisorId().equals(binding.supervisorId())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION,
+                        Map.of("reason", "CAPABILITY_OWNER_BINDING_UNAVAILABLE"));
+            }
+            ownerSupervisorId = ownerClaim.ownerSupervisorId();
+        }
+        CapabilityRequestPayload payload = new CapabilityRequestPayload(handle,
+                capability,
+                requesterNodeId,
+                binding.supervisorId(),
+                binding.workerId(),
+                ownerNodeId,
+                ownerSupervisorId,
+                ownerWorkerId,
+                ownerLineage,
+                request.contract(),
+                CapabilityLifecycleState.AWAITING_OWNER,
+                null,
+                0);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterNodeId, payload.encode(), identity);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("capabilityRequestHandle", handle.value());
+        result.put("pending", 1);
+        return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
+    }
+
+    /**
+     * Rejects a requester reply that no longer matches the recorded request, naming which part
+     * differs. The caller cannot otherwise tell a superseded revision from a mistyped capability or
+     * a contract that is not the one the owner proposed.
+     */
+    private static AgentResponse staleRevisionResponse(CapabilityRequestRecord record, String reason) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("reason", reason);
+        result.put("capability", record.capability());
+        result.put("expectedContractRevision", record.contractRevision());
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, result);
+    }
+
+    private AgentResponse handleRequesterRevisionResponse(DescribeCapabilityRequest request,
+            PredictionEventStore store,
+            CapabilityRequestProjection projection,
+            String requesterNodeId,
+            ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity)
             throws GeneralSecurityException, IOException {
 
         String handleStr = request.requestHandle();
@@ -260,8 +378,15 @@ public final class CapabilityRequestService {
         }
 
         CapabilityRequestRecord record = recOpt.get();
-        if (!record.requesterNodeId().equals(requesterNodeId)) {
+        if (!record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId())) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, null);
+        }
+
+        if (request.contractRevision() < 1 || request.contractRevision() != record.contractRevision()) {
+            return staleRevisionResponse(record, "CAPABILITY_CONTRACT_REVISION_STALE");
+        }
+        if (!record.capability().equals(request.capability())) {
+            return staleRevisionResponse(record, "CAPABILITY_NAME_MISMATCH");
         }
 
         if (record.state() == CapabilityLifecycleState.CANCELLED || record.state() == CapabilityLifecycleState.EXPIRED || record.state() == CapabilityLifecycleState.SUPERSEDED
@@ -272,6 +397,12 @@ public final class CapabilityRequestService {
         String revResp = request.revisionResponse().trim().toLowerCase(java.util.Locale.ROOT);
         return switch (revResp) {
             case "accept" -> {
+                if (record.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+                    yield staleRevisionResponse(record, "CAPABILITY_REVISION_NOT_PENDING");
+                }
+                if (request.contract() == null || !record.contract().isEquivalent(request.contract())) {
+                    yield staleRevisionResponse(record, "CAPABILITY_CONTRACT_MISMATCH");
+                }
                 CapabilityRequestPayload payload = new CapabilityRequestPayload(record.handle(),
                         record.capability(),
                         requesterNodeId,
@@ -279,16 +410,21 @@ public final class CapabilityRequestService {
                         record.authorityLineageId(),
                         record.contract(),
                         CapabilityLifecycleState.ACCEPTED,
-                        null);
+                        null,
+                        record.contractRevision());
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, requesterNodeId, payload.encode(), identity);
 
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("request", record.handle().value());
                 result.put("pending", 1);
-                yield new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE, AgentNextAction.WAIT, result);
+                result.put("capability", record.capability());
+                result.put("contractRevision", record.contractRevision());
+                result.put("contract", capabilityContractMap(record.contract()));
+                result.put("contractAccepted", true);
+                yield new AgentResponse(AgentStatus.READY, null, null, result);
             }
             case "counter" -> {
-                if (request.contract() == null) {
+                if (record.state() != CapabilityLifecycleState.REVISION_REQUESTED || request.contract() == null) {
                     yield new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, null);
                 }
                 CapabilityRequestPayload payload = new CapabilityRequestPayload(record.handle(),
@@ -298,7 +434,8 @@ public final class CapabilityRequestService {
                         record.authorityLineageId(),
                         request.contract(),
                         CapabilityLifecycleState.AWAITING_OWNER,
-                        null);
+                        null,
+                        record.contractRevision());
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, requesterNodeId, payload.encode(), identity);
 
                 Map<String, Object> result = new LinkedHashMap<>();
@@ -307,6 +444,9 @@ public final class CapabilityRequestService {
                 yield new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
             }
             case "cancel" -> {
+                if (record.state() != CapabilityLifecycleState.AWAITING_OWNER && record.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+                    yield new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);
+                }
                 CapabilityRequestPayload payload = new CapabilityRequestPayload(record.handle(),
                         record.capability(),
                         requesterNodeId,
@@ -314,7 +454,8 @@ public final class CapabilityRequestService {
                         record.authorityLineageId(),
                         record.contract(),
                         CapabilityLifecycleState.CANCELLED,
-                        "Cancelled by requester");
+                        "Cancelled by requester",
+                        record.contractRevision());
                 store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CANCELLED, requesterNodeId, payload.encode(), identity);
 
                 Map<String, Object> result = Map.of("request", record.handle().value());
@@ -336,9 +477,10 @@ public final class CapabilityRequestService {
      * @param revisionResponse        requester revision response ("accept", "counter", "cancel")
      *                                (optional)
      * @param ownerAuthorityLineageId optional explicit owner authority lineage
+     * @param contractRevision        exact existing contract revision being answered
      */
     public record DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse,
-                                            UUID ownerAuthorityLineageId) {
+                                            UUID ownerAuthorityLineageId, long contractRevision) {
 
         /**
          * Validates non-null core parameters.
@@ -361,7 +503,30 @@ public final class CapabilityRequestService {
          * @param revisionResponse     revision response
          */
         public DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse) {
-            this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, null);
+            this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, null, -1);
+        }
+
+        /**
+         * Retains the prior owner-lineage-aware constructor for internal callers.
+         *
+         * @param projectRoot project root
+         * @param provider provider identifier
+         * @param connectionInstanceId exact provider connection
+         * @param capability requested capability identifier
+         * @param contract complete API contract
+         * @param requestHandle existing request handle when revising
+         * @param revisionResponse response to the owner revision, if any
+         * @param ownerAuthorityLineageId intended owner authority lineage
+         */
+        public DescribeCapabilityRequest(Path projectRoot,
+                String provider,
+                String connectionInstanceId,
+                String capability,
+                CapabilityContract contract,
+                String requestHandle,
+                String revisionResponse,
+                UUID ownerAuthorityLineageId) {
+            this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, ownerAuthorityLineageId, -1);
         }
     }
 }

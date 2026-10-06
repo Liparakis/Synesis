@@ -244,4 +244,56 @@ final class NoChangeCompletionTest {
         assertTrue(new PredictionEventStore(temp, project).collaborationProjection().intent(intent.intentId())
                 .isPresent());
     }
+
+    @Test
+    void heartbeatsAfterProjectionDoNotStaleTheCompletion(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntent finishing = intent(project, "agt-finishing", "verification-a.py", group);
+        WorkIntent polling = intent(project, "agt-polling", "verification-b.py", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        assertTrue(service.announce(finishing).acquired());
+        assertTrue(service.announce(polling).acquired());
+
+        NoChangeCompletion projected = completion(temp, project, finishing);
+        service.heartbeat(polling.participant());
+        service.heartbeat(finishing.participant());
+
+        PredictionEventStore beforeFinish = new PredictionEventStore(temp, project);
+        assertEquals(projected.expectedRevision() + 2, beforeFinish.headSequence());
+        assertTrue(beforeFinish.unchangedSince(projected.expectedRevision()));
+        assertTrue(beforeFinish.unchangedSince(beforeFinish.headSequence()));
+        assertFalse(beforeFinish.unchangedSince(beforeFinish.headSequence() + 1));
+        assertFalse(beforeFinish.unchangedSince(-1));
+
+        assertEquals(projected, service.completeNoChange(projected));
+
+        // A fresh replay applies the projection's own validation of the recorded revision.
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertTrue(replayed.collaborationProjection().intent(finishing.intentId()).isEmpty());
+        assertTrue(replayed.collaborationProjection().noChangeCompletion(finishing.intentId()).isPresent());
+        assertTrue(replayed.collaborationProjection().intent(polling.intentId()).isPresent());
+    }
+
+    @Test
+    void stateChangeAfterProjectionStillStalesTheCompletion(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntent finishing = intent(project, "agt-finishing", "verification-a.py", group);
+        WorkIntent polling = intent(project, "agt-polling", "verification-b.py", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        assertTrue(service.announce(finishing).acquired());
+        assertTrue(service.announce(polling).acquired());
+
+        NoChangeCompletion projected = completion(temp, project, finishing);
+        service.heartbeat(polling.participant());
+        assertTrue(service.announce(intent(project, "agt-late", "verification-c.py", group)).acquired());
+        service.heartbeat(polling.participant());
+
+        assertFalse(new PredictionEventStore(temp, project).unchangedSince(projected.expectedRevision()));
+        assertThrows(IOException.class, () -> service.completeNoChange(projected));
+        assertTrue(new PredictionEventStore(temp, project).collaborationProjection().intent(finishing.intentId()).isPresent());
+    }
 }

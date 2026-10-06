@@ -23,6 +23,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  */
 public final class AgentWorkflowReducer {
 
+    private static final int RETRY_AFTER_MS = 5000;
+    private static final int MAX_UNCHANGED_POLLS = 3;
+
     /**
      * Creates the stateless workflow reducer.
      */
@@ -54,12 +57,34 @@ public final class AgentWorkflowReducer {
                 "claimEpoch",
                 "snapshotId",
                 "latestRejectedSnapshotId",
-                "sourceIntentId")) {
+                "sourceIntentId",
+                "contractRevision",
+                "revision",
+                "nextProtocolPayload",
+                "validationWorkspaceAvailable",
+                "validationEvidence",
+                "reviewDecision",
+                "recoveryDeadlineEpochMillis",
+                "reason",
+                "detail")) {
             if (result.containsKey(key)) {
-                seed.append('|').append(key).append('=').append(ProviderJson.write(result.get(key)));
+                seed.append('|').append(key).append('=').append(ProviderJson.write(actionEvidence(result.get(key))));
             }
         }
         return UUID.nameUUIDFromBytes(seed.toString().getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    /** Map iteration order must not change the identity of replayed action evidence. */
+    private static Object actionEvidence(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> ordered = new java.util.TreeMap<>();
+            map.forEach((key, entry) -> ordered.put(String.valueOf(key), actionEvidence(entry)));
+            return ordered;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(AgentWorkflowReducer::actionEvidence).toList();
+        }
+        return value;
     }
 
     private static LaneAction actionFor(AgentResponse response, Map<String, Object> result) {
@@ -78,6 +103,11 @@ public final class AgentWorkflowReducer {
         if (next == null) {
             if (hasActionableReviewCandidates(result)) {
                 return new LaneAction("REVIEW_CONTRACT", List.of("review_candidate_selection_required"), List.of("request_coordination", "get_next_action"), true);
+            }
+            if (ownerCompletionDue(result)) {
+                // The lane stays writable; the owner may still need to tidy its claimed files
+                // before asking for the finish projection.
+                return new LaneAction("PUBLISH", List.of("owner_completion_required"), List.of("get_next_action", "read_file", "apply_patch", "run_command"), true);
             }
             return new LaneAction("IMPLEMENT", List.of(), List.of("read_file", "apply_patch", "run_command"), true);
         }
@@ -102,18 +132,34 @@ public final class AgentWorkflowReducer {
                         true);
             }
             case REVIEW_DECISION -> new LaneAction("REVIEW_CONTRACT", List.of(reasonCode(reason)), List.of("respond_coordination", "get_next_action"), true);
-            case VALIDATE_IMPLEMENTATION, RESPOND_TO_VALIDATION_REVISION -> new LaneAction("PUBLISH", List.of(reasonCode(reason)), List.of("respond_coordination", "publish_capability_implementation"), true);
+            case VALIDATE_IMPLEMENTATION -> {
+                boolean workspaceAvailable = Boolean.TRUE.equals(result.get("validationWorkspaceAvailable"));
+                yield new LaneAction("VALIDATE",
+                        List.of(reasonCode(reason)),
+                        workspaceAvailable ? List.of("read_file", "run_command", "respond_coordination", "get_next_action") : List.of("respond_coordination", "get_next_action"),
+                        true);
+            }
+            case RESPOND_TO_VALIDATION_REVISION -> new LaneAction("REVISE_SCOPE", List.of(reasonCode(reason)), List.of("read_file", "apply_patch", "run_command", "get_next_action"), true);
+            case PUBLISH_CAPABILITY_IMPLEMENTATION -> new LaneAction("PUBLISH", List.of(reasonCode(reason)), List.of("publish_capability_implementation", "get_next_action"), true);
             case FINISH_LANE -> new LaneAction("PUBLISH", List.of(reasonCode(reason)), List.of("finish_lane", "get_next_action"), true);
             case WAIT -> {
                 boolean capabilityImplementation = reason == AgentReason.IMPLEMENTATION_UNAVAILABLE && result.containsKey("capabilityRequestHandle");
                 yield new LaneAction(capabilityImplementation ? "IMPLEMENT" : "WAIT",
                         List.of(reasonCode(reason)),
-                        capabilityImplementation ? List.of("read_file", "apply_patch", "run_command", "publish_capability_implementation", "get_next_action") : List.of("get_next_action"),
+                        capabilityImplementation ? List.of("read_file", "apply_patch", "run_command", "get_next_action") : List.of("get_next_action"),
                         true);
             }
             case RETRY -> new LaneAction("RECOVER", List.of(reasonCode(reason)), List.of("ensure_session", "get_next_action"), true);
             case REQUEST_HUMAN_HELP -> new LaneAction("INTEGRATION_REPAIR", List.of(reasonCode(reason)), List.of("get_next_action", "request_coordination"), false);
         };
+    }
+
+    /**
+     * A validated capability owner whose lane is still open. Unlike {@code implementationPending},
+     * where the completion request is only a later step, here it is the action due now.
+     */
+    private static boolean ownerCompletionDue(Map<String, Object> result) {
+        return Boolean.TRUE.equals(result.get("implementationValidated"));
     }
 
     private static boolean hasActionableReviewCandidates(Map<String, Object> result) {
@@ -124,14 +170,20 @@ public final class AgentWorkflowReducer {
     private static Map<String, Object> executableAction(AgentResponse response, Map<String, Object> result) {
         AgentNextAction next = response.nextAction();
         if (next == null) {
+            if (ownerCompletionDue(result) && result.get("completionRequest") instanceof Map<?, ?> completionRequest
+                    && completionRequest.get("tool") instanceof String tool && completionRequest.get("arguments") instanceof Map<?, ?> arguments) {
+                return Map.of("tool", tool, "arguments", arguments);
+            }
             return null;
         }
         switch (next) {
             case VALIDATE_IMPLEMENTATION -> {
-                // Validation is a provider decision.  Do not manufacture an
-                // accepted response from the available implementation
-                // metadata; the strict MCP boundary requires the provider to
-                // choose accepted or revision_required after inspection.
+                Object kind = result.get("nextProtocolKind");
+                Object payload = result.get("nextProtocolPayload");
+                if ("implementation_validation".equals(kind) && payload instanceof Map<?, ?> map && "inspect".equals(map.get("result"))) {
+                    return Map.of("tool", "respond_coordination", "arguments", Map.of("kind", kind, "payload", payload));
+                }
+                // After inspection, accepted versus revision_required is the provider's decision.
                 return null;
             }
             case RESPOND_COORDINATION -> {
@@ -145,13 +197,13 @@ public final class AgentWorkflowReducer {
                 }
                 return null;
             }
-            case FINISH_LANE -> {
+            case FINISH_LANE, PUBLISH_CAPABILITY_IMPLEMENTATION -> {
                 Map<String, Object> arguments = new LinkedHashMap<>();
                 Object payload = result.get("nextProtocolPayload");
                 if (payload instanceof Map<?, ?> payloadMap) {
                     payloadMap.forEach((key, value) -> arguments.put(String.valueOf(key), value));
                 }
-                return Map.of("tool", "finish_lane", "arguments", arguments);
+                return Map.of("tool", next.value(), "arguments", arguments);
             }
             case REQUEST_COORDINATION -> {
                 Object kind = result.get("nextProtocolKind");
@@ -240,6 +292,8 @@ public final class AgentWorkflowReducer {
         workflow.put("blockers", action.blockers());
         workflow.put("permittedOperations", action.permittedOperations());
         workflow.put("retrySafe", action.retrySafe());
+        workflow.put("retryAfterMs", RETRY_AFTER_MS);
+        workflow.put("maxUnchangedPolls", MAX_UNCHANGED_POLLS);
         workflow.put("delivery", "AT_LEAST_ONCE");
         workflow.put("acknowledgementRequired", true);
         Map<String, Object> executable = executableAction(response, result);

@@ -2,20 +2,34 @@ package org.synesis.workspace;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
@@ -58,6 +72,44 @@ class CapabilityNegotiationTest {
         org.synesis.workspace.test.TestGit.run(root, args);
     }
 
+    private static <T> List<T> concurrently(List<Callable<T>> calls) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(calls.size());
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<T>> pending = new ArrayList<>();
+            for (Callable<T> call : calls) {
+                pending.add(executor.submit(() -> {
+                    start.await();
+                    return call.call();
+                }));
+            }
+            start.countDown();
+            List<T> results = new ArrayList<>();
+            for (Future<T> future : pending) {
+                results.add(future.get(60, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    /** Replays the durable log from disk, which fails if conflicting events were ever appended. */
+    private PredictionEventStore replayedStore() throws Exception {
+        var location = projectService.locate(projectRoot);
+        return new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+    }
+
+    private CapabilityRequestRecord replayedRequest(String handle) throws Exception {
+        return replayedStore().capabilityRequestProjection().findByHandle(handle).orElseThrow();
+    }
+
+    private String requestProductQuery(CapabilityContract contract) {
+        AgentResponse response = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "catalog.product-query", contract, null, null));
+        assertEquals(AgentStatus.WAITING, response.status(), response.toJson());
+        return (String) ((Map<?, ?>) response.result()).get("capabilityRequestHandle");
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         projectRoot = tempDir.resolve("test-project");
@@ -95,7 +147,11 @@ class CapabilityNegotiationTest {
             bindingService.verifyWorkspaceTrust(location, "codex", bindings2.getLast().sessionId(), Path.of(bindings2.getLast().worktreePath()));
         }
 
-        // Assign semantic ownership for catalog.product-query to codex node ID via event store
+        // Assign semantic ownership for catalog.product-query to the bound codex session. The
+        // owner scope must be that binding's own supervisor and worker: replies and
+        // publication are authorized against the stored scope, not the shared node identity.
+        String codexSupervisor = bindingService.find(location, "codex", "inst-2").orElseThrow().supervisorId();
+        String codexWorker = bindingService.find(location, "codex", "inst-2").orElseThrow().workerId();
         var codexIdentity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         UUID taskId = UUID.randomUUID();
@@ -105,23 +161,43 @@ class CapabilityNegotiationTest {
                 "Product Query Task",
                 "catalog.product-query",
                 codexIdentity.nodeId(),
-                "supervisor-codex",
-                "worker-codex");
+                codexSupervisor,
+                codexWorker);
         CoordinationCommand cmd1 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), task.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CREATED, codexIdentity.nodeId(), cmd1.encoded(), codexIdentity);
 
-        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(taskId, codexIdentity.nodeId(), "supervisor-codex", "worker-codex");
+        org.synesis.coordination.domain.task.TaskClaim claim1 = new org.synesis.coordination.domain.task.TaskClaim(taskId, codexIdentity.nodeId(), codexSupervisor, codexWorker);
         CoordinationCommand cmd2 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), claim1.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.TASK_CLAIMED, codexIdentity.nodeId(), cmd2.encoded(), codexIdentity);
 
-        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), "supervisor-codex", List.of("catalog"), 1L);
+        OwnershipClaim claim2 = new OwnershipClaim(taskId, "catalog.product-query", codexIdentity.nodeId(), codexSupervisor, List.of("catalog"), 1L);
         CoordinationCommand cmd3 = CoordinationCommand.create(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), claim2.encoded(), codexIdentity);
         store.append(taskId, PredictionEventType.OWNERSHIP_CLAIMED, codexIdentity.nodeId(), cmd3.encoded(), codexIdentity);
+
     }
 
     @Test
     @SuppressWarnings("ExtractMethodRecommender")
-    void completeCapabilityNegotiationAcceptanceFlow() {
+    void completeCapabilityNegotiationAcceptanceFlow() throws Exception {
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requesterIntent = collaboration.announce(projectRoot,
+                "claude",
+                "inst-1",
+                "Implement the product CLI",
+                "Use the negotiated product query API",
+                List.of(ResourceSelector.pathExact("src/ProductCli.java")),
+                null,
+                org.synesis.coordination.domain.collaboration.WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of("catalog.product-query"));
+        collaboration.announce(projectRoot,
+                "codex",
+                "inst-2",
+                "Implement the product query API",
+                "Publish the negotiated capability implementation",
+                List.of(ResourceSelector.pathExact("src/ProductQuery.java")),
+                requesterIntent.intent().workGroupId());
+
         CapabilityContract contract = new CapabilityContract("UUID productId",
                 "Optional<Product>",
                 List.of("Return exact matching product", "Return empty when missing"),
@@ -148,7 +224,8 @@ class CapabilityNegotiationTest {
         assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNextResp.nextAction());
 
         // 3. Owner accepts request
-        CapabilityResponseService.OwnerResponseRequest ownerResp = new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, "accept", null, null);
+        long contractRevision = ((Number) ((Map<?, ?>) ownerNextResp.result()).get("contractRevision")).longValue();
+        CapabilityResponseService.OwnerResponseRequest ownerResp = new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, "accept", null, null, contractRevision);
         AgentResponse respResult = responseService.respondToOwnerRequest(ownerResp);
         assertEquals(AgentStatus.READY, respResult.status());
 
@@ -156,9 +233,10 @@ class CapabilityNegotiationTest {
         NextActionRequest reqNextReq = new NextActionRequest(projectRoot, "claude", "inst-1");
         AgentResponse reqNextResp = nextActionService.getNextAction(reqNextReq);
 
-        assertEquals(AgentStatus.WAITING, reqNextResp.status());
-        assertEquals(AgentReason.IMPLEMENTATION_UNAVAILABLE, reqNextResp.reason());
-        assertEquals(AgentNextAction.WAIT, reqNextResp.nextAction());
+        assertEquals(AgentStatus.READY, reqNextResp.status());
+        assertNull(reqNextResp.nextAction());
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) reqNextResp.result()).get("contractAccepted"), reqNextResp.toJson());
+        assertFalse(((Map<?, ?>) reqNextResp.result()).containsKey("implementationPending"), reqNextResp.toJson());
     }
 
     @Test
@@ -172,11 +250,13 @@ class CapabilityNegotiationTest {
         String handle = (String) result.get("capabilityRequestHandle");
 
         // Owner requests revision
+        AgentResponse ownerPending = nextActionService.getNextAction(new NextActionRequest(projectRoot, "codex", "inst-2"));
+        long ownerContractRevision = ((Number) ((Map<?, ?>) ownerPending.result()).get("contractRevision")).longValue();
         CapabilityContract revisedContract = new CapabilityContract("UUID productId",
                 "Optional<Product>",
                 List.of("Return exact matching product", "Reject null input"),
                 List.of("existing product returned", "null input rejected"));
-        CapabilityResponseService.OwnerResponseRequest ownerRevResp = new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, "revise", revisedContract, "Null input must be rejected");
+        CapabilityResponseService.OwnerResponseRequest ownerRevResp = new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, "revise", revisedContract, "Null input must be rejected", ownerContractRevision);
         AgentResponse revResult = responseService.respondToOwnerRequest(ownerRevResp);
         assertEquals(AgentStatus.READY, revResult.status());
 
@@ -189,11 +269,21 @@ class CapabilityNegotiationTest {
         assertEquals(AgentNextAction.REVISE_CAPABILITY_REQUEST, reqNextResp.nextAction());
 
         // Requester accepts revision
-        CapabilityRequestService.DescribeCapabilityRequest acceptRevReq = new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", null, null, handle, "accept");
+        long requesterContractRevision = ((Number) ((Map<?, ?>) reqNextResp.result()).get("contractRevision")).longValue();
+        CapabilityRequestService.DescribeCapabilityRequest acceptRevReq = new CapabilityRequestService.DescribeCapabilityRequest(projectRoot,
+                "claude",
+                "inst-1",
+                "catalog.product-query",
+                revisedContract,
+                handle,
+                "accept",
+                null,
+                requesterContractRevision);
         AgentResponse acceptRevResp = requestService.describeRequiredCapability(acceptRevReq);
 
-        assertEquals(AgentStatus.WAITING, acceptRevResp.status());
-        assertEquals(AgentReason.IMPLEMENTATION_UNAVAILABLE, acceptRevResp.reason());
+        assertEquals(AgentStatus.READY, acceptRevResp.status());
+        assertNull(acceptRevResp.nextAction());
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) acceptRevResp.result()).get("contractAccepted"));
     }
 
     @Test
@@ -217,5 +307,89 @@ class CapabilityNegotiationTest {
         assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason());
         PredictionEventStore reloaded = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         assertEquals(1, reloaded.capabilityRequestProjection().records().size());
+    }
+
+    @Test
+    void concurrentEquivalentRequestsRecordOneActiveRequest() throws Exception {
+        CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));
+
+        // Separate service instances stand in for separate MCP processes sharing one project.
+        List<Callable<AgentResponse>> calls = new ArrayList<>();
+        for (int caller = 0; caller < 4; caller++) {
+            calls.add(() -> new CapabilityRequestService().describeRequiredCapability(
+                    new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "catalog.product-query", contract, null, null)));
+        }
+        List<AgentResponse> responses = concurrently(calls);
+
+        for (AgentResponse response : responses) {
+            assertEquals(AgentStatus.WAITING, response.status(), response.toJson());
+            assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason(), response.toJson());
+        }
+        Set<Object> handles = responses.stream().map(response -> ((Map<?, ?>) response.result()).get("capabilityRequestHandle")).collect(Collectors.toSet());
+        assertEquals(1, handles.size(), "every caller must observe the single durable request");
+        assertEquals(1, replayedStore().capabilityRequestProjection().records().size());
+    }
+
+    @Test
+    void concurrentConflictingOwnerRepliesToOneRevisionLeaveOneDecision() throws Exception {
+        CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));
+        String handle = requestProductQuery(contract);
+        long contractRevision = replayedRequest(handle).contractRevision();
+
+        List<String> decisions = List.of("accept", "reject", "accept", "reject");
+        List<Callable<AgentResponse>> calls = new ArrayList<>();
+        for (String decision : decisions) {
+            calls.add(() -> new CapabilityResponseService().respondToOwnerRequest(
+                    new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, decision, null, null, contractRevision)));
+        }
+        List<AgentResponse> responses = concurrently(calls);
+
+        PredictionEventStore replayed = replayedStore();
+        CapabilityLifecycleState decided = replayed.capabilityRequestProjection().findByHandle(handle).orElseThrow().state();
+        assertTrue(decided == CapabilityLifecycleState.ACCEPTED || decided == CapabilityLifecycleState.REJECTED, decided.name());
+        long decisionEvents = replayed.events().stream()
+                .filter(event -> event.type() == PredictionEventType.CAPABILITY_REQUEST_ACCEPTED || event.type() == PredictionEventType.CAPABILITY_REQUEST_REJECTED).count();
+        assertEquals(1, decisionEvents, "only the first reply to a contract revision may be appended");
+
+        String winner = decided == CapabilityLifecycleState.ACCEPTED ? "accept" : "reject";
+        for (int index = 0; index < decisions.size(); index++) {
+            AgentResponse response = responses.get(index);
+            if (decisions.get(index).equals(winner)) {
+                assertEquals(AgentStatus.READY, response.status(), response.toJson());
+            } else {
+                assertEquals(AgentStatus.BLOCKED, response.status(), response.toJson());
+                assertEquals(AgentReason.STALE_REQUEST, response.reason(), response.toJson());
+            }
+        }
+    }
+
+    @Test
+    void siblingSessionOutsideStoredOwnerScopeCannotAnswer() throws Exception {
+        // A second codex connection shares the project node identity and, with no collaboration
+        // lanes announced, is not fenced by lineage. Only the stored owner scope separates it.
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(projectRoot, "codex", "inst-3", null, false));
+        var location = projectService.locate(projectRoot);
+        var owner = bindingService.find(location, "codex", "inst-2").orElseThrow();
+        var sibling = bindingService.find(location, "codex", "inst-3").orElseThrow();
+        assertEquals(owner.nodeId(), sibling.nodeId());
+        assertNotEquals(owner.supervisorId(), sibling.supervisorId());
+
+        CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));
+        String handle = requestProductQuery(contract);
+        long contractRevision = replayedRequest(handle).contractRevision();
+
+        AgentResponse siblingReply = responseService.respondToOwnerRequest(
+                new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-3", handle, "accept", null, null, contractRevision));
+        assertEquals(AgentStatus.BLOCKED, siblingReply.status(), siblingReply.toJson());
+        assertEquals(AgentReason.POLICY_DENIED, siblingReply.reason(), siblingReply.toJson());
+        assertEquals(CapabilityLifecycleState.AWAITING_OWNER, replayedRequest(handle).state());
+
+        AgentResponse siblingNext = nextActionService.getNextAction(new NextActionRequest(projectRoot, "codex", "inst-3"));
+        assertNotEquals(AgentNextAction.RESPOND_COORDINATION, siblingNext.nextAction(), siblingNext.toJson());
+
+        AgentResponse ownerReply = responseService.respondToOwnerRequest(
+                new CapabilityResponseService.OwnerResponseRequest(projectRoot, "codex", "inst-2", handle, "accept", null, null, contractRevision));
+        assertEquals(AgentStatus.READY, ownerReply.status(), ownerReply.toJson());
+        assertEquals(CapabilityLifecycleState.ACCEPTED, replayedRequest(handle).state());
     }
 }

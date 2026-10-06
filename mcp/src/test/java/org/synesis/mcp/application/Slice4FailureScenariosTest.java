@@ -1,7 +1,9 @@
 package org.synesis.mcp.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,6 +61,20 @@ class Slice4FailureScenariosTest {
         }
     }
 
+    private static String gitOutput(Path root, String... args) throws Exception {
+        String[] command = new String[args.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(args, 0, command, 3, args.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException("git failed: " + String.join(" ", args));
+        }
+        return output;
+    }
+
     private static void commitIfNeeded(Path root) throws Exception {
         Process process = new ProcessBuilder("git", "-C", root.toString(), "status", "--porcelain").redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -79,6 +95,93 @@ class Slice4FailureScenariosTest {
         Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
         return innerResult != null ? (String) innerResult.get("capabilityRequestHandle") : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static long extractContractRevision(String jsonRpcRes) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst().get("text");
+        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
+        Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
+        assertNotNull(innerResult.get("contractRevision"), "get_next_action did not expose the owner contract revision: " + parsed);
+        return ((Number) innerResult.get("contractRevision")).longValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractWorkflowArguments(String jsonRpcRes) {
+        Map<String, Object> innerResult = extractInnerResult(jsonRpcRes);
+        Map<String, Object> workflow = (Map<String, Object>) innerResult.get("workflow");
+        return (Map<String, Object>) workflow.get("arguments");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractInnerResponse(String jsonRpcRes) {
+        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
+        Map<String, Object> result = (Map<String, Object>) map.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        String text = (String) content.getFirst().get("text");
+        return (Map<String, Object>) ProviderJson.parse(text);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractInnerResult(String jsonRpcRes) {
+        return (Map<String, Object>) extractInnerResponse(jsonRpcRes).get("result");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> workflow(String jsonRpcResponse) {
+        return (Map<String, Object>) extractInnerResult(jsonRpcResponse).get("workflow");
+    }
+
+    private String toolCall(McpProtocolHandler handler, String name, Map<String, Object> arguments) {
+        return handler.handleMessage(ProviderJson.write(Map.of("jsonrpc",
+                "2.0",
+                "id",
+                UUID.randomUUID().toString(),
+                "method",
+                "tools/call",
+                "params",
+                Map.of("name", name, "arguments", arguments))));
+    }
+
+    private String inspectValidationRevision(String requestHandle, int revision, String expectedSource, String expectedCommit) {
+        String next = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertEquals("ready", extractResponseStatus(next), next);
+        Map<String, Object> workflow = workflow(next);
+        assertEquals("respond_coordination", workflow.get("recommendedTool"), next);
+        Map<String, Object> arguments = extractWorkflowArguments(next);
+        @SuppressWarnings("unchecked") Map<String, Object> payload = (Map<String, Object>) arguments.get("payload");
+        assertEquals("inspect", payload.get("result"), next);
+        assertEquals(requestHandle, payload.get("capabilityRequestHandle"), next);
+        assertEquals(revision, ((Number) payload.get("implementationRevision")).intValue(), next);
+
+        String opened = toolCall(requesterHandler, "respond_coordination", arguments);
+        assertEquals("ready", extractResponseStatus(opened), opened);
+
+        Map<String, Object> readArguments = Map.of("path", "ProductQuery.java",
+                "capabilityRequestHandle", requestHandle,
+                "implementationRevision", revision);
+        String read = toolCall(requesterHandler, "read_file", readArguments);
+        assertEquals("completed", extractResponseStatus(read), read);
+        Map<String, Object> file = extractInnerResult(read);
+        assertEquals("capability_validation_snapshot", file.get("workspace"), read);
+        assertEquals(requestHandle, file.get("capabilityRequestHandle"), read);
+        assertTrue(((String) file.get("content")).contains(expectedSource), read);
+
+        String checked = toolCall(requesterHandler,
+                "run_command",
+                Map.of("argv", List.of("git", "rev-parse", "HEAD"),
+                        "capabilityRequestHandle", requestHandle,
+                        "implementationRevision", revision));
+        assertEquals("completed", extractResponseStatus(checked), checked);
+        Map<String, Object> commandResult = extractInnerResult(checked);
+        assertEquals("capability_validation_snapshot", commandResult.get("workspace"), checked);
+        assertEquals(expectedCommit, String.valueOf(commandResult.get("stdout")).trim(), checked);
+        assertFalse(read.contains(projectRoot.toString().replace('\\', '/')), read);
+        assertFalse(checked.contains(projectRoot.toString().replace('\\', '/')), checked);
+        return String.valueOf(payload.get("inboxItemId"));
     }
 
     @SuppressWarnings("unchecked")
@@ -122,15 +225,15 @@ class Slice4FailureScenariosTest {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
+        git(projectRoot, "add", ".");
+        commitIfNeeded(projectRoot);
+
         location = projectService.locate(projectRoot);
         var bindingService = new ProviderSessionBindingService();
 
         sessionService = new AgentSessionService();
         sessionService.ensureSession(new SessionResolutionRequest(projectRoot, "claude", "inst-req-1", null, false));
         sessionService.ensureSession(new SessionResolutionRequest(projectRoot, "codex", "inst-owner-1", null, false));
-
-        git(projectRoot, "add", ".");
-        commitIfNeeded(projectRoot);
 
         var bindings1 = bindingService.list(location, "claude");
         if (!bindings1.isEmpty() && bindings1.getLast().worktreePath() != null) {
@@ -216,8 +319,8 @@ class Slice4FailureScenariosTest {
     @Test
     void testCompleteTaskBeforeValidationReturnsBlockedUnresolvedDependency() {
         String descJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
+                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
+                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
                 + "  }\n" + "}";
         String descRes = requesterHandler.handleMessage(descJson);
         assertNotNull(descRes);
@@ -235,71 +338,95 @@ class Slice4FailureScenariosTest {
     void testContractRevisionAndValidationRevisionLoop() throws Exception {
         // 1. Requester describes capability
         String descJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
+                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
+                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
                 + "  }\n" + "}";
         String descRes = requesterHandler.handleMessage(descJson);
         String reqHandle = extractResultField(descRes);
 
         // 2. Owner revises contract
+        assertEquals(b2.baseCommit(), gitOutput(projectRoot, "rev-parse", "HEAD"), "The capability request must not change the control checkout");
+        var ownerReadiness = new org.synesis.workspace.application.workspace.WorkspaceReadinessService().assess(new ProjectApplicationService().locate(projectRoot), "codex", "inst-owner-1");
+        assertEquals(true, ownerReadiness.ready(), "Owner workspace became stale before the request: " + ownerReadiness.internalReason() + " " + ownerReadiness.response());
+        String ownerNextJson = "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
+        long ownerContractRevision = extractContractRevision(ownerHandler.handleMessage(ownerNextJson));
         String reviseJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"revise\", \"revision\": {\n"
-                + "        \"inputs\": \"UUID id\",\n" + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n"
-                + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
+                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"revise\", \"contractRevision\": " + ownerContractRevision + ", \"revision\": {\n"
+                + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n" + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n"
+                + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
         String reviseRes = ownerHandler.handleMessage(reviseJson);
         assertNotNull(reviseRes);
         assertEquals("ready", extractResponseStatus(reviseRes));
 
-        // 2.5 Requester accepts revised contract by re-submitting request
+        // 2.5 Requester accepts the exact revised contract revision
+        String requesterNextJson = "{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
+        long revisedContractRevision = extractContractRevision(requesterHandler.handleMessage(requesterNextJson));
         String reDescJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 35,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"inputs\": \"UUID id\",\n"
+                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"revisionResponse\": \"accept\", \"contractRevision\": " + revisedContractRevision + ",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
                 + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n"
-                + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
+                + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
         String reDescRes = requesterHandler.handleMessage(reDescJson);
         assertNotNull(reDescRes);
 
-        // 3. Owner accepts after negotiation and publishes revision 1
-        String acceptJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 4,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"accept\"}\n" + "    }\n" + "  }\n" + "}";
-        String acceptRes = ownerHandler.handleMessage(acceptJson);
-        assertNotNull(acceptRes);
-
+        // 3. Owner implements the accepted contract and publishes revision 1
         Path ownerWt = Path.of(b2.worktreePath());
         Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery { // v1 }\n");
         git(ownerWt, "add", ".");
         git(ownerWt, "commit", "-m", "Implement ProductQuery v1");
 
-        String pub1Json =
-                "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 5,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"publish_capability_implementation\",\n" + "    \"arguments\": {\n"
-                        + "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" + "      \"summary\": \"Revision 1\"\n" + "    }\n" + "  }\n" + "}";
-        ownerHandler.handleMessage(pub1Json);
+        String firstPublicationReady = ownerHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{\"completionRequested\":true}}}");
+        assertEquals("ready", extractResponseStatus(firstPublicationReady), firstPublicationReady);
+        Map<String, Object> firstPublicationArguments = extractWorkflowArguments(firstPublicationReady);
+        assertEquals(reqHandle, firstPublicationArguments.get("capabilityRequestHandle"));
+        assertEquals(revisedContractRevision, ((Number) firstPublicationArguments.get("contractRevision")).longValue());
+        firstPublicationArguments.put("summary", "Revision 1");
+        String pub1Json = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"publish_capability_implementation\",\"arguments\":" + ProviderJson.write(firstPublicationArguments) + "}}";
+        String pub1Res = ownerHandler.handleMessage(pub1Json);
+        assertEquals("waiting", extractResponseStatus(pub1Res), pub1Res);
+        assertEquals("validation_required", extractResponseReason(pub1Res), pub1Res);
+        assertEquals(1, ((Number) extractInnerResult(pub1Res).get("revision")).intValue());
+        assertNotNull(extractInnerResult(pub1Res).get("commitSha"));
+        assertNotNull(extractInnerResult(pub1Res).get("snapshotId"));
+        String firstCommit = String.valueOf(extractInnerResult(pub1Res).get("commitSha"));
+        String firstInboxItemId = inspectValidationRevision(reqHandle, 1, "v1", firstCommit);
 
         // 4. Requester rejects revision 1 (revision_required)
         String valReqJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 6,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"implementation_validation\",\n" + "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000001\", \"capabilityRequestHandle\": \"" + reqHandle
+                + "      \"kind\": \"implementation_validation\",\n" + "      \"payload\": {\"inboxItemId\": \"" + firstInboxItemId + "\", \"capabilityRequestHandle\": \"" + reqHandle
                 + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"reason\": \"Missing null check\"}\n" + "    }\n" + "  }\n" + "}";
         String valReqRes = requesterHandler.handleMessage(valReqJson);
         assertNotNull(valReqRes);
-        assertEquals("blocked", extractResponseStatus(valReqRes), valReqRes);
+        assertEquals("waiting", extractResponseStatus(valReqRes), valReqRes);
+        assertEquals("revision_required", extractResponseReason(valReqRes), valReqRes);
 
         // 5. Owner publishes revision 2
         Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery { // v2 null check }\n");
         git(ownerWt, "add", ".");
         git(ownerWt, "commit", "-m", "Implement ProductQuery v2");
 
-        String pub2Json =
-                "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 7,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"publish_capability_implementation\",\n" + "    \"arguments\": {\n"
-                        + "      \"capabilityRequestHandle\": \"" + reqHandle + "\",\n" + "      \"summary\": \"Revision 2\"\n" + "    }\n" + "  }\n" + "}";
+        String secondPublicationReady = ownerHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{\"completionRequested\":true}}}");
+        assertEquals("ready", extractResponseStatus(secondPublicationReady), secondPublicationReady);
+        Map<String, Object> secondPublicationArguments = extractWorkflowArguments(secondPublicationReady);
+        assertEquals(reqHandle, secondPublicationArguments.get("capabilityRequestHandle"));
+        assertEquals(revisedContractRevision, ((Number) secondPublicationArguments.get("contractRevision")).longValue());
+        secondPublicationArguments.put("summary", "Revision 2");
+        String pub2Json = "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"publish_capability_implementation\",\"arguments\":" + ProviderJson.write(secondPublicationArguments) + "}}";
         String pub2Res = ownerHandler.handleMessage(pub2Json);
-        assertNotNull(pub2Res);
+        assertEquals("waiting", extractResponseStatus(pub2Res), pub2Res);
+        assertEquals("validation_required", extractResponseReason(pub2Res), pub2Res);
+        assertEquals(2, ((Number) extractInnerResult(pub2Res).get("revision")).intValue());
+        assertNotNull(extractInnerResult(pub2Res).get("commitSha"));
+        assertNotNull(extractInnerResult(pub2Res).get("snapshotId"));
+        String secondCommit = String.valueOf(extractInnerResult(pub2Res).get("commitSha"));
+        String secondInboxItemId = inspectValidationRevision(reqHandle, 2, "v2 null check", secondCommit);
 
         // 6. Requester accepts revision 2
         String val2Json = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 8,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"implementation_validation\",\n" + "      \"payload\": {\"inboxItemId\": \"00000000-0000-0000-0000-000000000002\", \"capabilityRequestHandle\": \"" + reqHandle
+                + "      \"kind\": \"implementation_validation\",\n" + "      \"payload\": {\"inboxItemId\": \"" + secondInboxItemId + "\", \"capabilityRequestHandle\": \"" + reqHandle
                 + "\", \"implementationRevision\": 2, \"result\": \"accepted\"}\n" + "    }\n" + "  }\n" + "}";
         String val2Res = requesterHandler.handleMessage(val2Json);
         assertNotNull(val2Res);
-        assertEquals("blocked", extractResponseStatus(val2Res));
+        assertEquals("completed", extractResponseStatus(val2Res), val2Res);
     }
 
     @Test

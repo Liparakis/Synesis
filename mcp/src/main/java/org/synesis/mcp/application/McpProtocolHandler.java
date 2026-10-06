@@ -56,6 +56,7 @@ import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
 import org.synesis.workspace.application.integration.ImplementationValidationService;
+import org.synesis.workspace.application.integration.CapabilityValidationSnapshotAccessService;
 import org.synesis.workspace.application.integration.IntegrationCompatibilityService;
 import org.synesis.workspace.application.integration.WorkspaceIntegrationReadinessService;
 import org.synesis.workspace.application.project.ProjectCommandAdmissionService;
@@ -220,6 +221,8 @@ public final class McpProtocolHandler {
      * Service that grants reads of immutable review snapshots.
      */
     private final ReviewSnapshotAccessService reviewSnapshotAccessService;
+    /** Resolves explicitly selected requester validation snapshots for reads and test commands. */
+    private final CapabilityValidationSnapshotAccessService validationSnapshotAccessService;
     /**
      * Resolves the exact provider and connection binding used for authority checks.
      */
@@ -410,6 +413,7 @@ public final class McpProtocolHandler {
         this.taskCancellationService = new AgentTaskCancellationService();
         this.collaborationService = new WorkspaceCollaborationService();
         this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
+        this.validationSnapshotAccessService = new CapabilityValidationSnapshotAccessService();
         this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
         this.leaseService = new SessionLeaseService();
         this.leasePolicy = new SessionLeasePolicy();
@@ -697,7 +701,7 @@ public final class McpProtocolHandler {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "ownerAuthorityLineageId");
+            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId");
             case "collaboration_status" -> List.of();
             case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
@@ -727,6 +731,22 @@ public final class McpProtocolHandler {
         for (String key : required) {
             if (!payload.containsKey(key) || payload.get(key) == null) {
                 throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:" + key);
+            }
+        }
+        if ("capability_request".equals(kind)) {
+            boolean hasHandle = payload.containsKey("capabilityRequestHandle");
+            boolean hasResponse = payload.containsKey("revisionResponse");
+            if (hasHandle != hasResponse) {
+                throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_REQUIRES_HANDLE_AND_RESPONSE");
+            }
+            if (hasResponse) {
+                Object response = payload.get("revisionResponse");
+                if (!(response instanceof String value) || !List.of("accept", "counter", "cancel").contains(value)) {
+                    throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_INVALID");
+                }
+                requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
+            } else if (payload.containsKey("contractRevision")) {
+                throw new IllegalArgumentException("CONTRACT_REVISION_REQUIRES_CAPABILITY_HANDLE");
             }
         }
         if ("work_group_join".equals(kind)) {
@@ -810,7 +830,7 @@ public final class McpProtocolHandler {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_response" -> List.of("capabilityRequestHandle", "response", "revision", "reason");
+            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision", "revision", "reason");
             case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus", "proposal");
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
@@ -824,7 +844,7 @@ public final class McpProtocolHandler {
             }
         }
         List<String> required = switch (kind) {
-            case "capability_response" -> List.of("capabilityRequestHandle", "response");
+            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision");
             case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus");
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution");
@@ -847,13 +867,14 @@ public final class McpProtocolHandler {
             if (!(response instanceof String value) || !("accept".equals(value) || "revise".equals(value) || "reject".equals(value))) {
                 throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESPONSE");
             }
+            requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
             if ("revise".equals(response) && !(payload.get("revision") instanceof Map<?, ?>)) {
                 throw new IllegalArgumentException("COORDINATION_RESPONSE_REVISION_REQUIRED");
             }
         }
         if ("implementation_validation".equals(kind)) {
             Object result = payload.get("result");
-            if (!(result instanceof String value) || !("accepted".equals(value) || "revision_required".equals(value))) {
+            if (!(result instanceof String value) || !("inspect".equals(value) || "accepted".equals(value) || "revision_required".equals(value))) {
                 throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESULT");
             }
             if ("revision_required".equals(result)) {
@@ -877,6 +898,12 @@ public final class McpProtocolHandler {
         normalized.put("kind", kind);
         normalized.put("payload", payload);
         return normalized;
+    }
+
+    private static void requirePositiveRevision(Object value, String field) {
+        if (!(value instanceof Number revision) || revision.longValue() < 1 || revision.doubleValue() != revision.longValue()) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + field);
+        }
     }
 
     /**
@@ -963,6 +990,57 @@ public final class McpProtocolHandler {
         return number.doubleValue() == value;
     }
 
+    private static boolean isScopeExtensionFailure(String message) {
+        return message != null && (message.startsWith("SCOPE_EXTENSION_") || "CLAIM_EPOCH_STALE".equals(message)
+                || "OVERLAPPING_CLAIM".equals(message) || "INTENT_OWNER_MISMATCH".equals(message)
+                || "INTENT_NOT_ACTIVE".equals(message));
+    }
+
+    private static AgentResponse scopeExtensionRequiredResponse(WorkIntent current,
+            AgentTaskIntent requested,
+            List<ResourceSelector> requestedSelectors) {
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("goal", requested.goal() == null ? current.goal() : requested.goal());
+        task.put("acceptance", requested.acceptance() == null ? current.acceptance() : requested.acceptance());
+        task.put("intentId", current.intentId().toString());
+        task.put("claimEpoch", current.claimEpoch().value());
+        task.put("workGroupId", current.workGroupId().toString());
+        task.put("role", current.role().wireValue());
+        List<ResourceSelector> selectors = new ArrayList<>(current.selectors());
+        for (ResourceSelector selector : requestedSelectors) {
+            if (!selectors.contains(selector)) {
+                selectors.add(selector);
+            }
+        }
+        task.put("claims", selectors.stream().map(selector -> Map.of("kind",
+                selector.kind() == ResourceSelector.Kind.PATH_EXACT ? "path_exact" : "path_subtree",
+                "path",
+                selector.value())).toList());
+        java.util.LinkedHashSet<String> dependencies = new java.util.LinkedHashSet<>(current.knownDependencies());
+        dependencies.addAll(requested.knownDependencies());
+        task.put("knownDependencies", List.copyOf(dependencies));
+        if (!current.reviewTargetSelectors().isEmpty()) {
+            task.put("reviewTargets", current.reviewTargetSelectors().stream().map(selector -> Map.of("kind",
+                    selector.kind() == ResourceSelector.Kind.PATH_EXACT ? "path_exact" : "path_subtree",
+                    "path",
+                    selector.value())).toList());
+        }
+        Map<String, Object> arguments = Map.of("task", task);
+        return new AgentResponse(AgentStatus.BLOCKED,
+                AgentReason.POLICY_DENIED,
+                AgentNextAction.ENSURE_SESSION,
+                Map.of("reason",
+                        "SCOPE_EXTENSION_PRECONDITION_REQUIRED",
+                        "recommendedTool",
+                        "ensure_session",
+                        "arguments",
+                        arguments,
+                        "nextProtocolKind",
+                        "ensure_session",
+                        "nextProtocolPayload",
+                        Map.of("tool", "ensure_session", "arguments", arguments)));
+    }
+
     /**
      * Restricts completed managed connections to the three permitted review coordination calls.
      *
@@ -1036,22 +1114,37 @@ public final class McpProtocolHandler {
         }
         admissionReconciliationAttempted = true;
         try {
-            reconciliationService.reconcileOnAdmission(activeProjectRoot);
+            reconciliationService.reconcileEligible(activeProjectRoot);
         } catch (Exception failure) {
             System.err.println("SYNESIS_MCP_RECONCILIATION_FAILURE=" + (failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage()));
         }
     }
 
-    /**
-     * Marks a clean stdio shutdown and detaches this connection's lane.
-     */
-    public void close() {
-        try {
-            leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId, commandProcessIdentity.pid());
-            collaborationService.detach(activeProjectRoot, provider, connectionInstanceId);
-        } catch (Exception ignored) {
-            // Recovery reconciles unclean or partially completed shutdowns.
+    /** Re-evaluates recovery eligibility on each ordinary durable inbox poll. */
+    private void reconcileRecoveryBeforeInboxPoll() {
+        if (activeProjectRoot == null) {
+            return;
         }
+        try {
+            var execution = reconciliationService.reconcileEligible(activeProjectRoot);
+            execution.ifPresent(result -> System.err.println("SYNESIS_MCP_RECOVERY_RECONCILIATION=completed:" + result.completedCount() + ",failed:" + result.failedCount()));
+        } catch (Exception failure) {
+            System.err.println("SYNESIS_MCP_RECOVERY_RECONCILIATION_FAILURE=" + failure.getClass().getSimpleName());
+        }
+    }
+
+    /** Marks clean transport EOF and immediately preserves any unfinished lane for recovery. */
+    public void close() {
+        if (activeProjectRoot == null) {
+            return;
+        }
+        boolean closed = leaseService.markClosedCleanly(activeProjectRoot, connectionInstanceId, commandProcessIdentity.pid());
+        if (!closed) {
+            System.err.println("SYNESIS_MCP_TRANSPORT_FINALIZATION=clean_close_unconfirmed");
+            return;
+        }
+        System.err.println("SYNESIS_MCP_TRANSPORT_FINALIZATION=clean_eof");
+        reconcileRecoveryBeforeInboxPoll();
     }
 
     /**
@@ -1582,8 +1675,10 @@ public final class McpProtocolHandler {
         ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
         var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
         String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
-        leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider, connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
+        // The collaboration event is the authority fence. Check it before renewing the external
+        // lease so a stale recovery-held session cannot make its lease appear active again.
         collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);
+        leaseService.createOrRenewLease(activeProjectRoot, location.projectId().toString(), provider, connectionInstanceId, nodeId, binding.sessionId(), leasePolicy);
         return location;
     }
 
@@ -1648,13 +1743,42 @@ public final class McpProtocolHandler {
         boolean noChangeCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE) && arguments != null && arguments.get("outcome") instanceof String outcome && "no_change".equalsIgnoreCase(outcome);
         boolean snapshotCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE);
         // finish_lane carries an optimistic event-log revision in its
-        // projected evidence.  The ordinary lease heartbeat appends a
-        // collaboration event, so doing it before completion would invalidate
-        // the exact server-issued finish envelope before the completion
-        // service can consume it.  Completion itself remains authoritative;
-        // all other non-command calls retain the normal activity heartbeat.
+        // projected evidence.  Heartbeats no longer invalidate that envelope,
+        // but a lane that is being closed has no liveness to renew, so the
+        // ordinary lease heartbeat is still skipped here.  Completion itself
+        // remains authoritative; all other non-command calls retain the
+        // normal activity heartbeat.
         if (managedState != ManagedAdmissionState.REVIEW_ONLY && !durableCommand && !noChangeCompletion && !snapshotCompletion) {
             renewLease();
+        }
+
+        boolean exactCompletedNoChangeReplay = false;
+        if (isSessionBound && noChangeCompletion) {
+            try {
+                authorityResolver.resolveCompleted(new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
+                exactCompletedNoChangeReplay = true;
+            } catch (Exception notCompletedOrUnreadable) {
+                // Active bindings still pass through the normal recovery fence below. Completed
+                // bindings reach only the completion service's exact durable-result replay checks.
+            }
+        }
+        if (isSessionBound && !exactCompletedNoChangeReplay) {
+            try {
+                if (collaborationService.recoveryFenced(activeProjectRoot, provider, connectionInstanceId)) {
+                    AgentResponse fenced = new AgentResponse(AgentStatus.BLOCKED,
+                            AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "SESSION_EPOCH_FENCED"));
+                    return textResultResponse(id, fenced.toJson());
+                }
+            } catch (Exception failure) {
+                System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
+                AgentResponse unavailable = new AgentResponse(AgentStatus.BLOCKED,
+                        AgentReason.POLICY_DENIED,
+                        AgentNextAction.REQUEST_HUMAN_HELP,
+                        Map.of("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE"));
+                return textResultResponse(id, unavailable.toJson());
+            }
         }
 
         if (requiresManualAttestation(name, arguments)) {
@@ -1741,7 +1865,7 @@ public final class McpProtocolHandler {
                         }
                     } else if (taskIntent != null && taskIntent.role() == WorkIntent.Role.REVIEWER && selectors.isEmpty() && !recoveryAdmission) {
                         agentResponse = reviewerClaimRequiredResponse();
-                    } else if (!selectors.isEmpty() && !recoveryAdmission) {
+                    } else if ((!selectors.isEmpty() || taskIntent != null && taskIntent.intentId() != null) && !recoveryAdmission) {
                         try {
                             ClaimResult claimResult = collaborationService.announce(activeProjectRoot,
                                     provider,
@@ -1752,7 +1876,9 @@ public final class McpProtocolHandler {
                                     taskIntent == null ? null : taskIntent.workGroupId(),
                                     taskIntent == null ? WorkIntent.Role.PRODUCER : taskIntent.role(),
                                     taskIntent == null ? List.of() : taskIntent.reviewTargetSelectors(),
-                                    taskIntent == null ? List.of() : taskIntent.knownDependencies());
+                                    taskIntent == null ? List.of() : taskIntent.knownDependencies(),
+                                    taskIntent == null ? null : taskIntent.intentId(),
+                                    taskIntent == null ? null : taskIntent.claimEpoch());
                             if (!claimResult.acquired()) {
                                 Map<String, Object> details = new LinkedHashMap<>();
                                 details.put("conflicts",
@@ -1760,15 +1886,30 @@ public final class McpProtocolHandler {
                                                 conflict.participant(),
                                                 "intent",
                                                 conflict.intentId(),
+                                                "ownerAuthorityLineageId",
+                                                conflict.ownerAuthorityLineageId() == null ? "" : conflict.ownerAuthorityLineageId().toString(),
                                                 "kind",
                                                 conflict.selector().kind().name(),
                                                 "path",
                                                 conflict.selector().value())).toList());
-                                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, details);
+                                details.put("coordinationKind", "capability_request");
+                                details.put("requiredCapabilityFields", List.of("capability", "contract", "ownerAuthorityLineageId"));
+                                details.put("claimRule", "Keep the owner claim exclusive. Claim a disjoint consumer path before requesting its API capability.");
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_COORDINATION, details);
                             }
                         } catch (Exception failure) {
                             if ("SESSION_EPOCH_FENCED".equals(failure.getMessage())) {
                                 agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_GENERATION_CHANGED, AgentNextAction.RETRY, null);
+                            } else if (failure instanceof WorkspaceCollaborationService.ScopeExtensionRequiredException required) {
+                                agentResponse = scopeExtensionRequiredResponse(required.currentIntent(), taskIntent, selectors);
+                            } else if (isScopeExtensionFailure(failure.getMessage())) {
+                                AgentReason reason = "OVERLAPPING_CLAIM".equals(failure.getMessage())
+                                        ? AgentReason.OVERLAPPING_CLAIM
+                                        : AgentReason.POLICY_DENIED;
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                                        reason,
+                                        AgentNextAction.REQUEST_HUMAN_HELP,
+                                        Map.of("reason", failure.getMessage()));
                             } else {
                                 agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
                             }
@@ -1781,9 +1922,25 @@ public final class McpProtocolHandler {
                 Integer startLine = (arguments != null && arguments.get("startLine") instanceof Number n) ? n.intValue() : null;
                 Integer endLine = (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
                 Integer maxBytes = (arguments != null && arguments.get("maxBytes") instanceof Number n) ? n.intValue() : null;
-
-                ReadRequest readReq = new ReadRequest(activeProjectRoot, provider, connectionInstanceId, path, startLine, endLine, maxBytes);
-                agentResponse = readService.readFile(readReq);
+                try {
+                    String validationHandle = optionalStringArgument(arguments, "capabilityRequestHandle");
+                    Long rawRevision = optionalLongArgument(arguments, "implementationRevision", 1);
+                    if (rawRevision != null && rawRevision > Integer.MAX_VALUE) {
+                        throw new IllegalArgumentException("invalid implementationRevision");
+                    }
+                    ReadRequest readReq = new ReadRequest(activeProjectRoot,
+                            provider,
+                            connectionInstanceId,
+                            path,
+                            startLine,
+                            endLine,
+                            maxBytes,
+                            validationHandle,
+                            rawRevision == null ? null : rawRevision.intValue());
+                    agentResponse = readService.readFile(readReq);
+                } catch (IllegalArgumentException invalidValidationEvidence) {
+                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                }
             }
             case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH -> {
                 String path = stringArgument(arguments, "path", "relativePath");
@@ -1810,7 +1967,8 @@ public final class McpProtocolHandler {
             }
             case TOOL_PREFIX + McpToolCatalog.RUN_COMMAND -> {
                 List<String> argv = new ArrayList<>();
-                boolean unsupportedField = arguments != null && arguments.keySet().stream().anyMatch(key -> !Set.of("argv", "workingDirectory", "timeoutSeconds").contains(key));
+                boolean unsupportedField = arguments != null && arguments.keySet().stream()
+                        .anyMatch(key -> !Set.of("argv", "workingDirectory", "timeoutSeconds", "capabilityRequestHandle", "implementationRevision").contains(key));
                 if (arguments != null && arguments.get("argv") instanceof List<?> list) {
                     for (Object item : list) {
                         if (!(item instanceof String s)) {
@@ -1838,12 +1996,29 @@ public final class McpProtocolHandler {
                     agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
                 } else {
                     try {
-                        AgentResponse reviewCommand = reviewSnapshotAccessService.runReviewCommand(activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
-                        if (reviewCommand != null) {
-                            agentResponse = reviewCommand;
+                        String validationHandle = optionalStringArgument(arguments, "capabilityRequestHandle");
+                        Long rawRevision = optionalLongArgument(arguments, "implementationRevision", 1);
+                        if (rawRevision != null && rawRevision > Integer.MAX_VALUE) {
+                            throw new IllegalArgumentException("invalid implementationRevision");
+                        }
+                        AgentResponse validationCommand = validationSnapshotAccessService.runCommand(activeProjectRoot,
+                                provider,
+                                connectionInstanceId,
+                                validationHandle,
+                                rawRevision == null ? null : rawRevision.intValue(),
+                                argv,
+                                workingDirectory,
+                                timeoutSeconds);
+                        if (validationCommand != null) {
+                            agentResponse = validationCommand;
                         } else {
-                            ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
-                            agentResponse = runDurableCommand(cmdReq, id);
+                            AgentResponse reviewCommand = reviewSnapshotAccessService.runReviewCommand(activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
+                            if (reviewCommand != null) {
+                                agentResponse = reviewCommand;
+                            } else {
+                                ProjectCommandService.CommandRequest cmdReq = new ProjectCommandService.CommandRequest(activeProjectRoot, provider, connectionInstanceId, argv, workingDirectory, timeoutSeconds);
+                                agentResponse = runDurableCommand(cmdReq, id);
+                            }
                         }
                     } catch (IllegalArgumentException ex) {
                         agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
@@ -1875,6 +2050,7 @@ public final class McpProtocolHandler {
                         agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
                     }
                 } else {
+                    reconcileRecoveryBeforeInboxPoll();
                     NextActionRequest nextReq = new NextActionRequest(activeProjectRoot, provider, connectionInstanceId, completionRequested);
                     agentResponse = nextActionService.getNextAction(nextReq);
                 }
@@ -1895,6 +2071,11 @@ public final class McpProtocolHandler {
                     try {
                         if ("capability_request".equals(collaborationOperation)) {
                             CapabilityContract contract = parseContract(arguments.get("contract"));
+                            if (contract == null) {
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                                        Map.of("error", "CAPABILITY_CONTRACT_INVALID"));
+                                break;
+                            }
                             agentResponse = capabilityRequestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(activeProjectRoot,
                                     provider,
                                     connectionInstanceId,
@@ -1902,7 +2083,8 @@ public final class McpProtocolHandler {
                                     contract,
                                     arguments.get("capabilityRequestHandle") instanceof String value ? value : null,
                                     arguments.get("revisionResponse") instanceof String value ? value : null,
-                                    arguments.get("ownerAuthorityLineageId") instanceof String value ? UUID.fromString(value) : null));
+                                    arguments.get("ownerAuthorityLineageId") instanceof String value ? UUID.fromString(value) : null,
+                                    arguments.get("contractRevision") instanceof Number value ? value.longValue() : -1));
                             break;
                         }
                         var result = switch (collaborationOperation) {
@@ -2048,13 +2230,22 @@ public final class McpProtocolHandler {
                                     ((Number) payload.get("claimEpoch")).longValue(),
                                     String.valueOf(payload.get("result")),
                                     payload.get("reason") == null ? null : String.valueOf(payload.get("reason"))));
-                            case "capability_response" -> agentResponse = capabilityResponseService.respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(activeProjectRoot,
-                                    provider,
-                                    connectionInstanceId,
-                                    String.valueOf(payload.get("capabilityRequestHandle")),
-                                    String.valueOf(payload.get("response")),
-                                    parseContract(payload.get("revision")),
-                                    payload.get("reason") == null ? null : String.valueOf(payload.get("reason"))));
+                            case "capability_response" -> {
+                                CapabilityContract revision = parseContract(payload.get("revision"));
+                                if ("revise".equals(payload.get("response")) && revision == null) {
+                                    agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                                            Map.of("error", "CAPABILITY_REVISION_INVALID"));
+                                    break;
+                                }
+                                agentResponse = capabilityResponseService.respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(activeProjectRoot,
+                                        provider,
+                                        connectionInstanceId,
+                                        String.valueOf(payload.get("capabilityRequestHandle")),
+                                        String.valueOf(payload.get("response")),
+                                        revision,
+                                        payload.get("reason") == null ? null : String.valueOf(payload.get("reason")),
+                                        ((Number) payload.get("contractRevision")).longValue()));
+                            }
                             case "coordination_response" -> {
                                 CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(String.valueOf(payload.get("coordinationStatus")));
                                 collaborationService.respond(activeProjectRoot,
@@ -2087,14 +2278,36 @@ public final class McpProtocolHandler {
                 agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
             }
             case TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> {
-                String reqHandle = arguments != null ? (String) arguments.get("capabilityRequestHandle") : null;
-                String summary = arguments != null ? (String) arguments.get("summary") : null;
+                try {
+                    String reqHandle = optionalStringArgument(arguments, "capabilityRequestHandle");
+                    String summary = optionalStringArgument(arguments, "summary");
+                    Long contractRevision = optionalLongArgument(arguments, "contractRevision", 1);
+                    UUID intentId = optionalUuidArgument(arguments, "intentId");
+                    Long claimEpoch = optionalLongArgument(arguments, "claimEpoch", 1);
+                    String expectedTreeHash = optionalStringArgument(arguments, "expectedTreeHash");
 
-                if (reqHandle == null || reqHandle.isBlank()) {
-                    agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
-                } else {
-                    ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(activeProjectRoot, provider, connectionInstanceId, reqHandle, summary);
-                    agentResponse = publicationService.publishImplementation(pubReq);
+                    if (reqHandle == null || reqHandle.isBlank()) {
+                        agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+                    } else if (contractRevision == null || intentId == null || claimEpoch == null || expectedTreeHash == null || expectedTreeHash.isBlank()) {
+                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                                Map.of("reason", "CAPABILITY_PUBLICATION_EVIDENCE_REQUIRED"));
+                    } else {
+                        ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(activeProjectRoot,
+                                provider,
+                                connectionInstanceId,
+                                reqHandle,
+                                summary,
+                                contractRevision,
+                                intentId,
+                                claimEpoch,
+                                expectedTreeHash);
+                        agentResponse = publicationService.publishImplementation(pubReq);
+                    }
+                } catch (IllegalArgumentException invalidPublication) {
+                    agentResponse = new AgentResponse(AgentStatus.BLOCKED,
+                            AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "CAPABILITY_PUBLICATION_EVIDENCE_INVALID"));
                 }
             }
             case TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> {
@@ -2150,9 +2363,24 @@ public final class McpProtocolHandler {
         if (!(contractObj instanceof Map<?, ?> map)) {
             return null;
         }
+        List<String> contractFields = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests");
+        if (map.size() != contractFields.size() || map.keySet().stream().anyMatch(key -> !(key instanceof String field) || !contractFields.contains(field))) {
+            return null;
+        }
+        Object rawPurpose = map.get("purpose");
         Object rawInputs = map.get("inputs");
         Object rawOutput = map.get("output");
-        if (!(rawInputs instanceof String inputs) || !(rawOutput instanceof String output)) {
+        Object rawErrorSemantics = map.get("errorSemantics");
+        Object rawSideEffects = map.get("sideEffects");
+        Object rawInvariants = map.get("invariants");
+        Object rawCompatibility = map.get("compatibility");
+        Object rawPerformance = map.get("performance");
+        Object rawConcurrency = map.get("concurrency");
+        if (!(rawPurpose instanceof String purpose) || !(rawInputs instanceof String inputs) || !(rawOutput instanceof String output)
+                || !(rawErrorSemantics instanceof String errorSemantics) || !(rawSideEffects instanceof String sideEffects)
+                || !(rawInvariants instanceof String invariants) || !(rawCompatibility instanceof String compatibility)
+                || !(rawPerformance instanceof String performance) || !(rawConcurrency instanceof String concurrency)
+                || !(map.get("requiredBehavior") instanceof List<?>) || !(map.get("acceptanceTests") instanceof List<?>)) {
             return null;
         }
         List<String> requiredBehavior;
@@ -2164,7 +2392,17 @@ public final class McpProtocolHandler {
             return null;
         }
         try {
-            return new CapabilityContract(inputs, output, requiredBehavior, acceptanceTests);
+            return new CapabilityContract(purpose,
+                    inputs,
+                    output,
+                    requiredBehavior,
+                    errorSemantics,
+                    sideEffects,
+                    invariants,
+                    compatibility,
+                    performance,
+                    concurrency,
+                    acceptanceTests);
         } catch (Exception ex) {
             return null;
         }
@@ -2184,11 +2422,11 @@ public final class McpProtocolHandler {
         Object taskObj = arguments.get("task");
         Map<?, ?> map;
         if (taskObj instanceof Map<?, ?> taskMap) {
-            if (Stream.of("goal", "acceptance", "likelyScopes", "knownDependencies", "workGroupId", "role", "reviewTargets", "claims").anyMatch(arguments::containsKey)) {
+            if (Stream.of("goal", "acceptance", "likelyScopes", "knownDependencies", "workGroupId", "role", "reviewTargets", "intentId", "claimEpoch", "claims").anyMatch(arguments::containsKey)) {
                 throw new IllegalArgumentException("TASK_FIELDS_MUST_BE_NESTED");
             }
             map = taskMap;
-        } else if (arguments.containsKey("goal") || arguments.containsKey("acceptance") || arguments.containsKey("claims") || arguments.containsKey("role") || arguments.containsKey("reviewTargets")) {
+        } else if (arguments.containsKey("goal") || arguments.containsKey("acceptance") || arguments.containsKey("claims") || arguments.containsKey("role") || arguments.containsKey("reviewTargets") || arguments.containsKey("intentId") || arguments.containsKey("claimEpoch")) {
             // A few provider renderers flatten the task object.  Normalize
             // that bounded shape without changing the advertised schema.
             map = arguments;
@@ -2226,7 +2464,34 @@ public final class McpProtocolHandler {
             throw new IllegalArgumentException("reviewTargets must be an array");
         }
         List<ResourceSelector> reviewTargetSelectors = parseSelectorList(map.get("reviewTargets"));
-        return new AgentTaskIntent(goal, acceptance, likelyScopes, knownDependencies, workGroupId, role, reviewTargetSelectors);
+        UUID intentId = null;
+        if (map.get("intentId") != null) {
+            if (!(map.get("intentId") instanceof String value)) {
+                throw new IllegalArgumentException("intentId must be a UUID string");
+            }
+            try {
+                intentId = UUID.fromString(value);
+            } catch (IllegalArgumentException invalid) {
+                throw new IllegalArgumentException("invalid intentId", invalid);
+            }
+        }
+        Long claimEpoch = null;
+        if (map.get("claimEpoch") != null) {
+            if (!(map.get("claimEpoch") instanceof Number value) || value.longValue() < 1
+                    || value.doubleValue() != value.longValue()) {
+                throw new IllegalArgumentException("claimEpoch must be a positive integer");
+            }
+            claimEpoch = value.longValue();
+        }
+        return new AgentTaskIntent(goal,
+                acceptance,
+                likelyScopes,
+                knownDependencies,
+                workGroupId,
+                role,
+                reviewTargetSelectors,
+                intentId,
+                claimEpoch);
     }
 
     /**

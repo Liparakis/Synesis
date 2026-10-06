@@ -200,6 +200,8 @@ public final class McpToolCatalog {
         taskProperties.put("knownDependencies",
                 Map.of("type", "array", "items", property("string"), "description", "Explicit capability identifiers required by this task; prose and file changes do not create dependencies"));
         taskProperties.put("workGroupId", Map.of("type", "string", "format", "uuid"));
+        taskProperties.put("intentId", Map.of("type", "string", "format", "uuid", "description", "Exact current intent required to extend a lane"));
+        taskProperties.put("claimEpoch", Map.of("type", "integer", "minimum", 1, "description", "Exact current claim epoch required to extend a lane"));
         taskProperties.put("role", Map.of("type", "string", "enum", List.of("producer", "reviewer"), "description", "Semantic review-routing role; it does not change ownership claims"));
         taskProperties.put("reviewTargets", Map.of("type", "array", "description", "Non-ownership selectors identifying producer work this reviewer may review", "items", claimSelector));
         taskProperties.put("unwindCompletion", Map.of("type", "boolean", "description", "Authorized unwind of this caller's prepared but unpublished completion"));
@@ -208,14 +210,14 @@ public final class McpToolCatalog {
         taskProperties.put("claims", claimArray);
         Map<String, Object> taskSchema = objectSchema(taskProperties, List.of());
         result.add(descriptor(ENSURE_SESSION,
-                "Ensures an active, verified Synesis workspace session. Keep every task member inside task, including role, workGroupId, reviewTargets, and claims; top-level task fields beside a task object are rejected. Before visible task mutation, include task.goal, task.acceptance, task.claims, and any knownDependencies as structured capability identifiers to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims.",
+                "Ensures an active, verified Synesis workspace session. Keep every task member inside task, including role, workGroupId, reviewTargets, intentId, claimEpoch, and claims; top-level task fields beside a task object are rejected. Before visible task mutation, include task.goal, task.acceptance, task.claims, and any knownDependencies as structured capability identifiers to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims. To extend a lane, follow the projected ensure_session continuation with its exact task.intentId and task.claimEpoch; existing claims and dependencies are retained.",
                 objectSchema(Map.of("task", taskSchema, "refresh", property("boolean")), List.of()),
                 "ensure-session",
                 "MUTATING",
                 List.of("SESSION_BINDING"),
                 1));
         result.add(descriptor(READ_FILE,
-                "Reads text file content from the assigned worktree, or from the authorized immutable snapshot workspace while a REVIEW decision is pending.",
+                "Reads text file content from the assigned worktree or REVIEW snapshot. During capability validation, provide capabilityRequestHandle and implementationRevision from get_next_action to read that request's exact immutable validation revision.",
                 objectSchema(Map.of("path",
                         Map.of("type", "string", "description", "Repository-relative file path"),
                         "startLine",
@@ -223,7 +225,11 @@ public final class McpToolCatalog {
                         "endLine",
                         Map.of("type", "integer", "description", "1-based ending line number (default: EOF)"),
                         "maxBytes",
-                        Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)")), List.of("path")),
+                        Map.of("type", "integer", "description", "Maximum UTF-8 bytes to return (default: 65536)"),
+                        "capabilityRequestHandle",
+                        Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$", "description", "Exact requester-owned capability handle shown for the current validation"),
+                        "implementationRevision",
+                        Map.of("type", "integer", "minimum", 1, "description", "Exact implementation revision shown for the current validation")), List.of("path")),
                 "read-file",
                 "READ_ONLY",
                 List.of("SESSION_BINDING"),
@@ -267,20 +273,24 @@ public final class McpToolCatalog {
                 property("integer")), List.of());
         Map<String, Object> commandResult = objectSchema(Map.of("status", property("string"), "result", commandEvidence), List.of());
         result.add(descriptor(RUN_COMMAND,
-                "Executes direct argv inside the assigned worktree, or inside the authorized immutable snapshot workspace during REVIEW validation.",
+                "Executes direct argv inside the assigned worktree or REVIEW snapshot. During capability validation, provide capabilityRequestHandle and implementationRevision from get_next_action to run tests against that request's exact immutable validation revision.",
                 objectSchema(Map.of("argv",
                         Map.of("type", "array", "minItems", 1, "items", property("string"), "description", "Executable and arguments passed directly without a shell"),
                         "workingDirectory",
                         Map.of("type", "string", "description", "Relative lane directory; default '.'"),
                         "timeoutSeconds",
-                        Map.of("type", "integer", "minimum", 1, "maximum", 3600, "description", "Execution timeout in seconds; default 120")), List.of("argv")),
+                        Map.of("type", "integer", "minimum", 1, "maximum", 3600, "description", "Execution timeout in seconds; default 120"),
+                        "capabilityRequestHandle",
+                        Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$", "description", "Exact requester-owned capability handle shown for the current validation"),
+                        "implementationRevision",
+                        Map.of("type", "integer", "minimum", 1, "description", "Exact implementation revision shown for the current validation")), List.of("argv")),
                 commandResult,
                 "run-command",
                 "MUTATING",
                 List.of("SESSION_BINDING"),
                 4));
         result.add(descriptor(GET_NEXT_ACTION,
-                "Retrieves the highest-priority actionable coordination item. Call without arguments to read the durable coordination inbox. The optional completionRequested boolean is a call-local request to evaluate completion; missing or false continues implementation and does not inherit a prior request. The optional integrationCheck input is a read-only compatibility check of explicitly supplied candidate facts; it never advances a lane or WorkGroup and must not replace empty-argument polling or be treated as lifecycle completion. If the response is workflow IMPLEMENT without a concrete recommendedTool and arguments, continue ordinary coding in the assigned worktree and do not inspect protected .synesis/** metadata. If the assigned visible work is complete or blocked while the WorkGroup or another participant remains active, do not end the session; perform a bounded wait and call get_next_action again until an exact lifecycle action or terminal state is projected. If a recommendedTool and arguments are present, execute that exact tool with those exact arguments before another lifecycle action. When WAIT projects get_next_action with empty arguments, continue the inbox until a terminal state or the next concrete action; do not stop while the WorkGroup is active.",
+                "Retrieves the highest-priority actionable coordination item. Call without arguments to read the durable coordination inbox. The optional completionRequested boolean is a call-local request to evaluate completion; after implementation, tests, and acceptance criteria are complete, call get_next_action once with completionRequested:true to request the exact publication projection. Missing or false continues implementation and does not inherit a prior request. The optional integrationCheck input is a read-only compatibility check of explicitly supplied candidate facts; it never advances a lane or WorkGroup and must not replace empty-argument polling or be treated as lifecycle completion. If the response is workflow IMPLEMENT without a concrete recommendedTool and arguments, continue ordinary coding in the assigned worktree and do not inspect protected .synesis/** metadata. Execute each concrete recommendedTool with its exact arguments before another lifecycle action. For repeated WAIT (including recommendedTool=get_next_action), IMPLEMENT, or blocked projections, compare workflow.actionId, honor workflow.retryAfterMs (default 5000 ms), and stop after workflow.maxUnchangedPolls unchanged responses (default 3). Reset the count when actionId changes. At the limit, report the stalled actionId and stop polling until a fresh state-change signal or human input; an active WorkGroup alone does not justify repeated unchanged calls.",
                 objectSchema(Map.of("completionRequested",
                                 Map.of("type", "boolean", "description", "Request completion projection for this call only; false or absent continues implementation"),
                                 "integrationCheck",
@@ -290,14 +300,20 @@ public final class McpToolCatalog {
                 "READ_ONLY",
                 List.of("SESSION_BINDING"),
                 5));
-        Map<String, Object> contractSchema = objectSchema(Map.of("inputs",
-                Map.of("type", "string", "description", "Input parameter specification"),
-                "output",
-                Map.of("type", "string", "description", "Output return type and semantics"),
-                "requiredBehavior",
-                Map.of("type", "array", "items", property("string"), "description", "List of operational behavior requirements"),
-                "acceptanceTests",
-                Map.of("type", "array", "items", property("string"), "description", "List of acceptance test criteria")), List.of());
+        Map<String, Object> contractProperties = new LinkedHashMap<>();
+        contractProperties.put("purpose", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "What callers use this API for"));
+        contractProperties.put("inputs", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Input names, types, constraints, and defaults"));
+        contractProperties.put("output", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Output type and semantics"));
+        contractProperties.put("requiredBehavior", Map.of("type", "array", "maxItems", 16, "items", Map.of("type", "string", "minLength", 1, "maxLength", 1000), "description", "Required operational behavior"));
+        contractProperties.put("errorSemantics", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Failure cases and observable results"));
+        contractProperties.put("sideEffects", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Externally visible effects"));
+        contractProperties.put("invariants", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Conditions that always remain true"));
+        contractProperties.put("compatibility", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Compatibility and evolution requirements"));
+        contractProperties.put("performance", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Latency and resource requirements"));
+        contractProperties.put("concurrency", Map.of("type", "string", "minLength", 1, "maxLength", 2000, "description", "Concurrency, ordering, and consistency guarantees"));
+        contractProperties.put("acceptanceTests", Map.of("type", "array", "maxItems", 16, "items", Map.of("type", "string", "minLength", 1, "maxLength", 1000), "description", "Acceptance criteria for the published implementation"));
+        List<String> contractFields = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests");
+        Map<String, Object> contractSchema = objectSchema(contractProperties, contractFields);
         Map<String, Object> requestPayload = new LinkedHashMap<>();
         requestPayload.put("conflictingIntentId", Map.of("type", "string", "format", "uuid"));
         requestPayload.put("intentId", Map.of("type", "string", "format", "uuid"));
@@ -312,6 +328,7 @@ public final class McpToolCatalog {
         requestPayload.put("contract", contractSchema);
         requestPayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
         requestPayload.put("revisionResponse", Map.of("type", "string", "enum", List.of("accept", "counter", "cancel")));
+        requestPayload.put("contractRevision", Map.of("type", "integer", "minimum", 1, "description", "Exact contract revision shown in the current request projection"));
         requestPayload.put("ownerAuthorityLineageId", Map.of("type", "string", "format", "uuid", "description", "Durable authority lineage of the intended capability publisher"));
         requestPayload.put("workGroupId", Map.of("type", "string", "format", "uuid"));
         requestPayload.put("goal", property("string"));
@@ -327,9 +344,10 @@ public final class McpToolCatalog {
                         List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join", "continuation", "work_group_create")),
                 "payload",
                 objectSchema(requestPayload, List.of())), List.of("kind", "payload"));
+        constrainPayloadKind(requestSchema, "capability_request", List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId"), List.of("capability", "contract"));
         constrainPayloadKind(requestSchema, "contract_request", List.of("conflictingIntentId", "proposal", "contractId", "revision"), List.of("conflictingIntentId", "proposal"));
         result.add(descriptor(REQUEST_COORDINATION,
-                "Submits one strict capability or collaboration request. For kind contract_request, payload requires conflictingIntentId (the exact owner intent UUID from public state) and proposal. Optional fields are contractId and revision. Only these fields are allowed for contract_request.",
+                "Submits one strict capability or collaboration request. A capability_request includes the complete API contract. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
                 requestSchema,
                 "request-coordination",
                 "MUTATING",
@@ -338,6 +356,7 @@ public final class McpToolCatalog {
         Map<String, Object> responsePayload = new LinkedHashMap<>();
         responsePayload.put("capabilityRequestHandle", Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$"));
         responsePayload.put("response", Map.of("type", "string", "enum", List.of("accept", "revise", "reject")));
+        responsePayload.put("contractRevision", Map.of("type", "integer", "minimum", 1, "description", "Exact contract revision shown in the owner inbox"));
         responsePayload.put("revision", contractSchema);
         responsePayload.put("reason", property("string"));
         responsePayload.put("coordinationRequest", Map.of("type", "string", "format", "uuid"));
@@ -349,27 +368,41 @@ public final class McpToolCatalog {
         responsePayload.put("snapshotId", property("string"));
         responsePayload.put("intentId", Map.of("type", "string", "format", "uuid"));
         responsePayload.put("claimEpoch", Map.of("type", "integer", "minimum", 1));
-        responsePayload.put("result", Map.of("type", "string", "enum", List.of("accepted", "revision_required", "rejected")));
+        responsePayload.put("result", Map.of("type", "string", "enum", List.of("inspect", "accepted", "revision_required", "rejected")));
         responsePayload.put("implementationRevision", Map.of("type", "integer", "minimum", 1));
         responsePayload.put("failedAcceptanceTests", Map.of("type", "array", "items", property("string")));
         Map<String, Object> responseSchema = objectSchema(Map.of("kind",
                 Map.of("type", "string", "enum", List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation")),
                 "payload",
                 objectSchema(responsePayload, List.of())), List.of("kind", "payload"));
+        constrainPayloadKind(responseSchema, "capability_response", List.of("capabilityRequestHandle", "response", "contractRevision", "revision", "reason"), List.of("capabilityRequestHandle", "response", "contractRevision"));
         constrainPayloadKind(responseSchema, "coordination_response", List.of("coordinationRequest", "coordinationStatus", "proposal"), List.of("coordinationRequest", "coordinationStatus"));
+        constrainPayloadKind(responseSchema,
+                "implementation_validation",
+                List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "failedAcceptanceTests"),
+                List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result"));
         result.add(descriptor(RESPOND_COORDINATION,
-                "Responds to a pending coordination item or validates an implementation. For kind coordination_response, payload requires coordinationRequest (the owned request UUID) and coordinationStatus (ACCEPTED, REVISED, REJECTED, CANCELLED, or COMPLETED); proposal is optional. Only these fields are allowed for coordination_response. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
+                "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required. capability_response is fenced to the exact contractRevision shown in the owner inbox; revise also requires a complete replacement contract. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
                 responseSchema,
                 "respond-coordination",
                 "MUTATING",
                 List.of("SESSION_BINDING", "COORDINATION"),
                 7));
         result.add(descriptor(PUBLISH_CAPABILITY_IMPLEMENTATION,
-                "Publishes an immutable implementation for an accepted capability request.",
+                "Publishes an immutable claimed-source snapshot for the accepted capability request and exact owner intent. Supply contractRevision, intentId, claimEpoch, and expectedTreeHash from the current get_next_action projection; stale evidence is rejected.",
                 objectSchema(Map.of("capabilityRequestHandle",
                         Map.of("type", "string", "pattern", "^req_[A-Za-z0-9]{12,64}$", "description", "Server-issued capability request handle"),
                         "summary",
-                        Map.of("type", "string", "description", "Human-readable summary of this implementation")), List.of("capabilityRequestHandle")),
+                        Map.of("type", "string", "description", "Human-readable summary of this implementation"),
+                        "contractRevision",
+                        Map.of("type", "integer", "minimum", 1, "description", "Exact accepted contract revision from the current projection"),
+                        "intentId",
+                        Map.of("type", "string", "format", "uuid", "description", "Exact active owner intent ID from the current projection"),
+                        "claimEpoch",
+                        Map.of("type", "integer", "minimum", 1, "description", "Exact active owner claim epoch from the current projection"),
+                        "expectedTreeHash",
+                        Map.of("type", "string", "pattern", "^[0-9a-f]{40}([0-9a-f]{24})?$", "description", "Projected Git tree hash for the claimed source snapshot")),
+                        List.of("capabilityRequestHandle", "contractRevision", "intentId", "claimEpoch", "expectedTreeHash")),
                 "publish-capability",
                 "MUTATING",
                 List.of("SESSION_BINDING", "CAPABILITY"),
@@ -439,14 +472,34 @@ public final class McpToolCatalog {
         Map<String, Object> kindSchema = (Map<String, Object>) properties.get("kind");
         Map<String, Object> payloadSchema = (Map<String, Object>) properties.get("payload");
         Map<String, Object> payloadProperties = (Map<String, Object>) payloadSchema.get("properties");
+        List<String> allKinds = (List<String>) kindSchema.get("enum");
+        Map<String, Map<String, Object>> constrainedKinds = new LinkedHashMap<>();
+        Object previous = schema.get("oneOf");
+        if (previous instanceof List<?> priorAlternatives) {
+            for (Object prior : priorAlternatives) {
+                if (!(prior instanceof Map<?, ?> alternative) || !(alternative.get("properties") instanceof Map<?, ?> priorProperties)
+                        || !(priorProperties.get("kind") instanceof Map<?, ?> priorKind) || !(priorKind.get("enum") instanceof List<?> priorKindValues)
+                        || priorKindValues.size() != 1 || !(priorProperties.get("payload") instanceof Map<?, ?> priorPayload)
+                        || !Boolean.FALSE.equals(priorPayload.get("additionalProperties"))) {
+                    continue;
+                }
+                String priorKindValue = String.valueOf(priorKindValues.getFirst());
+                if (allKinds.contains(priorKindValue)) {
+                    constrainedKinds.put(priorKindValue, (Map<String, Object>) alternative);
+                }
+            }
+        }
         Map<String, Object> selected = new LinkedHashMap<>();
         allowed.forEach(field -> selected.put(field, payloadProperties.get(field)));
         Map<String, Object> strictPayload = objectSchema(selected, required);
         strictPayload.put("additionalProperties", false);
-        List<String> otherKinds = ((List<String>) kindSchema.get("enum")).stream().filter(value -> !value.equals(kind)).toList();
-        schema.put("oneOf",
-                List.of(objectSchema(Map.of("kind", Map.of("type", "string", "enum", List.of(kind)), "payload", strictPayload), List.of("kind", "payload")),
-                        objectSchema(Map.of("kind", Map.of("type", "string", "enum", otherKinds), "payload", payloadSchema), List.of("kind", "payload"))));
+        constrainedKinds.put(kind, objectSchema(Map.of("kind", Map.of("type", "string", "enum", List.of(kind)), "payload", strictPayload), List.of("kind", "payload")));
+        List<Map<String, Object>> alternatives = new ArrayList<>(constrainedKinds.values());
+        List<String> otherKinds = allKinds.stream().filter(value -> !constrainedKinds.containsKey(value)).toList();
+        if (!otherKinds.isEmpty()) {
+            alternatives.add(objectSchema(Map.of("kind", Map.of("type", "string", "enum", otherKinds), "payload", payloadSchema), List.of("kind", "payload")));
+        }
+        schema.put("oneOf", List.copyOf(alternatives));
     }
 
     private static Map<String, Object> objectSchema(Map<String, Object> properties, List<String> required) {

@@ -16,8 +16,18 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
  * @param workGroupId           optional logical work-group identifier
  * @param role                  semantic producer or reviewer role
  * @param reviewTargetSelectors non-ownership selectors identifying producer work this reviewer may review
+ * @param intentId              exact current intent required for a scope extension
+ * @param claimEpoch            exact current claim epoch required for a scope extension
  */
-public record AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes, List<String> knownDependencies, UUID workGroupId, WorkIntent.Role role, List<ResourceSelector> reviewTargetSelectors) {
+public record AgentTaskIntent(String goal,
+        String acceptance,
+        List<String> likelyScopes,
+        List<String> knownDependencies,
+        UUID workGroupId,
+        WorkIntent.Role role,
+        List<ResourceSelector> reviewTargetSelectors,
+        UUID intentId,
+        Long claimEpoch) {
 
     /**
      * Validates task text, dependency identifiers, and selector bounds.
@@ -47,6 +57,9 @@ public record AgentTaskIntent(String goal, String acceptance, List<String> likel
         if (reviewTargetSelectors.size() > 128) {
             throw new IllegalArgumentException("reviewTargetSelectors exceeds 128 items");
         }
+        if ((intentId == null) != (claimEpoch == null) || claimEpoch != null && claimEpoch < 1) {
+            throw new IllegalArgumentException("intentId and positive claimEpoch must be supplied together");
+        }
     }
 
     /**
@@ -58,6 +71,27 @@ public record AgentTaskIntent(String goal, String acceptance, List<String> likel
      * @param knownDependencies explicitly declared capability dependencies
      */
     public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes, List<String> knownDependencies) {
-        this(goal, acceptance, likelyScopes, knownDependencies, null, WorkIntent.Role.PRODUCER, List.of());
+        this(goal, acceptance, likelyScopes, knownDependencies, null, WorkIntent.Role.PRODUCER, List.of(), null, null);
+    }
+
+    /**
+     * Preserves the original task-declaration constructor for provider-side callers.
+     *
+     * @param goal concise task goal
+     * @param acceptance conditions that define completion
+     * @param likelyScopes advisory scopes that do not acquire claims
+     * @param knownDependencies explicitly declared capability dependencies
+     * @param workGroupId work group to join, or {@code null} to start one
+     * @param role lane role, defaulting to producer when {@code null}
+     * @param reviewTargetSelectors selectors a reviewer lane intends to review
+     */
+    public AgentTaskIntent(String goal,
+            String acceptance,
+            List<String> likelyScopes,
+            List<String> knownDependencies,
+            UUID workGroupId,
+            WorkIntent.Role role,
+            List<ResourceSelector> reviewTargetSelectors) {
+        this(goal, acceptance, likelyScopes, knownDependencies, workGroupId, role, reviewTargetSelectors, null, null);
     }
 }

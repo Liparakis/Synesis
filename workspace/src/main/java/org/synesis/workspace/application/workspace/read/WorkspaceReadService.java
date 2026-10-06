@@ -18,6 +18,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.agent.AgentWorkspaceGuidance;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
+import org.synesis.workspace.application.integration.CapabilityValidationSnapshotAccessService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.filesystem.TextFileDocument;
@@ -37,6 +38,7 @@ public final class WorkspaceReadService {
     private final ProjectApplicationService projectService;
     private final WorkspaceReadinessService readinessService;
     private final ReviewSnapshotAccessService reviewSnapshotAccessService;
+    private final CapabilityValidationSnapshotAccessService validationSnapshotAccessService;
 
     /**
      * Creates a workspace read service instance.
@@ -45,6 +47,7 @@ public final class WorkspaceReadService {
         this.projectService = new ProjectApplicationService();
         this.readinessService = new WorkspaceReadinessService();
         this.reviewSnapshotAccessService = new ReviewSnapshotAccessService();
+        this.validationSnapshotAccessService = new CapabilityValidationSnapshotAccessService();
     }
 
     private static boolean isInvalidOrProtectedPath(String path) {
@@ -128,22 +131,36 @@ public final class WorkspaceReadService {
 
         ProjectLocation location;
         ReviewSnapshotAccessService.Access reviewAccess = null;
+        CapabilityValidationSnapshotAccessService.Access validationAccess = null;
         Path assignedWorktree;
         try {
             location = projectService.locate(root);
-            ReviewSnapshotAccessService.AccessResult reviewResolution = reviewSnapshotAccessService.resolve(root, request.provider(), request.connectionInstanceId());
-            if (reviewResolution.denied()) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", reviewResolution.error()));
+            CapabilityValidationSnapshotAccessService.AccessResult validationResolution = validationSnapshotAccessService.resolve(root,
+                    request.provider(),
+                    request.connectionInstanceId(),
+                    request.capabilityRequestHandle(),
+                    request.implementationRevision());
+            if (validationResolution.denied()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", validationResolution.error()));
             }
-            if (reviewResolution.available()) {
-                reviewAccess = reviewResolution.access();
-                assignedWorktree = reviewAccess.worktreePath();
+            if (validationResolution.available()) {
+                validationAccess = validationResolution.access();
+                assignedWorktree = validationAccess.worktreePath();
             } else {
-                ReadinessResult readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
-                if (!readiness.ready()) {
-                    return readiness.response();
+                ReviewSnapshotAccessService.AccessResult reviewResolution = reviewSnapshotAccessService.resolve(root, request.provider(), request.connectionInstanceId());
+                if (reviewResolution.denied()) {
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", reviewResolution.error()));
                 }
-                assignedWorktree = readiness.worktree();
+                if (reviewResolution.available()) {
+                    reviewAccess = reviewResolution.access();
+                    assignedWorktree = reviewAccess.worktreePath();
+                } else {
+                    ReadinessResult readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
+                    if (!readiness.ready()) {
+                        return readiness.response();
+                    }
+                    assignedWorktree = readiness.worktree();
+                }
             }
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
@@ -183,6 +200,7 @@ public final class WorkspaceReadService {
             missing.put("truncated", false);
             missing.put("createAllowed", true);
             addReviewMetadata(missing, reviewAccess);
+            addValidationMetadata(missing, validationAccess);
             return new AgentResponse(AgentStatus.COMPLETED, null, null, missing);
         }
 
@@ -266,8 +284,19 @@ public final class WorkspaceReadService {
         result.put("contentHash", document.revision());
         result.put("truncated", truncated);
         addReviewMetadata(result, reviewAccess);
+        addValidationMetadata(result, validationAccess);
 
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
+    }
+
+    private static void addValidationMetadata(Map<String, Object> result, CapabilityValidationSnapshotAccessService.Access validationAccess) {
+        if (validationAccess == null) {
+            return;
+        }
+        result.put("workspace", "capability_validation_snapshot");
+        result.put("capabilityRequestHandle", validationAccess.requestHandle());
+        result.put("implementationRevision", validationAccess.revision());
+        result.put("implementationCommitSha", validationAccess.commitSha());
     }
 
 }
