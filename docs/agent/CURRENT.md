@@ -1,3 +1,46 @@
+# 2026-10-10 — Refactored build installed and run with Codex and Claude Code; two installer defects fixed
+
+Uncommitted. Build `0.1.0-dev.class-splits-20261010`, from `master` at `14e8fdde` plus the two fixes
+below.
+
+Defects found while installing, both fixed in source:
+
+- The installer failed with `Access is denied` whenever a provider session was open. A provider keeps
+  its MCP server running, which holds `bin\synesis-mcp.exe` open, and Windows will not write over an
+  open image. `installStableLauncher` in `bootstrap/main.go` now leaves an identical launcher alone and
+  otherwise moves the open one aside (`synesis-mcp.exe.replaced-*`) so the new one can take its name;
+  running servers keep their image and a later installation removes the copy. Proven by
+  `TestLauncherHeldOpenByARunningProcessIsReplaced`, which runs a process from the launcher and
+  replaces it, and on this machine with three Codex desktop sessions connected throughout.
+- `:cli:platformBundle` declared outputs and no inputs, so Gradle reused an existing bundle: rebuilding
+  under an unchanged version packaged the previous launchers and jars. It and `:cli:runnableInstaller`
+  now declare what they package. Earlier builds in this work were unaffected only because every one
+  used a new version name.
+
+Real current-build acceptance, disposable project `Documents\TestingSynesisOnClaude`, one Claude Code
+agent (`claude-sonnet-5-5`, low effort) and one Codex agent (`gpt-6-luna`, medium effort), one prompt,
+started by `synesis agents run`. The bootstrapper initialized the project, installed both providers,
+started the controller, and validated; it assigned nothing and relayed nothing.
+
+- Run 1, Claude Code started first: `COMPLETED` in 93 s, no resumes. The Claude Code lane finished and
+  integrated before Codex announced, so the lanes did not overlap and each formed its own work group.
+- Run 2, Codex started first: `COMPLETED` in 87 s, no resumes, one work group. The lanes overlapped.
+  Codex declared `task_store.api`, was told `needs_capability` / `owner_required`, and sent a
+  capability request with a full contract. The owner's lane had integrated by then, so Synesis answered
+  `CAPABILITY_OWNER_INTEGRATED` and recorded no request. Codex's workspace was then reported stale,
+  `ensure_session` moved it to a fresh worktree on the new control head, and it built against the
+  integrated module.
+- Both runs: two immutable lane snapshots integrated, both agents `COMPLETED`, `python -m unittest`
+  passes 8 tests on the control branch.
+
+Reached through the split MCP handler by real providers: `ensure_session`, `get_next_action`,
+`read_file`, `apply_patch`, `run_command`, `request_coordination`, `finish_lane`, stale-workspace
+refresh, integration, and lane close. NOT REACHED in either run: an owner accepting a capability
+request, `publish_capability_implementation`, validation through `respond_coordination`,
+`cancel_lane`, recovery and lane continuation, and a controller resume. Those rest on the test suites
+alone for this build. A low-effort Claude Code agent finishes the storage lane in about half a minute,
+which is why the requester keeps arriving after the owner is done.
+
 # 2026-10-10 — Largest classes split by responsibility; behaviour and tests unchanged
 
 Uncommitted. Structural moves only: method bodies, comments, and checks were moved verbatim into
