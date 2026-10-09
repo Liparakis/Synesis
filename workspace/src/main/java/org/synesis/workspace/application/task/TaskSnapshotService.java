@@ -1,12 +1,17 @@
 package org.synesis.workspace.application.task;
 
+import static org.synesis.workspace.application.task.SnapshotGitCommands.runGitOutput;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.integrity;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.materializeSnapshot;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.materializedPaths;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.preparedTreeHash;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.projectIdentity;
+import static org.synesis.workspace.application.task.SnapshotTreeMaterialization.stableId;
+import static org.synesis.workspace.application.task.WorktreeChangeInspection.inspectWorktreeChanges;
+
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,7 +21,7 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.workspace.lifecycle.process.GitProcessRunner;
+import org.synesis.workspace.application.task.WorktreeChangeInspection.WorktreeChanges;
 
 /**
  * Service for creating and verifying immutable task snapshots from worker worktrees.
@@ -29,10 +34,6 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
 public final class TaskSnapshotService {
-
-    private record WorktreeChanges(boolean dirty, String headCommit, String baseCommit, List<String> changedPaths) {
-
-    }
 
     private final SnapshotArtifactPolicy artifactPolicy;
     private final org.synesis.workspace.lifecycle.RepositoryPortabilityService portabilityService;
@@ -55,71 +56,6 @@ public final class TaskSnapshotService {
         this.portabilityService = Objects.requireNonNull(portabilityService, "portabilityService");
     }
 
-    private static String gitRevParse(Path workdir) throws IOException {
-        return runGitOutput(workdir, "rev-parse", "HEAD");
-    }
-
-    private static String deriveBaseCommit(Path workdir) {
-        try {
-            return runGitOutput(workdir, "rev-parse", "HEAD^");
-        } catch (IOException e) {
-            try {
-                return runGitOutput(workdir, "hash-object", "-t", "tree", "/dev/null");
-            } catch (IOException e2) {
-                return "";
-            }
-        }
-    }
-
-    private WorktreeChanges inspectWorktreeChanges(Path worktree, String laneBaseCommit, boolean includeAllUntracked) throws IOException {
-        String status = includeAllUntracked ? runGitOutput(worktree, "status", "--porcelain", "--untracked-files=all") : runGitOutput(worktree, "status", "--porcelain");
-        boolean dirty = !status.isBlank();
-        String headCommit = gitRevParse(worktree);
-        String baseCommit = laneBaseCommit == null || laneBaseCommit.isBlank() ? dirty ? headCommit : deriveBaseCommit(worktree) : laneBaseCommit;
-        return new WorktreeChanges(dirty, headCommit, baseCommit, deriveChangedPaths(worktree, baseCommit, dirty));
-    }
-
-    private Optional<List<String>> publishableSourceChanges(List<String> changedPaths) {
-        SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(changedPaths);
-        if (!manifest.valid()) {
-            return Optional.empty();
-        }
-        return Optional.of(changedPaths.stream().filter(path -> !manifest.allowedArtifacts().contains(path)).toList());
-    }
-
-    /** Inspects a worktree and applies the same artifact policy used by both publication gates. */
-    private Optional<List<String>> publishableWorktreeSourceChanges(Path worktreePath, String laneBaseCommit) throws IOException {
-        List<String> changedPaths = inspectWorktreeChanges(worktreePath, laneBaseCommit, true).changedPaths();
-        return publishableSourceChanges(changedPaths);
-    }
-
-    private static List<String> deriveChangedPaths(Path workdir, String baseCommit, boolean includeWorkingTree) {
-        if (baseCommit.isBlank()) {
-            return List.of();
-        }
-        try {
-            List<String> paths = new ArrayList<>();
-            String committed = runGitOutput(workdir, "diff", "--name-only", baseCommit, "HEAD");
-            String working = includeWorkingTree ? runGitOutput(workdir, "diff", "--name-only", "HEAD") : "";
-            String untracked = includeWorkingTree ? runGitOutput(workdir, "ls-files", "--others", "--exclude-standard") : "";
-            String output = committed + "\n" + working + "\n" + untracked;
-            for (String line : output.split("\\r?\\n")) {
-                String trimmed = line.trim();
-                if (!trimmed.isBlank()) {
-                    if (!paths.contains(trimmed)) {
-                        paths.add(trimmed);
-                    }
-                    if (paths.size() >= TaskSnapshotRecord.MAX_CHANGED_PATHS) {
-                        break;
-                    }
-                }
-            }
-            return List.copyOf(paths);
-        } catch (Exception ex) {
-            throw new IllegalStateException("SNAPSHOT_DIFF_INSPECTION_FAILED", ex);
-        }
-    }
-
     /**
      * Computes the claimed source tree used by capability publication without changing HEAD,
      * the normal index, or the working files. Git tree objects may be written to capture it.
@@ -133,140 +69,7 @@ public final class TaskSnapshotService {
      */
     public String capabilityPublicationTreeHash(Path worktree, String laneBaseCommit,
             List<ResourceSelector> claims, List<ResourceSelector> foreignClaims) throws IOException {
-        if (claims == null || claims.isEmpty()) {
-            throw new IOException("CAPABILITY_PUBLICATION_CLAIM_REQUIRED");
-        }
-        WorktreeChanges changes = inspectWorktreeChanges(worktree, laneBaseCommit, true);
-        List<String> paths = materializedPaths(changes.changedPaths(), claims, false, foreignClaims);
-        if (paths.isEmpty()) {
-            throw new IOException("NO_CHANGES_TO_PUBLISH");
-        }
-        return preparedTreeHash(worktree, changes.headCommit(), paths);
-    }
-
-    private List<String> materializedPaths(List<String> changedPaths, List<ResourceSelector> claims,
-            boolean scopeToClaims, List<ResourceSelector> foreignClaims) {
-        SnapshotArtifactPolicy.Manifest manifest = artifactPolicy.classify(changedPaths);
-        if (!manifest.valid()) {
-            throw new IllegalStateException("SNAPSHOT_ARTIFACT_POLICY:" + manifest.rejectedArtifacts());
-        }
-        List<String> sourcePaths = changedPaths.stream().filter(path -> !manifest.allowedArtifacts().contains(path))
-                .filter(path -> foreignClaims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList();
-        if (!scopeToClaims && !claims.isEmpty()
-                && sourcePaths.stream().anyMatch(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-            throw new IllegalStateException("UNCLAIMED_SNAPSHOT_PATH");
-        }
-        return scopeToClaims ? sourcePaths.stream()
-                .filter(path -> claims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))).toList() : sourcePaths;
-    }
-
-    private static String preparedTreeHash(Path workdir, String parent, List<String> paths) throws IOException {
-        Path index = null;
-        try {
-            index = Files.createTempFile("synesis-tree-", ".index");
-            Files.deleteIfExists(index);
-            runGitWithIndex(workdir, index, "read-tree", parent);
-            stageSourceIndex(workdir, index, paths);
-            return runGitWithIndexOutput(workdir, index, "write-tree");
-        } finally {
-            if (index != null) {
-                Files.deleteIfExists(index);
-            }
-        }
-    }
-
-    private static String stableId(String project, UUID laneId, long epoch, String base, String tree) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest((project + "\n" + laneId + "\n" + epoch + "\n" + base + "\n" + tree).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest).substring(0, 32);
-        } catch (Exception failure) {
-            throw new IllegalStateException("SNAPSHOT_ID_DERIVATION_FAILED", failure);
-        }
-    }
-
-    private static String projectIdentity(Path controlRoot) {
-        Path metadata = controlRoot.resolve(".synesis/project.json");
-        try {
-            String content = Files.readString(metadata);
-            int marker = content.indexOf("\"projectId\"");
-            if (marker >= 0) {
-                int colon = content.indexOf(':', marker);
-                int first = content.indexOf('"', colon + 1);
-                int second = content.indexOf('"', first + 1);
-                if (first >= 0 && second > first) {
-                    return content.substring(first + 1, second);
-                }
-            }
-        } catch (IOException ignored) {
-            // The canonical fallback remains deterministic for uninitialized
-            // unit fixtures; production callers require project metadata.
-        }
-        return controlRoot.toAbsolutePath().normalize().toString().replace('\\', '/');
-    }
-
-    private static String materializeSnapshot(Path workdir, String parent, String snapshotId, String tree) throws IOException {
-        String ref = "refs/synesis/snapshots/" + snapshotId;
-        String existing;
-        try {
-            existing = runGitOutput(workdir, "rev-parse", "--verify", ref);
-        } catch (IOException missing) {
-            existing = null;
-        }
-        if (existing != null) {
-            if (!tree.equals(runGitOutput(workdir, "rev-parse", existing + "^{tree}"))
-                    || !parent.equals(runGitOutput(workdir, "rev-parse", existing + "^"))) {
-                throw new IOException("SNAPSHOT_REF_CONTENT_MISMATCH");
-            }
-            return existing;
-        }
-        // Commit the already captured tree, never restage mutable files between
-        // the optimistic tree check and immutable publication.
-        String commit = runGitOutput(workdir, "commit-tree", tree, "-p", parent, "-m", "Synesis immutable lane snapshot " + snapshotId);
-        runGitOutput(workdir, "update-ref", ref, commit, "");
-        return commit;
-    }
-
-    private static void stageSourceIndex(Path workdir, Path index, List<String> paths) throws IOException {
-        // Let Git's ignore rules omit provider/admin material first.  Reset
-        // explicitly managed paths from the temporary index as well, covering
-        // projects that accidentally track one of those files.
-        if (paths.isEmpty()) {
-            runGitWithIndex(workdir, index, "add", "-A", "--", ".");
-        } else {
-            List<String> add = new ArrayList<>();
-            add.add("add");
-            add.add("-A");
-            add.add("--");
-            add.addAll(paths);
-            runGitWithIndex(workdir, index, add.toArray(String[]::new));
-        }
-        for (String managed : List.of(".synesis", ".codex", ".claude", "AGENTS.md", ".mcp.json", "__pycache__", ":(glob)**/__pycache__/**")) {
-            try {
-                runGitWithIndex(workdir, index, "reset", "--", managed);
-            } catch (IOException ignored) {
-                // The managed path may not exist or be tracked in this lane.
-            }
-        }
-    }
-
-    private static String integrity(String commit, List<String> paths) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((commit + "\n" + String.join("\n", paths)).getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            return commit;
-        }
-    }
-
-    private static String runGitWithIndexOutput(Path workdir, Path index, String... args) throws IOException {
-        return GitProcessRunner.runWithIndex(workdir, index, args).trim();
-    }
-
-    private static void runGitWithIndex(Path workdir, Path index, String... args) throws IOException {
-        GitProcessRunner.runWithIndex(workdir, index, args);
-    }
-
-    private static String runGitOutput(Path workdir, String... args) throws IOException {
-        return GitProcessRunner.run(workdir, args).trim();
+        return SnapshotTreeMaterialization.capabilityPublicationTreeHash(artifactPolicy, worktree, laneBaseCommit, claims, foreignClaims);
     }
 
     /**
@@ -303,19 +106,7 @@ public final class TaskSnapshotService {
      * @throws IOException if Git inspection fails
      */
     public String snapshotBaseForBoundWorktree(Path workerWorktreePath, String intentBaseCommit, String bindingBaseCommit) throws IOException {
-        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
-        if (intentBaseCommit == null || intentBaseCommit.isBlank() || bindingBaseCommit == null || bindingBaseCommit.isBlank() || intentBaseCommit.equals(bindingBaseCommit)) {
-            return intentBaseCommit;
-        }
-        String worktreeHead = gitRevParse(workerWorktreePath);
-        if (commitIsAncestor(workerWorktreePath, intentBaseCommit, bindingBaseCommit) && commitIsAncestor(workerWorktreePath, bindingBaseCommit, worktreeHead)) {
-            return bindingBaseCommit;
-        }
-        return intentBaseCommit;
-    }
-
-    private static boolean commitIsAncestor(Path worktree, String ancestor, String descendant) throws IOException {
-        return GitProcessRunner.runResult(worktree, "merge-base", "--is-ancestor", ancestor, descendant).exitCode() == 0;
+        return WorktreeChangeInspection.snapshotBaseForBoundWorktree(workerWorktreePath, intentBaseCommit, bindingBaseCommit);
     }
 
     /**
@@ -369,23 +160,7 @@ public final class TaskSnapshotService {
      * @throws IOException if Git inspection fails
      */
     public boolean hasPublishableChanges(Path workerWorktreePath, List<ResourceSelector> claims, String laneBaseCommit, boolean allowOtherClaimedChanges) throws IOException {
-        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
-        Objects.requireNonNull(claims, "claims");
-        Optional<List<String>> publishableChanges = publishableWorktreeSourceChanges(workerWorktreePath, laneBaseCommit);
-        if (publishableChanges.isEmpty()) {
-            return false;
-        }
-        List<String> sourceChanges = publishableChanges.orElseThrow();
-        if (!claims.isEmpty()) {
-            boolean laneChange = sourceChanges.stream().anyMatch(path -> claims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
-            if (!laneChange) {
-                return false;
-            }
-            if (!allowOtherClaimedChanges && sourceChanges.stream().anyMatch(path -> claims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))))) {
-                return false;
-            }
-        }
-        return !sourceChanges.isEmpty();
+        return PublishableChangeDetection.hasPublishableChanges(artifactPolicy, workerWorktreePath, claims, laneBaseCommit, allowOtherClaimedChanges);
     }
 
     /**
@@ -424,24 +199,7 @@ public final class TaskSnapshotService {
      */
     public boolean hasScopedPublishableChanges(Path workerWorktreePath, List<ResourceSelector> laneClaims, List<ResourceSelector> participantClaims, List<ResourceSelector> foreignClaims, String laneBaseCommit)
             throws IOException {
-        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
-        Objects.requireNonNull(laneClaims, "laneClaims");
-        Objects.requireNonNull(participantClaims, "participantClaims");
-        Objects.requireNonNull(foreignClaims, "foreignClaims");
-        if (foreignClaims.isEmpty()) {
-            return hasPublishableChanges(workerWorktreePath, laneClaims, laneBaseCommit, true) && hasPublishableChanges(workerWorktreePath, participantClaims, laneBaseCommit, false);
-        }
-        Optional<List<String>> publishableChanges = publishableWorktreeSourceChanges(workerWorktreePath, laneBaseCommit);
-        if (publishableChanges.isEmpty()) {
-            return false;
-        }
-        List<String> sourceChanges = publishableChanges.orElseThrow();
-        boolean laneChange = sourceChanges.stream().anyMatch(path -> laneClaims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
-        if (!laneChange) {
-            return false;
-        }
-        return sourceChanges.stream().allMatch(path -> participantClaims.stream().anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))) || foreignClaims.stream()
-                .anyMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path))));
+        return PublishableChangeDetection.hasScopedPublishableChanges(artifactPolicy, workerWorktreePath, laneClaims, participantClaims, foreignClaims, laneBaseCommit);
     }
 
     /**
@@ -463,47 +221,7 @@ public final class TaskSnapshotService {
      * @throws IOException when Git inspection or the rejected snapshot commit is unavailable
      */
     public boolean hasRevisionPublishableChanges(Path workerWorktreePath, List<ResourceSelector> laneClaims, String laneBaseCommit, TaskSnapshotRecord rejectedSnapshot) throws IOException {
-        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
-        Objects.requireNonNull(laneClaims, "laneClaims");
-        Objects.requireNonNull(rejectedSnapshot, "rejectedSnapshot");
-        String rejectedCommit = rejectedSnapshot.commitSha();
-        if (rejectedCommit == null || rejectedCommit.isBlank()) {
-            return false;
-        }
-        runGitOutput(workerWorktreePath, "cat-file", "-e", rejectedCommit + "^{commit}");
-        List<String> currentPaths = inspectWorktreeChanges(workerWorktreePath, laneBaseCommit, true).changedPaths();
-        java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>(rejectedSnapshot.changedPaths());
-        candidates.addAll(currentPaths);
-        for (String path : candidates) {
-            if (laneClaims.stream().noneMatch(selector -> selector.overlaps(ResourceSelector.pathExact(path)))) {
-                continue;
-            }
-            if (differsFromCommit(workerWorktreePath, rejectedCommit, path)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean differsFromCommit(Path workdir, String commit, String path) throws IOException {
-        String normalized = path.replace('\\', '/');
-        boolean presentInCommit;
-        try {
-            runGitOutput(workdir, "cat-file", "-e", commit + ":" + normalized);
-            presentInCommit = true;
-        } catch (IOException missingPath) {
-            presentInCommit = false;
-        }
-        if (!presentInCommit) {
-            return Files.exists(workdir.resolve(normalized));
-        }
-        Path currentPath = workdir.resolve(normalized);
-        if (!Files.exists(currentPath)) {
-            return true;
-        }
-        String committedHash = runGitOutput(workdir, "rev-parse", commit + ":" + normalized);
-        String currentHash = runGitOutput(workdir, "hash-object", "--", normalized);
-        return !committedHash.equals(currentHash);
+        return PublishableChangeDetection.hasRevisionPublishableChanges(workerWorktreePath, laneClaims, laneBaseCommit, rejectedSnapshot);
     }
 
     /**
@@ -519,8 +237,7 @@ public final class TaskSnapshotService {
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean isCleanWorktree(Path workerWorktreePath) throws IOException {
-        Objects.requireNonNull(workerWorktreePath, "workerWorktreePath");
-        return runGitOutput(workerWorktreePath, "status", "--porcelain", "--untracked-files=all").isBlank();
+        return WorktreeChangeInspection.isCleanWorktree(workerWorktreePath);
     }
 
     /**
@@ -1078,7 +795,7 @@ public final class TaskSnapshotService {
         String baseCommit = changes.baseCommit();
         List<String> allChangedPaths = changes.changedPaths();
         SnapshotArtifactPolicy.Manifest artifactManifest = artifactPolicy.classify(allChangedPaths);
-        List<String> materializedPaths = materializedPaths(allChangedPaths, claims, scopeToClaims, foreignClaims);
+        List<String> materializedPaths = materializedPaths(artifactPolicy, allChangedPaths, claims, scopeToClaims, foreignClaims);
         String treeHash = preparedTreeHash(workerWorktreePath, headCommit, materializedPaths);
         if (expectedTreeHash != null && !expectedTreeHash.equals(treeHash)) {
             throw new IOException("CAPABILITY_PUBLICATION_TREE_STALE");
@@ -1157,16 +874,7 @@ public final class TaskSnapshotService {
      * @throws IOException if the ref cannot be created or verified
      */
     public String pinPreparedRef(Path worktreePath, TaskSnapshotRecord snapshot, String completionId) throws IOException {
-        Objects.requireNonNull(worktreePath, "worktreePath");
-        Objects.requireNonNull(snapshot, "snapshot");
-        Objects.requireNonNull(completionId, "completionId");
-        String ref = "refs/synesis/prepared/" + completionId;
-        runGitOutput(worktreePath, "update-ref", ref, snapshot.commitSha());
-        String resolved = runGitOutput(worktreePath, "rev-parse", ref);
-        if (!resolved.equals(snapshot.commitSha())) {
-            throw new IOException("PREPARED_OBJECT_MISMATCH");
-        }
-        return ref;
+        return SnapshotRefLifecycle.pinPreparedRef(worktreePath, snapshot, completionId);
     }
 
     /**
@@ -1177,7 +885,7 @@ public final class TaskSnapshotService {
      * @throws IOException if Git cannot remove the ref
      */
     public void removeSnapshotRef(Path worktreePath, TaskSnapshotRecord snapshot) throws IOException {
-        runGitOutput(worktreePath, "update-ref", "-d", snapshot.provenance().snapshotRef());
+        SnapshotRefLifecycle.removeSnapshotRef(worktreePath, snapshot);
     }
 
     /**
@@ -1188,12 +896,7 @@ public final class TaskSnapshotService {
      * @throws IOException if Git cannot remove the reference
      */
     public void removePreparedRef(Path worktreePath, String preparedRef) throws IOException {
-        Objects.requireNonNull(worktreePath, "worktreePath");
-        Objects.requireNonNull(preparedRef, "preparedRef");
-        if (!preparedRef.startsWith("refs/synesis/prepared/")) {
-            throw new IOException("INVALID_PREPARED_REF");
-        }
-        runGitOutput(worktreePath, "update-ref", "-d", preparedRef);
+        SnapshotRefLifecycle.removePreparedRef(worktreePath, preparedRef);
     }
 
     /**
@@ -1206,9 +909,7 @@ public final class TaskSnapshotService {
      * @throws IOException if the object cannot be verified or promoted
      */
     public void promotePreparedRef(Path worktreePath, String preparedRef, String finalRef, String expectedCommit) throws IOException {
-        verifyPreparedRef(worktreePath, preparedRef, expectedCommit);
-        runGitOutput(worktreePath, "update-ref", finalRef, expectedCommit);
-        verifyPreparedRef(worktreePath, finalRef, expectedCommit);
+        SnapshotRefLifecycle.promotePreparedRef(worktreePath, preparedRef, finalRef, expectedCommit);
     }
 
     /**
@@ -1220,10 +921,7 @@ public final class TaskSnapshotService {
      * @throws IOException if verification fails
      */
     public void verifyPreparedRef(Path worktreePath, String preparedRef, String expectedCommit) throws IOException {
-        String resolved = runGitOutput(worktreePath, "rev-parse", preparedRef);
-        if (!resolved.equals(expectedCommit)) {
-            throw new IOException("PREPARED_OBJECT_MISMATCH");
-        }
+        SnapshotRefLifecycle.verifyPreparedRef(worktreePath, preparedRef, expectedCommit);
     }
 
     /**
@@ -1235,6 +933,6 @@ public final class TaskSnapshotService {
      * @throws IOException if Git cannot resolve the tree
      */
     public String treeHash(Path worktreePath, String commit) throws IOException {
-        return runGitOutput(worktreePath, "rev-parse", commit + "^{tree}");
+        return SnapshotGitCommands.treeHash(worktreePath, commit);
     }
 }
