@@ -529,6 +529,15 @@ val platformBundle = tasks.register("platformBundle") {
         "Bundle assembly uses execution-time archive and filesystem operations."
     )
     dependsOn(runtimeImage, tasks.installDist, nativeMcpLauncher, ":mcp:jar")
+    // With outputs but no inputs, Gradle treats an existing bundle as current: a rebuild under an
+    // unchanged version silently packaged the previous launchers and jars.
+    inputs.files(tasks.jar, project(":mcp").tasks.named("jar"))
+    inputs.dir(layout.buildDirectory.dir("install/synesis/lib"))
+    inputs.dir(runtimeImageDirectory)
+    inputs.dir(nativeMcpDirectory)
+    inputs.file(rootProject.file("LICENSE"))
+    inputs.property("bundleVersion", bundleVersion)
+    inputs.property("bundlePlatform", bundlePlatform)
     outputs.dir(platformBundleDirectory)
     doLast {
         val root = platformBundleDirectory.get().asFile
@@ -1688,6 +1697,8 @@ val runnableInstaller = tasks.register("runnableInstaller") {
     )
     dependsOn(bundleArchive, nativeMcpLauncher)
     inputs.file(bundleArchiveFile)
+    // The installer executable is the native installer with the archive appended.
+    inputs.dir(nativeMcpDirectory)
     inputs.property("bundlePlatform", bundlePlatform)
     outputs.file(runnableInstallerFile)
     doLast {
