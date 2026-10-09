@@ -1,38 +1,24 @@
 package org.synesis.coordination.application;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import org.synesis.coordination.domain.collaboration.ClaimConflict;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
-import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
-import org.synesis.coordination.domain.collaboration.Participant;
-import org.synesis.coordination.domain.collaboration.RepairLanePayload;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
-import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.collaboration.WorkIntentScopeExtension;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.SnapshotReference;
-import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
-import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationMissingElementException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -55,9 +41,17 @@ public final class WorkIntentService {
      */
     private final PredictionEventStore store;
     /**
-     * Identity used to authenticate every event emitted by this service.
+     * Owns claim announcement, scope extension, and explicit lane release.
      */
-    private final NodeIdentity signer;
+    private final LaneClaimService laneClaims;
+    /**
+     * Owns no-change completion, release after integration, and the work-group completion that follows them.
+     */
+    private final LaneCompletionService laneCompletion;
+    /**
+     * Owns repair-lane admission and the ownership-transfer event.
+     */
+    private final RepairLaneTransfer repairLanes;
     /**
      * Owns coordination-request admission, response, and review-grant transitions.
      */
@@ -75,236 +69,12 @@ public final class WorkIntentService {
      */
     public WorkIntentService(PredictionEventStore store, NodeIdentity signer) {
         this.store = CoordinationNullException.requireNonNull(store, "store");
-        this.signer = CoordinationNullException.requireNonNull(signer, "signer");
-        this.coordinationRequests = new CoordinationRequestService(this.store, this.signer);
-        this.participantRecovery = new ParticipantRecoveryService(this.store, this.signer);
-    }
-
-    /**
-     * Checks whether unresolved output, grants, or requests prevent lane release.
-     *
-     * @param current fresh authoritative project projection
-     */
-    private static boolean hasNoChangeObligation(PredictionEventStore current, WorkIntent intent) {
-        if (hasPendingSnapshotOrPreparation(current, intent)) {
-            return true;
-        }
-        if (hasUnresolvedGrant(current, intent)) {
-            return true;
-        }
-        return hasPendingRequest(current, intent);
-    }
-
-    /**
-     * Checks for unpublished or unintegrated output from the exact claim epoch.
-     */
-    private static boolean hasPendingSnapshotOrPreparation(PredictionEventStore current, WorkIntent intent) {
-        boolean snapshotPending = current.taskCompletionProjection().allSnapshots().stream()
-                .anyMatch(snapshot -> snapshot.provenance().laneIdentity().equals(intent.identity())
-                        && snapshot.provenance().claimEpochIdentity().equals(intent.claimEpoch()));
-        boolean preparedPending = current.taskCompletionProjection().allPrepared().stream()
-                .anyMatch(prepared -> prepared.laneIdentity().equals(intent.identity()) && prepared.claimEpochIdentity()
-                        .equals(intent.claimEpoch()));
-        return snapshotPending || preparedPending;
-    }
-
-    /**
-     * Checks whether a grant or review response still reserves this intent.
-     */
-    private static boolean hasUnresolvedGrant(PredictionEventStore current, WorkIntent intent) {
-        return current.workGroupProjection().grants().stream().filter(grant -> grant.group().equals(intent.group()))
-                .filter(grant -> !current.workGroupProjection().continuationGrant(grant.identity()))
-                .filter(grant -> current.collaborationProjection().successorIntent(grant.targetIntent()).isEmpty())
-                .filter(grant -> !current.workGroupProjection().grantSuperseded(grant.identity())).filter(grant ->
-                        (grant.targetIntent().equals(intent.identity()) && grant.epoch().equals(intent.claimEpoch()))
-                                || grant.targetParticipantIdentity().equals(intent.participantIdentity()))
-                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.identity()) || (
-                        current.workGroupProjection().grantConsumed(grant.identity()) && current.workGroupProjection()
-                                .reviewValidationForGrant(grant.identity()).isEmpty()));
-    }
-
-    /**
-     * Checks whether a pending coordination request still refers to this intent or participant.
-     */
-    private static boolean hasPendingRequest(PredictionEventStore current, WorkIntent intent) {
-        return current.collaborationProjection().requests().stream()
-                .anyMatch(request -> request.status() == CoordinationRequest.Status.PENDING && (
-                        request.conflictingIntent().equals(intent.identity()) || request.requesterIdentity()
-                                .equals(intent.participantIdentity()) || request.targetIdentity()
-                                .equals(intent.participantIdentity())));
-    }
-
-    /**
-     * Selects the lowest-version active successor matching snapshot task and authority lineage.
-     */
-    private static WorkIntent successorForSnapshot(PredictionEventStore current, TaskSnapshotRecord snapshot) {
-        return current.collaborationProjection().activeIntents().stream()
-                .filter(intent -> intent.task().equals(snapshot.taskIdentity()))
-                .filter(intent -> intent.group().equals(snapshot.provenance().workGroupIdentity()))
-                .filter(intent -> intent.lineage().equals(snapshot.provenance().lineageIdentity()))
-                .filter(intent -> intent.intentVersion().value() > snapshot.provenance().claimEpochIdentity().value())
-                .min(Comparator.comparingLong(WorkIntent::version)).orElse(null);
-    }
-
-    /**
-     * Resolves the current intent and verifies the caller's exact completion binding.
-     */
-    private static WorkIntent validateNoChangeIntent(PredictionEventStore current, NoChangeCompletion completion)
-            throws IOException {
-        WorkIntent intent = current.collaborationProjection().intent(completion.intentIdentity())
-                .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
-        if (!current.projectIdentity().equals(intent.project())) {
-            throw new CoordinationException("NO_CHANGE_PROJECT_MISMATCH");
-        }
-        if (intent.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new CoordinationException("INTENT_NOT_ACTIVE");
-        }
-        if (!intent.group().equals(completion.workGroupIdentity()) || !intent.participantIdentity()
-                .equals(completion.participantIdentity()) || !intent.providerIdentity()
-                .equals(completion.providerIdentity()) || !intent.lineage().equals(completion.lineageIdentity())
-                || !intent.claimEpoch().equals(completion.claimEpochIdentity()) || !intent.baseCommitIdentity()
-                .equals(completion.workspaceCommitIdentity())) {
-            throw new CoordinationException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
-        }
-        return intent;
-    }
-
-    /**
-     * Verifies that this no-change completion can close its active work group.
-     */
-    private static void validateNoChangeGroup(PredictionEventStore current,
-            WorkIntent intent,
-            NoChangeCompletion completion) throws IOException {
-        WorkGroup group = current.workGroupProjection().group(intent.group())
-                .orElseThrow(() -> new CoordinationException("WORK_GROUP_NOT_FOUND"));
-        if (group.status() != WorkGroup.Status.ACTIVE) {
-            throw new CoordinationException("WORK_GROUP_NOT_ACTIVE");
-        }
-        if (!group.groupVersion().equals(completion.workGroupVersionIdentity())) {
-            throw new CoordinationException("WORK_GROUP_VERSION_STALE");
-        }
-        if (hasNoChangeObligation(current, intent)) {
-            throw new CoordinationException("NO_CHANGE_REVIEW_OBLIGATION");
-        }
-    }
-
-    /**
-     * Returns whether any active intent still belongs to the group.
-     */
-    private static boolean hasActiveGroupIntents(PredictionEventStore current, WorkGroupId workGroupId) {
-        return current.collaborationProjection().activeIntents().stream()
-                .anyMatch(intent -> intent.group().equals(workGroupId));
-    }
-
-    /**
-     * Returns whether a live or unreviewed grant can still add work to the group.
-     */
-    private static boolean hasUnresolvedGroupGrants(PredictionEventStore current, WorkGroupId workGroupId) {
-        return current.workGroupProjection().grants().stream().filter(grant -> grant.group().equals(workGroupId))
-                .filter(grant -> !current.workGroupProjection().continuationGrant(grant.identity()))
-                .filter(grant -> current.collaborationProjection().successorIntent(grant.targetIntent()).isEmpty())
-                .filter(grant -> !current.workGroupProjection().grantSuperseded(grant.identity()))
-                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.identity()) || (
-                        current.workGroupProjection().grantConsumed(grant.identity()) && current.workGroupProjection()
-                                .reviewValidationForGrant(grant.identity()).isEmpty()));
-    }
-
-    /**
-     * Returns whether an outstanding request still refers to this group.
-     */
-    private static boolean hasPendingGroupRequests(PredictionEventStore current, WorkGroupId workGroupId) {
-        return current.collaborationProjection().requests().stream()
-                .filter(request -> request.status() == CoordinationRequest.Status.PENDING)
-                .anyMatch(request -> current.collaborationProjection().intent(request.conflictingIntent())
-                        .map(intent -> intent.group().equals(workGroupId))
-                        .orElseGet(() -> current.collaborationProjection()
-                                .noChangeCompletion(request.conflictingIntent())
-                                .map(completion -> completion.workGroupIdentity().equals(workGroupId)).orElse(false)));
-    }
-
-    /**
-     * Requires every group snapshot to be integrated or superseded by an integrated correction.
-     */
-    private static boolean allGroupSnapshotsIntegrated(PredictionEventStore current, WorkGroupId workGroupId) {
-        for (var snapshot : current.taskCompletionProjection().allSnapshots()) {
-            if (!snapshot.provenance().workGroupIdentity().equals(workGroupId)) {
-                continue;
-            }
-            TaskCompletionState state = current.taskCompletionProjection().snapshotState(snapshot.snapshotIdentity())
-                    .orElse(TaskCompletionState.ACTIVE);
-            if (state == TaskCompletionState.REVIEW_REJECTED) {
-                boolean corrected = current.taskCompletionProjection().allSnapshots().stream()
-                        .anyMatch(candidate -> candidate.taskIdentity().equals(snapshot.taskIdentity())
-                                && candidate.provenance().lineageIdentity()
-                                .equals(snapshot.provenance().lineageIdentity())
-                                && candidate.provenance().claimEpochIdentity().value() > snapshot.provenance()
-                                .claimEpochIdentity().value() &&
-                                current.taskCompletionProjection().snapshotState(candidate.snapshotIdentity())
-                                        .orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED);
-                if (!corrected) {
-                    return false;
-                }
-            } else if (state != TaskCompletionState.INTEGRATED) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Returns whether prepared lane completions still lack integrated snapshots.
-     */
-    private static boolean hasUnintegratedPreparedCompletion(PredictionEventStore current, WorkGroupId workGroupId) {
-        return current.taskCompletionProjection().allPrepared().stream()
-                .anyMatch(prepared -> current.collaborationProjection().intent(prepared.laneIdentity())
-                        .map(intent -> intent.group().equals(workGroupId) && current.taskCompletionProjection()
-                                .findSnapshotForTaskRevision(intent.task(),
-                                        intent.identity(),
-                                        prepared.claimEpochIdentity()).map(snapshot ->
-                                        current.taskCompletionProjection().snapshotState(snapshot.snapshotIdentity())
-                                                .orElse(TaskCompletionState.ACTIVE) != TaskCompletionState.INTEGRATED)
-                                .orElse(true))
-                        .orElseGet(() -> current.collaborationProjection().noChangeCompletion(prepared.laneIdentity())
-                                .map(completion -> completion.workGroupIdentity().equals(workGroupId)).orElse(false)));
-    }
-
-    /**
-     * Validates repair authority and builds the sole durable ownership-transfer payload.
-     */
-    private static RepairLanePayload validateRepairLane(PredictionEventStore current,
-            WorkIntent source,
-            WorkIntent targetIntent,
-            SnapshotId snapshotId,
-            CommitId expectedControlHead) throws IOException {
-        if (source.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new CoordinationException("REPAIR_SOURCE_NOT_ACTIVE");
-        }
-        if (!source.project().equals(targetIntent.project()) || !source.group().equals(targetIntent.group())) {
-            throw new CoordinationException("REPAIR_WORK_GROUP_MISMATCH");
-        }
-        if (!source.lineage().equals(targetIntent.lineage())) {
-            throw new CoordinationException("REPAIR_AUTHORITY_LINEAGE_MISMATCH");
-        }
-        if (source.identity().equals(targetIntent.identity()) || source.participantIdentity()
-                .equals(targetIntent.participantIdentity())) {
-            throw new CoordinationException("REPAIR_TARGET_MUST_BE_DISTINCT");
-        }
-        if (!source.selectors().equals(targetIntent.selectors())) {
-            throw new CoordinationException("REPAIR_SCOPE_MISMATCH");
-        }
-        if (targetIntent.intentVersion().value() != source.intentVersion().value() + 1L) {
-            throw new CoordinationException("REPAIR_EPOCH_MISMATCH");
-        }
-        if (current.collaborationProjection().activeIntents().stream()
-                .anyMatch(intent -> intent.participantIdentity().equals(targetIntent.participantIdentity()))) {
-            throw new CoordinationException("REPAIR_TARGET_ALREADY_ACTIVE");
-        }
-        return new RepairLanePayload(source.identity().value(),
-                targetIntent,
-                snapshotId.value(),
-                expectedControlHead.value(),
-                source.version(),
-                targetIntent.version());
+        NodeIdentity eventSigner = CoordinationNullException.requireNonNull(signer, "signer");
+        this.laneClaims = new LaneClaimService(this.store, eventSigner);
+        this.laneCompletion = new LaneCompletionService(this.store, eventSigner);
+        this.repairLanes = new RepairLaneTransfer(this.store, eventSigner);
+        this.coordinationRequests = new CoordinationRequestService(this.store, eventSigner);
+        this.participantRecovery = new ParticipantRecoveryService(this.store, eventSigner);
     }
 
     /**
@@ -316,43 +86,7 @@ public final class WorkIntentService {
      * @throws GeneralSecurityException when event signing fails
      */
     public synchronized ClaimResult announce(WorkIntent intent) throws IOException, GeneralSecurityException {
-        CoordinationNullException.requireNonNull(intent, "intent");
-        if (!store.projectId().equals(intent.projectId())) {
-            throw new CoordinationArgumentException("intent project mismatch");
-        }
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
-            List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
-            if (!conflicts.isEmpty()) {
-                return new ClaimResult(false, intent, conflicts);
-            }
-            WorkGroup existingGroup = current.workGroupProjection().group(intent.group()).orElse(null);
-            if (existingGroup != null && existingGroup.status() != WorkGroup.Status.ACTIVE) {
-                throw new CoordinationException("WORK_GROUP_NOT_ACTIVE");
-            }
-            if (existingGroup == null) {
-                WorkGroup group = new WorkGroup(intent.group().value(),
-                        intent.project().value(),
-                        intent.goal(),
-                        intent.acceptance(),
-                        1,
-                        WorkGroup.Status.ACTIVE);
-                current.append(group.identity().value(),
-                        PredictionEventType.WORK_GROUP_CREATED,
-                        signer.nodeId(),
-                        CollaborationCodec.encodeWorkGroup(group),
-                        signer);
-            }
-            current.append(intent.identity().value(),
-                    PredictionEventType.WORK_INTENT_ANNOUNCED,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeIntent(intent),
-                    signer);
-            return new ClaimResult(true, intent, List.of());
-        }
+        return laneClaims.announce(intent);
     }
 
     /**
@@ -377,77 +111,13 @@ public final class WorkIntentService {
             String goal,
             String acceptance,
             List<String> requestedDependencies) throws IOException, GeneralSecurityException {
-        WorkIntentId exactIntent = CoordinationNullException.requireNonNull(intentId, "intent ID");
-        ParticipantId exactParticipant = CoordinationNullException.requireNonNull(participant, "participant");
-        ClaimEpoch exactEpoch = CoordinationNullException.requireNonNull(expectedEpoch, "claim epoch");
-        List<ResourceSelector> selectors =
-                List.copyOf(CoordinationNullException.requireNonNull(requestedSelectors, "selectors"));
-        List<String> dependencies = List.copyOf(CoordinationNullException.requireNonNull(requestedDependencies,
-                "dependencies"));
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore currentStore = freshStore();
-            WorkIntent current = currentStore.collaborationProjection().intent(exactIntent)
-                    .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
-            if (!current.participantIdentity().equals(exactParticipant)) {
-                throw new CoordinationException("INTENT_OWNER_MISMATCH");
-            }
-            if (currentStore.collaborationProjection().participantState(exactParticipant)
-                    .filter(state -> state == Participant.State.ACTIVE)
-                    .isEmpty()) {
-                throw new CoordinationException("INTENT_NOT_ACTIVE");
-            }
-            if (current.claimEpoch().value() != exactEpoch.value()) {
-                throw new CoordinationException("CLAIM_EPOCH_STALE");
-            }
-            List<ResourceSelector> mergedSelectors = new ArrayList<>(current.selectors());
-            selectors.stream().filter(selector -> !mergedSelectors.contains(selector)).forEach(mergedSelectors::add);
-            List<String> mergedDependencies = new ArrayList<>(current.knownDependencies());
-            dependencies.stream().filter(dependency -> !mergedDependencies.contains(dependency))
-                    .forEach(mergedDependencies::add);
-            if (mergedSelectors.size() > 128) {
-                throw new CoordinationException("SCOPE_EXTENSION_CLAIM_LIMIT_EXCEEDED");
-            }
-            if (mergedDependencies.size() > 50) {
-                throw new CoordinationException("SCOPE_EXTENSION_DEPENDENCY_LIMIT_EXCEEDED");
-            }
-            String updatedGoal = goal == null ? current.goal() : goal;
-            String updatedAcceptance = acceptance == null ? current.acceptance() : acceptance;
-            if (mergedSelectors.equals(current.selectors()) && mergedDependencies.equals(current.knownDependencies())
-                    && updatedGoal.equals(current.goal()) && updatedAcceptance.equals(current.acceptance())) {
-                return new ClaimResult(true, current, List.of());
-            }
-            WorkIntent amended = new WorkIntent(current.intentId(),
-                    current.projectId(),
-                    current.participant(),
-                    current.provider(),
-                    current.taskId(),
-                    updatedGoal,
-                    updatedAcceptance,
-                    current.baseCommit(),
-                    List.copyOf(mergedSelectors),
-                    current.version() + 1,
-                    current.workGroupId(),
-                    current.authorityLineageId(),
-                    current.status(),
-                    current.role(),
-                    current.reviewTargetSelectors(),
-                    List.copyOf(mergedDependencies));
-            List<ClaimConflict> conflicts = currentStore.collaborationProjection()
-                    .conflicts(amended.selectors(), current.identity());
-            if (!conflicts.isEmpty()) {
-                return new ClaimResult(false, current, conflicts);
-            }
-            WorkIntentScopeExtension extension = new WorkIntentScopeExtension(amended, current.version());
-            currentStore.append(current.identity().value(),
-                    PredictionEventType.WORK_INTENT_SCOPE_EXTENDED,
-                    signer.nodeId(),
-                    extension.encode(),
-                    signer);
-            return new ClaimResult(true, amended, List.of());
-        }
+        return laneClaims.extendScope(intentId,
+                participant,
+                expectedEpoch,
+                requestedSelectors,
+                goal,
+                acceptance,
+                requestedDependencies);
     }
 
     /**
@@ -501,26 +171,7 @@ public final class WorkIntentService {
     public synchronized void release(WorkIntentId intentId,
             ParticipantId participant,
             WorkIntentMutationPrecondition precondition) throws IOException, GeneralSecurityException {
-        WorkIntentId intentIdentity = CoordinationNullException.requireNonNull(intentId, "intent ID");
-        UUID intentUuid = intentIdentity.value();
-        ParticipantId participantIdentity = CoordinationNullException.requireNonNull(participant, "participant");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
-            WorkIntent intent = current.collaborationProjection().intent(intentIdentity)
-                    .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
-            intent.requireOwnedBy(participantIdentity);
-            if (precondition != null) {
-                precondition.requireMatches(intent);
-            }
-            current.append(intentUuid,
-                    PredictionEventType.WORK_INTENT_RELEASED,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeRelease(intentUuid),
-                    signer);
-        }
+        laneClaims.release(intentId, participant, precondition);
     }
 
     /**
@@ -539,40 +190,7 @@ public final class WorkIntentService {
      */
     public synchronized boolean releaseAfterIntegration(ProjectAppendLock lock, TaskSnapshotRecord snapshot)
             throws IOException, GeneralSecurityException {
-        CoordinationNullException.requireNonNull(lock, "project append lock");
-        CoordinationNullException.requireNonNull(snapshot, "snapshot");
-        if (!lock.isHeld()) {
-            throw new CoordinationException("event append lock unavailable");
-        }
-        PredictionEventStore current = freshStore();
-        TaskCompletionState snapshotState = current.taskCompletionProjection()
-                .snapshotState(snapshot.snapshotIdentity()).orElse(TaskCompletionState.ACTIVE);
-        if (snapshotState != TaskCompletionState.INTEGRATED) {
-            throw new CoordinationException("INTEGRATED_SNAPSHOT_REQUIRED");
-        }
-        WorkIntent exactIntent = current.collaborationProjection().intent(snapshot.provenance().laneIdentity())
-                .orElse(null);
-        WorkIntent intent = exactIntent == null ? successorForSnapshot(current, snapshot) : exactIntent;
-        if (intent == null) {
-            return false;
-        }
-        boolean successor = exactIntent == null;
-        if (intent.status() != WorkIntent.Status.ANNOUNCED || !intent.taskId().equals(snapshot.taskId())
-                || !intent.workGroupId().equals(snapshot.provenance().workGroupId()) || !intent.authorityLineageId()
-                .equals(snapshot.provenance().authorityLineageId()) || (successor ? intent.version()
-                                                                                    <= snapshot.provenance()
-                                                                                       .claimEpoch()
-                : !intent.participant().equals(snapshot.provenance().participant())
-                  || intent.version() != snapshot.provenance().claimEpoch())) {
-            throw new CoordinationException("INTEGRATED_LANE_BINDING_MISMATCH");
-        }
-        current.append(intent.intentId(),
-                PredictionEventType.WORK_INTENT_RELEASED,
-                signer.nodeId(),
-                CollaborationCodec.encodeRelease(intent.intentId()),
-                signer);
-        reevaluateNoChangeWorkGroup(current, intent.group());
-        return true;
+        return laneCompletion.releaseAfterIntegration(lock, snapshot);
     }
 
     /**
@@ -592,66 +210,7 @@ public final class WorkIntentService {
      */
     public synchronized NoChangeCompletion completeNoChange(NoChangeCompletion completion)
             throws IOException, GeneralSecurityException {
-        CoordinationNullException.requireNonNull(completion, "completion");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
-            NoChangeCompletion previous = current.collaborationProjection()
-                    .noChangeCompletion(completion.intentIdentity()).orElse(null);
-            if (previous != null) {
-                if (!previous.equals(completion)) {
-                    throw new CoordinationException("NO_CHANGE_COMPLETION_CONFLICT");
-                }
-                reevaluateNoChangeWorkGroup(current, completion.workGroupIdentity());
-                return previous;
-            }
-            if (!current.unchangedSince(completion.expectedRevision())) {
-                throw new CoordinationException("COMPLETION_REVISION_STALE");
-            }
-            WorkIntent intent = validateNoChangeIntent(current, completion);
-            validateNoChangeGroup(current, intent, completion);
-            current.append(intent.intentId(),
-                    PredictionEventType.WORK_INTENT_RELEASED,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeNoChangeCompletion(completion),
-                    signer);
-            reevaluateNoChangeWorkGroup(current, intent.group());
-            return completion;
-        }
-    }
-
-    /**
-     * Completes the group only after active intents and all lifecycle obligations are resolved.
-     *
-     * @param current fresh authoritative project projection
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private void reevaluateNoChangeWorkGroup(PredictionEventStore current, WorkGroupId workGroupId)
-            throws IOException, GeneralSecurityException {
-        WorkGroup group = current.workGroupProjection().group(workGroupId).orElse(null);
-        if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
-            return;
-        }
-        if (hasActiveGroupIntents(current, workGroupId) || hasUnresolvedGroupGrants(current, workGroupId)
-                || hasPendingGroupRequests(current, workGroupId) || !allGroupSnapshotsIntegrated(current, workGroupId)
-                || hasUnintegratedPreparedCompletion(current, workGroupId)) {
-            return;
-        }
-        WorkGroup completed = new WorkGroup(group.identity().value(),
-                group.projectId(),
-                group.goal(),
-                group.acceptance(),
-                group.version() + 1L,
-                WorkGroup.Status.COMPLETED,
-                group.reviewPolicy());
-        current.append(group.identity().value(),
-                PredictionEventType.WORK_GROUP_STATUS_CHANGED,
-                signer.nodeId(),
-                CollaborationCodec.encodeWorkGroup(completed),
-                signer);
+        return laneCompletion.completeNoChange(completion);
     }
 
     /**
@@ -697,7 +256,7 @@ public final class WorkIntentService {
             if (!lock.isHeld()) {
                 throw new CoordinationException("event append lock unavailable");
             }
-            createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
+            repairLanes.createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
         }
     }
 
@@ -746,41 +305,7 @@ public final class WorkIntentService {
         if (!lock.isHeld()) {
             throw new CoordinationException("event append lock unavailable");
         }
-        createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
-    }
-
-    /**
-     * Applies the create repair lane locked transition to the current coordination projection.
-     *
-     * @param targetIntent proposed target intent
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private void createRepairLaneLocked(WorkIntentId sourceIntentId,
-            SnapshotId snapshotId,
-            CommitId expectedControlHead,
-            WorkIntent targetIntent) throws IOException, GeneralSecurityException {
-        CoordinationNullException.requireNonNull(sourceIntentId, "source intent");
-        CoordinationNullException.requireNonNull(snapshotId, "snapshot ID");
-        CoordinationNullException.requireNonNull(expectedControlHead, "expected control HEAD");
-        CoordinationNullException.requireNonNull(targetIntent, "target intent");
-        if (snapshotId.value().isBlank() || expectedControlHead.value().isBlank()) {
-            throw new CoordinationException("REPAIR_METADATA_REQUIRED");
-        }
-        PredictionEventStore current = freshStore();
-        var existingTarget = current.collaborationProjection().intent(targetIntent.identity());
-        if (existingTarget.isPresent()) {
-            if (!existingTarget.orElseThrow(CoordinationMissingElementException::new).equals(targetIntent)) {
-                throw new CoordinationException("REPAIR_TARGET_MISMATCH");
-            }
-            return;
-        }
-        WorkIntent source = current.collaborationProjection().intent(sourceIntentId)
-                .orElseThrow(() -> new CoordinationException("REPAIR_SOURCE_NOT_FOUND"));
-        RepairLanePayload payload = validateRepairLane(current, source, targetIntent, snapshotId, expectedControlHead);
-        UUID eventId = UUID.nameUUIDFromBytes(("repair-lane:" + sourceIntentId.value() + ":" + targetIntent.identity()
-                .value() + ":" + snapshotId.value()).getBytes(StandardCharsets.UTF_8));
-        current.append(eventId, PredictionEventType.REPAIR_LANE_CREATED, signer.nodeId(), payload.encode(), signer);
+        repairLanes.createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
     }
 
     /**
