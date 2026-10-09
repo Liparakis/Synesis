@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.agents.AgentsCommand;
+import org.synesis.cli.command.agents.AgentsRunCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
 import org.synesis.cli.command.DaemonCommand;
@@ -103,7 +105,7 @@ public final class SynesisCli {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
         groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
-        groups.put("Coordinate work", List.of("collaboration", "task", "ownership", "constraint", "events", "coordination"));
+        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination"));
         groups.put("Maintain a project", List.of("cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
@@ -185,6 +187,8 @@ public final class SynesisCli {
         command.getSubcommands().get("speculation").addSubcommand("invalidate", new SpeculationInvalidateCommand(runtime));
         command.addSubcommand("integration", new IntegrationCommand());
         command.getSubcommands().get("integration").addSubcommand("gate", new IntegrationGateCommand(runtime));
+        command.addSubcommand("agents", new AgentsCommand());
+        command.getSubcommands().get("agents").addSubcommand("run", new AgentsRunCommand(runtime));
         command.addSubcommand("hook", new HookCommand());
         command.getSubcommands().get("hook").addSubcommand("claude", new HookClaudeCodeCommand(runtime));
         command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
