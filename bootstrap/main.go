@@ -1527,7 +1527,30 @@ func syncStableMcpLauncher(paths installPaths, payload string) error {
 	if runtime.GOOS != "windows" {
 		return os.Chmod(target, 0o755)
 	}
-	return nil
+	return syncStableCommandLauncher(paths, data)
+}
+
+// syncStableCommandLauncher installs the native launcher under the name people
+// type. Windows resolves synesis.exe ahead of synesis.cmd in the same
+// directory, so the command stops paying for a script interpreter on every
+// run, while synesis.cmd stays in place for hooks and registrations that name
+// it explicitly.
+//
+// A long-running command keeps the launcher image open, and Windows will not
+// replace an open image. Because the launcher only follows the active version
+// pointer, an identical copy is already correct, and a differing one that
+// cannot be replaced is still a working launcher: neither case may fail an
+// otherwise valid activation.
+func syncStableCommandLauncher(paths installPaths, launcher []byte) error {
+	target := filepath.Join(paths.bin, "synesis.exe")
+	if existing, err := os.ReadFile(target); err == nil {
+		if bytes.Equal(existing, launcher) {
+			return nil
+		}
+		_ = atomicWrite(target, launcher)
+		return nil
+	}
+	return atomicWrite(target, launcher)
 }
 
 // syncStableActivationLauncher copies the native, argv-safe activation helper

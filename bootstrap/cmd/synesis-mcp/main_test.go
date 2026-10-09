@@ -140,3 +140,68 @@ func TestResolveLayoutRejectsInvalidActivePayload(t *testing.T) {
 		t.Fatal("invalid active payload accepted")
 	}
 }
+
+func TestCommandRoleFollowsTheInstalledName(t *testing.T) {
+	for name, want := range map[string]bool{
+		"synesis": true, "synesis.exe": true, "SYNESIS.EXE": true,
+		"synesis-mcp": false, "synesis-mcp.exe": false, "synesis-installer.exe": false,
+	} {
+		if got := commandRole(filepath.Join("bin", name)); got != want {
+			t.Fatalf("commandRole(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+func TestReleaseHealthIsOnlyRequiredForMaximumReleaseInstallations(t *testing.T) {
+	payload := t.TempDir()
+	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload}); err != nil {
+		t.Fatalf("development layout must not be checked: %v", err)
+	}
+	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload, installRoot: t.TempDir(), protectionProfile: "standard"}); err != nil {
+		t.Fatalf("standard profile must not be checked: %v", err)
+	}
+}
+
+func TestMaximumReleaseFailsClosedWithoutAnAcceptingDoctor(t *testing.T) {
+	payload := t.TempDir()
+	install := t.TempDir()
+	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload, installRoot: install, protectionProfile: maximumReleaseProfile}); err == nil {
+		t.Fatal("a missing doctor must refuse the command")
+	}
+	// The payload marker selects the profile even when the pointer does not name it.
+	if err := os.WriteFile(filepath.Join(payload, "PROTECTION_PROFILE"), []byte(maximumReleaseProfile+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload, installRoot: install, protectionProfile: "standard"}); err == nil {
+		t.Fatal("the payload profile marker must be honoured")
+	}
+	if err := os.MkdirAll(filepath.Join(payload, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(payload, "bin", installerName()), []byte("not an executable"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload, installRoot: install, protectionProfile: maximumReleaseProfile}); err == nil {
+		t.Fatal("a doctor that cannot run must refuse the command")
+	}
+}
+
+func TestVersionedLauncherIsAnnouncedOnlyForAnInstalledPayload(t *testing.T) {
+	t.Setenv("SYNESIS_LAUNCHER", "")
+	payload := t.TempDir()
+	if got := withVersionedLauncher(nil, runtimeLayout{workingDirectory: payload}); len(got) != 0 {
+		t.Fatalf("development layout announced a launcher: %v", got)
+	}
+	got := withVersionedLauncher(nil, runtimeLayout{workingDirectory: payload, installRoot: t.TempDir()})
+	name := "synesis"
+	if runtime.GOOS == "windows" {
+		name = "synesis.cmd"
+	}
+	if want := "SYNESIS_LAUNCHER=" + filepath.Join(payload, "bin", name); len(got) != 1 || got[0] != want {
+		t.Fatalf("environment = %v, want [%s]", got, want)
+	}
+	t.Setenv("SYNESIS_LAUNCHER", "already-set")
+	if got := withVersionedLauncher(nil, runtimeLayout{workingDirectory: payload, installRoot: t.TempDir()}); len(got) != 0 {
+		t.Fatalf("an explicit launcher must be kept: %v", got)
+	}
+}

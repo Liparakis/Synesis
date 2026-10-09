@@ -76,18 +76,77 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     }
 
     /**
-     * Builds Claude Code's documented print-mode argv for supervised work.
+     * Runs Claude Code in print mode against the project's own MCP configuration.
      *
-     * @param worktree isolated lane worktree
-     * @param prompt   initial task prompt
-     * @return direct Claude argv
+     * <p>Print mode does not load a project-scoped {@code .mcp.json} without an interactive
+     * approval, so the file is named explicitly and nothing else is loaded. Only the Synesis tools
+     * and Claude Code's read-only tools are allowed: every change and command goes through
+     * Synesis, which is the rule the project instructions state.</p>
      */
     @Override
-    public java.util.Optional<java.util.List<String>> autonomousCommand(Path worktree, String prompt) {
-        if (worktree == null || prompt == null || prompt.isBlank()) {
+    public java.util.Optional<HeadlessSession> headlessSession() {
+        return java.util.Optional.of(new HeadlessSession() {
+
+            @Override
+            public List<String> startCommand(Path projectRoot, HeadlessOptions options) {
+                List<String> command = new java.util.ArrayList<>(List.of("claude", "-p", "--output-format", "stream-json", "--verbose",
+                        "--mcp-config", mcpConfigurationPath(projectRoot).toAbsolutePath().normalize().toString(), "--strict-mcp-config"));
+                if (options.model() != null) {
+                    command.addAll(List.of("--model", options.model()));
+                }
+                if (options.effort() != null) {
+                    command.addAll(List.of("--effort", options.effort()));
+                }
+                command.addAll(List.of("--allowedTools", "mcp__synesis", "Read", "Glob", "Grep"));
+                return List.copyOf(command);
+            }
+
+            @Override
+            public List<String> resumeCommand(Path projectRoot, String providerSessionId, HeadlessOptions options) {
+                List<String> command = new java.util.ArrayList<>(startCommand(projectRoot, options));
+                // Inserted ahead of the variadic tool list, which would otherwise swallow it.
+                command.addAll(2, List.of("--resume", providerSessionId));
+                return List.copyOf(command);
+            }
+
+            @Override
+            public java.util.Optional<String> sessionId(String outputLine) {
+                return announcedIdentifier(outputLine, "system", "session_id");
+            }
+        });
+    }
+
+    /** Reads an identifier from a JSON event line of the given type; any other line yields nothing. */
+    private static java.util.Optional<String> announcedIdentifier(String outputLine, String eventType, String field) {
+        if (outputLine == null || !outputLine.startsWith("{") || !outputLine.contains(field)) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(java.util.List.of("claude", "-p", prompt, "--add-dir", worktree.toAbsolutePath().normalize().toString(), "--output-format", "stream-json"));
+        try {
+            if (ProviderJson.parse(outputLine) instanceof Map<?, ?> event && eventType.equals(event.get("type")) && event.get(field) instanceof String identifier && !identifier.isBlank()) {
+                return java.util.Optional.of(identifier);
+            }
+        } catch (RuntimeException notAnEvent) {
+            // Providers interleave diagnostics with events; a line that is not JSON is not an event.
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Points Claude Code at the Synesis rules through a project rule file.
+     *
+     * <p>Claude Code loads every Markdown file under {@code .claude/rules} as project
+     * instructions and resolves {@code @} imports relative to the importing file; it does not read
+     * {@code AGENTS.md} itself. The rule file therefore imports the managed {@code AGENTS.md}
+     * block, and lives beside the other provider-local files that the control checkout and lane
+     * snapshots already exclude.</p>
+     *
+     * @param projectRoot control project root
+     * @return the Claude Code rule file
+     */
+    @Override
+    public java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
+        String content = ProjectInstructions.OWNERSHIP_MARKER + "\n# Synesis\n\nThis project is coordinated through Synesis. The rules imported below apply to this session;\nfollow them before reading, changing, or running anything in the project.\n\n@../../AGENTS.md\n";
+        return java.util.Optional.of(new ProjectInstructions(projectRoot.resolve(".claude/rules/synesis.md").toAbsolutePath().normalize(), content));
     }
 
     @Override

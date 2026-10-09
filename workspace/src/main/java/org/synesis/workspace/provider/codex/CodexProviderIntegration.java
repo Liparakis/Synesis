@@ -91,19 +91,56 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     }
 
     /**
-     * Builds Codex's documented noninteractive argv without bypassing its approval or sandbox
-     * policy.
-     *
-     * @param worktree isolated lane worktree
-     * @param prompt   initial task prompt
-     * @return direct Codex argv
+     * Runs Codex with {@code codex exec}, reading the prompt from standard input, without
+     * bypassing its approval or sandbox policy. Codex finds the Synesis server through its own
+     * configuration and the project through the working directory.
      */
     @Override
-    public java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
-        if (worktree == null || prompt == null || prompt.isBlank()) {
-            return java.util.Optional.empty();
+    public java.util.Optional<HeadlessSession> headlessSession() {
+        return java.util.Optional.of(new HeadlessSession() {
+
+            @Override
+            public List<String> startCommand(Path projectRoot, HeadlessOptions options) {
+                List<String> command = new java.util.ArrayList<>(List.of("codex", "exec", "--json", "--cd", projectRoot.toAbsolutePath().normalize().toString()));
+                command.addAll(modelArguments(options));
+                command.add("-");
+                return List.copyOf(command);
+            }
+
+            @Override
+            public List<String> resumeCommand(Path projectRoot, String providerSessionId, HeadlessOptions options) {
+                List<String> command = new java.util.ArrayList<>(List.of("codex", "exec", "resume", providerSessionId, "--json"));
+                command.addAll(modelArguments(options));
+                command.add("-");
+                return List.copyOf(command);
+            }
+
+            @Override
+            public java.util.Optional<String> sessionId(String outputLine) {
+                if (outputLine == null || !outputLine.startsWith("{") || !outputLine.contains("thread.started")) {
+                    return java.util.Optional.empty();
+                }
+                try {
+                    if (ProviderJson.parse(outputLine) instanceof Map<?, ?> event && "thread.started".equals(event.get("type")) && event.get("thread_id") instanceof String thread && !thread.isBlank()) {
+                        return java.util.Optional.of(thread);
+                    }
+                } catch (RuntimeException notAnEvent) {
+                    // Codex interleaves diagnostics with events; a line that is not JSON is not an event.
+                }
+                return java.util.Optional.empty();
+            }
+        });
+    }
+
+    private static List<String> modelArguments(HeadlessOptions options) {
+        List<String> arguments = new java.util.ArrayList<>();
+        if (options.model() != null) {
+            arguments.addAll(List.of("--model", options.model()));
         }
-        return java.util.Optional.of(List.of("codex", "exec", "--cd", worktree.toAbsolutePath().normalize().toString(), "--json", prompt));
+        if (options.effort() != null) {
+            arguments.addAll(List.of("--config", "model_reasoning_effort=" + options.effort()));
+        }
+        return arguments;
     }
 
     @Override

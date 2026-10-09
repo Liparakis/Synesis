@@ -225,17 +225,23 @@ public final class ProviderApplicationService {
         }
     }
 
+    private static final String NATIVE_LAUNCHER = "synesis.exe";
+    private static final String SCRIPT_LAUNCHER = "synesis.cmd";
+    private static final String UNIX_LAUNCHER = "synesis";
+
     private static Path metadata(ProjectLocation location, ProviderIntegration provider) {
         return location.synesisDirectory().resolve("local/providers/" + provider.id() + ".json");
     }
 
     private static Path launcher() {
-        String executable = isWindows() ? "synesis.cmd" : "synesis";
         String path = System.getenv("PATH");
         if (path != null) {
             for (String entry : path.split(java.io.File.pathSeparator)) {
-                Path candidate = Path.of(entry).resolve(executable).toAbsolutePath().normalize();
-                if (Files.isRegularFile(candidate)) {
+                if (entry.isBlank()) {
+                    continue;
+                }
+                Path candidate = launcherIn(Path.of(entry), isWindows());
+                if (candidate != null) {
                     return candidate;
                 }
             }
@@ -245,7 +251,31 @@ public final class ProviderApplicationService {
         if (configuredPath != null && Files.isRegularFile(configuredPath)) {
             return configuredPath.toAbsolutePath().normalize();
         }
-        return stableLauncher(executable);
+        Path stableBin = stableLauncher(SCRIPT_LAUNCHER).getParent();
+        Path installed = launcherIn(stableBin, isWindows());
+        return installed != null ? installed : stableLauncher(isWindows() ? SCRIPT_LAUNCHER : UNIX_LAUNCHER);
+    }
+
+    /**
+     * Returns the launcher a provider hook should run from one directory, or {@code null} when the
+     * directory has none.
+     *
+     * <p>On Windows the native launcher is preferred over the script of the same name: a hook runs
+     * on every intercepted edit, and the script starts two shells and a PowerShell host before the
+     * runtime. The script remains the answer for installations that predate the native launcher.</p>
+     *
+     * @param directory directory that may hold Synesis launchers
+     * @param windows   whether Windows launcher names apply
+     * @return absolute launcher path, or {@code null}
+     */
+    static Path launcherIn(Path directory, boolean windows) {
+        for (String name : windows ? List.of(NATIVE_LAUNCHER, SCRIPT_LAUNCHER) : List.of(UNIX_LAUNCHER)) {
+            Path candidate = directory.resolve(name).toAbsolutePath().normalize();
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static boolean isWindows() {
@@ -647,6 +677,7 @@ public final class ProviderApplicationService {
             }
             Path mcpLauncher = mcpLauncherPath();
             String mcpStatus = ensureMcpConfig(location, provider, mcpLauncher);
+            String instructionsStatus = ensureProjectInstructions(location, provider);
             McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(provider);
             Map<String, Object> metadata = new LinkedHashMap<>();
@@ -673,6 +704,7 @@ public final class ProviderApplicationService {
             ProviderResult installedResult = result(provider, result, synthetic, config, profile, mcpStatus);
             installedResult = withValue(installedResult, "SYNESIS_MANUAL", "ATTESTED");
             installedResult = withValue(installedResult, "MCP_HEALTH", health.status());
+            installedResult = withValue(installedResult, "PROJECT_INSTRUCTIONS", instructionsStatus);
             try {
                 ProviderSessionBindingService.BindingResult ensured = new ProviderSessionBindingService().ensure(location, provider.id(), null);
                 if (ensured.binding().worktreePath() != null) {
@@ -854,6 +886,7 @@ public final class ProviderApplicationService {
             if (!"codex".equals(provider.id())) {
                 removeMcpConfig(location, provider);
             }
+            removeProjectInstructions(location, provider);
             Files.deleteIfExists(metadata);
             try {
                 new ProviderSessionBindingService().revoke(location, provider.id());
@@ -891,6 +924,46 @@ public final class ProviderApplicationService {
         } catch (Exception failure) {
             return failure(id, "GLOBAL_MCP_UNINSTALL_FAILED", "PROVIDER_UNINSTALL_RESULT", 10);
         }
+    }
+
+    /**
+     * Installs the provider's project instruction file, if it has one.
+     *
+     * @param location project location
+     * @param provider provider integration
+     * @return {@code NOT_APPLICABLE}, {@code INSTALLED}, {@code UNCHANGED}, or {@code CONFLICT}
+     *         when a file the user owns already occupies the path and was left alone
+     * @throws IOException when the file cannot be read or written
+     */
+    String ensureProjectInstructions(ProjectLocation location, ProviderIntegration provider) throws IOException {
+        ProviderIntegration.ProjectInstructions instructions = provider.projectInstructions(location.root()).orElse(null);
+        if (instructions == null) {
+            return "NOT_APPLICABLE";
+        }
+        Path path = instructions.path();
+        if (Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            if (!ownedInstructions(path)) {
+                return "CONFLICT";
+            }
+            if (instructions.content().equals(Files.readString(path, StandardCharsets.UTF_8))) {
+                return "UNCHANGED";
+            }
+        }
+        atomicWrite(path, instructions.content());
+        return "INSTALLED";
+    }
+
+    private void removeProjectInstructions(ProjectLocation location, ProviderIntegration provider) throws IOException {
+        ProviderIntegration.ProjectInstructions instructions = provider.projectInstructions(location.root()).orElse(null);
+        if (instructions != null && ownedInstructions(instructions.path())) {
+            Files.delete(instructions.path());
+        }
+    }
+
+    /** Only a regular file that opens with the ownership marker is Synesis's to replace or remove. */
+    private static boolean ownedInstructions(Path path) throws IOException {
+        return Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                && Files.readString(path, StandardCharsets.UTF_8).startsWith(ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER);
     }
 
     /**

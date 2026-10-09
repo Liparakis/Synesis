@@ -79,18 +79,76 @@ public interface ProviderIntegration {
     }
 
     /**
-     * Returns an optional direct argv command for noninteractive supervision.
+     * Describes how this provider's agent is run without a person at the keyboard, for providers
+     * whose noninteractive mode Synesis has verified.
      *
-     * <p>An empty result is intentional: a provider may expose MCP transport
-     * without exposing a verified noninteractive driver. Callers must keep such providers pull-safe
-     * and must not infer autonomous support.
+     * <p>An empty result is intentional: a provider may expose MCP transport without a verified
+     * noninteractive driver. Callers must keep such providers pull-safe and must not infer one.</p>
      *
-     * @param worktree isolated lane worktree
-     * @param prompt   initial provider task prompt
-     * @return direct executable argv, or empty when unsupported/unverified
+     * @return the headless session contract, or empty when unsupported or unverified
      */
-    default java.util.Optional<List<String>> autonomousCommand(Path worktree, String prompt) {
+    default java.util.Optional<HeadlessSession> headlessSession() {
         return java.util.Optional.empty();
+    }
+
+    /**
+     * How one provider starts, identifies, and resumes a noninteractive agent session.
+     *
+     * <p>The prompt is always supplied on standard input, never as an argument, so that no shell
+     * or launcher quoting rule can alter it. Commands run with the control project as their
+     * working directory and never bypass the provider's own approval or sandbox policy.</p>
+     */
+    interface HeadlessSession {
+
+        /**
+         * Builds the argv that starts a new session.
+         *
+         * @param projectRoot control project root
+         * @param options     model selection
+         * @return argv whose first element is the provider executable name
+         */
+        List<String> startCommand(Path projectRoot, HeadlessOptions options);
+
+        /**
+         * Builds the argv that continues an earlier session with a further prompt.
+         *
+         * @param projectRoot       control project root
+         * @param providerSessionId identifier previously reported by {@link #sessionId(String)}
+         * @param options           model selection
+         * @return argv whose first element is the provider executable name
+         */
+        List<String> resumeCommand(Path projectRoot, String providerSessionId, HeadlessOptions options);
+
+        /**
+         * Reads the provider's own session identifier from one line of its output stream.
+         *
+         * @param outputLine one line the provider printed
+         * @return the identifier when this line announces it, otherwise empty
+         */
+        java.util.Optional<String> sessionId(String outputLine);
+    }
+
+    /**
+     * Model selection for a headless session; {@code null} leaves the provider's own default.
+     *
+     * @param model  provider model name, or {@code null}
+     * @param effort provider reasoning-effort level, or {@code null}
+     */
+    record HeadlessOptions(String model, String effort) {
+
+        private static final java.util.regex.Pattern TOKEN = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:\\[\\]-]{0,127}");
+
+        /**
+         * Rejects values that are not plain model or effort tokens, since they become arguments.
+         */
+        public HeadlessOptions {
+            if (model != null && !TOKEN.matcher(model).matches()) {
+                throw new IllegalArgumentException("model must be a plain token");
+            }
+            if (effort != null && !TOKEN.matcher(effort).matches()) {
+                throw new IllegalArgumentException("effort must be a plain token");
+            }
+        }
     }
 
     /**
@@ -214,6 +272,46 @@ public interface ProviderIntegration {
      * @return synthetic check result
      */
     SyntheticCheck syntheticCheck(Path profile, Path projectRoot);
+
+    /**
+     * Names the project instruction file this provider's harness loads by itself, when it does
+     * not read {@code AGENTS.md}.
+     *
+     * <p>Synesis states its coordination rules once, in the managed block of {@code AGENTS.md}.
+     * A harness that never opens that file would start work without them, so its integration
+     * points the harness's own instruction mechanism at it rather than keeping a second copy.</p>
+     *
+     * @param projectRoot control project root
+     * @return the file to install, or empty when the harness already reads {@code AGENTS.md}
+     */
+    default java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * A project-local instruction file owned entirely by Synesis.
+     *
+     * @param path    absolute location of the file
+     * @param content complete file content, beginning with {@link #OWNERSHIP_MARKER}
+     */
+    record ProjectInstructions(Path path, String content) {
+
+        /**
+         * First line of every instruction file Synesis owns. A file at the same path without it
+         * belongs to the user and is never replaced or removed.
+         */
+        public static final String OWNERSHIP_MARKER = "<!-- Managed by Synesis: replaced by `synesis provider install`, removed by uninstall. -->";
+
+        /**
+         * Validates that the content declares Synesis ownership.
+         */
+        public ProjectInstructions {
+            java.util.Objects.requireNonNull(path, "path");
+            if (content == null || !content.startsWith(OWNERSHIP_MARKER)) {
+                throw new IllegalArgumentException("project instructions must begin with the ownership marker");
+            }
+        }
+    }
 
     /**
      * Result of an isolated provider hook check.

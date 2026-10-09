@@ -1,6 +1,8 @@
 package org.synesis.workspace.application.provider;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,8 +101,24 @@ public final class ProviderManualService {
      * @throws IOException installation failure
      */
     public Attestation install(String provider) throws IOException {
+        return whileInstallationExcluded(provider, () -> installLocked(provider));
+    }
+
+    /**
+     * Runs an operation while no Synesis process on this machine is replacing the manual.
+     *
+     * <p>Every agent connection is its own process and may install the manual at startup, and a
+     * replacement briefly leaves no manual directory in place. The in-process monitor only keeps
+     * threads from overlapping on the file lock; the file lock is what excludes other processes.</p>
+     */
+    private <T> T whileInstallationExcluded(String provider, InstallationOperation<T> operation) throws IOException {
+        Path lockFile = skillDirectory(provider).resolveSibling(MANUAL_DIRECTORY + ".lock");
         synchronized (INSTALL_LOCK) {
-            return installLocked(provider);
+            Files.createDirectories(lockFile.getParent());
+            try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                    FileLock _ = channel.lock()) {
+                return operation.run();
+            }
         }
     }
 
@@ -191,9 +209,20 @@ public final class ProviderManualService {
      */
     public void requireAttested(String provider) throws IOException {
         Attestation result = attest(provider);
+        if (!result.valid() && Files.isDirectory(skillDirectory(provider).getParent())) {
+            // An unlocked read can land inside another process's replacement. Only a result
+            // observed while no replacement is running is evidence that the manual is invalid.
+            result = whileInstallationExcluded(provider, () -> attest(provider));
+        }
         if (!result.valid()) {
             throw new IOException("MANUAL_ATTESTATION_REQUIRED:" + result.reason());
         }
+    }
+
+    @FunctionalInterface
+    private interface InstallationOperation<T> {
+
+        T run() throws IOException;
     }
 
     /**

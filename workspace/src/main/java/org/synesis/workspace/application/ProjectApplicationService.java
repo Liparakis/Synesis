@@ -87,15 +87,6 @@ public final class ProjectApplicationService {
         this(new ManagedBaselineTransactionService(), new ProjectMetadataStorage());
     }
 
-    /**
-     * Creates a project service with an explicit baseline transaction service.
-     *
-     * @param baselineService managed-baseline transaction service
-     */
-    public ProjectApplicationService(ManagedBaselineTransactionService baselineService) {
-        this(baselineService, new ProjectMetadataStorage());
-    }
-
     ProjectApplicationService(ManagedBaselineTransactionService baselineService, ProjectMetadataStorage metadataStorage) {
         this.baselineService = Objects.requireNonNull(baselineService, "baselineService");
         this.metadataStorage = Objects.requireNonNull(metadataStorage, "metadataStorage");
@@ -438,6 +429,18 @@ public final class ProjectApplicationService {
     }
 
     /**
+     * Registers the Synesis server in Codex's configuration with the launcher built for it.
+     *
+     * <p>Initialization and {@code provider install} both write this entry. They must name the
+     * same launcher, or whichever ran last silently decides how every Codex session starts its
+     * server: the command launcher is the one people type, not the stdio server entry point.</p>
+     */
+    private static void registerCodexMcpServer(ProjectLocation location) {
+        ProviderApplicationService providerService = new ProviderApplicationService();
+        providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), providerService.mcpLauncherPath());
+    }
+
+    /**
      * Initializes a project without overwriting existing state.
      *
      * <p>For a Git repository, the managed baseline safety gate runs before
@@ -499,9 +502,7 @@ public final class ProjectApplicationService {
                     RepositoryPrivateStateService.ensure(root);
                     ensureAgentsFile(root);
                     if (configureProviderMcp) {
-                        ProviderApplicationService providerService = new ProviderApplicationService();
-                        Path launcher = providerService.launcherPath();
-                        providerService.ensureMcpConfig(existing, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                        registerCodexMcpServer(existing);
                     }
                     return new ProjectInitResult(ProjectInitStatus.ALREADY_INITIALIZED, existing, identity(existing.profile()), false, ensureGitHead(root));
                 } catch (Exception failure) {
@@ -541,9 +542,7 @@ public final class ProjectApplicationService {
             RepositoryPrivateStateService.ensure(root);
             try {
                 if (configureProviderMcp) {
-                    ProviderApplicationService providerService = new ProviderApplicationService();
-                    Path launcher = providerService.launcherPath();
-                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), launcher);
+                    registerCodexMcpServer(location);
                 }
             } catch (Exception ignored) {
             }
@@ -594,8 +593,7 @@ public final class ProjectApplicationService {
             ProjectLocation location = readLocation(root, synesis, metadata);
             if (configureProviderMcp) {
                 try {
-                    ProviderApplicationService providerService = new ProviderApplicationService();
-                    providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), providerService.launcherPath());
+                    registerCodexMcpServer(location);
                 } catch (Exception ignored) {
                     // Provider installation is optional; canonical identity and local state are not.
                 }
