@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -71,21 +72,17 @@ final class ProcessCommandRunner {
                 Thread.currentThread().interrupt();
             }
         });
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
         try {
-            while (!wait.isDone() && System.currentTimeMillis() < deadline) {
-                java.util.concurrent.locks.LockSupport.parkNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(25L));
-                if (Thread.interrupted()) {
-                    throw new InterruptedException();
-                }
-            }
-            if (timedOut.get() || !wait.isDone()) {
+            // Block on completion rather than polling: a Git inspection finishes in a few
+            // milliseconds, so any polling interval would dominate the cost of every command.
+            Integer completed = awaitWithin(wait, timeout);
+            if (timedOut.get() || completed == null) {
                 wait.cancel(true);
                 terminateProcessTree(process);
                 joinReaderAfterTermination(reader, process);
                 throw timeout(command, directory, timeout, collector.text());
             }
-            int exitCode = wait.get();
+            int exitCode = completed;
             joinReader(reader, process, System.nanoTime() + TimeUnit.SECONDS.toNanos(1));
             return new Result(exitCode, collector.text(), collector.bytes());
         } catch (InterruptedException interrupted) {
@@ -101,6 +98,19 @@ final class ProcessCommandRunner {
                 waiter.interrupt();
             }
             watchdog.interrupt();
+        }
+    }
+
+    /**
+     * Waits for a task without polling.
+     *
+     * @return the task result, or {@code null} when the timeout elapsed first
+     */
+    private static <T> T awaitWithin(FutureTask<T> task, Duration timeout) throws InterruptedException, ExecutionException {
+        try {
+            return task.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException expired) {
+            return null;
         }
     }
 
@@ -134,15 +144,9 @@ final class ProcessCommandRunner {
                 Thread.currentThread().interrupt();
             }
         });
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
         try {
-            while (!launch.isDone() && !timedOut.get() && System.currentTimeMillis() < deadline) {
-                java.util.concurrent.locks.LockSupport.parkNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(25L));
-                if (Thread.interrupted()) {
-                    throw new InterruptedException();
-                }
-            }
-            if (timedOut.get() || !launch.isDone()) {
+            Process launched = awaitWithin(launch, timeout);
+            if (launched == null) {
                 timedOut.set(true);
                 launch.cancel(true);
                 Process process = started.get();
@@ -151,7 +155,7 @@ final class ProcessCommandRunner {
                 }
                 throw timeout(command, directory, timeout, "process launch timed out");
             }
-            return launch.get();
+            return launched;
         } catch (InterruptedException interrupted) {
             timedOut.set(true);
             launch.cancel(true);

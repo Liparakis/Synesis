@@ -21,6 +21,8 @@ public final class SemanticIndexFingerprint {
      * Bounded output retained for complete structured index inspections.
      */
     private static final int INDEX_INSPECTION_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
+    private static final String SPARSE_INDEX_KEY = "index.sparse";
+    private static final String SPLIT_INDEX_KEY = "core.splitindex";
 
     private SemanticIndexFingerprint() {
     }
@@ -41,6 +43,8 @@ public final class SemanticIndexFingerprint {
         Map<String, String> modes = new LinkedHashMap<>();
         List<String> unmerged = new ArrayList<>();
         List<String> intentToAdd = new ArrayList<>();
+        List<String> skip = new ArrayList<>();
+        List<String> assume = new ArrayList<>();
         for (Entry entry : entries) {
             stages.computeIfAbsent(entry.path(), ignored -> new ArrayList<>()).add(Integer.toString(entry.stage()));
             blobs.put(entry.path(), entry.blob());
@@ -51,17 +55,17 @@ public final class SemanticIndexFingerprint {
             if (entry.intentToAdd()) {
                 intentToAdd.add(entry.path());
             }
+            if (entry.tag() == 'S' || entry.tag() == 's') {
+                skip.add(entry.path());
+            }
+            if (entry.tag() == 'h' || entry.tag() == 'H') {
+                assume.add(entry.path());
+            }
         }
-        String tree;
-        try {
-            tree = run(root);
-        } catch (IOException unmergedIndex) {
-            tree = "UNMERGED";
-        }
-        List<String> skip = flagPaths(root, 'S', 's');
-        List<String> assume = flagPaths(root, 'h', 'H');
-        boolean sparse = boolConfig(root, "index.sparse");
-        boolean split = boolConfig(root, "core.splitIndex");
+        String tree = indexTreeId(root);
+        Map<String, String> modeConfig = indexModeConfig(root);
+        boolean sparse = "true".equalsIgnoreCase(modeConfig.get(SPARSE_INDEX_KEY));
+        boolean split = "true".equalsIgnoreCase(modeConfig.get(SPLIT_INDEX_KEY));
         List<String> extensions = new ArrayList<>();
         if (sparse) {
             extensions.add("sparse-index");
@@ -91,8 +95,31 @@ public final class SemanticIndexFingerprint {
         return before.semanticEquals(after) ? Comparison.NONSEMANTIC_REFRESH : Comparison.SEMANTIC_STATE_CHANGED;
     }
 
+    /**
+     * Returns the tree the current index would commit, or {@code UNMERGED} when it has none.
+     *
+     * <p>Callers that only need to confirm the staged tree use this instead of a full capture,
+     * which costs several further Git processes.</p>
+     *
+     * @param repositoryRoot repository worktree
+     * @return staged tree identity
+     * @throws IOException when Git cannot be started
+     */
+    public static String indexTreeId(Path repositoryRoot) throws IOException {
+        Path root = Objects.requireNonNull(repositoryRoot, "repositoryRoot").toAbsolutePath().normalize();
+        try {
+            return run(root);
+        } catch (IOException unmergedIndex) {
+            return "UNMERGED";
+        }
+    }
+
+    /**
+     * Reads every index entry with its status tag in one listing, so staged identity and the
+     * skip-worktree and assume-unchanged flags come from the same view of the index.
+     */
     private static List<Entry> parseEntries(Path root) throws IOException {
-        String output = runIndexInspection(root, "ls-files", "--stage", "-z");
+        String output = runIndexInspection(root, "ls-files", "-v", "--stage", "-z");
         List<Entry> entries = new ArrayList<>();
         List<String> intentPaths = intentToAddPaths(root);
         for (String item : output.split("\\u0000")) {
@@ -104,18 +131,18 @@ public final class SemanticIndexFingerprint {
                 throw new IOException("INDEX_CORRUPT");
             }
             String[] header = item.substring(0, tab).split(" ");
-            if (header.length != 3) {
+            if (header.length != 4 || header[0].length() != 1) {
                 throw new IOException("INDEX_CORRUPT");
             }
-            String blob = header[1];
+            String blob = header[2];
             int stage;
             try {
-                stage = Integer.parseInt(header[2]);
+                stage = Integer.parseInt(header[3]);
             } catch (NumberFormatException invalid) {
                 throw new IOException("INDEX_CORRUPT", invalid);
             }
             String path = item.substring(tab + 1);
-            entries.add(new Entry(path, header[0], blob, stage, intentPaths.contains(path)));
+            entries.add(new Entry(path, header[1], blob, stage, intentPaths.contains(path), header[0].charAt(0)));
         }
         return List.copyOf(entries);
     }
@@ -131,26 +158,24 @@ public final class SemanticIndexFingerprint {
         return List.copyOf(paths);
     }
 
-    private static List<String> flagPaths(Path root, char... markers) throws IOException {
-        String output = runIndexInspection(root, "ls-files", "-v", "-z");
-        List<String> paths = new ArrayList<>();
-        for (String item : output.split("\\u0000")) {
-            if (item.length() < 3) {
-                continue;
-            }
-            char marker = item.charAt(0);
-            for (char candidate : markers) {
-                if (marker == candidate) {
-                    paths.add(item.substring(2));
-                }
+    /**
+     * Reads the index-format settings in one query. Git reports configuration keys in lower case
+     * and exits nonzero when neither is set, which means both modes are off.
+     */
+    private static Map<String, String> indexModeConfig(Path root) throws IOException {
+        Result result = runResult(root, "config", "--bool", "--get-regexp", "^(index\\.sparse|core\\.splitindex)$");
+        Map<String, String> values = new LinkedHashMap<>();
+        if (result.exitCode() != 0) {
+            return values;
+        }
+        for (String line : result.output().split("\\R")) {
+            String[] setting = line.trim().split("\\s+", 2);
+            if (setting.length == 2) {
+                // A later line for the same key is the value Git itself would apply.
+                values.put(setting[0], setting[1]);
             }
         }
-        return List.copyOf(paths);
-    }
-
-    private static boolean boolConfig(Path root, String key) throws IOException {
-        Result result = runResult(root, "config", "--bool", "--get", key);
-        return result.exitCode() == 0 && "true".equalsIgnoreCase(result.output().trim());
+        return values;
     }
 
     private static String rawIndexDigest(Path root) throws IOException {
@@ -320,7 +345,7 @@ public final class SemanticIndexFingerprint {
     /**
      * Represents one normalized index entry in a semantic fingerprint.
      */
-    private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd) {
+    private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd, char tag) {
 
     }
 

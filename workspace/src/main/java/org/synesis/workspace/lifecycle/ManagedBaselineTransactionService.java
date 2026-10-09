@@ -269,11 +269,6 @@ public final class ManagedBaselineTransactionService {
             writeJournal(resolution, journal);
             notifyPhase(Phase.FILES_WRITTEN);
             ManagedPathPolicy.TransactionOwnership ownership = new ManagedPathPolicy.TransactionOwnership(resolution.repositoryIdentity(), transactionId, absent, expected, states);
-            ManagedPathPolicy.Report afterWrite = pathPolicy.inspect(root, Optional.of(ownership));
-            if (afterWrite.blocked()) {
-                throw failure("MANAGED_PATH_PROVENANCE_MISMATCH", blockingPaths(afterWrite));
-            }
-
             ManagedPathPolicy.Report beforeCommit = pathPolicy.inspect(root, Optional.of(ownership));
             if (beforeCommit.blocked()) {
                 throw failure("MANAGED_PATH_PROVENANCE_MISMATCH", blockingPaths(beforeCommit));
@@ -459,8 +454,7 @@ public final class ManagedBaselineTransactionService {
 
     private boolean synchronizedState(Path root, String commit) throws IOException {
         String expectedTree = git(root, "rev-parse", commit + "^{tree}");
-        SemanticIndexFingerprint.Fingerprint current = SemanticIndexFingerprint.capture(root);
-        return expectedTree.equals(current.indexTreeId()) && git(root, "status", "--porcelain").isBlank();
+        return expectedTree.equals(SemanticIndexFingerprint.indexTreeId(root)) && git(root, "status", "--porcelain").isBlank();
     }
 
     private void synchronizeRealIndex(Path root, AdministrativeStateLocator.Resolution resolution, Journal journal, SemanticIndexFingerprint.Fingerprint original, String commit) throws IOException, BaselineFailure {
@@ -479,25 +473,47 @@ public final class ManagedBaselineTransactionService {
             throw failure("CONTROL_INDEX_RECOVERY_REQUIRED", comparison.name());
         }
         git(root, "reset", "--mixed", commit);
-        SemanticIndexFingerprint.Fingerprint synchronizedIndex = SemanticIndexFingerprint.capture(root);
         String expectedTree = git(root, "rev-parse", commit + "^{tree}");
-        if (!expectedTree.equals(synchronizedIndex.indexTreeId())) {
+        if (!expectedTree.equals(SemanticIndexFingerprint.indexTreeId(root))) {
             Journal failed = journal.withPhase(Phase.CONTROL_INDEX_RECOVERY_REQUIRED).withIndexFailure("INDEX_TREE_MISMATCH");
             writeJournal(resolution, failed);
             throw failure("CONTROL_INDEX_RECOVERY_REQUIRED", "INDEX_TREE_MISMATCH");
         }
-        for (String managed : pathPolicy.managedPaths()) {
-            String expectedBlob = git(root, "ls-tree", "-r", "--full-tree", commit, "--", managed);
-            if (!expectedBlob.isBlank() && Files.isRegularFile(root.resolve(managed))) {
-                String actualBlob = git(root, "hash-object", "--", managed);
-                String blob = expectedBlob.split("\\s+")[2];
-                if (!blob.equals(actualBlob)) {
-                    throw failure("MANAGED_WORKTREE_BLOB_MISMATCH", managed);
-                }
-            }
-        }
+        requireManagedWorktreeBlobs(root, commit);
         if (!git(root, "status", "--porcelain").isBlank()) {
             throw failure("CONTROL_CHECKOUT_NOT_CLEAN", "managed baseline left Git status dirty");
+        }
+    }
+
+    /**
+     * Confirms each committed managed file on disk hashes to the blob the administrative commit
+     * recorded, asking Git once for the committed blobs and once for the worktree hashes.
+     */
+    private void requireManagedWorktreeBlobs(Path root, String commit) throws IOException, BaselineFailure {
+        List<String> listing = new ArrayList<>(List.of("ls-tree", "-r", "--full-tree", "-z", commit, "--"));
+        listing.addAll(pathPolicy.managedPaths());
+        Map<String, String> committed = new LinkedHashMap<>();
+        for (String entry : git(root, listing.toArray(String[]::new)).split("\\u0000")) {
+            int tab = entry.indexOf('\t');
+            if (tab < 0) {
+                continue;
+            }
+            String path = entry.substring(tab + 1);
+            if (Files.isRegularFile(root.resolve(path))) {
+                committed.put(path, entry.substring(0, tab).split("\\s+")[2]);
+            }
+        }
+        if (committed.isEmpty()) {
+            return;
+        }
+        List<String> hashing = new ArrayList<>(List.of("hash-object", "--"));
+        hashing.addAll(committed.keySet());
+        String[] actual = git(root, hashing.toArray(String[]::new)).split("\\R");
+        int index = 0;
+        for (Map.Entry<String, String> expected : committed.entrySet()) {
+            if (index >= actual.length || !expected.getValue().equals(actual[index++].trim())) {
+                throw failure("MANAGED_WORKTREE_BLOB_MISMATCH", expected.getKey());
+            }
         }
     }
 

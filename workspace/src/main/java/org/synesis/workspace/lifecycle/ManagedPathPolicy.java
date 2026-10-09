@@ -63,6 +63,43 @@ public final class ManagedPathPolicy {
         return run(root, "check-ignore", "--no-index", "--quiet", "--", path).exitCode() == 0;
     }
 
+    /**
+     * Returns the managed paths that exist while being both untracked and ignored, which is the
+     * one state plain status output cannot reveal.
+     *
+     * <p>Git is asked once per question for all candidates rather than once per path: every
+     * transaction phase repeats this inspection, and each Git process is costly to start.</p>
+     */
+    private static List<String> hiddenManagedPaths(Path root) throws IOException {
+        List<String> candidates = new ArrayList<>();
+        for (String managed : DEFAULT_MANAGED_PATHS) {
+            if (Files.exists(root.resolve(managed))) {
+                candidates.add(managed);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        candidates.removeAll(reportedPaths(root, "\\u0000", "ls-files", "-z", "--", candidates));
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        List<String> ignored = reportedPaths(root, "\\R", "check-ignore", "--no-index", "--", candidates);
+        candidates.retainAll(ignored);
+        return candidates;
+    }
+
+    private static List<String> reportedPaths(Path root, String separator, String command, String option, String terminator, List<String> paths) throws IOException {
+        List<String> arguments = new ArrayList<>(List.of(command, option, terminator));
+        arguments.addAll(paths);
+        Result result = run(root, arguments.toArray(String[]::new));
+        // check-ignore exits 1 when nothing matches; both commands report real failure above that.
+        if (result.exitCode() > 1) {
+            throw new IOException("git inspection failed: " + result.output());
+        }
+        return result.exitCode() == 0 ? List.of(result.output().split(separator)) : List.of();
+    }
+
     private static String git(Path root) throws IOException {
         Result result = run(root, "status", "--porcelain=v2", "--untracked-files=all");
         if (result.exitCode() != 0) {
@@ -119,10 +156,7 @@ public final class ManagedPathPolicy {
                 findings.add(new Finding(path, Classification.TRACKED_CHANGE, true));
             }
         }
-        for (String managed : DEFAULT_MANAGED_PATHS) {
-            if (!Files.exists(root.resolve(managed)) || isTracked(root, managed) || !isIgnored(root, managed)) {
-                continue;
-            }
+        for (String managed : hiddenManagedPaths(root)) {
             boolean allowed = ownership.isPresent() && ownership.get().owns(root, managed);
             findings.add(new Finding(managed, allowed ? Classification.TRANSACTION_OWNED_IGNORED_MANAGED_PATH : Classification.IGNORED_MANAGED_PATH_COLLISION, !allowed));
         }
