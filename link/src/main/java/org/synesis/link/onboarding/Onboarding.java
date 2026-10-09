@@ -2,16 +2,13 @@ package org.synesis.link.onboarding;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.codec.quic.InsecureQuicTokenHandler;
-import io.netty.handler.codec.quic.QuicChannel;
 import io.netty.handler.codec.quic.QuicSslContext;
 import io.netty.handler.codec.quic.QuicSslContextBuilder;
-import io.netty.handler.codec.quic.QuicStreamType;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -20,7 +17,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -34,34 +30,26 @@ import java.util.function.Consumer;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateDescriptor;
-import org.synesis.link.candidate.CandidateGatherer;
-import org.synesis.link.candidate.CandidateGatheringPolicy;
 import org.synesis.link.candidate.CandidatePair;
 import org.synesis.link.candidate.CandidatePairs;
 import org.synesis.link.candidate.CandidateProvider;
 import org.synesis.link.candidate.CandidateRacer;
-import org.synesis.link.candidate.ConnectionAttempt;
 import org.synesis.link.candidate.ConnectionPolicy;
 import org.synesis.link.candidate.DirectConnectionResult;
-import org.synesis.link.candidate.LocalInterfaceCandidateProvider;
 import org.synesis.link.candidate.StunCandidateProvider;
 import org.synesis.link.candidate.TraversalCoordinator;
 import org.synesis.link.demo.DemoWorkRequest;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
-import org.synesis.link.protocol.HandshakeProof;
-import org.synesis.link.protocol.AuthenticatedDescriptorExchange;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.link.protocol.TraversalOffer;
-import org.synesis.link.session.HandshakeRole;
 import org.synesis.link.session.HandshakeTranscript;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;
-import org.synesis.link.session.SessionAuthenticator;
 import org.synesis.link.session.SessionCloseReason;
 import org.synesis.link.transport.quic.EphemeralTlsMaterial;
 import org.synesis.link.transport.quic.NettyQuicTransport;
@@ -130,30 +118,6 @@ public final class Onboarding {
     return new Onboarding(IdentityBootstrap.defaultDirectory(), events);
   }
 
-  private static void closeResources(Channel udp, MultiThreadIoEventLoopGroup group,
-      EphemeralTlsMaterial tls,
-      NettyStunBindingTransport stun, InvitationAdmission admission) {
-    if (stun != null) {
-      stun.close();
-    }
-    if (udp != null) {
-      udp.close().syncUninterruptibly();
-    }
-    if (group != null) {
-      group.shutdownGracefully().syncUninterruptibly();
-    }
-    if (admission != null) {
-      admission.close();
-    }
-    if (tls != null) {
-      try {
-        tls.close();
-      } catch (java.io.IOException ignored) {
-        // All bounded network resources have already been closed.
-      }
-    }
-  }
-
   private static byte[] randomBytes() {
     byte[] value = new byte[NONCE_BYTES];
     RANDOM.nextBytes(value);
@@ -172,88 +136,6 @@ public final class Onboarding {
     } catch (java.security.NoSuchAlgorithmException impossible) {
       throw new AssertionError(impossible);
     }
-  }
-
-  private static List<Candidate> gather(String id, int port,
-      List<CandidateProvider> optionalProviders)
-      throws Exception {
-    List<CandidateProvider> providers = new ArrayList<>();
-    providers.add(new LocalInterfaceCandidateProvider(id, port, 0));
-    providers.addAll(optionalProviders);
-    CandidateGatheringPolicy policy = optionalProviders.isEmpty()
-        ? CandidateGatheringPolicy.defaults()
-        : CandidateGatheringPolicy.directTraversalDefaults();
-    try (CandidateGatherer gatherer = new CandidateGatherer(policy)) {
-      return gatherer.gather(providers)
-          .completion()
-          .toCompletableFuture()
-          .get(10, TimeUnit.SECONDS)
-          .candidates();
-    }
-  }
-
-  private static ConnectionAttempt attempt(NodeIdentity identity, CandidateDescriptor host,
-      HandshakeTranscript transcript, Channel udp, CandidatePair pair,
-      PeerSession.ApplicationStreamHandler applicationHandler) {
-    return attempt(identity, host.nodeId(), host.publicKeyEncoded(), transcript, udp, pair,
-        applicationHandler);
-  }
-
-  private static ConnectionAttempt attempt(NodeIdentity identity, String hostNodeId,
-      byte[] hostPublicKey, HandshakeTranscript transcript, Channel udp, CandidatePair pair,
-      PeerSession.ApplicationStreamHandler applicationHandler) {
-    return new ConnectionAttempt() {
-      private volatile QuicChannel connection;
-
-      @Override
-      public CompletionStage<PeerSession> connect(
-          org.synesis.link.candidate.CandidateCancellation cancellation) {
-        CompletableFuture<PeerSession> result = new CompletableFuture<>();
-        QuicChannel.newBootstrap(udp)
-            .handler(new ChannelInboundHandlerAdapter())
-            .streamHandler(NettySessionHandshake.clientApplicationStreamHandler())
-            .remoteAddress(new InetSocketAddress(pair.remote()
-                .address(),
-                pair.remote()
-                    .port()))
-            .connect()
-            .addListener(future -> {
-              if (!future.isSuccess()) {
-                result.completeExceptionally(future.cause());
-                return;
-              }
-              connection = (QuicChannel) future.getNow();
-              CompletableFuture<PeerSession> established = new CompletableFuture<>();
-              try {
-                HandshakeProof proof = SessionAuthenticator.createProof(identity, transcript,
-                    HandshakeRole.INITIATOR);
-                connection.createStream(QuicStreamType.BIDIRECTIONAL,
-                    NettySessionHandshake.clientStreamHandler(identity, hostNodeId, transcript,
-                        proof, new ReplayGuard(), established,
-                        org.synesis.link.session.LivenessConfiguration.DEFAULT,
-                        applicationHandler));
-                established.whenComplete((session, failure) -> {
-                  if (failure == null) {
-                    result.complete(session);
-                  } else {
-                    result.completeExceptionally(failure);
-                  }
-                });
-              } catch (Exception exception) {
-                result.completeExceptionally(exception);
-              }
-            });
-        return result;
-      }
-
-      @Override
-      public void cancel() {
-        if (connection != null) {
-          connection.close()
-              .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-        }
-      }
-    };
   }
 
   private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
@@ -329,7 +211,7 @@ public final class Onboarding {
       emit(OnboardingEventType.LISTENER_READY, "");
       List<CandidateProvider> providers = stun == null ? List.of()
           : List.of(new StunCandidateProvider(stunServer, 100, stun));
-      List<Candidate> candidates = gather("host", port, providers);
+      List<Candidate> candidates = LocalCandidateGathering.gather("host", port, providers);
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       Instant expires = issued.plus(SessionInvitation.DEFAULT_LIFETIME);
@@ -348,7 +230,7 @@ public final class Onboarding {
           udp, tls, stun,
           admission, sessionAction);
     } catch (Exception failure) {
-      closeResources(udp, group, tls, stun, admission);
+      EndpointCleanup.closeResources(udp, group, tls, stun, admission);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
     }
   }
@@ -394,7 +276,7 @@ public final class Onboarding {
       List<CandidateProvider> optionalProviders = stun == null
           ? List.of()
           : List.of(new StunCandidateProvider(stunServer, 100, stun));
-      List<Candidate> candidates = gather("join",
+      List<Candidate> candidates = LocalCandidateGathering.gather("join",
           ((InetSocketAddress) udp.localAddress()).getPort(), optionalProviders);
       CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
           Instant.now().truncatedTo(ChronoUnit.SECONDS), invitation.expiresAt(), candidates);
@@ -403,7 +285,7 @@ public final class Onboarding {
       return new PreparedJoin(local.identity(), null, null, null, null, localDescriptor,
           invitation, group, udp, stun, applicationHandler, sessionAction);
     } catch (Exception failure) {
-      closeResources(udp, group, null, stun, null);
+      EndpointCleanup.closeResources(udp, group, null, stun, null);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
     }
   }
@@ -480,7 +362,7 @@ public final class Onboarding {
     try {
       AtomicReference<CandidateDescriptor> localDescriptor = new AtomicReference<>();
       CompletableFuture<CandidateDescriptor> remoteDescriptor = new CompletableFuture<>();
-      PeerSession.ApplicationStreamHandler bootstrapHandler = compactApplicationHandler(
+      PeerSession.ApplicationStreamHandler bootstrapHandler = CompactDescriptorExchange.compactApplicationHandler(
           localDescriptor, remoteDescriptor, applicationHandler);
       tls = EphemeralTlsMaterial.create();
       group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
@@ -507,7 +389,7 @@ public final class Onboarding {
       emit(OnboardingEventType.LISTENER_READY, "");
       List<CandidateProvider> providers = stun == null ? List.of()
           : List.of(new StunCandidateProvider(stunServer, 100, stun));
-      List<Candidate> candidates = gather("host", port, providers);
+      List<Candidate> candidates = LocalCandidateGathering.gather("host", port, providers);
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       Candidate endpoint = CompactBootstrapInvitation.selectEndpoint(candidates);
       CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued, expires,
@@ -521,7 +403,7 @@ public final class Onboarding {
       return new PreparedHost(local.identity(), expectedPeer, null, null, invitation,
           remoteDescriptor, established, group, udp, tls, stun, admission, sessionAction);
     } catch (Exception failure) {
-      closeResources(udp, group, tls, stun, admission);
+      EndpointCleanup.closeResources(udp, group, tls, stun, admission);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
     }
   }
@@ -615,7 +497,7 @@ public final class Onboarding {
         }
         List<CandidateProvider> providers = stun == null ? List.of()
             : List.of(new StunCandidateProvider(stunServer, 100, stun));
-        List<Candidate> candidates = gather("join",
+        List<Candidate> candidates = LocalCandidateGathering.gather("join",
             ((InetSocketAddress) udp.localAddress()).getPort(), providers);
         CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
             Instant.now().truncatedTo(ChronoUnit.SECONDS),
@@ -629,7 +511,7 @@ public final class Onboarding {
             group, udp,
             stun, applicationHandler, sessionAction);
       } catch (Exception failure) {
-        closeResources(udp, group, null, stun, null);
+        EndpointCleanup.closeResources(udp, group, null, stun, null);
         throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
       }
     } catch (OnboardingFailure failure) {
@@ -722,7 +604,7 @@ public final class Onboarding {
       List<CandidateProvider> optionalProviders = stun == null
           ? List.of()
           : List.of(new StunCandidateProvider(stunServer, 100, stun));
-      List<Candidate> candidates = gather("host", port, optionalProviders);
+      List<Candidate> candidates = LocalCandidateGathering.gather("host", port, optionalProviders);
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued,
@@ -880,7 +762,7 @@ public final class Onboarding {
       List<CandidateProvider> optionalProviders = stun == null
           ? List.of()
           : List.of(new StunCandidateProvider(stunServer, 100, stun));
-      List<Candidate> localCandidates = gather("join",
+      List<Candidate> localCandidates = LocalCandidateGathering.gather("join",
           ((InetSocketAddress) udp.localAddress()).getPort(),
           optionalProviders);
       CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
@@ -941,7 +823,7 @@ public final class Onboarding {
           new ConnectionPolicy(8, 8, 2, Duration.ofMillis(100),
               Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(2), 16))) {
         DirectConnectionResult result = racer.race(pairs, host.nodeId(),
-                pair -> attempt(local.identity(), host,
+                pair -> ClientQuicConnectionAttempt.attempt(local.identity(), host,
                     transcript, clientUdp, pair, applicationHandler))
             .completion()
             .toCompletableFuture()
@@ -981,53 +863,6 @@ public final class Onboarding {
       group.shutdownGracefully()
           .syncUninterruptibly();
     }
-  }
-
-  private static PeerSession.ApplicationStreamHandler compactApplicationHandler(
-      AtomicReference<CandidateDescriptor> localDescriptor,
-      CompletableFuture<CandidateDescriptor> remoteDescriptor,
-      PeerSession.ApplicationStreamHandler delegate) {
-    return (remoteNodeId, payload) -> {
-      if (!AuthenticatedDescriptorExchange.looksLike(payload)) {
-        return delegate == null
-            ? CompletableFuture.failedFuture(new IllegalStateException(
-                "no application handler is installed"))
-            : delegate.handle(remoteNodeId, payload);
-      }
-      try {
-        CandidateDescriptor received = AuthenticatedDescriptorExchange.decodeRequest(payload);
-        if (!remoteNodeId.equals(received.nodeId())
-            || !received.isValidAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)) {
-          throw new IllegalArgumentException("remote descriptor does not match session identity");
-        }
-        CandidateDescriptor local = localDescriptor.get();
-        if (local == null) {
-          throw new IllegalStateException("local descriptor is not ready");
-        }
-        remoteDescriptor.complete(received);
-        return CompletableFuture.completedFuture(AuthenticatedDescriptorExchange.response(local));
-      } catch (Exception failure) {
-        remoteDescriptor.completeExceptionally(failure);
-        return CompletableFuture.failedFuture(failure);
-      }
-    };
-  }
-
-  private static CandidateDescriptor exchangeDescriptor(PeerSession session,
-      CandidateDescriptor localDescriptor, String expectedRemoteNodeId, byte[] expectedRemoteKey,
-      Instant expiresAt) throws Exception {
-    byte[] response = session.requestApplication(
-            AuthenticatedDescriptorExchange.request(localDescriptor))
-        .toCompletableFuture()
-        .get(10, TimeUnit.SECONDS);
-    CandidateDescriptor remote = AuthenticatedDescriptorExchange.decodeResponse(response);
-    if (!remote.nodeId().equals(expectedRemoteNodeId)
-        || !Arrays.equals(remote.publicKeyEncoded(), expectedRemoteKey)
-        || !remote.isValidAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)
-        || remote.expiresAt().isAfter(expiresAt)) {
-      throw new IllegalArgumentException("remote descriptor is not bound to the invitation");
-    }
-    return remote;
   }
 
   private IdentityBootstrap bootstrap() {
@@ -1253,7 +1088,7 @@ public final class Onboarding {
           compactCompletion.completeExceptionally(
               new java.util.concurrent.CancellationException("host handle closed"));
         }
-        closeResources(udp, group, tls, stun, admission);
+        EndpointCleanup.closeResources(udp, group, tls, stun, admission);
       }
     }
   }
@@ -1375,7 +1210,7 @@ public final class Onboarding {
             Duration.ofSeconds(2),
             16))) {
           DirectConnectionResult result = racer.race(pairs, host.nodeId(),
-                  pair -> attempt(identity, host,
+                  pair -> ClientQuicConnectionAttempt.attempt(identity, host,
                       transcript, udp, pair, applicationHandler))
               .completion()
               .toCompletableFuture()
@@ -1423,7 +1258,7 @@ public final class Onboarding {
             Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20),
             Duration.ofSeconds(2), 16))) {
           DirectConnectionResult result = racer.race(pairs, compactInvitation.hostNodeId(),
-                  pair -> attempt(identity, compactInvitation.hostNodeId(),
+                  pair -> ClientQuicConnectionAttempt.attempt(identity, compactInvitation.hostNodeId(),
                       compactInvitation.publicKeyEncoded(), transcript, udp, pair,
                       applicationHandler))
               .completion()
@@ -1438,7 +1273,7 @@ public final class Onboarding {
           if (!session.hasRemotePublicKey(compactInvitation.publicKeyEncoded())) {
             throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
           }
-          exchangeDescriptor(session, localDescriptor, compactInvitation.hostNodeId(),
+          CompactDescriptorExchange.exchangeDescriptor(session, localDescriptor, compactInvitation.hostNodeId(),
               compactInvitation.publicKeyEncoded(), compactInvitation.expiresAt());
           emit(OnboardingEventType.DESCRIPTORS_EXCHANGED, "");
           emit(OnboardingEventType.PATH_SELECTED, pairs.getFirst().identifier());
@@ -1465,7 +1300,7 @@ public final class Onboarding {
     @Override
     public void close() {
       if (closed.compareAndSet(false, true)) {
-        closeResources(udp, group, null, stun, null);
+        EndpointCleanup.closeResources(udp, group, null, stun, null);
       }
     }
   }
