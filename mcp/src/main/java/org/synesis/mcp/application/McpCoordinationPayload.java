@@ -1,0 +1,376 @@
+package org.synesis.mcp.application;
+
+import static org.synesis.mcp.application.McpToolArguments.nullableStringList;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
+
+/**
+ * Validates and normalizes the strict {@code request_coordination} and {@code respond_coordination}
+ * payload schemas, and decodes the capability contract and review policy objects they carry.
+ *
+ * <p>Kept apart from {@link McpProtocolHandler} so the accepted kinds, the allowed and required
+ * fields, and the rejection codes form one inspectable schema rather than part of tool dispatch.
+ * Normalization only derives dispatch fields from the payload; authorization stays with the
+ * application services.
+ */
+final class McpCoordinationPayload {
+
+    /** Utility class; these rules are exposed through static operations. */
+    private McpCoordinationPayload() {
+    }
+
+    /**
+     * Validates the strict coordination request schema and maps its operation to dispatch fields.
+     *
+     * @param arguments top-level request_coordination arguments
+     * @return the payload fields plus the dispatch fields derived from the kind
+     * @throws IllegalArgumentException when the kind is unknown or the payload has a missing, extra, or inconsistent field
+     */
+    @SuppressWarnings({"unchecked"})
+    static Map<String, Object> normalizeStrictCoordination(Map<String, Object> arguments) {
+        Object kindValue = arguments.get("kind");
+        Object payloadValue = arguments.get("payload");
+        if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
+            throw new IllegalArgumentException("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD");
+        }
+        Map<String, Object> payload = (Map<String, Object>) rawPayload;
+        List<String> allowed = switch (kind) {
+            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId");
+            case "collaboration_status" -> List.of();
+            case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
+            case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
+            case "scope_revision" -> List.of("intentId", "selectors", "proposal");
+            case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
+            case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant", "proposal", "snapshotId", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
+            case "work_group_create" -> List.of("workGroupId", "goal", "acceptance", "reviewPolicy");
+            case "continuation" -> payload.containsKey("grantId") ? List.of("grantId", "intentId", "claimEpoch") : List.of("intentId", "claimEpoch");
+            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
+        };
+        for (String key : payload.keySet()) {
+            if (!allowed.contains(key)) {
+                throw new IllegalArgumentException("COORDINATION_FIELD_NOT_ALLOWED:" + key);
+            }
+        }
+        List<String> required = switch (kind) {
+            case "capability_request" -> List.of("capability", "contract");
+            case "contract_proposal" -> List.of("contractId", "body");
+            case "contract_request" -> List.of("conflictingIntentId", "proposal");
+            case "scope_revision" -> List.of("intentId", "selectors", "proposal");
+            case "handoff" -> List.of("intentId", "targetParticipant", "proposal");
+            case "work_group_join" -> payload.containsKey("grantId") ? List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant") : List.of("workGroupId", "intentId", "proposal");
+            case "work_group_create" -> List.of("workGroupId", "goal", "acceptance");
+            case "continuation" -> payload.containsKey("grantId") ? List.of("grantId", "intentId", "claimEpoch") : List.of("intentId", "claimEpoch");
+            default -> List.of();
+        };
+        for (String key : required) {
+            if (!payload.containsKey(key) || payload.get(key) == null) {
+                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:" + key);
+            }
+        }
+        if ("capability_request".equals(kind)) {
+            boolean hasHandle = payload.containsKey("capabilityRequestHandle");
+            boolean hasResponse = payload.containsKey("revisionResponse");
+            if (hasHandle != hasResponse) {
+                throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_REQUIRES_HANDLE_AND_RESPONSE");
+            }
+            if (hasResponse) {
+                Object response = payload.get("revisionResponse");
+                if (!(response instanceof String value) || !List.of("accept", "counter", "cancel").contains(value)) {
+                    throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_INVALID");
+                }
+                requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
+            } else if (payload.containsKey("contractRevision")) {
+                throw new IllegalArgumentException("CONTRACT_REVISION_REQUIRES_CAPABILITY_HANDLE");
+            }
+        }
+        if ("work_group_join".equals(kind)) {
+            requireMatchingAlias(payload, "intentId", "reviewedIntentId");
+            requireMatchingAlias(payload, "targetParticipant", "reviewerParticipant");
+            requireOptionalText(payload, "reviewedParticipantId");
+            requireOptionalText(payload, "reviewerParticipant");
+        }
+        Map<String, Object> normalized = new LinkedHashMap<>(payload);
+        normalized.remove("kind");
+        normalized.put("collaborationOperation", switch (kind) {
+            case "capability_request" -> "capability_request";
+            case "collaboration_status" -> "status";
+            case "contract_proposal" -> "publish";
+            case "contract_request", "scope_revision" -> "request_coordination";
+            case "handoff" -> "handoff";
+            case "work_group_join" -> payload.containsKey("grantId") ? "lane_grant_consume" : "request_coordination";
+            case "work_group_create" -> "work_group_create";
+            default -> kind;
+        });
+        if ("contract_proposal".equals(kind)) {
+            normalized.put("collaborationContractId", payload.get("contractId"));
+            normalized.put("collaborationBody", payload.get("body"));
+            normalized.put("collaborationSelectors", payload.getOrDefault("selectors", List.of()));
+        }
+        if ("capability_request".equals(kind)) {
+            if (!(payload.get("capability") instanceof String capability) || capability.isBlank()) {
+                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:capability");
+            }
+            normalized.put("capability", capability);
+        }
+        if ("work_group_join".equals(kind)) {
+            normalized.put("targetParticipant", payload.get("targetParticipant"));
+            if (!payload.containsKey("grantId")) {
+                normalized.put("collaborationIntentId", payload.get("intentId"));
+                normalized.put("collaborationRequestKind", "REVIEW");
+                normalized.put("collaborationProposal", payload.get("proposal"));
+            }
+        }
+        if ("work_group_create".equals(kind)) {
+            validateReviewPolicyPayload(payload.get("reviewPolicy"));
+            normalized.put("collaborationGoal", payload.get("goal"));
+            normalized.put("collaborationAcceptance", payload.get("acceptance"));
+        }
+        if ("contract_request".equals(kind)) {
+            normalized.putIfAbsent("collaborationIntentId", payload.get("conflictingIntentId"));
+            normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
+            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+        }
+        if ("scope_revision".equals(kind)) {
+            normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
+            normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
+            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+        }
+        if ("handoff".equals(kind)) {
+            normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
+            normalized.putIfAbsent("collaborationTarget", payload.get("targetParticipant"));
+            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
+        }
+        if ("continuation".equals(kind)) {
+            normalized.putIfAbsent("grantId", payload.get("grantId"));
+            normalized.putIfAbsent("collaborationSourceIntentId", payload.get("intentId"));
+            normalized.putIfAbsent("claimEpoch", payload.get("claimEpoch"));
+        }
+        return normalized;
+    }
+
+    /**
+     * Validates the strict coordination-response schema before service invocation.
+     *
+     * @param arguments top-level respond_coordination arguments
+     * @return the validated {@code kind} and {@code payload}
+     * @throws IllegalArgumentException when the kind is unknown or the payload fails validation
+     */
+    @SuppressWarnings({"unchecked", "ExtractMethodRecommender"})
+    static Map<String, Object> normalizeStrictResponse(Map<String, Object> arguments) {
+        Object kindValue = arguments.get("kind");
+        Object payloadValue = arguments.get("payload");
+        if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
+            throw new IllegalArgumentException("COORDINATION_RESPONSE_REQUIRES_KIND_AND_PAYLOAD");
+        }
+        Map<String, Object> payload = (Map<String, Object>) rawPayload;
+        List<String> allowed = switch (kind) {
+            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision", "revision", "reason");
+            case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus", "proposal");
+            case "inbox_acknowledge" -> List.of("inboxItemId");
+            case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
+            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "failedAcceptanceTests");
+            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
+            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_RESPONSE_KIND");
+        };
+        for (String key : payload.keySet()) {
+            if (!allowed.contains(key)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:" + key);
+            }
+        }
+        List<String> required = switch (kind) {
+            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision");
+            case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus");
+            case "inbox_acknowledge" -> List.of("inboxItemId");
+            case "inbox_resolve" -> List.of("inboxItemId", "resolution");
+            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result");
+            case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result");
+            default -> List.of();
+        };
+        for (String key : required) {
+            if (!payload.containsKey(key)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_REQUIRED:" + key);
+            }
+        }
+        if ("review_validation".equals(kind)) {
+            requireMatchingAlias(payload, "intentId", "reviewedIntentId");
+            requireOptionalText(payload, "reviewedParticipantId");
+            requireOptionalText(payload, "reviewerParticipant");
+        }
+        if ("capability_response".equals(kind)) {
+            Object response = payload.get("response");
+            if (!(response instanceof String value) || !("accept".equals(value) || "revise".equals(value) || "reject".equals(value))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESPONSE");
+            }
+            requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
+            if ("revise".equals(response) && !(payload.get("revision") instanceof Map<?, ?>)) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_REVISION_REQUIRED");
+            }
+        }
+        if ("implementation_validation".equals(kind)) {
+            Object result = payload.get("result");
+            if (!(result instanceof String value) || !("inspect".equals(value) || "accepted".equals(value) || "revision_required".equals(value))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESULT");
+            }
+            if ("revision_required".equals(result)) {
+                Object reason = payload.get("reason");
+                if (!(reason instanceof String reasonText) || reasonText.isBlank()) {
+                    throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
+                }
+            }
+        }
+        if ("review_validation".equals(kind)) {
+            Object result = payload.get("result");
+            if (!(result instanceof String reviewResult) || !("accept".equalsIgnoreCase(reviewResult) || "accepted".equalsIgnoreCase(reviewResult) || "reject".equalsIgnoreCase(reviewResult)
+                    || "rejected".equalsIgnoreCase(reviewResult))) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESULT");
+            }
+            if (("reject".equalsIgnoreCase(String.valueOf(result)) || "rejected".equalsIgnoreCase(String.valueOf(result))) && (!(payload.get("reason") instanceof String reason) || reason.isBlank())) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
+            }
+        }
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("kind", kind);
+        normalized.put("payload", payload);
+        return normalized;
+    }
+
+    private static void requirePositiveRevision(Object value, String field) {
+        if (!(value instanceof Number revision) || revision.longValue() < 1 || revision.doubleValue() != revision.longValue()) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + field);
+        }
+    }
+
+    /**
+     * Ensures a supplied provider-facing alias exactly matches its canonical field.
+     *
+     * @param payload   request payload
+     * @param canonical canonical field name
+     * @param alias     provider-facing alias
+     * @throws IllegalArgumentException when both fields are present and differ or either is blank
+     */
+    private static void requireMatchingAlias(Map<String, Object> payload, String canonical, String alias) {
+        if (!payload.containsKey(alias) || !payload.containsKey(canonical)) {
+            return;
+        }
+        Object canonicalValue = payload.get(canonical);
+        Object aliasValue = payload.get(alias);
+        if (!(canonicalValue instanceof String canonicalText) || canonicalText.isBlank() || !(aliasValue instanceof String aliasText) || aliasText.isBlank() || !canonicalText.equals(aliasText)) {
+            throw new IllegalArgumentException("COORDINATION_ALIAS_MISMATCH:" + alias);
+        }
+    }
+
+    /**
+     * Validates that an optional payload field, when present, is nonblank text.
+     *
+     * @param payload request payload
+     * @param key     field name
+     * @throws IllegalArgumentException when the field is present but not nonblank text
+     */
+    private static void requireOptionalText(Map<String, Object> payload, String key) {
+        if (payload.containsKey(key) && (!(payload.get(key) instanceof String value) || value.isBlank())) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + key);
+        }
+    }
+
+    /**
+     * Validates the bounded two-boolean review policy accepted by work-group creation.
+     *
+     * @param rawPolicy untrusted review policy value, possibly {@code null}
+     * @throws IllegalArgumentException when the policy is not an object with exactly boolean {@code mandatory} and {@code independenceRequired}
+     */
+    private static void validateReviewPolicyPayload(Object rawPolicy) {
+        if (rawPolicy == null) {
+            return;
+        }
+        if (!(rawPolicy instanceof Map<?, ?> policy)) {
+            throw new IllegalArgumentException("REVIEW_POLICY_SCHEMA_INVALID");
+        }
+        if (policy.keySet().stream().anyMatch(key -> !"mandatory".equals(key) && !"independenceRequired".equals(key))) {
+            throw new IllegalArgumentException("REVIEW_POLICY_FIELD_NOT_ALLOWED");
+        }
+        if (!(policy.get("mandatory") instanceof Boolean) || !(policy.get("independenceRequired") instanceof Boolean)) {
+            throw new IllegalArgumentException("REVIEW_POLICY_FIELDS_REQUIRED");
+        }
+    }
+
+    /**
+     * Converts a validated review policy object into the domain policy value.
+     *
+     * @param rawPolicy untrusted review policy value, possibly {@code null}
+     * @return the parsed policy, or {@link ReviewPolicy#none()} when absent
+     * @throws IllegalArgumentException when the payload is invalid or the policy is unsupported
+     */
+    static ReviewPolicy parseReviewPolicy(Object rawPolicy) {
+        if (rawPolicy == null) {
+            return ReviewPolicy.none();
+        }
+        validateReviewPolicyPayload(rawPolicy);
+        Map<?, ?> policy = (Map<?, ?>) rawPolicy;
+        try {
+            return new ReviewPolicy((Boolean) policy.get("mandatory"), (Boolean) policy.get("independenceRequired"));
+        } catch (IllegalArgumentException invalidPolicy) {
+            throw new IllegalArgumentException("REVIEW_POLICY_UNSUPPORTED", invalidPolicy);
+        }
+    }
+
+    /**
+     * Decodes a capability contract from the JSON-compatible contract object.
+     *
+     * @param contractObj untrusted contract value
+     * @return validated contract or {@code null} when required fields are absent or invalid
+     */
+    static CapabilityContract parseContract(Object contractObj) {
+        if (!(contractObj instanceof Map<?, ?> map)) {
+            return null;
+        }
+        List<String> contractFields = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests");
+        if (map.size() != contractFields.size() || map.keySet().stream().anyMatch(key -> !(key instanceof String field) || !contractFields.contains(field))) {
+            return null;
+        }
+        Object rawPurpose = map.get("purpose");
+        Object rawInputs = map.get("inputs");
+        Object rawOutput = map.get("output");
+        Object rawErrorSemantics = map.get("errorSemantics");
+        Object rawSideEffects = map.get("sideEffects");
+        Object rawInvariants = map.get("invariants");
+        Object rawCompatibility = map.get("compatibility");
+        Object rawPerformance = map.get("performance");
+        Object rawConcurrency = map.get("concurrency");
+        if (!(rawPurpose instanceof String purpose) || !(rawInputs instanceof String inputs) || !(rawOutput instanceof String output)
+                || !(rawErrorSemantics instanceof String errorSemantics) || !(rawSideEffects instanceof String sideEffects)
+                || !(rawInvariants instanceof String invariants) || !(rawCompatibility instanceof String compatibility)
+                || !(rawPerformance instanceof String performance) || !(rawConcurrency instanceof String concurrency)
+                || !(map.get("requiredBehavior") instanceof List<?>) || !(map.get("acceptanceTests") instanceof List<?>)) {
+            return null;
+        }
+        List<String> requiredBehavior;
+        List<String> acceptanceTests;
+        try {
+            requiredBehavior = Objects.requireNonNullElse(nullableStringList(map.get("requiredBehavior"), "requiredBehavior"), List.of());
+            acceptanceTests = Objects.requireNonNullElse(nullableStringList(map.get("acceptanceTests"), "acceptanceTests"), List.of());
+        } catch (IllegalArgumentException invalid) {
+            return null;
+        }
+        try {
+            return new CapabilityContract(purpose,
+                    inputs,
+                    output,
+                    requiredBehavior,
+                    errorSemantics,
+                    sideEffects,
+                    invariants,
+                    compatibility,
+                    performance,
+                    concurrency,
+                    acceptanceTests);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+}
