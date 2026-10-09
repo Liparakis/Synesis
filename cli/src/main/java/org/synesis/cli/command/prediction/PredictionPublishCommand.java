@@ -21,21 +21,21 @@ import picocli.CommandLine.Option;
 public final class PredictionPublishCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
-    @Option(names = "--supervisor", required = true)
+    @Option(names = "--supervisor", required = true, description = "ID of the publishing supervisor.")
     private String supervisor;
-    @Option(names = "--worker", required = true)
+    @Option(names = "--worker", required = true, description = "ID of the publishing worker.")
     private String worker;
-    @Option(names = "--prediction", required = true)
+    @Option(names = "--prediction", required = true, description = "ID of the prediction to publish state for.")
     private UUID prediction;
     @Option(names = "--stage", required = true, description = "implementation-started|patch-ready|available")
     private String stage;
-    @Option(names = "--commit", required = true)
+    @Option(names = "--commit", required = true, description = "Commit identifier recorded with the published state.")
     private String commit;
 
     /**

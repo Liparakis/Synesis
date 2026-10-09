@@ -17,7 +17,7 @@ import picocli.CommandLine.Option;
  *
  * @since 1.0
  */
-@Command(name = "mcp", description = "Launches the stdio Model Context Protocol (MCP) server")
+@Command(name = "mcp", description = "Launches the stdio Model Context Protocol (MCP) server", mixinStandardHelpOptions = true)
 public final class McpCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

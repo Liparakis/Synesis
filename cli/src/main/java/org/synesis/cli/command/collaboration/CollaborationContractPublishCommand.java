@@ -17,17 +17,17 @@ import picocli.CommandLine.Option;
 public final class CollaborationContractPublishCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
-    @Option(names = "--provider", defaultValue = "codex")
+    @Option(names = "--provider", defaultValue = "codex", description = "Provider ID of the calling session (default: codex).")
     private String provider;
-    @Option(names = "--connection-instance-id", required = true)
+    @Option(names = "--connection-instance-id", required = true, description = "Connection instance ID of the calling provider session.")
     private String connection;
-    @Option(names = "--contract", required = true)
+    @Option(names = "--contract", required = true, description = "Contract ID; publishing an existing ID creates its next revision.")
     private UUID contract;
-    @Option(names = "--body", required = true)
+    @Option(names = "--body", required = true, description = "Contract text.")
     private String body;
-    @Option(names = "--selector", split = ",")
+    @Option(names = "--selector", split = ",", description = "Comma-separated selector references the contract covers.")
     private List<String> selectors = List.of();
 
     /**

@@ -19,11 +19,11 @@ import picocli.CommandLine.Option;
 public final class SpeculationPrepareCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--prediction", required = true)
+    @Option(names = "--prediction", required = true, description = "ID of the prediction the worktree is for.")
     private UUID prediction;
-    @Option(names = "--base-commit", required = true)
+    @Option(names = "--base-commit", required = true, description = "Commit the isolated worktree is created from.")
     private String baseCommit;
 
     /**

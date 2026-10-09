@@ -18,11 +18,11 @@ import picocli.CommandLine.Option;
 public final class CheckActionCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--scope", required = true)
+    @Option(names = "--scope", required = true, description = "Project-relative path the action targets.")
     private String scope;
-    @Option(names = "--action", required = true)
+    @Option(names = "--action", required = true, description = "Description of the action to check.")
     private String action;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private String project;
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;

@@ -21,6 +21,7 @@ public final class ConsoleTerminal implements Terminal {
     private final BufferedReader input;
     private final int width;
     private final boolean unicodeSupported;
+    private final Charset outputCharset;
 
     /**
      * Creates a terminal connected to the current process streams.
@@ -47,7 +48,7 @@ public final class ConsoleTerminal implements Terminal {
      * @param input stdin stream
      */
     public ConsoleTerminal(PrintStream out, PrintStream err, InputStream input) {
-        Charset outputCharset = out.charset();
+        this.outputCharset = out.charset();
         this.out = new PrintWriter(out, true);
         this.err = new PrintWriter(err, true);
         this.input = new BufferedReader(new InputStreamReader(input, Charset.defaultCharset()));
@@ -86,6 +87,11 @@ public final class ConsoleTerminal implements Terminal {
     @Override
     public boolean unicodeSupported() {
         return unicodeSupported;
+    }
+
+    @Override
+    public boolean canDisplay(String text) {
+        return outputCharset.newEncoder().canEncode(text);
     }
 
     @Override

@@ -16,13 +16,13 @@ import java.util.concurrent.Callable;
 public final class EventsFollowCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--cursor", required = true)
+    @Option(names = "--cursor", required = true, description = "File holding the last followed event sequence; read as 0 if missing.")
     private Path cursor;
-    @Option(names = "--duration-seconds", defaultValue = "0")
+    @Option(names = "--duration-seconds", defaultValue = "0", description = "Seconds to follow events; 0 follows until the stream ends.")
     private int durationSeconds;
 
     /**

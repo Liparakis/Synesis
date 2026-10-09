@@ -16,7 +16,7 @@ import picocli.CommandLine.Option;
 public final class HookClaudeCodeCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private String project;
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;

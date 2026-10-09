@@ -24,15 +24,15 @@ import picocli.CommandLine.Option;
 public final class ConstraintCreateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--title", required = true)
+    @Option(names = "--title", required = true, description = "Short constraint title.")
     private String title;
-    @Option(names = "--rationale", required = true)
+    @Option(names = "--rationale", required = true, description = "Reason the constraint exists.")
     private String rationale;
-    @Option(names = "--scope", required = true)
+    @Option(names = "--scope", required = true, description = "Repository-relative path or pattern covered, such as src/protocol/**.")
     private String scope;
-    @Option(names = "--effect", defaultValue = "block")
+    @Option(names = "--effect", defaultValue = "block", description = "Effect on matching actions: block or warn (default: block).")
     private String effect;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private String project;
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;

@@ -22,9 +22,9 @@ public final class UiCommand implements Callable<Integer> {
     private Path data;
     @Option(names = "--identity", description = "Coordinator identity directory.")
     private Path identity;
-    @Option(names = "--host", defaultValue = "127.0.0.1")
+    @Option(names = "--host", defaultValue = "127.0.0.1", description = "Loopback host to bind (default: 127.0.0.1); used only with --duration-seconds above 0.")
     private String host;
-    @Option(names = "--port", defaultValue = "0")
+    @Option(names = "--port", defaultValue = "0", description = "TCP port; 0 picks a free port. Used only with --duration-seconds above 0.")
     private int port;
     @Option(names = "--duration-seconds", defaultValue = "0", description = "Bounded duration for smoke tests.")
     private int durationSeconds;

@@ -15,7 +15,7 @@ import picocli.CommandLine.Option;
 public final class CollaborationContractStatusCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
 
     /**

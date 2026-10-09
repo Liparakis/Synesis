@@ -21,21 +21,21 @@ import picocli.CommandLine.Option;
 public final class PredictionRespondCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
-    @Option(names = "--supervisor", required = true)
+    @Option(names = "--supervisor", required = true, description = "ID of the responding supervisor.")
     private String supervisor;
-    @Option(names = "--worker", required = true)
+    @Option(names = "--worker", required = true, description = "ID of the responding worker.")
     private String worker;
-    @Option(names = "--prediction", required = true)
+    @Option(names = "--prediction", required = true, description = "ID of the prediction being answered.")
     private UUID prediction;
     @Option(names = "--action", required = true, description = "receive|exact|equivalent|revise|reject")
     private String action;
-    @Option(names = "--reason", defaultValue = "")
+    @Option(names = "--reason", defaultValue = "", description = "Free-text reason recorded with the response (default: empty).")
     private String reason;
 
     /**

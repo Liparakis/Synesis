@@ -19,9 +19,9 @@ import picocli.CommandLine.Option;
 public final class SyncHostCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Project directory or project UUID (default: current directory).")
     private String project;
-    @Option(names = "--record")
+    @Option(names = "--record", description = "UUID of a single project record to sync (default: all records).")
     private String record;
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;

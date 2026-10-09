@@ -19,9 +19,9 @@ import picocli.CommandLine.Option;
 public final class OwnershipShowCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--capability", required = true)
+    @Option(names = "--capability", required = true, description = "Semantic capability name to look up.")
     private String capability;
 
     /**

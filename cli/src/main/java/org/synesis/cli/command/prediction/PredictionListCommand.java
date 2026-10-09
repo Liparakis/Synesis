@@ -21,9 +21,9 @@ import picocli.CommandLine.Option;
 public final class PredictionListCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
 
     /**

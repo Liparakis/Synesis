@@ -19,19 +19,19 @@ import picocli.CommandLine.Option;
 public final class CollaborationAnnounceCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
-    @Option(names = "--provider", defaultValue = "codex")
+    @Option(names = "--provider", defaultValue = "codex", description = "Provider ID of the calling session (default: codex).")
     private String provider;
-    @Option(names = "--connection-instance-id", required = true)
+    @Option(names = "--connection-instance-id", required = true, description = "Connection instance ID of the calling provider session.")
     private String connectionInstanceId;
-    @Option(names = "--goal", required = true)
+    @Option(names = "--goal", required = true, description = "Goal of the work being announced.")
     private String goal;
-    @Option(names = "--acceptance", required = true)
+    @Option(names = "--acceptance", required = true, description = "Acceptance criteria for the work.")
     private String acceptance;
-    @Option(names = "--claim", required = true, split = ",")
+    @Option(names = "--claim", required = true, split = ",", description = "Comma-separated repository-relative paths to claim.")
     private List<String> claims;
-    @Option(names = "--subtree")
+    @Option(names = "--subtree", description = "Claim each path as a directory subtree instead of an exact file.")
     private boolean subtree;
     @Option(names = "--work-group", description = "Logical work-group UUID")
     private UUID workGroupId;

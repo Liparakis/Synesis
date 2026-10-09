@@ -81,6 +81,11 @@ import org.synesis.cli.command.workspace.WorkspaceVerifyCommand;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
+import org.synesis.cli.terminal.HumanTerminal;
+import org.synesis.cli.terminal.Terminal;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import picocli.CommandLine;
 
 /**
@@ -88,7 +93,19 @@ import picocli.CommandLine;
  */
 public final class SynesisCli {
 
+    private static final Map<String, List<String>> COMMAND_GROUPS = commandGroups();
+    private static final List<String> PLUMBING_COMMANDS = List.of("check-action", "daemon", "hook", "integration", "mcp", "open", "prediction", "speculation", "supervisor", "workspace");
+
     private SynesisCli() {
+    }
+
+    private static Map<String, List<String>> commandGroups() {
+        Map<String, List<String>> groups = new LinkedHashMap<>();
+        groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
+        groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
+        groups.put("Coordinate work", List.of("collaboration", "task", "ownership", "constraint", "events", "coordination"));
+        groups.put("Maintain a project", List.of("cleanup", "reconcile", "repair", "migrate", "project"));
+        return groups;
     }
 
     /**
@@ -171,6 +188,7 @@ public final class SynesisCli {
         command.addSubcommand("hook", new HookCommand());
         command.getSubcommands().get("hook").addSubcommand("claude", new HookClaudeCodeCommand(runtime));
         command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
+        groupRootCommands(command);
         configureHandlers(command, runtime);
         try {
             return command.execute(arguments);
@@ -179,11 +197,56 @@ public final class SynesisCli {
         }
     }
 
+    /**
+     * Lists root commands by what a person is trying to do instead of in registration order.
+     *
+     * <p>Commands that only agents and integrations call are named on one line so they stay
+     * discoverable without crowding the everyday ones. A command missing from every group is
+     * still listed, so registering a new command can never hide it from help.</p>
+     */
+    static void groupRootCommands(CommandLine command) {
+        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST_HEADING, _ -> "");
+        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST, help -> {
+            Map<String, CommandLine.Help> remaining = new LinkedHashMap<>(help.subcommands());
+            StringBuilder text = new StringBuilder();
+            COMMAND_GROUPS.forEach((heading, names) -> {
+                Map<String, CommandLine.Help> members = new LinkedHashMap<>();
+                names.forEach(name -> {
+                    CommandLine.Help member = remaining.remove(name);
+                    if (member != null) {
+                        members.put(name, member);
+                    }
+                });
+                if (!members.isEmpty()) {
+                    text.append(String.format("%n%s:%n", heading)).append(help.commandList(members));
+                }
+            });
+            List<String> plumbing = PLUMBING_COMMANDS.stream().filter(name -> remaining.remove(name) != null).toList();
+            if (!remaining.isEmpty()) {
+                text.append(String.format("%nOther commands:%n")).append(help.commandList(remaining));
+            }
+            if (!plumbing.isEmpty()) {
+                text.append(String.format("%nCalled by agents and integrations:%n  %s%n", String.join(", ", plumbing)));
+            }
+            return text.toString();
+        });
+    }
+
     static void configureHandlers(CommandLine command, CliRuntime runtime) {
         command.setOut(runtime.terminal().out());
         command.setErr(runtime.terminal().err());
         command.setParameterExceptionHandler((exception, _) -> {
-            runtime.terminal().stderr("Usage error in '" + exception.getCommandLine().getCommandName() + "'. Run 'synesis help' for valid commands and options.");
+            CommandLine failed = exception.getCommandLine();
+            if (runtime.terminal() instanceof HumanTerminal) {
+                // A person can act on the parser's own explanation and on near-miss suggestions;
+                // the machine contract below stays a single stable line.
+                runtime.terminal().stderr(exception.getMessage());
+                if (!CommandLine.UnmatchedArgumentException.printSuggestions(exception, runtime.terminal().err())) {
+                    runtime.terminal().stderr("Run '" + failed.getCommandSpec().qualifiedName() + " --help' for valid commands and options.");
+                }
+                return ExitCodes.USAGE;
+            }
+            runtime.terminal().stderr("Usage error in '" + failed.getCommandName() + "'. Run 'synesis help' for valid commands and options.");
             return ExitCodes.USAGE;
         });
         command.setExecutionExceptionHandler((exception, _, _) -> FailureMapper.internal(runtime.terminal()));
@@ -214,6 +277,11 @@ public final class SynesisCli {
      */
     public static void main(String[] arguments) {
         configureWindowsLoopbackSocketDirectory();
-        System.exit(execute(arguments, CliRuntime.defaults(new ConsoleTerminal())));
+        Terminal terminal = new ConsoleTerminal();
+        java.io.Console console = System.console();
+        if (HumanTerminal.selected(List.of(arguments), console != null && console.isTerminal(), System.getenv(HumanTerminal.OUTPUT_VARIABLE))) {
+            terminal = new HumanTerminal(terminal, HumanTerminal.colorSupported(System.getenv()));
+        }
+        System.exit(execute(arguments, CliRuntime.defaults(terminal)));
     }
 }

@@ -76,4 +76,17 @@ public interface Terminal {
      * @return true when the glyphs can be encoded
      */
     boolean unicodeSupported();
+
+    /**
+     * Returns whether the output encoding can represent every character of {@code text}.
+     *
+     * <p>Block-drawing support, which {@link #unicodeSupported()} reports, does not imply that
+     * other symbols survive a legacy console code page, so decorations must ask for themselves.</p>
+     *
+     * @param text characters a caller would like to print
+     * @return {@code true} only when all of them can be encoded
+     */
+    default boolean canDisplay(String text) {
+        return false;
+    }
 }

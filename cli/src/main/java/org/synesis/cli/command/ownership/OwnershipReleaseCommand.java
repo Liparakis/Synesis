@@ -22,21 +22,21 @@ import picocli.CommandLine.Option;
 public final class OwnershipReleaseCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
-    @Option(names = "--supervisor", required = true)
+    @Option(names = "--supervisor", required = true, description = "ID of the supervisor that owns the capability.")
     private String supervisor;
-    @Option(names = "--task", required = true)
+    @Option(names = "--task", required = true, description = "ID of the task the claim belongs to.")
     private UUID taskId;
-    @Option(names = "--capability", required = true)
+    @Option(names = "--capability", required = true, description = "Semantic capability name to release.")
     private String capability;
-    @Option(names = "--scope", required = true, split = ",")
+    @Option(names = "--scope", required = true, split = ",", description = "Comma-separated protected scope patterns of the claim.")
     private List<String> scopes;
-    @Option(names = "--intent-version", defaultValue = "1")
+    @Option(names = "--intent-version", defaultValue = "1", description = "Non-negative ownership intent version of the claim (default: 1).")
     private long intentVersion;
 
     /**

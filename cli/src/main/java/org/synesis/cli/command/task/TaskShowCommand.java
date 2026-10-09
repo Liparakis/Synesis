@@ -24,9 +24,9 @@ public final class TaskShowCommand implements Callable<Integer> {
     private final CliRuntime runtime;
     @Option(names = "--project", description = "Initialized project directory.")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--task", required = true)
+    @Option(names = "--task", required = true, description = "ID of the task to show.")
     private UUID taskId;
 
     /**

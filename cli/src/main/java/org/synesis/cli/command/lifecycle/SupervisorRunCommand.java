@@ -18,19 +18,19 @@ import picocli.CommandLine.Option;
 public final class SupervisorRunCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
-    @Option(names = "--supervisor", required = true)
+    @Option(names = "--supervisor", required = true, description = "Supervisor ID reported for this run.")
     private String supervisor;
-    @Option(names = "--worker", required = true)
+    @Option(names = "--worker", required = true, description = "Worker ID reported for this run.")
     private String worker;
-    @Option(names = "--cursor")
+    @Option(names = "--cursor", description = "Cursor file (default: coordination.cursor in the profile directory).")
     private Path cursor;
-    @Option(names = "--duration-seconds", defaultValue = "0")
+    @Option(names = "--duration-seconds", defaultValue = "0", description = "Seconds to follow events; 0 follows until the stream ends.")
     private int durationSeconds;
 
     /**

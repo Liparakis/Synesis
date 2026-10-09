@@ -20,11 +20,11 @@ import picocli.CommandLine.Parameters;
 public final class SyncJoinCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Project directory or project UUID (default: current directory).")
     private String project;
-    @Option(names = "--record")
+    @Option(names = "--record", description = "UUID of a single project record to sync (default: from the invitation, else all records).")
     private String record;
-    @Option(names = "--expect-host")
+    @Option(names = "--expect-host", description = "Require the invitation host to have this node ID.")
     private String expectedHost;
     @Option(names = "--profile", description = "Advanced local profile override.")
     private String profile;

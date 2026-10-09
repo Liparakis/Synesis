@@ -20,13 +20,13 @@ public final class CoordinationServeCommand implements Callable<Integer> {
     private Path data;
     @Option(names = "--identity", description = "Coordinator identity directory.")
     private Path identity;
-    @Option(names = "--host", defaultValue = "127.0.0.1")
+    @Option(names = "--host", defaultValue = "127.0.0.1", description = "Loopback host to bind: 127.0.0.1, localhost, or ::1 (default: 127.0.0.1).")
     private String host;
-    @Option(names = "--port", defaultValue = "48123")
+    @Option(names = "--port", defaultValue = "48123", description = "TCP port to listen on (default: 48123).")
     private int port;
-    @Option(names = "--duration-seconds", defaultValue = "0")
+    @Option(names = "--duration-seconds", defaultValue = "0", description = "Seconds to serve before exiting; 0 serves until interrupted.")
     private int durationSeconds;
-    @Option(names = "--parent-pid", defaultValue = "-1", hidden = true)
+    @Option(names = "--parent-pid", defaultValue = "-1", hidden = true, description = "Exit when the process with this PID ends; -1 disables the check.")
     private long parentPid;
 
     /**

@@ -23,11 +23,11 @@ import org.synesis.coordination.domain.prediction.PredictionIntegrationResult;
 public final class IntegrationGateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--prediction", required = true)
+    @Option(names = "--prediction", required = true, description = "ID of the prediction to gate.")
     private UUID prediction;
 
     /**

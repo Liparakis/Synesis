@@ -16,17 +16,17 @@ import picocli.CommandLine.Option;
 public final class CollaborationContractBindCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
-    @Option(names = "--provider", defaultValue = "codex")
+    @Option(names = "--provider", defaultValue = "codex", description = "Provider ID of the calling session (default: codex).")
     private String provider;
-    @Option(names = "--connection-instance-id", required = true)
+    @Option(names = "--connection-instance-id", required = true, description = "Connection instance ID of the calling provider session.")
     private String connection;
-    @Option(names = "--intent", required = true)
+    @Option(names = "--intent", required = true, description = "Work intent ID to bind.")
     private UUID intent;
-    @Option(names = "--contract", required = true)
+    @Option(names = "--contract", required = true, description = "Shared contract ID to bind to.")
     private UUID contract;
-    @Option(names = "--revision", required = true)
+    @Option(names = "--revision", required = true, description = "Exact contract revision number to bind.")
     private long revision;
 
     /**

@@ -22,59 +22,59 @@ import picocli.CommandLine.Option;
 public final class PredictionCreateCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project")
+    @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private Path project;
-    @Option(names = "--endpoint", required = true)
+    @Option(names = "--endpoint", required = true, description = "Coordination server endpoint URI, such as http://127.0.0.1:48123/.")
     private URI endpoint;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
-    @Option(names = "--supervisor", required = true)
+    @Option(names = "--supervisor", required = true, description = "ID of the requesting supervisor.")
     private String supervisor;
-    @Option(names = "--worker", required = true)
+    @Option(names = "--worker", required = true, description = "ID of the requesting worker.")
     private String worker;
-    @Option(names = "--task", required = true)
+    @Option(names = "--task", required = true, description = "ID of the requesting task.")
     private UUID taskId;
-    @Option(names = "--capability", required = true)
+    @Option(names = "--capability", required = true, description = "Semantic capability name the prediction is about.")
     private String capability;
-    @Option(names = "--owner-node", required = true)
+    @Option(names = "--owner-node", required = true, description = "Node ID of the capability owner.")
     private String ownerNode;
-    @Option(names = "--owner-supervisor", required = true)
+    @Option(names = "--owner-supervisor", required = true, description = "Supervisor ID of the capability owner.")
     private String ownerSupervisor;
-    @Option(names = "--scope", required = true, split = ",")
+    @Option(names = "--scope", required = true, split = ",", description = "Comma-separated protected scope patterns.")
     private List<String> scopes;
-    @Option(names = "--base-commit", required = true)
+    @Option(names = "--base-commit", required = true, description = "Base commit the prediction is made against.")
     private String baseCommit;
-    @Option(names = "--base-scope-hash", required = true, split = ",")
+    @Option(names = "--base-scope-hash", required = true, split = ",", description = "Comma-separated scope hashes recorded as the prediction base.")
     private List<String> baseScopeHashes;
-    @Option(names = "--project-sequence", defaultValue = "0")
+    @Option(names = "--project-sequence", defaultValue = "0", description = "Project event sequence used as the base (default: 0).")
     private long projectSequence;
-    @Option(names = "--intent-version", defaultValue = "1")
+    @Option(names = "--intent-version", defaultValue = "1", description = "Owner's intent version the prediction is based on (default: 1).")
     private long intentVersion;
-    @Option(names = "--purpose", required = true)
+    @Option(names = "--purpose", required = true, description = "Purpose of the predicted capability.")
     private String purpose;
-    @Option(names = "--inputs", required = true)
+    @Option(names = "--inputs", required = true, description = "Input contract of the capability.")
     private String inputs;
-    @Option(names = "--outputs", required = true)
+    @Option(names = "--outputs", required = true, description = "Output contract of the capability.")
     private String outputs;
-    @Option(names = "--behavior", required = true)
+    @Option(names = "--behavior", required = true, description = "Behavior contract of the capability.")
     private String behavior;
-    @Option(names = "--errors", required = true)
+    @Option(names = "--errors", required = true, description = "Error semantics of the capability.")
     private String errors;
-    @Option(names = "--side-effects", required = true)
+    @Option(names = "--side-effects", required = true, description = "Side effects of the capability.")
     private String sideEffects;
-    @Option(names = "--invariants", required = true)
+    @Option(names = "--invariants", required = true, description = "Invariants the capability must hold.")
     private String invariants;
-    @Option(names = "--compatibility", required = true)
+    @Option(names = "--compatibility", required = true, description = "Compatibility requirements of the capability.")
     private String compatibility;
-    @Option(names = "--performance", required = true)
+    @Option(names = "--performance", required = true, description = "Performance requirements of the capability.")
     private String performance;
-    @Option(names = "--concurrency", required = true)
+    @Option(names = "--concurrency", required = true, description = "Concurrency requirements of the capability.")
     private String concurrency;
-    @Option(names = "--acceptance-test", required = true, split = ",")
+    @Option(names = "--acceptance-test", required = true, split = ",", description = "Comma-separated acceptance tests.")
     private List<String> acceptanceTests;
-    @Option(names = "--confidence", defaultValue = "80")
+    @Option(names = "--confidence", defaultValue = "80", description = "Confidence score from 0 to 100 (default: 80).")
     private int confidence;
-    @Option(names = "--risk", defaultValue = "20")
+    @Option(names = "--risk", defaultValue = "20", description = "Speculation risk score from 0 to 100 (default: 20).")
     private int risk;
     @Option(names = "--expires-at", description = "Epoch milliseconds; defaults to ten minutes from now.")
     private long expiresAt;

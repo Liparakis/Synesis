@@ -7,7 +7,7 @@ import picocli.CommandLine.Spec;
 /**
  * Parent for bounded project synchronization.
  */
-@Command(name = "sync", description = "Synchronize a configured project.")
+@Command(name = "sync", description = "Synchronize a configured project.", mixinStandardHelpOptions = true)
 public final class SyncCommand implements Runnable {
 
     @Spec

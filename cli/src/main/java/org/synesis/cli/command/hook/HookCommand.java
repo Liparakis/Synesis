@@ -7,7 +7,7 @@ import picocli.CommandLine.Spec;
 /**
  * Parent for provider hook adapters.
  */
-@Command(name = "hook", description = "Run a provider hook adapter.")
+@Command(name = "hook", description = "Run a provider hook adapter.", mixinStandardHelpOptions = true)
 public final class HookCommand implements Runnable {
 
     @Spec

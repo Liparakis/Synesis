@@ -17,15 +17,15 @@ import picocli.CommandLine.Option;
 public final class CollaborationReadinessCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--control-head", required = true)
+    @Option(names = "--control-head", required = true, description = "Expected current head commit of the control branch.")
     private String controlHead;
-    @Option(names = "--base", required = true)
+    @Option(names = "--base", required = true, description = "Base commit the candidate snapshot was built on.")
     private String base;
-    @Option(names = "--path", required = true)
+    @Option(names = "--path", required = true, description = "Changed repository-relative path; repeat for each path.")
     private List<String> paths;
-    @Option(names = "--claim", required = true)
+    @Option(names = "--claim", required = true, description = "Exact path claimed by the candidate; repeat for each claim.")
     private List<String> claims;
-    @Option(names = "--tests-passed", defaultValue = "false")
+    @Option(names = "--tests-passed", defaultValue = "false", description = "Report that the project tests passed (default: false).")
     private boolean testsPassed;
 
     /**

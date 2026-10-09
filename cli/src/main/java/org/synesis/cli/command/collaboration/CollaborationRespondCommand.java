@@ -17,17 +17,17 @@ import picocli.CommandLine.Option;
 public final class CollaborationRespondCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
-    @Option(names = "--provider", defaultValue = "codex")
+    @Option(names = "--provider", defaultValue = "codex", description = "Provider ID of the calling session (default: codex).")
     private String provider;
-    @Option(names = "--connection-instance-id", required = true)
+    @Option(names = "--connection-instance-id", required = true, description = "Connection instance ID of the calling provider session.")
     private String connection;
-    @Option(names = "--request", required = true)
+    @Option(names = "--request", required = true, description = "ID of the coordination request to answer.")
     private UUID request;
-    @Option(names = "--status", required = true)
+    @Option(names = "--status", required = true, description = "Response: ACCEPTED, REVISED, REJECTED, CANCELLED, or COMPLETED.")
     private CoordinationRequest.Status status;
-    @Option(names = "--proposal", defaultValue = "")
+    @Option(names = "--proposal", defaultValue = "", description = "Revised proposal text (default: empty).")
     private String proposal;
 
     /**

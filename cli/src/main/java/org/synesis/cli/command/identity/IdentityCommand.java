@@ -7,7 +7,7 @@ import picocli.CommandLine.Spec;
 /**
  * Parent command for non-mutating and bootstrap identity operations.
  */
-@Command(name = "identity", description = "Inspect the local Synesis identity.")
+@Command(name = "identity", description = "Inspect the local Synesis identity.", mixinStandardHelpOptions = true)
 public final class IdentityCommand implements Runnable {
 
     @Spec

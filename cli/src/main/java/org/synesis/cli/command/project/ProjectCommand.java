@@ -7,7 +7,7 @@ import picocli.CommandLine.Spec;
 /**
  * Parent for project operations.
  */
-@Command(name = "project", description = "Manage the current Synesis project.")
+@Command(name = "project", description = "Manage the current Synesis project.", mixinStandardHelpOptions = true)
 public final class ProjectCommand implements Runnable {
 
     @Spec

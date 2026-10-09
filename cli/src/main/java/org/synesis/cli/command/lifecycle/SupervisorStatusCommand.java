@@ -17,7 +17,7 @@ import picocli.CommandLine.Option;
 public final class SupervisorStatusCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--profile", required = true)
+    @Option(names = "--profile", required = true, description = "Node profile directory holding the signing identity.")
     private Path profile;
 
     /**

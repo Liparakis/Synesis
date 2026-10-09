@@ -7,7 +7,7 @@ import picocli.CommandLine.Spec;
 /**
  * Parent for typed project constraints.
  */
-@Command(name = "constraint", description = "Manage typed project constraints.")
+@Command(name = "constraint", description = "Manage typed project constraints.", mixinStandardHelpOptions = true)
 public final class ConstraintCommand implements Runnable {
 
     @Spec

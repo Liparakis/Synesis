@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
+import org.synesis.cli.terminal.HumanTerminal;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -15,7 +16,7 @@ import picocli.CommandLine.Option;
 public final class CollaborationStatusCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
-    @Option(names = "--project", defaultValue = ".")
+    @Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).")
     private Path project;
 
     /**
@@ -48,6 +49,11 @@ public final class CollaborationStatusCommand implements Callable<Integer> {
             }
             for (var grant : snapshot.grants()) {
                 runtime.terminal().stdout("LANE_GRANT=" + grant.grantId() + " GROUP=" + grant.workGroupId() + " TARGET=" + grant.targetParticipant() + " EPOCH=" + grant.claimEpoch());
+            }
+            boolean nothingToShow = snapshot.intents().isEmpty() && snapshot.participants().isEmpty() && snapshot.requests().isEmpty() && snapshot.groups().isEmpty() && snapshot.grants().isEmpty();
+            if (nothingToShow && runtime.terminal() instanceof HumanTerminal) {
+                // The machine contract for "nothing" stays empty output; a person needs to be told.
+                runtime.terminal().stdout("No active work, requests, or grants in this project.");
             }
             return ExitCodes.OK;
         } catch (Exception failure) {
