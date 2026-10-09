@@ -1,3 +1,55 @@
+# 2026-10-10 — Largest classes split by responsibility; behaviour and tests unchanged
+
+Uncommitted. Structural moves only: method bodies, comments, and checks were moved verbatim into
+package-private classes in the same package, and every public signature stayed where it was. No test
+file was added, changed, or removed. Each move was compared line by line against the original before
+it was applied.
+
+| Class | Lines before | Lines after | Moved into |
+| --- | ---: | ---: | --- |
+| `AgentNextActionService` | 3,129 | 740 | `ReviewLaneProjection`, `CapabilityActionProjection`, `LaneCompletionProjection`, `RecoveryContinuationProjection`, `LocalCoordinationFallback`, `CollaborationView`, `NextActionSupport`, `NextActionKeys`, `NextActionProtocol`, `LaneScope`, `CapabilityActor`, `Publishability` |
+| `McpProtocolHandler` | 2,743 | 668 | Stateless: `McpToolArguments`, `McpTaskArguments`, `McpCoordinationPayload`, `McpIntegrationCheckEvidence`, `McpJsonRpcResponses`, `McpRootCandidates`. State-owning: `McpProjectRootSelection`, `McpManagedAdmission`, `McpSessionLease`, `McpSessionEstablishment`, `McpDurableCommand`, `McpRecoveryReconciliation`, `McpWorkspaceTools`, `McpCoordinationTools` |
+| `ControlPlaneHttpHandler` | 1,888 | 434 | `ControlPlaneRequestBoundary`, `ControlPlaneSessions`, `ControlPlaneProjectEndpoints`, `ControlPlaneOnboardingEndpoints`, `ControlPlaneEventStream`, `ControlPlaneHttpJson`, `ApiFailure` |
+| `ProviderSessionBindingService` | 1,662 | 897 | `ProviderBindingFile`, `ProviderWorktreeGitFacts`, `ProviderWorktreeAllocation`, `ProviderSessionCoordinationFacts`, `ProviderWorkspaceRefresh`, `ProviderWorkspaceVerification` |
+| `ProviderApplicationService` | 1,157 | 529 | `ProviderLauncherResolution`, `ProviderHookConfiguration`, `ProviderConfigurationFiles`, `ProviderResults`, `ProviderProjectInstructions`, `ProviderHealthProbes` |
+| `WorkIntentService` | 1,197 | 722 | `LaneCompletionRules`, `LaneClaimService`, `LaneCompletionService`, `RepairLaneTransfer` |
+| `WorkspaceCollaborationService` | 1,118 | 786 | `WorkIntentAnnouncement`, `NoChangeLaneCompletion`, `RecoveryLaneContinuation`, `MutationAdmission` |
+| `TaskSnapshotService` | 1,240 | 938 | `SnapshotGitCommands`, `WorktreeChangeInspection`, `PublishableChangeDetection`, `SnapshotTreeMaterialization`, `SnapshotRefLifecycle` |
+| `CodexAppServerLifecycleService` | 1,737 | 1,491 | `CodexAppServerDirectLaunch`, `CodexAppServerPayloadReader`, `CodexAppServerProcessStreams`, `CodexAppServerProcessTermination` |
+| `Onboarding` | 1,472 | 1,307 | `LocalCandidateGathering`, `EndpointCleanup`, `ClientQuicConnectionAttempt`, `CompactDescriptorExchange` |
+
+`McpProtocolHandler.handleToolsCall` is now the shared admission checks followed by one `switch` over
+the ten tools. Each MCP state field has exactly one class that writes it; the selected project root is
+passed to a tool call as an argument instead of being re-read from the handler. The stdio server calls
+the handler from one thread, so the two are equivalent.
+
+Left as they are, deliberately:
+
+- `CollaborationProjection` (1,101 lines) is one replay state machine: a single `apply` switch whose
+  handlers nearly all read and write the same `intents` and `participantHistory` maps. The sibling
+  projections have the same shape. Splitting it would need a shared mutable state object.
+- `CodexAppServerLifecycleService` keeps its lifecycle state machine and its event listener. Every
+  listener case interleaves a store read, identity checks, and a transition that takes the state lock,
+  writes the store, and notifies waiters; separating translation from mutation would reorder them.
+- `Onboarding` is still large because its host, join, and import paths each repeat the same endpoint
+  setup sequence in a long linear body. Reducing it means merging those copies, which changes
+  acquisition and cleanup order in security-sensitive code. That is a behaviour change and needs its
+  own task and tests.
+- `ParticipantRecoveryService` carries private copies of `validateContinuationTarget` and
+  `selectorsOverlap` that also exist in `CollaborationProjection`. Not merged, for the same reason.
+
+Build change: the isolated test-state root in `build.gradle.kts` is now canonicalized. A Gradle daemon
+started with the default Windows temporary directory reports it with an 8.3 short name
+(`C:\Users\LIPARA~1\...`); worktree containment checks resolve real paths and rejected every mutation as
+a symlink escape. One suite run failed 24 tests that way before the cause was found; none of the
+failures came from the moved code.
+
+Verification on the final tree, `:coordination:check :link:check :workspace:check :mcp:check
+:cli:check` with `-Xlint:all -Werror`, Javadoc, format, architecture, and static-analysis gates:
+coordination 112, link 111, workspace 502 (1 skipped), MCP 123, CLI 85 tests, 0 failures, `BUILD
+SUCCESSFUL`. Not run: `project-record`, `relay`, `web-ui` tests (untouched modules), the installer
+build, and any real-provider acceptance run on this tree.
+
 # 2026-10-09 — `synesis agents run`: a controller that resumes stopped agents
 
 Synesis has no working way to wake a provider session. The Codex wake path needs the coordination
