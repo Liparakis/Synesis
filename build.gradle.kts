@@ -136,7 +136,9 @@ subprojects {
     tasks.withType<Test>().configureEach {
         val stateRoot = providers.gradleProperty("synesisTestState").orNull?.takeIf { it.isNotBlank() }
                 ?: File(System.getProperty("java.io.tmpdir"), "synesis-test-state").absolutePath
-        val testState = File(stateRoot, project.name)
+        // Canonical, because a Windows temporary directory is often spelled with an 8.3 short
+        // name; containment checks resolve real paths and would see the state root as an escape.
+        val testState = File(stateRoot, project.name).canonicalFile
         val testHome = testState.resolve("home")
         val testLocalAppData = testState.resolve("local")
         environment("USERPROFILE", testHome.absolutePath)
