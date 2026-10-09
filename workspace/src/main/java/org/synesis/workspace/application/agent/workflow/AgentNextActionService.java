@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import org.synesis.coordination.application.PeerDependencyPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
@@ -231,6 +232,9 @@ public final class AgentNextActionService {
     /**
      * The one call that asks Synesis to project the caller's exact publication or finish action.
      */
+    private static final String CAPABILITY_OWNER_COMPLETING = "CAPABILITY_OWNER_COMPLETING";
+    private static final String IMPLEMENTATION_AWAITING_VALIDATION = "IMPLEMENTATION_AWAITING_VALIDATION";
+
     private static final Map<String, Object> COMPLETION_REQUEST = Map.of("tool", "get_next_action", "arguments", Map.of("completionRequested", true));
 
     /**
@@ -751,7 +755,7 @@ public final class AgentNextActionService {
             }
         }
 
-        Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId());
+        Map<String, Object> collaboration = collaborationDetails(store, binding.sessionId(), null, binding.provider());
         LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
         CapabilityActor actor = new CapabilityActor(callerIdentity.nodeId(), binding.supervisorId(), binding.workerId(), binding.sessionId());
 
@@ -761,6 +765,14 @@ public final class AgentNextActionService {
         }
 
         if (request.completionRequested()) {
+            AgentResponse owedReply = owedOwnerReply(store, lane, actor);
+            if (owedReply != null) {
+                return owedReply;
+            }
+            AgentResponse awaitedVerdict = awaitedVerdict(store, lane, actor);
+            if (awaitedVerdict != null) {
+                return awaitedVerdict;
+            }
             AgentResponse completion = completionRequestAction(store, lane, actor);
             if (completion != null) {
                 return completion;
@@ -792,6 +804,58 @@ public final class AgentNextActionService {
             return integrationState;
         }
         return capabilityAction(store, actor, callerIntent.orElse(null), coordinationActivated);
+    }
+
+    /**
+     * Returns the reply a capability owner still owes, which outranks its own request to finish.
+     *
+     * <p>Only the owner can answer a request addressed to its lane. If the lane closed first the
+     * requester would wait on a reply nobody is left to give, so an owner asking to finish is shown
+     * the request instead. Only an unanswered request counts. For a request the owner has
+     * accepted, and for a revision the requester asked for after validating, the completion
+     * request is itself how the owner declares the next implementation ready to publish.</p>
+     *
+     * @param store current project projection
+     * @param lane  the caller's lane
+     * @param actor capability identity of the caller
+     * @return the owed reply, or {@code null} when none is owed
+     */
+    private static AgentResponse owedOwnerReply(PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
+        WorkIntent intent = activeIntentOf(store, lane.participantId()).orElse(null);
+        if (intent == null) {
+            return null;
+        }
+        AgentResponse owner = ownerCapabilityAction(store.capabilityRequestProjection(), actor, inCallerLineage(store.collaborationProjection().activated(), intent));
+        return owner != null && owner.nextAction() == AgentNextAction.RESPOND_COORDINATION ? owner : null;
+    }
+
+    /**
+     * Returns the wait an owner must observe before finishing while a published implementation
+     * still awaits the requester's verdict.
+     *
+     * <p>The verdict may be a revision, and only an open owner lane can make one. Offering
+     * {@code finish_lane} here also contradicted the action itself, which refuses as soon as the
+     * requester opens its validation.</p>
+     *
+     * @param store current project projection
+     * @param lane  the caller's lane
+     * @param actor capability identity of the caller
+     * @return the wait, or {@code null} when no published implementation of this lane is unjudged
+     */
+    private static AgentResponse awaitedVerdict(PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
+        WorkIntent intent = activeIntentOf(store, lane.participantId()).orElse(null);
+        if (intent == null) {
+            return null;
+        }
+        List<CapabilityRequestRecord> unjudged = AgentReviewActionProjection.ownerImplementationsAwaitingVerdict(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId());
+        if (unjudged.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(Keys.CAPABILITY_REQUEST_HANDLE, unjudged.getFirst().handle().value());
+        result.put(Keys.REASON, IMPLEMENTATION_AWAITING_VALIDATION);
+        result.put(Keys.PENDING, unjudged.size());
+        return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
     }
 
     /**
@@ -1325,10 +1389,11 @@ public final class AgentNextActionService {
      * @param participantId exact current caller participant
      * @return deterministic, public-safe continuation candidates ordered by source intent id
      */
-    private static List<Map<String, Object>> continuationCandidates(PredictionEventStore store, String participantId) {
+    private static List<Map<String, Object>> continuationCandidates(PredictionEventStore store, String participantId, String callerProvider) {
         var collaboration = store.collaborationProjection();
         var workGroups = store.workGroupProjection();
-        List<ResourceSelector> callerSelectors = collaboration.activeIntents().stream().filter(existing -> existing.participant().equals(participantId)).flatMap(existing -> existing.selectors().stream()).toList();
+        List<WorkIntent> callerIntents = collaboration.activeIntents().stream().filter(existing -> existing.participant().equals(participantId)).toList();
+        List<ResourceSelector> callerSelectors = callerIntents.stream().flatMap(existing -> existing.selectors().stream()).toList();
 
         List<Map<String, Object>> candidates = new ArrayList<>();
         for (WorkIntent intent : collaboration.activeIntents()) {
@@ -1341,8 +1406,7 @@ public final class AgentNextActionService {
                 continue;
             }
             boolean sameParticipant = intent.participant().equals(participantId);
-            boolean scopeConflict = !sameParticipant && overlapsAny(callerSelectors, intent.selectors());
-            candidates.add(continuationCandidate(intent, group, sameParticipant, scopeConflict));
+            candidates.add(continuationCandidate(intent, group, continuationBlock(intent, sameParticipant, callerIntents, callerSelectors, callerProvider)));
         }
         candidates.sort(Comparator.comparing(candidate -> String.valueOf(candidate.get(Keys.SOURCE_INTENT_ID))));
         return List.copyOf(candidates);
@@ -1351,13 +1415,12 @@ public final class AgentNextActionService {
     /**
      * Builds the public-safe description of one continuation candidate.
      *
-     * @param intent          the recovery-held intent
-     * @param group           the active work group of the intent
-     * @param sameParticipant whether the caller is the former owner
-     * @param scopeConflict   whether the caller's own claims overlap the candidate's claims
+     * @param intent        the recovery-held intent
+     * @param group         the active work group of the intent
+     * @param blockedReason why the caller may not continue it, or {@code null} when it may
      * @return the candidate map; {@code available} is {@code false} when blocked
      */
-    private static Map<String, Object> continuationCandidate(WorkIntent intent, WorkGroup group, boolean sameParticipant, boolean scopeConflict) {
+    private static Map<String, Object> continuationCandidate(WorkIntent intent, WorkGroup group, String blockedReason) {
         Map<String, Object> candidate = new LinkedHashMap<>();
         candidate.put(Keys.SOURCE_INTENT_ID, intent.intentId().toString());
         candidate.put(Keys.INTENT_ID, intent.intentId().toString());
@@ -1375,14 +1438,39 @@ public final class AgentNextActionService {
         candidate.put("unfinished", true);
         candidate.put("blocksWorkGroupCompletion", true);
         candidate.put("durableArtifactsAvailable", true);
-        candidate.put(Keys.AVAILABLE, !sameParticipant && !scopeConflict);
+        candidate.put("provider", intent.provider());
+        candidate.put(Keys.AVAILABLE, blockedReason == null);
         candidate.put("continuationRequest", Map.of("kind", Protocol.KIND_CONTINUATION, "payload", Map.of(Keys.INTENT_ID, intent.intentId().toString(), Keys.CLAIM_EPOCH, intent.version())));
-        if (sameParticipant) {
-            candidate.put("blockedReason", "CURRENT_PARTICIPANT_IS_FORMER_OWNER");
-        } else if (scopeConflict) {
-            candidate.put("blockedReason", "OVERLAPPING_CLAIM");
+        if (blockedReason != null) {
+            candidate.put("blockedReason", blockedReason);
         }
         return candidate;
+    }
+
+    /**
+     * Names the reason the caller may not continue a recovery-held lane, most specific first.
+     *
+     * <p>A connection owns one lane and one worker context, so a caller that already holds a lane
+     * cannot take a second. A lane is continued from its own provider's session binding, so a
+     * caller of another provider cannot take it either. Offering either only hands the caller a
+     * request that is then refused.</p>
+     *
+     * @return the stable reason, or {@code null} when the caller may continue the lane
+     */
+    private static String continuationBlock(WorkIntent held, boolean sameParticipant, List<WorkIntent> callerIntents, List<ResourceSelector> callerSelectors, String callerProvider) {
+        if (sameParticipant) {
+            return "CURRENT_PARTICIPANT_IS_FORMER_OWNER";
+        }
+        if (overlapsAny(callerSelectors, held.selectors())) {
+            return "OVERLAPPING_CLAIM";
+        }
+        if (!callerIntents.isEmpty()) {
+            return "CURRENT_PARTICIPANT_HOLDS_A_LANE";
+        }
+        if (callerProvider != null && !callerProvider.equals(held.provider())) {
+            return "CONTINUATION_REQUIRES_SAME_PROVIDER";
+        }
+        return null;
     }
 
     /**
@@ -1755,7 +1843,7 @@ public final class AgentNextActionService {
             }
             localDependencies = resolution.records();
             locallyOwnedDependencies = resolution.locallyOwned();
-            AgentResponse missingDependency = missingDependencyResponse(capabilities,
+            AgentResponse missingDependency = missingDependencyResponse(store,
                     actor,
                     callerIntent,
                     localDependencies,
@@ -1799,7 +1887,7 @@ public final class AgentNextActionService {
      * @return a {@code NEEDS_CAPABILITY} response, or {@code null} when every dependency has been
      *         requested (or there are none)
      */
-    private static AgentResponse missingDependencyResponse(CapabilityRequestProjection capabilities,
+    private static AgentResponse missingDependencyResponse(PredictionEventStore store,
             CapabilityActor actor,
             WorkIntent intent,
             Map<String, CapabilityRequestRecord> locallyResolved,
@@ -1807,14 +1895,25 @@ public final class AgentNextActionService {
         if (intent.knownDependencies().isEmpty()) {
             return null;
         }
-        var requestedCapabilities = capabilities.findAllForRequester(actor.nodeId()).stream().filter(candidate -> candidate.matchesRequester(actor.nodeId(), actor.supervisorId(), actor.workerId()))
+        var requestedCapabilities = store.capabilityRequestProjection().findAllForRequester(actor.nodeId()).stream()
+                .filter(candidate -> candidate.matchesRequester(actor.nodeId(), actor.supervisorId(), actor.workerId()))
                 .map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
+        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
         String missingDependency = intent.knownDependencies().stream()
                 .filter(dependency -> !requestedCapabilities.contains(dependency) && !locallyResolved.containsKey(dependency)
-                        && !locallyOwned.contains(dependency))
+                        && !locallyOwned.contains(dependency) && !integrated.contains(dependency))
                 .findFirst().orElse(null);
         if (missingDependency == null) {
-            return null;
+            return integrated.isEmpty() ? null : integratedDependencyResponse(integrated, intent);
+        }
+        if (PeerDependencyPolicy.awaitingPeerIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent)) {
+            // Every lane that could own this is already closing; a request now could never be
+            // answered. Its work reaches this lane when it is integrated.
+            Map<String, Object> waiting = new LinkedHashMap<>();
+            waiting.put(Keys.CAPABILITY, missingDependency);
+            waiting.put(Keys.REASON, CAPABILITY_OWNER_COMPLETING);
+            waiting.put(Keys.PENDING, 1);
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, waiting);
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(Keys.CAPABILITY, missingDependency);
@@ -1900,6 +1999,18 @@ public final class AgentNextActionService {
         }
         result.put("resolvedDependencies", dependencyContractMaps(resolved));
         return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+    }
+
+    /**
+     * Tells a lane that work it declared a dependency on is already integrated, so it should build
+     * against that work in its own refreshed workspace instead of asking for an owner.
+     */
+    private static AgentResponse integratedDependencyResponse(Set<String> integrated, WorkIntent intent) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dependenciesIntegrated", List.copyOf(integrated));
+        result.put("dependencyGuidance", "The lane that provided these has completed and its work is integrated. Read it in your workspace and build against it; no capability request is needed.");
+        result.put(Keys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
+        return new AgentResponse(AgentStatus.READY, null, null, result);
     }
 
     private static AgentResponse localDependencyReadyResponse(Map<String, CapabilityRequestRecord> resolved,
@@ -2181,7 +2292,7 @@ public final class AgentNextActionService {
      * @return a fresh, mutable discovery map
      */
     private static Map<String, Object> collaborationDetails(PredictionEventStore store, String sessionId) {
-        return collaborationDetails(store, sessionId, null);
+        return collaborationDetails(store, sessionId, null, null);
     }
 
     /**
@@ -2195,6 +2306,16 @@ public final class AgentNextActionService {
      * @return a fresh, mutable discovery map whose key order is part of the wire format
      */
     private static Map<String, Object> collaborationDetails(PredictionEventStore store, String sessionId, Set<UUID> reviewGroupFilter) {
+        return collaborationDetails(store, sessionId, reviewGroupFilter, null);
+    }
+
+    /**
+     * Builds the public collaboration view for one caller.
+     *
+     * @param callerProvider the caller's provider when its exact binding is known; {@code null}
+     *                       leaves provider-specific continuation eligibility undecided
+     */
+    private static Map<String, Object> collaborationDetails(PredictionEventStore store, String sessionId, Set<UUID> reviewGroupFilter, String callerProvider) {
         String participantId = sessionId == null || sessionId.isBlank() ? "" : WorkspaceCollaborationService.participantHandle(sessionId);
         var collaboration = store.collaborationProjection();
         var workGroups = store.workGroupProjection();
@@ -2215,7 +2336,7 @@ public final class AgentNextActionService {
         result.put("currentParticipant", participantId);
         result.put("currentIntent", currentIntent);
         result.put(Keys.PENDING_COORDINATION, enrichedPending);
-        result.put(Keys.CONTINUATION_CANDIDATES, continuationCandidates(store, participantId));
+        result.put(Keys.CONTINUATION_CANDIDATES, continuationCandidates(store, participantId, callerProvider));
 
         List<Map<String, Object>> reviewCandidates = AgentReviewActionProjection.reviewCandidates(store);
         result.put("reviewCandidates", reviewCandidates);

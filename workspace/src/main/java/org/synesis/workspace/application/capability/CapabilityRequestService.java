@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.synesis.coordination.application.PeerDependencyPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
@@ -117,6 +118,18 @@ public final class CapabilityRequestService {
         // identity; the durable lineage and exact owner session remain the
         // authority boundary for the response and publication steps.
         return foreignActiveLineage ? localNodeId : null;
+    }
+
+    private static java.util.Set<String> integratedDependencies(PredictionEventStore store,
+            CapabilityRequestProjection projection,
+            WorkIntent requesterIntent,
+            String requesterNodeId,
+            ProviderSessionBindingService.Binding binding) {
+        java.util.Set<String> requested = projection.findAllForRequester(requesterNodeId).stream()
+                .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
+                .map(CapabilityRequestRecord::capability)
+                .collect(java.util.stream.Collectors.toSet());
+        return PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, requested);
     }
 
     private static Optional<WorkIntent> currentIntent(PredictionEventStore store, String participant) {
@@ -266,6 +279,11 @@ public final class CapabilityRequestService {
         // ownership record before it can be durably recorded.
         String ownerNodeId = resolveOwnerNodeId(store, capability, inferredOwnerLineage, requesterParticipant, requesterNodeId);
         if (ownerNodeId == null || ownerNodeId.isBlank()) {
+            if (requesterIntent.isPresent() && integratedDependencies(store, projection, requesterIntent.get(), requesterNodeId, binding).contains(capability)) {
+                // Nobody is left to negotiate with, and what this lane depends on is already in
+                // its base. Answering "find an owner" again would send it in a circle.
+                return new AgentResponse(AgentStatus.READY, null, null, Map.of("capability", capability, "reason", "CAPABILITY_OWNER_INTEGRATED"));
+            }
             Map<String, Object> result = Map.of("capability", capability);
             return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
         }
@@ -311,6 +329,17 @@ public final class CapabilityRequestService {
             }
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY,
                     Map.of("capabilityRequestHandle", activeRec.handle().value(), "expectedContractRevision", activeRec.contractRevision()));
+        }
+
+        // A lane that has prepared its completion closes without reading its inbox again. A
+        // request recorded against it now would never be answered, so it is not recorded; the
+        // requester waits for that lane's work to be integrated instead.
+        boolean ownerClosing = store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> !intent.participant().equals(requesterParticipant))
+                .filter(intent -> intent.authorityLineageId().equals(ownerLineage))
+                .anyMatch(intent -> PeerDependencyPolicy.closing(store.taskCompletionProjection(), intent));
+        if (ownerClosing) {
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("capability", capability, "reason", "CAPABILITY_OWNER_COMPLETING"));
         }
 
         // Create new capability request

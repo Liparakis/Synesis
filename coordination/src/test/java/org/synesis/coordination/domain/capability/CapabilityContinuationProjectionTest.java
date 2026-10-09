@@ -122,6 +122,58 @@ final class CapabilityContinuationProjectionTest {
         assertEquals(contract, transferred.contract());
     }
 
+    @Test
+    void validatedRequestFollowsEitherLaneToItsSuccessor(@TempDir Path temp) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        var signer = new IdentityBootstrap(temp.resolve("link")).loadOrCreate().identity();
+        CapabilityRequestHandle handle = new CapabilityRequestHandle("req_21234567890123456789012345678901");
+        UUID lineage = UUID.randomUUID();
+        CapabilityContract contract = new CapabilityContract("lookup", "id: UUID", "value: string", List.of("stable"),
+                "not found", "none", "pure", "v1", "local", "serialized", List.of("lookup returns value"));
+        CapabilityRequestProjection projection = new CapabilityRequestProjection();
+        apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+        apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, -1).encode());
+        byte[] implementation = new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "published", "", "", List.of(), "").encode();
+        apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, implementation);
+        apply(projection, projectId, signer, 4, PredictionEventType.CAPABILITY_VALIDATION_STARTED,
+                new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "", "", "", List.of(),
+                        temp.resolve("validation-worktree").toString(), "requester-session").encode());
+        apply(projection, projectId, signer, 5, PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED, implementation);
+        assertEquals(CapabilityLifecycleState.VALIDATED, projection.findByHandle(handle).orElseThrow().state());
+
+        // The owner's process is lost after validation, before its lane published the snapshot
+        // integration is waiting for. Its successor must be the owner, or nobody can finish.
+        var ownerTarget = new WorkIntent(UUID.randomUUID(), projectId, "agt_owner_successor", "codex", UUID.randomUUID(), "task", "acceptance", "base",
+                List.of(ResourceSelector.pathExact("task_store.py")), 2, UUID.randomUUID(), lineage, WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER, List.of(), List.of());
+        apply(projection, projectId, signer, 6, PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                CollaborationCodec.encodeContinuation(new LaneContinuation(UUID.randomUUID(), UUID.randomUUID(), ownerTarget, "agt_owner", "agt_owner_successor", 1, "snapshot#hash",
+                        new CapabilityActorScope("owner-node", "owner-supervisor", "owner-worker", "old-owner-session"),
+                        new CapabilityActorScope("owner-node", "new-owner-supervisor", "new-owner-worker", "new-owner-session"))));
+        CapabilityRequestRecord afterOwner = projection.findByHandle(handle).orElseThrow();
+        assertTrue(afterOwner.matchesOwner("owner-node", "new-owner-supervisor", "new-owner-worker"));
+        assertTrue(!afterOwner.matchesOwner("owner-node", "owner-supervisor", "owner-worker"), "the predecessor no longer acts as owner");
+        assertEquals(CapabilityLifecycleState.VALIDATED, afterOwner.state(), "a verdict already given is not reopened");
+
+        // The requester's process is lost too. Its successor must still hold the validated
+        // dependency, or it would be told to request a capability it already has.
+        var requesterTarget = new WorkIntent(UUID.randomUUID(), projectId, "agt_requester_successor", "claude", UUID.randomUUID(), "task", "acceptance", "base",
+                List.of(ResourceSelector.pathExact("task_cli.py")), 2, UUID.randomUUID(), UUID.randomUUID(), WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER, List.of(), List.of("catalog.lookup"));
+        apply(projection, projectId, signer, 7, PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                CollaborationCodec.encodeContinuation(new LaneContinuation(UUID.randomUUID(), UUID.randomUUID(), requesterTarget, "agt_requester", "agt_requester_successor", 1, "snapshot#hash",
+                        new CapabilityActorScope("requester-node", "requester-supervisor", "requester-worker", "old-requester-session"),
+                        new CapabilityActorScope("requester-node", "new-requester-supervisor", "new-requester-worker", "new-requester-session"))));
+        CapabilityRequestRecord afterRequester = projection.findByHandle(handle).orElseThrow();
+        assertTrue(afterRequester.matchesRequester("requester-node", "new-requester-supervisor", "new-requester-worker"));
+        assertTrue(afterRequester.matchesOwner("owner-node", "new-owner-supervisor", "new-owner-worker"));
+        assertEquals(CapabilityLifecycleState.VALIDATED, afterRequester.state());
+    }
+
     private static void apply(CapabilityRequestProjection projection, UUID project, org.synesis.link.identity.NodeIdentity signer,
             long sequence, PredictionEventType type, byte[] payload) throws Exception {
         PredictionEvent event = PredictionEvent.create(project, UUID.randomUUID(), sequence, type, signer.nodeId(), payload, new byte[32], signer,

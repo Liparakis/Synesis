@@ -231,6 +231,39 @@ class AgentNextActionServiceTest {
             assertTrue(((List<?>) result.get("pendingCoordination")).isEmpty());
             assertEquals(org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATION_PENDING, unchanged.taskCompletionProjection().snapshotState("snap_recovery_contract_fence").orElseThrow());
         }
+        if (!multipleCandidates) {
+            // A session of another provider cannot continue the lane, because a lane is continued
+            // from its own provider's binding. It must not be handed a request that would be refused.
+            prepareSessionAndTrust("claude", "continuation-other-provider");
+            AgentResponse otherProvider = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "claude", "continuation-other-provider"));
+            assertNotEquals(AgentReason.CONTINUATION_AVAILABLE, otherProvider.reason(), otherProvider.toJson());
+            Map<?, ?> refused = onlyContinuationCandidate(otherProvider);
+            if (refused != null) {
+                assertEquals(Boolean.FALSE, refused.get("available"), otherProvider.toJson());
+                assertEquals("CONTINUATION_REQUIRES_SAME_PROVIDER", refused.get("blockedReason"), otherProvider.toJson());
+            } else {
+                assertTrue(pendingContract, "only the shared integration wait may replace the collaboration view: " + otherProvider.toJson());
+            }
+        }
+        if (pendingContract && !multipleCandidates) {
+            // A session that already holds its own lane cannot take a second one.
+            AgentResponse laneHolder = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "continuation-requester"));
+            assertNotEquals(AgentReason.CONTINUATION_AVAILABLE, laneHolder.reason(), laneHolder.toJson());
+            Map<?, ?> blocked = onlyContinuationCandidate(laneHolder);
+            if (blocked != null) {
+                assertEquals(Boolean.FALSE, blocked.get("available"), laneHolder.toJson());
+                assertEquals("CURRENT_PARTICIPANT_HOLDS_A_LANE", blocked.get("blockedReason"), laneHolder.toJson());
+            }
+        }
+    }
+
+    private static Map<?, ?> onlyContinuationCandidate(AgentResponse response) {
+        java.util.List<?> candidates = (java.util.List<?>) ((Map<?, ?>) response.result()).get("continuationCandidates");
+        if (candidates == null) {
+            return null;
+        }
+        assertEquals(1, candidates.size(), response.toJson());
+        return (Map<?, ?>) candidates.getFirst();
     }
 
     @Test

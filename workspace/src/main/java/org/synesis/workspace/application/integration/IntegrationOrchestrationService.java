@@ -92,7 +92,8 @@ public final class IntegrationOrchestrationService {
                 .filter(validation -> validation.sourceParticipant().equals(snapshot.provenance().participant())).isPresent();
     }
 
-    private static CandidateResolution resolveCandidate(TaskSnapshotRecord candidate,
+    private static CandidateResolution resolveCandidate(Path controlRoot,
+            TaskSnapshotRecord candidate,
             List<TaskSnapshotRecord> allSnapshots,
             CapabilityRequestProjection capProj,
             org.synesis.coordination.domain.task.TaskCompletionProjection completion) {
@@ -124,13 +125,11 @@ public final class IntegrationOrchestrationService {
                 structuralFailures.add("CAPABILITY_LINEAGE_MISMATCH:" + dependencyHandle);
                 continue;
             }
-            TaskSnapshotRecord ownerSnapshot = allSnapshots.stream().filter(snapshot -> snapshot.provenance().authorityLineageId().equals(capability.authorityLineageId()))
-                    .filter(snapshot -> snapshot.commitSha().equals(implementation.commitSha())).min(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId))
-                    .orElse(null);
+            TaskSnapshotRecord ownerSnapshot = ownerSnapshotCarrying(controlRoot, implementation, allSnapshots);
             if (ownerSnapshot == null) {
                 // Validation alone does not put the implementation in the
-                // integration history. Keep the consumer pending until its
-                // exact owner commit is published as a task snapshot.
+                // integration history. Keep the consumer pending until the
+                // owner lane publishes a task snapshot that carries it.
                 pendingDependency = true;
                 continue;
             }
@@ -142,6 +141,70 @@ public final class IntegrationOrchestrationService {
             pendingDependency = true;
         }
         return new CandidateResolution(structuralFailures.isEmpty() && !pendingDependency, dependencies, structuralFailures);
+    }
+
+    /**
+     * Finds the owner-lane snapshot that puts a validated implementation into the integration
+     * history.
+     *
+     * <p>The snapshot of the validated commit itself is preferred. A lane that changed hands is
+     * rebuilt from recovery evidence, so its later snapshot is a different commit even when nothing
+     * in it changed; requiring the same commit would leave every consumer of a recovered owner
+     * waiting forever. Such a snapshot qualifies only when every path the implementation changed
+     * has, in it, exactly the content the requester validated.</p>
+     */
+    private static TaskSnapshotRecord ownerSnapshotCarrying(Path controlRoot, org.synesis.coordination.domain.integration.ImplementationRevisionRecord implementation, List<TaskSnapshotRecord> allSnapshots) {
+        List<TaskSnapshotRecord> ownerSnapshots = allSnapshots.stream()
+                .filter(snapshot -> snapshot.provenance().authorityLineageId().equals(implementation.authorityLineageId()))
+                .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId))
+                .toList();
+        for (TaskSnapshotRecord snapshot : ownerSnapshots) {
+            if (snapshot.commitSha().equals(implementation.commitSha())) {
+                return snapshot;
+            }
+        }
+        for (TaskSnapshotRecord snapshot : ownerSnapshots) {
+            if (carriesValidatedContent(controlRoot, implementation.commitSha(), implementation.changedPaths(), snapshot.commitSha())) {
+                return snapshot;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reports whether a commit holds, for every given path, the same content as the validated
+     * commit, including the same absence. Anything Git cannot answer counts as a difference.
+     *
+     * @param repository      repository holding both commits
+     * @param validatedCommit commit the requester validated
+     * @param validatedPaths  paths that implementation changed; an empty list proves nothing
+     * @param candidateCommit commit of the owner-lane snapshot being considered
+     * @return {@code true} only when every path is provably identical in both commits
+     */
+    static boolean carriesValidatedContent(Path repository, String validatedCommit, List<String> validatedPaths, String candidateCommit) {
+        if (validatedPaths.isEmpty()) {
+            return false;
+        }
+        for (String path : validatedPaths) {
+            String validated = contentIdentity(repository, validatedCommit, path);
+            if (validated == null || !validated.equals(contentIdentity(repository, candidateCommit, path))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Returns the blob identity of a path in a commit, a marker when the path is absent, or {@code null} when unknown. */
+    private static String contentIdentity(Path repository, String commit, String path) {
+        try {
+            if (GitProcessRunner.runResult(repository, "cat-file", "-e", commit + "^{commit}").exitCode() != 0) {
+                return null;
+            }
+            GitProcessRunner.Result blob = GitProcessRunner.runResult(repository, "rev-parse", "--verify", "--quiet", commit + ":" + path);
+            return blob.exitCode() == 0 ? blob.output() : "ABSENT";
+        } catch (IOException | RuntimeException unknown) {
+            return null;
+        }
     }
 
     private static boolean blockedCandidateAppendFailed(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord candidate, String expectedControlHead, List<String> failures) {
@@ -477,7 +540,7 @@ public final class IntegrationOrchestrationService {
             List<TaskSnapshotRecord> readyCandidates = new ArrayList<>();
             boolean sawPendingDependency = false;
             for (TaskSnapshotRecord candidate : eligible) {
-                CandidateResolution resolution = resolveCandidate(candidate, allSnapshots, capProj, store.taskCompletionProjection());
+                CandidateResolution resolution = resolveCandidate(controlRoot, candidate, allSnapshots, capProj, store.taskCompletionProjection());
                 if (!resolution.structuralFailures().isEmpty()) {
                     if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, resolution.structuralFailures())) {
                         return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));

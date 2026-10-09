@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.UUID;
 
+import org.synesis.coordination.application.PeerDependencyPolicy;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
@@ -192,12 +193,33 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
         var projection = store.capabilityRequestProjection();
         List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).toList();
         Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency))) {
+        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
+        if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {
             return true;
         }
         return requesterRequests.stream().anyMatch(request -> request.state() != CapabilityLifecycleState.VALIDATED)
                 || ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
                 || !projection.allValidationContexts().isEmpty();
+    }
+
+    /**
+     * Finds implementations this exact owner lane has published that the requester has not yet
+     * accepted or sent back. While any exists the owner lane must stay open: only it can produce
+     * the revision a requester may still ask for.
+     */
+    static List<CapabilityRequestRecord> ownerImplementationsAwaitingVerdict(PredictionEventStore store,
+            WorkIntent intent,
+            String nodeId,
+            String supervisorId,
+            String workerId) {
+        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return List.of();
+        }
+        return store.capabilityRequestProjection().records().values().stream()
+                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
+                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
+                .filter(request -> request.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || request.state() == CapabilityLifecycleState.VALIDATING)
+                .toList();
     }
 
     /**

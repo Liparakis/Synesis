@@ -731,11 +731,20 @@ public final class AgentTaskCompletionService {
         if (!pending.isEmpty()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.UNRESOLVED_DEPENDENCY, AgentNextAction.WAIT, Map.of("pending", pending.size()));
         }
+        WorkIntent callerIntent = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst().orElse(null);
+        List<CapabilityRequestRecord> unjudged = AgentReviewActionProjection.ownerImplementationsAwaitingVerdict(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId);
+        if (!unjudged.isEmpty()) {
+            // Same rule the inbox projects: the requester may still send this back, and only an
+            // open owner lane can revise it.
+            return new AgentResponse(AgentStatus.BLOCKED,
+                    AgentReason.VALIDATION_REQUIRED,
+                    AgentNextAction.WAIT,
+                    Map.of("capabilityRequestHandle", unjudged.getFirst().handle().value(), "reason", "IMPLEMENTATION_AWAITING_VALIDATION", "pending", unjudged.size()));
+        }
         int validationCount = store.capabilityRequestProjection().allValidationContexts().size();
         if (validationCount > 0) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("pending", validationCount));
         }
-        WorkIntent callerIntent = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst().orElse(null);
         var ownerImplementation = AgentReviewActionProjection.ownerImplementationPending(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId);
         if (ownerImplementation.isPresent()) {
             CapabilityRequestRecord request = ownerImplementation.get();

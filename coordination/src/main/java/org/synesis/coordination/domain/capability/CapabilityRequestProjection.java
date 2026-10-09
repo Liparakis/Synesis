@@ -708,7 +708,7 @@ public final class CapabilityRequestProjection {
         }
         for (Map.Entry<CapabilityRequestHandle, CapabilityRequestRecord> entry : List.copyOf(records.entrySet())) {
             CapabilityRequestRecord current = entry.getValue();
-            if (!hasOpenObligation(current.state())) {
+            if (!followsLane(current.state())) {
                 continue;
             }
             boolean requester = current.matchesRequester(source);
@@ -736,6 +736,20 @@ public final class CapabilityRequestProjection {
             }
             records.put(entry.getKey(), updated);
         }
+    }
+
+    /**
+     * Reports whether a request still binds the lanes it names, and so must move with a lane that
+     * changes hands.
+     *
+     * <p>A validated request owes no further negotiation, but both lanes still act on it: the
+     * owner's lane must publish the snapshot integration waits for, and the requester's lane may
+     * only finish because its dependency is validated. Leaving it with the predecessor would show
+     * the successor owner nothing to complete and the successor requester a dependency it
+     * apparently never requested. Requests that ended without an agreement bind nobody.</p>
+     */
+    private static boolean followsLane(CapabilityLifecycleState state) {
+        return hasOpenObligation(state) || state == CapabilityLifecycleState.VALIDATED;
     }
 
     private static boolean hasOpenObligation(CapabilityLifecycleState state) {

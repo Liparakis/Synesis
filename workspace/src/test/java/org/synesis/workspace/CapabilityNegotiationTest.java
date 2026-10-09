@@ -240,6 +240,47 @@ class CapabilityNegotiationTest {
     }
 
     @Test
+    void ownerAskingToFinishIsGivenThePendingRequestInstead() throws Exception {
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var requesterIntent = collaboration.announce(projectRoot,
+                "claude",
+                "inst-1",
+                "Implement the product CLI",
+                "Use the negotiated product query API",
+                List.of(ResourceSelector.pathExact("src/ProductCli.java")),
+                null,
+                org.synesis.coordination.domain.collaboration.WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of("catalog.product-query"));
+        collaboration.announce(projectRoot,
+                "codex",
+                "inst-2",
+                "Implement the product query API",
+                "Publish the negotiated capability implementation",
+                List.of(ResourceSelector.pathExact("src/ProductQuery.java")),
+                requesterIntent.intent().workGroupId());
+        CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));
+        AgentResponse described = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "catalog.product-query", contract, null, null));
+        String handle = (String) ((Map<?, ?>) described.result()).get("capabilityRequestHandle");
+
+        // Finished work in the owner's lane is what makes its snapshot publishable at all.
+        Path ownerWorktree = Path.of(bindingService.find(projectService.locate(projectRoot), "codex", "inst-2").orElseThrow().worktreePath());
+        Files.createDirectories(ownerWorktree.resolve("src"));
+        Files.writeString(ownerWorktree.resolve("src/ProductQuery.java"), "final class ProductQuery {}\n");
+
+        // The owner believes its own work is done and asks to close the lane. Closing now would
+        // leave the requester waiting on a reply that can no longer be given.
+        AgentResponse completion = nextActionService.getNextAction(new NextActionRequest(projectRoot, "codex", "inst-2", true));
+
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, completion.nextAction(), completion.toJson());
+        assertEquals(handle, ((Map<?, ?>) completion.result()).get("capabilityRequestHandle"), completion.toJson());
+
+        // The requester owes nothing to anyone, so its own completion request is unaffected.
+        AgentResponse requesterCompletion = nextActionService.getNextAction(new NextActionRequest(projectRoot, "claude", "inst-1", true));
+        assertNotEquals(AgentNextAction.RESPOND_COORDINATION, requesterCompletion.nextAction(), requesterCompletion.toJson());
+    }
+
+    @Test
     void revisionAndRejectionFlows() {
         CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));
 

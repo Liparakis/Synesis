@@ -413,6 +413,13 @@ class SyntheticTwoProcessCollaborationTest {
         String published = toolCall(ownerHandler, "publish_capability_implementation", publicationArguments);
         assertEquals("waiting", extractResponseStatus(published), published);
 
+        // The requester has not judged the implementation yet and may still send it back, so an
+        // owner asking to finish is told to wait rather than offered a finish it would be refused.
+        String earlyFinish = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("waiting", extractResponseStatus(earlyFinish), earlyFinish);
+        assertEquals("validation_required", extractResponseReason(earlyFinish), earlyFinish);
+        assertEquals("IMPLEMENTATION_AWAITING_VALIDATION", extractInnerResult(earlyFinish).get("reason"), earlyFinish);
+
         Map<String, Object> inspectArguments = extractWorkflowArguments(toolCall(requesterHandler, "get_next_action", Map.of()));
         Map<String, Object> inspectPayload = (Map<String, Object>) inspectArguments.get("payload");
         assertEquals("ready", extractResponseStatus(toolCall(requesterHandler, "respond_coordination", inspectArguments)));
@@ -434,6 +441,19 @@ class SyntheticTwoProcessCollaborationTest {
         String requesterFinished = toolCall(requesterHandler, "finish_lane", extractWorkflowArguments(requesterProjection));
         assertEquals("waiting", extractResponseStatus(requesterFinished), requesterFinished);
         assertEquals(1, replayedStore().taskCompletionProjection().allSnapshots().size(), requesterFinished);
+
+        // The requester's lane is now closing: its completion is prepared and it will not read
+        // its inbox again. A request addressed to it is not recorded, and the asker is told to wait.
+        String closingLineage = replayedStore().collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.provider().equals("claude")).findFirst().orElseThrow().authorityLineageId().toString();
+        long requestsBefore = replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CAPABILITY_REQUEST_CREATED).count();
+        String lateRequest = toolCall(ownerHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request",
+                        "payload", Map.of("capability", "catalog.cli-output", "ownerAuthorityLineageId", closingLineage, "contract", productQueryContract("Print one line per product"))));
+        assertEquals("waiting", extractResponseStatus(lateRequest), lateRequest);
+        assertEquals("CAPABILITY_OWNER_COMPLETING", extractInnerResult(lateRequest).get("reason"), lateRequest);
+        assertEquals(requestsBefore, replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CAPABILITY_REQUEST_CREATED).count(), lateRequest);
 
         // 5. An ordinary owner poll names the completion request instead of the shared wait.
         String ownerPoll = toolCall(ownerHandler, "get_next_action", Map.of());
@@ -460,5 +480,110 @@ class SyntheticTwoProcessCollaborationTest {
         assertEquals(2, done.events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count(), requesterDone);
         assertTrue(done.collaborationProjection().activeIntents().isEmpty(), requesterDone);
         assertEquals("COMPLETED", done.workGroupProjection().groups().getFirst().status().name(), requesterDone);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void dependencyOnALaneAlreadyIntegratedIsSatisfiedByItsWorkInsteadOfDemandingAnOwner() throws Exception {
+        // 1. The CLI lane declares a dependency nobody has been asked for. While the other lane is
+        //    open, that is still a negotiation to be had.
+        String declared = toolCall(requesterHandler,
+                "ensure_session",
+                Map.of("task", Map.of("goal", "Implement the product CLI",
+                        "acceptance", "Publish the CLI implementation",
+                        "claims", List.of(Map.of("kind", "path_exact", "path", "ProductCli.java")),
+                        "knownDependencies", List.of("catalog.product-store"))));
+        if ("blocked".equals(extractResponseStatus(declared))) {
+            // Extending an announced intent goes through the exact call the server projects.
+            Map<String, Object> exactExtension = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(declared).get("nextProtocolPayload")).get("arguments");
+            declared = toolCall(requesterHandler, "ensure_session", exactExtension);
+        }
+        assertEquals("ready", extractResponseStatus(declared), declared);
+        String whileOwnerOpen = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertEquals("owner_required", extractResponseReason(whileOwnerOpen), whileOwnerOpen);
+
+        // 2. The other lane finishes and is integrated without ever being asked.
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        String ownerProjection = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        String ownerFinished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(ownerProjection));
+        assertEquals("integrated", ((Map<String, Object>) extractInnerResult(ownerFinished).get("completion")).get("task"), ownerFinished);
+
+        // 3. Nobody is left to own the dependency, and the work it named is in the CLI lane's
+        //    base. The inbox says so instead of asking for an owner again.
+        String afterIntegration = toolCall(requesterHandler, "get_next_action", Map.of());
+        if ("retry_required".equals(extractResponseStatus(afterIntegration))) {
+            toolCall(requesterHandler, "ensure_session", Map.of());
+            afterIntegration = toolCall(requesterHandler, "get_next_action", Map.of());
+        }
+        assertEquals("ready", extractResponseStatus(afterIntegration), afterIntegration);
+        assertEquals(List.of("catalog.product-store"), extractInnerResult(afterIntegration).get("dependenciesIntegrated"), afterIntegration);
+
+        String asked = toolCall(requesterHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-store", "contract", productQueryContract("Persist products"))));
+        assertEquals("ready", extractResponseStatus(asked), asked);
+        assertEquals("CAPABILITY_OWNER_INTEGRATED", extractInnerResult(asked).get("reason"), asked);
+        assertTrue(replayedStore().capabilityRequestProjection().records().isEmpty(), "no request may be recorded against a lane that is gone");
+
+        // 4. The CLI lane can therefore finish, and the work group completes.
+        String refreshed = toolCall(requesterHandler, "ensure_session", Map.of());
+        assertEquals("ready", extractResponseStatus(refreshed), refreshed);
+        Path reqWt = Path.of(String.valueOf(extractInnerResult(refreshed).get("worktree")));
+        Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
+        git(reqWt, "add", ".");
+        git(reqWt, "commit", "-m", "Implement ProductCli");
+        String requesterProjection = toolCall(requesterHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("finish_lane", extractInnerResponse(requesterProjection).get("nextAction"), requesterProjection);
+        String requesterFinished = toolCall(requesterHandler, "finish_lane", extractWorkflowArguments(requesterProjection));
+        assertEquals("completed", extractResponseStatus(requesterFinished), requesterFinished);
+        PredictionEventStore done = replayedStore();
+        assertEquals(2, done.events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count(), requesterFinished);
+        assertTrue(done.collaborationProjection().activeIntents().isEmpty(), requesterFinished);
+        assertEquals("COMPLETED", done.workGroupProjection().groups().getFirst().status().name(), requesterFinished);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void dependencyDeclaredAfterTheOtherWorkGroupCompletedIsSatisfiedByItsIntegratedWork() throws Exception {
+        // 1. Both announced lanes finish, which completes their work group.
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true))));
+        String refreshed = toolCall(requesterHandler, "ensure_session", Map.of());
+        Path reqWt = Path.of(String.valueOf(extractInnerResult(refreshed).get("worktree")));
+        Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
+        git(reqWt, "add", ".");
+        git(reqWt, "commit", "-m", "Implement ProductCli");
+        toolCall(requesterHandler, "finish_lane", extractWorkflowArguments(toolCall(requesterHandler, "get_next_action", Map.of("completionRequested", true))));
+        assertEquals("COMPLETED", replayedStore().workGroupProjection().groups().getFirst().status().name());
+
+        // 2. A session that arrives afterwards announces work that depends on what they built.
+        //    Its lane starts a work group of its own; nobody in the project is left to ask.
+        AgentSessionService lateSessions = new AgentSessionService();
+        lateSessions.ensureSession(new SessionResolutionRequest(projectRoot, "claude", "inst-late-1", null, false));
+        var bindingService = new ProviderSessionBindingService();
+        var projectLocation = new ProjectApplicationService().locate(projectRoot);
+        var lateBinding = bindingService.find(projectLocation, "claude", "inst-late-1").orElseThrow();
+        bindingService.verifyWorkspaceTrust(projectLocation, "claude", lateBinding.sessionId(), Path.of(lateBinding.worktreePath()));
+        McpProtocolHandler lateHandler = new McpProtocolHandler(lateSessions, projectRoot, "claude", "inst-late-1");
+        lateHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri().toString().replace("\\", "/") + "\"}}");
+        String declared = toolCall(lateHandler,
+                "ensure_session",
+                Map.of("task", Map.of("goal", "Add a product report",
+                        "acceptance", "Publish the report",
+                        "claims", List.of(Map.of("kind", "path_exact", "path", "ProductReport.java")),
+                        "knownDependencies", List.of("catalog.product-store"))));
+        assertEquals("ready", extractResponseStatus(declared), declared);
+        assertEquals(2, replayedStore().workGroupProjection().groups().size(), "the late lane is not part of the completed work group");
+
+        String next = toolCall(lateHandler, "get_next_action", Map.of());
+        assertEquals("ready", extractResponseStatus(next), next);
+        assertEquals(List.of("catalog.product-store"), extractInnerResult(next).get("dependenciesIntegrated"), next);
+        lateHandler.close();
     }
 }
