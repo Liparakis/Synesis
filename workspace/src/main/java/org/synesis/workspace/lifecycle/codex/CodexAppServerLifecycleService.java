@@ -13,11 +13,9 @@ import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -28,11 +26,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import org.synesis.workspace.lifecycle.codex.protocol.CodexAppServerProtocolClient;
 import org.synesis.workspace.lifecycle.codex.protocol.CodexAppServerProtocolSchema;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.AuthorityContext;
+
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.diagnostic;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.optionalResponseId;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.protocolParams;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.reconcileReadState;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.requireSuccessful;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.responseId;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.value;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessStreams.closeStreams;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessStreams.drainStderr;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessTermination.ownedTermination;
+import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessTermination.terminateProcessTree;
 
 /**
  * Codex-only App Server lifecycle state machine.
@@ -101,111 +110,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return direct process launcher
      */
     public static ProcessLauncher defaultLauncher() {
-        return (authority, _) -> {
-            List<String> command = configuredCommand(authority);
-            ProcessBuilder builder = new ProcessBuilder(command).directory(Path.of(authority.realWorktree()).toFile()).redirectError(ProcessBuilder.Redirect.PIPE);
-            builder.environment().put("SYNESIS_MCP_PROJECT", authority.controlProjectRoot());
-            builder.environment().put("SYNESIS_MCP_CONNECTION_INSTANCE_ID", authority.connectionInstanceId());
-            builder.environment().put("SYNESIS_MCP_PROVIDER", authority.provider());
-            Process process = builder.start();
-            var info = ProcessHandle.of(process.pid()).map(ProcessHandle::info).orElse(null);
-            String executable = info == null ? command.getFirst() : info.command().orElse(command.getFirst());
-            // Windows commonly exposes the executable and start instant but
-            // omits ProcessHandle.Info.commandLine().  Persist the same
-            // identity that the repeated-discovery inspector can observe in
-            // that case; retaining a synthetic argv string would make a
-            // verified attachment look unowned during shutdown.
-            String commandIdentity = info == null ? executable : info.commandLine().orElse(executable);
-            long started = info == null ? System.currentTimeMillis() : info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
-            return new AppServerProcess(process, executable, commandIdentity, started);
-        };
-    }
-
-    private static List<String> configuredCommand(LifecycleControlRequestEnvelope.AuthorityContext authority) {
-        List<String> command = new ArrayList<>(configuredCommand());
-        // Codex 0.145.0 does not reliably propagate arbitrary parent
-        // environment variables into configured MCP subprocesses.  Keep the
-        // inherited variables as a compatibility fallback, but also provide
-        // the exact binding values through Codex's supported per-server env
-        // overrides.  This remains one App Server process and one existing
-        // Synesis MCP server; it only makes the already-required binding
-        // explicit at the App Server boundary.
-        command.add("-c");
-        command.add("mcp_servers.synesis.env.SYNESIS_MCP_PROJECT=" + codexConfigString(authority.controlProjectRoot()));
-        command.add("-c");
-        command.add("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=" + codexConfigString(authority.connectionInstanceId()));
-        command.add("-c");
-        command.add("mcp_servers.synesis.env.SYNESIS_MCP_PROVIDER=" + codexConfigString(authority.provider()));
-        return List.copyOf(command);
-    }
-
-    private static List<String> configuredCommand() {
-        String configured = System.getenv("SYNESIS_CODEX_APP_SERVER_COMMAND");
-        if (configured == null || configured.isBlank()) {
-            return List.of("codex", "app-server");
-        }
-        String[] tokens = configured.trim().split("\\s+");
-        return List.of(tokens);
-    }
-
-    private static String codexConfigString(String value) {
-        String normalized = value.replace('\\', '/');
-        return "\"" + normalized.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-
-    private static CodexLifecycleStateStore.State reconcileReadState(CodexLifecycleStateStore.Checkpoint prior, CodexAppServerProtocolClient.Response read) {
-        String status = null;
-        if (read.result() instanceof Map<?, ?> raw) {
-            Object value = raw.get("status");
-            status = statusText(value);
-            if (status == null && raw.get("thread") instanceof Map<?, ?> thread) {
-                status = statusText(thread.get("status"));
-            }
-        }
-        if ("interrupted".equalsIgnoreCase(status)) {
-            return CodexLifecycleStateStore.State.INTERRUPTED;
-        }
-        if ("completed".equalsIgnoreCase(status)) {
-            return CodexLifecycleStateStore.State.COMPLETED;
-        }
-        if ("idle".equalsIgnoreCase(status)) {
-            return CodexLifecycleStateStore.State.IDLE;
-        }
-        if ("running".equalsIgnoreCase(status)) {
-            return CodexLifecycleStateStore.State.RUNNING;
-        }
-        return prior.state() == CodexLifecycleStateStore.State.RUNNING || prior.state() == CodexLifecycleStateStore.State.INTERRUPTING || prior.state() == CodexLifecycleStateStore.State.AMBIGUOUS
-                ? CodexLifecycleStateStore.State.AMBIGUOUS : prior.state();
-    }
-
-    private static boolean ownedTermination(ProcessTreeTerminator.Outcome outcome) {
-        return outcome == ProcessTreeTerminator.Outcome.CLEAN_GRACEFUL || outcome == ProcessTreeTerminator.Outcome.FORCED || outcome == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED;
-    }
-
-    private static void closeStreams(AppServerProcess process) {
-        try {
-            process.process().getInputStream().close();
-        } catch (IOException ignored) {
-            // Best effort after ownership was lost.
-        }
-        try {
-            process.process().getOutputStream().close();
-        } catch (IOException ignored) {
-            // Best effort after ownership was lost.
-        }
-    }
-
-    private static Map<String, Object> protocolParams(LifecycleControlRequestEnvelope request, Map<String, ?> base) throws IOException {
-        Map<String, Object> params = new LinkedHashMap<>(base);
-        String approvalPolicy = request.options().get("codexApprovalPolicy");
-        if (approvalPolicy == null || approvalPolicy.isBlank()) {
-            return params;
-        }
-        if (!Set.of("never", "on-request", "untrusted").contains(approvalPolicy)) {
-            throw new IOException("codex_approval_policy_invalid");
-        }
-        params.put("approvalPolicy", approvalPolicy);
-        return params;
+        return (authority, _) -> CodexAppServerDirectLaunch.launch(authority);
     }
 
     private static void requireActiveTurn(CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
@@ -219,56 +124,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             case IDLE, INTERRUPTED, COMPLETED, FAILED, INTERACTION_REQUIRED, STOPPED, AMBIGUOUS -> true;
             default -> false;
         };
-    }
-
-    private static String responseId(CodexAppServerProtocolClient.Response response, String key) throws IOException {
-        if (!(response.result() instanceof Map<?, ?> raw)) {
-            throw new IOException("missing " + key + " response");
-        }
-        Object value = raw.get(key);
-        if (value == null && raw.get("thread") instanceof Map<?, ?> thread) {
-            value = thread.get(key);
-            if (value == null && key.endsWith("Id")) {
-                value = thread.get("id");
-            }
-        }
-        if (value == null && raw.get("turn") instanceof Map<?, ?> turn) {
-            value = turn.get(key);
-            if (value == null && key.endsWith("Id")) {
-                value = turn.get("id");
-            }
-        }
-        if (!(value instanceof String text) || text.isBlank()) {
-            throw new IOException("missing " + key + " response");
-        }
-        return text;
-    }
-
-    private static String optionalResponseId(CodexAppServerProtocolClient.Response response) {
-        if (!(response.result() instanceof Map<?, ?> raw)) {
-            return null;
-        }
-        Object value = raw.get("threadId");
-        if (value == null && raw.get("thread") instanceof Map<?, ?> thread) {
-            value = thread.get("threadId");
-            if (value == null) {
-                value = thread.get("id");
-            }
-        }
-        if (value == null && raw.get("turn") instanceof Map<?, ?> turn) {
-            value = turn.get("threadId");
-            if (value == null) {
-                value = turn.get("id");
-            }
-        }
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static CodexAppServerProtocolClient.Response requireSuccessful(CodexAppServerProtocolClient.Response response, String method) throws IOException {
-        if (response.failed()) {
-            throw new IOException("codex_request_failed:" + method);
-        }
-        return response;
     }
 
     private static void requireOperation(LifecycleControlRequestEnvelope request, LifecycleControlRequestEnvelope.Operation operation) {
@@ -288,55 +143,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
 
     private static CodexLifecycleHttpClient.Response response(boolean success, String diagnostic, CodexLifecycleStateStore.State state, long revision, String threadId, String turnId, Map<String, Object> result) {
         return new CodexLifecycleHttpClient.Response(success, diagnostic, state.name(), revision, threadId, turnId, result);
-    }
-
-    private static String diagnostic(Throwable failure) {
-        String value = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-        return value.length() > 1024 ? value.substring(0, 1024) : value;
-    }
-
-    private static String statusText(Object value) {
-        if (value instanceof String text) {
-            return text;
-        }
-        if (value instanceof Map<?, ?> map) {
-            Object type = map.get("type");
-            if (type != null) {
-                return statusText(type);
-            }
-            Object status = map.get("status");
-            if (status != null) {
-                return statusText(status);
-            }
-        }
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private static void drainStderr(InputStream stderr, CodexEvidenceJournal journal) {
-        Thread thread = new Thread(() -> {
-            try (stderr) {
-                byte[] buffer = new byte[4096];
-                int read;
-                StringBuilder text = new StringBuilder();
-                while ((read = stderr.read(buffer)) >= 0) {
-                    text.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
-                    if (text.length() > 64 * 1024) {
-                        text.delete(0, text.length() - 64 * 1024);
-                    }
-                    if (text.indexOf("\n") >= 0) {
-                        journal.offer("process_stderr", Map.of("text", text.toString()), false);
-                        text.setLength(0);
-                    }
-                }
-                if (!text.isEmpty()) {
-                    journal.offer("process_stderr", Map.of("text", text.toString()), false);
-                }
-            } catch (IOException failure) {
-                journal.offer("process_stderr_failure", Map.of("diagnostic", diagnostic(failure)), true);
-            }
-        }, "synesis-codex-stderr-reader");
-        thread.setDaemon(true);
-        thread.start();
     }
 
     /**
@@ -597,7 +403,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             if (attachment != null) {
                 closeAttachmentStreams(attachment);
             }
-            ProcessTreeTerminator.Result result = terminateProcessTree(attachment == null ? startingProcess : attachment.process(),
+            ProcessTreeTerminator.Result result = terminateProcessTree(launcher, authority, terminator, attachment == null ? startingProcess : attachment.process(),
                     current.attachmentGeneration(),
                     Duration.ofSeconds(2),
                     Instant.ofEpochMilli(request.callerDeadlineEpochMillis()),
@@ -852,7 +658,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         AppServerProcess launching = startingProcess;
         if (attachment == null && launching != null) {
             CodexLifecycleStateStore.Checkpoint snapshot = checkpointUnchecked();
-            ProcessTreeTerminator.Result result = terminateProcessTree(launching, snapshot.attachmentGeneration(), Duration.ofMillis(500), Instant.now().plusSeconds(2), snapshot);
+            ProcessTreeTerminator.Result result = terminateProcessTree(launcher, authority, terminator, launching, snapshot.attachmentGeneration(), Duration.ofMillis(500), Instant.now().plusSeconds(2), snapshot);
             if (ownedTermination(result.outcome())) {
                 launching.close();
             } else {
@@ -897,7 +703,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
         ProcessTreeTerminator.Result termination = null;
         if (attachment.process().process().isAlive() && current.rootPid() > 0) {
-            ProcessTreeTerminator.Result result = terminateProcessTree(attachment.process(), current.attachmentGeneration(), Duration.ofMillis(500), Instant.now().plusSeconds(2), current);
+            ProcessTreeTerminator.Result result = terminateProcessTree(launcher, authority, terminator, attachment.process(), current.attachmentGeneration(), Duration.ofMillis(500), Instant.now().plusSeconds(2), current);
             termination = result;
             if (ownedTermination(result.outcome())) {
                 attachment.process().process().destroyForcibly();
@@ -951,7 +757,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             return;
         }
         try {
-            ProcessTreeTerminator.Result result = terminateProcessTree(process, attachmentGeneration, Duration.ofMillis(250), Instant.now().plusSeconds(2), checkpointUnchecked());
+            ProcessTreeTerminator.Result result = terminateProcessTree(launcher, authority, terminator, process, attachmentGeneration, Duration.ofMillis(250), Instant.now().plusSeconds(2), checkpointUnchecked());
             if (ownedTermination(result.outcome())) {
                 process.process().destroyForcibly();
             }
@@ -1249,7 +1055,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
         try {
             Attachment current = active;
-            ProcessTreeTerminator.Result result = terminateProcessTree(current == null ? null : current.process(), checkpoint.attachmentGeneration(), Duration.ofMillis(250), Instant.now().plusSeconds(2), checkpoint);
+            ProcessTreeTerminator.Result result = terminateProcessTree(launcher, authority, terminator, current == null ? null : current.process(), checkpoint.attachmentGeneration(), Duration.ofMillis(250), Instant.now().plusSeconds(2), checkpoint);
             if (ownedTermination(result.outcome()) && active != null && active.attachmentGeneration() == checkpoint.attachmentGeneration()) {
                 Attachment failed = active;
                 failed.process().process().destroyForcibly();
@@ -1272,33 +1078,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
 
     /** Rejects managed-tree death evidence that does not prove the requested generation stopped. */
     static void requireManagedTreeDeathEvidence(long attachmentGeneration, ManagedProcessTreeSupervisor.DeathEvidence evidence) throws IOException {
-        if (evidence == null || evidence.generation() != attachmentGeneration) {
-            throw new IOException("managed_process_tree_death_evidence_mismatch");
-        }
-    }
-
-    private ProcessTreeTerminator.Result terminateProcessTree(AppServerProcess process, long attachmentGeneration, Duration grace, Instant deadline, CodexLifecycleStateStore.Checkpoint checkpoint) throws IOException {
-        if (process != null && process.supervisor() != null) {
-            ManagedProcessTreeSupervisor.DeathEvidence evidence = process.supervisor()
-                    .teardownAndProveEmptyWithEvidence(process.process(), attachmentGeneration, process.executable(), process.commandIdentity(), process.startEpochMillis());
-            launcher.managedTreeStopped(authority, attachmentGeneration, evidence);
-            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(Math.max(1L, process.process().pid()),
-                    process.executable(),
-                    process.commandIdentity(),
-                    process.startEpochMillis(),
-                    attachmentGeneration);
-            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.FORCED, attachmentGeneration, identity.pid(), List.of(), List.of(), true, "managed_job_empty");
-        }
-        if (checkpoint.rootPid() <= 0) {
-            ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(1L, "unknown", "unknown", Math.max(1L, checkpoint.rootStartEpochMillis()), attachmentGeneration);
-            return new ProcessTreeTerminator.Result(ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED, attachmentGeneration, identity.pid(), List.of(), List.of(), false, "root_already_exited");
-        }
-        ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(checkpoint.rootPid(),
-                checkpoint.rootExecutable(),
-                checkpoint.rootCommandIdentity(),
-                checkpoint.rootStartEpochMillis(),
-                attachmentGeneration);
-        return terminator.terminate(identity, attachmentGeneration, grace, deadline);
+        CodexAppServerProcessTermination.requireManagedTreeDeathEvidence(attachmentGeneration, evidence);
     }
 
     /**
@@ -1706,32 +1486,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             } catch (IOException ignored) {
                 // The protocol failure is already surfaced through the journal.
             }
-        }
-
-        private String value(Map<String, Object> params, String first, String second) {
-            Object value = params.get(first);
-            if (value == null) {
-                value = params.get(second);
-            }
-            if (value == null && params.get("thread") instanceof Map<?, ?> thread) {
-                value = thread.get(first);
-                if (value == null) {
-                    value = thread.get(second);
-                }
-                if (value == null && first.endsWith("Id")) {
-                    value = thread.get("id");
-                }
-            }
-            if (value == null && params.get("turn") instanceof Map<?, ?> turn) {
-                value = turn.get(first);
-                if (value == null) {
-                    value = turn.get(second);
-                }
-                if (value == null && first.endsWith("Id")) {
-                    value = turn.get("id");
-                }
-            }
-            return statusText(value);
         }
     }
 }
