@@ -39,6 +39,64 @@ import org.synesis.workspace.agent.AgentStatus;
  */
 final class AgentReviewActionProjection {
 
+    /**
+     * Returns whether a reviewer still lacks a resolved review of a current producer lane.
+     *
+     * <p>Open review grants always count as unresolved. A consumed grant addressed to a successor
+     * reviewer authorizes <em>continuation</em> of the reviewer lane and is explicitly not a review
+     * obligation, so it never strands the successor in {@code REVIEWER_PENDING}.</p>
+     *
+     * @param store    current project projection
+     * @param reviewer the reviewer intent being evaluated
+     * @return {@code true} if the reviewer still owes a review
+     */
+    static boolean hasUnresolvedReviewObligation(PredictionEventStore store, WorkIntent reviewer) {
+        if (reviewer.role() != WorkIntent.Role.REVIEWER) {
+            return false;
+        }
+        var workGroups = store.workGroupProjection();
+        List<LaneGrant> reviewerGrants = workGroups.grants().stream().filter(grant -> grant.workGroupId().equals(reviewer.workGroupId())).filter(grant -> grant.targetParticipant().equals(reviewer.participant()))
+                .filter(grant -> !AgentReviewActionProjection.grantTargetsSupersededIntent(store, grant)).filter(grant -> !workGroups.grantSuperseded(grant.grantId())).toList();
+
+        boolean unresolvedGrant = reviewerGrants.stream().filter(grant -> AgentReviewActionProjection.allowsIndependentReview(store, grant))
+                .anyMatch(grant -> workGroups.reviewValidationForGrant(grant.grantId()).isEmpty());
+        if (unresolvedGrant) {
+            return true;
+        }
+
+        List<WorkIntent> producers = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
+                .filter(intent -> intent.workGroupId().equals(reviewer.workGroupId())).filter(intent -> !intent.participant().equals(reviewer.participant())).toList();
+        List<WorkIntent> matching = reviewer.reviewTargetSelectors().isEmpty() ? producers : producers.stream().filter(producer -> AgentReviewActionProjection.reviewTargetsMatch(reviewer, producer)).toList();
+
+        if (matching.isEmpty()) {
+            if (reviewerGrants.stream().anyMatch(grant -> workGroups.continuationGrant(grant.grantId()))) {
+                // A continuation grant restores the reviewer lane; it is not a review obligation.
+                return false;
+            }
+            // With no producer yet, an empty grant list means the reviewer is waiting for review
+            // work to emerge. Open grants were handled above, so any grant left here is either a
+            // self-review or already validated and does not imply future review work.
+            return reviewerGrants.isEmpty();
+        }
+        return matching.stream().anyMatch(producer -> !AgentReviewActionProjection.hasCompletedReview(store, reviewer, producer));
+    }
+
+    /**
+     * Maps a protocol action name to the {@link AgentNextAction} it implies.
+     *
+     * @param protocolAction wire name of the protocol action, such as {@code "wait"}
+     * @return the matching action; {@link AgentNextAction#REQUEST_COORDINATION} for any name that
+     *         has no dedicated mapping
+     */
+    static AgentNextAction protocolNextAction(String protocolAction) {
+        return switch (protocolAction) {
+            case NextActionProtocol.ACTION_RESPOND_COORDINATION -> AgentNextAction.RESPOND_COORDINATION;
+            case NextActionProtocol.ACTION_REVIEW_DECISION -> AgentNextAction.REVIEW_DECISION;
+            case NextActionProtocol.ACTION_WAIT -> AgentNextAction.WAIT;
+            default -> AgentNextAction.REQUEST_COORDINATION;
+        };
+    }
+
     static boolean hasAvailableReviewerReviewContinuation(PredictionEventStore store, Map<String, Object> collaboration) {
         Object projected = collaboration.get("continuationCandidates");
         if (!(projected instanceof List<?> candidates)) {
@@ -54,7 +112,7 @@ final class AgentReviewActionProjection {
             return false;
         }
         List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> availableReviewerIntents.contains(intent.intentId().toString())).filter(intent -> AgentNextActionService.hasUnresolvedReviewObligation(store, intent))
+        return store.collaborationProjection().activeIntents().stream().filter(intent -> availableReviewerIntents.contains(intent.intentId().toString())).filter(intent -> hasUnresolvedReviewObligation(store, intent))
                 .anyMatch(reviewer -> pendingReviews.stream().filter(snapshot -> snapshot.provenance().workGroupId().equals(reviewer.workGroupId())).anyMatch(snapshot -> reviewTargetsMatch(reviewer, snapshot)));
     }
 
@@ -74,7 +132,7 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
         }
         Map<String, Object> review = reviewActions.getFirst();
         String protocolAction = String.valueOf(review.get("nextProtocolAction"));
-        AgentNextAction next = AgentNextActionService.protocolNextAction(protocolAction);
+        AgentNextAction next = protocolNextAction(protocolAction);
         Map<String, Object> projection = new LinkedHashMap<>(collaboration);
         if (reviewOnly) {
             projection.put("reviewOnly", true);
@@ -96,7 +154,7 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
      */
     static AgentResponse reviewerPendingAction(PredictionEventStore store, String participantId) {
         for (WorkIntent reviewer : store.collaborationProjection().activeIntents()) {
-            if (!reviewer.participant().equals(participantId) || reviewer.role() != WorkIntent.Role.REVIEWER || !AgentNextActionService.hasUnresolvedReviewObligation(store, reviewer)) {
+            if (!reviewer.participant().equals(participantId) || reviewer.role() != WorkIntent.Role.REVIEWER || !hasUnresolvedReviewObligation(store, reviewer)) {
                 continue;
             }
             if (hasMandatoryReviewCandidate(store, reviewer)) {

@@ -50,7 +50,7 @@ final class NoChangeCompletionEligibility {
         if (!declaresNoRepositoryMutation(intent.acceptance())) {
             return denied("NO_CHANGE_NOT_DECLARED");
         }
-        if (AgentNextActionService.hasUnresolvedReviewObligation(store, intent)) {
+        if (AgentReviewActionProjection.hasUnresolvedReviewObligation(store, intent)) {
             return denied("NO_CHANGE_REVIEWER_PENDING");
         }
         WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
