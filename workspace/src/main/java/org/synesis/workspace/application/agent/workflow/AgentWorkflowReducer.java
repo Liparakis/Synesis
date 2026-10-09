@@ -2,7 +2,6 @@ package org.synesis.workspace.application.agent.workflow;
 
 import java.nio.charset.StandardCharsets;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +11,7 @@ import java.util.UUID;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -92,6 +92,11 @@ public final class AgentWorkflowReducer {
             return new LaneAction("RECOVER", List.of("session_terminal_state_unavailable"), List.of(), false);
         }
         String laneState = laneState(result);
+        if (response.status() == AgentStatus.COMPLETED && response.nextAction() == null && "COMPLETED".equals(result.get("state"))) {
+            // A lane closed by its binding carries no intent or participant to read a state from.
+            // Without this it would be described as open implementation work with write operations.
+            laneState = "COMPLETED";
+        }
         if (response.nextAction() == null && ("COMPLETED".equals(laneState) || "CANCELLED".equals(laneState) || "DETACHED".equals(laneState) || "REVOKED".equals(laneState))) {
             return new LaneAction("CLOSE", List.of("lane_" + laneState.toLowerCase(java.util.Locale.ROOT)), List.of("get_next_action", "ensure_session"), true);
         }
@@ -281,7 +286,12 @@ public final class AgentWorkflowReducer {
         Map<String, Object> workflow = new LinkedHashMap<>();
         workflow.put("actionId", actionId);
         workflow.put("type", action.type());
-        workflow.put("payload", Collections.unmodifiableMap(new LinkedHashMap<>(result)));
+        // The envelope describes the action; the facts it was derived from stay in the enclosing
+        // result once. Only the recovery deadline is repeated, because agents are told to pace
+        // recovery polling from the envelope alone.
+        if (result.get("recoveryDeadlineEpochMillis") != null) {
+            workflow.put("recoveryDeadlineEpochMillis", result.get("recoveryDeadlineEpochMillis"));
+        }
         Map<?, ?> laneContext = firstIntent(result);
         if (laneContext.get("workGroupId") != null) {
             workflow.put("workGroupId", laneContext.get("workGroupId"));

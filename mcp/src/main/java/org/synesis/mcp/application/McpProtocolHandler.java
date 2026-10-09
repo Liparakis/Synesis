@@ -1089,6 +1089,41 @@ public final class McpProtocolHandler {
     }
 
     /**
+     * Recognizes a failure to obtain the project append lock within its bound.
+     *
+     * @param failure failure raised while recording a coordination event
+     * @return {@code true} when nothing was appended because the lock was busy
+     */
+    private static boolean isAppendContention(Exception failure) {
+        String message = failure.getMessage();
+        return "event append lock timeout".equals(message) || "event append lock unavailable".equals(message);
+    }
+
+    /**
+     * Renders a failure for the server diagnostic stream: its type and a bounded single-line
+     * message, so an otherwise opaque internal failure can be traced without exposing payloads.
+     */
+    private static String failureDiagnostic(Exception failure) {
+        String message = failure.getMessage() == null ? "" : failure.getMessage().replaceAll("\\s+", " ");
+        return failure.getClass().getSimpleName() + (message.isEmpty() ? "" : ":" + message.substring(0, Math.min(message.length(), 200)));
+    }
+
+    /**
+     * Reports whether this exact connection's binding is durably completed.
+     *
+     * @return {@code true} only when the completed binding resolves; unreadable or active state
+     *         is {@code false}, so callers keep their fail-closed path
+     */
+    private boolean exactBindingCompleted() {
+        try {
+            authorityResolver.resolveCompleted(new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
+            return true;
+        } catch (Exception notCompletedOrUnreadable) {
+            return false;
+        }
+    }
+
+    /**
      * Renews the exact session lease after verified MCP activity.
      *
      * @return {@code true} when the lease was renewed, {@code false} for an unbound connection
@@ -1752,16 +1787,9 @@ public final class McpProtocolHandler {
             renewLease();
         }
 
-        boolean exactCompletedNoChangeReplay = false;
-        if (isSessionBound && noChangeCompletion) {
-            try {
-                authorityResolver.resolveCompleted(new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
-                exactCompletedNoChangeReplay = true;
-            } catch (Exception notCompletedOrUnreadable) {
-                // Active bindings still pass through the normal recovery fence below. Completed
-                // bindings reach only the completion service's exact durable-result replay checks.
-            }
-        }
+        // Active bindings still pass through the normal recovery fence below. Completed
+        // bindings reach only the completion service's exact durable-result replay checks.
+        boolean exactCompletedNoChangeReplay = isSessionBound && noChangeCompletion && exactBindingCompleted();
         if (isSessionBound && !exactCompletedNoChangeReplay) {
             try {
                 if (collaborationService.recoveryFenced(activeProjectRoot, provider, connectionInstanceId)) {
@@ -1772,12 +1800,18 @@ public final class McpProtocolHandler {
                     return textResultResponse(id, fenced.toJson());
                 }
             } catch (Exception failure) {
-                System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
-                AgentResponse unavailable = new AgentResponse(AgentStatus.BLOCKED,
-                        AgentReason.POLICY_DENIED,
-                        AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE"));
-                return textResultResponse(id, unavailable.toJson());
+                // A lane that completed has no active binding left to fence, and its agent's
+                // closing inbox read must be told so rather than sent to a human. Only that
+                // read is let through: every mutating tool still fails closed here.
+                boolean closingRead = name.equals(TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION) && exactBindingCompleted();
+                if (!closingRead) {
+                    System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
+                    AgentResponse unavailable = new AgentResponse(AgentStatus.BLOCKED,
+                            AgentReason.POLICY_DENIED,
+                            AgentNextAction.REQUEST_HUMAN_HELP,
+                            Map.of("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE"));
+                    return textResultResponse(id, unavailable.toJson());
+                }
             }
         }
 
@@ -1910,7 +1944,12 @@ public final class McpProtocolHandler {
                                         reason,
                                         AgentNextAction.REQUEST_HUMAN_HELP,
                                         Map.of("reason", failure.getMessage()));
+                            } else if (isAppendContention(failure)) {
+                                // Another session held the project log; nothing was recorded and the
+                                // same announcement is safe to repeat.
+                                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
                             } else {
+                                System.err.println("SYNESIS_MCP_ANNOUNCE_FAILURE=" + failureDiagnostic(failure));
                                 agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
                             }
                         }

@@ -33,6 +33,20 @@ final class AgentWorkflowReducerTest {
     }
 
     @Test
+    void laneClosedByItsBindingIsDescribedAsClosedNotAsOpenWork() {
+        AgentWorkflowReducer reducer = new AgentWorkflowReducer();
+        var request = new NextActionRequest(Path.of("."), "claude", "connection-1");
+        AgentResponse closed = reducer.decorate(request, new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("state", "COMPLETED", "lane", "session-1")));
+        Map<?, ?> workflow = (Map<?, ?>) ((Map<?, ?>) closed.result()).get("workflow");
+        assertEquals("CLOSE", workflow.get("type"));
+        assertFalse(((java.util.List<?>) workflow.get("permittedOperations")).contains("apply_patch"), workflow.toString());
+
+        // A state value alone is not a closed lane: review waits reuse the same key.
+        AgentResponse waiting = reducer.decorate(request, new AgentResponse(AgentStatus.READY, null, null, Map.of("state", "COMPLETED")));
+        assertEquals("IMPLEMENT", ((Map<?, ?>) ((Map<?, ?>) waiting.result()).get("workflow")).get("type"));
+    }
+
+    @Test
     void staleFinishEvidenceProjectsAnExplicitFreshCompletionPoll() {
         AgentWorkflowReducer reducer = new AgentWorkflowReducer();
         var request = new NextActionRequest(Path.of("."), "codex", "connection-1");

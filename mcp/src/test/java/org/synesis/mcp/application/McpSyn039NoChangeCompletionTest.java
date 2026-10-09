@@ -122,6 +122,25 @@ final class McpSyn039NoChangeCompletionTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void closingInboxReadAfterCompletionReportsCompletionWhileMutationStaysRefused(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn039-closing-read");
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
+        Map<String, Object> finishArguments = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) projection.get("result")).get("workflow")).get("arguments");
+        assertEquals("completed", innerResult(fixture.handler.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments)))).get("status"));
+
+        // An agent that follows the protocol reads its inbox once more after finishing. That read
+        // must say the lane is done, not send the agent to a human over a missing active binding.
+        Map<String, Object> closingRead = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("completed", closingRead.get("status"), closingRead.toString());
+        assertNotEquals("request_human_help", closingRead.get("nextAction"), closingRead.toString());
+
+        Map<String, Object> lateMutation = innerResult(fixture.handler.handleMessage(toolCall("apply_patch", "{\"path\":\"late.txt\",\"create\":true,\"content\":\"late\\n\"}")));
+        assertEquals("blocked", lateMutation.get("status"), lateMutation.toString());
+        fixture.handler.close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void mutationRequiredAcceptanceCannotCompleteAsNoChange(@TempDir Path temp) throws Exception {
         Fixture fixture = prepare(temp, "syn039-mutation-required-no-change", "AGENTS.md must be corrected and the issue tracker implementation must be verified.");
         Map<String, Object> projected = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));

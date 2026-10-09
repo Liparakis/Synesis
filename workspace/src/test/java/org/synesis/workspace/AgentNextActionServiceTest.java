@@ -478,7 +478,8 @@ class AgentNextActionServiceTest {
             assertEquals(owner.intent().version(), ((Number) item.get("claimEpoch")).longValue());
         }
         assertFalse(result.containsKey("nextProtocolPayload"));
-        assertEquals(pending, ((Map<?, ?>) workflow.get("payload")).get("pendingCoordination"));
+        assertEquals(pending, result.get("pendingCoordination"));
+        assertFalse(workflow.containsKey("payload"), "the envelope must not repeat the result it describes");
 
         AgentResponse nonOwnerResponse = service.getNextAction(new NextActionRequest(controlRoot, "codex", "contract-requester"));
         assertEquals(AgentStatus.WAITING, nonOwnerResponse.status(), nonOwnerResponse.toJson());
