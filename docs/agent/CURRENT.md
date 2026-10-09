@@ -1,3 +1,378 @@
+# 2026-10-09 — `synesis agents run`: a controller that resumes stopped agents
+
+Synesis has no working way to wake a provider session. The Codex wake path needs the coordination
+server and a thread Synesis launched through the App Server, which nothing in production starts; Claude
+Code has none. A headless agent therefore ends its process when it has nothing to do in one turn, and
+nothing tells it when another lane has moved on.
+
+Added, uncommitted, build `0.1.0-dev.agents-run3-20261009`:
+
+- `synesis agents run --agent <provider[:model[:effort]]>... (--prompt | --prompt-file)` starts one
+  headless session per agent with the same prompt, then watches the durable log. An agent that has
+  stopped is started again, on its own provider session, with one sentence telling it to continue, when
+  a lane of its provider is still open and work has progressed since it stopped. Heartbeats,
+  suspensions, recovery holds, and accepted continuations are not progress, so idle agents cannot wake
+  each other. The controller never reads or relays agent output, assigns nothing, selects no
+  continuation, and writes no coordination state. It ends `COMPLETED`, `STALLED`, `NO_WORK_ANNOUNCED`,
+  `RESUME_LIMIT_REACHED`, or `TIMED_OUT`.
+- `ProviderIntegration.headlessSession()` replaces the unused `autonomousCommand`: how a provider is
+  started, how its session identifier is read from its output, and how it is resumed. The prompt goes
+  on standard input. Claude Code runs in print mode against the project's `.mcp.json` with only the
+  Synesis tools and its read-only tools allowed; Codex runs `codex exec` under its own approval and
+  sandbox policy.
+- `PeerDependencyPolicy` now looks across the project instead of one work group. A lane announced after
+  the others finished starts a work group of its own; under the earlier scope its declared dependency
+  stayed `owner_required` forever. Found by the second real run below.
+
+Real current-build acceptance, disposable project `Documents\TestingSynesisOnClaude`, one Claude Code
+agent (`claude-sonnet-5-5`, low effort) and one Codex agent (`gpt-6-luna`, medium effort), one prompt:
+
+- Run 1, started together by the controller: `COMPLETED` in 118 s. Both lanes integrated, WorkGroup
+  `COMPLETED`, `python -m unittest` in the control checkout ran 8 tests, all passing. The lane with the
+  declared dependency built against the other's integrated work without a capability request. The
+  controller resumed the Claude agent once, on its own session, after that agent's lane had already
+  completed; that resume achieved nothing, and the rule was then tightened to require an open lane of
+  the agent's provider.
+- Run 2, same command on a fresh project: `STALLED`, correctly. The Codex agent announced after the
+  Claude lane's work group had completed, landed in a second work group, was told `owner_required` on
+  every poll, and stopped with its lane open. Nothing had progressed since, so nothing was resumed.
+- Run 3, the controller with a single new Codex agent on that same stalled project, after the policy
+  change: `COMPLETED` in 71 s with no resume. The agent took over the abandoned lane by continuation,
+  was told its dependency was integrated, and finished. Both work groups `COMPLETED`; 9 tests pass in
+  the control checkout.
+
+Not demonstrated: a real run in which the controller's resume was needed and made the difference, for
+example an owner waiting for a requester's verdict. That path is covered by the controller's tests with
+scripted processes only. Capability negotiation did not occur in these three runs.
+
+Evidence: coordination 112, workspace 502 (1 skipped), mcp 123, cli 85 pass with their `check` gates
+and `repositoryHygieneCheck`. New tests: the controller against scripted processes and project states
+(resume on progress, no resume without it, no resume without an open lane of the provider, per-agent
+limit, time limit, no session identifier); each provider's start and resume commands and session
+identifier parsing; executable resolution; agent specifications; and a two-process test in which a lane
+announced after the other work group completed has its dependency satisfied.
+
+# 2026-10-09 — Codex with Claude Code: WorkGroup COMPLETED through loss, recovery, and continuation
+
+Real current-build acceptance on the project mixed attempt 2 (below) left stuck, never reset. One Codex
+thread (`gpt-6-luna`, medium effort) and one Claude Code session (`claude-sonnet-5-5`, low effort), each
+resumed with the single sentence "Continue following the coordination protocol from where you stopped."
+Every resume was a new process and therefore a new session. The bootstrapper relayed nothing, selected
+no continuation, and did not touch `.synesis`.
+
+Demonstrated across attempt 2 and these resumes, from a replayed copy of the 97-event log: admission of
+both providers; disjoint claims; capability request; the owner shown the unanswered request when it
+asked to finish, and its acceptance; implementation publication; requester inspection and validation;
+loss of both participants and later of two successors; reconciliation (`PARTICIPANT_SUSPENDED` and
+`RECOVERY_SNAPSHOT_HELD` four times each); continuation of the storage lane by a Codex successor, twice, and of the CLI lane by a Claude
+successor (`LANE_CONTINUATION_ACCEPTED` at 61, 67, 78); the successor owner's completion and
+integration (`TASK_INTEGRATED` at 75); integration of the CLI lane (92, 94); every session finalized and
+intent released; `WORK_GROUP_STATUS_CHANGED` to `COMPLETED` (97). No intent remains active.
+Independently: the control branch holds three snapshot commits, `python -m unittest` there runs 14
+tests, all passing, and the CLI adds, completes, lists, and removes tasks.
+
+Not demonstrated: a mixed run that completes without any agent process exiting; review; a requester
+sending an implementation back. Both of the CLI lane's snapshots were integrated, its predecessor's and
+its successor's.
+
+Changes made to get there, uncommitted, build `0.1.0-dev.recovered-owner-20261009`:
+
+- A validated capability request now follows a lane to its successor. The signed continuation event
+  already transferred the owner and requester of requests with an open obligation; a validated one was
+  left with the predecessor, so a successor owner was never shown that its completion was due and a
+  successor requester would have been told to request a dependency it already held. Requests that
+  ended without agreement still do not move. This changes how existing logs replay: a validated
+  request is attributed to the successor after a continuation.
+- A continuation is offered only to a caller that can take it. A caller that already holds a lane
+  (`CURRENT_PARTICIPANT_HOLDS_A_LANE`) or belongs to another provider
+  (`CONTINUATION_REQUIRES_SAME_PROVIDER`) sees the candidate as unavailable instead of being handed a
+  request that fails with `RECOVERY_SOURCE_BINDING_NOT_FOUND`. A lane is still continued only from its
+  own provider's binding; taking over another provider's lane remains unsupported.
+- The integration pump accepts an owner-lane snapshot as carrying a validated implementation when it
+  is the validated commit or when every path that implementation changed has identical content in it,
+  including the same absences. It previously required the validated commit itself, which a lane
+  rebuilt from recovery evidence can never produce, so the consumer waited forever. A snapshot in
+  which a validated path differs still does not qualify.
+
+Evidence: coordination 112, workspace 489 (1 skipped), mcp 122, cli 83 pass with their `check` gates
+and `repositoryHygieneCheck`. New tests cover the validated-request transfer (owner and requester), the
+two unavailable continuation reasons, and the content rule against a real repository (identical,
+edited, restored, earlier, unknown).
+
+# 2026-10-09 — Dependencies on finished lanes, owners awaiting a verdict, and abandoned recovery locks
+
+Three changes decided after the mixed runs below, uncommitted.
+
+- Dependency on finished work. `PeerDependencyPolicy` (coordination) is the one statement of the rule,
+  used by the inbox projection, the completion gate, and the capability request service. A capability
+  request is no longer recorded against a lane whose completion is prepared; the asker is told to wait
+  (`CAPABILITY_OWNER_COMPLETING`), and its inbox says the same instead of `owner_required` while every
+  remaining producer lane is closing. Once no producer lane of the work group is open and at least one
+  peer lane has been integrated, a declared dependency the lane never obtained a request for counts as
+  satisfied: the inbox lists it under `dependenciesIntegrated`, a request for it answers
+  `CAPABILITY_OWNER_INTEGRATED` without recording anything, and it no longer blocks the lane's
+  completion. A dependency with an open producer peer, or in a work group where nothing was integrated,
+  is unresolved exactly as before. This lets a lane complete without a negotiated contract in that one
+  situation.
+- Owner awaiting a verdict. While an implementation this lane published is `IMPLEMENTATION_AVAILABLE` or
+  `VALIDATING`, an owner asking to finish is told to wait (`validation_required`,
+  `IMPLEMENTATION_AWAITING_VALIDATION`), and `finish_lane` refuses for the same stated reason. Before,
+  the inbox offered `finish_lane` until the requester opened its validation, after which the action
+  refused it.
+- Abandoned recovery lock. Taking `reconciliation-execution.lock` now reclaims a lock whose recorded
+  process no longer exists, or whose identifier belongs to a process that started after the lock was
+  written. The decision and the new lock are made under an operating-system lock so two recoveries
+  cannot discard each other's. An unreadable lock is still treated as held. Why the recovery that left
+  the lock never finished is not known; the lock recorded a process that had exited, with no execution
+  journal.
+
+Evidence: coordination 111, workspace 488 (1 skipped), mcp 122, cli 83 pass with their `check` gates.
+New tests: the lock (reclaim, exclusion, identifier reuse, unreadable lock); the two-process negotiation
+test now also asserts the owner's wait and the refused late request; a new two-process test takes a
+declared dependency through an integrated peer to work-group completion.
+
+Real current-build acceptance, build `0.1.0-dev.recovery-fixes-20261009`, on the project left stuck by
+mixed attempt 2 below, with its stale lock still in place. Resuming the Codex thread: the stale lock
+was reclaimed; both exited participants were suspended and their recovery snapshots held (events 57
+to 60); the inbox offered the storage lane's continuation and Codex accepted it
+(`LANE_CONTINUATION_ACCEPTED`, event 61), keeping that lane's authority lineage. Demonstrated:
+participant loss, reconciliation, continuation. NOT REACHED: the owner's completion, integration,
+WorkGroup completion.
+
+It stopped on two defects in what follows a continuation, neither changed:
+
+- The successor is not recognised as the owner of the capability its lane had published. Capability
+  ownership is matched on the supervisor and worker of the session that was addressed, and a successor
+  session has its own. The validated-completion prompt therefore never appears for it.
+- With its own lane in hand, the successor was next offered the continuation of the other, exited lane
+  (the Claude CLI lane, whose completion is already prepared and snapshot created). Executing that
+  projected call failed with `RECOVERY_SOURCE_BINDING_NOT_FOUND`, and the same call was projected again.
+
+# 2026-10-09 — Claude project rules, and Codex with Claude: negotiation through validation, then stalled
+
+Changes, uncommitted:
+
+- `synesis provider install claude` writes `.claude/rules/synesis.md`, a Synesis-owned file that imports
+  the managed `AGENTS.md` block with `@../../AGENTS.md`. Checked against Claude Code 2.1.291 first: it
+  loads Markdown under `.claude/rules` as project instructions and resolves the import relative to the
+  rule file. The install result reports `PROJECT_INSTRUCTIONS` as `INSTALLED`, `UNCHANGED`, `CONFLICT`
+  (a file without the ownership marker is at that path and was left alone), or `NOT_APPLICABLE` for
+  providers that read `AGENTS.md` themselves. Uninstall removes only a file that carries the marker.
+- `synesis init` registered the Codex server with the command launcher while `provider install codex`
+  used the server launcher, so whichever ran last decided how every Codex session started its server.
+  Both now use the server launcher.
+
+Mixed runs, build `0.1.0-dev.mixed-run-20261009`, disposable project `Documents\TestingSynesisOnClaude`,
+one Claude Code session (`claude-sonnet-5-5`, low effort) and one Codex session (`gpt-6-luna`, medium
+effort), one identical prompt that named neither roles nor files and did not mention `AGENTS.md`. The
+project README required the CLI author to obtain the storage API through a capability request.
+
+Attempt 1, both launched together: PARTIAL. Claude claimed the store and completed and integrated its
+lane. Codex's capability request was recorded at event 13, between Claude's `COMPLETION_PREPARED` (12)
+and `TASK_SNAPSHOT_CREATED` (14). Claude's lane closed with the request unanswered and Codex waited on
+an owner that no longer existed. The owner-finish precedence added earlier cannot see a request that
+arrives after completion has been prepared.
+
+Attempt 2, Codex launched first and Claude once Codex had announced its claim: PARTIAL. Demonstrated,
+from a replayed copy of the log: admission of both providers; disjoint claims; Claude's capability
+request; Codex asking to finish, being shown the unanswered request instead, and accepting it at
+contract revision 17; Codex's implementation publication; Claude's inspection and validation in the
+owner's snapshot (`CAPABILITY_IMPLEMENTATION_VALIDATED`); Claude's `COMPLETION_PREPARED` and
+`TASK_SNAPSHOT_CREATED`. NOT REACHED: the owner's lane completion, either integration, WorkGroup
+completion. The control branch still ends at the managed baseline.
+
+Why attempt 2 stopped, in order:
+
+- Codex asked to finish while Claude's validation was still open. `get_next_action` projected
+  `finish_lane`; `finish_lane` then refused with `task_not_ready` and `pending: 1`. The projection and
+  the action disagree for an owner whose published implementation awaits the requester's verdict.
+- Both headless agents then reached the unchanged-poll limit and their processes exited. A resumed
+  headless agent is a new connection and a new session; it was shown only the shared
+  `integration_pending` wait, not the owner's validated-completion prompt, which belongs to the exited
+  session's lane.
+- The exited sessions were not recovered. The first resumed Codex connection began a reconciliation
+  execution at startup and took `reconciliation-execution.lock`; the lock was still there after that
+  process had gone, with no execution journal written. Every later attempt, the second resumed
+  connection's and an operator `synesis reconcile --execute`, failed with "execution is busy". `synesis
+  reconcile --dry-run` reported three recovery-eligible sessions and one suspected stale. Why the first
+  execution never finished is not known. `doctor` and `repair` are the documented way to clear a stale
+  lock and were not run; the project was left as it stopped.
+
+Open, not changed:
+
+- A capability request can be recorded against an owner whose completion is already prepared.
+  Refusing it there is not enough on its own: a lane with a declared dependency and no active owner is
+  told `owner_required` on every poll and cannot complete, so the requester also needs a lawful way
+  forward when the work it depends on has been integrated.
+- Whether an owner may be projected `finish_lane` while its implementation awaits validation.
+- Recovery of sessions whose processes exited cleanly, and a stale reconciliation lock that blocks it.
+
+Evidence: workspace 484 (1 skipped), mcp 121, cli 83 pass with their `check` gates after all changes
+above. The installed build, `0.1.0-dev.mixed-run-20261009`, has every change in this entry.
+
+# 2026-10-09 — Two Claude Code agents: WorkGroup COMPLETED; four defects found by the runs
+
+Real current-build acceptance in a disposable project (`Documents\TestingSynesisOnClaude`), two headless
+Claude Code 2.1.291 sessions (`claude-sonnet-5-5`, low effort), launched together with one identical
+prompt that named no role, file, or peer and told each to read `README.md` and `AGENTS.md`. The
+bootstrapper created the repository and goal, ran `synesis init` and `synesis provider install claude`,
+and validated the result; it relayed nothing between agents. Claude Code does not load `AGENTS.md` on
+its own, so the prompt pointed at it; Synesis does not yet write a `CLAUDE.md`.
+
+Run 1, build `0.1.0-dev.native-launcher-20261009`: PARTIAL. Demonstrated: admission of both sessions,
+concurrent claims (the second session's claim on `task_store.py` was refused with `overlapping_claim`
+and it re-claimed `task_cli.py`), a capability request, and completion and integration of the owner's
+lane. NOT REACHED: the owner's reply, validation, the requester's completion, WorkGroup completion.
+The owner asked to finish after the request had been recorded, was projected `finish_lane`, and
+closed its lane; the requester then waited on a reply nobody could give.
+
+Run 2, build `0.1.0-dev.claude-run2-20261009`, same prompt, project re-created: both lanes completed,
+two snapshot commits on the control branch, both participants `COMPLETED` and the WorkGroup
+`COMPLETED` in `collaboration status`. The event log itself was not replayed. Independently: `python -m unittest` in the control
+checkout ran 9 tests, all passing, and the CLI added, completed, listed, and removed tasks. NOT REACHED
+in run 2: capability negotiation. The second session's first announcement with a declared dependency
+returned `internal_failure`; it retried without the dependency, built against the integrated store
+after its workspace refreshed, and never needed the request.
+
+Changes made from these runs, uncommitted:
+
+- An owner asking to finish is shown a request it has not answered instead of `finish_lane`. Accepted
+  requests and requester-requested revisions are unchanged: for those the completion request is how
+  the owner declares the next implementation ready. Negative control: the new test received
+  `finish_lane` before the change. A first version that also covered validation revisions broke
+  `Slice4FailureScenariosTest` and was narrowed.
+- A session whose lane has completed can read its inbox once more and is told the lane is completed.
+  Before, the recovery-fence check failed on the missing active binding and returned
+  `SESSION_RECOVERY_STATE_UNAVAILABLE` with `request_human_help`. Only `get_next_action` is let through;
+  a mutating tool on a completed binding is still refused.
+- That closing response is described as workflow `CLOSE`. It had been described as `IMPLEMENT` with
+  write operations permitted.
+- An announcement that cannot obtain the project append lock now returns a retryable
+  `EVENT_APPEND_LOCK_UNAVAILABLE`, and any other announcement failure writes
+  `SYNESIS_MCP_ANNOUNCE_FAILURE=<type>:<message>` to the server diagnostic stream. The cause of the
+  run 2 `internal_failure` is not known: it did not reproduce with two scripted sessions in sequence,
+  and nothing was logged at the time.
+- Provider hooks are installed against `synesis.exe` when the installation has it, falling back to
+  `synesis.cmd`. Existing projects keep their hook until the provider is installed again; for Codex
+  that changes the hook text it asks the user to re-trust.
+
+Also observed: `request_coordination` rejects an unexpected payload field as `policy_denied` with
+`request_human_help` (the agent removed the field and succeeded); a project directory that is deleted
+and re-created keeps failing discovery with `IDENTITY_MISMATCH` until the old registry entry is removed,
+which is the registry's documented rule; `provider install claude` leaves `.claude/` and `.mcp.json`
+untracked in the control checkout, which the integration and snapshot paths already tolerate.
+
+The native launcher went through three real installs: `synesis --version` takes about 410 ms through
+`bin\synesis.exe` against about 640 ms through `synesis.cmd`.
+
+Evidence after all changes: workspace 481 (1 skipped), mcp 121, cli 83 with their `check` gates, the
+one mcp failure above included and then fixed; after the narrowing, mcp 121 and a focused workspace
+selection of 50 pass, and the full workspace suite was not run again. Installed build:
+`0.1.0-dev.claude-fixes-20261009`, which no agent run has exercised.
+
+# 2026-10-09 — Dead code removed, native command launcher, cross-process manual installation
+
+Uncommitted, on top of the entry below.
+
+- Removed production code unreachable from every entry point, with its dedicated tests:
+  `ProviderSupervisionService`, `ProviderProcessSupervisor`, `ResetRecoveryService`, `DecisionSearch`,
+  `ProviderSessionCommand`, `ImplementationSnapshotService`, `ProjectCommandFormatMigrationService`,
+  `ManualCandidateProvider`, fourteen methods and five constructors with no callers. About 2,750
+  lines. `CandidateGathererTest` now uses its existing stub in place of the removed provider;
+  `ProjectCommandNamespaceSpikeTest` lost the one method that exercised the removed migration
+  service. Kept deliberately: the managed-Codex launcher chain and the overlay reconciliation, key
+  agreement, and relay client, which are unwired but correspond to accepted ADRs. ADR-0013 and
+  ADR-0043 still name `DecisionSearch` and `ProviderSessionCommand`.
+- Native command launcher: the launcher binary already used for MCP is now also installed on Windows
+  as `bin\synesis.exe`, which the shell resolves ahead of `synesis.cmd`. When run under that name it
+  performs the script launcher's maximum-release doctor check, failing closed, and sets
+  `SYNESIS_LAUNCHER` as the versioned script does. `synesis.cmd` remains for hooks and registrations
+  that name it. An existing launcher that cannot be replaced because it is running does not fail
+  activation. Measured with the installed build before this change: about 350 ms less per command
+  through the native launcher. The new installation path was not exercised by a real install.
+- Provider manual: installation and the re-check behind `requireAttested` now hold a file lock beside
+  the manual directory. Each agent connection is a separate process that may install the manual at
+  startup, and a replacement briefly leaves no directory in place; two workspace tests failed once
+  with `MANUAL_ATTESTATION_REQUIRED:MANUAL_MISSING` under the new per-run isolated home. No test
+  drives two processes through this path; the evidence is the full suite passing again.
+- `collaboration status` tells a person when there is nothing to show; its machine output is unchanged.
+- The Claude provider binds a worktree and serves `ensure_session` and `get_next_action` over MCP from
+  the current source (driven by a script, not by Claude Code). Responses carried no
+  `workflow.payload`.
+- The developer profile was cleared of test residue: 2,299 workspace directories, 2,420 repository
+  records, and 256 registry entries, none of which belonged to a project that still exists.
+
+Evidence: `check` across all modules: coordination 111, mcp 120, mcp-contract 15, cli 83, link 111,
+project-record 24, relay 4 pass; workspace 476 with the two failures above, then 476 (1 skipped)
+passing after the manual lock, with `:workspace:check`. `go test ./...` passes in `bootstrap`.
+Installer `0.1.0-dev.cli-speed2-20261009` built, not installed.
+
+# 2026-10-09 — CLI speed, readable output, smaller workflow envelope, test isolation
+
+Measured on the installed `0.1.0-dev.installer-ui-20261006` build first: `synesis init` took 4.3–5.8 s
+and started 66 Git processes in sequence; every command paid about 640 ms before doing work; in
+SynesisTest73 `get_next_action` produced 53% of all tool-response characters, with each response
+repeating its whole result under `workflow.payload`.
+
+Changes, uncommitted:
+
+- Process runner: `ProcessCommandRunner` blocks on process launch and exit instead of polling every
+  25 ms. Timeout, interruption, and output-collection behaviour are unchanged.
+- Managed baseline: `init` now starts 40 Git processes. `ManagedPathPolicy.inspect` asks Git once for
+  tracked and once for ignored managed paths instead of once per path, and fails closed when either
+  query errors (previously an error read as "not tracked" / "not ignored").
+  `SemanticIndexFingerprint.capture` reads entries and flags from one `ls-files -v --stage -z` listing
+  and both index-mode settings from one `config --get-regexp` query. The post-reset check and recovery's
+  synchronized-state check call the new `indexTreeId` instead of a full capture, because they only
+  compared the tree. One of two back-to-back identical ownership inspections before the administrative
+  commit was removed. Managed worktree blobs are verified with one `ls-tree` and one `hash-object`.
+  Measured from the staged distribution: `init` 2.5 s (from 3.8 s on the same harness).
+- Known-project registry: a full registry now drops entries whose directory no longer exists before
+  refusing a new project. The bound itself is unchanged, and a registry full of present directories
+  still returns `REGISTRY_FULL` without rewriting the file.
+- Workflow envelope: `AgentWorkflowReducer` no longer copies the result into `workflow.payload`. The
+  facts remain once in the enclosing result. `workflow.recoveryDeadlineEpochMillis` is now written when
+  the result carries one; the provider manual already told agents to read it there, and it was
+  previously reachable only inside the removed copy. `finish_lane` responses shrink with it because
+  they embed the next-action result.
+- CLI output: on an interactive terminal the `KEY=VALUE` contract is shown as aligned labelled lines
+  with an outcome marker on `*_RESULT` facts. Pipes, files, hooks, and scripts keep the machine
+  contract by default; `--porcelain` or `SYNESIS_OUTPUT=porcelain` forces it and
+  `SYNESIS_OUTPUT=human` forces the readable form. Only lines passed through `Terminal.stdout` and
+  `Terminal.stderr` are presented; raw writers and `stdoutRaw` are untouched. Usage errors in the
+  readable form carry the parser's message and suggestions.
+- CLI help: root help groups commands by purpose and names agent-facing commands on one line; all 178
+  options that lacked a description have one; seven group commands gained `-h/--help`.
+- Tests: every `Test` task now runs with `LOCALAPPDATA`, the home directory variables, and `user.home`
+  pointed at `<java.io.tmpdir>/synesis-test-state/<module>` (override with `-PsynesisTestState`). Before
+  this, suites had filled the real registry with 256 dead paths and left about 2,300 workspaces and
+  2,400 repository records under the developer's profile; that existing residue was not removed.
+
+Evidence: full `test` across all modules under isolation, before the envelope and CLI changes:
+coordination 111, workspace 486 (1 skipped, 1 failure: `CodexManagedRuntimeHomeTest`, caused by the
+first isolation location being inside the project tree; relocated and re-run green), mcp 120,
+mcp-contract 15, cli 76, link 111, project-record 27, relay 4. After all changes: workspace 486 (1 skipped), mcp 120, and cli 83
+pass, as do `:workspace:check :cli:check :mcp:check -x test` and `repositoryHygieneCheck`. The real
+profile gained no workspaces across these runs. Source semantics only: installer
+`0.1.0-dev.cli-speed-20261009` was built but not installed, and no agent run exercised the smaller
+envelope.
+
+Found, not changed:
+
+- `GitProcessRunner` disables system and global Git configuration, so a checkout relying on
+  `core.autocrlf=true` from the Git for Windows system config can be reported as
+  `CONTROL_CHECKOUT_DIRTY` when Git's stat cache does not short-circuit the comparison. Reproduced once.
+- `SemanticIndexFingerprint` records paths tagged `H` (ordinary cached entries) as assume-unchanged;
+  the behaviour was preserved.
+- `provider install` reports `PROVIDER_INSTALL_RESULT=SUCCESS` even when worktree allocation fails
+  (`WORKTREE_BINDING_STATUS=FAILED`). Seen with a state root deep enough to exceed the Windows path
+  limit; with ordinary paths the Claude provider binds a worktree exactly as Codex does.
+- The script launcher (`cmd` to PowerShell to `cmd` to Java) costs about 350 ms more per command than
+  the existing native launcher used for MCP.
+- About 5,200 lines in 21 production files are unreachable from any entry point (provider process
+  supervision, the managed-Codex launcher chain, overlay reconciliation and key agreement, decision
+  search, reset recovery). Several correspond to accepted ADRs, so nothing was deleted.
+
 # 2026-10-06 — Windows installer: outcome, versions, and pre-install disclosure
 
 The native setup wizard keeps its 912x666 footprint, dark theme, and page flow. Changes:
