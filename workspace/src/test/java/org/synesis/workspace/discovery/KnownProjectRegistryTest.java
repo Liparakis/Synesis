@@ -185,6 +185,62 @@ final class KnownProjectRegistryTest {
         }
     }
 
+    @Test
+    void fullRegistryReclaimsVanishedDirectoriesBeforeRefusingALiveProject() throws Exception {
+        Path root = Files.createTempDirectory("synesis-known-project-full-");
+        try {
+            ProjectLocation location = new ProjectApplicationService().init(Files.createDirectories(root.resolve("live")), false).location();
+            Path survivor = Files.createDirectories(root.resolve("still-present"));
+            Path registryPath = root.resolve("state/registry.json");
+            writeFullRegistry(registryPath, index -> index == 0 ? survivor : root.resolve("vanished-" + index));
+            KnownProjectRegistry registry = new KnownProjectRegistry(registryPath);
+
+            registry.observe(location);
+
+            List<Path> remembered = registry.projects().stream().map(KnownProjectRegistry.ProjectView::path).toList();
+            assertEquals(Set.of(survivor, location.root()), Set.copyOf(remembered));
+        } finally {
+            delete(root);
+        }
+    }
+
+    @Test
+    void fullRegistryOfPresentDirectoriesStillRefusesAnotherProject() throws Exception {
+        Path root = Files.createTempDirectory("synesis-known-project-bound-");
+        try {
+            ProjectLocation location = new ProjectApplicationService().init(Files.createDirectories(root.resolve("live")), false).location();
+            Path present = Files.createDirectories(root.resolve("present"));
+            Path registryPath = root.resolve("state/registry.json");
+            writeFullRegistry(registryPath, index -> {
+                try {
+                    return Files.createDirectories(present.resolve(Integer.toString(index)));
+                } catch (java.io.IOException failure) {
+                    throw new java.io.UncheckedIOException(failure);
+                }
+            });
+            KnownProjectRegistry registry = new KnownProjectRegistry(registryPath);
+            String before = Files.readString(registryPath, StandardCharsets.UTF_8);
+
+            KnownProjectRegistry.RegistryException refused = org.junit.jupiter.api.Assertions.assertThrows(KnownProjectRegistry.RegistryException.class, () -> registry.observe(location));
+
+            assertEquals("REGISTRY_FULL", refused.code());
+            assertEquals(before, Files.readString(registryPath, StandardCharsets.UTF_8));
+        } finally {
+            delete(root);
+        }
+    }
+
+    private static void writeFullRegistry(Path registryPath, java.util.function.IntFunction<Path> pathForIndex) throws Exception {
+        StringBuilder json = new StringBuilder("{\"schemaVersion\":1,\"projects\":[");
+        for (int index = 0; index < KnownProjectRegistry.MAX_PROJECTS; index++) {
+            String path = pathForIndex.apply(index).toAbsolutePath().normalize().toString().replace("\\", "\\\\");
+            json.append(index == 0 ? "" : ",").append("{\"projectId\":\"").append(new UUID(7L, index)).append("\",\"path\":\"").append(path)
+                    .append("\",\"createdAt\":\"2026-01-01T00:00:00Z\",\"firstObservedAt\":\"2026-01-01T00:00:00Z\",\"lastObservedAt\":\"2026-01-01T00:00:00Z\"}");
+        }
+        Files.createDirectories(registryPath.getParent());
+        Files.writeString(registryPath, json.append("]}").toString(), StandardCharsets.UTF_8);
+    }
+
     private static void delete(Path root) throws Exception {
         if (root == null || Files.notExists(root)) {
             return;

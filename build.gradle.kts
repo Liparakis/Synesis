@@ -125,3 +125,30 @@ tasks.register<RepositoryHygieneTask>("repositoryHygieneCheck") {
     })
     scriptsDirectory.set(layout.projectDirectory.dir("scripts"))
 }
+
+// Tests initialize real projects, provider sessions, and worktrees. Point every
+// per-user state root at a disposable directory so a suite run can never fill
+// the developer's known-project registry or leave workspaces in their profile.
+// The directory lives under the system temporary directory rather than the build
+// directory because Synesis state is by contract outside the project it serves,
+// and tests assert that.
+subprojects {
+    tasks.withType<Test>().configureEach {
+        val stateRoot = providers.gradleProperty("synesisTestState").orNull?.takeIf { it.isNotBlank() }
+                ?: File(System.getProperty("java.io.tmpdir"), "synesis-test-state").absolutePath
+        val testState = File(stateRoot, project.name)
+        val testHome = testState.resolve("home")
+        val testLocalAppData = testState.resolve("local")
+        environment("USERPROFILE", testHome.absolutePath)
+        environment("HOME", testHome.absolutePath)
+        environment("LOCALAPPDATA", testLocalAppData.absolutePath)
+        environment("APPDATA", testHome.resolve("AppData/Roaming").absolutePath)
+        environment("XDG_STATE_HOME", testHome.resolve(".local/state").absolutePath)
+        environment("XDG_DATA_HOME", testHome.resolve(".local/share").absolutePath)
+        systemProperty("user.home", testHome.absolutePath)
+        doFirst {
+            testState.deleteRecursively()
+            check(testHome.mkdirs() && testLocalAppData.mkdirs()) { "Unable to create isolated test state: $testState" }
+        }
+    }
+}

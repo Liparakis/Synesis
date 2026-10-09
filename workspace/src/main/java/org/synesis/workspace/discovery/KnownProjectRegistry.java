@@ -129,6 +129,13 @@ public final class KnownProjectRegistry {
             }
             if (byIdentityAndPath == null) {
                 if (entries.size() >= MAX_PROJECTS) {
+                    // The bound exists to cap the document, not to remember deleted
+                    // projects forever: a full registry of vanished directories must
+                    // not refuse a live one. Entries are only reclaimed under pressure
+                    // so a briefly unmounted project is not forgotten casually.
+                    entries.removeIf(entry -> !Files.isDirectory(entry.path()));
+                }
+                if (entries.size() >= MAX_PROJECTS) {
                     throw new RegistryException("REGISTRY_FULL", "known project limit reached");
                 }
                 entries.add(new Entry(validated.projectId(), root, validated.createdAt(), observedAt, observedAt));
