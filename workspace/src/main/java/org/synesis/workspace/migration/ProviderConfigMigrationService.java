@@ -196,14 +196,6 @@ public final class ProviderConfigMigrationService {
         return (Files.isRegularFile(nativeMcp) ? nativeMcp : bin.resolve(windows ? "synesis.cmd" : "synesis")).toAbsolutePath().normalize();
     }
 
-    private static boolean isReparsePoint(Path path) {
-        try {
-            return Boolean.TRUE.equals(Files.getAttribute(path, "dos:reparsePoint"));
-        } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
-            return false;
-        }
-    }
-
     /**
      * Inspects the supported providers without changing files.
      *

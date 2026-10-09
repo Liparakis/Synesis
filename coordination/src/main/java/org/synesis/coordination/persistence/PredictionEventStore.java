@@ -332,15 +332,6 @@ public final class PredictionEventStore {
     }
 
     /**
-     * Returns the current project sequence with its domain identity type.
-     *
-     * @return typed event sequence at the current log head
-     */
-    public synchronized EventSequence headSequenceIdentity() {
-        return new EventSequence(headSequence());
-    }
-
-    /**
      * Reports whether an optimistic envelope issued at {@code revision} still describes this log.
      *
      * <p>Completion envelopes are fenced by the revision at which they were projected. Every MCP

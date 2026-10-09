@@ -407,18 +407,6 @@ public final class ProjectCommandNamespace implements AutoCloseable {
     }
 
     /**
-     * Acquires one published permanent worktree lock object.
-     *
-     * @param worktreeLocator bounded physical-worktree locator
-     * @return held permanent lock
-     * @throws IOException if the lock cannot be acquired
-     */
-    @SuppressWarnings("unused")
-    public CommandPermanentLock openWorktreeLock(String worktreeLocator) throws IOException {
-        return CommandPermanentLock.open(worktreeLockPath(worktreeLocator));
-    }
-
-    /**
      * Publishes verified scope metadata and creates its bounded record directories.
      *
      * @param identity verified physical-worktree identity

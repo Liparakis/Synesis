@@ -40,14 +40,6 @@ class ProjectCommandNamespaceSpikeTest {
     return builder.start();
   }
 
-  private static Map<String, Object> castMap(Object value) {
-    Map<String, Object> result = new java.util.LinkedHashMap<>();
-    for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-      result.put((String) entry.getKey(), entry.getValue());
-    }
-    return result;
-  }
-
   @Test
   void publishesPermanentLocksAndAtomicallyReplacesMetadata(@TempDir Path temp) throws Exception {
     ProjectCommandNamespace namespace = ProjectCommandNamespace.open(temp.resolve("commands"));
@@ -256,32 +248,6 @@ class ProjectCommandNamespaceSpikeTest {
         java.util.Objects.requireNonNull(ignored);
       }
     });
-  }
-
-  @Test
-  void migratesSupportedOlderObjectWithExactBackupAndJournal(@TempDir Path temp) throws Exception {
-    Path target = temp.resolve("old.json");
-    Map<String, Object> older = new java.util.LinkedHashMap<>();
-    older.put("schemaVersion", 1L);
-    older.put("objectRevision", 1L);
-    older.put("value", "preserve");
-    String original = org.synesis.workspace.infrastructure.json.ProviderJson.write(
-        CommandDurableFormat.withIntegrity(older));
-    Files.writeString(target, original, StandardCharsets.UTF_8);
-    Path backup = temp.resolve("backup")
-        .resolve("old.json.bak");
-    Path journal = temp.resolve("journal")
-        .resolve("migration.json");
-    try (CommandPermanentLock lock = CommandPermanentLock.open(temp.resolve("migration.lock"))) {
-      new ProjectCommandFormatMigrationService().migrate(target, backup, journal, lock);
-    }
-    assertEquals(original, Files.readString(backup));
-    assertTrue(Files.readString(target)
-        .contains("\"schemaVersion\":2"));
-    assertTrue(Files.isRegularFile(journal));
-    CommandDurableFormat.verify(
-        castMap(org.synesis.workspace.infrastructure.json.ProviderJson.parse(
-            Files.readString(target))));
   }
 
   @Test

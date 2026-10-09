@@ -17,31 +17,6 @@ import org.synesis.coordination.exception.CoordinationNullException;
 public record ClaimConflict(String participant, String intentId, ResourceSelector selector, UUID ownerAuthorityLineageId) {
 
     /**
-     * Retains the prior untyped conflict constructor for legacy callers.
-     *
-     * @param participant conflicting participant identifier
-     * @param intentId conflicting intent identifier
-     * @param selector requested selector that conflicts
-     */
-    public ClaimConflict(String participant, String intentId, ResourceSelector selector) {
-        this(participant, intentId, selector, null);
-    }
-
-    /**
-     * Creates a conflict using typed participant and intent identities.
-     *
-     * @param participant conflicting participant
-     * @param intentId    conflicting intent
-     * @param selector    conflicting selector
-     */
-    public ClaimConflict(ParticipantId participant, WorkIntentId intentId, ResourceSelector selector) {
-        this(CoordinationNullException.requireNonNull(participant, "participant").value(),
-                CoordinationNullException.requireNonNull(intentId, "intent ID").value().toString(),
-                CoordinationNullException.requireNonNull(selector, "selector"),
-                null);
-    }
-
-    /**
      * Creates a conflict carrying the exact lineage of its current owner intent.
      *
      * @param ownerIntent active owner intent for the conflicting claim

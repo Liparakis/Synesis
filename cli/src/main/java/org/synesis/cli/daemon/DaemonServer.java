@@ -485,10 +485,6 @@ final class DaemonServer implements AutoCloseable {
         return value.regionMatches(true, 0, "synesis://answer/", 0, "synesis://answer/".length());
     }
 
-    private static boolean isJoin(String value) {
-        return value.regionMatches(true, 0, "synesis://join/", 0, "synesis://join/".length());
-    }
-
     private static void validateUriShape(String uriValue) throws IOException {
         URI uri;
         try {

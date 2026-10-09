@@ -59,16 +59,4 @@ public record ProjectCommandSpec(List<String> argv, String workingDirectory, int
             throw new IllegalArgumentException("timeoutSeconds must be between 1 and " + MAX_TIMEOUT_SECONDS);
         }
     }
-
-    /**
-     * Creates a command specification using the default validation timeout.
-     *
-     * @param argv             direct executable and arguments
-     * @param workingDirectory project-relative directory, or {@code null}
-     * @return validated command specification
-     */
-    @SuppressWarnings("unused")
-    public static ProjectCommandSpec withDefaultTimeout(List<String> argv, String workingDirectory) {
-        return new ProjectCommandSpec(argv, workingDirectory, DEFAULT_TIMEOUT_SECONDS);
-    }
 }

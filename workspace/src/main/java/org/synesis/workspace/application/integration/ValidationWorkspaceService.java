@@ -3,10 +3,7 @@ package org.synesis.workspace.application.integration;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
@@ -210,49 +207,5 @@ public final class ValidationWorkspaceService {
         } catch (IOException ignored) {
             // Best-effort cleanup; diagnostics will surface abandoned worktrees
         }
-    }
-
-    /**
-     * Finds an existing validation worktree for a given handle and revision, if one was previously
-     * created.
-     *
-     * @param projectRoot    absolute project root path
-     * @param handle         capability request handle
-     * @param revisionNumber implementation revision number
-     * @return path to the existing validation worktree, or empty if not found
-     */
-    @SuppressWarnings("unused")
-    public Optional<Path> findExistingWorktree(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber) {
-        Objects.requireNonNull(projectRoot, "projectRoot");
-        Objects.requireNonNull(handle, "handle");
-        String token = extractToken(handle);
-        String worktreeName = token + "-r" + revisionNumber;
-        Path candidate = resolveValidationRoot(projectRoot).resolve(worktreeName);
-        if (Files.exists(candidate) && Files.isDirectory(candidate)) {
-            return Optional.of(candidate.toAbsolutePath().normalize());
-        }
-        return Optional.empty();
-    }
-
-    /**
-     * Discovers all abandoned validation worktrees under the external validation root. Used for
-     * diagnostics and restart cleanup.
-     *
-     * @param projectRoot absolute project root path
-     * @return list of absolute paths to candidate abandoned validation worktrees
-     */
-    @SuppressWarnings("unused")
-    public List<Path> discoverAbandonedWorktrees(Path projectRoot) {
-        Objects.requireNonNull(projectRoot, "projectRoot");
-        Path validationRoot = resolveValidationRoot(projectRoot);
-        if (!Files.isDirectory(validationRoot)) {
-            return List.of();
-        }
-        List<Path> result = new ArrayList<>();
-        try (var stream = Files.list(validationRoot)) {
-            stream.filter(Files::isDirectory).forEach(result::add);
-        } catch (IOException ignored) {
-        }
-        return List.copyOf(result);
     }
 }

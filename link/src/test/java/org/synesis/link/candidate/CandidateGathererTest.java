@@ -21,7 +21,8 @@ final class CandidateGathererTest {
   void oneProviderFailureDoesNotSuppressAnotherProvider() throws Exception {
     Candidate candidate = new Candidate(CandidateType.MANUAL,
         InetAddress.getByName("192.0.2.9"), 4433, 1);
-    CandidateProvider good = new ManualCandidateProvider("good", List.of(candidate));
+    CandidateProvider good = new StubProvider("good",
+        CompletableFuture.completedFuture(List.of(candidate)));
     CandidateProvider bad = new StubProvider("bad", CompletableFuture.failedFuture(
         new IllegalStateException("not safe to log")));
 

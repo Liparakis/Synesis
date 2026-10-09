@@ -406,15 +406,6 @@ public final class TraversalAnswer {
   }
 
   /**
-   * Returns a copy of the responder public key.
-   *
-   * @return responder public key copy
-   */
-  public byte[] responderPublicKeyEncoded() {
-    return responderPublicKey.clone();
-  }
-
-  /**
    * Returns the inclusive validity start.
    *
    * @return inclusive validity start

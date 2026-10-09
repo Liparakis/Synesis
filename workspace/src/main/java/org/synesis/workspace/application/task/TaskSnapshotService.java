@@ -45,15 +45,6 @@ public final class TaskSnapshotService {
     }
 
     /**
-     * Creates a service with an explicit artifact policy. *
-     *
-     * @param artifactPolicy snapshot artifact policy
-     */
-    public TaskSnapshotService(SnapshotArtifactPolicy artifactPolicy) {
-        this(artifactPolicy, new org.synesis.workspace.lifecycle.RepositoryPortabilityService());
-    }
-
-    /**
      * Creates a service with explicit artifact and portability policies.
      *
      * @param artifactPolicy     snapshot artifact policy

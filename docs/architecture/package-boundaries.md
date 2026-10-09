@@ -93,12 +93,12 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.application.control`: `ControlBranchAdvancementService`
 - `org.synesis.workspace.application.guardrail`: `ActionCheckResult`, `GuardrailApplicationService`
 - `org.synesis.workspace.application.hook`: `HookApplicationService`
-- `org.synesis.workspace.application.integration`: `ImplementationPublicationService`, `ImplementationSnapshotService`, `ImplementationValidationService`, `IntegrationCompatibilityService`, `IntegrationOrchestrationService`, `IntegrationWorkspaceService`, `ValidationWorkspaceService`, `WorkspaceIntegrationReadinessService`
+- `org.synesis.workspace.application.integration`: `ImplementationPublicationService`, `ImplementationValidationService`, `IntegrationCompatibilityService`, `IntegrationOrchestrationService`, `IntegrationWorkspaceService`, `ValidationWorkspaceService`, `WorkspaceIntegrationReadinessService`
 - `org.synesis.workspace.application.project`: `ProjectCommandAdmissionService`, `ProjectCommandService`, `ProjectCommandSpec`, `ProjectCreateResult`, `ProjectIdentity`, `ProjectInitResult`, `ProjectInitStatus`, `ProjectLocation`
 - `org.synesis.workspace.application.project.execution`: `ExecutionRequest`, `ExecutionResult`, `ProjectProcessExecutor`, `StartedProcessIdentity`
-- `org.synesis.workspace.application.provider`: `ProviderApplicationService`, `ProviderManualService`, `ProviderMcpConfigurationService`, `ProviderSessionBindingService`, `ProviderSupervisionService`
+- `org.synesis.workspace.application.provider`: `ProviderApplicationService`, `ProviderManualService`, `ProviderMcpConfigurationService`, `ProviderSessionBindingService`
 - `org.synesis.workspace.application.provider.continuity`: `ManagedAttachmentRecord`, `ManagedAttachmentService`, `ManagedAttachmentStore`, `ManagedRuntimeDeathReceipt`, `ManagedRuntimeDeathReceiptStore`, `ProviderContinuityMode`, `ProviderThreadOwnershipRecord`, `ProviderThreadOwnershipStore`, `RuntimeAuthenticator`
-- `org.synesis.workspace.application.provider.session`: `ProviderSessionCommand`, `ProviderSessionTerminalizationService`, `SessionAuthorityResolver`
+- `org.synesis.workspace.application.provider.session`: `ProviderSessionTerminalizationService`, `SessionAuthorityResolver`
 - `org.synesis.workspace.application.sync`: `ProjectContextExchange`, `SyncApplicationService`
 - `org.synesis.workspace.application.task`: `SnapshotArtifactPolicy`, `TaskSnapshotService`
 - `org.synesis.workspace.application.workspace`: `ReadinessResult`, `WorkspaceReadinessService`
@@ -109,7 +109,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.infrastructure.filesystem`: `AtomicFiles`, `ProjectMetadataStorage`, `TextFileDocument`
 - `org.synesis.workspace.infrastructure.json`: `ProviderJson`
 - `org.synesis.workspace.infrastructure.process`: `ProcessEvidenceState`, `ProcessInspector`
-- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `PlanIntegrity`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`, `ResetRecoveryService`
+- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `PlanIntegrity`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`
 - `org.synesis.workspace.lifecycle.cleanup.execution`: `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `CleanupExecutionLock`, `CleanupExecutionRecord`, `CleanupExecutionService`, `LifecycleQuarantineService`
 - `org.synesis.workspace.lifecycle.cleanup.inventory`: `LifecycleInventoryService`, `LifecyclePathVerifier`, `LifecycleResourceFingerprint`, `LifecycleResourceType`
 - `org.synesis.workspace.lifecycle.cleanup.plan`: `CleanupClassification`, `CleanupEligibilityService`, `CleanupPlan`, `CleanupPlanEntry`, `CleanupPlanService`, `CleanupPlanStore`, `CleanupReason`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `RetentionPolicy`
@@ -118,7 +118,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.lifecycle.codex.protocol`: `BoundedProtocolFrameReader`, `CodexAppServerProtocolClient`, `CodexAppServerProtocolSchema`, `LifecycleControlRequestEnvelope`
 - `org.synesis.workspace.lifecycle.codex.runtime`: `CodexManagedAuthentication`, `CodexManagedRuntimeHome`, `ManagedCodexRuntimeMode`, `ManagedCodexThreadBroker`
 - `org.synesis.workspace.lifecycle.codex.state`: `CodexEvidenceJournal`, `CodexEvidenceRetention`, `CodexLifecycleStateStore`, `LifecycleIdempotencyLedger`
-- `org.synesis.workspace.lifecycle.command`: `CommandDurableFormat`, `CommandFormatException`, `CommandPermanentLock`, `PhysicalWorktreeIdentity`, `ProjectCommandAuthoritySnapshot`, `ProjectCommandCanonicalizer`, `ProjectCommandDiagnostics`, `ProjectCommandFormatMigrationService`, `ProjectCommandMaintenanceService`, `ProjectCommandNamespace`, `ProjectCommandPhase`, `ProjectCommandProcessAnchor`, `ProjectCommandProtectionService`, `ProjectCommandRecord`, `ProjectCommandStore`, `ProjectCommandTerminalResolution`
+- `org.synesis.workspace.lifecycle.command`: `CommandDurableFormat`, `CommandFormatException`, `CommandPermanentLock`, `PhysicalWorktreeIdentity`, `ProjectCommandAuthoritySnapshot`, `ProjectCommandCanonicalizer`, `ProjectCommandDiagnostics`, `ProjectCommandMaintenanceService`, `ProjectCommandNamespace`, `ProjectCommandPhase`, `ProjectCommandProcessAnchor`, `ProjectCommandProtectionService`, `ProjectCommandRecord`, `ProjectCommandStore`, `ProjectCommandTerminalResolution`
 - `org.synesis.workspace.lifecycle.lease`: `SessionLeasePolicy`, `SessionLeaseRecord`, `SessionLeaseService`, `SessionLeaseState`, `SessionLeaseStore`, `SessionProcessIdentity`
 - `org.synesis.workspace.lifecycle.process`: `GitProcessRunner`, `ProcessCommandRunner`, `SemanticIndexFingerprint`
 - `org.synesis.workspace.lifecycle.reconciliation`: `ReconciliationAction`, `ReconciliationExecutionJournal`, `ReconciliationExecutionLock`, `ReconciliationExecutionRecord`, `ReconciliationPlan`, `ReconciliationPlanEntry`, `ReconciliationPlanStore`, `ReconciliationService`
@@ -126,7 +126,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.lifecycle.repair`: `RepairAction`, `RepairBackupService`, `RepairExecutionJournal`, `RepairExecutionLock`, `RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`, `RepairService`
 - `org.synesis.workspace.migration`: `PostMigrationReplayVerifier`, `ProjectMigrationRestorationService`, `ProjectMigrationService`, `ProviderConfigMigrationService`
 - `org.synesis.workspace.project`: `ActionGuardrail`, `ProjectPathResolver`
-- `org.synesis.workspace.provider`: `ProviderIntegration`, `ProviderMcpEvidenceTier`, `ProviderProcessSupervisor`, `ProviderRegistry`, `ProviderSupportLevel`
+- `org.synesis.workspace.provider`: `ProviderIntegration`, `ProviderMcpEvidenceTier`, `ProviderRegistry`, `ProviderSupportLevel`
 - `org.synesis.workspace.provider.claude`: `ClaudeCodeHookAdapter`, `ClaudeCodeProviderIntegration`
 - `org.synesis.workspace.provider.codex`: `CodexApplyPatchParser`, `CodexHookAdapter`, `CodexNativePatchRouter`, `CodexProviderIntegration`, `CodexTomlConfiguration`
 - `org.synesis.workspace.transport.control`: `ControlPlaneEventHub`, `ControlPlaneHttpHandler`, `ControlPlaneLinkOperations`, `ControlPlaneReadModel`, `Event`, `LinkRuntimeOwner`, `OnboardingControlPlaneOperations`
@@ -140,7 +140,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.application.agent.completion`: `TaskCancellationTest`
 - `org.synesis.workspace.application.agent.session`: `AgentSessionServiceTest`
 - `org.synesis.workspace.application.agent.workflow`: `AgentTaskCompletionReviewPolicyTest`, `ReviewAdmissionOrderIndependenceTest`, `SessionTerminalStateUnavailableTest`
-- `org.synesis.workspace.application.integration`: `ImplementationPublicationTest`, `IntegrationCompatibilityServiceTest`, `IntegrationOrchestrationServiceTest`, `IntegrationQueueTest`, `ValidationWorkspaceTest`
+- `org.synesis.workspace.application.integration`: `IntegrationCompatibilityServiceTest`, `IntegrationOrchestrationServiceTest`, `IntegrationQueueTest`, `ValidationWorkspaceTest`
 - `org.synesis.workspace.application.project.execution`: `ProjectProcessExecutorTest`
 - `org.synesis.workspace.application.provider`: `ProviderManualServiceTest`, `ProviderSessionTerminalizationServiceTest`
 - `org.synesis.workspace.application.provider.continuity`: `ManagedAttachmentServiceTest`, `ProviderThreadOwnershipStoreTest`
@@ -153,7 +153,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.infrastructure.filesystem`: `ProjectMetadataStorageTest`, `TextFileDocumentTest`
 - `org.synesis.workspace.infrastructure.json`: `ProviderJsonTest`
 - `org.synesis.workspace.infrastructure.process`: `ProcessInspectorTest`
-- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocatorTest`, `ManagedBaselineTransactionServiceTest`, `ManagedPathPolicyTest`, `PlanIntegrityTest`, `RepositoryPortabilityServiceTest`, `ResetRecoveryServiceTest`
+- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocatorTest`, `ManagedBaselineTransactionServiceTest`, `ManagedPathPolicyTest`, `PlanIntegrityTest`, `RepositoryPortabilityServiceTest`
 - `org.synesis.workspace.lifecycle.cleanup`: `NoForceAndSafetyArchitectureTest`, `ValidationAndIntegrationCleanupTest`
 - `org.synesis.workspace.lifecycle.cleanup.execution`: `JournalAndRestartTest`, `LockAndConcurrencyTest`, `QuarantineTest`, `TemporaryFileCleanupTest`, `WorkerCleanupTest`
 - `org.synesis.workspace.lifecycle.cleanup.inventory`: `LifecyclePathVerifierTest`
@@ -169,7 +169,6 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.lifecycle.recovery`: `RecoverySnapshotServiceTest`
 - `org.synesis.workspace.lifecycle.repair`: `RepairPlanTest`
 - `org.synesis.workspace.migration`: `PostMigrationReplayVerifierTest`, `ProjectMigrationRestorationServiceTest`, `ProjectMigrationServiceTest`, `ProviderConfigMigrationServiceTest`
-- `org.synesis.workspace.provider`: `ProviderProcessSupervisorTest`
 - `org.synesis.workspace.provider.claude`: `ClaudeCodeHookAdapterTest`
 - `org.synesis.workspace.provider.codex`: `CodexApplyPatchParserTest`, `CodexHookAdapterTest`, `CodexHookPerformanceTest`
 - `org.synesis.workspace.test`: `PortableTestCommand`, `PortableTestProcess`, `ProviderTestSupport`, `TestGit`

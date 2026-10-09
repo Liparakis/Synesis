@@ -103,16 +103,6 @@ public final class PeerSession {
   }
 
   /**
-   * Returns a copy of the authenticated remote X.509 public key.
-   *
-   * @return remote public-key bytes
-   */
-  @SuppressWarnings("unused")
-  public byte[] remotePublicKeyEncoded() {
-    return remotePublicKey.clone();
-  }
-
-  /**
    * Returns the unique session ID.
    *
    * @return session ID

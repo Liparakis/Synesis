@@ -1018,20 +1018,6 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
-     * Returns whether the session owns the target or no collaboration protocol is active.
-     *
-     * @param projectRoot          project root
-     * @param provider             provider
-     * @param connectionInstanceId connection ID
-     * @param relativePath         repository-relative target
-     * @return authorization decision
-     */
-    @SuppressWarnings("unused")
-    public boolean permitsMutation(Path projectRoot, String provider, String connectionInstanceId, String relativePath) {
-        return "allowed".equals(mutationReason(projectRoot, provider, connectionInstanceId, relativePath));
-    }
-
-    /**
      * Returns a stable mutation authorization classification.
      *
      * @param projectRoot          project root

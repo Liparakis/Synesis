@@ -19,8 +19,6 @@ import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,7 +29,6 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
-import org.synesis.workspace.lifecycle.command.ProjectCommandMaintenanceService;
 
 /**
  * Execution engine for executing reviewed cleanup plans safely with strict precondition
@@ -464,22 +461,6 @@ public final class CleanupExecutionService {
                     resultStatus,
                     Collections.unmodifiableList(records));
         }
-    }
-
-    /**
-     * Executes the command-namespace terminal retention step through the existing cleanup entry
-     * point.
-     *
-     * @param namespaceRoot host-wide command namespace root
-     * @param anchorId      dead process anchor to review and compact
-     * @param now           retention clock value
-     * @param retention     required diagnostic retention interval
-     * @return compacted terminal-history result
-     * @throws IOException if command state is live, blocking, pinned, corrupt, or unsupported
-     */
-    @SuppressWarnings("unused")
-    public ProjectCommandMaintenanceService.CleanupResult cleanupDeadCommandAnchor(Path namespaceRoot, String anchorId, Instant now, Duration retention) throws IOException {
-        return new ProjectCommandMaintenanceService().cleanupDeadAnchor(namespaceRoot, anchorId, now, retention);
     }
 
     /**

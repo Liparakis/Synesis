@@ -159,29 +159,6 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
     }
 
     /**
-     * Constructs a node-only payload with an explicit authority lineage.
-     *
-     * @param handle             request handle
-     * @param capability         capability identifier
-     * @param requesterNodeId    requester node
-     * @param ownerNodeId        owner node
-     * @param authorityLineageId durable authority lineage
-     * @param contract           capability contract
-     * @param state              lifecycle state
-     * @param reason             optional reason
-     */
-    public CapabilityRequestPayload(CapabilityRequestHandle handle,
-            String capability,
-            String requesterNodeId,
-            String ownerNodeId,
-            UUID authorityLineageId,
-            CapabilityContract contract,
-            CapabilityLifecycleState state,
-            String reason) {
-        this(handle, capability, requesterNodeId, ownerNodeId, authorityLineageId, contract, state, reason, -1);
-    }
-
-    /**
      * Constructs a node-only payload with an explicit authority lineage and contract revision fence.
      *
      * @param handle public request handle

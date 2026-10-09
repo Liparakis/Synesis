@@ -5,7 +5,6 @@ import java.util.UUID;
 import org.synesis.coordination.domain.identity.AuthorityLineageId;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
-import org.synesis.coordination.domain.identity.EventSequence;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.ProviderId;
 import org.synesis.coordination.domain.identity.ProviderSessionId;
@@ -146,15 +145,6 @@ public record NoChangeCompletion(UUID intentId, UUID workGroupId, String partici
      */
     public WorkGroupVersion workGroupVersionIdentity() {
         return new WorkGroupVersion(workGroupVersion);
-    }
-
-    /**
-     * Returns the project event revision observed before appending this completion.
-     *
-     * @return the project event revision observed before appending this completion.
-     */
-    public EventSequence expectedRevisionIdentity() {
-        return new EventSequence(expectedRevision);
     }
 
     /**

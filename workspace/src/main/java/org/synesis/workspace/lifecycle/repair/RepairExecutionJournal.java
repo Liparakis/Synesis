@@ -5,10 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -70,39 +67,6 @@ public final class RepairExecutionJournal {
 
         String jsonLine = ProviderJson.write(map) + "\n";
         Files.writeString(journalFile, jsonLine, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
-    }
-
-    /**
-     * Reads all historical execution records from journal file.
-     *
-     * @return list of execution records
-     * @throws IOException if reading fails
-     */
-    @SuppressWarnings("unused")
-    public synchronized List<RepairExecutionRecord> readAll() throws IOException {
-        if (!Files.exists(journalFile)) {
-            return List.of();
-        }
-
-        List<String> lines = Files.readAllLines(journalFile, StandardCharsets.UTF_8);
-        List<RepairExecutionRecord> result = new ArrayList<>();
-
-        for (String line : lines) {
-            if (line.isBlank()) {
-                continue;
-            }
-            @SuppressWarnings("unchecked") Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(line);
-            result.add(new RepairExecutionRecord((String) map.get("executionId"),
-                    (String) map.get("planId"),
-                    (String) map.get("entryId"),
-                    (String) map.get("action"),
-                    (String) map.get("targetPath"),
-                    (String) map.get("status"),
-                    ((Number) map.get("timestampEpochMillis")).longValue(),
-                    (String) map.get("details")));
-        }
-
-        return Collections.unmodifiableList(result);
     }
 
     /**

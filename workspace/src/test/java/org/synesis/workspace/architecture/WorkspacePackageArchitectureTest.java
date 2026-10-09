@@ -134,7 +134,6 @@ class WorkspacePackageArchitectureTest {
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/http/CodexLifecycleHttpAdapter.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/state/CodexLifecycleStateStore.java")));
     assertTrue(Files.isRegularFile(sources.resolve("lifecycle/codex/runtime/CodexManagedRuntimeHome.java")));
-    assertTrue(Files.isRegularFile(sources.resolve("application/provider/session/ProviderSessionCommand.java")));
     assertTrue(Files.isRegularFile(sources.resolve("application/project/execution/ProjectProcessExecutor.java")));
     assertTrue(Files.isRegularFile(sources.resolve("application/workspace/read/WorkspaceReadService.java")));
     assertTrue(Files.isRegularFile(sources.resolve("application/workspace/mutation/WorkspacePatchService.java")));

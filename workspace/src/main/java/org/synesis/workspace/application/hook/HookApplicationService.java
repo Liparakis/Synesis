@@ -71,15 +71,6 @@ public final class HookApplicationService {
         return null;
     }
 
-    private static Path workspacePath(String json, Path fallback) {
-        Map<String, Object> value = object(ProviderJson.parse(json));
-        Object paths = value == null ? null : value.get("workspacePaths");
-        if (paths instanceof java.util.List<?> list && !list.isEmpty() && list.getFirst() instanceof String path && !path.isBlank()) {
-            return Path.of(path);
-        }
-        return fallback;
-    }
-
     private static Path controlRoot(Path cwd) throws Exception {
         Path current = Objects.requireNonNull(cwd, "cwd").toAbsolutePath().normalize();
         while (current != null) {
