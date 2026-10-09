@@ -1521,7 +1521,7 @@ func syncStableMcpLauncher(paths installPaths, payload string) error {
 		return fmt.Errorf("read bundled MCP launcher: %w", err)
 	}
 	target := filepath.Join(paths.bin, mcpLauncherName())
-	if err := atomicWrite(target, data); err != nil {
+	if err := installStableLauncher(target, data); err != nil {
 		return err
 	}
 	if runtime.GOOS != "windows" {
@@ -1529,6 +1529,53 @@ func syncStableMcpLauncher(paths installPaths, payload string) error {
 	}
 	return syncStableCommandLauncher(paths, data)
 }
+
+// installStableLauncher writes a native launcher under a stable name.
+//
+// A provider keeps its MCP server running for as long as a session is open, and
+// Windows will not write over an open image, so updating with any session open
+// used to fail the whole installation. Windows does let an open image be
+// renamed: the launcher in use is moved aside and the new one takes its name.
+// Running servers keep the image they started from, and the next one starts
+// from the new launcher. A copy moved aside is removed by a later
+// installation, once nothing holds it.
+func installStableLauncher(target string, launcher []byte) error {
+	if replaced, err := filepath.Glob(target + replacedLauncherSuffix + "*"); err == nil {
+		for _, stale := range replaced {
+			_ = os.Remove(stale)
+		}
+	}
+	if existing, err := os.ReadFile(target); err == nil && bytes.Equal(existing, launcher) {
+		return nil
+	}
+	writeErr := atomicWrite(target, launcher)
+	if writeErr == nil {
+		return nil
+	}
+	if info, err := os.Lstat(target); err != nil || !info.Mode().IsRegular() {
+		return writeErr
+	}
+	reserved, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+replacedLauncherSuffix)
+	if err != nil {
+		return writeErr
+	}
+	aside := reserved.Name()
+	reserved.Close()
+	if err := os.Rename(target, aside); err != nil {
+		_ = os.Remove(aside)
+		return writeErr
+	}
+	if err := atomicWrite(target, launcher); err != nil {
+		if restoreErr := os.Rename(aside, target); restoreErr != nil {
+			return fmt.Errorf("launcher replacement failed: %w; the previous launcher is at %s", err, aside)
+		}
+		return err
+	}
+	_ = os.Remove(aside)
+	return nil
+}
+
+const replacedLauncherSuffix = ".replaced-"
 
 // syncStableCommandLauncher installs the native launcher under the name people
 // type. Windows resolves synesis.exe ahead of synesis.cmd in the same
@@ -1543,14 +1590,11 @@ func syncStableMcpLauncher(paths installPaths, payload string) error {
 // otherwise valid activation.
 func syncStableCommandLauncher(paths installPaths, launcher []byte) error {
 	target := filepath.Join(paths.bin, "synesis.exe")
-	if existing, err := os.ReadFile(target); err == nil {
-		if bytes.Equal(existing, launcher) {
-			return nil
-		}
-		_ = atomicWrite(target, launcher)
+	if _, err := os.ReadFile(target); err == nil {
+		_ = installStableLauncher(target, launcher)
 		return nil
 	}
-	return atomicWrite(target, launcher)
+	return installStableLauncher(target, launcher)
 }
 
 // syncStableActivationLauncher copies the native, argv-safe activation helper
