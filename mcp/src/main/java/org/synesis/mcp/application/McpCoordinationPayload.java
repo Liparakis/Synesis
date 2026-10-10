@@ -3,13 +3,14 @@ package org.synesis.mcp.application;
 import static org.synesis.mcp.application.McpToolArguments.nullableStringList;
 import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
 import static org.synesis.mcp.application.McpToolArguments.optionalUuidArgument;
+import static org.synesis.mcp.application.McpToolArguments.strings;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 
 /**
@@ -18,7 +19,7 @@ import org.synesis.coordination.domain.collaboration.ReviewPolicy;
  *
  * <p>Kept apart from {@link McpProtocolHandler} so the accepted kinds, the allowed and required
  * fields, and the rejection codes form one inspectable schema rather than part of tool dispatch.
- * Normalization only derives dispatch fields from the payload; authorization stays with the
+ * Normalization only reads the payload into typed operations; authorization stays with the
  * application services.
  */
 final class McpCoordinationPayload {
@@ -28,14 +29,14 @@ final class McpCoordinationPayload {
     }
 
     /**
-     * Validates the strict coordination request schema and maps its operation to dispatch fields.
+     * Validates the strict coordination request schema and reads it into the operation its kind dispatches to.
      *
      * @param arguments top-level request_coordination arguments
-     * @return the payload fields plus the dispatch fields derived from the kind
+     * @return the typed operation the kind dispatches to
      * @throws IllegalArgumentException when the kind is unknown or the payload has a missing, extra, or inconsistent field
      */
     @SuppressWarnings({"unchecked"})
-    static Map<String, Object> normalizeStrictCoordination(Map<String, Object> arguments) {
+    static McpCoordinationRequest normalizeStrictCoordination(Map<String, Object> arguments) {
         Object kindValue = arguments.get("kind");
         Object payloadValue = arguments.get("payload");
         if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
@@ -93,75 +94,82 @@ final class McpCoordinationPayload {
             requireOptionalText(payload, "reviewedParticipantId");
             requireOptionalText(payload, "reviewerParticipant");
         }
-        Map<String, Object> normalized = new LinkedHashMap<>(payload);
-        normalized.remove("kind");
-        normalized.put("collaborationOperation", switch (kind) {
-            case "capability_request" -> "capability_request";
-            case "collaboration_status" -> "status";
-            case "contract_proposal" -> "publish";
-            case "contract_request", "scope_revision" -> "request_coordination";
-            case "handoff" -> "handoff";
-            case "work_group_join" -> payload.containsKey("grantId") ? "lane_grant_consume" : "request_coordination";
-            case "work_group_create" -> "work_group_create";
-            default -> kind;
-        });
-        if ("contract_proposal".equals(kind)) {
-            normalized.put("collaborationContractId", payload.get("contractId"));
-            normalized.put("collaborationBody", payload.get("body"));
-            normalized.put("collaborationSelectors", payload.getOrDefault("selectors", List.of()));
-        }
-        if ("capability_request".equals(kind)) {
-            if (!(payload.get("capability") instanceof String capability) || capability.isBlank()) {
-                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:capability");
-            }
-            normalized.put("capability", capability);
-        }
-        if ("work_group_join".equals(kind)) {
-            normalized.put("targetParticipant", payload.get("targetParticipant"));
-            if (!payload.containsKey("grantId")) {
-                normalized.put("collaborationIntentId", payload.get("intentId"));
-                normalized.put("collaborationRequestKind", "REVIEW");
-                normalized.put("collaborationProposal", payload.get("proposal"));
-            }
+        if ("capability_request".equals(kind) && (!(payload.get("capability") instanceof String capability) || capability.isBlank())) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:capability");
         }
         if ("work_group_create".equals(kind)) {
             validateReviewPolicyPayload(payload.get("reviewPolicy"));
-            normalized.put("collaborationGoal", payload.get("goal"));
-            normalized.put("collaborationAcceptance", payload.get("acceptance"));
-        }
-        if ("contract_request".equals(kind)) {
-            normalized.putIfAbsent("collaborationIntentId", payload.get("conflictingIntentId"));
-            normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
-            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
-        }
-        if ("scope_revision".equals(kind)) {
-            normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
-            normalized.putIfAbsent("collaborationRequestKind", "CONTRACT");
-            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
-        }
-        if ("handoff".equals(kind)) {
-            normalized.putIfAbsent("collaborationIntentId", payload.get("intentId"));
-            normalized.putIfAbsent("collaborationTarget", payload.get("targetParticipant"));
-            normalized.putIfAbsent("collaborationProposal", payload.getOrDefault("proposal", ""));
-        }
-        if ("continuation".equals(kind)) {
-            normalized.putIfAbsent("grantId", payload.get("grantId"));
-            normalized.putIfAbsent("collaborationSourceIntentId", payload.get("intentId"));
-            normalized.putIfAbsent("claimEpoch", payload.get("claimEpoch"));
         }
         requireTypedRequestFields(kind, payload);
-        return normalized;
+        return requestOf(kind, payload);
+    }
+
+    /**
+     * Reads a validated request payload into the operation its kind dispatches to.
+     *
+     * @param kind    validated request kind
+     * @param payload request payload that passed every schema check for {@code kind}
+     * @return the typed operation
+     * @throws IllegalArgumentException with {@code CAPABILITY_CONTRACT_INVALID} when a capability contract does not decode
+     */
+    private static McpCoordinationRequest requestOf(String kind, Map<String, Object> payload) {
+        return switch (kind) {
+            case "capability_request" -> {
+                CapabilityContract contract = parseContract(payload.get("contract"));
+                if (contract == null) {
+                    throw new IllegalArgumentException("CAPABILITY_CONTRACT_INVALID");
+                }
+                yield new McpCoordinationRequest.DescribeCapability(String.valueOf(payload.get("capability")),
+                        contract,
+                        payload.get("capabilityRequestHandle") instanceof String value ? value : null,
+                        payload.get("revisionResponse") instanceof String value ? value : null,
+                        payload.get("ownerAuthorityLineageId") instanceof String value ? value : null,
+                        payload.get("contractRevision") instanceof Number value ? value.longValue() : -1);
+            }
+            case "collaboration_status" -> new McpCoordinationRequest.Status();
+            case "contract_proposal" -> new McpCoordinationRequest.PublishContract(optionalUuidArgument(payload, "contractId"),
+                    String.valueOf(payload.get("body")),
+                    strings(payload.get("selectors")));
+            case "contract_request" -> new McpCoordinationRequest.OpenRequest(optionalUuidArgument(payload, "conflictingIntentId"),
+                    CoordinationRequest.Kind.CONTRACT,
+                    String.valueOf(payload.get("proposal")),
+                    null);
+            case "scope_revision" -> new McpCoordinationRequest.OpenRequest(optionalUuidArgument(payload, "intentId"),
+                    CoordinationRequest.Kind.CONTRACT,
+                    String.valueOf(payload.get("proposal")),
+                    null);
+            case "handoff" -> new McpCoordinationRequest.Handoff(optionalUuidArgument(payload, "intentId"),
+                    String.valueOf(payload.get("targetParticipant")),
+                    String.valueOf(payload.get("proposal")));
+            case "work_group_join" -> payload.containsKey("grantId")
+                    ? new McpCoordinationRequest.ConsumeLaneGrant(optionalUuidArgument(payload, "grantId"),
+                            optionalUuidArgument(payload, "intentId"),
+                            optionalLongArgument(payload, "claimEpoch", 1))
+                    : new McpCoordinationRequest.OpenRequest(optionalUuidArgument(payload, "intentId"),
+                            CoordinationRequest.Kind.REVIEW,
+                            String.valueOf(payload.get("proposal")),
+                            payload.get("snapshotId") instanceof String snapshotId ? snapshotId : null);
+            case "work_group_create" -> new McpCoordinationRequest.CreateWorkGroup(optionalUuidArgument(payload, "workGroupId"),
+                    String.valueOf(payload.get("goal")),
+                    String.valueOf(payload.get("acceptance")),
+                    payload.get("reviewPolicy"));
+            case "continuation" -> new McpCoordinationRequest.ContinueLane(
+                    payload.get("grantId") instanceof String blank && blank.isBlank() ? null : optionalUuidArgument(payload, "grantId"),
+                    optionalUuidArgument(payload, "intentId"),
+                    optionalLongArgument(payload, "claimEpoch", 1));
+            default -> throw new IllegalStateException("unvalidated coordination kind: " + kind);
+        };
     }
 
     /**
      * Validates the strict coordination-response schema before service invocation.
      *
      * @param arguments top-level respond_coordination arguments
-     * @return the validated {@code kind} and {@code payload}
+     * @return the typed operation the kind dispatches to
      * @throws IllegalArgumentException when the kind is unknown or the payload fails validation
      */
     @SuppressWarnings({"unchecked", "ExtractMethodRecommender"})
-    static Map<String, Object> normalizeStrictResponse(Map<String, Object> arguments) {
+    static McpCoordinationResponse normalizeStrictResponse(Map<String, Object> arguments) {
         Object kindValue = arguments.get("kind");
         Object payloadValue = arguments.get("payload");
         if (!(kindValue instanceof String kind) || !(payloadValue instanceof Map<?, ?> rawPayload)) {
@@ -230,10 +238,46 @@ final class McpCoordinationPayload {
             }
         }
         requireTypedResponseFields(kind, payload);
-        Map<String, Object> normalized = new LinkedHashMap<>();
-        normalized.put("kind", kind);
-        normalized.put("payload", payload);
-        return normalized;
+        return responseOf(kind, payload);
+    }
+
+    /**
+     * Reads a validated response payload into the operation its kind dispatches to.
+     *
+     * @param kind    validated response kind
+     * @param payload response payload that passed every schema check for {@code kind}
+     * @return the typed operation
+     * @throws IllegalArgumentException when {@code coordinationStatus} or {@code resolution} names no status
+     */
+    private static McpCoordinationResponse responseOf(String kind, Map<String, Object> payload) {
+        String reason = payload.get("reason") == null ? null : String.valueOf(payload.get("reason"));
+        return switch (kind) {
+            case "implementation_validation" -> new McpCoordinationResponse.ImplementationValidation(String.valueOf(payload.get("capabilityRequestHandle")),
+                    String.valueOf(payload.get("result")),
+                    reason,
+                    optionalLongArgument(payload, "implementationRevision", 1).intValue(),
+                    strings(payload.get("failedAcceptanceTests")));
+            case "review_validation" -> new McpCoordinationResponse.ReviewValidation(optionalUuidArgument(payload, "grantId"),
+                    String.valueOf(payload.get("snapshotId")),
+                    optionalUuidArgument(payload, "intentId"),
+                    optionalLongArgument(payload, "claimEpoch", 1),
+                    String.valueOf(payload.get("result")),
+                    reason);
+            case "capability_response" -> new McpCoordinationResponse.RespondToCapability(String.valueOf(payload.get("capabilityRequestHandle")),
+                    String.valueOf(payload.get("response")),
+                    parseContract(payload.get("revision")),
+                    reason,
+                    optionalLongArgument(payload, "contractRevision", 1));
+            case "coordination_response" -> new McpCoordinationResponse.RespondToRequest(optionalUuidArgument(payload, "coordinationRequest"),
+                    (String) payload.get("coordinationRequest"),
+                    CoordinationRequest.Status.valueOf(String.valueOf(payload.get("coordinationStatus"))),
+                    String.valueOf(payload.getOrDefault("proposal", "")));
+            case "inbox_acknowledge" -> new McpCoordinationResponse.AcknowledgeInbox(optionalUuidArgument(payload, "inboxItemId"));
+            case "inbox_resolve" -> new McpCoordinationResponse.ResolveInbox(optionalUuidArgument(payload, "inboxItemId"),
+                    CoordinationRequest.Status.valueOf(String.valueOf(payload.get("resolution"))),
+                    String.valueOf(payload.getOrDefault("proposal", "")));
+            default -> throw new IllegalStateException("unvalidated coordination response kind: " + kind);
+        };
     }
 
     /**

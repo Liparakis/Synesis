@@ -39,6 +39,10 @@ final class McpTaskArguments {
      * Wire name of {@link ResourceSelector.Kind#PATH_SUBTREE} in task arguments and in tool replies.
      */
     private static final String PATH_SUBTREE = "path_subtree";
+    /**
+     * Intent of a call that declares no task: a producer with no goal, scope, work group, or intent ID.
+     */
+    static final AgentTaskIntent NO_TASK = new AgentTaskIntent(null, null, null, List.of(), null, WorkIntent.Role.PRODUCER, List.of(), null, null);
 
     /** Utility class; these rules are exposed through static operations. */
     private McpTaskArguments() {
@@ -63,12 +67,12 @@ final class McpTaskArguments {
      * Decodes nested task intent fields while preserving the bounded flattened-provider form.
      *
      * @param arguments validated top-level tool arguments, or {@code null}
-     * @return typed task intent, or {@code null} when the tool call declares no task
+     * @return typed task intent, or {@link #NO_TASK} when the tool call declares no task
      * @throws IllegalArgumentException when nested task shape or field types violate the wire contract
      */
     static AgentTaskIntent parseTaskIntent(Map<String, Object> arguments) {
         if (arguments == null) {
-            return null;
+            return NO_TASK;
         }
         Object taskObj = arguments.get("task");
         Map<?, ?> map;
@@ -82,7 +86,7 @@ final class McpTaskArguments {
             // that bounded shape without changing the advertised schema.
             map = arguments;
         } else {
-            return null;
+            return NO_TASK;
         }
         Object rawGoal = map.get("goal");
         Object rawAcceptance = map.get("acceptance");

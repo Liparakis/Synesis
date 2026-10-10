@@ -356,16 +356,25 @@ public final class McpProtocolHandler {
             case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH, TOOL_PREFIX + McpToolCatalog.RUN_COMMAND, TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> true;
             case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION ->
                     arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
-            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> {
-                // Status/discovery is a safe read.  Contract, scope, handoff,
-                // continuation, and join operations increase authority.
-                String operation = arguments == null ? null : String.valueOf(arguments.get("collaborationOperation"));
-                String kind = arguments == null ? null : String.valueOf(arguments.get("kind"));
-                yield !("status".equals(operation) || "status".equals(arguments == null ? null : arguments.get("coordinationRequest"))) && (kind == null || !kind.isBlank() || operation == null || !operation.isBlank());
-            }
+            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> arguments == null || !carriesRetiredStatusKeys(arguments);
             case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
             default -> false;
         };
+    }
+
+    /**
+     * Recognizes the top-level keys of the retired status request. Every coordination request that
+     * follows the schema, {@code collaboration_status} included, needs an attestation; the schema
+     * accepts none of these keys, yet a call that carries one is still exempt.
+     *
+     * @param arguments non-null tool arguments of {@code request_coordination}
+     * @return {@code true} when the call names the status operation, or blanks both {@code kind} and the operation
+     */
+    private static boolean carriesRetiredStatusKeys(Map<String, Object> arguments) {
+        Object operation = arguments.get("collaborationOperation");
+        return "status".equals(operation)
+                || "status".equals(arguments.get("coordinationRequest"))
+                || arguments.get("kind") instanceof String kind && kind.isBlank() && operation instanceof String text && text.isBlank();
     }
 
     /**

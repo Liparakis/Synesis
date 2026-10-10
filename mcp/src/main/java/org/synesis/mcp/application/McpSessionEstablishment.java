@@ -157,133 +157,190 @@ final class McpSessionEstablishment {
      * @return the serialized {@code tools/call} response frame
      */
     String ensureSession(Object id, Map<String, Object> arguments, Path activeProjectRoot) {
-        AgentResponse agentResponse;
-        AgentTaskIntent taskIntent;
+        AgentTaskIntent task;
         try {
-            taskIntent = parseTaskIntent(arguments);
+            task = parseTaskIntent(arguments);
         } catch (IllegalArgumentException invalidTask) {
             String reason = "TASK_FIELDS_MUST_BE_NESTED".equals(invalidTask.getMessage()) ? "TASK_FIELDS_MUST_BE_NESTED" : "INVALID_TASK_INTENT";
-            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", reason);
-            return textResultResponse(id, agentResponse.toJson());
+            return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", reason).toJson());
         }
         boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
+        List<ResourceSelector> selectors = parseClaimSelectors(arguments);
 
-        if (!parseClaimSelectors(arguments).isEmpty() && !manualService.attest(provider).valid()) {
+        if (!selectors.isEmpty() && !manualService.attest(provider).valid()) {
             return claimsRejectedResponse(id);
         }
 
-        SessionResolutionRequest resolutionRequest = new SessionResolutionRequest(activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh, managedAdmission);
-
-        agentResponse = sessionService.ensureSession(resolutionRequest);
-        if (agentResponse.status() == AgentStatus.READY) {
-            isSessionBound = true;
-            commands.refreshCommandProcessAnchorForVerifiedSession(activeProjectRoot);
-            // The first verified ensure_session is activity too. Establish the lease
-            // before any claim is announced so an abruptly deleted chat remains
-            // recoverable even when it sends no follow-up MCP request.
-            if (lease.renewLease(activeProjectRoot)) {
-                reconciliation.reconcileAfterAdmission(activeProjectRoot);
-            }
-            if (arguments != null && Boolean.TRUE.equals(arguments.get("unwindCompletion"))) {
-                agentResponse = taskCompletionService.unwindPrepared(new CompleteTaskRequest(activeProjectRoot, provider, connectionInstanceId, null));
-            }
-            String repairIntentText = taskField(arguments, "repairIntentId");
-            String repairSnapshotId = taskField(arguments, "repairSnapshotId");
-            if (repairIntentText != null || repairSnapshotId != null) {
-                try {
-                    if (repairIntentText == null || repairSnapshotId == null) {
-                        throw new IllegalArgumentException("repair intent and snapshot are both required");
-                    }
-                    UUID repairIntentId = UUID.fromString(repairIntentText);
-                    var joined = collaborationService.joinRepair(activeProjectRoot, provider, connectionInstanceId, repairIntentId, repairSnapshotId);
-                    if (!joined.acquired()) {
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("conflicts", joined.conflicts()));
-                    } else {
-                        agentResponse = new AgentResponse(AgentStatus.READY,
-                                null,
-                                AgentNextAction.RETRY,
-                                object("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
-                    }
-                } catch (Exception repairFailure) {
-                    agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
-                }
-            }
-            List<ResourceSelector> selectors = parseClaimSelectors(arguments);
-            boolean claimsSpecified = claimsFieldSpecified(arguments);
-            WorkIntent.Role requestedRole = taskIntent == null ? WorkIntent.Role.PRODUCER : taskIntent.role();
-            boolean recoveryAdmission =
-                    !refresh && collaborationService.recoveryContinuationAdmission(activeProjectRoot, connectionInstanceId, requestedRole, selectors, taskIntent == null ? null : taskIntent.workGroupId());
-            if (refresh && claimsSpecified && selectors.isEmpty()) {
-                try {
-                    collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
-                } catch (IOException missing) {
-                    if ("INTENT_NOT_FOUND".equals(missing.getMessage()) && taskIntent != null && taskIntent.role() == WorkIntent.Role.REVIEWER) {
-                        agentResponse = reviewerClaimRequiredResponse();
-                    } else if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
-                        agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-                    }
-                } catch (Exception failure) {
-                    agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-                }
-            } else if (taskIntent != null && taskIntent.role() == WorkIntent.Role.REVIEWER && selectors.isEmpty() && !recoveryAdmission) {
-                agentResponse = reviewerClaimRequiredResponse();
-            } else if ((!selectors.isEmpty() || taskIntent != null && taskIntent.intentId() != null) && !recoveryAdmission) {
-                try {
-                    ClaimResult claimResult = collaborationService.announce(activeProjectRoot,
-                            provider,
-                            connectionInstanceId,
-                            taskIntent == null ? null : taskIntent.goal(),
-                            taskIntent == null ? null : taskIntent.acceptance(),
-                            selectors,
-                            taskIntent == null ? null : taskIntent.workGroupId(),
-                            taskIntent == null ? WorkIntent.Role.PRODUCER : taskIntent.role(),
-                            taskIntent == null ? List.of() : taskIntent.reviewTargetSelectors(),
-                            taskIntent == null ? List.of() : taskIntent.knownDependencies(),
-                            taskIntent == null ? null : taskIntent.intentId(),
-                            taskIntent == null ? null : taskIntent.claimEpoch());
-                    if (!claimResult.acquired()) {
-                        Map<String, Object> details = new LinkedHashMap<>();
-                        details.put("conflicts",
-                                claimResult.conflicts().stream().map(conflict -> object("participant",
-                                        conflict.participant(),
-                                        "intent",
-                                        conflict.intentId(),
-                                        "ownerAuthorityLineageId",
-                                        conflict.ownerAuthorityLineageId() == null ? "" : conflict.ownerAuthorityLineageId().toString(),
-                                        "kind",
-                                        conflict.selector().kind().name(),
-                                        "path",
-                                        conflict.selector().value())).toList());
-                        details.put("coordinationKind", "capability_request");
-                        details.put("requiredCapabilityFields", List.of("capability", "contract", "ownerAuthorityLineageId"));
-                        details.put("claimRule", "Keep the owner claim exclusive. Claim a disjoint consumer path before requesting its API capability.");
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_COORDINATION, details);
-                    }
-                } catch (Exception failure) {
-                    if ("SESSION_EPOCH_FENCED".equals(failure.getMessage())) {
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_GENERATION_CHANGED, AgentNextAction.RETRY, null);
-                    } else if (failure instanceof WorkspaceCollaborationService.ScopeExtensionRequiredException required) {
-                        agentResponse = scopeExtensionRequiredResponse(required.currentIntent(), taskIntent, selectors);
-                    } else if (isScopeExtensionFailure(failure.getMessage())) {
-                        AgentReason reason = "OVERLAPPING_CLAIM".equals(failure.getMessage())
-                                ? AgentReason.OVERLAPPING_CLAIM
-                                : AgentReason.POLICY_DENIED;
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED,
-                                reason,
-                                AgentNextAction.REQUEST_HUMAN_HELP,
-                                Map.of("reason", failure.getMessage()));
-                    } else if (isAppendContention(failure)) {
-                        // Another session held the project log; nothing was recorded and the
-                        // same announcement is safe to repeat.
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
-                    } else {
-                        System.err.println("SYNESIS_MCP_ANNOUNCE_FAILURE=" + failureDiagnostic(failure));
-                        agentResponse = new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-                    }
-                }
-            }
+        AgentResponse admitted = sessionService.ensureSession(new SessionResolutionRequest(activeProjectRoot, provider, connectionInstanceId, task, refresh, managedAdmission));
+        if (admitted.status() != AgentStatus.READY) {
+            return textResultResponse(id, admitted.toJson());
         }
-        return textResultResponse(id, agentResponse.toJson());
+        bindVerifiedSession(activeProjectRoot);
+        // Every phase runs, and when several produce a reply the later one wins: the claim
+        // phase over the repair join over the unwind over the admission reply.
+        AgentResponse unwound = unwindCompletion(arguments, activeProjectRoot);
+        AgentResponse repaired = repairJoin(arguments, activeProjectRoot);
+        AgentResponse claimed = claimPhase(task, selectors, refresh, claimsFieldSpecified(arguments), activeProjectRoot);
+        AgentResponse reply = claimed != null ? claimed : repaired != null ? repaired : unwound != null ? unwound : admitted;
+        return textResultResponse(id, reply.toJson());
+    }
+
+    /**
+     * Marks the connection session-bound and starts its lease, so an abruptly deleted chat stays
+     * recoverable even when it sends no follow-up request. The first verified {@code ensure_session}
+     * is activity too, and the lease is established before any claim is announced.
+     *
+     * @param activeProjectRoot the connection's currently selected control project root
+     */
+    private void bindVerifiedSession(Path activeProjectRoot) {
+        isSessionBound = true;
+        commands.refreshCommandProcessAnchorForVerifiedSession(activeProjectRoot);
+        if (lease.renewLease(activeProjectRoot)) {
+            reconciliation.reconcileAfterAdmission(activeProjectRoot);
+        }
+    }
+
+    /**
+     * Unwinds a prepared completion when the caller asks for it.
+     *
+     * @param arguments         tool arguments, possibly {@code null}
+     * @param activeProjectRoot the connection's currently selected control project root
+     * @return the unwind reply, or {@code null} when none was requested
+     */
+    private AgentResponse unwindCompletion(Map<String, Object> arguments, Path activeProjectRoot) {
+        if (arguments == null || !Boolean.TRUE.equals(arguments.get("unwindCompletion"))) {
+            return null;
+        }
+        return taskCompletionService.unwindPrepared(new CompleteTaskRequest(activeProjectRoot, provider, connectionInstanceId, null));
+    }
+
+    /**
+     * Joins the caller to a repair of a named intent and snapshot when it supplies them.
+     *
+     * @param arguments         tool arguments, possibly {@code null}
+     * @param activeProjectRoot the connection's currently selected control project root
+     * @return the repair reply, or {@code null} when neither repair field was supplied
+     */
+    private AgentResponse repairJoin(Map<String, Object> arguments, Path activeProjectRoot) {
+        String repairIntentText = taskField(arguments, "repairIntentId");
+        String repairSnapshotId = taskField(arguments, "repairSnapshotId");
+        if (repairIntentText == null && repairSnapshotId == null) {
+            return null;
+        }
+        try {
+            if (repairIntentText == null || repairSnapshotId == null) {
+                throw new IllegalArgumentException("repair intent and snapshot are both required");
+            }
+            UUID repairIntentId = UUID.fromString(repairIntentText);
+            var joined = collaborationService.joinRepair(activeProjectRoot, provider, connectionInstanceId, repairIntentId, repairSnapshotId);
+            if (!joined.acquired()) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("conflicts", joined.conflicts()));
+            }
+            return new AgentResponse(AgentStatus.READY,
+                    null,
+                    AgentNextAction.RETRY,
+                    object("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
+        } catch (Exception repairFailure) {
+            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
+        }
+    }
+
+    /**
+     * Applies the ownership claims of the call: releases them for an empty refresh, requires a
+     * reviewer to claim explicitly, or announces the claims.
+     *
+     * @param task              task the call declares
+     * @param selectors         claim selectors the call names
+     * @param refresh           whether the call refreshes an existing session
+     * @param claimsSpecified   whether the call carries a {@code claims} field, even an empty one
+     * @param activeProjectRoot the connection's currently selected control project root
+     * @return the reply, or {@code null} when claims need no reply
+     */
+    private AgentResponse claimPhase(AgentTaskIntent task, List<ResourceSelector> selectors, boolean refresh, boolean claimsSpecified, Path activeProjectRoot) {
+        boolean recoveryAdmission = !refresh && collaborationService.recoveryContinuationAdmission(activeProjectRoot, connectionInstanceId, task.role(), selectors, task.workGroupId());
+        if (refresh && claimsSpecified && selectors.isEmpty()) {
+            return releaseClaims(task, activeProjectRoot);
+        }
+        if (task.role() == WorkIntent.Role.REVIEWER && selectors.isEmpty() && !recoveryAdmission) {
+            return reviewerClaimRequiredResponse();
+        }
+        if ((!selectors.isEmpty() || task.intentId() != null) && !recoveryAdmission) {
+            return announceClaims(task, selectors, activeProjectRoot);
+        }
+        return null;
+    }
+
+    private AgentResponse releaseClaims(AgentTaskIntent task, Path activeProjectRoot) {
+        try {
+            collaborationService.release(activeProjectRoot, provider, connectionInstanceId);
+            return null;
+        } catch (IOException missing) {
+            if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
+                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            }
+            return task.role() == WorkIntent.Role.REVIEWER ? reviewerClaimRequiredResponse() : null;
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+        }
+    }
+
+    private AgentResponse announceClaims(AgentTaskIntent task, List<ResourceSelector> selectors, Path activeProjectRoot) {
+        try {
+            ClaimResult claimResult = collaborationService.announce(activeProjectRoot,
+                    provider,
+                    connectionInstanceId,
+                    task.goal(),
+                    task.acceptance(),
+                    selectors,
+                    task.workGroupId(),
+                    task.role(),
+                    task.reviewTargetSelectors(),
+                    task.knownDependencies(),
+                    task.intentId(),
+                    task.claimEpoch());
+            if (claimResult.acquired()) {
+                return null;
+            }
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("conflicts",
+                    claimResult.conflicts().stream().map(conflict -> object("participant",
+                            conflict.participant(),
+                            "intent",
+                            conflict.intentId(),
+                            "ownerAuthorityLineageId",
+                            conflict.ownerAuthorityLineageId() == null ? "" : conflict.ownerAuthorityLineageId().toString(),
+                            "kind",
+                            conflict.selector().kind().name(),
+                            "path",
+                            conflict.selector().value())).toList());
+            details.put("coordinationKind", "capability_request");
+            details.put("requiredCapabilityFields", List.of("capability", "contract", "ownerAuthorityLineageId"));
+            details.put("claimRule", "Keep the owner claim exclusive. Claim a disjoint consumer path before requesting its API capability.");
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_COORDINATION, details);
+        } catch (Exception failure) {
+            if ("SESSION_EPOCH_FENCED".equals(failure.getMessage())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_GENERATION_CHANGED, AgentNextAction.RETRY, null);
+            }
+            if (failure instanceof WorkspaceCollaborationService.ScopeExtensionRequiredException required) {
+                return scopeExtensionRequiredResponse(required.currentIntent(), task, selectors);
+            }
+            if (isScopeExtensionFailure(failure.getMessage())) {
+                AgentReason reason = "OVERLAPPING_CLAIM".equals(failure.getMessage())
+                        ? AgentReason.OVERLAPPING_CLAIM
+                        : AgentReason.POLICY_DENIED;
+                return new AgentResponse(AgentStatus.BLOCKED,
+                        reason,
+                        AgentNextAction.REQUEST_HUMAN_HELP,
+                        Map.of("reason", failure.getMessage()));
+            }
+            if (isAppendContention(failure)) {
+                // Another session held the project log; nothing was recorded and the
+                // same announcement is safe to repeat.
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
+            }
+            System.err.println("SYNESIS_MCP_ANNOUNCE_FAILURE=" + failureDiagnostic(failure));
+            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+        }
     }
 
     /**
