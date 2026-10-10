@@ -1,3 +1,64 @@
+# 2026-10-11 — Everything recorded as wrong or unproven on the remaster branch, fixed or run
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster9-20261011` to `remaster11`. Real runs in new
+disposable projects under `Documents\SynesisRemasterAcceptance`, started by `synesis agents run`. The
+bootstrapper created each repository and goal, ran `synesis init` and `synesis provider install`,
+started the controller, injected process failures where stated, set a validation command as project
+policy in one run, and validated; it assigned nothing and relayed nothing. Claude Code
+`claude-opus-5-5` high, Codex `gpt-6-luna` medium.
+
+Defects found by these runs and fixed, each with a test that fails without the fix:
+
+- Two processes that read the same log head both appended, and the later durable move replaced the
+  earlier writer's event; the hash chain stayed valid. A lane announcement was lost this way:
+  `ensure_session` answered `ready` and the lane was never in the log. On master too. The durable name
+  is now given by a hard link, which refuses an existing name, and the append is made again on the
+  new head. This is the `ensure_session` anomaly of the entry below.
+- An owner that changed a validated file and then finished left its requester's snapshot
+  `INTEGRATION_PENDING` for good. The finish is refused with `VALIDATED_IMPLEMENTATION_CHANGED`,
+  naming the files, and a validated owner is told beforehand not to change them.
+- An owner that committed after publishing could not finish with identical content
+  (`SNAPSHOT_REF_CONTENT_MISMATCH`): reuse of a snapshot ref compared its parent commit as well as its
+  tree.
+- An owner waited for the requester's tests before publishing while the requester waited for the
+  publication. The owner's answer now says its requester is waiting and to publish without the
+  requester's files (blocker `requester_waiting_for_implementation`).
+- A work group created ahead of its lanes that never received one stayed `ACTIVE`, and no agent can
+  close a group. A group that never had a lane is not open work (`WorkIntentService.hasOpenWork`),
+  for the controller and for agents.
+- A session with no lane, in a project with no open work, was told `coordination_intent_required`. It
+  is told `completed`, state `NO_OPEN_WORK`, and may still announce.
+- A coordination request refused for a field its kind does not take now lists the fields it takes.
+
+| Run | Agents | Result |
+| --- | --- | --- |
+| Three-part goal | Codex, Claude Code, Codex | `COMPLETED`, 297 s, 4 resumes, 13 tests pass; three lanes integrated and a fourth, self-announced, cancelled |
+| Negotiated, three times | Codex pair | one `STALLED` on the validated-file defect before its fix; two `COMPLETED` after |
+| Negotiated | Claude Code then Codex | `COMPLETED` |
+| Cancel | Codex pair | `COMPLETED` |
+| Negotiated with `python -m unittest` as the project's validation command | Claude Code, Codex | `COMPLETED`; both finishes carry the validation evidence |
+| Review: one agent implements, one reviews | Claude Code pair, twice | the lane stayed `REVIEW_PENDING` until the reviewer decided, then integrated; first run `STALLED` on the empty-group defect, second `COMPLETED` |
+| Codex process tree killed 80 s in | Codex, Claude Code | exit code 1 recorded, Codex resumed and continued its lane, `COMPLETED`, 16 tests pass |
+| Controller and both agents killed 85 s in, fresh agents 335 s later | Codex, Claude Code | both abandoned lanes continued by the new sessions, `COMPLETED`, 17 tests pass |
+| Owner's bounded wait | Codex, Claude Code | the owner proposed its contract, was answered `requester_response_pending` with a deadline, finished after it; Codex returned, was told `ownerProceededWithoutAnswer`, `COMPLETED`, 13 tests pass |
+| `synesis host` and `synesis join`, two identities on one machine | none | descriptors exchanged, path selected, both identities verified, `CONTROL_READY`, `LIVENESS=LIVE`, both exit 0 |
+
+The controller's 30-second rule of the entry below has now been observed: in 13 runs since it was
+added an agent was resumed for work recorded 3 to 30 seconds before its process ended.
+
+A project can gate what a lane publishes on tests: `validation.argv` in `.synesis/project.json`
+(ADR-0042). The earlier statement that nothing gates integration on tests described projects that
+had not set it. A failing validation command refusing a finish is now covered by a test.
+
+Not changed: `synesis join` of an invitation created under the same identity fails with
+`CONNECTION_FAILED`, as it does on the previous build.
+
+NOT REACHED: more than three agents, review with a rejected lane, a join between two machines, and
+macOS or Linux agents.
+
+Verification: `check`, link 171, coordination 190, project-record 60, relay 12, mcp-contract 17,
+workspace 593 (1 skipped), MCP 155, CLI 113, 0 failures.
+
 # 2026-10-11 — Lane cancellation made to work for real agents: five defects closed
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster4-20261010` to `remaster8`. Fourteen further

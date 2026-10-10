@@ -82,8 +82,9 @@ does not change when that time passes, so the command also resumes a stopped
 agent once when such a deadline of its provider has passed, and does not end the
 run while one is still pending.
 
-The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when every work group is
-complete and no lane is open, `STALLED` when every agent has stopped and nothing
+The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when no lane is open and
+every work group that ever had a lane is closed (a group created ahead of its
+lanes that never received one holds no work), `STALLED` when every agent has stopped and nothing
 has progressed since, `NO_WORK_ANNOUNCED`, `RESUME_LIMIT_REACHED`, or
 `TIMED_OUT`. Only `COMPLETED` exits with 0. Each provider must already be
 installed in the project. Provider commands keep the provider's own approval and
