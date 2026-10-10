@@ -2,9 +2,14 @@ package org.synesis.workspace.application.agent.run;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalLong;
 
+import org.synesis.coordination.application.RequesterAnswerPolicy;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -41,6 +46,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         public boolean progressedSince(long sequence) {
             return false;
         }
+
+        @Override
+        public OptionalLong answerDeadline(String provider) {
+            return OptionalLong.empty();
+        }
     };
 
     private final ProjectLocation location;
@@ -71,7 +81,25 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         List<WorkGroup> groups = store.workGroupProjection().groups();
         boolean complete = !groups.isEmpty() && groups.stream().noneMatch(group -> group.status() == WorkGroup.Status.ACTIVE) && store.collaborationProjection().activeIntents().isEmpty();
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
+        // is the one whose agent has to come back when the answer period ends.
+        Map<String, Long> answerDeadlines = new HashMap<>();
+        for (CapabilityRequestRecord request : store.capabilityRequestProjection().records().values()) {
+            if (!RequesterAnswerPolicy.awaitsRequesterAnswer(request)) {
+                continue;
+            }
+            long deadline = RequesterAnswerPolicy.answerDeadlineEpochMillis(request);
+            store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.authorityLineageId().equals(request.authorityLineageId()))
+                    .forEach(intent -> answerDeadlines.merge(intent.provider(), deadline, Math::max));
+        }
         return new AgentRunController.Observation() {
+
+            @Override
+            public OptionalLong answerDeadline(String provider) {
+                Long deadline = answerDeadlines.get(provider);
+                return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
+            }
 
             @Override
             public long headSequence() {

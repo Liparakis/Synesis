@@ -113,6 +113,12 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
             public java.util.Optional<String> sessionId(String outputLine) {
                 return announcedIdentifier(outputLine, "system", "session_id");
             }
+
+            @Override
+            public Map<String, String> environment(HeadlessOptions options) {
+                // Claude Code starts a stdio MCP server with its own environment.
+                return options.connectionInstanceId() == null ? Map.of() : Map.of(CONNECTION_INSTANCE_VARIABLE, options.connectionInstanceId());
+            }
         });
     }
 

@@ -60,10 +60,24 @@ lane of its provider is still open, and other work has progressed since, the
 command starts that agent's own provider session again with one sentence telling
 it to continue. It reads only the durable coordination log: it never reads or
 relays an agent's conversation, never assigns work or picks a continuation, and
-writes no coordination state. Heartbeats and lane takeovers do not count as
-progress, so two idle agents cannot wake each other. A resumed agent is a new
+never writes to the coordination log. Heartbeats and lane takeovers do not count
+as progress, so two idle agents cannot wake each other. A resumed agent is a new
 connection and therefore a new session; it regains its lane through the ordinary
 recovery and continuation path.
+
+That path starts when a connection is known to have ended. A provider that kills
+its MCP server instead of closing it leaves no such proof, and Synesis would
+otherwise wait out its five-minute abrupt-loss grace period. The command gives
+each process it starts its own connection identity and, when the process exits,
+records that connection as closed in the project's session leases. It can do
+this only for processes it started.
+
+A capability owner that proposed a contract waits a bounded time for the
+requester's answer (two minutes by default; `SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS`
+or the system property `synesis.requesterAnswerGraceSeconds` changes it). The log
+does not change when that time passes, so the command also resumes a stopped
+agent once when such a deadline of its provider has passed, and does not end the
+run while one is still pending.
 
 The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when every work group is
 complete and no lane is open, `STALLED` when every agent has stopped and nothing

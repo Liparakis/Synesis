@@ -5,8 +5,10 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
@@ -26,11 +28,20 @@ import org.synesis.workspace.provider.ProviderIntegration.HeadlessSession;
  * controller is that missing signal and nothing more: it reads the durable log, and when work has
  * progressed since an agent stopped it starts that agent's own provider session again with one
  * neutral sentence. It never reads or relays agent conversation, never chooses work, a lane, or a
- * continuation, and never writes coordination state. Every decision an agent then makes is still
- * made through Synesis.</p>
+ * continuation, and never writes to the coordination log. Every decision an agent then makes is
+ * still made through Synesis.</p>
  *
  * <p>A resumed agent is a new connection, so Synesis sees a new session; the lane it left is
- * recovered and offered for continuation by the ordinary recovery path.</p>
+ * recovered and offered for continuation by the ordinary recovery path. That path starts once a
+ * connection is known to have ended. A provider that kills its MCP server instead of closing it
+ * leaves no such proof, and Synesis would wait out its abrupt-loss grace period before believing
+ * it. The controller started the process and saw it exit, so it gives each process its own
+ * connection identity and reports that connection ended: the one fact it adds, and only about
+ * its own children.</p>
+ *
+ * <p>An owner waiting a bounded time for a requester's answer also ends its process. The log does
+ * not move when that time passes, so the controller reads the deadline and resumes the owner's
+ * provider once for it.</p>
  */
 public final class AgentRunController {
 
@@ -51,6 +62,7 @@ public final class AgentRunController {
 
     private final AgentProcesses processes;
     private final ProjectObserver observer;
+    private final Connections connections;
     private final LongSupplier clockMillis;
     private final Pause pause;
 
@@ -59,12 +71,14 @@ public final class AgentRunController {
      *
      * @param processes   starts provider processes
      * @param observer    reads the project's durable coordination state
+     * @param connections names each process's connection and records that it ended
      * @param clockMillis current time in milliseconds
      * @param pause       waits between observations
      */
-    public AgentRunController(AgentProcesses processes, ProjectObserver observer, LongSupplier clockMillis, Pause pause) {
+    public AgentRunController(AgentProcesses processes, ProjectObserver observer, Connections connections, LongSupplier clockMillis, Pause pause) {
         this.processes = Objects.requireNonNull(processes, "processes");
         this.observer = Objects.requireNonNull(observer, "observer");
+        this.connections = Objects.requireNonNull(connections, "connections");
         this.clockMillis = Objects.requireNonNull(clockMillis, "clockMillis");
         this.pause = Objects.requireNonNull(pause, "pause");
     }
@@ -98,7 +112,9 @@ public final class AgentRunController {
             int index = 0;
             for (AgentSpec spec : request.agents()) {
                 Agent agent = new Agent(++index, spec);
-                agent.process = processes.start(spec.session().startCommand(request.projectRoot(), spec.options()), request.projectRoot(), request.prompt(), agent.label(), spec.session()::sessionId);
+                HeadlessOptions options = agent.connect(connections.open());
+                agent.process = processes.start(spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), spec.session().environment(options), request.prompt(), agent.label(),
+                        spec.session()::sessionId);
                 agents.add(agent);
                 listener.accept("AGENT_STARTED=" + agent.label());
             }
@@ -107,21 +123,37 @@ public final class AgentRunController {
                 Observation observation = observer.observe();
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
+                        connections.ended(agent.connectionId);
                         agent.exited(seenWhileRunning);
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
                 }
+                long now = clockMillis.getAsLong();
+                boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
-                        if (agent.resumable(request.maxResumesPerAgent()) && observation.hasOpenLane(agent.spec.provider()) && observation.progressedSince(agent.stoppedAtSequence)) {
+                        if (!agent.resumable(request.maxResumesPerAgent()) || !observation.hasOpenLane(agent.spec.provider())) {
+                            continue;
+                        }
+                        OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
+                        boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
+                        if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed) {
+                            if (deadlinePassed) {
+                                agent.resumedForDeadline = answerDeadline.getAsLong();
+                            }
                             agent.resumes++;
-                            agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, agent.spec.options()), request.projectRoot(), RESUME_PROMPT,
-                                    agent.label(), agent.spec.session()::sessionId);
+                            HeadlessOptions options = agent.connect(connections.open());
+                            agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
+                                    agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
                             listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
+                        } else if (answerDeadline.isPresent() && now < answerDeadline.getAsLong()) {
+                            awaitingDeadline = true;
                         }
                     }
                 }
-                if (agents.stream().noneMatch(agent -> agent.process != null)) {
+                // With every agent stopped the run is over, unless a stopped owner is only waiting
+                // for its answer period to end: nothing in the log will announce that moment.
+                if (agents.stream().noneMatch(agent -> agent.process != null) && !awaitingDeadline) {
                     return new Result(observation.complete() ? Outcome.COMPLETED : stalledOutcome(agents, observation, request.maxResumesPerAgent()), resumes(agents));
                 }
                 if (clockMillis.getAsLong() >= deadline) {
@@ -134,6 +166,7 @@ public final class AgentRunController {
             for (Agent agent : agents) {
                 if (agent.process != null) {
                     agent.process.stop();
+                    connections.ended(agent.connectionId);
                 }
             }
         }
@@ -203,13 +236,35 @@ public final class AgentRunController {
          *
          * @param command          argv from the provider's headless contract
          * @param workingDirectory control project root
+         * @param environment      variables added to the process's environment
          * @param prompt           text written to the process's standard input, which is then closed
          * @param label            stable name of the agent, for logs
          * @param sessionIdReader  recognises the provider session identifier in an output line
          * @return the running process
          * @throws IOException when the process cannot be started
          */
-        RunningAgent start(List<String> command, Path workingDirectory, String prompt, String label, java.util.function.Function<String, Optional<String>> sessionIdReader) throws IOException;
+        RunningAgent start(List<String> command, Path workingDirectory, Map<String, String> environment, String prompt, String label, java.util.function.Function<String, Optional<String>> sessionIdReader)
+                throws IOException;
+    }
+
+    /**
+     * Names the Synesis connection of each provider process and records when it has ended.
+     */
+    public interface Connections {
+
+        /**
+         * Returns a new connection identity for one process start.
+         *
+         * @return identity the process's Synesis MCP server will use
+         */
+        String open();
+
+        /**
+         * Records that the process using a connection has exited.
+         *
+         * @param connectionInstanceId identity returned by {@link #open()}
+         */
+        void ended(String connectionInstanceId);
     }
 
     /**
@@ -306,6 +361,19 @@ public final class AgentRunController {
          *         {@link AgentRunController#isProgress(PredictionEventType)}
          */
         boolean progressedSince(long sequence);
+
+        /**
+         * Returns when the open lanes of a provider may stop waiting for a requester to answer a
+         * contract they proposed.
+         *
+         * <p>An owner told to wait ends its process like any other idle agent, and the log does
+         * not change when the wait is over. This is the one moment the controller must take from
+         * a clock instead of from recorded progress.</p>
+         *
+         * @param provider provider identifier
+         * @return the latest such deadline in epoch milliseconds, or empty when none is pending
+         */
+        OptionalLong answerDeadline(String provider);
     }
 
     /**
@@ -387,8 +455,10 @@ public final class AgentRunController {
         private final int index;
         private final AgentSpec spec;
         private RunningAgent process;
+        private String connectionId;
         private String providerSessionId;
         private long stoppedAtSequence;
+        private long resumedForDeadline = Long.MIN_VALUE;
         private int exitCode;
         private int resumes;
 
@@ -399,6 +469,12 @@ public final class AgentRunController {
 
         private String label() {
             return spec.provider() + "#" + index;
+        }
+
+        /** Gives the next process of this agent its own connection identity. */
+        private HeadlessOptions connect(String identity) {
+            connectionId = identity;
+            return spec.options().withConnection(identity);
         }
 
         /**

@@ -140,6 +140,12 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         if (options.effort() != null) {
             arguments.addAll(List.of("--config", "model_reasoning_effort=" + options.effort()));
         }
+        if (options.connectionInstanceId() != null) {
+            // Codex gives an MCP server only the environment its configuration names, so the
+            // identity is added to the Synesis server's entry for this one process. The value is
+            // a plain token, which Codex takes literally.
+            arguments.addAll(List.of("--config", "mcp_servers.synesis.env." + CONNECTION_INSTANCE_VARIABLE + "=" + options.connectionInstanceId()));
+        }
         return arguments;
     }
 

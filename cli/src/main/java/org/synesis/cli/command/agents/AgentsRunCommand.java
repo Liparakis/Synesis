@@ -13,6 +13,7 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 
 import org.synesis.workspace.application.agent.run.AgentRunController;
+import org.synesis.workspace.application.agent.run.ControllerConnections;
 import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.run.ProviderAgentProcesses;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -118,7 +119,8 @@ public final class AgentsRunCommand implements Callable<Integer> {
             AgentRunController.Request request = new AgentRunController.Request(location.root(), specifications, startPrompt, Duration.ofMinutes(timeoutMinutes), Duration.ofSeconds(pollSeconds), maxResumes);
             runtime.terminal().stdout("AGENT_LOG_DIRECTORY=" + logDirectory);
             long started = System.currentTimeMillis();
-            AgentRunController controller = new AgentRunController(new ProviderAgentProcesses(logDirectory), new EventLogObserver(location), System::currentTimeMillis, Thread::sleep);
+            AgentRunController controller = new AgentRunController(new ProviderAgentProcesses(logDirectory), new EventLogObserver(location), new ControllerConnections(location.root()), System::currentTimeMillis,
+                    Thread::sleep);
             AgentRunController.Result result = controller.run(request, runtime.terminal()::stdout);
             runtime.terminal().stdout("AGENT_RUN_RESULT=" + result.outcome());
             runtime.terminal().stdout("AGENT_RESUMES=" + result.resumes());

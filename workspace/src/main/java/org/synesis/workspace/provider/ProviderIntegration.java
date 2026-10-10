@@ -126,20 +126,42 @@ public interface ProviderIntegration {
          * @return the identifier when this line announces it, otherwise empty
          */
         java.util.Optional<String> sessionId(String outputLine);
+
+        /**
+         * Returns environment variables the provider process needs so that the Synesis MCP
+         * server it starts uses the connection identity named in the options.
+         *
+         * <p>A provider that hands the identity over through its arguments returns nothing here.
+         * Whoever starts the process knows that identity and can therefore tell Synesis when the
+         * connection has ended, which a provider that kills its MCP server cannot.</p>
+         *
+         * @param options model selection and connection identity
+         * @return variables to add to the provider process's environment; empty by default
+         */
+        default Map<String, String> environment(HeadlessOptions options) {
+            return Map.of();
+        }
     }
 
     /**
-     * Model selection for a headless session; {@code null} leaves the provider's own default.
-     *
-     * @param model  provider model name, or {@code null}
-     * @param effort provider reasoning-effort level, or {@code null}
+     * Name of the variable through which the Synesis MCP server receives its connection identity.
      */
-    record HeadlessOptions(String model, String effort) {
+    String CONNECTION_INSTANCE_VARIABLE = "SYNESIS_MCP_CONNECTION_INSTANCE_ID";
+
+    /**
+     * Model selection and connection identity for a headless session.
+     *
+     * @param model                provider model name, or {@code null} for the provider's default
+     * @param effort               provider reasoning-effort level, or {@code null} for the default
+     * @param connectionInstanceId identity the Synesis MCP server of this process must use, or
+     *                             {@code null} to let the server choose its own
+     */
+    record HeadlessOptions(String model, String effort, String connectionInstanceId) {
 
         private static final java.util.regex.Pattern TOKEN = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:\\[\\]-]{0,127}");
 
         /**
-         * Rejects values that are not plain model or effort tokens, since they become arguments.
+         * Rejects values that are not plain tokens, since they become arguments or environment.
          */
         public HeadlessOptions {
             if (model != null && !TOKEN.matcher(model).matches()) {
@@ -148,6 +170,29 @@ public interface ProviderIntegration {
             if (effort != null && !TOKEN.matcher(effort).matches()) {
                 throw new IllegalArgumentException("effort must be a plain token");
             }
+            if (connectionInstanceId != null && !TOKEN.matcher(connectionInstanceId).matches()) {
+                throw new IllegalArgumentException("connection identity must be a plain token");
+            }
+        }
+
+        /**
+         * Creates options that leave the connection identity to the MCP server.
+         *
+         * @param model  provider model name, or {@code null}
+         * @param effort provider reasoning-effort level, or {@code null}
+         */
+        public HeadlessOptions(String model, String effort) {
+            this(model, effort, null);
+        }
+
+        /**
+         * Returns these options for one process start under a given connection identity.
+         *
+         * @param identity connection identity for that process
+         * @return options carrying the identity
+         */
+        public HeadlessOptions withConnection(String identity) {
+            return new HeadlessOptions(model, effort, identity);
         }
     }
 

@@ -13,6 +13,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,10 +49,12 @@ public final class ProviderAgentProcesses implements AgentRunController.AgentPro
     }
 
     @Override
-    public AgentRunController.RunningAgent start(List<String> command, Path workingDirectory, String prompt, String label, Function<String, Optional<String>> sessionIdReader) throws IOException {
+    public AgentRunController.RunningAgent start(List<String> command, Path workingDirectory, Map<String, String> environment, String prompt, String label, Function<String, Optional<String>> sessionIdReader)
+            throws IOException {
         Files.createDirectories(logDirectory);
         Path log = logDirectory.resolve(label.replace('#', '-') + "-" + launches.incrementAndGet() + ".log");
         ProcessBuilder builder = new ProcessBuilder(executable(command)).directory(workingDirectory.toFile()).redirectErrorStream(true);
+        builder.environment().putAll(environment);
         Process process = builder.start();
         try (Writer stdin = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
             stdin.write(prompt);

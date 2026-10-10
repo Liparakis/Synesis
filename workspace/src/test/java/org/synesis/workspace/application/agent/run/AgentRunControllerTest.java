@@ -9,7 +9,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,56 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void everyProcessGetsItsOwnConnectionAndItsEndIsReportedBeforeTheAgentIsResumed() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 6, 3);
+        script.at(0).head(5).announced();
+        script.at(4).head(9).progressAfter(5);
+        script.at(6).head(14).progressAfter(9).complete();
+
+        script.run(8);
+
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3", "ended conn-2", "ended conn-3"), script.connections,
+                "a resumed process is a new connection, opened only after the previous one was reported ended");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(0), "Claude Code passes its environment to the MCP server");
+        assertEquals(Map.of(), script.environments.get(1), "Codex is given the identity through its configuration arguments");
+        assertTrue(script.commands.get(1).contains("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-2"), script.commands.get(1).toString());
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
+    }
+
+    @Test
+    void stoppedOwnerIsResumedOnceWhenItsAnswerPeriodEndsEvenThoughNothingWasRecorded() throws Exception {
+        Script script = new Script();
+        // Both agents stop at tick 1 and the log never moves. claude owns a proposal whose answer
+        // period ends at tick 5; resumed then, it finishes and the work completes.
+        script.lifetimes(1, 1, 1);
+        script.at(0).head(3).announced();
+        script.answerDeadlines.put("claude", 5_000L);
+        script.at(6).head(8).complete();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "only the provider that owns the proposal is woken, and only once");
+        assertEquals(5, script.resumedAtTicks.getFirst(), "the run must wait for the deadline instead of ending while every agent is stopped");
+        assertEquals(1, result.resumes());
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+    }
+
+    @Test
+    void ownerIsNotResumedAgainForTheSameDeadline() throws Exception {
+        Script script = new Script();
+        // The resumed owner stops again without finishing and the deadline stays as it was.
+        script.lifetimes(1, 1, 1);
+        script.at(0).head(3).announced();
+        script.answerDeadlines.put("claude", 3_000L);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(1, result.resumes());
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+    }
+
+    @Test
     void nothingIsResumedWhenNoWorkProgressedAfterEveryAgentStopped() throws Exception {
         Script script = new Script();
         script.lifetimes(2, 3);
@@ -81,6 +133,7 @@ final class AgentRunControllerTest {
         assertEquals(2, result.resumes(), "the limit is per agent");
         assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
         assertTrue(script.stopped.contains("codex#2"), "a running agent is stopped when the time limit passes");
+        assertTrue(script.connections.contains("ended conn-2"), "a stopped agent's connection has ended too: " + script.connections);
     }
 
     @Test
@@ -156,6 +209,11 @@ final class AgentRunControllerTest {
         private final List<String> stopped = new ArrayList<>();
         private final List<String> withoutSessionId = new ArrayList<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
+        private final List<String> connections = new ArrayList<>();
+        private final List<Map<String, String>> environments = new ArrayList<>();
+        private final List<List<String>> commands = new ArrayList<>();
+        private final List<Integer> resumedAtTicks = new ArrayList<>();
+        private final Map<String, Long> answerDeadlines = new java.util.HashMap<>();
         private final List<Integer> lifetimes = new ArrayList<>();
         private final java.util.TreeMap<Integer, State> states = new java.util.TreeMap<>();
         private boolean endlessProgress;
@@ -175,7 +233,23 @@ final class AgentRunControllerTest {
         }
 
         private AgentRunController.Result run(int maxResumes, Duration timeout) throws Exception {
-            AgentRunController controller = new AgentRunController(this::start, this::observe, () -> tick * 1_000L, millis -> tick++);
+            AgentRunController.Connections named = new AgentRunController.Connections() {
+
+                private int opened;
+
+                @Override
+                public String open() {
+                    String identity = "conn-" + ++opened;
+                    connections.add("open " + identity);
+                    return identity;
+                }
+
+                @Override
+                public void ended(String connectionInstanceId) {
+                    connections.add("ended " + connectionInstanceId);
+                }
+            };
+            AgentRunController controller = new AgentRunController(this::start, this::observe, named, () -> tick * 1_000L, millis -> tick++);
             HeadlessOptions options = new HeadlessOptions(null, null);
             AgentRunController.Request request = new AgentRunController.Request(PROJECT,
                     List.of(AgentRunController.AgentSpec.of(ProviderRegistry.find("claude"), options), AgentRunController.AgentSpec.of(ProviderRegistry.find("codex"), options)),
@@ -186,9 +260,15 @@ final class AgentRunControllerTest {
             return controller.run(request, events::add);
         }
 
-        private AgentRunController.RunningAgent start(List<String> command, Path workingDirectory, String prompt, String label, Function<String, Optional<String>> sessionIdReader) {
+        private AgentRunController.RunningAgent start(List<String> command, Path workingDirectory, Map<String, String> environment, String prompt, String label,
+                Function<String, Optional<String>> sessionIdReader) {
             assertEquals(PROJECT, workingDirectory);
+            commands.add(command);
+            environments.add(environment);
             boolean resume = command.contains("--resume") || command.contains("resume");
+            if (resume) {
+                resumedAtTicks.add(tick);
+            }
             String session = "session-" + label.substring(label.indexOf('#') + 1);
             launches.add(resume ? "resume " + label + " " + session : "start " + label);
             prompts.add(prompt);
@@ -253,6 +333,12 @@ final class AgentRunControllerTest {
                 @Override
                 public boolean progressedSince(long sequence) {
                     return endlessProgress ? sequence < head : sequence <= state.progressAfter && state.progressAfter >= 0;
+                }
+
+                @Override
+                public OptionalLong answerDeadline(String provider) {
+                    Long deadline = answerDeadlines.get(provider);
+                    return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
                 }
             };
         }

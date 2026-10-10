@@ -63,6 +63,25 @@ final class HeadlessSessionContractTest {
     }
 
     @Test
+    void eachProviderHandsTheConnectionIdentityToItsMcpServerInTheWayItSupports() {
+        HeadlessOptions named = new HeadlessOptions("gpt-6-luna", null).withConnection("conn-instance-7f3a");
+        HeadlessSession claude = ProviderRegistry.find("claude").headlessSession().orElseThrow();
+        HeadlessSession codex = ProviderRegistry.find("codex").headlessSession().orElseThrow();
+
+        assertEquals(java.util.Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-instance-7f3a"), claude.environment(named));
+        assertFalse(claude.startCommand(PROJECT, named).stream().anyMatch(argument -> argument.contains("conn-instance-7f3a")), "Claude Code needs no argument for it");
+        assertEquals(java.util.Map.of(), claude.environment(new HeadlessOptions(null, null)), "without an identity the server chooses its own");
+
+        assertEquals(java.util.Map.of(), codex.environment(named), "Codex does not pass its environment to an MCP server");
+        assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--model", "gpt-6-luna", "--config",
+                "mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a", "-"), codex.startCommand(PROJECT, named));
+        List<String> resume = codex.resumeCommand(PROJECT, "01a12165-781c-70e0-b010-e8d2c048e4e5", named);
+        assertTrue(resume.indexOf("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a") < resume.indexOf("-"), "the prompt marker stays last: " + resume);
+
+        assertThrows(IllegalArgumentException.class, () -> new HeadlessOptions(null, null).withConnection("conn \" --config x=y"));
+    }
+
+    @Test
     void modelAndEffortMustBePlainTokensBecauseTheyBecomeArguments() {
         assertThrows(IllegalArgumentException.class, () -> new HeadlessOptions("sonnet --dangerously-skip-permissions", null));
         assertThrows(IllegalArgumentException.class, () -> new HeadlessOptions(null, "low&calc"));
