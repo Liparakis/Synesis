@@ -18,7 +18,6 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -95,19 +94,19 @@ public final class ImplementationValidationService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            identity = location.loadOrCreateIdentity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
 
         String requesterNodeId = identity.nodeId();
         try {
-            Path coordDir = location.root().resolve(".synesis/coordination");
+            Path coordDir = location.coordinationDirectory();
             try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordDir)) {
                 if (!lock.isHeld()) {
                     return blocked("EVENT_APPEND_LOCK_UNAVAILABLE", AgentReason.TASK_NOT_READY);
                 }
-                PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+                PredictionEventStore store = location.openCoordinationStore();
                 Optional<CapabilityRequestRecord> recOpt = store.capabilityRequestProjection().findByHandle(request.requestHandle());
                 if (recOpt.isEmpty()) {
                     return new AgentResponse(AgentStatus.BLOCKED, AgentReason.REQUEST_NOT_FOUND, AgentNextAction.RETRY, null);

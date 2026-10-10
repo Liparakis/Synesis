@@ -4,7 +4,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.synesis.link.identity.IdentityBootstrap;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -113,7 +112,7 @@ final class McpSessionLease {
     ProjectLocation renewLeaseAndHeartbeat(Path activeProjectRoot) throws Exception {
         ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
         var binding = authorityResolver.resolve(location, provider, connectionInstanceId);
-        String nodeId = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity().nodeId();
+        String nodeId = location.loadOrCreateIdentity().nodeId();
         // The collaboration event is the authority fence. Check it before renewing the external
         // lease so a stale recovery-held session cannot make its lease appear active again.
         collaborationService.heartbeatIfPresent(activeProjectRoot, provider, connectionInstanceId);

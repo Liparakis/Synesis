@@ -21,7 +21,6 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -119,13 +118,13 @@ public final class ImplementationPublicationService {
             ProviderSessionBindingService.Binding binding,
             NodeIdentity identity,
             Path ownerWorktree) throws Exception {
-        Path coordination = location.root().resolve(".synesis/coordination");
+        Path coordination = location.coordinationDirectory();
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordination)) {
             if (!lock.isHeld()) {
                 return blocked("EVENT_APPEND_LOCK_UNAVAILABLE", AgentReason.TASK_NOT_READY, AgentNextAction.RETRY);
             }
 
-            PredictionEventStore store = new PredictionEventStore(coordination, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             Optional<CapabilityRequestRecord> capabilityOpt = store.capabilityRequestProjection().findByHandle(request.requestHandle());
             if (capabilityOpt.isEmpty()) {
                 return blocked("CAPABILITY_REQUEST_NOT_FOUND", AgentReason.REQUEST_NOT_FOUND, AgentNextAction.RETRY);
@@ -302,7 +301,7 @@ public final class ImplementationPublicationService {
                     || !Path.of(authorized.worktreePath()).toAbsolutePath().normalize().equals(readiness.worktree())) {
                 return blocked("CAPABILITY_PUBLISHER_STALE", AgentReason.CAPABILITY_PUBLISHER_STALE, AgentNextAction.ENSURE_SESSION);
             }
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = location.loadOrCreateIdentity();
             if (!identity.nodeId().equals(binding.nodeId())) {
                 return blocked("CAPABILITY_PUBLISHER_IDENTITY_STALE", AgentReason.CAPABILITY_PUBLISHER_STALE, AgentNextAction.ENSURE_SESSION);
             }

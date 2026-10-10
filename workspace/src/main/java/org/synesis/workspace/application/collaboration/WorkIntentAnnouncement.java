@@ -19,7 +19,6 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
@@ -85,8 +84,8 @@ final class WorkIntentAnnouncement {
         ProjectLocation location = projectService.locate(projectRoot);
         manualService.requireAttested(provider);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         String participant = participantHandle(binding.sessionId());
         var existing = store.collaborationProjection().participants().stream().filter(candidate -> candidate.id().equals(participant)).findFirst();
         if (existing.isPresent() && existing.get().state() != Participant.State.ACTIVE) {
@@ -178,8 +177,8 @@ final class WorkIntentAnnouncement {
         if (binding.worktreePath() == null) {
             throw new IOException("REPAIR_BINDING_NOT_READY");
         }
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId).orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
         if (!snapshot.provenance().snapshotRef().equals("refs/synesis/snapshots/" + snapshot.snapshotId())) {
             throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");

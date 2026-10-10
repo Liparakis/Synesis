@@ -10,7 +10,6 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -91,8 +90,8 @@ final class NoChangeLaneCompletion {
         if (!new TaskSnapshotService().isCleanWorktree(readiness.worktree())) {
             throw new IOException("NO_CHANGE_DIRTY_WORKSPACE");
         }
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         WorkIntent intent = store.collaborationProjection().intent(expectedIntentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
         WorkGroup group = store.workGroupProjection().group(expectedWorkGroupId).orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
         if (!intent.workGroupId().equals(expectedWorkGroupId) || intent.version() != expectedClaimEpoch || group.version() != expectedWorkGroupVersion || !store.unchangedSince(expectedRevision)) {

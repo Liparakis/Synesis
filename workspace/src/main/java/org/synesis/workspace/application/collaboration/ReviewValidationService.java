@@ -17,7 +17,6 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -67,14 +66,14 @@ public final class ReviewValidationService {
             }
             ProjectLocation location = projectService.locate(root);
             ProviderSessionBindingService.Binding binding = authorityResolver.resolveReview(location, request.provider(), request.connectionInstanceId());
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = location.loadOrCreateIdentity();
             String reviewer = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            Path coordDir = location.root().resolve(".synesis/coordination");
+            Path coordDir = location.coordinationDirectory();
             try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(coordDir)) {
                 if (!appendLock.isHeld()) {
                     throw new IOException("event append lock unavailable");
                 }
-                PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+                PredictionEventStore store = location.openCoordinationStore();
                 LaneGrant grant = store.workGroupProjection().grants().stream().filter(value -> value.grantId().equals(request.grantId())).findFirst().orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
                 if (store.workGroupProjection().continuationGrant(grant.grantId())) {
                     return blocked("REVIEW_SELF_APPROVAL_FORBIDDEN", AgentNextAction.RETRY);

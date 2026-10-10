@@ -17,7 +17,6 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -82,11 +81,6 @@ public final class AgentNextActionService {
      * Project descriptor whose presence marks an initialised Synesis workspace.
      */
     private static final String PROJECT_DESCRIPTOR = ".synesis/project.json";
-
-    /**
-     * Profile sub-directory that stores the node identity.
-     */
-    private static final String LINK_PROFILE_DIR = "link";
 
     /**
      * Binding status of a session that has been terminalized.
@@ -693,7 +687,7 @@ public final class AgentNextActionService {
      * @throws Exception if the identity cannot be read or created
      */
     private static NodeIdentity loadCallerIdentity(ProjectLocation location) throws Exception {
-        return new IdentityBootstrap(location.profile().resolve(LINK_PROFILE_DIR)).loadOrCreate().identity();
+        return location.loadOrCreateIdentity();
     }
 
     /**

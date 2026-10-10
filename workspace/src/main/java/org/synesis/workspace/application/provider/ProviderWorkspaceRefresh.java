@@ -10,7 +10,6 @@ import java.util.UUID;
 
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -83,7 +82,7 @@ final class ProviderWorkspaceRefresh {
     }
 
     static Binding refreshClaimedDirtyWorkspace(ProviderSessionBindingService service, ProjectLocation location, Binding binding, Path bindingPath) throws Exception {
-        Path coordination = location.root().resolve(".synesis/coordination");
+        Path coordination = location.coordinationDirectory();
         // The same lock fences claim transitions and peer integration while the new
         // worktree is prepared. The old worktree remains intact even after publication.
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordination)) {
@@ -105,7 +104,7 @@ final class ProviderWorkspaceRefresh {
                     || !current.baseCommit().equals(currentCommit(source))) {
                 throw staleDirty();
             }
-            var projection = new PredictionEventStore(coordination, location.projectId()).collaborationProjection();
+            var projection = location.openCoordinationStore().collaborationProjection();
             String participant = WorkspaceCollaborationService.participantHandle(current.sessionId());
             if (projection.participantState(participant).filter(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE).isEmpty()) {
                 throw staleDirty();

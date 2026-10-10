@@ -17,7 +17,6 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
@@ -82,7 +81,7 @@ public final class ReconciliationService {
         List<SessionLeaseRecord> leases = leaseStore.listAll(root);
         Map<String, Participant.State> participantStates;
         try {
-            participantStates = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection().participants().stream()
+            participantStates = location.openCoordinationStore().collaborationProjection().participants().stream()
                     .collect(java.util.stream.Collectors.toMap(Participant::id, Participant::state, (first, ignored) -> first));
         } catch (Exception ignored) {
             participantStates = Map.of();
@@ -204,16 +203,15 @@ public final class ReconciliationService {
             ReconciliationExecutionJournal journal = new ReconciliationExecutionJournal(root, executionId);
             Set<String> previouslyCompleted = ReconciliationExecutionJournal.loadCompletedActionIds(root, planId);
 
-            Path coordDir = location.root().resolve(".synesis/coordination");
             PredictionEventStore store;
             try {
-                store = new PredictionEventStore(coordDir, location.projectId());
+                store = location.openCoordinationStore();
             } catch (java.security.GeneralSecurityException gse) {
                 throw new IOException("Security error initializing event store for reconciliation", gse);
             }
             NodeIdentity identity;
             try {
-                identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+                identity = location.loadOrCreateIdentity();
             } catch (Exception ex) {
                 throw new IOException("Failed to load node identity for reconciliation", ex);
             }
@@ -321,7 +319,7 @@ public final class ReconciliationService {
                             // leave the durable log with the heartbeat while this journal incorrectly records
                             // the suspension as complete.
                             new WorkIntentService(store, identity).suspend(participant);
-                            store = new PredictionEventStore(coordDir, location.projectId());
+                            store = location.openCoordinationStore();
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(executionId,
                                     planId,
@@ -368,7 +366,7 @@ public final class ReconciliationService {
                             WorkIntentService intentService = new WorkIntentService(store, identity);
                             RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location, entry.targetResourceId());
                             intentService.holdRecovery(participant, snapshot.root().toString() + "#" + snapshot.contentHash());
-                            store = new PredictionEventStore(coordDir, location.projectId());
+                            store = location.openCoordinationStore();
                             completedCount++;
                             ReconciliationExecutionRecord rec = new ReconciliationExecutionRecord(executionId,
                                     planId,

@@ -5,7 +5,6 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.identity.ProviderSessionId;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -35,8 +34,8 @@ final class MutationAdmission {
      */
     static String mutationReason(ProjectLocation location, ProviderSessionBindingService.Binding binding, String relativePath) {
         try {
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            NodeIdentity identity = location.loadOrCreateIdentity();
+            PredictionEventStore store = location.openCoordinationStore();
             WorkIntentService service = new WorkIntentService(store, identity);
             if (service.activeIntents().isEmpty() && !store.collaborationProjection().activated()) {
                 return "allowed";
@@ -85,8 +84,8 @@ final class MutationAdmission {
             if (binding == null || relativePath == null || relativePath.isBlank()) {
                 return false;
             }
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            NodeIdentity identity = location.loadOrCreateIdentity();
+            PredictionEventStore store = location.openCoordinationStore();
             WorkIntentService service = new WorkIntentService(store, identity);
             String participant = participantHandle(binding.sessionId());
             ResourceSelector selector = ResourceSelector.pathExact(relativePath);

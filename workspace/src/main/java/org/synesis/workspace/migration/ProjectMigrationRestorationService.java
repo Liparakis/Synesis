@@ -96,7 +96,7 @@ final class ProjectMigrationRestorationService {
             throw new IOException("project_restore_target_changed");
         }
         try {
-            String node = new IdentityBootstrap(location.profile().resolve("link")).inspect().nodeId();
+            String node = new IdentityBootstrap(location.linkDirectory()).inspect().nodeId();
             if (!manifest.nodeId().equals(node)) {
                 throw new IOException("project_restore_target_changed");
             }
@@ -139,7 +139,7 @@ final class ProjectMigrationRestorationService {
     }
 
     private static String keyFingerprint(ProjectLocation location) throws IOException {
-        Path keys = location.profile().resolve("link");
+        Path keys = location.linkDirectory();
         if (!Files.isDirectory(keys)) {
             return "missing";
         }

@@ -591,7 +591,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 || !binding.baseCommit().equals(expected.baseCommit())) {
             throw new IOException("lifecycle_worktree_identity_mismatch");
         }
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        PredictionEventStore store = location.openCoordinationStore();
         Participant participant = store.collaborationProjection().participants().stream().filter(item -> item.id().equals(expected.participant())).findFirst().orElse(null);
         if (participant == null || participant.state() != Participant.State.ACTIVE) {
             throw new IOException("lifecycle_participant_inactive");

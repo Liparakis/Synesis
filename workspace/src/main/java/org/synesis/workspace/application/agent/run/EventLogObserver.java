@@ -66,14 +66,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
 
     @Override
     public AgentRunController.Observation observe() throws IOException {
-        java.nio.file.Path coordination = location.root().resolve(".synesis/coordination");
+        java.nio.file.Path coordination = location.coordinationDirectory();
         if (!java.nio.file.Files.isDirectory(coordination)) {
             // Nothing has been recorded yet, and opening a store would create the directory.
             return NOTHING_RECORDED;
         }
         PredictionEventStore store;
         try {
-            store = new PredictionEventStore(coordination, location.projectId());
+            store = location.openCoordinationStore();
         } catch (GeneralSecurityException failure) {
             throw new IOException("coordination log could not be verified", failure);
         }

@@ -12,7 +12,6 @@ import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
@@ -71,13 +70,13 @@ public final class CapabilityValidationSnapshotAccessService {
             if (!"BOUND".equals(binding.status()) || !"VERIFIED".equals(binding.providerTrustState())) {
                 return denied("VALIDATION_REQUESTER_BINDING_UNVERIFIED");
             }
-            var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-            Path coordination = location.root().resolve(".synesis/coordination");
+            var identity = location.loadOrCreateIdentity();
+            Path coordination = location.coordinationDirectory();
             if (!Files.isDirectory(coordination.resolve("events"))) {
                 return denied("VALIDATION_CONTEXT_UNAVAILABLE");
             }
 
-            PredictionEventStore store = new PredictionEventStore(coordination, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             CapabilityRequestRecord request = store.capabilityRequestProjection().findByHandle(requestHandle).orElse(null);
             if (request == null || !request.matchesRequester(identity.nodeId(), binding.supervisorId(), binding.workerId())) {
                 return denied("VALIDATION_REQUESTER_MISMATCH");

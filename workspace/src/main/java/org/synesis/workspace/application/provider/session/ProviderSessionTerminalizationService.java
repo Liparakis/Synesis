@@ -195,12 +195,12 @@ public final class ProviderSessionTerminalizationService {
         if (terminalReason.length() > 256) {
             throw new IllegalArgumentException("terminal reason exceeds 256 characters");
         }
-        Path coordinationRoot = location.root().resolve(".synesis/coordination");
+        Path coordinationRoot = location.coordinationDirectory();
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordinationRoot)) {
             if (!lock.isHeld()) {
                 throw new IOException("event append lock unavailable");
             }
-            PredictionEventStore store = new PredictionEventStore(coordinationRoot, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             String requestedSessionId = binding.sessionId();
             ProviderSessionBindingService.Binding durableBinding = bindingService.list(location, binding.provider()).stream().filter(candidate -> candidate.sessionId().equals(requestedSessionId)).findFirst()
                     .orElseThrow(() -> new IOException("SESSION_BINDING_NOT_FOUND"));

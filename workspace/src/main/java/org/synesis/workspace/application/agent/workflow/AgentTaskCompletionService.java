@@ -29,7 +29,6 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -385,7 +384,7 @@ public final class AgentTaskCompletionService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            identity = location.loadOrCreateIdentity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
@@ -396,8 +395,7 @@ public final class AgentTaskCompletionService {
         Path workerWorktreePath = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
 
         try {
-            Path coordDir = location.root().resolve(".synesis/coordination");
-            PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             ExecutionResult prePublicationValidation = null;
 
             if (terminalRetry) {
@@ -852,7 +850,7 @@ public final class AgentTaskCompletionService {
         }
 
         try {
-            PredictionEventStore current = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            PredictionEventStore current = location.openCoordinationStore();
             NoChangeCompletion alreadyCompleted = current.collaborationProjection().noChangeCompletion(request.expectedIntentId()).orElse(null);
             if (alreadyCompleted != null) {
                 if (!noChangeEvidenceMatches(request, readiness.binding(), alreadyCompleted)) {
@@ -900,7 +898,7 @@ public final class AgentTaskCompletionService {
             if (!bindingService.complete(location, request.provider(), request.connectionInstanceId()) && !bindingService.hasActiveIntent(location, binding)) {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "SESSION_COMPLETE_FAILED"));
             }
-            PredictionEventStore completedStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            PredictionEventStore completedStore = location.openCoordinationStore();
             return noChangeCompletionWithContinuation(location, request, completedStore, completion, validation, binding, identity);
         } catch (Exception failure) {
             String reason = failure.getMessage() == null ? "NO_CHANGE_COMPLETION_FAILED" : failure.getMessage();
@@ -983,8 +981,8 @@ public final class AgentTaskCompletionService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            NodeIdentity identity = location.loadOrCreateIdentity();
+            PredictionEventStore store = location.openCoordinationStore();
             UUID taskId = deriveTaskId(binding);
             var preparedOpt = store.taskCompletionProjection().findPrepared(taskId);
             if (preparedOpt.isEmpty()) {
@@ -1001,11 +999,11 @@ public final class AgentTaskCompletionService {
             }
             WorkIntent replacement = currentIntent.nextVersion();
             CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
-            try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
+            try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.coordinationDirectory())) {
                 if (!lock.isHeld()) {
                     throw new java.io.IOException("event append lock unavailable");
                 }
-                PredictionEventStore currentStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+                PredictionEventStore currentStore = location.openCoordinationStore();
                 if (currentStore.taskCompletionProjection().findPrepared(taskId).isEmpty()) {
                     return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_unwound", "claimEpoch", replacement.version()));
                 }

@@ -1,11 +1,17 @@
 package org.synesis.workspace.application.project;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 
 import java.time.Instant;
 
 import java.util.Objects;
 import java.util.UUID;
+
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
+import org.synesis.link.identity.NodeIdentity;
 
 
 /**
@@ -54,5 +60,46 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     public ProjectIdentity identity() {
         return new ProjectIdentity(projectId, createdAt);
+    }
+
+    /**
+     * Returns the directory holding this project's coordination event log.
+     *
+     * @return coordination directory under the project root
+     */
+    public Path coordinationDirectory() {
+        return root.resolve(".synesis/coordination");
+    }
+
+    /**
+     * Opens a fresh view of this project's coordination store, so events appended by other
+     * processes are visible.
+     *
+     * @return coordination store for this project
+     * @throws IOException              if the event log cannot be read
+     * @throws GeneralSecurityException if stored events fail verification
+     */
+    public PredictionEventStore openCoordinationStore() throws IOException, GeneralSecurityException {
+        return new PredictionEventStore(coordinationDirectory(), projectId);
+    }
+
+    /**
+     * Returns the directory holding the signing identity files of this project's profile.
+     *
+     * @return link directory under the profile
+     */
+    public Path linkDirectory() {
+        return profile.resolve("link");
+    }
+
+    /**
+     * Loads the signing identity of this project's profile, creating it on first use.
+     *
+     * @return the long-term node identity
+     * @throws IOException              if identity storage is missing, corrupt, or inconsistent
+     * @throws GeneralSecurityException if key material is invalid
+     */
+    public NodeIdentity loadOrCreateIdentity() throws IOException, GeneralSecurityException {
+        return new IdentityBootstrap(linkDirectory()).loadOrCreate().identity();
     }
 }

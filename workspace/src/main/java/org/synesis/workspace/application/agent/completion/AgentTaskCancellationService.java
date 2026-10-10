@@ -12,7 +12,6 @@ import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -95,7 +94,7 @@ public final class AgentTaskCancellationService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            identity = location.loadOrCreateIdentity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
@@ -105,8 +104,7 @@ public final class AgentTaskCancellationService {
         String callerWorkerId = binding.workerId();
 
         try {
-            Path coordDir = location.root().resolve(".synesis/coordination");
-            PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
 
             UUID taskId = deriveTaskId(binding);
 

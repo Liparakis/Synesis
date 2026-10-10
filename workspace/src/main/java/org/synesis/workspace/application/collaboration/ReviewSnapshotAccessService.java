@@ -193,11 +193,11 @@ public final class ReviewSnapshotAccessService {
             } catch (Exception noReviewBinding) {
                 return new AccessResult(null, null);
             }
-            Path coordination = location.root().resolve(".synesis/coordination");
+            Path coordination = location.coordinationDirectory();
             if (!Files.exists(coordination.resolve("events"))) {
                 return new AccessResult(null, null);
             }
-            PredictionEventStore store = new PredictionEventStore(coordination, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
             List<GrantSnapshot> candidates = store.workGroupProjection().grants().stream().filter(grant -> grant.targetParticipant().equals(participant))
                     // The consumed grant created by LANE_CONTINUATION_ACCEPTED is a

@@ -6,10 +6,8 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
@@ -151,7 +149,7 @@ public final class ProviderSessionBindingService {
             // lane worktree can be created. Git visibility is not ownership of
             // any provider configuration file.
             RepositoryPrivateStateService.ensure(location.root());
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = location.loadOrCreateIdentity();
             String evidence = instanceEvidence == null || instanceEvidence.isBlank() ? fallbackEvidence(location, provider) : instanceEvidence.trim();
             String fingerprint = fingerprint(evidence);
             Path local = location.synesisDirectory().resolve("local");
@@ -308,7 +306,7 @@ public final class ProviderSessionBindingService {
                 return java.util.Optional.empty();
             }
             Binding binding = read(bindingPath);
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = location.loadOrCreateIdentity();
             if (!location.projectId().toString().equals(binding.projectId()) || !identity.nodeId().equals(binding.nodeId()) || !provider.equals(binding.provider())
                     || !instanceFingerprint.equals(binding.providerInstanceFingerprint())) {
                 throw new BindingException("SESSION_IDENTITY_MISMATCH", "Stored provider binding does not match this project or connection");
@@ -436,13 +434,13 @@ public final class ProviderSessionBindingService {
      */
     public boolean hasActiveIntent(ProjectLocation location, Binding binding) throws Exception {
         String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        return new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection().activeIntents().stream()
+        return location.openCoordinationStore().collaborationProjection().activeIntents().stream()
                 .anyMatch(intent -> intent.participant().equals(participant));
     }
 
     private boolean completeIfIdle(ProjectLocation location, Binding binding, Path bindingPath, ProjectAppendLock appendLock) throws Exception {
         if (appendLock == null) {
-            try (ProjectAppendLock acquired = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
+            try (ProjectAppendLock acquired = ProjectAppendLock.acquire(location.coordinationDirectory())) {
                 return completeIfIdle(location, binding, bindingPath, acquired);
             }
         }

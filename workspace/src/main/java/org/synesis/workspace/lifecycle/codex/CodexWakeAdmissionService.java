@@ -220,7 +220,7 @@ public final class CodexWakeAdmissionService {
      */
     public List<WakeResult> scan(Path projectRoot) throws Exception {
         ProjectLocation location = new ProjectApplicationService().locate(projectRoot.toAbsolutePath().normalize());
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        PredictionEventStore store = location.openCoordinationStore();
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         CodexLifecycleStateStore lifecycle = new CodexLifecycleStateStore(runtimeRoot(location).resolve("bindings"));
         List<WakeResult> results = new ArrayList<>();

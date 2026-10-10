@@ -30,7 +30,6 @@ import org.synesis.coordination.domain.identity.WorkGroupVersion;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -278,14 +277,13 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void release(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
-        WorkIntentService service = new WorkIntentService(store, identity);
-        WorkIntent current = store.collaborationProjection().intent(intentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
-        service.release(intentId, participantHandle(binding.sessionId()), WorkIntentMutationPrecondition.capture(current));
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
+            WorkIntentService service = new WorkIntentService(store, identity);
+            WorkIntent current = store.collaborationProjection().intent(intentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            service.release(intentId, participantHandle(binding.sessionId()), WorkIntentMutationPrecondition.capture(current));
+            return null;
+        });
     }
 
     /**
@@ -330,11 +328,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void detach(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).detach(participantHandle(binding.sessionId()));
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).detach(participantHandle(binding.sessionId()));
+            return null;
+        });
     }
 
     /**
@@ -346,11 +343,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void cancel(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).cancel(participantHandle(binding.sessionId()));
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).cancel(participantHandle(binding.sessionId()));
+            return null;
+        });
     }
 
     /**
@@ -385,8 +381,8 @@ public final class WorkspaceCollaborationService {
     public CoordinationRequest request(Path projectRoot, String provider, String connectionInstanceId, UUID conflictingIntentId, CoordinationRequest.Kind kind, String proposal, String snapshotId) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = kind == CoordinationRequest.Kind.REVIEW ? reviewBinding(location, provider, connectionInstanceId) : binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         if (kind == CoordinationRequest.Kind.REVIEW && "COMPLETED".equalsIgnoreCase(binding.status())) {
             String participant = participantHandle(binding.sessionId());
             WorkIntent target = store.collaborationProjection().intent(conflictingIntentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
@@ -412,11 +408,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void respond(Path projectRoot, String provider, String connectionInstanceId, UUID requestId, CoordinationRequest.Status status, String proposal) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).respond(participantHandle(binding.sessionId()), requestId, status, proposal);
+            return null;
+        });
     }
 
     /**
@@ -429,11 +424,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when authority or persistence validation fails
      */
     public void acknowledgeInbox(Path projectRoot, String provider, String connectionInstanceId, UUID itemId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).acknowledgeInbox(participantHandle(binding.sessionId()), itemId);
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).acknowledgeInbox(participantHandle(binding.sessionId()), itemId);
+            return null;
+        });
     }
 
     /**
@@ -448,11 +442,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception authorization or persistence failure
      */
     public void resolveInbox(Path projectRoot, String provider, String connectionInstanceId, UUID itemId, CoordinationRequest.Status status, String proposal) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).resolveInbox(participantHandle(binding.sessionId()), itemId, status, proposal);
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).resolveInbox(participantHandle(binding.sessionId()), itemId, status, proposal);
+            return null;
+        });
     }
 
     /**
@@ -468,11 +461,8 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public CoordinationRequest handoff(Path projectRoot, String provider, String connectionInstanceId, UUID intentId, String target, String proposal) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        return new WorkIntentService(store, identity).offerHandoff(participantHandle(binding.sessionId()), intentId, target, proposal);
+        return withSession(projectRoot, provider, connectionInstanceId,
+                (store, identity, binding) -> new WorkIntentService(store, identity).offerHandoff(participantHandle(binding.sessionId()), intentId, target, proposal));
     }
 
     /**
@@ -484,11 +474,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void heartbeat(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
+        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
+            new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
+            return null;
+        });
     }
 
     /**
@@ -559,8 +548,8 @@ public final class WorkspaceCollaborationService {
      */
     public CollaborationSnapshot status(Path projectRoot) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        WorkIntentService service = new WorkIntentService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        PredictionEventStore store = location.openCoordinationStore();
+        WorkIntentService service = new WorkIntentService(store, location.loadOrCreateIdentity());
         return new CollaborationSnapshot(service.activeIntents(),
                 service.requests(),
                 store.collaborationProjection().participants(),
@@ -578,8 +567,8 @@ public final class WorkspaceCollaborationService {
      */
     public void createWorkGroup(Path projectRoot, WorkGroup group) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).create(group);
+        PredictionEventStore store = location.openCoordinationStore();
+        new WorkGroupService(store, location.loadOrCreateIdentity()).create(group);
     }
 
     /**
@@ -609,8 +598,8 @@ public final class WorkspaceCollaborationService {
      */
     public void consumeLaneGrant(Path projectRoot, UUID grantId, String participant, UUID intentId, long epoch) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).consume(new LaneGrantId(grantId),
+        PredictionEventStore store = location.openCoordinationStore();
+        new WorkGroupService(store, location.loadOrCreateIdentity()).consume(new LaneGrantId(grantId),
                 new ParticipantId(participant),
                 new WorkIntentId(intentId),
                 new ClaimEpoch(epoch));
@@ -643,8 +632,8 @@ public final class WorkspaceCollaborationService {
      */
     public void closeWorkGroup(Path projectRoot, UUID groupId, WorkGroup.Status status, long expectedVersion) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).close(new WorkGroupId(groupId), status, new WorkGroupVersion(expectedVersion));
+        PredictionEventStore store = location.openCoordinationStore();
+        new WorkGroupService(store, location.loadOrCreateIdentity()).close(new WorkGroupId(groupId), status, new WorkGroupVersion(expectedVersion));
     }
 
     /**
@@ -662,8 +651,8 @@ public final class WorkspaceCollaborationService {
     public ContractRecord publishContract(Path projectRoot, String provider, String connectionInstanceId, UUID contractId, String body, List<String> selectors) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         return new ContractService(store, identity).publish(new ContractId(contractId), new ParticipantId(participantHandle(binding.sessionId())), body, selectors);
     }
 
@@ -681,8 +670,8 @@ public final class WorkspaceCollaborationService {
     public void bindContract(Path projectRoot, String provider, String connectionInstanceId, UUID intentId, UUID contractId, long revision) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         new ContractService(store, identity).bind(new WorkIntentId(intentId), new ParticipantId(participantHandle(binding.sessionId())), new ContractId(contractId), new ContractRevision(revision));
     }
 
@@ -695,8 +684,8 @@ public final class WorkspaceCollaborationService {
      */
     public ContractSnapshot contractStatus(Path projectRoot) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        ContractService service = new ContractService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        PredictionEventStore store = location.openCoordinationStore();
+        ContractService service = new ContractService(store, location.loadOrCreateIdentity());
         return new ContractSnapshot(service.contracts(), service.dependencies());
     }
 
@@ -746,6 +735,19 @@ public final class WorkspaceCollaborationService {
      */
     public boolean hasActiveMutationClaim(ProjectLocation location, ProviderSessionBindingService.Binding binding, String relativePath) {
         return MutationAdmission.hasActiveMutationClaim(location, binding, relativePath);
+    }
+
+    @FunctionalInterface
+    private interface SessionAction<T> {
+        T apply(PredictionEventStore store, NodeIdentity identity, ProviderSessionBindingService.Binding binding) throws Exception;
+    }
+
+    private <T> T withSession(Path projectRoot, String provider, String connectionInstanceId, SessionAction<T> action) throws Exception {
+        ProjectLocation location = projectService.locate(projectRoot);
+        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
+        return action.apply(store, identity, binding);
     }
 
     private ProviderSessionBindingService.Binding binding(ProjectLocation location, String provider, String connectionId) throws Exception {

@@ -27,12 +27,7 @@ final class NextActionSupport {
     private static final System.Logger LOGGER = System.getLogger(AgentNextActionService.class.getName());
 
     /**
-     * Project-relative directory holding the durable coordination event store.
-     */
-    private static final String COORDINATION_DIR = ".synesis/coordination";
-
-    /**
-     * Sub-directory of {@link #COORDINATION_DIR} whose existence signals a populated event log.
+     * Sub-directory of the project coordination directory whose existence signals a populated event log.
      */
     private static final String EVENTS_DIR = "events";
 
@@ -47,7 +42,7 @@ final class NextActionSupport {
      * @throws Exception if the store cannot be opened
      */
     static PredictionEventStore newEventStore(ProjectLocation location) throws Exception {
-        return new PredictionEventStore(location.root().resolve(COORDINATION_DIR), location.projectId());
+        return location.openCoordinationStore();
     }
 
     /**
@@ -58,7 +53,7 @@ final class NextActionSupport {
      * @throws Exception if the store cannot be opened
      */
     static Optional<PredictionEventStore> openEventStore(ProjectLocation location) throws Exception {
-        if (!Files.exists(location.root().resolve(COORDINATION_DIR).resolve(EVENTS_DIR))) {
+        if (!Files.exists(location.coordinationDirectory().resolve(EVENTS_DIR))) {
             return Optional.empty();
         }
         return Optional.of(newEventStore(location));

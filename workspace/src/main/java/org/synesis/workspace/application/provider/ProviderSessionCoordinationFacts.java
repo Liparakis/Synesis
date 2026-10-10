@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
@@ -27,13 +26,13 @@ final class ProviderSessionCoordinationFacts {
     }
 
     static boolean cleanlyDetached(ProjectLocation location, Binding binding) {
-        Path coordination = location.root().resolve(".synesis/coordination");
+        Path coordination = location.coordinationDirectory();
         if (!Files.isDirectory(coordination.resolve("events"))) {
             return false;
         }
         try {
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            return new PredictionEventStore(coordination, location.projectId()).collaborationProjection().participantState(participant)
+            return location.openCoordinationStore().collaborationProjection().participantState(participant)
                     .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED).orElse(false);
         } catch (Exception ignored) {
             return false;
@@ -56,7 +55,7 @@ final class ProviderSessionCoordinationFacts {
         }
         try {
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-            var projection = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection();
+            var projection = location.openCoordinationStore().collaborationProjection();
             return projection.activeIntents().stream().filter(intent -> intent.projectId().equals(location.projectId())).filter(intent -> intent.provider().equals(binding.provider()))
                     .filter(intent -> intent.participant().equals(participant)).filter(intent -> intent.status() == WorkIntent.Status.ANNOUNCED)
                     .anyMatch(intent -> projection.predecessorIntent(intent.intentId()).isPresent() && projection.participantState(participant)
@@ -72,7 +71,7 @@ final class ProviderSessionCoordinationFacts {
             return false;
         }
         String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        return new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection().activeIntents().stream()
+        return location.openCoordinationStore().collaborationProjection().activeIntents().stream()
                 .filter(intent -> intent.participant().equals(participant)).anyMatch(intent -> declaresNoRepositoryMutation(intent.acceptance()));
     }
 

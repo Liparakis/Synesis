@@ -18,7 +18,6 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -64,7 +63,7 @@ final class RecoveryLaneContinuation {
     boolean recoveryFenced(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         ProjectLocation location = projectService.locate(projectRoot);
         ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        PredictionEventStore store = location.openCoordinationStore();
         Participant.State state = store.collaborationProjection()
                 .participantState(participantHandle(binding.sessionId()))
                 .orElse(null);
@@ -97,7 +96,7 @@ final class RecoveryLaneContinuation {
         List<ResourceSelector> requestedSelectors = selectors == null ? List.of() : List.copyOf(selectors);
         try {
             ProjectLocation location = projectService.locate(projectRoot);
-            PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             String currentParticipant = participantHandle(connectionInstanceId);
             return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.role() == requestedRole).filter(intent -> !intent.participant().equals(currentParticipant))
                     .filter(intent -> workGroupId == null || intent.workGroupId().equals(workGroupId))
@@ -131,8 +130,8 @@ final class RecoveryLaneContinuation {
         if (binding.worktreePath() == null) {
             throw new IOException("CONTINUATION_TARGET_WORKTREE_REQUIRED");
         }
-        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        PredictionEventStore store = location.openCoordinationStore();
         String targetParticipant = participantHandle(binding.sessionId());
         Optional<UUID> existingSuccessor = store.collaborationProjection().successorIntent(sourceIntentId);
         if (existingSuccessor.isPresent()) {

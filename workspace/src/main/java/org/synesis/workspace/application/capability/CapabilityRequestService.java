@@ -27,7 +27,6 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -207,12 +206,12 @@ public final class CapabilityRequestService {
         NodeIdentity identity;
         try {
             location = projectService.locate(root);
-            identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            identity = location.loadOrCreateIdentity();
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
         }
 
-        Path coordDir = location.root().resolve(".synesis/coordination");
+        Path coordDir = location.coordinationDirectory();
         ProjectAppendLock appendLock;
         try {
             appendLock = ProjectAppendLock.acquire(coordDir);
@@ -232,7 +231,7 @@ public final class CapabilityRequestService {
             if (binding.worktreePath() == null) {
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
             }
-            PredictionEventStore store = new PredictionEventStore(coordDir, location.projectId());
+            PredictionEventStore store = location.openCoordinationStore();
             return describeLocked(request, location, store, binding, identity);
         } catch (Exception ex) {
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);

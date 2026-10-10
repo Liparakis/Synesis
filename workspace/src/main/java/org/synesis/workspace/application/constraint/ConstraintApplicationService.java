@@ -4,7 +4,6 @@ import java.io.Serial;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.projectrecord.domain.DecisionRecord;
@@ -41,7 +40,7 @@ public final class ConstraintApplicationService {
         Objects.requireNonNull(location, "location");
         try {
             ProjectConfig config = ProjectConfig.load(location.profile().resolve("project.conf"));
-            NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+            NodeIdentity identity = location.loadOrCreateIdentity();
             DecisionRecord record = ProjectConstraint.createTypedRecord(config.projectId(),
                     UUID.randomUUID(),
                     identity.nodeId(),

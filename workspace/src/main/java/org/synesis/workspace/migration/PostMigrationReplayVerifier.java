@@ -129,7 +129,7 @@ final class PostMigrationReplayVerifier {
      */
     MigrationSemanticSnapshot capture(ProjectLocation location) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(location, "location");
-        String nodeId = new IdentityBootstrap(location.profile().resolve("link")).inspect().nodeId();
+        String nodeId = new IdentityBootstrap(location.linkDirectory()).inspect().nodeId();
         if (nodeId.isBlank()) {
             throw new IOException("project node identity unavailable");
         }
