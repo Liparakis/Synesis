@@ -72,12 +72,17 @@ below carries one of three evidence marks:
 
 Resolved by the repository owner on October 10, 2026.
 
-1. **Java API between modules is internal.** Synesis has had no first release
-   and no consumer outside this repository, so public Java types and members
-   may be narrowed, moved, or removed when every caller here is migrated in the
-   same change. ADR-0088 records this. The MCP and CLI surface, wire formats,
-   and persisted state stay published contracts. Wave 9 is therefore approved.
-   Where a unit below says deprecate, it now removes.
+1. **Internal APIs and prerelease formats may be redesigned.** Synesis has had
+   no first public release and no consumer outside this repository. Public Java
+   types may be narrowed, moved, or removed, and a wire or persisted format may
+   be redesigned, when that materially improves correctness, simplicity,
+   maintainability, or performance. The change migrates every producer and
+   consumer here, updates tests and docs, and keeps Claude Code and Codex
+   sessions interoperating. Compatibility with superseded prerelease versions
+   is not required. ADR-0088 records this. The MCP catalog and the CLI surface
+   stay stable. Wave 9 is therefore approved. Where a unit below says
+   deprecate, it now removes. Where a unit says bytes stay identical, that
+   remains the default, and a unit that changes a format says so in its commit.
 2. **Unwired subsystems stay.** They are neither deleted nor restructured.
    `docs/agent/DEFERRED.md` records them for a separate review.
 3. **Defects are fixed.** Each fix is its own commit, states the behavior it
@@ -108,7 +113,8 @@ Rules that hold for every unit:
 ## Wave 0: pin the contracts (tests only)
 
 No production code changes in this wave. Each unit decodes fixed bytes captured
-from the unmodified code and asserts the re-encoding is identical.
+from the unmodified code and asserts the re-encoding is identical. Fixtures
+cover the current canonical format of each form, not historical versions.
 
 ### P-1 Coordination event and command bytes
 - Problem: 12 `CollaborationCodec` forms, `ContractCodec`, and nine payload
