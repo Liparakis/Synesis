@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
+import org.synesis.workspace.application.task.SnapshotRefs;
 
 /**
  * Manages dedicated Git integration worktrees for task integration.
@@ -252,7 +253,7 @@ public final class IntegrationWorkspaceService {
             throw new IOException("REPAIR_TARGET_NOT_AT_CONTROL_HEAD");
         }
         String snapshotRef = snapshot.provenance().snapshotRef();
-        if (!snapshotRef.startsWith("refs/synesis/snapshots/")) {
+        if (!SnapshotRefs.isSnapshotRef(snapshotRef)) {
             throw new IOException("REPAIR_SNAPSHOT_REF_INVALID");
         }
         String resolvedSnapshot = gitRevParse(target, snapshotRef + "^{commit}");

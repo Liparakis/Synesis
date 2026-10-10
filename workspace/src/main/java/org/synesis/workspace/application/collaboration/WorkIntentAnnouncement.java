@@ -31,6 +31,7 @@ import org.synesis.workspace.application.provider.session.SessionAuthorityResolv
 import static org.synesis.workspace.application.collaboration.WorkspaceCollaborationService.participantHandle;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService.ScopeExtensionRequiredException;
+import org.synesis.workspace.application.task.SnapshotRefs;
 
 /**
  * Admits a verified provider session's lane: first announcement, scope extension of the session's
@@ -180,7 +181,7 @@ final class WorkIntentAnnouncement {
         NodeIdentity identity = location.loadOrCreateIdentity();
         PredictionEventStore store = location.openCoordinationStore();
         TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId).orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
-        if (!snapshot.provenance().snapshotRef().equals("refs/synesis/snapshots/" + snapshot.snapshotId())) {
+        if (!snapshot.provenance().snapshotRef().equals(SnapshotRefs.snapshotRef(snapshot.snapshotId()))) {
             throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");
         }
         UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));

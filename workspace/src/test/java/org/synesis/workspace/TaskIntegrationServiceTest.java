@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
 /**
@@ -68,9 +69,7 @@ class TaskIntegrationServiceTest {
     Files.writeString(root.resolve("README.md"), "changed\n");
     Files.writeString(root.resolve("new.txt"), "new\n");
 
-    TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(
-        UUID.randomUUID(), "node", "supervisor", "worker", "lane",
-        root, root, "snapshot", java.util.Optional.empty(), List.of());
+    TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(SnapshotRequest.forTask(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.empty(), List.of()));
     assertNotNull(record.commitSha());
     org.junit.jupiter.api.Assertions.assertNotEquals(head, record.commitSha());
     assertEquals(List.of("README.md", "new.txt"), record.changedPaths());
@@ -96,9 +95,9 @@ class TaskIntegrationServiceTest {
 
     TaskSnapshotService service = new TaskSnapshotService();
     assertFalse(service.hasPublishableChanges(root,
-        List.of(ResourceSelector.pathExact("todo.py"))));
+        List.of(ResourceSelector.pathExact("todo.py")), null, false));
     assertTrue(service.hasPublishableChanges(root,
-        List.of(ResourceSelector.pathExact("test_todo.py"))));
+        List.of(ResourceSelector.pathExact("test_todo.py")), null, false));
   }
 
   @Test
@@ -122,12 +121,10 @@ class TaskIntegrationServiceTest {
         List.of(foreignClaim), base));
 
     UUID laneId = UUID.randomUUID();
-    TaskSnapshotRecord snapshot = service.createSnapshot(
-        UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root,
-        "successor correction", java.util.Optional.empty(), List.of(), List.of(laneClaim),
-        UUID.randomUUID(), laneId, "agt_successor", "lane", 2,
-        org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneId),
-        List.of(), true, base, true, List.of(foreignClaim));
+    TaskSnapshotRecord snapshot = service.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "successor correction", java.util.Optional.empty(), List.of(),
+        new SnapshotRequest.ClaimScope(List.of(laneClaim), List.of(foreignClaim), true),
+        new SnapshotRequest.Lane(UUID.randomUUID(), laneId, "agt_successor", "lane", 2, org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneId), List.of()),
+        true, base, null));
 
     assertEquals(List.of("issue_tracker.py"), snapshot.changedPaths());
     assertEquals("issue_tracker.py", gitOutput(root, "diff", "--name-only", base,
@@ -182,11 +179,10 @@ class TaskIntegrationServiceTest {
     Files.writeString(root.resolve("README.md"), "unclaimed\n");
     TaskSnapshotService service = new TaskSnapshotService();
     org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
-        () -> service.createSnapshot(
-            UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot",
-            java.util.Optional.empty(), List.of(),
-        List.of(ResourceSelector.pathExact("src/claimed.py")),
-            UUID.randomUUID(), UUID.randomUUID(), "agt_test", "lane", 1, List.of()));
+        () -> service.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.empty(), List.of(),
+            SnapshotRequest.ClaimScope.unscoped(List.of(ResourceSelector.pathExact("src/claimed.py"))),
+            SnapshotRequest.Lane.of(UUID.randomUUID(), UUID.randomUUID(), "agt_test", "lane", 1, List.of()),
+            false, null, null)));
   }
 
   @Test
@@ -210,19 +206,15 @@ class TaskIntegrationServiceTest {
     List<ResourceSelector> claims = List.of(ResourceSelector.pathExact("a.py"),
         ResourceSelector.pathExact("b.py"));
     assertTrue(snapshots.hasScopedPublishableChanges(root,
-        List.of(ResourceSelector.pathExact("a.py")), claims, base));
-    TaskSnapshotRecord snapshotA = snapshots.createSnapshot(
-        UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root,
-        "lane A", java.util.Optional.empty(), List.of(),
-        List.of(ResourceSelector.pathExact("a.py")), group, laneA, "agt_test", "lane", 1,
-        org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneA),
-        List.of(), false, base, true);
-    TaskSnapshotRecord snapshotB = snapshots.createSnapshot(
-        UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root,
-        "lane B", java.util.Optional.empty(), List.of(),
-        List.of(ResourceSelector.pathExact("b.py")), group, laneB, "agt_test", "lane", 1,
-        org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneB),
-        List.of(), false, base, true);
+        List.of(ResourceSelector.pathExact("a.py")), claims, List.of(), base));
+    TaskSnapshotRecord snapshotA = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "lane A", java.util.Optional.empty(), List.of(),
+        new SnapshotRequest.ClaimScope(List.of(ResourceSelector.pathExact("a.py")), List.of(), true),
+        new SnapshotRequest.Lane(group, laneA, "agt_test", "lane", 1, org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneA), List.of()),
+        false, base, null));
+    TaskSnapshotRecord snapshotB = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "lane B", java.util.Optional.empty(), List.of(),
+        new SnapshotRequest.ClaimScope(List.of(ResourceSelector.pathExact("b.py")), List.of(), true),
+        new SnapshotRequest.Lane(group, laneB, "agt_test", "lane", 1, org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(laneB), List.of()),
+        false, base, null));
 
     assertEquals(List.of("a.py"), snapshotA.changedPaths());
     assertEquals(List.of("b.py"), snapshotB.changedPaths());
@@ -242,10 +234,10 @@ class TaskIntegrationServiceTest {
     TaskSnapshotService service = new TaskSnapshotService();
     UUID taskId = UUID.randomUUID();
     UUID laneId = UUID.randomUUID();
-    TaskSnapshotRecord first = service.createSnapshot(taskId, "node", "supervisor", "worker",
-        "lane",
-        root, root, "snapshot", java.util.Optional.empty(), List.of(), List.of(),
-        UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
+    TaskSnapshotRecord first = service.createSnapshot(new SnapshotRequest(taskId, "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.empty(), List.of(),
+        SnapshotRequest.ClaimScope.unscoped(List.of()),
+        SnapshotRequest.Lane.of(UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of()),
+        false, null, null));
     String prepared = service.pinPreparedRef(root, first, "cmp_test");
     service.verifyPreparedRef(root, prepared, first.commitSha());
     service.promotePreparedRef(root,
@@ -254,10 +246,10 @@ class TaskIntegrationServiceTest {
             .snapshotRef(),
         first.commitSha());
 
-    TaskSnapshotRecord retry = service.createSnapshot(taskId, "node", "supervisor", "worker",
-        "lane",
-        root, root, "snapshot", java.util.Optional.of(first), List.of(), List.of(),
-        UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of());
+    TaskSnapshotRecord retry = service.createSnapshot(new SnapshotRequest(taskId, "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.of(first), List.of(),
+        SnapshotRequest.ClaimScope.unscoped(List.of()),
+        SnapshotRequest.Lane.of(UUID.randomUUID(), laneId, "agt_test", "lane", 1, List.of()),
+        false, null, null));
     assertEquals(first.snapshotId(), retry.snapshotId());
     assertEquals(first.commitSha(),
         gitOutput(root,
@@ -280,9 +272,7 @@ class TaskIntegrationServiceTest {
     Files.createDirectories(root.resolve(".codex"));
     Files.writeString(root.resolve(".codex/session.json"), "runtime\n");
 
-    TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(
-        UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root,
-        "snapshot", java.util.Optional.empty(), List.of());
+    TaskSnapshotRecord record = new TaskSnapshotService().createSnapshot(SnapshotRequest.forTask(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.empty(), List.of()));
 
     assertEquals(List.of("README.md"), record.changedPaths());
     assertNotEquals("UNRECORDED",
@@ -319,16 +309,14 @@ class TaskIntegrationServiceTest {
 
       TaskSnapshotService snapshots = new TaskSnapshotService();
       UUID group = UUID.randomUUID();
-      TaskSnapshotRecord snapshotA = snapshots.createSnapshot(
-          UUID.randomUUID(), "node-a", "sup-a", "worker-a", "lane-a", laneA, root,
-          "lane A", java.util.Optional.empty(), List.of(),
-          List.of(ResourceSelector.pathExact("src/a.py")), group, UUID.randomUUID(),
-          "participant-a", "binding-a", 1, List.of());
-      TaskSnapshotRecord snapshotB = snapshots.createSnapshot(
-          UUID.randomUUID(), "node-b", "sup-b", "worker-b", "lane-b", laneB, root,
-          "lane B", java.util.Optional.empty(), List.of(),
-          List.of(ResourceSelector.pathExact("src/b.py")), group, UUID.randomUUID(),
-          "participant-b", "binding-b", 1, List.of());
+      TaskSnapshotRecord snapshotA = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node-a", "sup-a", "worker-a", "lane-a", laneA, root, "lane A", java.util.Optional.empty(), List.of(),
+          SnapshotRequest.ClaimScope.unscoped(List.of(ResourceSelector.pathExact("src/a.py"))),
+          SnapshotRequest.Lane.of(group, UUID.randomUUID(), "participant-a", "binding-a", 1, List.of()),
+          false, null, null));
+      TaskSnapshotRecord snapshotB = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node-b", "sup-b", "worker-b", "lane-b", laneB, root, "lane B", java.util.Optional.empty(), List.of(),
+          SnapshotRequest.ClaimScope.unscoped(List.of(ResourceSelector.pathExact("src/b.py"))),
+          SnapshotRequest.Lane.of(group, UUID.randomUUID(), "participant-b", "binding-b", 1, List.of()),
+          false, null, null));
 
       assertEquals(List.of("src/a.py"), snapshotA.changedPaths());
       assertEquals(List.of("src/b.py"), snapshotB.changedPaths());
@@ -377,9 +365,7 @@ class TaskIntegrationServiceTest {
 
     IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(
         IllegalStateException.class,
-        () -> new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "supervisor",
-            "worker",
-            "lane", root, root, "snapshot", java.util.Optional.empty(), List.of()));
+        () -> new TaskSnapshotService().createSnapshot(SnapshotRequest.forTask(UUID.randomUUID(), "node", "supervisor", "worker", "lane", root, root, "snapshot", java.util.Optional.empty(), List.of())));
     assertTrue(failure.getMessage()
         .startsWith("SNAPSHOT_ARTIFACT_POLICY:"));
   }

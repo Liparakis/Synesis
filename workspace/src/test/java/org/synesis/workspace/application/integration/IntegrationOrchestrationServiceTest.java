@@ -29,6 +29,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 
 /**
@@ -127,7 +128,7 @@ class IntegrationOrchestrationServiceTest {
             Files.createDirectories(lane.resolve("src"));
             Files.writeString(lane.resolve("src/claimed.py"), "claimed\n");
 
-            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(), "node", "sup", "worker", "lane", lane, root, "snapshot", java.util.Optional.empty(), List.of(), List.of());
+            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(SnapshotRequest.forTask(UUID.randomUUID(), "node", "sup", "worker", "lane", lane, root, "snapshot", java.util.Optional.empty(), List.of()));
             assertEquals(baselineCommit, snapshot.baseCommit());
             assertEquals(List.of("src/claimed.py"), snapshot.changedPaths());
             TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(),
@@ -214,26 +215,10 @@ class IntegrationOrchestrationServiceTest {
             Files.createDirectories(lane.resolve("src"));
             Files.writeString(lane.resolve("src/claimed.py"), "claimed\n");
 
-            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(taskId,
-                    "node",
-                    "sup",
-                    "worker",
-                    "binding",
-                    lane,
-                    root,
-                    "snapshot",
-                    java.util.Optional.empty(),
-                    List.of(),
-                    ownerIntent.selectors(),
-                    ownerIntent.workGroupId(),
-                    ownerIntent.intentId(),
-                    ownerIntent.participant(),
-                    "binding",
-                    ownerIntent.version(),
-                    ownerIntent.authorityLineageId(),
-                    List.of(),
-                    false,
-                    baselineCommit);
+            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(taskId, "node", "sup", "worker", "binding", lane, root, "snapshot", java.util.Optional.empty(), List.of(),
+                SnapshotRequest.ClaimScope.unscoped(ownerIntent.selectors()),
+                new SnapshotRequest.Lane(ownerIntent.workGroupId(), ownerIntent.intentId(), ownerIntent.participant(), "binding", ownerIntent.version(), ownerIntent.authorityLineageId(), List.of()),
+                false, baselineCommit, null));
             TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(),
                     snapshot.snapshotId(),
                     snapshot.nodeId(),

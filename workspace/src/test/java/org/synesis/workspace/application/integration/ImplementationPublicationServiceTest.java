@@ -35,6 +35,7 @@ import org.synesis.workspace.application.capability.CapabilityResponseService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
@@ -351,29 +352,10 @@ class ImplementationPublicationServiceTest {
     private TaskSnapshotRecord finishSnapshot() throws Exception {
         var ownerBinding = bindings.find(location, "codex", ownerConnection).orElseThrow();
         var ownerIntent = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).collaborationProjection().intent(ownerIntentId).orElseThrow();
-        return new TaskSnapshotService().createSnapshot(ownerIntent.taskId(),
-                ownerBinding.nodeId(),
-                ownerBinding.supervisorId(),
-                ownerBinding.workerId(),
-                ownerBinding.sessionId(),
-                ownerWorktree,
-                location.root(),
-                "Complete the task-tracker lane",
-                java.util.Optional.empty(),
-                List.of(),
-                ownerIntent.selectors(),
-                workGroupId,
-                ownerIntentId,
-                WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()),
-                ownerBinding.sessionId(),
-                claimEpoch,
-                ownerIntent.authorityLineageId(),
-                List.of(),
-                false,
-                ownerBinding.baseCommit(),
-                true,
-                List.of(),
-                null);
+        return new TaskSnapshotService().createSnapshot(new SnapshotRequest(ownerIntent.taskId(), ownerBinding.nodeId(), ownerBinding.supervisorId(), ownerBinding.workerId(), ownerBinding.sessionId(), ownerWorktree, location.root(), "Complete the task-tracker lane", java.util.Optional.empty(), List.of(),
+            new SnapshotRequest.ClaimScope(ownerIntent.selectors(), List.of(), true),
+            new SnapshotRequest.Lane(workGroupId, ownerIntentId, WorkspaceCollaborationService.participantHandle(ownerBinding.sessionId()), ownerBinding.sessionId(), claimEpoch, ownerIntent.authorityLineageId(), List.of()),
+            false, ownerBinding.baseCommit(), null));
     }
 
     private static String responseReason(AgentResponse response) {

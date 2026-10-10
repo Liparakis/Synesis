@@ -33,6 +33,7 @@ import org.synesis.workspace.application.integration.IntegrationWorkspaceService
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.mutation.PatchRequest;
 import org.synesis.workspace.application.workspace.mutation.WorkspacePatchService;
@@ -146,40 +147,14 @@ final class MultiChatLogicalWorkspaceTest {
         Files.writeString(laneBWorktree.resolve("src/b.py"), "lane-b\n");
         String base = gitOutput(root, "rev-parse", "HEAD");
         TaskSnapshotService snapshots = new TaskSnapshotService();
-        TaskSnapshotRecord snapshotA = snapshots.createSnapshot(UUID.randomUUID(),
-                "node-a",
-                "sup-a",
-                "worker-a",
-                "chat-a",
-                laneAWorktree,
-                root,
-                "lane A",
-                java.util.Optional.empty(),
-                List.of(),
-                List.of(ResourceSelector.pathExact("src/a.py")),
-                group,
-                UUID.randomUUID(),
-                WorkspaceCollaborationService.participantHandle(laneA.sessionId()),
-                laneA.sessionId(),
-                1,
-                List.of());
-        TaskSnapshotRecord snapshotB = snapshots.createSnapshot(UUID.randomUUID(),
-                "node-b",
-                "sup-b",
-                "worker-b",
-                "chat-b",
-                laneBWorktree,
-                root,
-                "lane B",
-                java.util.Optional.empty(),
-                List.of(),
-                List.of(ResourceSelector.pathExact("src/b.py")),
-                group,
-                UUID.randomUUID(),
-                WorkspaceCollaborationService.participantHandle(laneB.sessionId()),
-                laneB.sessionId(),
-                1,
-                List.of());
+        TaskSnapshotRecord snapshotA = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node-a", "sup-a", "worker-a", "chat-a", laneAWorktree, root, "lane A", java.util.Optional.empty(), List.of(),
+            SnapshotRequest.ClaimScope.unscoped(List.of(ResourceSelector.pathExact("src/a.py"))),
+            SnapshotRequest.Lane.of(group, UUID.randomUUID(), WorkspaceCollaborationService.participantHandle(laneA.sessionId()), laneA.sessionId(), 1, List.of()),
+            false, null, null));
+        TaskSnapshotRecord snapshotB = snapshots.createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node-b", "sup-b", "worker-b", "chat-b", laneBWorktree, root, "lane B", java.util.Optional.empty(), List.of(),
+            SnapshotRequest.ClaimScope.unscoped(List.of(ResourceSelector.pathExact("src/b.py"))),
+            SnapshotRequest.Lane.of(group, UUID.randomUUID(), WorkspaceCollaborationService.participantHandle(laneB.sessionId()), laneB.sessionId(), 1, List.of()),
+            false, null, null));
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
         IntegrationWorkspaceService.IntegrationWorktreeResult integrated = integration.prepareIntegrationWorktree(root, "acceptance-" + UUID.randomUUID(), base, List.of(snapshotA, snapshotB));
         try {
@@ -216,23 +191,10 @@ final class MultiChatLogicalWorkspaceTest {
         UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Files.createDirectories(sourceWorktree.resolve("src"));
         Files.writeString(sourceWorktree.resolve("src/conflict.py"), "original\n");
-        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(UUID.randomUUID(),
-                "node",
-                "sup",
-                "worker",
-                sourceBinding.sessionId(),
-                sourceWorktree,
-                root,
-                "conflict",
-                java.util.Optional.empty(),
-                List.of(),
-                selectors,
-                group,
-                sourceIntentId,
-                WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()),
-                sourceBinding.sessionId(),
-                1,
-                List.of());
+        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "sup", "worker", sourceBinding.sessionId(), sourceWorktree, root, "conflict", java.util.Optional.empty(), List.of(),
+            SnapshotRequest.ClaimScope.unscoped(selectors),
+            SnapshotRequest.Lane.of(group, sourceIntentId, WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()), sourceBinding.sessionId(), 1, List.of()),
+            false, null, null));
         IdentityBootstrap bootstrap = new IdentityBootstrap(location.profile().resolve("link"));
         var identity = bootstrap.loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());

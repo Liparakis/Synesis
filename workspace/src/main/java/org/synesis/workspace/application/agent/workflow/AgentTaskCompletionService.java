@@ -48,6 +48,7 @@ import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
@@ -523,7 +524,7 @@ public final class AgentTaskCompletionService {
 
             TaskSnapshotRecord snapshot;
             try {
-                snapshot = snapshotService.createSnapshot(taskId,
+                snapshot = snapshotService.createSnapshot(new SnapshotRequest(taskId,
                         callerNodeId,
                         callerSupervisorId,
                         callerWorkerId,
@@ -533,18 +534,17 @@ public final class AgentTaskCompletionService {
                         summaryText,
                         existingOpt,
                         workerCapabilities,
-                        currentClaims,
-                        laneIntent.map(WorkIntent::workGroupId).orElse(taskId),
-                        laneIntent.map(WorkIntent::intentId).orElse(taskId),
-                        participantHandle,
-                        binding.sessionId(),
-                        laneIntent.map(WorkIntent::version).orElse(1L),
-                        laneIntent.map(WorkIntent::authorityLineageId).orElse(org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(taskId)),
-                        List.of(),
+                        new SnapshotRequest.ClaimScope(currentClaims, foreignClaims, scopeToLane),
+                        new SnapshotRequest.Lane(laneIntent.map(WorkIntent::workGroupId).orElse(taskId),
+                                laneIntent.map(WorkIntent::intentId).orElse(taskId),
+                                participantHandle,
+                                binding.sessionId(),
+                                laneIntent.map(WorkIntent::version).orElse(1L),
+                                laneIntent.map(WorkIntent::authorityLineageId).orElse(org.synesis.coordination.domain.collaboration.WorkIntent.defaultAuthorityLineage(taskId)),
+                                List.of()),
                         reviewRequired,
                         snapshotBaseCommit,
-                        scopeToLane,
-                        foreignClaims);
+                        null));
             } catch (IllegalStateException immutabilityError) {
                 // Task snapshot is immutable and content changed after completion
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, null);

@@ -97,7 +97,7 @@ final class SnapshotTreeMaterialization {
     }
 
     static String materializeSnapshot(Path workdir, String parent, String snapshotId, String tree) throws IOException {
-        String ref = "refs/synesis/snapshots/" + snapshotId;
+        String ref = SnapshotRefs.snapshotRef(snapshotId);
         String existing;
         try {
             existing = runGitOutput(workdir, "rev-parse", "--verify", ref);

@@ -25,6 +25,7 @@ import org.synesis.workspace.application.project.execution.ProjectProcessExecuto
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+import org.synesis.workspace.application.task.SnapshotRefs;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -70,7 +71,7 @@ public final class ReviewSnapshotAccessService {
     }
 
     private static void verifySnapshotRef(Path controlRoot, TaskSnapshotRecord snapshot) throws IOException {
-        String expectedRef = "refs/synesis/snapshots/" + snapshot.snapshotId();
+        String expectedRef = SnapshotRefs.snapshotRef(snapshot.snapshotId());
         if (!expectedRef.equals(snapshot.provenance().snapshotRef())) {
             throw new IOException("REVIEW_SNAPSHOT_REF_MISMATCH");
         }

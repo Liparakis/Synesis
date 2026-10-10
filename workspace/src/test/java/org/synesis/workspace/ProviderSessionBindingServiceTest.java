@@ -344,7 +344,7 @@ final class ProviderSessionBindingServiceTest {
         var snapshots = new org.synesis.workspace.application.task.TaskSnapshotService();
         String publicationBase = snapshots.snapshotBaseForBoundWorktree(target, intent.baseCommit(), refreshed.baseCommit());
         assertEquals(refreshed.baseCommit(), publicationBase);
-        assertTrue(snapshots.hasScopedPublishableChanges(target, intent.selectors(), intent.selectors(), publicationBase));
+        assertTrue(snapshots.hasScopedPublishableChanges(target, intent.selectors(), intent.selectors(), List.of(), publicationBase));
         assertEquals(target.toString(), new ProviderSessionBindingService().ensure(location, "codex", "dirty-refresh").binding().worktreePath());
 
         Files.writeString(root.resolve("owned.txt"), "conflicting peer change\n");

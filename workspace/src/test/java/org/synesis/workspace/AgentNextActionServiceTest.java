@@ -574,7 +574,7 @@ class AgentNextActionServiceTest {
         assertEquals("IMPLEMENT", ((Map<?, ?>) afterTests.result()).get("workflow") instanceof Map<?, ?> workflow ? workflow.get("type") : null, afterTests.toJson());
         assertFalse(afterTests.toJson().contains("finish_lane"), afterTests.toJson());
 
-        assertTrue(new TaskSnapshotService().hasPublishableChanges(worker, claim.intent().selectors(), claim.intent().baseCommit()),
+        assertTrue(new TaskSnapshotService().hasPublishableChanges(worker, claim.intent().selectors(), claim.intent().baseCommit(), false),
                 "base=" + claim.intent().baseCommit() + ", head=" + org.synesis.workspace.test.TestGit.output(worker, "rev-parse", "HEAD") + ", diff=" + org.synesis.workspace.test.TestGit.output(worker,
                         "diff",
                         "--name-only",

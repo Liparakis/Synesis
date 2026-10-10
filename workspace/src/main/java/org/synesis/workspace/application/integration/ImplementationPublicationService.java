@@ -34,6 +34,7 @@ import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.WorkspaceCheck;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+import org.synesis.workspace.application.task.SnapshotRequest;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
@@ -184,7 +185,7 @@ public final class ImplementationPublicationService {
                     // Superseded by an owner that finished without an answer: not a dependency.
                     .filter(record -> !org.synesis.coordination.application.RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record))
                     .toList();
-            TaskSnapshotRecord snapshot = snapshotService.createSnapshot(
+            TaskSnapshotRecord snapshot = snapshotService.createSnapshot(new SnapshotRequest(
                     intent.taskId(),
                     ownerNodeId,
                     binding.supervisorId(),
@@ -195,19 +196,17 @@ public final class ImplementationPublicationService {
                     summary(request),
                     Optional.empty(),
                     dependencies,
-                    intent.selectors(),
-                    intent.workGroupId(),
-                    intent.intentId(),
-                    participant,
-                    binding.sessionId(),
-                    intent.version(),
-                    intent.authorityLineageId(),
-                    List.of(),
+                    new SnapshotRequest.ClaimScope(intent.selectors(), foreignClaims, false),
+                    new SnapshotRequest.Lane(intent.workGroupId(),
+                            intent.intentId(),
+                            participant,
+                            binding.sessionId(),
+                            intent.version(),
+                            intent.authorityLineageId(),
+                            List.of()),
                     false,
                     laneBase,
-                    false,
-                    foreignClaims,
-                    request.expectedTreeHash());
+                    request.expectedTreeHash()));
             if (snapshot.changedPaths().size() > ImplementationRevisionRecord.MAX_CHANGED_PATHS) {
                 return blocked("CAPABILITY_PUBLICATION_PATH_LIMIT_EXCEEDED", AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP);
             }

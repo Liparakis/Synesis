@@ -23,7 +23,7 @@ final class SnapshotRefLifecycle {
         Objects.requireNonNull(worktreePath, "worktreePath");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(completionId, "completionId");
-        String ref = "refs/synesis/prepared/" + completionId;
+        String ref = SnapshotRefs.preparedRef(completionId);
         runGitOutput(worktreePath, "update-ref", ref, snapshot.commitSha());
         String resolved = runGitOutput(worktreePath, "rev-parse", ref);
         if (!resolved.equals(snapshot.commitSha())) {
@@ -41,7 +41,7 @@ final class SnapshotRefLifecycle {
     static void removePreparedRef(Path worktreePath, String preparedRef) throws IOException {
         Objects.requireNonNull(worktreePath, "worktreePath");
         Objects.requireNonNull(preparedRef, "preparedRef");
-        if (!preparedRef.startsWith("refs/synesis/prepared/")) {
+        if (!preparedRef.startsWith(SnapshotRefs.PREPARED_PREFIX)) {
             throw new IOException("INVALID_PREPARED_REF");
         }
         runGitOutput(worktreePath, "update-ref", "-d", preparedRef);

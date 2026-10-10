@@ -38,6 +38,7 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.task.SnapshotRefs;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -342,7 +343,7 @@ public final class IntegrationOrchestrationService {
                     }
                 }
             }
-            if (snapshot.provenance().snapshotRef().startsWith("refs/synesis/snapshots/")) {
+            if (SnapshotRefs.isSnapshotRef(snapshot.provenance().snapshotRef())) {
                 var prepared = store.taskCompletionProjection().findPrepared(snapshot.taskId(), snapshot.provenance().laneId(), snapshot.provenance().claimEpoch());
                 if (prepared.isEmpty()) {
                     failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
