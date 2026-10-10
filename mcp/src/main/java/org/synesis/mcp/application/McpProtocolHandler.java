@@ -301,7 +301,7 @@ public final class McpProtocolHandler {
      * @param input URI or local path string
      * @return normalized absolute Path, or {@code null} if empty/invalid
      */
-    public static Path parseUriOrPath(String input) {
+    static Path parseUriOrPath(String input) {
         return McpRootCandidates.parseUriOrPath(input);
     }
 
@@ -353,7 +353,7 @@ public final class McpProtocolHandler {
      *
      * @return active control project root path
      */
-    public Path activeProjectRoot() {
+    Path activeProjectRoot() {
         return projectRoots.activeProjectRoot();
     }
 
@@ -511,7 +511,7 @@ public final class McpProtocolHandler {
      * @param params JSON-RPC initialize request params map, or {@code null}
      * @return list of parsed candidate paths from protocol params
      */
-    public List<Path> extractCandidateRoots(Map<String, Object> params) {
+    List<Path> extractCandidateRoots(Map<String, Object> params) {
         return McpRootCandidates.extractCandidateRoots(params);
     }
 
@@ -521,7 +521,7 @@ public final class McpProtocolHandler {
      * @param candidates candidate workspace paths
      * @return resolved control project root, or {@code null} if none or ambiguous
      */
-    public Path resolveProjectRootFromCandidates(List<Path> candidates) {
+    Path resolveProjectRootFromCandidates(List<Path> candidates) {
         return projectRoots.resolveProjectRootFromCandidates(candidates);
     }
 

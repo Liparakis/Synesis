@@ -41,7 +41,7 @@ public final class ExitCodes {
     /**
      * Bounded session/network failure.
      */
-    public static final int SESSION_FAILED = 13;
+    static final int SESSION_FAILED = 13;
     /**
      * Unexpected redacted internal failure.
      */

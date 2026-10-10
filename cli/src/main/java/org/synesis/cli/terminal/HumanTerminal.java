@@ -25,7 +25,7 @@ public final class HumanTerminal implements Terminal {
     /**
      * Command-line flag that keeps the machine contract even on an interactive terminal.
      */
-    public static final String PORCELAIN_FLAG = "--porcelain";
+    static final String PORCELAIN_FLAG = "--porcelain";
     /**
      * Environment variable that selects {@code human} or {@code porcelain} output explicitly.
      */
