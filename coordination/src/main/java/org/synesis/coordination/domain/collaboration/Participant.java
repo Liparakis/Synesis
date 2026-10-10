@@ -22,25 +22,6 @@ public record Participant(String id, String provider, String goal, State state, 
                           List<ResourceSelector> claims, String recoverySnapshotReference) {
 
     /**
-     * Creates a participant without a recovery snapshot reference.
-     *
-     * @param id                   opaque participant ID
-     * @param provider             provider ID
-     * @param goal                 announced goal
-     * @param state                lifecycle state
-     * @param lastVerifiedActivity last verified activity timestamp
-     * @param claims               active claims
-     */
-    public Participant(String id,
-            String provider,
-            String goal,
-            State state,
-            long lastVerifiedActivity,
-            List<ResourceSelector> claims) {
-        this(id, provider, goal, state, lastVerifiedActivity, claims, null);
-    }
-
-    /**
      * Validates the opaque participant projection.
      */
     public Participant {
@@ -73,6 +54,65 @@ public record Participant(String id, String provider, String goal, State state, 
      */
     public Optional<SnapshotReference> recoverySnapshotIdentity() {
         return Optional.ofNullable(recoverySnapshotReference).map(SnapshotReference::new);
+    }
+
+    /**
+     * Returns a copy in the given lifecycle state.
+     *
+     * @param newState lifecycle state of the copy
+     * @return the copy
+     */
+    public Participant withState(State newState) {
+        return new Participant(id, provider, goal, newState, lastVerifiedActivity, claims, recoverySnapshotReference);
+    }
+
+    /**
+     * Returns a copy holding the given claims.
+     *
+     * @param newClaims active claims of the copy
+     * @return the copy
+     */
+    public Participant withClaims(List<ResourceSelector> newClaims) {
+        return new Participant(id, provider, goal, state, lastVerifiedActivity, newClaims, recoverySnapshotReference);
+    }
+
+    /**
+     * Returns a copy announcing the given goal.
+     *
+     * @param newGoal announced goal of the copy
+     * @return the copy
+     */
+    public Participant withGoal(String newGoal) {
+        return new Participant(id, provider, newGoal, state, lastVerifiedActivity, claims, recoverySnapshotReference);
+    }
+
+    /**
+     * Returns a copy with the given last verified activity timestamp.
+     *
+     * @param timestamp last verified activity timestamp of the copy
+     * @return the copy
+     */
+    public Participant withLastVerifiedActivity(long timestamp) {
+        return new Participant(id, provider, goal, state, timestamp, claims, recoverySnapshotReference);
+    }
+
+    /**
+     * Returns a copy holding the given recovery snapshot reference.
+     *
+     * @param reference opaque internal recovery snapshot reference of the copy
+     * @return the copy
+     */
+    public Participant withRecoverySnapshotReference(String reference) {
+        return new Participant(id, provider, goal, state, lastVerifiedActivity, claims, reference);
+    }
+
+    /**
+     * Returns a copy that no longer carries a recovery snapshot reference.
+     *
+     * @return the copy
+     */
+    public Participant withoutRecoveryReference() {
+        return withRecoverySnapshotReference(null);
     }
 
     /**

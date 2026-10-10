@@ -449,6 +449,47 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant, Stri
     }
 
     /**
+     * Returns a copy at the next intent version.
+     *
+     * @return the copy
+     */
+    public WorkIntent nextVersion() {
+        return new WorkIntent(intentId, projectId, participant, provider, taskId, goal, acceptance, baseCommit,
+                selectors, version + 1, workGroupId, authorityLineageId, status, role, reviewTargetSelectors,
+                knownDependencies);
+    }
+
+    /**
+     * Returns a copy owned by the given participant.
+     *
+     * @param newParticipant opaque participant handle of the copy
+     * @return the copy
+     */
+    public WorkIntent withParticipant(String newParticipant) {
+        return new WorkIntent(intentId, projectId, newParticipant, provider, taskId, goal, acceptance, baseCommit,
+                selectors, version, workGroupId, authorityLineageId, status, role, reviewTargetSelectors,
+                knownDependencies);
+    }
+
+    /**
+     * Returns a copy with the given goal, acceptance criteria, selectors, and known dependencies.
+     *
+     * @param newGoal         work goal of the copy
+     * @param newAcceptance   acceptance criteria of the copy
+     * @param newSelectors    requested resource selectors of the copy
+     * @param newDependencies capability identifiers the copy explicitly requires
+     * @return the copy
+     */
+    public WorkIntent withScope(String newGoal,
+            String newAcceptance,
+            List<ResourceSelector> newSelectors,
+            List<String> newDependencies) {
+        return new WorkIntent(intentId, projectId, participant, provider, taskId, newGoal, newAcceptance, baseCommit,
+                newSelectors, version, workGroupId, authorityLineageId, status, role, reviewTargetSelectors,
+                newDependencies);
+    }
+
+    /**
      * Intent lifecycle states.
      */
     public enum Status {

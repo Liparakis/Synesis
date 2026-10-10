@@ -585,14 +585,8 @@ public final class TaskCompletionProjection {
         IntegrationAttemptRecord current = attempts.get(payload.identity());
         if (current != null) {
             attempts.put(payload.identity(),
-                    new IntegrationAttemptRecord(current.attemptId(),
-                            current.projectId(),
-                            current.taskSnapshotIds(),
-                            current.expectedControlHead(),
-                            current.integrationCommitSha(),
-                            "pending".equalsIgnoreCase(payload.status()) ? "pending" : "failed",
+                    current.withOutcome("pending".equalsIgnoreCase(payload.status()) ? "pending" : "failed",
                             payload.failureReason(),
-                            current.startedAtMillis(),
                             event.createdAtEpochMillis()));
         }
         if (payload.identity().equals(activeAttemptId)) {
@@ -624,15 +618,7 @@ public final class TaskCompletionProjection {
         IntegrationAttemptRecord current = attempts.get(payload.identity());
         if (current != null) {
             attempts.put(payload.identity(),
-                    new IntegrationAttemptRecord(current.attemptId(),
-                            current.projectId(),
-                            current.taskSnapshotIds(),
-                            current.expectedControlHead(),
-                            current.integrationCommitSha(),
-                            "conflict",
-                            payload.failureReason(),
-                            current.startedAtMillis(),
-                            event.createdAtEpochMillis()));
+                    current.withOutcome("conflict", payload.failureReason(), event.createdAtEpochMillis()));
         }
         if (payload.identity().equals(activeAttemptId)) {
             activeAttemptId = null;
@@ -688,16 +674,7 @@ public final class TaskCompletionProjection {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
         IntegrationAttemptRecord current = attempts.get(payload.identity());
         if (current != null) {
-            attempts.put(payload.identity(),
-                    new IntegrationAttemptRecord(current.attemptId(),
-                            current.projectId(),
-                            current.taskSnapshotIds(),
-                            current.expectedControlHead(),
-                            payload.integrationCommitSha(),
-                            current.status(),
-                            current.failureReason(),
-                            current.startedAtMillis(),
-                            current.completedAtMillis()));
+            attempts.put(payload.identity(), current.withCommit(payload.integrationCommitSha()));
         }
     }
 
@@ -713,15 +690,8 @@ public final class TaskCompletionProjection {
         IntegrationAttemptRecord current = attempts.get(payload.identity());
         if (current != null) {
             attempts.put(payload.identity(),
-                    new IntegrationAttemptRecord(current.attemptId(),
-                            current.projectId(),
-                            current.taskSnapshotIds(),
-                            current.expectedControlHead(),
-                            payload.integrationCommitSha(),
-                            "advanced",
-                            "",
-                            current.startedAtMillis(),
-                            event.createdAtEpochMillis()));
+                    current.withCommit(payload.integrationCommitSha())
+                            .withOutcome("advanced", "", event.createdAtEpochMillis()));
         }
         if (payload.identity().equals(activeAttemptId)) {
             activeAttemptId = null;

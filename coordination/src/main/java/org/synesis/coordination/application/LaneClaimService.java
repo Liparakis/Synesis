@@ -159,22 +159,8 @@ final class LaneClaimService {
                     && updatedGoal.equals(current.goal()) && updatedAcceptance.equals(current.acceptance())) {
                 return new ClaimResult(true, current, List.of());
             }
-            WorkIntent amended = new WorkIntent(current.intentId(),
-                    current.projectId(),
-                    current.participant(),
-                    current.provider(),
-                    current.taskId(),
-                    updatedGoal,
-                    updatedAcceptance,
-                    current.baseCommit(),
-                    List.copyOf(mergedSelectors),
-                    current.version() + 1,
-                    current.workGroupId(),
-                    current.authorityLineageId(),
-                    current.status(),
-                    current.role(),
-                    current.reviewTargetSelectors(),
-                    List.copyOf(mergedDependencies));
+            WorkIntent amended = current.nextVersion()
+                    .withScope(updatedGoal, updatedAcceptance, mergedSelectors, mergedDependencies);
             List<ClaimConflict> conflicts = currentStore.collaborationProjection()
                     .conflicts(amended.selectors(), current.identity());
             if (!conflicts.isEmpty()) {

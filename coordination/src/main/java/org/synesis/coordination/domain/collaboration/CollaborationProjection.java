@@ -563,14 +563,7 @@ public final class CollaborationProjection {
                 .filter(intent -> intent.participantIdentity().equals(participant)).toList();
         if (owned.isEmpty()) {
             if (previous != null) {
-                participantHistory.put(participant,
-                        new Participant(previous.id(),
-                                previous.provider(),
-                                previous.goal(),
-                                emptyState,
-                                previous.lastVerifiedActivity(),
-                                List.of(),
-                                previous.recoverySnapshotReference()));
+                participantHistory.put(participant, previous.withState(emptyState).withClaims(List.of()));
             }
             return;
         }
@@ -658,13 +651,8 @@ public final class CollaborationProjection {
         Participant previous = participantHistory.get(replacement.participantIdentity());
         if (previous != null) {
             participantHistory.put(replacement.participantIdentity(),
-                    new Participant(previous.id(),
-                            previous.provider(),
-                            replacement.goal(),
-                            Participant.State.ACTIVE,
-                            previous.lastVerifiedActivity(),
-                            replacement.selectors(),
-                            previous.recoverySnapshotReference()));
+                    previous.withGoal(replacement.goal()).withState(Participant.State.ACTIVE)
+                            .withClaims(replacement.selectors()));
         }
     }
 
@@ -736,35 +724,15 @@ public final class CollaborationProjection {
                 || current.version() != validation.claimEpoch() || current.status() != WorkIntent.Status.ANNOUNCED) {
             throw new CoordinationException("REVIEW_TARGET_STALE");
         }
-        WorkIntent correction = new WorkIntent(current.intentId(),
-                current.projectId(),
-                current.participant(),
-                current.provider(),
-                current.taskId(),
-                current.goal(),
-                current.acceptance(),
-                current.baseCommit(),
-                current.selectors(),
-                current.version() + 1L,
-                current.workGroupId(),
-                current.authorityLineageId(),
-                WorkIntent.Status.ANNOUNCED,
-                current.role(),
-                current.reviewTargetSelectors(),
-                current.knownDependencies());
+        WorkIntent correction = current.nextVersion();
         intents.put(correction.identity(), correction);
         Participant participant = participantHistory.get(current.participantIdentity());
         if (participant == null) {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
         participantHistory.put(current.participantIdentity(),
-                new Participant(participant.id(),
-                        participant.provider(),
-                        correction.goal(),
-                        Participant.State.ACTIVE,
-                        participant.lastVerifiedActivity(),
-                        correction.selectors(),
-                        participant.recoverySnapshotReference()));
+                participant.withGoal(correction.goal()).withState(Participant.State.ACTIVE)
+                        .withClaims(correction.selectors()));
     }
 
     /**
@@ -785,12 +753,8 @@ public final class CollaborationProjection {
             throw new CoordinationException("SESSION_EPOCH_FENCED");
         }
         participantHistory.put(participant,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.ACTIVE,
-                        timestamp,
-                        current.claims()));
+                current.withState(Participant.State.ACTIVE).withLastVerifiedActivity(timestamp)
+                        .withoutRecoveryReference());
     }
 
     /**
@@ -810,41 +774,17 @@ public final class CollaborationProjection {
         if (target == null || target.state() != Participant.State.ACTIVE) {
             throw new CoordinationException("HANDOFF_TARGET_NOT_ACTIVE");
         }
-        WorkIntent transferred = new WorkIntent(current.intentId(),
-                current.projectId(),
-                handoff.target(),
-                current.provider(),
-                current.taskId(),
-                current.goal(),
-                current.acceptance(),
-                current.baseCommit(),
-                current.selectors(),
-                current.version() + 1,
-                current.workGroupId(),
-                current.authorityLineageId(),
-                current.status(),
-                current.role(),
-                current.reviewTargetSelectors(),
-                current.knownDependencies());
+        WorkIntent transferred = current.nextVersion().withParticipant(handoff.target());
         intents.put(current.identity(), transferred);
         Participant previous = participantHistory.get(current.participantIdentity());
         if (previous != null) {
             participantHistory.put(current.participantIdentity(),
-                    new Participant(previous.id(),
-                            previous.provider(),
-                            previous.goal(),
-                            Participant.State.COMPLETED,
-                            previous.lastVerifiedActivity(),
-                            List.of()));
+                    previous.withState(Participant.State.COMPLETED).withClaims(List.of())
+                            .withoutRecoveryReference());
         }
         participantHistory.put(handoff.targetParticipant(),
-                new Participant(target.id(),
-                        target.provider(),
-                        target.goal(),
-                        Participant.State.ACTIVE,
-                        target.lastVerifiedActivity(),
-                        transferred.selectors(),
-                        null));
+                target.withState(Participant.State.ACTIVE).withClaims(transferred.selectors())
+                        .withoutRecoveryReference());
     }
 
     /**
@@ -858,14 +798,7 @@ public final class CollaborationProjection {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
-        participantHistory.put(participant,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.SUSPENDED,
-                        current.lastVerifiedActivity(),
-                        current.claims(),
-                        current.recoverySnapshotReference()));
+        participantHistory.put(participant, current.withState(Participant.State.SUSPENDED));
     }
 
     /**
@@ -883,13 +816,8 @@ public final class CollaborationProjection {
             throw new CoordinationException("RECOVERY_NOT_SUSPENDED");
         }
         participantHistory.put(participantId,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.RECOVERY_HELD,
-                        current.lastVerifiedActivity(),
-                        current.claims(),
-                        recovery.snapshot().value()));
+                current.withState(Participant.State.RECOVERY_HELD)
+                        .withRecoverySnapshotReference(recovery.snapshot().value()));
     }
 
     /**
@@ -976,14 +904,14 @@ public final class CollaborationProjection {
         if (current == null) {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
-        participantHistory.put(participant,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.REVOKED,
-                        current.lastVerifiedActivity(),
-                        List.of(),
-                        current.recoverySnapshotReference()));
+        participantHistory.put(participant, current.withState(Participant.State.REVOKED).withClaims(List.of()));
+        dropIntentsOf(participant);
+    }
+
+    /**
+     * Removes every intent the participant owns.
+     */
+    private void dropIntentsOf(ParticipantId participant) {
         intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
     }
 
@@ -1005,15 +933,8 @@ public final class CollaborationProjection {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
-        participantHistory.put(participant,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.CANCELLED,
-                        current.lastVerifiedActivity(),
-                        List.of(),
-                        current.recoverySnapshotReference()));
-        intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
+        participantHistory.put(participant, current.withState(Participant.State.CANCELLED).withClaims(List.of()));
+        dropIntentsOf(participant);
     }
 
     /**
@@ -1027,15 +948,8 @@ public final class CollaborationProjection {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
-        participantHistory.put(participant,
-                new Participant(current.id(),
-                        current.provider(),
-                        current.goal(),
-                        Participant.State.DETACHED,
-                        current.lastVerifiedActivity(),
-                        List.of(),
-                        current.recoverySnapshotReference()));
-        intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
+        participantHistory.put(participant, current.withState(Participant.State.DETACHED).withClaims(List.of()));
+        dropIntentsOf(participant);
     }
 
     /**

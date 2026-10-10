@@ -7,8 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.domain.identity.ParticipantId;
+import org.synesis.coordination.domain.identity.SnapshotReference;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.link.identity.NodeIdentity;
@@ -135,6 +138,41 @@ final class CollaborationProjectionTest {
         assertEquals(Participant.State.ACTIVE, participant.state());
         assertEquals(active.selectors(), participant.claims());
         assertEquals(2L, participant.lastVerifiedActivity());
+    }
+
+    @Test
+    void recoveryReferenceSurvivesLifecycleTransitionsButNotHeartbeat() throws Exception {
+        NodeIdentity identity = NodeIdentity.generate();
+        CollaborationProjection projection = new CollaborationProjection();
+        WorkIntent held = intent("agt_held", "src/held.py");
+
+        projection.apply(event(identity,
+                1,
+                PredictionEventType.WORK_INTENT_ANNOUNCED,
+                CollaborationCodec.encodeIntent(held)));
+        projection.apply(event(identity,
+                2,
+                PredictionEventType.PARTICIPANT_SUSPENDED,
+                CollaborationCodec.encodeHeartbeat(held.participant())));
+        projection.apply(event(identity,
+                3,
+                PredictionEventType.RECOVERY_SNAPSHOT_HELD,
+                CollaborationCodec.encodeRecovery(new RecoveryEvidence(new ParticipantId(held.participant()),
+                        new SnapshotReference("snap-held")))));
+        projection.apply(event(identity,
+                4,
+                PredictionEventType.PARTICIPANT_SUSPENDED,
+                CollaborationCodec.encodeHeartbeat(held.participant())));
+
+        assertEquals(Optional.of("snap-held"), projection.recoverySnapshotReference(held.participant()));
+
+        projection.apply(event(identity,
+                5,
+                PredictionEventType.PARTICIPANT_HEARTBEAT,
+                CollaborationCodec.encodeHeartbeat(held.participant())));
+
+        assertEquals(Optional.empty(), projection.recoverySnapshotReference(held.participant()));
+        assertEquals(Participant.State.ACTIVE, projection.participantState(held.participant()).orElseThrow());
     }
 
     @Test

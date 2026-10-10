@@ -47,4 +47,28 @@ public record IntegrationAttemptRecord(String attemptId, UUID projectId, List<St
         CoordinationNullException.requireNonNull(failureReason, "failureReason");
     }
 
+    /**
+     * Returns a copy recording how the attempt ended.
+     *
+     * @param newStatus            outcome status
+     * @param newFailureReason     failure or conflict explanation, empty when none
+     * @param newCompletedAtMillis completion timestamp
+     * @return the copy
+     */
+    public IntegrationAttemptRecord withOutcome(String newStatus, String newFailureReason, long newCompletedAtMillis) {
+        return new IntegrationAttemptRecord(attemptId, projectId, taskSnapshotIds, expectedControlHead,
+                integrationCommitSha, newStatus, newFailureReason, startedAtMillis, newCompletedAtMillis);
+    }
+
+    /**
+     * Returns a copy recording the integration commit.
+     *
+     * @param commitSha Git commit SHA produced in the integration worktree
+     * @return the copy
+     */
+    public IntegrationAttemptRecord withCommit(String commitSha) {
+        return new IntegrationAttemptRecord(attemptId, projectId, taskSnapshotIds, expectedControlHead, commitSha,
+                status, failureReason, startedAtMillis, completedAtMillis);
+    }
+
 }

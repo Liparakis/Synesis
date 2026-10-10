@@ -999,22 +999,7 @@ public final class AgentTaskCompletionService {
             if (!currentIntent.participant().equals(participant) || currentIntent.version() != prepared.claimEpoch()) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "UNWIND_CALLER_MISMATCH"));
             }
-            WorkIntent replacement = new WorkIntent(currentIntent.intentId(),
-                    currentIntent.projectId(),
-                    currentIntent.participant(),
-                    currentIntent.provider(),
-                    currentIntent.taskId(),
-                    currentIntent.goal(),
-                    currentIntent.acceptance(),
-                    currentIntent.baseCommit(),
-                    currentIntent.selectors(),
-                    currentIntent.version() + 1,
-                    currentIntent.workGroupId(),
-                    currentIntent.authorityLineageId(),
-                    WorkIntent.Status.ANNOUNCED,
-                    currentIntent.role(),
-                    currentIntent.reviewTargetSelectors(),
-                    currentIntent.knownDependencies());
+            WorkIntent replacement = currentIntent.nextVersion();
             CompletionUnwoundPayload payload = new CompletionUnwoundPayload(prepared, replacement);
             try (ProjectAppendLock lock = ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {
                 if (!lock.isHeld()) {
