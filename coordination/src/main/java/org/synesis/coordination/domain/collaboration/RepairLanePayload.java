@@ -1,20 +1,20 @@
 package org.synesis.coordination.domain.collaboration;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
+
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
 import org.synesis.coordination.domain.identity.SnapshotId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -35,6 +35,12 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
 
     private static final int V2_MAGIC = 0x52505232;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT, true, "repair text bound", "truncated repair text")
+            .checkingWrites(MAX_TEXT, "repair text bound");
+    private static final WireFormat INTENT = WireFormat.bounded(1024 * 1024,
+            false,
+            "repair intent bound",
+            "truncated repair payload");
 
     /**
      * Validates repair transfer fields.
@@ -66,55 +72,16 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
             if (magic != V2_MAGIC) {
                 throw new CoordinationException("unsupported repair payload");
             }
-            UUID source = new UUID(in.readLong(), in.readLong());
-            int length = in.readInt();
-            if (length < 1 || length > 1024 * 1024) {
-                throw new CoordinationException("repair intent bound");
-            }
-            byte[] intent = in.readNBytes(length);
-            if (intent.length != length) {
-                throw new CoordinationException("truncated repair payload");
-            }
-            WorkIntent target = CollaborationCodec.decodeIntent(intent);
-            String snapshot = readText(in);
-            String head = readText(in);
+            UUID source = readUuid(in);
+            WorkIntent target = CollaborationCodec.decodeIntent(INTENT.readBytes(in));
+            String snapshot = TEXT.readText(in);
+            String head = TEXT.readText(in);
             long sourceEpoch = in.readLong();
             long targetEpoch = in.readLong();
             return new RepairLanePayload(source, target, snapshot, head, sourceEpoch, targetEpoch);
         } catch (RuntimeException failure) {
             throw new CoordinationException("malformed repair payload", failure);
         }
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_TEXT) {
-            throw new CoordinationException("repair text bound");
-        }
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 0 || length > MAX_TEXT) {
-            throw new CoordinationException("repair text bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated repair text");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -168,23 +135,14 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      * @return encoded bytes
      */
     public byte[] encode() {
-        try {
-            byte[] intent = CollaborationCodec.encodeIntent(targetIntent);
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(V2_MAGIC);
-            out.writeLong(sourceIntentId.getMostSignificantBits());
-            out.writeLong(sourceIntentId.getLeastSignificantBits());
-            out.writeInt(intent.length);
-            out.write(intent);
-            writeText(out, snapshotId);
-            writeText(out, expectedControlHead);
+        byte[] intent = CollaborationCodec.encodeIntent(targetIntent);
+        return WireFormat.encode(V2_MAGIC, out -> {
+            writeUuid(out, sourceIntentId);
+            INTENT.writeBytes(out, intent);
+            TEXT.writeText(out, snapshotId);
+            TEXT.writeText(out, expectedControlHead);
             out.writeLong(sourceClaimEpoch);
             out.writeLong(targetClaimEpoch);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 }

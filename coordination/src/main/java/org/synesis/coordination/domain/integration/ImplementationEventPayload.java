@@ -1,20 +1,20 @@
 package org.synesis.coordination.domain.integration;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
+
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 import org.synesis.coordination.domain.identity.AuthorityLineageId;
 import org.synesis.coordination.domain.identity.ImplementationRevision;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -46,6 +46,10 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
     private static final int MAGIC = 0x494D504C; // "IMPL"
     private static final int VERSION = 3;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
+            true,
+            "Invalid text length in implementation payload",
+            "Truncated implementation payload").checkingWrites(MAX_TEXT, "text exceeds payload bound");
 
     /**
      * Compact constructor enforcing non-null invariants.
@@ -126,11 +130,11 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             if (magic != MAGIC || version != VERSION) {
                 throw new CoordinationException("Unsupported implementation event payload format");
             }
-            CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
+            CapabilityRequestHandle handle = CapabilityRequestHandle.parse(TEXT.readText(in));
             UUID authorityLineageId = readUuid(in);
             int revisionNumber = in.readInt();
-            String baseCommit = readText(in);
-            String commitSha = readText(in);
+            String baseCommit = TEXT.readText(in);
+            String commitSha = TEXT.readText(in);
 
             int pathCount = in.readInt();
             if (pathCount < 0 || pathCount > ImplementationRevisionRecord.MAX_CHANGED_PATHS) {
@@ -138,11 +142,11 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             }
             List<String> changedPaths = new ArrayList<>(pathCount);
             for (int i = 0; i < pathCount; i++) {
-                changedPaths.add(readText(in));
+                changedPaths.add(TEXT.readText(in));
             }
-            String summary = readText(in);
-            String validationResult = readText(in);
-            String validationReason = readText(in);
+            String summary = TEXT.readText(in);
+            String validationResult = TEXT.readText(in);
+            String validationReason = TEXT.readText(in);
 
             int testCount = in.readInt();
             if (testCount < 0 || testCount > 32) {
@@ -150,10 +154,10 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             }
             List<String> failedTests = new ArrayList<>(testCount);
             for (int i = 0; i < testCount; i++) {
-                failedTests.add(readText(in));
+                failedTests.add(TEXT.readText(in));
             }
-            String worktreePath = readText(in);
-            String requesterSessionId = readText(in);
+            String worktreePath = TEXT.readText(in);
+            String requesterSessionId = TEXT.readText(in);
             return new ImplementationEventPayload(handle,
                     authorityLineageId,
                     revisionNumber,
@@ -169,56 +173,6 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
         } catch (RuntimeException failure) {
             throw new CoordinationException("Malformed implementation event payload", failure);
         }
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String val) throws IOException {
-        byte[] b = val.getBytes(StandardCharsets.UTF_8);
-        if (b.length > MAX_TEXT) {
-            throw new CoordinationException("text exceeds payload bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int len = in.readInt();
-        if (len < 0 || len > MAX_TEXT) {
-            throw new CoordinationException("Invalid text length in implementation payload");
-        }
-        byte[] b = in.readNBytes(len);
-        if (b.length != len) {
-            throw new CoordinationException("Truncated implementation payload");
-        }
-        return new String(b, StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
     }
 
     /**
@@ -245,33 +199,26 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
      * @return encoded bytes
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return WireFormat.encode(MAGIC, out -> {
             out.writeInt(VERSION);
-            writeText(out, handle.value());
+            TEXT.writeText(out, handle.value());
             writeUuid(out, authorityLineageId);
             out.writeInt(revisionNumber);
-            writeText(out, baseCommit);
-            writeText(out, commitSha);
+            TEXT.writeText(out, baseCommit);
+            TEXT.writeText(out, commitSha);
             out.writeInt(changedPaths.size());
             for (String path : changedPaths) {
-                writeText(out, path);
+                TEXT.writeText(out, path);
             }
-            writeText(out, summary);
-            writeText(out, validationResult);
-            writeText(out, validationReason);
+            TEXT.writeText(out, summary);
+            TEXT.writeText(out, validationResult);
+            TEXT.writeText(out, validationReason);
             out.writeInt(failedAcceptanceTests.size());
             for (String test : failedAcceptanceTests) {
-                writeText(out, test);
+                TEXT.writeText(out, test);
             }
-            writeText(out, worktreePath);
-            writeText(out, requesterSessionId);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            TEXT.writeText(out, worktreePath);
+            TEXT.writeText(out, requesterSessionId);
+        });
     }
 }

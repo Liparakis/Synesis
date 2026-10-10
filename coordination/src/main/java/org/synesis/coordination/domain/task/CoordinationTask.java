@@ -1,10 +1,11 @@
 package org.synesis.coordination.domain.task;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -13,10 +14,10 @@ import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.ProjectId;
 import org.synesis.coordination.domain.identity.SupervisorId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -37,6 +38,7 @@ public record CoordinationTask(UUID taskId, UUID projectId, String title, String
     private static final int MAGIC = 0x53435431;
     private static final int MAX_BYTES = 64 * 1024;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, false, "text bound", "truncated text");
 
     /**
      * Validates task identity and bounded text.
@@ -70,11 +72,11 @@ public record CoordinationTask(UUID taskId, UUID projectId, String title, String
             }
             CoordinationTask task = new CoordinationTask(readUuid(in),
                     readUuid(in),
-                    readText(in),
-                    readText(in),
-                    readText(in),
-                    readText(in),
-                    readText(in));
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in));
             if (in.available() != 0) {
                 throw new CoordinationException("trailing task bytes");
             }
@@ -92,53 +94,6 @@ public record CoordinationTask(UUID taskId, UUID projectId, String title, String
         if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
             throw new CoordinationArgumentException(label + " is empty or exceeds bound");
         }
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 1 || length > MAX_TEXT_BYTES) {
-            throw new CoordinationException("text bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated text");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -192,25 +147,19 @@ public record CoordinationTask(UUID taskId, UUID projectId, String title, String
      * @return bounded canonical bytes
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        byte[] encoded = encode(MAGIC, out -> {
             out.writeInt(1);
             writeUuid(out, taskId);
             writeUuid(out, projectId);
-            writeText(out, title);
-            writeText(out, capability);
-            writeText(out, creatorNodeId);
-            writeText(out, creatorSupervisorId);
-            writeText(out, creatorWorkerId);
-            out.flush();
-            if (bytes.size() > MAX_BYTES) {
-                throw new CoordinationArgumentException("task exceeds bound");
-            }
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
+            TEXT.writeText(out, title);
+            TEXT.writeText(out, capability);
+            TEXT.writeText(out, creatorNodeId);
+            TEXT.writeText(out, creatorSupervisorId);
+            TEXT.writeText(out, creatorWorkerId);
+        });
+        if (encoded.length > MAX_BYTES) {
+            throw new CoordinationArgumentException("task exceeds bound");
         }
+        return encoded;
     }
 }

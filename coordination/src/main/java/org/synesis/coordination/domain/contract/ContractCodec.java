@@ -1,17 +1,19 @@
 package org.synesis.coordination.domain.contract;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
+
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 
 /**
  * Bounded canonical encoding for contract events.
@@ -21,6 +23,9 @@ public final class ContractCodec {
     private static final int MAGIC_PUBLISH = 0x53435031;
     private static final int MAGIC_DEPEND = 0x53434431;
     private static final int MAGIC_SUPERSEDE = 0x53435331;
+
+    private static final WireFormat TEXT = WireFormat.bounded(32768, false, "text bound", "truncated text")
+            .checkingWrites(32768, "text bound");
 
     /**
      * Validates and initializes this contract codec.
@@ -35,26 +40,19 @@ public final class ContractCodec {
      * @return canonical event payload
      */
     public static byte[] encodePublish(ContractRecord record) {
-        try {
-            ByteArrayOutputStream b = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(b);
-            out.writeInt(MAGIC_PUBLISH);
-            uuid(out, record.contractId());
-            uuid(out, record.projectId());
+        return encode(MAGIC_PUBLISH, out -> {
+            writeUuid(out, record.contractId());
+            writeUuid(out, record.projectId());
             out.writeLong(record.revision());
-            text(out, record.owner());
-            text(out, record.contentHash());
-            text(out, record.body());
+            TEXT.writeText(out, record.owner());
+            TEXT.writeText(out, record.contentHash());
+            TEXT.writeText(out, record.body());
             uuidNullable(out, record.supersedes());
             out.writeInt(record.selectorRefs().size());
             for (String ref : record.selectorRefs()) {
-                text(out, ref);
+                TEXT.writeText(out, ref);
             }
-            out.flush();
-            return b.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 
     /**
@@ -70,9 +68,9 @@ public final class ContractCodec {
             if (in.readInt() != MAGIC_PUBLISH) {
                 throw new CoordinationException("contract format");
             }
-            UUID id = uuid(in), project = uuid(in);
+            UUID id = readUuid(in), project = readUuid(in);
             long revision = in.readLong();
-            String owner = text(in), hash = text(in), body = text(in);
+            String owner = TEXT.readText(in), hash = TEXT.readText(in), body = TEXT.readText(in);
             UUID supersedes = uuidNullable(in);
             int count = in.readInt();
             if (count < 0 || count > 128) {
@@ -80,7 +78,7 @@ public final class ContractCodec {
             }
             List<String> refs = new ArrayList<>();
             for (int i = 0; i < count; i++) {
-                refs.add(text(in));
+                refs.add(TEXT.readText(in));
             }
             if (in.available() != 0) {
                 throw new CoordinationException("trailing contract bytes");
@@ -106,19 +104,12 @@ public final class ContractCodec {
      * @return canonical event payload
      */
     public static byte[] encodeDependency(ContractDependency dependency) {
-        try {
-            ByteArrayOutputStream b = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(b);
-            out.writeInt(MAGIC_DEPEND);
-            uuid(out, dependency.intentId());
-            text(out, dependency.participant());
-            uuid(out, dependency.contractId());
+        return encode(MAGIC_DEPEND, out -> {
+            writeUuid(out, dependency.intentId());
+            TEXT.writeText(out, dependency.participant());
+            writeUuid(out, dependency.contractId());
             out.writeLong(dependency.revision());
-            out.flush();
-            return b.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 
     /**
@@ -134,9 +125,9 @@ public final class ContractCodec {
             if (in.readInt() != MAGIC_DEPEND) {
                 throw new CoordinationException("dependency format");
             }
-            UUID intent = uuid(in);
-            String participant = text(in);
-            UUID contract = uuid(in);
+            UUID intent = readUuid(in);
+            String participant = TEXT.readText(in);
+            UUID contract = readUuid(in);
             long revision = in.readLong();
             if (in.available() != 0) {
                 throw new CoordinationException("trailing dependency bytes");
@@ -156,18 +147,11 @@ public final class ContractCodec {
      * @return canonical event payload
      */
     public static byte[] encodeSupersede(UUID contractId, long oldRevision, long newRevision) {
-        try {
-            ByteArrayOutputStream b = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(b);
-            out.writeInt(MAGIC_SUPERSEDE);
-            uuid(out, contractId);
+        return encode(MAGIC_SUPERSEDE, out -> {
+            writeUuid(out, contractId);
             out.writeLong(oldRevision);
             out.writeLong(newRevision);
-            out.flush();
-            return b.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 
     /**
@@ -182,31 +166,12 @@ public final class ContractCodec {
         if (in.readInt() != MAGIC_SUPERSEDE) {
             throw new CoordinationException("supersession format");
         }
-        UUID id = uuid(in);
+        UUID id = readUuid(in);
         long oldRevision = in.readLong(), newRevision = in.readLong();
         if (in.available() != 0) {
             throw new CoordinationException("trailing supersession bytes");
         }
         return new ContractSupersede(id, oldRevision, newRevision);
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void uuid(DataOutputStream out, UUID id) throws IOException {
-        out.writeLong(id.getMostSignificantBits());
-        out.writeLong(id.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID uuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
     }
 
     /**
@@ -217,7 +182,7 @@ public final class ContractCodec {
     private static void uuidNullable(DataOutputStream out, UUID id) throws IOException {
         out.writeBoolean(id != null);
         if (id != null) {
-            uuid(out, id);
+            writeUuid(out, id);
         }
     }
 
@@ -227,38 +192,7 @@ public final class ContractCodec {
      * @throws IOException when payload validation or durable I/O fails
      */
     private static UUID uuidNullable(DataInputStream in) throws IOException {
-        return in.readBoolean() ? uuid(in) : null;
-    }
-
-    /**
-     * Encodes bounded UTF-8 text with its byte length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void text(DataOutputStream out, String value) throws IOException {
-        byte[] b = value.getBytes(StandardCharsets.UTF_8);
-        if (b.length > 32768) {
-            throw new CoordinationException("text bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Decodes bounded UTF-8 text after checking its encoded byte length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String text(DataInputStream in) throws IOException {
-        int n = in.readInt();
-        if (n < 1 || n > 32768) {
-            throw new CoordinationException("text bound");
-        }
-        byte[] b = in.readNBytes(n);
-        if (b.length != n) {
-            throw new CoordinationException("truncated text");
-        }
-        return new String(b, StandardCharsets.UTF_8);
+        return in.readBoolean() ? readUuid(in) : null;
     }
 
 }

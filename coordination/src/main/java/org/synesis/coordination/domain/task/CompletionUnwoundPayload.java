@@ -1,16 +1,14 @@
 package org.synesis.coordination.domain.task;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -24,6 +22,7 @@ import org.synesis.coordination.exception.CoordinationNullException;
 public record CompletionUnwoundPayload(CompletionPreparedPayload prepared, WorkIntent replacementIntent) {
 
     private static final int MAGIC = 0x53555731;
+    private static final WireFormat BYTES = WireFormat.bounded(1_000_000, false, "payload bound", "truncated payload");
 
     /**
      * Validates the payload fields.
@@ -53,8 +52,8 @@ public record CompletionUnwoundPayload(CompletionPreparedPayload prepared, WorkI
             if (in.readInt() != MAGIC) {
                 throw new CoordinationException("unsupported unwind format");
             }
-            byte[] preparedBytes = readBytes(in);
-            byte[] intentBytes = readBytes(in);
+            byte[] preparedBytes = BYTES.readBytes(in);
+            byte[] intentBytes = BYTES.readBytes(in);
             if (in.available() != 0) {
                 throw new CoordinationException("trailing unwind bytes");
             }
@@ -66,42 +65,14 @@ public record CompletionUnwoundPayload(CompletionPreparedPayload prepared, WorkI
     }
 
     /**
-     * Reads a length-bounded byte field.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static byte[] readBytes(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 1 || length > 1_000_000) {
-            throw new CoordinationException("payload bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated payload");
-        }
-        return bytes;
-    }
-
-    /**
      * Encodes this payload deterministically.
      *
      * @return encoded bytes
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            byte[] preparedBytes = prepared.encode();
-            out.writeInt(preparedBytes.length);
-            out.write(preparedBytes);
-            byte[] intentBytes = CollaborationCodec.encodeIntent(replacementIntent);
-            out.writeInt(intentBytes.length);
-            out.write(intentBytes);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        return WireFormat.encode(MAGIC, out -> {
+            BYTES.writeBytes(out, prepared.encode());
+            BYTES.writeBytes(out, CollaborationCodec.encodeIntent(replacementIntent));
+        });
     }
 }

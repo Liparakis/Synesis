@@ -1,18 +1,17 @@
 package org.synesis.coordination.domain.integration;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.IntegrationAttemptId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -35,6 +34,10 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
     private static final int MAGIC = 0x494E5447; // "INTG"
     private static final int VERSION = 1;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
+            true,
+            "Invalid text length in payload",
+            "Truncated payload").checkingWrites(MAX_TEXT, "text exceeds payload bound");
 
     /**
      * Compact constructor.
@@ -71,17 +74,17 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
             if (in.readInt() != MAGIC || in.readInt() != VERSION) {
                 throw new CoordinationException("Unsupported integration attempt payload format");
             }
-            String attemptId = readText(in);
+            String attemptId = TEXT.readText(in);
             UUID projectId = readUuid(in);
             int snapCount = in.readInt();
             List<String> snaps = new ArrayList<>(snapCount);
             for (int i = 0; i < snapCount; i++) {
-                snaps.add(readText(in));
+                snaps.add(TEXT.readText(in));
             }
-            String expectedHead = readText(in);
-            String integrationCommit = readText(in);
-            String status = readText(in);
-            String failureReason = readText(in);
+            String expectedHead = TEXT.readText(in);
+            String integrationCommit = TEXT.readText(in);
+            String status = TEXT.readText(in);
+            String failureReason = TEXT.readText(in);
 
             return new IntegrationAttemptPayload(attemptId,
                     projectId,
@@ -93,56 +96,6 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
         } catch (RuntimeException failure) {
             throw new CoordinationException("Malformed integration attempt payload", failure);
         }
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID val) throws IOException {
-        out.writeLong(val.getMostSignificantBits());
-        out.writeLong(val.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String val) throws IOException {
-        byte[] b = val.getBytes(StandardCharsets.UTF_8);
-        if (b.length > MAX_TEXT) {
-            throw new CoordinationException("text exceeds payload bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int len = in.readInt();
-        if (len < 0 || len > MAX_TEXT) {
-            throw new CoordinationException("Invalid text length in payload");
-        }
-        byte[] b = in.readNBytes(len);
-        if (b.length != len) {
-            throw new CoordinationException("Truncated payload");
-        }
-        return new String(b, StandardCharsets.UTF_8);
     }
 
     /**
@@ -160,25 +113,18 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
      * @return encoded bytes
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return WireFormat.encode(MAGIC, out -> {
             out.writeInt(VERSION);
-            writeText(out, attemptId);
+            TEXT.writeText(out, attemptId);
             writeUuid(out, projectId);
             out.writeInt(taskSnapshotIds.size());
             for (String snap : taskSnapshotIds) {
-                writeText(out, snap);
+                TEXT.writeText(out, snap);
             }
-            writeText(out, expectedControlHead);
-            writeText(out, integrationCommitSha);
-            writeText(out, status);
-            writeText(out, failureReason);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            TEXT.writeText(out, expectedControlHead);
+            TEXT.writeText(out, integrationCommitSha);
+            TEXT.writeText(out, status);
+            TEXT.writeText(out, failureReason);
+        });
     }
 }

@@ -1,10 +1,11 @@
 package org.synesis.coordination.domain.ownership;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,9 +17,9 @@ import org.synesis.coordination.domain.identity.IntentVersion;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.SupervisorId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -37,6 +38,7 @@ public record OwnershipClaim(UUID taskId, String capability, String ownerNodeId,
 
     private static final int MAGIC = 0x534f4331;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, false, "text bound", "truncated text");
     private static final int MAX_LIST_ENTRIES = 128;
 
     /**
@@ -95,17 +97,17 @@ public record OwnershipClaim(UUID taskId, String capability, String ownerNodeId,
             if (in.readInt() != MAGIC || in.readInt() != 1) {
                 throw new CoordinationException("unsupported ownership format");
             }
-            UUID taskId = new UUID(in.readLong(), in.readLong());
-            String capability = readText(in);
-            String node = readText(in);
-            String supervisor = readText(in);
+            UUID taskId = readUuid(in);
+            String capability = TEXT.readText(in);
+            String node = TEXT.readText(in);
+            String supervisor = TEXT.readText(in);
             int count = in.readInt();
             if (count < 0 || count > MAX_LIST_ENTRIES) {
                 throw new CoordinationException("scope bound");
             }
             ArrayList<String> scopes = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
-                scopes.add(readText(in));
+                scopes.add(TEXT.readText(in));
             }
             OwnershipClaim claim = new OwnershipClaim(taskId, capability, node, supervisor, scopes, in.readLong());
             if (in.available() != 0) {
@@ -125,34 +127,6 @@ public record OwnershipClaim(UUID taskId, String capability, String ownerNodeId,
         if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
             throw new CoordinationArgumentException(label + " is empty or exceeds bound");
         }
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 1 || length > MAX_TEXT_BYTES) {
-            throw new CoordinationException("text bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated text");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -197,25 +171,17 @@ public record OwnershipClaim(UUID taskId, String capability, String ownerNodeId,
      * @return canonical bytes
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(1);
-            out.writeLong(taskId.getMostSignificantBits());
-            out.writeLong(taskId.getLeastSignificantBits());
-            writeText(out, capability);
-            writeText(out, ownerNodeId);
-            writeText(out, ownerSupervisorId);
+            writeUuid(out, taskId);
+            TEXT.writeText(out, capability);
+            TEXT.writeText(out, ownerNodeId);
+            TEXT.writeText(out, ownerSupervisorId);
             out.writeInt(protectedScopes.size());
             for (String scope : protectedScopes) {
-                writeText(out, scope);
+                TEXT.writeText(out, scope);
             }
             out.writeLong(intentVersion);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 }

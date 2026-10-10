@@ -1,19 +1,19 @@
 package org.synesis.coordination.domain.task;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -43,6 +43,10 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     private static final int MAGIC = 0x534E4150; // "SNAP"
     private static final int VERSION = 5;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
+            true,
+            "Invalid text length in payload",
+            "Truncated payload").checkingWrites(MAX_TEXT, "text exceeds payload bound");
 
     /**
      * Compact constructor.
@@ -169,18 +173,18 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
      */
     private static TaskSnapshotPayload readPayload(DataInputStream in) throws IOException {
         UUID taskId = readUuid(in);
-        String snapshotId = readText(in);
-        String nodeId = readText(in);
-        String supervisorId = readText(in);
-        String workerId = readText(in);
-        String providerSessionId = readText(in);
-        String baseCommit = readText(in);
-        String commitSha = readText(in);
+        String snapshotId = TEXT.readText(in);
+        String nodeId = TEXT.readText(in);
+        String supervisorId = TEXT.readText(in);
+        String workerId = TEXT.readText(in);
+        String providerSessionId = TEXT.readText(in);
+        String baseCommit = TEXT.readText(in);
+        String commitSha = TEXT.readText(in);
 
         List<String> changedPaths = readTextList(in);
         List<String> dependencies = readTextList(in);
 
-        String summary = readText(in);
+        String summary = TEXT.readText(in);
         SnapshotProvenance provenance = readProvenance(in);
         boolean reviewRequired = in.readBoolean();
         return new TaskSnapshotPayload(taskId,
@@ -209,7 +213,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         int count = in.readInt();
         List<String> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(readText(in));
+            values.add(TEXT.readText(in));
         }
         return values;
     }
@@ -225,15 +229,15 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         UUID group = readUuid(in);
         UUID lane = readUuid(in);
         UUID authorityLineage = readUuid(in);
-        String participant = readText(in);
-        String binding = readText(in);
+        String participant = TEXT.readText(in);
+        String binding = TEXT.readText(in);
         long epoch = in.readLong();
         List<String> contracts = readList(in);
         List<String> lineage = readList(in);
         List<String> claims = readList(in);
-        String snapshotRef = readText(in);
-        String integrity = readText(in);
-        String artifacts = readText(in);
+        String snapshotRef = TEXT.readText(in);
+        String integrity = TEXT.readText(in);
+        String artifacts = TEXT.readText(in);
         return new SnapshotProvenance(group,
                 lane,
                 authorityLineage,
@@ -249,56 +253,6 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     }
 
     /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID val) throws IOException {
-        out.writeLong(val.getMostSignificantBits());
-        out.writeLong(val.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String val) throws IOException {
-        byte[] b = val.getBytes(StandardCharsets.UTF_8);
-        if (b.length > MAX_TEXT) {
-            throw new CoordinationException("text exceeds payload bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int len = in.readInt();
-        if (len < 0 || len > MAX_TEXT) {
-            throw new CoordinationException("Invalid text length in payload");
-        }
-        byte[] b = in.readNBytes(len);
-        if (b.length != len) {
-            throw new CoordinationException("Truncated payload");
-        }
-        return new String(b, StandardCharsets.UTF_8);
-    }
-
-    /**
      * Writes a bounded list using the canonical payload format.
      *
      * @throws IOException when payload validation or durable I/O fails
@@ -306,7 +260,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     private static void writeList(DataOutputStream out, List<String> values) throws IOException {
         out.writeInt(values.size());
         for (String value : values) {
-            writeText(out, value);
+            TEXT.writeText(out, value);
         }
     }
 
@@ -322,7 +276,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         }
         List<String> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(readText(in));
+            values.add(TEXT.readText(in));
         }
         return values;
     }
@@ -351,46 +305,39 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
      * @return encoded bytes
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return WireFormat.encode(MAGIC, out -> {
             out.writeInt(VERSION);
             writeUuid(out, taskId);
-            writeText(out, snapshotId);
-            writeText(out, nodeId);
-            writeText(out, supervisorId);
-            writeText(out, workerId);
-            writeText(out, providerSessionId);
-            writeText(out, baseCommit);
-            writeText(out, commitSha);
+            TEXT.writeText(out, snapshotId);
+            TEXT.writeText(out, nodeId);
+            TEXT.writeText(out, supervisorId);
+            TEXT.writeText(out, workerId);
+            TEXT.writeText(out, providerSessionId);
+            TEXT.writeText(out, baseCommit);
+            TEXT.writeText(out, commitSha);
 
             out.writeInt(changedPaths.size());
             for (String p : changedPaths) {
-                writeText(out, p);
+                TEXT.writeText(out, p);
             }
             out.writeInt(capabilityDependencies.size());
             for (String dep : capabilityDependencies) {
-                writeText(out, dep);
+                TEXT.writeText(out, dep);
             }
-            writeText(out, summary);
+            TEXT.writeText(out, summary);
             writeUuid(out, provenance.workGroupId());
             writeUuid(out, provenance.laneId());
             writeUuid(out, provenance.authorityLineageId());
-            writeText(out, provenance.participant());
-            writeText(out, provenance.bindingIdentity());
+            TEXT.writeText(out, provenance.participant());
+            TEXT.writeText(out, provenance.bindingIdentity());
             out.writeLong(provenance.claimEpoch());
             writeList(out, provenance.contractRevisions());
             writeList(out, provenance.handoffLineage());
             writeList(out, provenance.claimSelectors());
-            writeText(out, provenance.snapshotRef());
-            writeText(out, provenance.integrityEvidence());
-            writeText(out, provenance.artifactManifestDigest());
+            TEXT.writeText(out, provenance.snapshotRef());
+            TEXT.writeText(out, provenance.integrityEvidence());
+            TEXT.writeText(out, provenance.artifactManifestDigest());
             out.writeBoolean(reviewRequired);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+        });
     }
 }

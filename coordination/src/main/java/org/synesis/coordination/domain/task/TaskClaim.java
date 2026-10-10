@@ -1,10 +1,11 @@
 package org.synesis.coordination.domain.task;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -12,10 +13,10 @@ import java.util.UUID;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.SupervisorId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -31,6 +32,7 @@ public record TaskClaim(UUID taskId, String ownerNodeId, String ownerSupervisorI
 
     private static final int MAGIC = 0x53544331;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, false, "text bound", "truncated text");
 
     /**
      * Validates claim identity and bounded text.
@@ -55,10 +57,10 @@ public record TaskClaim(UUID taskId, String ownerNodeId, String ownerSupervisorI
             if (in.readInt() != MAGIC || in.readInt() != 1) {
                 throw new CoordinationException("unsupported claim format");
             }
-            TaskClaim claim = new TaskClaim(new UUID(in.readLong(), in.readLong()),
-                    readText(in),
-                    readText(in),
-                    readText(in));
+            TaskClaim claim = new TaskClaim(readUuid(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in));
             if (in.available() != 0) {
                 throw new CoordinationException("trailing claim bytes");
             }
@@ -76,34 +78,6 @@ public record TaskClaim(UUID taskId, String ownerNodeId, String ownerSupervisorI
         if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
             throw new CoordinationArgumentException(label + " is empty or exceeds bound");
         }
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 1 || length > MAX_TEXT_BYTES) {
-            throw new CoordinationException("text bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated text");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -148,20 +122,12 @@ public record TaskClaim(UUID taskId, String ownerNodeId, String ownerSupervisorI
      * @return canonical bytes
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(1);
-            out.writeLong(taskId.getMostSignificantBits());
-            out.writeLong(taskId.getLeastSignificantBits());
-            writeText(out, ownerNodeId);
-            writeText(out, ownerSupervisorId);
-            writeText(out, ownerWorkerId);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            writeUuid(out, taskId);
+            TEXT.writeText(out, ownerNodeId);
+            TEXT.writeText(out, ownerSupervisorId);
+            TEXT.writeText(out, ownerWorkerId);
+        });
     }
 }

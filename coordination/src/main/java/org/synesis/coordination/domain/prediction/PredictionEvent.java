@@ -1,10 +1,11 @@
 package org.synesis.coordination.domain.prediction;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,7 @@ import org.synesis.coordination.domain.identity.EventSequence;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.domain.identity.ProjectId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationInvariantError;
@@ -31,6 +33,9 @@ public final class PredictionEvent {
 
     private static final int MAGIC = 0x53434531;
     private static final int MAX_PAYLOAD_BYTES = 64 * 1024;
+    private static final WireFormat BYTES = WireFormat.bounded(MAX_PAYLOAD_BYTES, true, "byte bound", "truncated event")
+            .checkingWrites(MAX_PAYLOAD_BYTES, "payload bound");
+    private static final WireFormat TEXT = BYTES.checkingWrites(8192, "text bound");
     private final UUID eventId;
     private final UUID projectId;
     private final UUID predictionId;
@@ -199,10 +204,11 @@ public final class PredictionEvent {
             UUID eventId = readUuid(in), projectId = readUuid(in), predictionId = readUuid(in);
             long sequence = in.readLong();
             int wireCode = in.readInt();
-            String actor = readText(in);
+            String actor = TEXT.readText(in);
             long created = in.readLong();
-            byte[] payload = readBytes(in);
-            byte[] previous = readBytes(in), digest = readBytes(in), key = readBytes(in), signature = readBytes(in);
+            byte[] payload = BYTES.readBytes(in);
+            byte[] previous = BYTES.readBytes(in), digest = BYTES.readBytes(in);
+            byte[] key = BYTES.readBytes(in), signature = BYTES.readBytes(in);
             if (in.available() != 0) {
                 throw new CoordinationException("trailing event bytes");
             }
@@ -295,25 +301,18 @@ public final class PredictionEvent {
             long created,
             byte[] payload,
             byte[] previous) {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(1);
             writeUuid(out, eventId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
             out.writeLong(sequence);
             out.writeInt(wireCode);
-            writeText(out, actor);
+            TEXT.writeText(out, actor);
             out.writeLong(created);
-            writeBytes(out, payload);
-            writeBytes(out, previous);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            BYTES.writeBytes(out, payload);
+            BYTES.writeBytes(out, previous);
+        });
     }
 
     /**
@@ -325,79 +324,6 @@ public final class PredictionEvent {
         } catch (NoSuchAlgorithmException impossible) {
             throw new CoordinationInvariantError(impossible);
         }
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID id) throws IOException {
-        out.writeLong(id.getMostSignificantBits());
-        out.writeLong(id.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] b = value.getBytes(StandardCharsets.UTF_8);
-        if (b.length > 8192) {
-            throw new CoordinationException("text bound");
-        }
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        byte[] b = readBytes(in);
-        return new String(b, StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Writes a length-bounded byte field.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeBytes(DataOutputStream out, byte[] value) throws IOException {
-        if (value.length > MAX_PAYLOAD_BYTES) {
-            throw new CoordinationException("payload bound");
-        }
-        out.writeInt(value.length);
-        out.write(value);
-    }
-
-    /**
-     * Reads a length-bounded byte field.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static byte[] readBytes(DataInputStream in) throws IOException {
-        int n = in.readInt();
-        if (n < 0 || n > MAX_PAYLOAD_BYTES) {
-            throw new CoordinationException("byte bound");
-        }
-        byte[] b = in.readNBytes(n);
-        if (b.length != n) {
-            throw new CoordinationException("truncated event");
-        }
-        return b;
     }
 
     /**
@@ -539,27 +465,20 @@ public final class PredictionEvent {
      * @return canonical encoded event
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(1);
             writeUuid(out, eventId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
             out.writeLong(sequence);
             out.writeInt(encodedWireCode);
-            writeText(out, actorNodeId);
+            TEXT.writeText(out, actorNodeId);
             out.writeLong(createdAtEpochMillis);
-            writeBytes(out, payload);
-            writeBytes(out, previousDigest);
-            writeBytes(out, digest);
-            writeBytes(out, signerPublicKey);
-            writeBytes(out, signature);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            BYTES.writeBytes(out, payload);
+            BYTES.writeBytes(out, previousDigest);
+            BYTES.writeBytes(out, digest);
+            BYTES.writeBytes(out, signerPublicKey);
+            BYTES.writeBytes(out, signature);
+        });
     }
 }

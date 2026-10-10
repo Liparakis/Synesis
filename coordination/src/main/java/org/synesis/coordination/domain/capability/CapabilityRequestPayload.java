@@ -1,20 +1,19 @@
 package org.synesis.coordination.domain.capability;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.CapabilityId;
 import org.synesis.coordination.domain.identity.NodeId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -45,6 +44,10 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
     private static final int MAGIC = 0x53435250; // "SCRP"
     private static final int VERSION = 4;
     private static final int MAX_ENCODED_BYTES = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(64 * 1024,
+            true,
+            "Invalid text length bound",
+            "Truncated text payload");
 
     /**
      * Compact constructor enforcing nullability and bounds.
@@ -140,28 +143,28 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
                 throw new CoordinationException("Unsupported capability request payload format");
             }
 
-            CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
-            String capability = readText(in);
-            String requesterNodeId = readText(in);
-            String requesterSupervisorId = readText(in);
-            String requesterWorkerId = readText(in);
-            String ownerNodeId = readText(in);
-            String ownerSupervisorId = readText(in);
-            String ownerWorkerId = readText(in);
+            CapabilityRequestHandle handle = CapabilityRequestHandle.parse(TEXT.readText(in));
+            String capability = TEXT.readText(in);
+            String requesterNodeId = TEXT.readText(in);
+            String requesterSupervisorId = TEXT.readText(in);
+            String requesterWorkerId = TEXT.readText(in);
+            String ownerNodeId = TEXT.readText(in);
+            String ownerSupervisorId = TEXT.readText(in);
+            String ownerWorkerId = TEXT.readText(in);
             UUID authorityLineageId = readUuid(in);
             long expectedContractRevision = in.readLong();
 
-            String purpose = readText(in);
-            String inputs = readText(in);
-            String output = readText(in);
+            String purpose = TEXT.readText(in);
+            String inputs = TEXT.readText(in);
+            String output = TEXT.readText(in);
             List<String> requiredBehavior = readTextList(in);
             List<String> acceptanceTests = readTextList(in);
-            String errorSemantics = readText(in);
-            String sideEffects = readText(in);
-            String invariants = readText(in);
-            String compatibility = readText(in);
-            String performance = readText(in);
-            String concurrency = readText(in);
+            String errorSemantics = TEXT.readText(in);
+            String sideEffects = TEXT.readText(in);
+            String invariants = TEXT.readText(in);
+            String compatibility = TEXT.readText(in);
+            String performance = TEXT.readText(in);
+            String concurrency = TEXT.readText(in);
             CapabilityContract contract = new CapabilityContract(purpose,
                     inputs,
                     output,
@@ -173,8 +176,8 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
                     performance,
                     concurrency,
                     acceptanceTests);
-            CapabilityLifecycleState state = CapabilityLifecycleState.fromValue(readText(in));
-            String reasonRaw = readText(in);
+            CapabilityLifecycleState state = CapabilityLifecycleState.fromValue(TEXT.readText(in));
+            String reasonRaw = TEXT.readText(in);
             String reason = reasonRaw.isBlank() ? null : reasonRaw;
             if (in.available() != 0) {
                 throw new CoordinationException("Trailing capability request payload bytes");
@@ -212,56 +215,9 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
         }
         List<String> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(readText(in));
+            values.add(TEXT.readText(in));
         }
         return values;
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String val) throws IOException {
-        byte[] b = val.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(b.length);
-        out.write(b);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int len = in.readInt();
-        if (len < 0 || len > 64 * 1024) {
-            throw new CoordinationException("Invalid text length bound");
-        }
-        byte[] b = in.readNBytes(len);
-        if (b.length != len) {
-            throw new CoordinationException("Truncated text payload");
-        }
-        return new String(b, StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
     }
 
     /**
@@ -288,48 +244,41 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
      * @return encoded payload bytes
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return WireFormat.encode(MAGIC, out -> {
             out.writeInt(VERSION);
-            writeText(out, handle.value());
-            writeText(out, capability);
-            writeText(out, requesterNodeId);
-            writeText(out, requesterSupervisorId);
-            writeText(out, requesterWorkerId);
-            writeText(out, ownerNodeId);
-            writeText(out, ownerSupervisorId);
-            writeText(out, ownerWorkerId);
+            TEXT.writeText(out, handle.value());
+            TEXT.writeText(out, capability);
+            TEXT.writeText(out, requesterNodeId);
+            TEXT.writeText(out, requesterSupervisorId);
+            TEXT.writeText(out, requesterWorkerId);
+            TEXT.writeText(out, ownerNodeId);
+            TEXT.writeText(out, ownerSupervisorId);
+            TEXT.writeText(out, ownerWorkerId);
             writeUuid(out, authorityLineageId);
             out.writeLong(expectedContractRevision);
-            writeText(out, contract.purpose());
-            writeText(out, contract.inputs());
-            writeText(out, contract.output());
+            TEXT.writeText(out, contract.purpose());
+            TEXT.writeText(out, contract.inputs());
+            TEXT.writeText(out, contract.output());
 
             out.writeInt(contract.requiredBehavior().size());
             for (String b : contract.requiredBehavior()) {
-                writeText(out, b);
+                TEXT.writeText(out, b);
             }
 
             out.writeInt(contract.acceptanceTests().size());
             for (String a : contract.acceptanceTests()) {
-                writeText(out, a);
+                TEXT.writeText(out, a);
             }
 
-            writeText(out, contract.errorSemantics());
-            writeText(out, contract.sideEffects());
-            writeText(out, contract.invariants());
-            writeText(out, contract.compatibility());
-            writeText(out, contract.performance());
-            writeText(out, contract.concurrency());
+            TEXT.writeText(out, contract.errorSemantics());
+            TEXT.writeText(out, contract.sideEffects());
+            TEXT.writeText(out, contract.invariants());
+            TEXT.writeText(out, contract.compatibility());
+            TEXT.writeText(out, contract.performance());
+            TEXT.writeText(out, contract.concurrency());
 
-            writeText(out, state.value());
-            writeText(out, reason != null ? reason : "");
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            TEXT.writeText(out, state.value());
+            TEXT.writeText(out, reason != null ? reason : "");
+        });
     }
 }

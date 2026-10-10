@@ -1,9 +1,10 @@
 package org.synesis.coordination.domain.collaboration;
 
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
+
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -14,11 +15,11 @@ import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -41,6 +42,10 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
 
     private static final int MAGIC = 0x53525631;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
+            true,
+            "invalid review text length",
+            "truncated review validation").checkingWrites(MAX_TEXT, "text exceeds payload bound");
 
     /**
      * Validates the decision's identity, result, and bounded text.
@@ -82,16 +87,16 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
             if (in.readInt() != MAGIC) {
                 throw new CoordinationException("unsupported review validation format");
             }
-            ReviewValidationPayload payload = new ReviewValidationPayload(uuid(in),
-                    uuid(in),
-                    uuid(in),
-                    readText(in),
+            ReviewValidationPayload payload = new ReviewValidationPayload(readUuid(in),
+                    readUuid(in),
+                    readUuid(in),
+                    TEXT.readText(in),
                     in.readLong(),
-                    uuid(in),
-                    readText(in),
-                    readText(in),
-                    readText(in),
-                    readText(in));
+                    readUuid(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in),
+                    TEXT.readText(in));
             if (in.available() != 0) {
                 throw new CoordinationException("trailing review validation bytes");
             }
@@ -109,56 +114,6 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
         if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT) {
             throw new CoordinationArgumentException(field + " is empty or exceeds payload bound");
         }
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void uuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID uuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Encodes bounded UTF-8 review text with its byte length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void text(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_TEXT) {
-            throw new CoordinationException("text exceeds payload bound");
-        }
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 0 || length > MAX_TEXT) {
-            throw new CoordinationException("invalid review text length");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated review validation");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -230,24 +185,17 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
      * @return encoded decision
      */
     public byte[] encode() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            uuid(out, grantId);
-            uuid(out, workGroupId);
-            uuid(out, targetIntentId);
-            text(out, targetParticipant);
+        return WireFormat.encode(MAGIC, out -> {
+            writeUuid(out, grantId);
+            writeUuid(out, workGroupId);
+            writeUuid(out, targetIntentId);
+            TEXT.writeText(out, targetParticipant);
             out.writeLong(claimEpoch);
-            uuid(out, taskId);
-            text(out, snapshotId);
-            text(out, result);
-            text(out, reason);
-            text(out, sourceParticipant);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            writeUuid(out, taskId);
+            TEXT.writeText(out, snapshotId);
+            TEXT.writeText(out, result);
+            TEXT.writeText(out, reason);
+            TEXT.writeText(out, sourceParticipant);
+        });
     }
 }

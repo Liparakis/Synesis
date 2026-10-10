@@ -1,12 +1,13 @@
 package org.synesis.coordination.domain.command;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
+
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,11 +17,11 @@ import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.domain.identity.ProjectId;
 import org.synesis.coordination.domain.identity.SupervisorId;
 import org.synesis.coordination.domain.identity.TaskId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -32,6 +33,9 @@ public final class CoordinationCommand {
 
     private static final int MAGIC = 0x53434331;
     private static final int MAX_BYTES = 64 * 1024;
+    private static final WireFormat BYTES = WireFormat.bounded(MAX_BYTES, true, "byte bound", "truncated command")
+            .checkingWrites(MAX_BYTES, "byte bound");
+    private static final WireFormat TEXT = BYTES.checkingWrites(8192, "text bound");
     private final UUID commandId;
     private final UUID projectId;
     private final UUID predictionId;
@@ -200,10 +204,10 @@ public final class CoordinationCommand {
             } catch (IllegalArgumentException unknown) {
                 throw new CoordinationException("event type");
             }
-            String actor = readText(in);
-            String supervisor = version == 2 ? readText(in) : null;
-            String worker = version == 2 ? readText(in) : null;
-            byte[] payload = readBytes(in), key = readBytes(in), signature = readBytes(in);
+            String actor = TEXT.readText(in);
+            String supervisor = version == 2 ? TEXT.readText(in) : null;
+            String worker = version == 2 ? TEXT.readText(in) : null;
+            byte[] payload = BYTES.readBytes(in), key = BYTES.readBytes(in), signature = BYTES.readBytes(in);
             if (in.available() != 0) {
                 throw new CoordinationException("trailing command bytes");
             }
@@ -220,78 +224,6 @@ public final class CoordinationCommand {
         } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("malformed coordination command", failure);
         }
-    }
-
-    /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 8192) {
-            throw new CoordinationException("text bound");
-        }
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        return new String(readBytes(in), StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Writes a length-bounded byte field.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeBytes(DataOutputStream out, byte[] value) throws IOException {
-        if (value.length > MAX_BYTES) {
-            throw new CoordinationException("byte bound");
-        }
-        out.writeInt(value.length);
-        out.write(value);
-    }
-
-    /**
-     * Reads a length-bounded byte field.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static byte[] readBytes(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 0 || length > MAX_BYTES) {
-            throw new CoordinationException("byte bound");
-        }
-        byte[] value = in.readNBytes(length);
-        if (value.length != length) {
-            throw new CoordinationException("truncated command");
-        }
-        return value;
     }
 
     /**
@@ -419,55 +351,41 @@ public final class CoordinationCommand {
      * @return encoded command
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(formatVersion());
             writeUuid(out, commandId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
             out.writeInt(type.wireCode());
-            writeText(out, actorNodeId);
+            TEXT.writeText(out, actorNodeId);
             if (formatVersion() == 2) {
-                writeText(out, actorSupervisorId);
-                writeText(out, actorWorkerId);
+                TEXT.writeText(out, actorSupervisorId);
+                TEXT.writeText(out, actorWorkerId);
             }
-            writeBytes(out, payload);
-            writeBytes(out, signerPublicKey);
-            writeBytes(out, signature);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            BYTES.writeBytes(out, payload);
+            BYTES.writeBytes(out, signerPublicKey);
+            BYTES.writeBytes(out, signature);
+        });
     }
 
     /**
      * Produces the canonical event bytes used for signing and hashing.
      */
     private byte[] canonical() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
+        return encode(MAGIC, out -> {
             out.writeInt(formatVersion());
             writeUuid(out, commandId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
             out.writeInt(type.wireCode());
-            writeText(out, actorNodeId);
+            TEXT.writeText(out, actorNodeId);
             if (formatVersion() == 2) {
-                writeText(out, actorSupervisorId);
-                writeText(out, actorWorkerId);
+                TEXT.writeText(out, actorSupervisorId);
+                TEXT.writeText(out, actorWorkerId);
             }
-            writeBytes(out, payload);
-            writeBytes(out, signerPublicKey);
-            out.flush();
-            return bytes.toByteArray();
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
-        }
+            BYTES.writeBytes(out, payload);
+            BYTES.writeBytes(out, signerPublicKey);
+        });
     }
 
     /**

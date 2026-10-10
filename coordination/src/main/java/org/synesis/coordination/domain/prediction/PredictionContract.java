@@ -1,8 +1,10 @@
 package org.synesis.coordination.domain.prediction;
 
+import static org.synesis.coordination.domain.identity.WireFormat.encode;
+import static org.synesis.coordination.domain.identity.WireFormat.readUuid;
+import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -15,10 +17,10 @@ import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.domain.identity.ProjectId;
 import org.synesis.coordination.domain.identity.SupervisorId;
+import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
-import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
 
@@ -72,6 +74,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
      */
     public static final int MAX_ENCODED_BYTES = 64 * 1024;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, false, "text bound", "truncated text");
     private static final int MAX_LIST_ENTRIES = 128;
 
     /**
@@ -142,23 +145,23 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
         }
         UUID predictionId = readUuid(in);
         UUID projectId = readUuid(in);
-        String requesterNodeId = readText(in);
-        String requesterSupervisorId = readText(in);
-        String requesterWorkerId = readText(in);
-        String owningCapability = readText(in);
-        String ownerNodeId = readText(in);
-        String ownerSupervisorId = readText(in);
-        String baseCommit = readText(in);
-        String purpose = readText(in);
-        String inputs = readText(in);
-        String outputs = readText(in);
-        String behavior = readText(in);
-        String errorSemantics = readText(in);
-        String sideEffects = readText(in);
-        String invariants = readText(in);
-        String compatibility = readText(in);
-        String performance = readText(in);
-        String concurrency = readText(in);
+        String requesterNodeId = TEXT.readText(in);
+        String requesterSupervisorId = TEXT.readText(in);
+        String requesterWorkerId = TEXT.readText(in);
+        String owningCapability = TEXT.readText(in);
+        String ownerNodeId = TEXT.readText(in);
+        String ownerSupervisorId = TEXT.readText(in);
+        String baseCommit = TEXT.readText(in);
+        String purpose = TEXT.readText(in);
+        String inputs = TEXT.readText(in);
+        String outputs = TEXT.readText(in);
+        String behavior = TEXT.readText(in);
+        String errorSemantics = TEXT.readText(in);
+        String sideEffects = TEXT.readText(in);
+        String invariants = TEXT.readText(in);
+        String compatibility = TEXT.readText(in);
+        String performance = TEXT.readText(in);
+        String concurrency = TEXT.readText(in);
         UUID requestingTaskId = readUuid(in);
         List<String> protectedScopes = readList(in);
         long baseProjectSequence = in.readLong();
@@ -225,53 +228,6 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
     }
 
     /**
-     * Writes a UUID in the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeUuid(DataOutputStream out, UUID value) throws IOException {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    /**
-     * Reads a UUID from the canonical binary payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static UUID readUuid(DataInputStream in) throws IOException {
-        return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Writes bounded UTF-8 text in the canonical payload format.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void writeText(DataOutputStream out, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
-        out.write(bytes);
-    }
-
-    /**
-     * Reads bounded UTF-8 text and validates its encoded length.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static String readText(DataInputStream in) throws IOException {
-        int length = in.readInt();
-        if (length < 1 || length > MAX_TEXT_BYTES) {
-            throw new CoordinationException("text bound");
-        }
-        byte[] bytes = in.readNBytes(length);
-        if (bytes.length != length) {
-            throw new CoordinationException("truncated text");
-        }
-        return new String(bytes, StandardCharsets.UTF_8);
-    }
-
-    /**
      * Writes a bounded list using the canonical payload format.
      *
      * @throws IOException when payload validation or durable I/O fails
@@ -280,7 +236,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
         out.writeInt(values.size());
         values.forEach(value -> {
             try {
-                writeText(out, value);
+                TEXT.writeText(out, value);
             } catch (IOException impossible) {
                 throw new CoordinationStateException(impossible);
             }
@@ -299,7 +255,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
         }
         ArrayList<String> values = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
-            values.add(readText(in));
+            values.add(TEXT.readText(in));
         }
         return List.copyOf(values);
     }
@@ -373,10 +329,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
      * @return canonical encoded contract
      */
     public byte[] encoded() {
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(0x53435031);
+        byte[] encoded = encode(0x53435031, out -> {
             out.writeByte(1);
             writeUuid(out, predictionId);
             writeUuid(out, projectId);
@@ -384,7 +337,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
                     ownerSupervisorId, baseCommit, purpose, inputs, outputs, behavior, errorSemantics, sideEffects,
                     invariants, compatibility, performance, concurrency};
             for (String value : values) {
-                writeText(out, value);
+                TEXT.writeText(out, value);
             }
             writeUuid(out, requestingTaskId);
             writeList(out, protectedScopes);
@@ -395,14 +348,10 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
             out.writeInt(confidence);
             out.writeInt(speculationRisk);
             out.writeLong(expiresAtEpochMillis);
-            out.flush();
-            byte[] encoded = bytes.toByteArray();
-            if (encoded.length > MAX_ENCODED_BYTES) {
-                throw new CoordinationArgumentException("contract exceeds bound");
-            }
-            return encoded;
-        } catch (IOException impossible) {
-            throw new CoordinationInvariantError(impossible);
+        });
+        if (encoded.length > MAX_ENCODED_BYTES) {
+            throw new CoordinationArgumentException("contract exceeds bound");
         }
+        return encoded;
     }
 }
