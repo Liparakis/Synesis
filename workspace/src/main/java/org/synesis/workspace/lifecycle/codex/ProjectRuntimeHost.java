@@ -303,23 +303,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 return;
             }
             if (prior.rootPid() <= 0) {
-                store.write(new Checkpoint(prior.bindingSessionId(),
-                        prior.projectId(),
-                        prior.provider(),
-                        prior.revision() + 1L,
-                        CodexLifecycleStateStore.State.AMBIGUOUS,
-                        hostInstanceId,
-                        prior.attachmentGeneration(),
-                        prior.connectionGeneration(),
-                        -1L,
-                        prior.rootStartEpochMillis(),
-                        prior.rootExecutable(),
-                        prior.rootCommandIdentity(),
-                        prior.threadId(),
-                        prior.turnId(),
-                        "owner_missing_after_restart",
-                        prior.evidenceComplete(),
-                        System.currentTimeMillis()));
+                store.write(prior.advance(CodexLifecycleStateStore.State.AMBIGUOUS, "owner_missing_after_restart").withRootPid(-1L).withOwner(hostInstanceId));
                 return;
             }
             ProcessTreeTerminator.AttachmentIdentity identity = new ProcessTreeTerminator.AttachmentIdentity(prior.rootPid(),
@@ -331,23 +315,9 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             CodexLifecycleStateStore.State state =
                     result.outcome() == ProcessTreeTerminator.Outcome.CLEAN_GRACEFUL || result.outcome() == ProcessTreeTerminator.Outcome.FORCED || result.outcome() == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED
                             ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.AMBIGUOUS;
-            store.write(new CodexLifecycleStateStore.Checkpoint(prior.bindingSessionId(),
-                    prior.projectId(),
-                    prior.provider(),
-                    prior.revision() + 1L,
-                    state,
-                    hostInstanceId,
-                    prior.attachmentGeneration(),
-                    prior.connectionGeneration(),
-                    state == CodexLifecycleStateStore.State.STOPPED ? -1L : prior.rootPid(),
-                    prior.rootStartEpochMillis(),
-                    prior.rootExecutable(),
-                    prior.rootCommandIdentity(),
-                    prior.threadId(),
-                    prior.turnId(),
-                    result.diagnostic(),
-                    prior.evidenceComplete(),
-                    System.currentTimeMillis()));
+            store.write(prior.advance(state, result.diagnostic())
+                    .withRootPid(state == CodexLifecycleStateStore.State.STOPPED ? -1L : prior.rootPid())
+                    .withOwner(hostInstanceId));
         } catch (Exception ignored) {
             // A malformed or untrusted record is surfaced by STATUS/doctor; never adopt by PID alone.
         }
@@ -570,7 +540,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
     private BindingRuntime createBindingRuntime(String bindingSessionId, AuthorityContext authority) {
         CodexLifecycleStateStore stateStore = new CodexLifecycleStateStore(runtimeRoot.resolve("bindings"));
         Path evidence = runtimeRoot.resolve("evidence").resolve(bindingSessionId);
-        CodexAppServerLifecycleService service = new CodexAppServerLifecycleService(authority, stateStore, ledger, launcher, terminator, evidence);
+        CodexAppServerLifecycleService service = new CodexAppServerLifecycleService(authority, stateStore, launcher, terminator, evidence);
         return new BindingRuntime(bindingSessionId,
                 authority,
                 stateStore,
@@ -769,23 +739,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             if (hostInstanceId.equals(checkpoint.ownerHostInstanceId())) {
                 return;
             }
-            stateStore.write(new CodexLifecycleStateStore.Checkpoint(bindingSessionId,
-                    authority.projectId(),
-                    checkpoint.provider(),
-                    checkpoint.revision(),
-                    checkpoint.state(),
-                    hostInstanceId,
-                    checkpoint.attachmentGeneration(),
-                    checkpoint.connectionGeneration(),
-                    checkpoint.rootPid(),
-                    checkpoint.rootStartEpochMillis(),
-                    checkpoint.rootExecutable(),
-                    checkpoint.rootCommandIdentity(),
-                    checkpoint.threadId(),
-                    checkpoint.turnId(),
-                    checkpoint.terminalDiagnostic(),
-                    checkpoint.evidenceComplete(),
-                    System.currentTimeMillis()));
+            stateStore.write(checkpoint.withOwner(hostInstanceId));
         }
 
         private void cleanupEvidence() {

@@ -271,5 +271,105 @@ public final class CodexLifecycleStateStore {
                 throw new IllegalArgumentException("invalid lifecycle checkpoint revision or timestamp");
             }
         }
+
+        /**
+         * Returns the next revision in {@code state} with {@code diagnostic}, stamped now.
+         *
+         * @param state      next authoritative state
+         * @param diagnostic next terminal diagnostic, or {@code null}
+         * @return next-revision checkpoint
+         */
+        public Checkpoint advance(State state, String diagnostic) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision + 1L, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, diagnostic, evidenceComplete, System.currentTimeMillis());
+        }
+
+        /**
+         * Returns this revision owned by another host instance, stamped now.
+         *
+         * @param hostInstanceId new owner instance identity
+         * @return re-owned checkpoint
+         */
+        public Checkpoint withOwner(String hostInstanceId) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, hostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, terminalDiagnostic, evidenceComplete, System.currentTimeMillis());
+        }
+
+        /**
+         * Returns this checkpoint for other process generations.
+         *
+         * @param attachmentGeneration process attachment generation
+         * @param connectionGeneration App Server connection generation
+         * @return checkpoint with the given generations
+         */
+        public Checkpoint attachedTo(long attachmentGeneration, long connectionGeneration) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, terminalDiagnostic, evidenceComplete, updatedAtEpochMillis);
+        }
+
+        /**
+         * Returns this checkpoint for another owned root process.
+         *
+         * @param rootPid         owned root PID, or {@code -1}
+         * @param executable      executable identity
+         * @param commandIdentity bounded command identity
+         * @return checkpoint with the given root identity
+         */
+        public Checkpoint withRoot(long rootPid, String executable, String commandIdentity) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, executable, commandIdentity, threadId, turnId, terminalDiagnostic, evidenceComplete, updatedAtEpochMillis);
+        }
+
+        /**
+         * Returns this checkpoint with no owned root process.
+         *
+         * @return checkpoint whose root PID is {@code -1} and whose root identity is {@code none}
+         */
+        public Checkpoint withoutRoot() {
+            return withRoot(-1L, "none", "none");
+        }
+
+        /**
+         * Returns this checkpoint with another root PID and the same root identity.
+         *
+         * @param rootPid owned root PID, or {@code -1}
+         * @return checkpoint with the given root PID
+         */
+        public Checkpoint withRootPid(long rootPid) {
+            return withRoot(rootPid, rootExecutable, rootCommandIdentity);
+        }
+
+        /**
+         * Returns this checkpoint with another verified root start instant.
+         *
+         * @param rootStartEpochMillis verified process start instant
+         * @return checkpoint with the given start instant
+         */
+        public Checkpoint withRootStart(long rootStartEpochMillis) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, terminalDiagnostic, evidenceComplete, updatedAtEpochMillis);
+        }
+
+        /**
+         * Returns this checkpoint for another exact thread and turn.
+         *
+         * @param threadId exact thread identity, or {@code null}
+         * @param turnId   exact active/last turn identity, or {@code null}
+         * @return checkpoint with the given thread and turn
+         */
+        public Checkpoint withThread(String threadId, String turnId) {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, terminalDiagnostic, evidenceComplete, updatedAtEpochMillis);
+        }
+
+        /**
+         * Returns this checkpoint with its evidence marked incomplete.
+         *
+         * @return checkpoint whose detailed evidence is incomplete
+         */
+        public Checkpoint withEvidenceIncomplete() {
+            return new Checkpoint(bindingSessionId, projectId, provider, revision, state, ownerHostInstanceId, attachmentGeneration, connectionGeneration, rootPid,
+                    rootStartEpochMillis, rootExecutable, rootCommandIdentity, threadId, turnId, terminalDiagnostic, false, updatedAtEpochMillis);
+        }
     }
 }

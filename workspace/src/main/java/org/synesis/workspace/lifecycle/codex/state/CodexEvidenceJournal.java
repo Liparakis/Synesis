@@ -139,7 +139,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         try {
             encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(value);
         } catch (RuntimeException failure) {
-            omit(category);
+            countDrop(category);
             return false;
         }
         byte[] bytes = encoded.getBytes(StandardCharsets.UTF_8);
@@ -158,14 +158,14 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         Entry entry = new Entry(category, encoded + System.lineSeparator(), terminal);
         synchronized (queueLock) {
             if (closedRequested) {
-                omit(category);
+                countDrop(category);
                 return false;
             }
             if (terminal && criticalQueue.size() < MAX_CRITICAL_QUEUE_ENTRIES) {
                 if (queue.size() + criticalQueue.size() >= MAX_QUEUE_ENTRIES) {
                     Entry low = queue.stream().filter(item -> !item.terminal()).findFirst().orElse(null);
                     if (low == null) {
-                        omit(category);
+                        countDrop(category);
                         return false;
                     }
                     queue.remove(low);
@@ -181,7 +181,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
                     queue.remove(low);
                     countDrop(low.category());
                 } else {
-                    omit(category);
+                    countDrop(category);
                     return false;
                 }
             }
@@ -329,15 +329,6 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         } catch (IOException failure) {
             markIncomplete();
             countDrop(entry.category());
-        }
-    }
-
-    private void omit(String category) {
-        synchronized (accountingLock) {
-            complete = false;
-            overflowMarker = true;
-            eventsDropped++;
-            dropped.merge(category, 1L, Long::sum);
         }
     }
 

@@ -1,7 +1,5 @@
 package org.synesis.workspace.lifecycle.codex;
 
-import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger;
-
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
@@ -18,12 +16,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,7 +33,6 @@ import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.reconcileReadState;
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.requireSuccessful;
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.responseId;
-import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.value;
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessStreams.closeStreams;
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessStreams.drainStderr;
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessTermination.ownedTermination;
@@ -57,6 +52,8 @@ import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessTermina
 @SuppressWarnings({"resource", "DuplicatedCode"})
 public final class CodexAppServerLifecycleService implements AutoCloseable {
 
+    private static final int MAX_WAITERS = 4;
+
     private final LifecycleControlRequestEnvelope.AuthorityContext authority;
     private final CodexLifecycleStateStore stateStore;
     private final ProcessLauncher launcher;
@@ -64,7 +61,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
     private final Path evidenceDirectory;
     private final Object stateLock = new Object();
     private final Map<String, Waiter> waiters = new LinkedHashMap<>();
-    private final ExecutorService waitExecutor;
     private final ScheduledExecutorService scheduler;
     private volatile Attachment active;
     private volatile AppServerProcess startingProcess;
@@ -75,28 +71,20 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      *
      * @param authority         exact verified binding authority
      * @param stateStore        durable checkpoint store
-     * @param ledger            durable lifecycle idempotency ledger
      * @param launcher          direct App Server process launcher
      * @param terminator        ownership-verified process terminator
      * @param evidenceDirectory generation journal directory
      */
     public CodexAppServerLifecycleService(LifecycleControlRequestEnvelope.AuthorityContext authority,
             CodexLifecycleStateStore stateStore,
-            LifecycleIdempotencyLedger ledger,
             ProcessLauncher launcher,
             ProcessTreeTerminator terminator,
             Path evidenceDirectory) {
         this.authority = Objects.requireNonNull(authority, "authority");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
-        Objects.requireNonNull(ledger, "ledger");
         this.launcher = Objects.requireNonNull(launcher, "launcher");
         this.terminator = Objects.requireNonNull(terminator, "terminator");
         this.evidenceDirectory = Objects.requireNonNull(evidenceDirectory, "evidenceDirectory").toAbsolutePath().normalize();
-        this.waitExecutor = Executors.newFixedThreadPool(4, runnable -> {
-            Thread thread = new Thread(runnable, "synesis-codex-lifecycle-wait");
-            thread.setDaemon(true);
-            return thread;
-        });
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "synesis-codex-lifecycle-deadline");
             thread.setDaemon(true);
@@ -163,31 +151,12 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         CodexLifecycleStateStore.Checkpoint prior = checkpoint();
         long attachmentGeneration = prior.attachmentGeneration() + 1L;
         long connectionGeneration = prior.connectionGeneration() + 1L;
-        transition(prior, CodexLifecycleStateStore.State.STARTING, attachmentGeneration, connectionGeneration, -1L, "none", "none", null, null, null);
-        AppServerProcess process = null;
-        CodexEvidenceJournal journal = null;
-        CodexAppServerProtocolClient protocol = null;
+        transition(prior.advance(CodexLifecycleStateStore.State.STARTING, null).attachedTo(attachmentGeneration, connectionGeneration).withoutRoot().withThread(null, null));
+        Startup startup = new Startup(attachmentGeneration, connectionGeneration);
         try {
-            process = launcher.launch(authority, attachmentGeneration);
-            startingProcess = process;
-            if (closed) {
-                throw new IOException("owner_shutdown");
-            }
-            journal = new CodexEvidenceJournal(evidenceDirectory.resolve("generation-" + connectionGeneration + ".jsonl"));
-            monitorProcessExit(process, journal, attachmentGeneration, connectionGeneration);
-            CompletableFuture<String> threadStarted = new CompletableFuture<>();
-            CompletableFuture<String> turnStarted = new CompletableFuture<>();
-            AppServerProcess ownedProcess = process;
-            protocol = new CodexAppServerProtocolClient(connectionGeneration,
-                    process.stdout(),
-                    process.stdin(),
-                    new Listener(threadStarted, turnStarted, journal, ownedProcess, attachmentGeneration, connectionGeneration),
-                    journal);
-            drainStderr(process.stderr(), journal);
-            Duration timeout = remaining(request);
-            requireSuccessful(protocol.request("initialize", CodexAppServerProtocolSchema.initializeParams(), LifecycleControlRequestEnvelope.Classification.STATE_CHANGING, request.digest(), null, null, timeout),
-                    "initialize");
-            protocol.notify("initialized", Map.of());
+            connect(startup, request, true);
+            AppServerProcess process = startup.process;
+            CodexAppServerProtocolClient protocol = startup.protocol;
             String expectedManagedThread = launcher.expectedInitialThreadId(authority, attachmentGeneration);
             String initialMethod = expectedManagedThread == null ? "thread/start" : "thread/resume";
             Map<String, Object> initialParams = expectedManagedThread == null ? Map.of("cwd", authority.realWorktree()) : Map.of("threadId", expectedManagedThread);
@@ -204,8 +173,8 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 throw new IOException("thread response identity mismatch");
             }
             if (expectedManagedThread == null) {
-                threadStarted.get(Math.max(1L, remaining(request).toMillis()), TimeUnit.MILLISECONDS);
-                if (!threadStarted.getNow("").equals(threadId)) {
+                startup.threadStarted.get(Math.max(1L, remaining(request).toMillis()), TimeUnit.MILLISECONDS);
+                if (!startup.threadStarted.getNow("").equals(threadId)) {
                     throw new IOException("thread/started identity mismatch");
                 }
             } else {
@@ -223,12 +192,8 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             }
             launcher.verifyReturnedThread(authority, attachmentGeneration, threadId);
             launcher.finalizeManagedThread(authority, attachmentGeneration, threadId);
-            launcher.activateManagedAttachment(authority, attachmentGeneration);
-            synchronized (stateLock) {
-                active = new Attachment(process, protocol, journal, attachmentGeneration, connectionGeneration);
-            }
-            CodexLifecycleStateStore.Checkpoint threadCheckpoint = checkpoint();
-            transition(threadCheckpoint, CodexLifecycleStateStore.State.IDLE, attachmentGeneration, connectionGeneration, process.process().pid(), process.executable(), process.commandIdentity(), threadId, null, null);
+            activate(startup);
+            transition(onProcess(checkpoint().advance(CodexLifecycleStateStore.State.IDLE, null).attachedTo(attachmentGeneration, connectionGeneration), process, process.process().pid()).withThread(threadId, null));
             CodexAppServerProtocolClient.Response turnResponse = requireSuccessful(protocol.request("turn/start",
                     protocolParams(request, Map.of("threadId", threadId, "input", CodexAppServerProtocolSchema.textInput(request.input()))),
                     LifecycleControlRequestEnvelope.Classification.STATE_CHANGING,
@@ -237,43 +202,19 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                     null,
                     remaining(request)), "turn/start");
             String turnId = responseId(turnResponse, "turnId");
-            turnStarted.get(Math.max(1L, remaining(request).toMillis()), TimeUnit.MILLISECONDS);
-            if (!turnStarted.getNow("").equals(turnId)) {
+            startup.turnStarted.get(Math.max(1L, remaining(request).toMillis()), TimeUnit.MILLISECONDS);
+            if (!startup.turnStarted.getNow("").equals(turnId)) {
                 throw new IOException("turn/started identity mismatch");
             }
             startingProcess = null;
             CodexLifecycleStateStore.Checkpoint latest = checkpoint();
             if (latest.state() != CodexLifecycleStateStore.State.COMPLETED && latest.state() != CodexLifecycleStateStore.State.INTERRUPTED) {
-                transition(latest, CodexLifecycleStateStore.State.RUNNING, attachmentGeneration, connectionGeneration, process.process().pid(), process.executable(), process.commandIdentity(), threadId, turnId, null);
+                transition(onProcess(latest.advance(CodexLifecycleStateStore.State.RUNNING, null).attachedTo(attachmentGeneration, connectionGeneration), process, process.process().pid()).withThread(threadId, turnId));
                 latest = checkpoint();
             }
             return response(true, "started", latest.state(), latest.revision(), threadId, turnId);
         } catch (Exception failure) {
-            if (protocol != null) {
-                protocol.close();
-            }
-            if (journal != null) {
-                try {
-                    journal.close();
-                } catch (IOException ignored) {
-                    // Preserve the authoritative lifecycle failure.
-                    journal.markIncomplete();
-                }
-                persistEvidenceCompleteness(checkpointUnchecked(), journal);
-            }
-            terminateStartupProcess(process, attachmentGeneration);
-            startingProcess = null;
-            CodexLifecycleStateStore.Checkpoint latest = checkpoint();
-            transition(latest,
-                    CodexLifecycleStateStore.State.FAILED,
-                    attachmentGeneration,
-                    connectionGeneration,
-                    process == null ? -1L : process.process().pid(),
-                    process == null ? "none" : process.executable(),
-                    process == null ? "none" : process.commandIdentity(),
-                    latest.threadId(),
-                    latest.turnId(),
-                    diagnostic(failure));
+            abandon(startup, failure, CodexLifecycleStateStore.State.FAILED, null, false);
             throw failure;
         }
     }
@@ -328,7 +269,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         CompletableFuture<CodexLifecycleHttpClient.Response> future = new CompletableFuture<>();
         String waiterId = request.requestId().toString();
         synchronized (stateLock) {
-            if (waiters.size() >= 32 || activeWaitersForBinding() >= 4) {
+            if (waiters.size() >= MAX_WAITERS) {
                 throw new IOException("lifecycle_wait_capacity_exceeded");
             }
             CodexLifecycleStateStore.Checkpoint current = checkpoint();
@@ -364,16 +305,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         requireExact(request, attachment);
         CodexLifecycleStateStore.Checkpoint current = checkpoint();
         requireActiveTurn(current);
-        transition(current,
-                CodexLifecycleStateStore.State.INTERRUPTING,
-                current.attachmentGeneration(),
-                current.connectionGeneration(),
-                current.rootPid(),
-                current.rootExecutable(),
-                current.rootCommandIdentity(),
-                current.threadId(),
-                current.turnId(),
-                null);
+        transition(current.advance(CodexLifecycleStateStore.State.INTERRUPTING, null));
         requireSuccessful(attachment.protocol().request("turn/interrupt",
                 Map.of("threadId", request.expectedThreadId(), "turnId", request.expectedTurnId()),
                 LifecycleControlRequestEnvelope.Classification.STATE_CHANGING,
@@ -396,7 +328,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         synchronized (stateLock) {
             CodexLifecycleStateStore.Checkpoint current = checkpoint();
             if (current.rootPid() <= 0) {
-                transition(current, CodexLifecycleStateStore.State.STOPPED, current.attachmentGeneration(), current.connectionGeneration(), -1L, "none", "none", current.threadId(), current.turnId(), null);
+                transition(current.advance(CodexLifecycleStateStore.State.STOPPED, null).withoutRoot());
                 return response(true, "root_already_exited", CodexLifecycleStateStore.State.STOPPED, checkpoint().revision(), current.threadId(), current.turnId());
             }
             Attachment attachment = active;
@@ -410,29 +342,10 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                     current);
             if (attachment != null) {
                 attachment.journal().offer("hard_stop_result", Map.of("outcome", result.outcome().name(), "diagnostic", result.diagnostic(), "survivors", result.survivors()), true);
-                try {
-                    attachment.journal().close();
-                } catch (IOException failure) {
-                    attachment.journal().markIncomplete();
-                    current = new CodexLifecycleStateStore.Checkpoint(current.bindingSessionId(),
-                            current.projectId(),
-                            current.provider(),
-                            current.revision(),
-                            current.state(),
-                            current.ownerHostInstanceId(),
-                            current.attachmentGeneration(),
-                            current.connectionGeneration(),
-                            current.rootPid(),
-                            current.rootStartEpochMillis(),
-                            current.rootExecutable(),
-                            current.rootCommandIdentity(),
-                            current.threadId(),
-                            current.turnId(),
-                            current.terminalDiagnostic(),
-                            false,
-                            System.currentTimeMillis());
+                // A journal that failed to close is not recorded in the checkpoint on this path.
+                if (closeJournal(attachment.journal())) {
+                    persistEvidenceCompleteness(current, attachment.journal());
                 }
-                persistEvidenceCompleteness(current, attachment.journal());
                 if (active == attachment) {
                     active = null;
                 }
@@ -441,16 +354,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                     result.outcome() == ProcessTreeTerminator.Outcome.CLEAN_GRACEFUL || result.outcome() == ProcessTreeTerminator.Outcome.FORCED || result.outcome() == ProcessTreeTerminator.Outcome.ROOT_ALREADY_EXITED
                             ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.FAILED;
             current = checkpoint();
-            transition(current,
-                    state,
-                    current.attachmentGeneration(),
-                    current.connectionGeneration(),
-                    result.outcome() == ProcessTreeTerminator.Outcome.ROOT_SURVIVED ? current.rootPid() : -1L,
-                    current.rootExecutable(),
-                    current.rootCommandIdentity(),
-                    current.threadId(),
-                    current.turnId(),
-                    result.diagnostic());
+            transition(current.advance(state, result.diagnostic()).withRootPid(result.outcome() == ProcessTreeTerminator.Outcome.ROOT_SURVIVED ? current.rootPid() : -1L));
             return response(state == CodexLifecycleStateStore.State.STOPPED, result.diagnostic(), state, checkpoint().revision(), current.threadId(), current.turnId());
         }
     }
@@ -482,30 +386,12 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
         long attachmentGeneration = prior.attachmentGeneration() + 1L;
         long connectionGeneration = prior.connectionGeneration() + 1L;
-        transition(prior, CodexLifecycleStateStore.State.STARTING, attachmentGeneration, connectionGeneration, -1L, "none", "none", prior.threadId(), prior.turnId(), "explicit_resume");
-        AppServerProcess process = null;
-        CodexEvidenceJournal journal = null;
-        CodexAppServerProtocolClient protocol = null;
-        CompletableFuture<String> threadResumed = new CompletableFuture<>();
+        transition(prior.advance(CodexLifecycleStateStore.State.STARTING, "explicit_resume").attachedTo(attachmentGeneration, connectionGeneration).withoutRoot());
+        Startup startup = new Startup(attachmentGeneration, connectionGeneration);
         try {
-            process = launcher.launch(authority, attachmentGeneration);
-            startingProcess = process;
-            journal = new CodexEvidenceJournal(evidenceDirectory.resolve("generation-" + connectionGeneration + ".jsonl"));
-            monitorProcessExit(process, journal, attachmentGeneration, connectionGeneration);
-            protocol = new CodexAppServerProtocolClient(connectionGeneration,
-                    process.stdout(),
-                    process.stdin(),
-                    new Listener(threadResumed, new CompletableFuture<>(), journal, process, attachmentGeneration, connectionGeneration),
-                    journal);
-            drainStderr(process.stderr(), journal);
-            requireSuccessful(protocol.request("initialize",
-                    CodexAppServerProtocolSchema.initializeParams(),
-                    LifecycleControlRequestEnvelope.Classification.STATE_CHANGING,
-                    request.digest(),
-                    null,
-                    null,
-                    remaining(request)), "initialize");
-            protocol.notify("initialized", Map.of());
+            connect(startup, request, false);
+            AppServerProcess process = startup.process;
+            CodexAppServerProtocolClient protocol = startup.protocol;
             CodexAppServerProtocolClient.Response resumeResponse = requireSuccessful(protocol.request("thread/resume",
                     protocolParams(request, Map.of("threadId", prior.threadId())),
                     LifecycleControlRequestEnvelope.Classification.STATE_CHANGING,
@@ -534,50 +420,75 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 throw new IOException("thread/read identity mismatch");
             }
             launcher.verifyReturnedThread(authority, attachmentGeneration, prior.threadId());
-            launcher.activateManagedAttachment(authority, attachmentGeneration);
-            active = new Attachment(process, protocol, journal, attachmentGeneration, connectionGeneration);
+            activate(startup);
             startingProcess = null;
             CodexLifecycleStateStore.State reconciled = reconcileReadState(prior, read);
-            CodexLifecycleStateStore.Checkpoint latest = checkpoint();
-            transition(latest,
-                    reconciled,
-                    attachmentGeneration,
-                    connectionGeneration,
-                    process.process().pid(),
-                    process.executable(),
-                    process.commandIdentity(),
-                    prior.threadId(),
-                    prior.turnId(),
-                    "explicit_thread_resume");
+            transition(onProcess(checkpoint().advance(reconciled, "explicit_thread_resume").attachedTo(attachmentGeneration, connectionGeneration), process, process.process().pid())
+                    .withThread(prior.threadId(), prior.turnId()));
         } catch (Exception failure) {
-            if (protocol != null) {
-                protocol.close();
-            }
-            if (journal != null) {
-                try {
-                    journal.close();
-                } catch (IOException ignored) {
-                    // Preserve authoritative resume failure.
-                    journal.markIncomplete();
-                }
-                persistEvidenceCompleteness(checkpointUnchecked(), journal);
-            }
-            terminateStartupProcess(process, attachmentGeneration);
-            active = null;
-            startingProcess = null;
-            CodexLifecycleStateStore.Checkpoint latest = checkpointUnchecked();
-            transition(latest,
-                    CodexLifecycleStateStore.State.AMBIGUOUS,
-                    attachmentGeneration,
-                    connectionGeneration,
-                    process == null ? -1L : process.process().pid(),
-                    process == null ? "none" : process.executable(),
-                    process == null ? "none" : process.commandIdentity(),
-                    prior.threadId(),
-                    prior.turnId(),
-                    diagnostic(failure));
+            // A failed resume keeps the thread and turn the caller asked to resume, and releases the attachment.
+            abandon(startup, failure, CodexLifecycleStateStore.State.AMBIGUOUS, prior, true);
             throw failure;
         }
+    }
+
+    /**
+     * Launches the App Server for {@code startup} and completes the {@code initialize} handshake.
+     * Only an initial start refuses to continue once the owner is closed.
+     */
+    private void connect(Startup startup, LifecycleControlRequestEnvelope request, boolean refuseWhenClosed) throws Exception {
+        AppServerProcess process = launcher.launch(authority, startup.attachmentGeneration);
+        startup.process = process;
+        startingProcess = process;
+        if (refuseWhenClosed && closed) {
+            throw new IOException("owner_shutdown");
+        }
+        CodexEvidenceJournal journal = new CodexEvidenceJournal(evidenceDirectory.resolve("generation-" + startup.connectionGeneration + ".jsonl"));
+        startup.journal = journal;
+        monitorProcessExit(process, journal, startup.attachmentGeneration, startup.connectionGeneration);
+        CodexAppServerProtocolClient protocol = new CodexAppServerProtocolClient(startup.connectionGeneration,
+                process.stdout(),
+                process.stdin(),
+                new CodexAppServerEventListener(this, startup.threadStarted, startup.turnStarted, journal, process, startup.attachmentGeneration, startup.connectionGeneration),
+                journal);
+        startup.protocol = protocol;
+        drainStderr(process.stderr(), journal);
+        requireSuccessful(protocol.request("initialize", CodexAppServerProtocolSchema.initializeParams(), LifecycleControlRequestEnvelope.Classification.STATE_CHANGING, request.digest(), null, null, remaining(request)),
+                "initialize");
+        protocol.notify("initialized", Map.of());
+    }
+
+    private void activate(Startup startup) throws IOException {
+        launcher.activateManagedAttachment(authority, startup.attachmentGeneration);
+        synchronized (stateLock) {
+            active = new Attachment(startup.process, startup.protocol, startup.journal, startup.attachmentGeneration, startup.connectionGeneration);
+        }
+    }
+
+    /**
+     * Tears down a startup that did not reach a proven thread and records {@code failedState}.
+     *
+     * @param pinned        checkpoint whose thread and turn the failed state keeps, or {@code null} to keep the latest
+     * @param releaseActive whether to also drop the active attachment
+     */
+    private void abandon(Startup startup, Exception failure, CodexLifecycleStateStore.State failedState, CodexLifecycleStateStore.Checkpoint pinned, boolean releaseActive) throws IOException {
+        if (startup.protocol != null) {
+            startup.protocol.close();
+        }
+        if (startup.journal != null) {
+            closeJournalAndRecord(startup.journal);
+        }
+        terminateStartupProcess(startup.process, startup.attachmentGeneration);
+        if (releaseActive) {
+            active = null;
+        }
+        startingProcess = null;
+        CodexLifecycleStateStore.Checkpoint latest = checkpointUnchecked();
+        CodexLifecycleStateStore.Checkpoint kept = pinned == null ? latest : pinned;
+        CodexLifecycleStateStore.Checkpoint failed = latest.advance(failedState, diagnostic(failure))
+                .attachedTo(startup.attachmentGeneration, startup.connectionGeneration)
+                .withThread(kept.threadId(), kept.turnId());
+        transition(startup.process == null ? failed.withoutRoot() : onProcess(failed, startup.process, startup.process.process().pid()));
     }
 
     /**
@@ -649,7 +560,6 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         } catch (IOException ignored) {
             // The authoritative owner shutdown path remains bounded.
         }
-        waitExecutor.shutdownNow();
         scheduler.shutdownNow();
     }
 
@@ -673,16 +583,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         CodexLifecycleStateStore.Checkpoint current = checkpointUnchecked();
         if (current.threadId() != null && current.turnId() != null && (current.state() == CodexLifecycleStateStore.State.RUNNING || current.state() == CodexLifecycleStateStore.State.INTERRUPTING)) {
             try {
-                transition(current,
-                        CodexLifecycleStateStore.State.INTERRUPTING,
-                        current.attachmentGeneration(),
-                        current.connectionGeneration(),
-                        current.rootPid(),
-                        current.rootExecutable(),
-                        current.rootCommandIdentity(),
-                        current.threadId(),
-                        current.turnId(),
-                        "owner_shutdown");
+                transition(current.advance(CodexLifecycleStateStore.State.INTERRUPTING, "owner_shutdown"));
                 attachment.protocol().request("turn/interrupt",
                         Map.of("threadId", current.threadId(), "turnId", current.turnId()),
                         LifecycleControlRequestEnvelope.Classification.STATE_CHANGING,
@@ -710,43 +611,15 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             }
         }
         attachment.protocol().close();
-        try {
-            attachment.journal().close();
-        } catch (IOException failure) {
-            attachment.journal().markIncomplete();
-            current = new CodexLifecycleStateStore.Checkpoint(current.bindingSessionId(),
-                    current.projectId(),
-                    current.provider(),
-                    current.revision(),
-                    current.state(),
-                    current.ownerHostInstanceId(),
-                    current.attachmentGeneration(),
-                    current.connectionGeneration(),
-                    current.rootPid(),
-                    current.rootStartEpochMillis(),
-                    current.rootExecutable(),
-                    current.rootCommandIdentity(),
-                    current.threadId(),
-                    current.turnId(),
-                    current.terminalDiagnostic(),
-                    false,
-                    System.currentTimeMillis());
+        // A journal that failed to close is not recorded in the checkpoint on this path.
+        if (closeJournal(attachment.journal())) {
+            persistEvidenceCompleteness(current, attachment.journal());
         }
-        persistEvidenceCompleteness(current, attachment.journal());
         active = null;
         current = checkpointUnchecked();
         try {
             CodexLifecycleStateStore.State shutdownState = termination == null || ownedTermination(termination.outcome()) ? CodexLifecycleStateStore.State.STOPPED : CodexLifecycleStateStore.State.FAILED;
-            transition(current,
-                    shutdownState,
-                    current.attachmentGeneration(),
-                    current.connectionGeneration(),
-                    -1L,
-                    current.rootExecutable(),
-                    current.rootCommandIdentity(),
-                    current.threadId(),
-                    current.turnId(),
-                    termination == null ? "owner_shutdown" : termination.diagnostic());
+            transition(current.advance(shutdownState, termination == null ? "owner_shutdown" : termination.diagnostic()).withRootPid(-1L));
         } catch (IOException ignored) {
             // Preserve the last durable checkpoint when shutdown is already failing.
         }
@@ -844,32 +717,12 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private CodexLifecycleStateStore.Checkpoint checkpoint() throws IOException {
+    CodexLifecycleStateStore.Checkpoint checkpoint() throws IOException {
         return stateStore.read(authority.bindingSessionId(), authority.projectId());
     }
 
     private CodexLifecycleStateStore.Checkpoint checkpointUnchecked() {
-        try {
-            return checkpoint();
-        } catch (IOException failure) {
-            return new CodexLifecycleStateStore.Checkpoint(authority.bindingSessionId(),
-                    authority.projectId(),
-                    "codex",
-                    0L,
-                    CodexLifecycleStateStore.State.FAILED,
-                    "unknown",
-                    0L,
-                    0L,
-                    -1L,
-                    0L,
-                    "none",
-                    "none",
-                    null,
-                    null,
-                    "checkpoint_unreadable",
-                    false,
-                    System.currentTimeMillis());
-        }
+        return stateStore.readUnchecked(authority.bindingSessionId(), authority.projectId());
     }
 
     private void monitorProcessExit(AppServerProcess process, CodexEvidenceJournal journal, long attachmentGeneration, long connectionGeneration) {
@@ -894,7 +747,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                     case COMPLETED, INTERRUPTED, FAILED, INTERACTION_REQUIRED -> current.state();
                     default -> CodexLifecycleStateStore.State.FAILED;
                 };
-                transition(current, next, attachmentGeneration, connectionGeneration, -1L, process.executable(), process.commandIdentity(), current.threadId(), current.turnId(), "process_exit");
+                transition(onProcess(current.advance(next, "process_exit").attachedTo(attachmentGeneration, connectionGeneration), process, -1L));
                 journal.offer("process_exit", Map.of("pid", process.process().pid()), true);
                 scheduler.execute(() -> closeExitedAttachment(attachmentGeneration, journal));
             } catch (InterruptedException interrupted) {
@@ -931,12 +784,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
             }
             active = null;
             try {
-                attachment.journal().close();
-            } catch (IOException failure) {
-                attachment.journal().markIncomplete();
-            }
-            try {
-                persistEvidenceCompleteness(checkpointUnchecked(), journal);
+                closeJournalAndRecord(journal);
             } catch (IOException ignored) {
                 // The process-exit checkpoint remains authoritative.
             }
@@ -961,61 +809,52 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private void transition(CodexLifecycleStateStore.Checkpoint prior,
-            CodexLifecycleStateStore.State state,
-            long attachmentGeneration,
-            long connectionGeneration,
-            long rootPid,
-            String executable,
-            String commandIdentity,
-            String threadId,
-            String turnId,
-            String diagnostic) throws IOException {
+    static CodexLifecycleStateStore.Checkpoint onProcess(CodexLifecycleStateStore.Checkpoint checkpoint, AppServerProcess process, long rootPid) {
+        return checkpoint.withRoot(rootPid, process.executable(), process.commandIdentity());
+    }
+
+    /** Persists {@code next}, folding in what only the live attachment knows, and wakes matching waiters. */
+    void transition(CodexLifecycleStateStore.Checkpoint next) throws IOException {
         synchronized (stateLock) {
-            CodexLifecycleStateStore.Checkpoint next = new CodexLifecycleStateStore.Checkpoint(authority.bindingSessionId(),
-                    authority.projectId(),
-                    "codex",
-                    prior.revision() + 1L,
-                    state,
-                    prior.ownerHostInstanceId(),
-                    attachmentGeneration,
-                    connectionGeneration,
-                    rootPid,
-                    rootPid > 0 && active != null ? active.process().startEpochMillis() : prior.rootStartEpochMillis(),
-                    executable == null ? "none" : executable,
-                    commandIdentity == null ? "none" : commandIdentity,
-                    threadId,
-                    turnId,
-                    diagnostic,
-                    prior.evidenceComplete() && (active == null || active.journal().evidenceComplete()),
-                    System.currentTimeMillis());
+            Attachment attachment = active;
+            if (attachment != null) {
+                if (next.rootPid() > 0) {
+                    next = next.withRootStart(attachment.process().startEpochMillis());
+                }
+                if (!attachment.journal().evidenceComplete()) {
+                    next = next.withEvidenceIncomplete();
+                }
+            }
             stateStore.write(next);
             notifyWaiters(next);
         }
+    }
+
+    /**
+     * Closes the journal. A journal that cannot close is marked incomplete.
+     *
+     * @return whether the journal closed cleanly
+     */
+    private static boolean closeJournal(CodexEvidenceJournal journal) {
+        try {
+            journal.close();
+            return true;
+        } catch (IOException failure) {
+            journal.markIncomplete();
+            return false;
+        }
+    }
+
+    private void closeJournalAndRecord(CodexEvidenceJournal journal) throws IOException {
+        closeJournal(journal);
+        persistEvidenceCompleteness(checkpointUnchecked(), journal);
     }
 
     private void persistEvidenceCompleteness(CodexLifecycleStateStore.Checkpoint prior, CodexEvidenceJournal journal) throws IOException {
         if (journal == null || journal.evidenceComplete() || !prior.evidenceComplete()) {
             return;
         }
-        CodexLifecycleStateStore.Checkpoint incomplete = new CodexLifecycleStateStore.Checkpoint(prior.bindingSessionId(),
-                prior.projectId(),
-                prior.provider(),
-                prior.revision() + 1L,
-                prior.state(),
-                prior.ownerHostInstanceId(),
-                prior.attachmentGeneration(),
-                prior.connectionGeneration(),
-                prior.rootPid(),
-                prior.rootStartEpochMillis(),
-                prior.rootExecutable(),
-                prior.rootCommandIdentity(),
-                prior.threadId(),
-                prior.turnId(),
-                prior.terminalDiagnostic(),
-                false,
-                System.currentTimeMillis());
-        stateStore.write(incomplete);
+        stateStore.write(prior.advance(prior.state(), prior.terminalDiagnostic()).withEvidenceIncomplete());
     }
 
     private void notifyWaiters(CodexLifecycleStateStore.Checkpoint checkpoint) {
@@ -1037,16 +876,20 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private int activeWaitersForBinding() {
-        return waiters.size();
-    }
-
     private Duration remaining(LifecycleControlRequestEnvelope request) throws TimeoutException {
         long remaining = request.callerDeadlineEpochMillis() - System.currentTimeMillis();
         if (remaining <= 0) {
             throw new TimeoutException("lifecycle caller deadline expired");
         }
         return Duration.ofMillis(remaining);
+    }
+
+    void providerTurnCompleted(long attachmentGeneration, String threadId, String turnId) throws IOException {
+        launcher.providerTurnCompleted(authority, attachmentGeneration, threadId, turnId);
+    }
+
+    void cleanUpFailedAttachment(CodexLifecycleStateStore.Checkpoint checkpoint) {
+        scheduler.execute(() -> terminateFailedAttachment(checkpoint));
     }
 
     private void terminateFailedAttachment(CodexLifecycleStateStore.Checkpoint checkpoint) {
@@ -1060,12 +903,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
                 Attachment failed = active;
                 failed.process().process().destroyForcibly();
                 failed.protocol().close();
-                try {
-                    failed.journal().close();
-                } catch (IOException closeFailure) {
-                    failed.journal().markIncomplete();
-                }
-                persistEvidenceCompleteness(checkpointUnchecked(), failed.journal());
+                closeJournalAndRecord(failed.journal());
                 active = null;
             }
         } catch (RuntimeException ignored) {
@@ -1277,215 +1115,29 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
     }
 
     /**
+     * One in-flight attachment startup. The fields fill in as the launch proceeds so a failure
+     * can release exactly what was acquired.
+     */
+    private static final class Startup {
+
+        private final long attachmentGeneration;
+        private final long connectionGeneration;
+        private final CompletableFuture<String> threadStarted = new CompletableFuture<>();
+        private final CompletableFuture<String> turnStarted = new CompletableFuture<>();
+        private AppServerProcess process;
+        private CodexEvidenceJournal journal;
+        private CodexAppServerProtocolClient protocol;
+
+        private Startup(long attachmentGeneration, long connectionGeneration) {
+            this.attachmentGeneration = attachmentGeneration;
+            this.connectionGeneration = connectionGeneration;
+        }
+    }
+
+    /**
      * Tracks one bounded caller wait for an exact Codex lifecycle turn.
      */
     private record Waiter(String expectedThreadId, String expectedTurnId, CompletableFuture<CodexLifecycleHttpClient.Response> future) {
 
-    }
-
-    /**
-     * Routes protocol events into the owning lifecycle state machine.
-     */
-    private final class Listener implements CodexAppServerProtocolClient.Listener {
-
-        private final CompletableFuture<String> threadStarted;
-        private final CompletableFuture<String> turnStarted;
-        private final CodexEvidenceJournal journal;
-        private final AppServerProcess process;
-        private final long attachmentGeneration;
-        private final long connectionGeneration;
-
-        private Listener(CompletableFuture<String> threadStarted, CompletableFuture<String> turnStarted, CodexEvidenceJournal journal, AppServerProcess process, long attachmentGeneration, long connectionGeneration) {
-            this.threadStarted = threadStarted;
-            this.turnStarted = turnStarted;
-            this.journal = journal;
-            this.process = process;
-            this.attachmentGeneration = attachmentGeneration;
-            this.connectionGeneration = connectionGeneration;
-        }
-
-        @Override
-        public void onEvent(String method, Map<String, Object> params) {
-            try {
-                switch (method) {
-                    case "error" -> throw new IOException("codex_server_error");
-                    case "thread/started", "thread/resumed" -> {
-                        String id = value(params, "threadId", "thread_id");
-                        if (id != null) {
-                            threadStarted.complete(id);
-                            CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                            if (current.threadId() != null && !current.threadId().equals(id)) {
-                                throw new IOException("thread event identity mismatch");
-                            }
-                            transition(current,
-                                    CodexLifecycleStateStore.State.IDLE,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    id,
-                                    current.turnId(),
-                                    null);
-                        }
-                        journal.offer("thread_started", Map.of("threadId", id == null ? "" : id), true);
-                    }
-                    case "turn/started" -> {
-                        String id = value(params, "turnId", "turn_id");
-                        String eventThread = value(params, "threadId", "thread_id");
-                        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                        if (eventThread != null && current.threadId() != null && !current.threadId().equals(eventThread)) {
-                            throw new IOException("turn event thread identity mismatch");
-                        }
-                        if (id != null) {
-                            turnStarted.complete(id);
-                            transition(current,
-                                    CodexLifecycleStateStore.State.RUNNING,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    current.threadId(),
-                                    id,
-                                    null);
-                        }
-                        journal.offer("turn_started", Map.of("turnId", id == null ? "" : id), true);
-                    }
-                    case "turn/completed" -> {
-                        String status = value(params, "status", "turnStatus");
-                        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                        String eventThread = value(params, "threadId", "thread_id");
-                        String eventTurn = value(params, "turnId", "turn_id");
-                        if (eventThread != null && current.threadId() != null && !current.threadId().equals(eventThread)) {
-                            throw new IOException("completed event thread identity mismatch");
-                        }
-                        if (eventTurn != null && current.turnId() != null && !current.turnId().equals(eventTurn)) {
-                            throw new IOException("completed event turn identity mismatch");
-                        }
-                        CodexLifecycleStateStore.State next = "interrupted".equalsIgnoreCase(status) ? CodexLifecycleStateStore.State.INTERRUPTED : CodexLifecycleStateStore.State.COMPLETED;
-                        transition(current, next, attachmentGeneration, connectionGeneration, process.process().pid(), process.executable(), process.commandIdentity(), current.threadId(), current.turnId(), null);
-                        if (next == CodexLifecycleStateStore.State.COMPLETED) {
-                            launcher.providerTurnCompleted(authority, attachmentGeneration, current.threadId(), current.turnId());
-                        }
-                        journal.offer("turn_completed", Map.of("turnId", current.turnId() == null ? "" : current.turnId(), "status", status == null ? "" : status), true);
-                    }
-                    case "thread/closed" -> {
-                        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                        transition(current,
-                                CodexLifecycleStateStore.State.STOPPED,
-                                attachmentGeneration,
-                                connectionGeneration,
-                                -1L,
-                                process.executable(),
-                                process.commandIdentity(),
-                                current.threadId(),
-                                current.turnId(),
-                                null);
-                    }
-                    case "thread/status/changed" -> {
-                        String status = value(params, "status", "threadStatus");
-                        String eventThread = value(params, "threadId", "thread_id");
-                        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                        if (eventThread != null && current.threadId() != null && !current.threadId().equals(eventThread)) {
-                            throw new IOException("status event thread identity mismatch");
-                        }
-                        if ("interaction_required".equalsIgnoreCase(status) || "interactionRequired".equalsIgnoreCase(status)) {
-                            transition(current,
-                                    CodexLifecycleStateStore.State.INTERACTION_REQUIRED,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    current.threadId(),
-                                    current.turnId(),
-                                    "interaction_required");
-                        } else if ("idle".equalsIgnoreCase(status)) {
-                            transition(current,
-                                    CodexLifecycleStateStore.State.IDLE,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    current.threadId(),
-                                    current.turnId(),
-                                    null);
-                        } else if ("active".equalsIgnoreCase(status)) {
-                            transition(current,
-                                    CodexLifecycleStateStore.State.RUNNING,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    current.threadId(),
-                                    current.turnId(),
-                                    null);
-                        } else if ("systemError".equalsIgnoreCase(status)) {
-                            transition(current,
-                                    CodexLifecycleStateStore.State.FAILED,
-                                    attachmentGeneration,
-                                    connectionGeneration,
-                                    process.process().pid(),
-                                    process.executable(),
-                                    process.commandIdentity(),
-                                    current.threadId(),
-                                    current.turnId(),
-                                    "system_error");
-                        }
-                        journal.offer("thread_status_changed", params, false);
-                    }
-                    case "auth/required", "interaction_required" -> {
-                        CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                        String eventThread = value(params, "threadId", "thread_id");
-                        if (eventThread != null && current.threadId() != null && !current.threadId().equals(eventThread)) {
-                            throw new IOException("interaction event thread identity mismatch");
-                        }
-                        transition(current,
-                                CodexLifecycleStateStore.State.INTERACTION_REQUIRED,
-                                attachmentGeneration,
-                                connectionGeneration,
-                                process.process().pid(),
-                                process.executable(),
-                                process.commandIdentity(),
-                                current.threadId(),
-                                current.turnId(),
-                                method);
-                        journal.offer("interaction_required", params, true);
-                    }
-                    // This notification describes a Codex-managed child process, not the App Server root.
-                    // Root exit is authoritative only from the owned ProcessHandle monitor.
-                    case "process/exited" -> journal.offer("process_child_exit", params, true);
-                    default -> {
-                        // Visible messages and deltas are retained by the protocol event evidence path.
-                    }
-                }
-            } catch (Exception failure) {
-                onFailure(failure);
-            }
-        }
-
-        @Override
-        public void onFailure(Throwable failure) {
-            try {
-                CodexLifecycleStateStore.Checkpoint current = checkpoint();
-                transition(current,
-                        CodexLifecycleStateStore.State.FAILED,
-                        attachmentGeneration,
-                        connectionGeneration,
-                        process.process().isAlive() ? process.process().pid() : -1L,
-                        process.executable(),
-                        process.commandIdentity(),
-                        current.threadId(),
-                        current.turnId(),
-                        diagnostic(failure));
-                journal.offer("protocol_failure", Map.of("diagnostic", diagnostic(failure)), true);
-                scheduler.execute(() -> terminateFailedAttachment(current));
-            } catch (IOException ignored) {
-                // The protocol failure is already surfaced through the journal.
-            }
-        }
     }
 }

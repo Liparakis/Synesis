@@ -1,6 +1,5 @@
 package org.synesis.workspace.lifecycle.codex;
 
-import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger;
 
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
@@ -193,8 +192,7 @@ class CodexLifecycleWaitControlTest {
         "supervisor",
         "worker");
     CodexLifecycleStateStore store = new CodexLifecycleStateStore(temp.resolve("state"));
-    LifecycleIdempotencyLedger ledger = new LifecycleIdempotencyLedger(temp.resolve("ledger.json"));
-    return new CodexAppServerLifecycleService(authority, store, ledger, launcher,
+    return new CodexAppServerLifecycleService(authority, store, launcher,
         new ProcessTreeTerminator(),
         temp.resolve("evidence"));
   }
