@@ -38,7 +38,6 @@ import org.synesis.link.identity.NodeIdentity;
  * projection replay is
  * deterministic.
  */
-@SuppressWarnings("DuplicatedCode")
 public final class PredictionEventStore {
 
     /**
@@ -90,6 +89,17 @@ public final class PredictionEventStore {
      * Projection for contract binding and publication state.
      */
     private final ContractProjection contractProjection = new ContractProjection();
+    /**
+     * Every projection above, in validation and application order; the one place a new projection is registered.
+     */
+    private final List<Stage> stages = List.of(
+            new Stage(projection::validate, projection::apply),
+            new Stage(coordinationProjection::validate, coordinationProjection::apply),
+            new Stage(capabilityRequestProjection::validate, capabilityRequestProjection::apply),
+            new Stage(taskCompletionProjection::validate, taskCompletionProjection::apply),
+            new Stage(collaborationProjection::validate, collaborationProjection::apply),
+            new Stage(workGroupProjection::validate, workGroupProjection::apply),
+            new Stage(contractProjection::validate, contractProjection::apply));
     /**
      * Events replayed into this instance's in-memory projections.
      */
@@ -218,13 +228,9 @@ public final class PredictionEventStore {
      * @throws IOException when any projection rejects the transition
      */
     private void validateProjections(PredictionEvent event) throws IOException {
-        projection.validate(event);
-        coordinationProjection.validate(event);
-        capabilityRequestProjection.validate(event);
-        taskCompletionProjection.validate(event);
-        collaborationProjection.validate(event);
-        workGroupProjection.validate(event);
-        contractProjection.validate(event);
+        for (Stage stage : stages) {
+            stage.validate().accept(event);
+        }
     }
 
     /**
@@ -266,15 +272,20 @@ public final class PredictionEventStore {
      * @throws IOException when replaying the event into a projection fails
      */
     private void applyProjections(PredictionEvent event) throws IOException {
-        projection.apply(event);
-        coordinationProjection.apply(event);
-        capabilityRequestProjection.apply(event);
-        taskCompletionProjection.apply(event);
-        collaborationProjection.apply(event);
-        workGroupProjection.apply(event);
-        contractProjection.apply(event);
-        events.add(event);
+        replay(event);
         invokeFaultInjector(AppendBoundary.AFTER_PROJECTION);
+    }
+
+    /**
+     * Applies one verified event to every projection and records it in the in-memory log.
+     *
+     * @throws IOException when a projection rejects the event
+     */
+    private void replay(PredictionEvent event) throws IOException {
+        for (Stage stage : stages) {
+            stage.apply().accept(event);
+        }
+        events.add(event);
     }
 
     /**
@@ -296,21 +307,9 @@ public final class PredictionEventStore {
      * @throws IOException              when payload validation or durable I/O fails
      * @throws GeneralSecurityException when signing or signature verification fails
      */
-    @SuppressWarnings("DataFlowIssue")
     private synchronized Head durableHead() throws IOException, GeneralSecurityException {
-        long sequence = 0L;
-        byte[] digest = new byte[32];
-        try (var files = Files.list(eventsDirectory)) {
-            for (Path file : files.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList()) {
-                PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
-                    throw new CoordinationException("invalid coordination event log");
-                }
-                sequence = event.sequence();
-                digest = event.digest();
-            }
-        }
-        return new Head(sequence, digest);
+        return scan(event -> {
+        });
     }
 
     /**
@@ -454,28 +453,35 @@ public final class PredictionEventStore {
      * @throws GeneralSecurityException when signing or signature verification fails
      */
     private void load() throws IOException, GeneralSecurityException {
+        scan(this::replay);
+    }
+
+    /**
+     * Walks the durable log in file-name order, requiring each event to belong to this project, follow its
+     * predecessor's sequence and digest, and carry a valid signature, and hands each such event to {@code visitor}.
+     *
+     * @param visitor receives every verified event, in order
+     * @return sequence and digest of the last event, or zero and an all-zero digest for an empty log
+     * @throws IOException              when an event is undecodable, out of chain, or the visitor fails
+     * @throws GeneralSecurityException when signing or signature verification fails
+     */
+    private Head scan(Transition visitor) throws IOException, GeneralSecurityException {
         List<Path> files;
         try (var stream = Files.list(eventsDirectory)) {
             files = stream.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
         }
-        EventSequence expected = new EventSequence(1);
-        byte[] previous = new byte[32];
+        long sequence = 0L;
+        byte[] digest = new byte[32];
         for (Path file : files) {
             PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-            if (!event.projectId().equals(projectId) || !event.sequenceIdentity().equals(expected) || !Arrays.equals(event.previousDigest(), previous) || !event.verify()) {
+            if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
                 throw new CoordinationException("invalid coordination event log");
             }
-            projection.apply(event);
-            coordinationProjection.apply(event);
-            capabilityRequestProjection.apply(event);
-            taskCompletionProjection.apply(event);
-            collaborationProjection.apply(event);
-            workGroupProjection.apply(event);
-            contractProjection.apply(event);
-            events.add(event);
-            previous = event.digest();
-            expected = new EventSequence(expected.value() + 1L);
+            visitor.accept(event);
+            sequence = event.sequence();
+            digest = event.digest();
         }
+        return new Head(sequence, digest);
     }
 
     /**
@@ -498,6 +504,22 @@ public final class PredictionEventStore {
          * @throws IOException simulated process failure
          */
         void hit(AppendBoundary boundary) throws IOException;
+    }
+
+    /**
+     * One event action a projection performs, either validating a transition or applying it.
+     */
+    @FunctionalInterface
+    private interface Transition {
+
+        void accept(PredictionEvent event) throws IOException;
+    }
+
+    /**
+     * The validation and application entry points of one projection.
+     */
+    private record Stage(Transition validate, Transition apply) {
+
     }
 
     /**

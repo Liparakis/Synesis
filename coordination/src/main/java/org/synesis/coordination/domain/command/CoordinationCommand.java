@@ -193,8 +193,11 @@ public final class CoordinationCommand {
                 throw new CoordinationException("unsupported command format");
             }
             UUID commandId = readUuid(in), projectId = readUuid(in), predictionId = readUuid(in);
-            int ordinal = in.readInt();
-            if (ordinal < 0 || ordinal >= PredictionEventType.values().length) {
+            int wireCode = in.readInt();
+            PredictionEventType type;
+            try {
+                type = PredictionEventType.fromWireCode(wireCode);
+            } catch (IllegalArgumentException unknown) {
                 throw new CoordinationException("event type");
             }
             String actor = readText(in);
@@ -207,7 +210,7 @@ public final class CoordinationCommand {
             return new CoordinationCommand(commandId,
                     projectId,
                     predictionId,
-                    PredictionEventType.values()[ordinal],
+                    type,
                     actor,
                     supervisor,
                     worker,
@@ -424,7 +427,7 @@ public final class CoordinationCommand {
             writeUuid(out, commandId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
-            out.writeInt(type.ordinal());
+            out.writeInt(type.wireCode());
             writeText(out, actorNodeId);
             if (formatVersion() == 2) {
                 writeText(out, actorSupervisorId);
@@ -452,7 +455,7 @@ public final class CoordinationCommand {
             writeUuid(out, commandId);
             writeUuid(out, projectId);
             writeUuid(out, predictionId);
-            out.writeInt(type.ordinal());
+            out.writeInt(type.wireCode());
             writeText(out, actorNodeId);
             if (formatVersion() == 2) {
                 writeText(out, actorSupervisorId);

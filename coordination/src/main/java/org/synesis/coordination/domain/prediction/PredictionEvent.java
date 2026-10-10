@@ -231,11 +231,6 @@ public final class PredictionEvent {
      * @throws IOException when payload validation or durable I/O fails
      */
     private static PredictionEventType decodeWireType(int wireCode, byte[] payload) throws IOException {
-        if (wireCode == 42 && (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32) || hasMagic(payload,
-                0x53494e33) || hasMagic(payload, 0x53494e34) || hasMagic(payload, 0x53494e35) || hasMagic(payload,
-                0x53494e36) || hasMagic(payload, 0x53494e37))) {
-            return PredictionEventType.WORK_INTENT_ANNOUNCED;
-        }
         if (wireCode == 42 || wireCode == 43 || wireCode == 44) {
             if (hasMagic(payload, 0x53494e31) || hasMagic(payload, 0x53494e32) || hasMagic(payload, 0x53494e33)
                     || hasMagic(payload, 0x53494e34) || hasMagic(payload, 0x53494e35) || hasMagic(payload, 0x53494e36)
@@ -531,29 +526,11 @@ public final class PredictionEvent {
                     payload,
                     previousDigest);
             if (!Arrays.equals(digest, sha256(canonical))) {
-                canonical = canonicalWithWireCode(type.ordinal());
-                if (!Arrays.equals(digest, sha256(canonical))) {
-                    return false;
-                }
+                return false;
             }
         }
         return NodeIdentity.deriveNodeId(signerPublicKey).equals(actorNodeId)
                 && NodeIdentity.verifySignature(signerPublicKey, canonical, signature);
-    }
-
-    /**
-     * Produces canonical event bytes using the event's preserved wire code.
-     */
-    private byte[] canonicalWithWireCode(int wireCode) {
-        return canonical(eventId,
-                projectId,
-                predictionId,
-                sequence,
-                wireCode,
-                actorNodeId,
-                createdAtEpochMillis,
-                payload,
-                previousDigest);
     }
 
     /**

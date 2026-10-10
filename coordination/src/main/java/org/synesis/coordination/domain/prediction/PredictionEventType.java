@@ -1,5 +1,9 @@
 package org.synesis.coordination.domain.prediction;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 
 
@@ -10,295 +14,305 @@ public enum PredictionEventType {
     /**
      * Creates a prediction and its immutable contract.
      */
-    PREDICTION_CREATED,
+    PREDICTION_CREATED(0),
     /**
      * Routes a prediction to its owner supervisor.
      */
-    PREDICTION_ROUTED,
+    PREDICTION_ROUTED(1),
     /**
      * Confirms owner receipt.
      */
-    REQUEST_RECEIVED,
+    REQUEST_RECEIVED(2),
     /**
      * Accepts the requested contract exactly.
      */
-    ACCEPTED_EXACT,
+    ACCEPTED_EXACT(3),
     /**
      * Accepts an equivalent contract.
      */
-    ACCEPTED_EQUIVALENT,
+    ACCEPTED_EQUIVALENT(4),
     /**
      * Revises the requested contract.
      */
-    CONTRACT_REVISED,
+    CONTRACT_REVISED(5),
     /**
      * Starts owner implementation.
      */
-    IMPLEMENTATION_STARTED,
+    IMPLEMENTATION_STARTED(6),
     /**
      * Publishes an implementation reference.
      */
-    PATCH_READY,
+    PATCH_READY(7),
     /**
      * Announces capability availability.
      */
-    CAPABILITY_AVAILABLE,
+    CAPABILITY_AVAILABLE(8),
     /**
      * Starts requester validation.
      */
-    VALIDATION_STARTED,
+    VALIDATION_STARTED(9),
     /**
      * Retires resolved speculation.
      */
-    SPECULATION_RETIRED,
+    SPECULATION_RETIRED(10),
     /**
      * Invalidates speculation and dependent work.
      */
-    PREDICTION_INVALIDATED,
+    PREDICTION_INVALIDATED(11),
     /**
      * Rejects the capability request.
      */
-    REQUEST_REJECTED,
+    REQUEST_REJECTED(12),
     /**
      * Expires an unresolved prediction.
      */
-    PREDICTION_EXPIRED,
+    PREDICTION_EXPIRED(13),
     /**
      * Creates a claimable task.
      */
-    TASK_CREATED,
+    TASK_CREATED(14),
     /**
      * Claims a task for one supervisor.
      */
-    TASK_CLAIMED,
+    TASK_CLAIMED(15),
     /**
      * Releases a task claim.
      */
-    TASK_RELEASED,
+    TASK_RELEASED(16),
     /**
      * Assigns semantic ownership to a task capability.
      */
-    OWNERSHIP_CLAIMED,
+    OWNERSHIP_CLAIMED(17),
     /**
      * Releases semantic ownership from a task capability.
      */
-    OWNERSHIP_RELEASED,
+    OWNERSHIP_RELEASED(18),
     /**
      * Creates a durable capability request handle and contract.
      */
-    CAPABILITY_REQUEST_CREATED,
+    CAPABILITY_REQUEST_CREATED(19),
     /**
      * Revises an existing capability request contract.
      */
-    CAPABILITY_REQUEST_CONTRACT_REVISED,
+    CAPABILITY_REQUEST_CONTRACT_REVISED(20),
     /**
      * Accepts a capability request contract.
      */
-    CAPABILITY_REQUEST_ACCEPTED,
+    CAPABILITY_REQUEST_ACCEPTED(21),
     /**
      * Rejects a capability request.
      */
-    CAPABILITY_REQUEST_REJECTED,
+    CAPABILITY_REQUEST_REJECTED(22),
     /**
      * Cancels a pending capability request.
      */
-    CAPABILITY_REQUEST_CANCELLED,
+    CAPABILITY_REQUEST_CANCELLED(23),
     /**
      * Supersedes a capability request with a replacement.
      */
-    CAPABILITY_REQUEST_SUPERSEDED,
+    CAPABILITY_REQUEST_SUPERSEDED(24),
     /**
      * Owner publishes an immutable implementation snapshot for a capability request.
      */
-    CAPABILITY_IMPLEMENTATION_PUBLISHED,
+    CAPABILITY_IMPLEMENTATION_PUBLISHED(25),
     /**
      * Requester begins active validation of the current implementation revision.
      */
-    CAPABILITY_VALIDATION_STARTED,
+    CAPABILITY_VALIDATION_STARTED(26),
     /**
      * Requester accepts the implementation snapshot; capability transitions to VALIDATED.
      */
-    CAPABILITY_IMPLEMENTATION_VALIDATED,
+    CAPABILITY_IMPLEMENTATION_VALIDATED(27),
     /**
      * Requester rejects the implementation snapshot and requests a revision.
      */
-    CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+    CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED(28),
     /**
      * Agent requests task completion.
      */
-    TASK_COMPLETION_REQUESTED,
+    TASK_COMPLETION_REQUESTED(29),
     /**
      * Immutable task snapshot created from worker worktree commit.
      */
-    TASK_SNAPSHOT_CREATED,
+    TASK_SNAPSHOT_CREATED(30),
     /**
      * Task snapshot created but waiting for dependent tasks to complete.
      */
-    TASK_WAITING_FOR_DEPENDENCIES,
+    TASK_WAITING_FOR_DEPENDENCIES(31),
     /**
      * Dedicated integration attempt started in external integration worktree.
      */
-    INTEGRATION_ATTEMPT_STARTED,
+    INTEGRATION_ATTEMPT_STARTED(32),
     /**
      * Integration attempt failed build or test gate.
      */
-    INTEGRATION_ATTEMPT_FAILED,
+    INTEGRATION_ATTEMPT_FAILED(33),
     /**
      * Integration attempt encountered git merge conflict.
      */
-    INTEGRATION_CONFLICTED,
+    INTEGRATION_CONFLICTED(34),
     /**
      * Verified integration commit created in integration worktree.
      */
-    INTEGRATION_COMMIT_CREATED,
+    INTEGRATION_COMMIT_CREATED(35),
     /**
      * Control branch fast-forwarded to integration commit.
      */
-    CONTROL_BRANCH_ADVANCED,
+    CONTROL_BRANCH_ADVANCED(36),
     /**
      * Task successfully integrated into control branch.
      */
-    TASK_INTEGRATED,
+    TASK_INTEGRATED(37),
     /**
      * Worker session finalized following successful task integration.
      */
-    SESSION_FINALIZED,
+    SESSION_FINALIZED(38),
     /**
      * Provider session marked abandoned due to verified process death beyond grace period.
      */
-    SESSION_ABANDONED,
+    SESSION_ABANDONED(39),
     /**
      * Ambient worker requests task cancellation.
      */
-    TASK_CANCELLATION_REQUESTED,
+    TASK_CANCELLATION_REQUESTED(40),
     /**
      * Task transitioned to terminal cancelled state.
      */
-    TASK_CANCELLED,
+    TASK_CANCELLED(41),
     /**
      * Capability dependency invalidated due to cancellation or abandonment of supplier task.
      */
-    DEPENDENCY_INVALIDATED,
+    DEPENDENCY_INVALIDATED(42),
     /**
      * Announces an authenticated worker intent and atomically requested claims.
      */
-    WORK_INTENT_ANNOUNCED,
+    WORK_INTENT_ANNOUNCED(43),
     /**
      * Releases all claims associated with an authenticated worker intent.
      */
-    WORK_INTENT_RELEASED,
+    WORK_INTENT_RELEASED(44),
     /**
      * Creates a signed coordination request between conflicting participants.
      */
-    COORDINATION_REQUESTED,
+    COORDINATION_REQUESTED(45),
     /**
      * Records the target participant's coordination response.
      */
-    COORDINATION_RESPONDED,
+    COORDINATION_RESPONDED(46),
     /**
      * Records verified activity for an authenticated participant.
      */
-    PARTICIPANT_HEARTBEAT,
+    PARTICIPANT_HEARTBEAT(47),
     /**
      * Atomically transfers an intent after an accepted handoff request.
      */
-    CLAIM_HANDOFF_ACCEPTED,
+    CLAIM_HANDOFF_ACCEPTED(48),
     /**
      * Marks a participant abandoned after verified process absence beyond grace.
      */
-    PARTICIPANT_ABANDONED,
+    PARTICIPANT_ABANDONED(49),
     /**
      * Publishes a stable contract revision.
      */
-    CONTRACT_PUBLISHED,
+    CONTRACT_PUBLISHED(50),
     /**
      * Binds an intent to an exact contract revision.
      */
-    CONTRACT_DEPENDENCY_BOUND,
+    CONTRACT_DEPENDENCY_BOUND(51),
     /**
      * Supersedes the current contract revision.
      */
-    CONTRACT_SUPERSEDED,
+    CONTRACT_SUPERSEDED(52),
     /**
      * Creates a durable logical work group.
      */
-    WORK_GROUP_CREATED,
+    WORK_GROUP_CREATED(53),
     /**
      * Issues a targeted lane join or continuation grant.
      */
-    LANE_GRANT_ISSUED,
+    LANE_GRANT_ISSUED(54),
     /**
      * Consumes a single-use lane grant.
      */
-    LANE_GRANT_CONSUMED,
+    LANE_GRANT_CONSUMED(55),
     /**
      * Revokes a lane grant or lane authority epoch.
      */
-    LANE_REVOKED,
+    LANE_REVOKED(56),
     /**
      * Changes logical work-group lifecycle without closing sibling lanes.
      */
-    WORK_GROUP_STATUS_CHANGED,
+    WORK_GROUP_STATUS_CHANGED(57),
     /**
      * Fences a participant after verified process loss without releasing its claims.
      */
-    PARTICIPANT_SUSPENDED,
+    PARTICIPANT_SUSPENDED(58),
     /**
      * Records that an immutable recovery snapshot exists for a suspended participant.
      */
-    RECOVERY_SNAPSHOT_HELD,
+    RECOVERY_SNAPSHOT_HELD(59),
     /**
      * Explicitly revokes a participant lane and releases its claims.
      */
-    PARTICIPANT_REVOKED,
+    PARTICIPANT_REVOKED(60),
     /**
      * Idempotently acknowledges a durable inbox item.
      */
-    INBOX_ITEM_ACKNOWLEDGED,
+    INBOX_ITEM_ACKNOWLEDGED(61),
     /**
      * Explicitly cancels a participant lane and fences its epoch.
      */
-    PARTICIPANT_CANCELLED,
+    PARTICIPANT_CANCELLED(62),
     /**
      * Atomically transfers a held recovery lane into a new participant lane.
      */
-    LANE_CONTINUATION_ACCEPTED,
+    LANE_CONTINUATION_ACCEPTED(63),
     /**
      * Records a clean connection shutdown without treating the lane as completed.
      */
-    PARTICIPANT_DETACHED,
+    PARTICIPANT_DETACHED(64),
     /**
      * Pins a verified prepared lane tree before mutation authority is fenced.
      */
-    COMPLETION_PREPARED,
+    COMPLETION_PREPARED(65),
     /**
      * Records a structurally invalid immutable integration candidate.
      */
-    INTEGRATION_BLOCKED,
+    INTEGRATION_BLOCKED(66),
     /**
      * Records a valid immutable candidate materialized into a repair lane.
      */
-    REPAIR_REQUIRED,
+    REPAIR_REQUIRED(67),
     /**
      * Atomically transfers reserved selectors into a new repair lane.
      */
-    REPAIR_LANE_CREATED,
+    REPAIR_LANE_CREATED(68),
     /**
      * Unfences a prepared but unpublished completion at a new claim epoch.
      */
-    COMPLETION_UNWOUND,
+    COMPLETION_UNWOUND(69),
     /**
      * Records an authenticated review decision for an immutable task snapshot.
      */
-    REVIEW_VALIDATION_RECORDED,
+    REVIEW_VALIDATION_RECORDED(70),
     /**
      * Commits an irreversible fence for one exact provider session.
      */
-    PROVIDER_SESSION_TERMINALIZED,
+    PROVIDER_SESSION_TERMINALIZED(71),
     /**
      * Extends one active intent without releasing its existing claims or dependencies.
      */
-    WORK_INTENT_SCOPE_EXTENDED;
+    WORK_INTENT_SCOPE_EXTENDED(72);
+
+
+    private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())
+            .collect(Collectors.toUnmodifiableMap(PredictionEventType::wireCode, Function.identity()));
+
+    private final int wireCode;
+
+    PredictionEventType(int wireCode) {
+        this.wireCode = wireCode;
+    }
 
     /**
      * Resolves a stable persisted wire code.
@@ -307,12 +321,11 @@ public enum PredictionEventType {
      * @return event type
      */
     public static PredictionEventType fromWireCode(int wireCode) {
-        for (PredictionEventType type : values()) {
-            if (type.wireCode() == wireCode) {
-                return type;
-            }
+        PredictionEventType type = BY_WIRE_CODE.get(wireCode);
+        if (type == null) {
+            throw new CoordinationArgumentException("unknown event wire code: " + wireCode);
         }
-        throw new CoordinationArgumentException("unknown event wire code: " + wireCode);
+        return type;
     }
 
     /**
@@ -321,38 +334,6 @@ public enum PredictionEventType {
      * @return wire code
      */
     public int wireCode() {
-        return switch (this) {
-            case WORK_INTENT_ANNOUNCED -> 43;
-            case WORK_INTENT_RELEASED -> 44;
-            case COORDINATION_REQUESTED -> 45;
-            case COORDINATION_RESPONDED -> 46;
-            case PARTICIPANT_HEARTBEAT -> 47;
-            case CLAIM_HANDOFF_ACCEPTED -> 48;
-            case PARTICIPANT_ABANDONED -> 49;
-            case CONTRACT_PUBLISHED -> 50;
-            case CONTRACT_DEPENDENCY_BOUND -> 51;
-            case CONTRACT_SUPERSEDED -> 52;
-            case WORK_GROUP_CREATED -> 53;
-            case LANE_GRANT_ISSUED -> 54;
-            case LANE_GRANT_CONSUMED -> 55;
-            case LANE_REVOKED -> 56;
-            case WORK_GROUP_STATUS_CHANGED -> 57;
-            case PARTICIPANT_SUSPENDED -> 58;
-            case RECOVERY_SNAPSHOT_HELD -> 59;
-            case PARTICIPANT_REVOKED -> 60;
-            case INBOX_ITEM_ACKNOWLEDGED -> 61;
-            case PARTICIPANT_CANCELLED -> 62;
-            case LANE_CONTINUATION_ACCEPTED -> 63;
-            case PARTICIPANT_DETACHED -> 64;
-            case COMPLETION_PREPARED -> 65;
-            case INTEGRATION_BLOCKED -> 66;
-            case REPAIR_REQUIRED -> 67;
-            case REPAIR_LANE_CREATED -> 68;
-            case COMPLETION_UNWOUND -> 69;
-            case REVIEW_VALIDATION_RECORDED -> 70;
-            case PROVIDER_SESSION_TERMINALIZED -> 71;
-            case WORK_INTENT_SCOPE_EXTENDED -> 72;
-            default -> ordinal();
-        };
+        return wireCode;
     }
 }
