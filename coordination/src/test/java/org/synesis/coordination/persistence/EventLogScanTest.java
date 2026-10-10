@@ -1,10 +1,15 @@
 package org.synesis.coordination.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +34,21 @@ import org.synesis.link.identity.NodeIdentity;
 class EventLogScanTest {
 
     private static final String INVALID_LOG = "invalid coordination event log";
+
+    @Test
+    void openingAStoreLeavesATemporaryFileAnotherWriterIsStillUsingAndRemovesAnAbandonedOne(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        new PredictionEventStore(temp, project);
+        Path inFlight = Files.createFile(temp.resolve("events").resolve("00000000000000000001.sce.tmp-" + UUID.randomUUID()));
+        Path abandoned = Files.createFile(temp.resolve("events").resolve("00000000000000000001.sce.tmp-" + UUID.randomUUID()));
+        Files.setLastModifiedTime(abandoned, FileTime.from(Instant.now().minus(Duration.ofMinutes(10))));
+
+        PredictionEventStore reader = new PredictionEventStore(temp, project);
+
+        assertEquals(0L, reader.headSequence());
+        assertTrue(Files.exists(inFlight), "a reader must not delete the file another process is appending through");
+        assertFalse(Files.exists(abandoned));
+    }
 
     private static void appendRequest(PredictionEventStore store, NodeIdentity requester, NodeIdentity owner, String handle) throws Exception {
         CapabilityRequestPayload payload = new CapabilityRequestPayload(CapabilityRequestHandle.parse(handle),

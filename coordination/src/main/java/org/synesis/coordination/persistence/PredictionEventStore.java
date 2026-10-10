@@ -8,8 +8,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -57,6 +60,11 @@ public final class PredictionEventStore {
      * Project namespace every loaded and appended event must match.
      */
     private final UUID projectId;
+    /**
+     * Age beyond which a temporary event file can only have been abandoned by a writer that died.
+     */
+    private static final Duration ABANDONED_TEMPORARY_AGE = Duration.ofMinutes(1);
+
     /**
      * Clock used for newly appended event timestamps.
      */
@@ -289,14 +297,27 @@ public final class PredictionEventStore {
     }
 
     /**
-     * Removes temporary event files left before the durable move.
+     * Removes temporary event files that a writer left behind before its durable move.
      *
-     * @throws IOException when payload validation or durable I/O fails
+     * <p>Every open runs this, readers included, and holds no lock, so a temporary file may belong
+     * to another process that is appending right now. Such a file exists for milliseconds. Only
+     * one older than {@link #ABANDONED_TEMPORARY_AGE} is removed, and one that cannot be inspected
+     * or deleted is left alone: it is being written or has just been moved, and reading the log
+     * never looks at it.</p>
+     *
+     * @throws IOException when the events directory cannot be listed
      */
     private void cleanupTemporaryFiles() throws IOException {
+        FileTime abandonedBefore = FileTime.from(Instant.now().minus(ABANDONED_TEMPORARY_AGE));
         try (var stream = Files.list(eventsDirectory)) {
             for (Path file : stream.filter(path -> path.getFileName().toString().contains(".sce.tmp-")).toList()) {
-                Files.deleteIfExists(file);
+                try {
+                    if (Files.getLastModifiedTime(file).compareTo(abandonedBefore) < 0) {
+                        Files.deleteIfExists(file);
+                    }
+                } catch (IOException inFlight) {
+                    // Not ours to remove.
+                }
             }
         }
     }

@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -154,6 +157,21 @@ final class RecoveryContinuationCrashSafetyTest {
         }
     }
 
+    /**
+     * The killed writer left its temporary file. A store that opens right away leaves it alone, since
+     * a file that young may belong to a writer that is still appending; once it is old enough to be
+     * abandoned the next open removes it.
+     */
+    private static void assertAbandonedTemporaryFilesAreRemoved(Scenario scenario) throws Exception {
+        try (var files = Files.list(scenario.root().resolve("events"))) {
+            for (Path leftover : files.filter(path -> path.getFileName().toString().contains(".tmp-")).toList()) {
+                Files.setLastModifiedTime(leftover, FileTime.from(Instant.now().minus(Duration.ofMinutes(10))));
+            }
+        }
+        new PredictionEventStore(scenario.root(), scenario.project());
+        assertNoTemporaryFiles(scenario.root());
+    }
+
     private static String javaExecutable() {
         return Path.of(System.getProperty("java.home"),
                 "bin",
@@ -255,7 +273,7 @@ final class RecoveryContinuationCrashSafetyTest {
                         restarted.collaborationProjection().participantState(scenario.owner().participant())
                                 .orElseThrow());
                 assertEquals(0, continuationEvents(restarted));
-                assertNoTemporaryFiles(scenario.root());
+                assertAbandonedTemporaryFilesAreRemoved(scenario);
                 assertEquals("COMMITTED", continueLane(scenario).status());
             } else {
                 assertSingleSuccessor(restarted, scenario);
