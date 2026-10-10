@@ -1,14 +1,10 @@
 package org.synesis.workspace.lifecycle.repair;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -16,6 +12,7 @@ import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
@@ -49,16 +46,6 @@ public final class RepairService {
         this.doctorService = Objects.requireNonNull(doctorService, "doctorService");
         this.planStore = Objects.requireNonNull(planStore, "planStore");
         this.backupService = Objects.requireNonNull(backupService, "backupService");
-    }
-
-    private static String computeHash(String text) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            return "00000000000000000000000000000000";
-        }
     }
 
     /**
@@ -129,7 +116,7 @@ public final class RepairService {
             entries.add(new RepairPlanEntry(1, entryId, finding.code(), action, targetPath, finding.evidenceFingerprint(), executable, reasons, finding.summary(), backupReq));
         }
 
-        String doctorReportFingerprint = computeHash(report.reportId() + report.timestampEpochMillis());
+        String doctorReportFingerprint = Sha256.hex(report.reportId() + report.timestampEpochMillis());
         return planStore.createAndSave(root, report.projectId(), doctorReportFingerprint, entries);
     }
 

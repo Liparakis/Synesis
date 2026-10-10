@@ -2,6 +2,7 @@ package org.synesis.workspace.lifecycle.codex;
 
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.codex.CodexAppServerLifecycleService.ProcessLauncher;
 import org.synesis.workspace.lifecycle.codex.CodexWakeAdmissionService.LifecycleDispatcher;
 import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient.Response;
@@ -32,9 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.security.GeneralSecurityException;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -171,11 +170,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         if (encoded.length <= 15_000) {
             return new String(encoded, StandardCharsets.UTF_8);
         }
-        try {
-            return "response-ref:sha256:" + java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
+        return "response-ref:sha256:" + Sha256.hex(encoded);
     }
 
     private static String safeState(BindingRuntime runtime) {

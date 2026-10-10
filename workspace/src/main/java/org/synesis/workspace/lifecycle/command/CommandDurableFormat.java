@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -88,7 +89,7 @@ public final class CommandDurableFormat {
 
     private static String digest(Map<String, Object> value) {
         try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance(INTEGRITY_ALGORITHM).digest(ProviderJson.write(new TreeMap<>(value)).getBytes(StandardCharsets.UTF_8)));
+            return Sha256.hex(ProviderJson.write(new TreeMap<>(value)));
         } catch (Exception failure) {
             throw new IllegalStateException("command integrity unavailable", failure);
         }

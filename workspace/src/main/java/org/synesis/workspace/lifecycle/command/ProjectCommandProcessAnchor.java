@@ -1,10 +1,9 @@
 package org.synesis.workspace.lifecycle.command;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
@@ -42,12 +41,7 @@ public record ProjectCommandProcessAnchor(String anchorId, String scopeLocator, 
         Objects.requireNonNull(processIdentity, "processIdentity");
         String material = scopeLocator + "\n" + processIdentity.pid() + "\n" + processIdentity.executableIdentity() + "\n" + processIdentity.commandLine() + "\n" + processIdentity.processStartTime() + "\n"
                 + processIdentity.connectionNonce() + "\n" + createdAtEpochMillis;
-        try {
-            String digest = java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8)));
-            return new ProjectCommandProcessAnchor("v1-" + digest, scopeLocator, processIdentity, createdAtEpochMillis);
-        } catch (Exception failure) {
-            throw new IllegalStateException("command anchor hash unavailable", failure);
-        }
+        return new ProjectCommandProcessAnchor("v1-" + Sha256.hex(material), scopeLocator, processIdentity, createdAtEpochMillis);
     }
 
     /**

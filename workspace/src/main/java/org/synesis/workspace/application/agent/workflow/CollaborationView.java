@@ -3,10 +3,6 @@ package org.synesis.workspace.application.agent.workflow;
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.logSuppressed;
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.openEventStore;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +15,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Builds the provider-safe collaboration view embedded in next-action responses: participants,
@@ -57,7 +54,7 @@ final class CollaborationView {
         try {
             Optional<PredictionEventStore> store = openEventStore(location);
             if (store.isPresent()) {
-                String fingerprint = sha256Hex(request.connectionInstanceId());
+                String fingerprint = Sha256.hex(request.connectionInstanceId());
                 var binding = bindingService.list(location, request.provider()).stream().filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint())).findFirst().orElse(null);
                 return collaborationDetails(store.get(), binding != null ? binding.sessionId() : "");
             }
@@ -150,20 +147,5 @@ final class CollaborationView {
         result.put("participants", participants);
         result.put("intents", intents);
         return result;
-    }
-
-    /**
-     * Computes the lower-case hexadecimal SHA-256 digest of a string's UTF-8 bytes.
-     *
-     * @param value the text to hash
-     * @return the 64-character hexadecimal digest
-     * @throws IllegalStateException if the JVM lacks SHA-256, which the Java platform guarantees
-     */
-    private static String sha256Hex(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is required of every Java platform implementation", impossible);
-        }
     }
 }

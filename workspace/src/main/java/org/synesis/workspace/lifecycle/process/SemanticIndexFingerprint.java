@@ -3,13 +3,13 @@ package org.synesis.workspace.lifecycle.process;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Captures the semantic staged state of a Git index separately from incidental index bytes such as
@@ -187,21 +187,13 @@ public final class SemanticIndexFingerprint {
         if (!Files.exists(index)) {
             // An unborn repository legitimately has no physical index yet;
             // represent its empty semantic index deterministically.
-            return hash(new byte[0]);
+            return Sha256.hex(new byte[0]);
         }
         if (!Files.isRegularFile(index)) {
             throw new IOException("INDEX_UNAVAILABLE");
         }
         try {
-            return hash(Files.readAllBytes(index));
-        } catch (Exception failure) {
-            throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
-        }
-    }
-
-    private static String hash(byte[] bytes) throws IOException {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+            return Sha256.hex(Files.readAllBytes(index));
         } catch (Exception failure) {
             throw new IOException("INDEX_DIGEST_UNAVAILABLE", failure);
         }

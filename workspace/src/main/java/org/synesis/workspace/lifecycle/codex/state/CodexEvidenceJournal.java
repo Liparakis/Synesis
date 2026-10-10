@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -15,6 +14,8 @@ import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Asynchronous bounded JSONL evidence persistence for one connection generation.
@@ -93,14 +94,6 @@ public final class CodexEvidenceJournal implements AutoCloseable {
         writer.submit(this::drain);
     }
 
-    private static String digest(String value) {
-        try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
-    }
-
     private static Object boundedValue(Object value, int depth) {
         if (value == null || value instanceof Number || value instanceof Boolean) {
             return value;
@@ -110,7 +103,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             if (bytes.length <= MAX_ENTRY_BYTES) {
                 return text;
             }
-            return Map.of("truncated", true, "contentDigest", digest(text), "originalBytes", bytes.length);
+            return Map.of("truncated", true, "contentDigest", Sha256.hex(text), "originalBytes", bytes.length);
         }
         if (depth >= 4) {
             String text = String.valueOf(value);
@@ -158,7 +151,7 @@ public final class CodexEvidenceJournal implements AutoCloseable {
             Map<String, Object> summary = new LinkedHashMap<>();
             summary.put("category", category);
             summary.put("truncated", true);
-            summary.put("contentDigest", digest(encoded));
+            summary.put("contentDigest", Sha256.hex(encoded));
             summary.put("originalBytes", bytes.length);
             encoded = org.synesis.workspace.infrastructure.json.ProviderJson.write(summary);
         }

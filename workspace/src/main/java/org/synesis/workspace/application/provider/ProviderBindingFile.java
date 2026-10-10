@@ -6,9 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +13,7 @@ import java.util.UUID;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.BindingException;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import static org.synesis.workspace.application.provider.ProviderSessionBindingService.SCHEMA_VERSION;
@@ -46,8 +44,8 @@ final class ProviderBindingFile {
         return value;
     }
 
-    static String fingerprint(String value) throws NoSuchAlgorithmException {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+    static String fingerprint(String value) {
+        return Sha256.hex(value);
     }
 
     @SuppressWarnings("unchecked")

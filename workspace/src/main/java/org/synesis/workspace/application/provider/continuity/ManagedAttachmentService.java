@@ -15,6 +15,7 @@ import java.util.HexFormat;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Issues, authenticates, and atomically rotates managed attachment proofs.
@@ -49,13 +50,9 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         boolean statusValid = replacement ? record.status() != ManagedAttachmentRecord.Status.TERMINAL
                 : (record.status() == ManagedAttachmentRecord.Status.ACTIVE || (allowPending && record.status() == ManagedAttachmentRecord.Status.PENDING_ACTIVATION));
         if (!expectedProjectId.equals(record.projectId()) || !request.provider().equals(record.provider()) || !request.bindingSessionId().equals(record.bindingSessionId()) || !threadMatches(record, request, allowPending)
-                || request.expectedGeneration() != record.generation() || !statusValid || !constantTimeEquals(record.proofHash(), hash(request.proof()))) {
+                || request.expectedGeneration() != record.generation() || !statusValid || !constantTimeEquals(record.proofHash(), Sha256.hex(request.proof()))) {
             throw failure("attachment_rejected");
         }
-    }
-
-    private static String hash(String proof) throws Exception {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(proof.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static boolean constantTimeEquals(String expected, String actual) {
@@ -167,7 +164,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 bindingSessionId,
                 threadId,
                 1L,
-                hash(proof),
+                Sha256.hex(proof),
                 runtimeHomeId,
                 ManagedAttachmentRecord.Status.ACTIVE,
                 1L,
@@ -229,7 +226,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 bindingSessionId,
                 null,
                 1L,
-                hash(proof),
+                Sha256.hex(proof),
                 runtimeHomeId,
                 ManagedAttachmentRecord.Status.PENDING_ACTIVATION,
                 1L,
@@ -418,7 +415,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 prior.bindingSessionId(),
                 newThreadId,
                 prior.generation() + 1L,
-                hash(proof),
+                Sha256.hex(proof),
                 runtimeHomeId,
                 ManagedAttachmentRecord.Status.ACTIVE,
                 prior.revision() + 1L,
@@ -511,7 +508,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
                 prior.bindingSessionId(),
                 prior.threadId(),
                 prior.generation() + 1L,
-                hash(proof),
+                Sha256.hex(proof),
                 runtimeHomeId,
                 ManagedAttachmentRecord.Status.PENDING_ACTIVATION,
                 prior.revision() + 1L,

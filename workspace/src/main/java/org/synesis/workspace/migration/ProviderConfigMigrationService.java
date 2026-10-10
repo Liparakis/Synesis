@@ -6,15 +6,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
@@ -71,7 +70,7 @@ public final class ProviderConfigMigrationService {
     }
 
     private static String hash(Path path) throws IOException {
-        return hash(Files.readString(path));
+        return Sha256.hex(Files.readString(path));
     }
 
     private static String safeHash(Path path) {
@@ -88,14 +87,6 @@ public final class ProviderConfigMigrationService {
 
     private static Path configPath(Entry planned) {
         return Path.of(planned.configPath());
-    }
-
-    private static String hash(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")

@@ -7,9 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +18,7 @@ import org.synesis.link.identity.IdentityBootstrap;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -38,11 +37,11 @@ public final class ProjectMigrationRestorationService {
             throw new IOException("project_restore_target_changed");
         }
         byte[] backup = Files.readAllBytes(file.backup());
-        if (!hash(backup).equals(file.backupHash())) {
+        if (!Sha256.hex(backup).equals(file.backupHash())) {
             throw new IOException("project_restore_backup_invalid");
         }
         if (Files.isRegularFile(target)) {
-            String currentHash = hash(Files.readAllBytes(target));
+            String currentHash = Sha256.hex(Files.readAllBytes(target));
             if (currentHash.equals(file.backupHash())) {
                 return;
             }
@@ -60,7 +59,7 @@ public final class ProjectMigrationRestorationService {
         }
         Path temporary = target.resolveSibling(target.getFileName() + ".restore-" + UUID.randomUUID());
         Files.write(temporary, backup, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        if (!hash(Files.readAllBytes(temporary)).equals(file.backupHash())) {
+        if (!Sha256.hex(Files.readAllBytes(temporary)).equals(file.backupHash())) {
             Files.deleteIfExists(temporary);
             throw new IOException("project_restore_hash_mismatch");
         }
@@ -73,18 +72,18 @@ public final class ProjectMigrationRestorationService {
         } finally {
             Files.deleteIfExists(temporary);
         }
-        if (!Files.isRegularFile(target) || !hash(Files.readAllBytes(target)).equals(file.backupHash())) {
+        if (!Files.isRegularFile(target) || !Sha256.hex(Files.readAllBytes(target)).equals(file.backupHash())) {
             throw new IOException("project_restore_hash_mismatch");
         }
     }
 
     private static void verifyManifest(Path adminRoot, BackupManifest manifest) throws IOException {
-        String expected = hash(ProviderJson.write(serializable(manifest, false)));
+        String expected = Sha256.hex(ProviderJson.write(serializable(manifest, false)));
         if (!expected.equals(manifest.manifestHash())) {
             throw new IOException("project_restore_backup_invalid");
         }
         for (MutableFile file : manifest.files()) {
-            if (!Files.isRegularFile(file.backup()) || Files.isSymbolicLink(file.backup()) || !hash(Files.readAllBytes(file.backup())).equals(file.backupHash())) {
+            if (!Files.isRegularFile(file.backup()) || Files.isSymbolicLink(file.backup()) || !Sha256.hex(Files.readAllBytes(file.backup())).equals(file.backupHash())) {
                 throw new IOException("project_restore_backup_invalid");
             }
         }
@@ -151,10 +150,10 @@ public final class ProjectMigrationRestorationService {
         StringBuilder value = new StringBuilder();
         try (var stream = Files.walk(keys)) {
             for (Path file : stream.filter(Files::isRegularFile).sorted().toList()) {
-                value.append(keys.relativize(file)).append(':').append(hash(Files.readAllBytes(file))).append('\n');
+                value.append(keys.relativize(file)).append(':').append(Sha256.hex(Files.readAllBytes(file))).append('\n');
             }
         }
-        return hash(value.toString().getBytes(StandardCharsets.UTF_8));
+        return Sha256.hex(value.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     private static void append(Path journal, String state) throws IOException {
@@ -230,18 +229,6 @@ public final class ProjectMigrationRestorationService {
         return value;
     }
 
-    private static String hash(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (Exception failure) {
-            throw new IllegalStateException(failure);
-        }
-    }
-
-    private static String hash(String text) {
-        return hash(text.getBytes(StandardCharsets.UTF_8));
-    }
-
     /**
      * Creates and verifies a backup manifest outside the project checkout.
      *
@@ -264,7 +251,7 @@ public final class ProjectMigrationRestorationService {
             String rollbackCompatibility,
             List<Path> files,
             PostMigrationReplayVerifier.MigrationSemanticSnapshot before) throws IOException {
-        return prepare(adminRoot, planId, hash(planId), location, sourceSchema, targetSchema, rollbackCompatibility, files, before);
+        return prepare(adminRoot, planId, Sha256.hex(planId), location, sourceSchema, targetSchema, rollbackCompatibility, files, before);
     }
 
     /**
@@ -314,8 +301,8 @@ public final class ProjectMigrationRestorationService {
             byte[] data = Files.readAllBytes(target);
             Path backup = backupRoot.resolve(String.format("%03d-%s.bak", sequence++, target.getFileName()));
             Files.write(backup, data, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            String sourceHash = hash(data);
-            String backupHash = hash(Files.readAllBytes(backup));
+            String sourceHash = Sha256.hex(data);
+            String backupHash = Sha256.hex(Files.readAllBytes(backup));
             if (!sourceHash.equals(backupHash)) {
                 throw new IOException("backup hash mismatch");
             }
@@ -333,7 +320,7 @@ public final class ProjectMigrationRestorationService {
                 sequence,
                 entries,
                 "");
-        String manifestHash = hash(ProviderJson.write(serializable(manifest, false)));
+        String manifestHash = Sha256.hex(ProviderJson.write(serializable(manifest, false)));
         manifest = new BackupManifest(manifest.planId(),
                 manifest.planHash(),
                 manifest.projectId(),

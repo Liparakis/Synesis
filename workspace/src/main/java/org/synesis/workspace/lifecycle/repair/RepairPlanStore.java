@@ -11,8 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.doctor.DoctorFindingCode;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.PlanIntegrity;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 /**
@@ -142,7 +142,7 @@ public final class RepairPlanStore {
         RepairPlan unsignedPlan = new RepairPlan(1, planId, projectId, root.toString(), workspaceRoot.toString(), System.currentTimeMillis(), doctorReportFingerprint, supported, unsupported, "UNSIGNED", entries);
 
         String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = PlanIntegrity.sha256Utf8(canonicalContent);
+        String contentHash = Sha256.hex(canonicalContent);
 
         RepairPlan finalPlan = new RepairPlan(unsignedPlan.schemaVersion(),
                 unsignedPlan.planId(),
@@ -207,7 +207,7 @@ public final class RepairPlanStore {
                 plan.unsupportedCount(),
                 "UNSIGNED",
                 plan.entries());
-        String expectedHash = PlanIntegrity.sha256Utf8(serializeCanonical(unsigned));
+        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
         if (!expectedHash.equals(plan.contentHash())) {
             throw new IOException("Repair plan content hash integrity verification failed for " + planId);
         }

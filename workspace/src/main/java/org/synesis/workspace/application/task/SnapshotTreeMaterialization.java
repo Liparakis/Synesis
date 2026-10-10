@@ -6,16 +6,14 @@ import static org.synesis.workspace.application.task.SnapshotGitCommands.runGitW
 import static org.synesis.workspace.application.task.WorktreeChangeInspection.inspectWorktreeChanges;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.workspace.application.task.WorktreeChangeInspection.WorktreeChanges;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Builds the immutable content of a task snapshot: which changed paths are materialized, the Git
@@ -75,12 +73,7 @@ final class SnapshotTreeMaterialization {
     }
 
     static String stableId(String project, UUID laneId, long epoch, String base, String tree) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest((project + "\n" + laneId + "\n" + epoch + "\n" + base + "\n" + tree).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest).substring(0, 32);
-        } catch (Exception failure) {
-            throw new IllegalStateException("SNAPSHOT_ID_DERIVATION_FAILED", failure);
-        }
+        return Sha256.hex(project + "\n" + laneId + "\n" + epoch + "\n" + base + "\n" + tree).substring(0, 32);
     }
 
     static String projectIdentity(Path controlRoot) {
@@ -149,10 +142,6 @@ final class SnapshotTreeMaterialization {
     }
 
     static String integrity(String commit, List<String> paths) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((commit + "\n" + String.join("\n", paths)).getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            return commit;
-        }
+        return Sha256.hex(commit + "\n" + String.join("\n", paths));
     }
 }

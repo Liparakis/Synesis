@@ -1,12 +1,10 @@
 package org.synesis.workspace.lifecycle.command;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Objects;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 /**
@@ -38,13 +36,7 @@ public record PhysicalWorktreeIdentity(String locator, Path realPath) {
         if (!Files.isDirectory(real)) {
             throw new IOException("WORKTREE_IDENTITY_NOT_DIRECTORY");
         }
-        try {
-            String exact = real.toString();
-            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(exact.getBytes(StandardCharsets.UTF_8)));
-            return new PhysicalWorktreeIdentity("v1-" + digest, real);
-        } catch (Exception failure) {
-            throw new IOException("WORKTREE_IDENTITY_HASH_FAILED", failure);
-        }
+        return new PhysicalWorktreeIdentity("v1-" + Sha256.hex(real.toString()), real);
     }
 
     /**

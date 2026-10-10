@@ -1,10 +1,9 @@
 package org.synesis.workspace.lifecycle.command;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Objects;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 
 /**
@@ -100,7 +99,7 @@ public record ProjectCommandAuthoritySnapshot(String bindingDigest, String block
     private static String digest(List<?> values) {
         try {
             String material = values.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("\u001f"));
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8)));
+            return Sha256.hex(material);
         } catch (Exception failure) {
             throw new IllegalStateException("authority digest unavailable", failure);
         }

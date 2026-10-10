@@ -1,11 +1,10 @@
 package org.synesis.workspace.application.task;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Classifies provider and Synesis administration paths explicitly before a source snapshot is
@@ -34,11 +33,7 @@ public final class SnapshotArtifactPolicy {
 
     private static String digest(List<String> allowed, List<String> rejected) {
         String value = "allowed\n" + String.join("\n", allowed) + "\nrejected\n" + String.join("\n", rejected);
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException("SNAPSHOT_ARTIFACT_DIGEST_FAILED", failure);
-        }
+        return Sha256.hex(value);
     }
 
     /**

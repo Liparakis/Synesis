@@ -7,7 +7,8 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.HexFormat;
+
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Loss-aware UTF-8 text document separating raw storage from provider-facing text.
@@ -141,11 +142,7 @@ public final class TextFileDocument {
      * @return lowercase hexadecimal revision
      */
     public String revision() {
-        try {
-            return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(rawBytes));
-        } catch (Exception ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
-        }
+        return Sha256.hex(rawBytes);
     }
 
     /**

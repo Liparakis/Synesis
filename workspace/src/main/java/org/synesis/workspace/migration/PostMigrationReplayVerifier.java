@@ -3,11 +3,9 @@ package org.synesis.workspace.migration;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.RecordComponent;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -26,6 +24,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Replays the existing durable event store and compares canonical semantic projection snapshots
@@ -52,7 +51,7 @@ public final class PostMigrationReplayVerifier {
         state.put("taskSnapshots", completion.allSnapshots());
         state.put("activeIntegration", completion.activeIntegrationAttempt().orElse(null));
         state.put("lastControlHead", completion.lastControlHeadAdvanced());
-        return hashText(canonical(state));
+        return Sha256.hex(canonical(state));
     }
 
     private static List<Object> implementationSnapshot(CapabilityRequestProjection projection) {
@@ -80,7 +79,7 @@ public final class PostMigrationReplayVerifier {
 
     private static String hashFiles(Path root, String suffix) throws IOException {
         if (!Files.isDirectory(root)) {
-            return hashText("missing:" + root.getFileName());
+            return Sha256.hex("missing:" + root.getFileName());
         }
         List<Path> files;
         try (var stream = Files.walk(root)) {
@@ -90,7 +89,7 @@ public final class PostMigrationReplayVerifier {
         for (Path file : files) {
             value.append(root.relativize(file)).append(':').append(HexFormat.of().formatHex(Files.readAllBytes(file))).append('\n');
         }
-        return hashText(value.toString());
+        return Sha256.hex(value.toString());
     }
 
     private static String canonical(Object value) {
@@ -126,14 +125,6 @@ public final class PostMigrationReplayVerifier {
         return String.valueOf(value);
     }
 
-    private static String hashText(String text) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException(failure);
-        }
-    }
-
     /**
      * Captures and verifies one project using the production event store.
      *
@@ -155,7 +146,7 @@ public final class PostMigrationReplayVerifier {
         if (Files.isDirectory(events)) {
             store = new PredictionEventStore(coordination, location.projectId());
         }
-        String projection = store == null ? hashText("empty-projections") : projectionFingerprint(store);
+        String projection = store == null ? Sha256.hex("empty-projections") : projectionFingerprint(store);
         long head = store == null ? 0L : store.headSequence();
         TaskCompletionProjection completion = store == null ? null : store.taskCompletionProjection();
         boolean snapshotsValid = completion == null || snapshotsValid(completion);

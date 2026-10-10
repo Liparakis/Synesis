@@ -9,16 +9,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.process.SemanticIndexFingerprint;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
@@ -81,7 +80,7 @@ public final class ManagedBaselineTransactionService {
     }
 
     private static boolean differsDigest(Path path, String expected) throws IOException {
-        return expected == null || !Files.isRegularFile(path) || !expected.equals(hash(Files.readAllBytes(path)));
+        return expected == null || !Files.isRegularFile(path) || !expected.equals(Sha256.hex(Files.readAllBytes(path)));
     }
 
     private static String createAdministrativeCommit(Path root, String parent, java.util.Set<String> paths, String transactionId) throws IOException {
@@ -166,14 +165,6 @@ public final class ManagedBaselineTransactionService {
         return normalized.toString().replace('\\', '/');
     }
 
-    private static String hash(byte[] bytes) throws IOException {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (Exception failure) {
-            throw new IOException("hash unavailable", failure);
-        }
-    }
-
     private static Path normalize(Path root) {
         return Objects.requireNonNull(root, "repositoryRoot").toAbsolutePath().normalize();
     }
@@ -254,7 +245,7 @@ public final class ManagedBaselineTransactionService {
                 if (state == ManagedPathPolicy.StartState.ABSENT) {
                     absent.add(path);
                 }
-                expected.put(path, hash(content));
+                expected.put(path, Sha256.hex(content));
             }
             String conflict = conflictingJournal(resolution, states.keySet());
             if (conflict != null) {

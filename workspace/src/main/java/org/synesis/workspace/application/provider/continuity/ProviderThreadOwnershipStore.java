@@ -8,14 +8,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -51,14 +50,6 @@ public final class ProviderThreadOwnershipStore {
     public static ProviderThreadOwnershipStore storeFor(ProjectLocation location) {
         Objects.requireNonNull(location, "location");
         return new ProviderThreadOwnershipStore(location.synesisDirectory().resolve("local/runtime").resolve(DIRECTORY));
-    }
-
-    private static String digest(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError(impossible);
-        }
     }
 
     private static void requireText(String value, String label) {
@@ -277,7 +268,7 @@ public final class ProviderThreadOwnershipStore {
     private Path pathFor(String provider, String providerThreadId) {
         requireProvider(provider);
         requireText(providerThreadId, "providerThreadId");
-        return directory.resolve(provider + "-" + digest(providerThreadId) + ".json");
+        return directory.resolve(provider + "-" + Sha256.hex(providerThreadId) + ".json");
     }
 
     private Optional<ProviderThreadOwnershipRecord> readUnlocked(Path path) throws IOException {

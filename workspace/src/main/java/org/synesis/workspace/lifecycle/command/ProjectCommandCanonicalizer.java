@@ -1,12 +1,11 @@
 package org.synesis.workspace.lifecycle.command;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -104,7 +103,7 @@ public final class ProjectCommandCanonicalizer {
 
     private static String digest(Map<String, Object> value) {
         try {
-            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(ProviderJson.write(value).getBytes(StandardCharsets.UTF_8)));
+            return Sha256.hex(ProviderJson.write(value));
         } catch (Exception failure) {
             throw new IllegalStateException("command digest unavailable", failure);
         }

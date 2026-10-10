@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
@@ -117,14 +118,6 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
     private static String boundedSummary(Object result, Object error) {
         String value = String.valueOf(error == null ? result : error);
         return value.length() > 1024 ? value.substring(0, 1024) : value;
-    }
-
-    private static String digest(byte[] value) {
-        try {
-            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(value));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
     }
 
     /**
@@ -356,7 +349,7 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
             }
         } catch (BoundedProtocolFrameReader.OversizedFrameException oversized) {
             oversizedFrames.incrementAndGet();
-            evidence.offer("codex_protocol_oversized", Map.of("observedBytes", oversized.observedBytes(), "prefixDigest", digest(oversized.prefix()), "prefixBytes", oversized.prefix().length), true);
+            evidence.offer("codex_protocol_oversized", Map.of("observedBytes", oversized.observedBytes(), "prefixDigest", Sha256.hex(oversized.prefix()), "prefixBytes", oversized.prefix().length), true);
             if (!closed) {
                 fail(oversized);
             }

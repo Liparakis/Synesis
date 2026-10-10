@@ -4,14 +4,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -312,14 +311,6 @@ public final class ManagedPathPolicy {
             this(repositoryIdentity, transactionId, absentAtStart, expectedDigests, absentStates(absentAtStart));
         }
 
-        private static String hash(byte[] bytes) throws IOException {
-            try {
-                return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-            } catch (Exception failure) {
-                throw new IOException("managed path hash unavailable", failure);
-            }
-        }
-
         private boolean owns(Path root, String path) {
             String state = startStates.get(path);
             if (!StartState.ABSENT.name().equals(state) && !StartState.TRACKED.name().equals(state)) {
@@ -330,7 +321,7 @@ public final class ManagedPathPolicy {
                 return false;
             }
             try {
-                return expected.equals(hash(Files.readAllBytes(root.resolve(path))));
+                return expected.equals(Sha256.hex(Files.readAllBytes(root.resolve(path))));
             } catch (IOException failure) {
                 return false;
             }

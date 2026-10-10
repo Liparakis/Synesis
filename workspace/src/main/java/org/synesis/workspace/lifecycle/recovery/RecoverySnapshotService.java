@@ -14,6 +14,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -38,7 +39,7 @@ public final class RecoverySnapshotService {
 
     private static String hash(Path root, List<String> paths) throws IOException {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = Sha256.newDigest();
             for (String relative : paths) {
                 Path relativePath = safeRelativePath(relative);
                 digest.update(relativePath.toString().replace('\\', '/').getBytes(StandardCharsets.UTF_8));

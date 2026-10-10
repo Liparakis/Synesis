@@ -1,5 +1,6 @@
 package org.synesis.workspace.lifecycle.cleanup.plan;
 
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceFingerprint;
@@ -17,7 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.PlanIntegrity;
 
 /**
  * Storage service for persisting and loading immutable cleanup plans outside the control checkout.
@@ -215,7 +215,7 @@ public final class CleanupPlanStore {
                 persistedEntries);
 
         String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = PlanIntegrity.sha256Utf8(canonicalContent);
+        String contentHash = Sha256.hex(canonicalContent);
 
         PersistedCleanupPlan finalPlan = new PersistedCleanupPlan(unsignedPlan.schemaVersion(),
                 unsignedPlan.planId(),
@@ -286,7 +286,7 @@ public final class CleanupPlanStore {
                 plan.totalEstimatedReclaimableBytes(),
                 "UNSIGNED",
                 plan.entries());
-        String expectedHash = PlanIntegrity.sha256Utf8(serializeCanonical(unsigned));
+        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
         if (!expectedHash.equals(plan.contentHash())) {
             throw new IOException("Cleanup plan content hash integrity verification failed for " + planId);
         }

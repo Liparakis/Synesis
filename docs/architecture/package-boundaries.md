@@ -106,10 +106,11 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.application.workspace.read`: `ReadRequest`, `WorkspaceReadService`
 - `org.synesis.workspace.discovery`: `KnownProjectRegistry`
 - `org.synesis.workspace.doctor`: `DoctorConfidence`, `DoctorFinding`, `DoctorFindingCode`, `DoctorRecommendation`, `DoctorRenderer`, `DoctorReport`, `DoctorService`, `DoctorSeverity`, `DoctorStatus`
+- `org.synesis.workspace.infrastructure.digest`: `Sha256`
 - `org.synesis.workspace.infrastructure.filesystem`: `AtomicFiles`, `ProjectMetadataStorage`, `TextFileDocument`
 - `org.synesis.workspace.infrastructure.json`: `ProviderJson`
 - `org.synesis.workspace.infrastructure.process`: `ProcessEvidenceState`, `ProcessInspector`
-- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `PlanIntegrity`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`
+- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`
 - `org.synesis.workspace.lifecycle.cleanup.execution`: `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `CleanupExecutionLock`, `CleanupExecutionRecord`, `CleanupExecutionService`, `LifecycleQuarantineService`
 - `org.synesis.workspace.lifecycle.cleanup.inventory`: `LifecycleInventoryService`, `LifecyclePathVerifier`, `LifecycleResourceFingerprint`, `LifecycleResourceType`
 - `org.synesis.workspace.lifecycle.cleanup.plan`: `CleanupClassification`, `CleanupEligibilityService`, `CleanupPlan`, `CleanupPlanEntry`, `CleanupPlanService`, `CleanupPlanStore`, `CleanupReason`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `RetentionPolicy`
@@ -150,10 +151,11 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.architecture`: `WorkspaceApplicationPackageArchitectureTest`, `WorkspacePackageArchitectureTest`
 - `org.synesis.workspace.discovery`: `KnownProjectRegistryTest`
 - `org.synesis.workspace.doctor`: `DoctorServiceTest`
+- `org.synesis.workspace.infrastructure.digest`: `Sha256Test`
 - `org.synesis.workspace.infrastructure.filesystem`: `ProjectMetadataStorageTest`, `TextFileDocumentTest`
 - `org.synesis.workspace.infrastructure.json`: `ProviderJsonTest`
 - `org.synesis.workspace.infrastructure.process`: `ProcessInspectorTest`
-- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocatorTest`, `ManagedBaselineTransactionServiceTest`, `ManagedPathPolicyTest`, `PlanIntegrityTest`, `RepositoryPortabilityServiceTest`
+- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocatorTest`, `ManagedBaselineTransactionServiceTest`, `ManagedPathPolicyTest`, `RepositoryPortabilityServiceTest`
 - `org.synesis.workspace.lifecycle.cleanup`: `NoForceAndSafetyArchitectureTest`, `ValidationAndIntegrationCleanupTest`
 - `org.synesis.workspace.lifecycle.cleanup.execution`: `JournalAndRestartTest`, `LockAndConcurrencyTest`, `QuarantineTest`, `TemporaryFileCleanupTest`, `WorkerCleanupTest`
 - `org.synesis.workspace.lifecycle.cleanup.inventory`: `LifecyclePathVerifierTest`

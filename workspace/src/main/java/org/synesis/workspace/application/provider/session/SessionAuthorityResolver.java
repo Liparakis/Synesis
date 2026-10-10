@@ -2,12 +2,10 @@ package org.synesis.workspace.application.provider.session;
 
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Resolves one exact provider connection to its authenticated session binding.
@@ -38,7 +36,7 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        String fingerprint = Sha256.hex(connectionInstanceId);
         ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId())).filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
                 .findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
@@ -63,7 +61,7 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        String fingerprint = Sha256.hex(connectionInstanceId);
         ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "COMPLETED".equalsIgnoreCase(candidate.status())).findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
@@ -91,7 +89,7 @@ public final class SessionAuthorityResolver {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(connectionInstanceId.getBytes(StandardCharsets.UTF_8)));
+        String fingerprint = Sha256.hex(connectionInstanceId);
         ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId()))
                 .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()) || "COMPLETED".equalsIgnoreCase(candidate.status())).findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));

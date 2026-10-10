@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -353,11 +354,7 @@ public final class LifecycleControlRequestEnvelope {
      * @return lowercase hexadecimal digest
      */
     public String digest() {
-        try {
-            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(canonicalBytes()));
-        } catch (java.security.NoSuchAlgorithmException impossible) {
-            throw new AssertionError("SHA-256 is required", impossible);
-        }
+        return Sha256.hex(canonicalBytes());
     }
 
     /**

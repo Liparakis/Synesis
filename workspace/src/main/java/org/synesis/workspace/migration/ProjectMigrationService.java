@@ -5,11 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,6 +15,7 @@ import java.util.UUID;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
@@ -52,22 +51,6 @@ public final class ProjectMigrationService {
      */
     public ProjectMigrationService(Path adminRoot) {
         this.adminRoot = Objects.requireNonNull(adminRoot, "adminRoot").toAbsolutePath().normalize();
-    }
-
-    private static String hash(byte[] value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));
-        } catch (Exception failure) {
-            throw new IllegalStateException(failure);
-        }
-    }
-
-    private static String hash(String text) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException(failure);
-        }
     }
 
     private static String planJson(Plan plan) {
@@ -120,11 +103,11 @@ public final class ProjectMigrationService {
             String raw = Files.readString(metadata, StandardCharsets.UTF_8);
             Object value = ProviderJson.parse(raw);
             if (!(value instanceof Map<?, ?> map) || !(map.get("schemaVersion") instanceof Number number) || !(map.get("projectId") instanceof String projectId)) {
-                return new Entry(metadata, -1, CURRENT_SCHEMA, hash(raw), Outcome.REQUIRES_HUMAN_REVIEW, "");
+                return new Entry(metadata, -1, CURRENT_SCHEMA, Sha256.hex(raw), Outcome.REQUIRES_HUMAN_REVIEW, "");
             }
             int schema = number.intValue();
             Outcome outcome = schema == CURRENT_SCHEMA || schema == 1 ? Outcome.UP_TO_DATE : Outcome.UNSUPPORTED_SCHEMA;
-            return new Entry(metadata, schema, CURRENT_SCHEMA, hash(raw), outcome, projectId);
+            return new Entry(metadata, schema, CURRENT_SCHEMA, Sha256.hex(raw), outcome, projectId);
         } catch (Exception failure) {
             return new Entry(workingDirectory.toAbsolutePath().normalize().resolve(".synesis/project.json"), -1, CURRENT_SCHEMA, "", Outcome.PROJECT_NOT_INITIALIZED, "");
         }
@@ -273,7 +256,7 @@ public final class ProjectMigrationService {
         try {
             manifest = restoration.prepare(adminRoot,
                     plan.planId(),
-                    hash(planJson(plan).getBytes(StandardCharsets.UTF_8)),
+                    Sha256.hex(planJson(plan).getBytes(StandardCharsets.UTF_8)),
                     location,
                     plan.entry().sourceSchema(),
                     plan.entry().targetSchema(),
@@ -291,7 +274,7 @@ public final class ProjectMigrationService {
             appendJournal(plan.planId(), "PROJECT_MIGRATION_EXECUTING");
             step.apply(location);
             for (ProjectMigrationRestorationService.MutableFile file : manifest.files()) {
-                expected.put(file.target(), Files.isRegularFile(file.target()) ? hash(Files.readAllBytes(file.target())) : "MISSING");
+                expected.put(file.target(), Files.isRegularFile(file.target()) ? Sha256.hex(Files.readAllBytes(file.target())) : "MISSING");
                 appendTargetHash(plan.planId(), file.target(), expected.get(file.target()));
             }
             appendJournal(plan.planId(), "PROJECT_MIGRATION_VERIFIED");
@@ -313,7 +296,7 @@ public final class ProjectMigrationService {
             }
             for (ProjectMigrationRestorationService.MutableFile file : manifest.files()) {
                 try {
-                    expected.put(file.target(), Files.isRegularFile(file.target()) ? hash(Files.readAllBytes(file.target())) : "MISSING");
+                    expected.put(file.target(), Files.isRegularFile(file.target()) ? Sha256.hex(Files.readAllBytes(file.target())) : "MISSING");
                 } catch (IOException ignored) {
                     expected.put(file.target(), "UNKNOWN");
                 }
@@ -499,7 +482,7 @@ public final class ProjectMigrationService {
         static ProjectMigrationLock acquire(Path adminRoot, Path projectRoot) throws IOException {
             Path directory = adminRoot.resolve("migration-locks");
             Files.createDirectories(directory);
-            Path lock = directory.resolve(hash(projectRoot.toAbsolutePath().normalize().toString()) + ".lock");
+            Path lock = directory.resolve(Sha256.hex(projectRoot.toAbsolutePath().normalize().toString()) + ".lock");
             try {
                 Files.writeString(lock, "project=" + projectRoot.toAbsolutePath().normalize() + "\nphase=LOCKED\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
                 return new ProjectMigrationLock(lock);

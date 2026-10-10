@@ -6,12 +6,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Bounded, lossless editor for the Codex TOML MCP table.
@@ -38,12 +38,12 @@ public final class CodexTomlConfiguration {
         String text = new String(bytes, StandardCharsets.UTF_8);
         Parsed parsed = parse(text);
         if (parsed.outcome != Outcome.UP_TO_DATE && parsed.outcome != Outcome.MIGRATION_REQUIRED) {
-            return new Inspection(parsed.outcome, sha(bytes), parsed.unrelated, parsed.synesis);
+            return new Inspection(parsed.outcome, Sha256.hex(bytes), parsed.unrelated, parsed.synesis);
         }
         String desired = canonical(desired(launcher));
         String current = canonical(parsed.parentDirect);
         Outcome outcome = desired.equals(current) ? Outcome.UP_TO_DATE : Outcome.MIGRATION_REQUIRED;
-        return new Inspection(outcome, sha(bytes), parsed.unrelated, sha(current.getBytes(StandardCharsets.UTF_8)));
+        return new Inspection(outcome, Sha256.hex(bytes), parsed.unrelated, Sha256.hex(current));
     }
 
     /**
@@ -250,7 +250,7 @@ public final class CodexTomlConfiguration {
             parentDirect = direct.toString();
             unrelated = text.substring(0, start) + text.substring(end);
         }
-        return new Parsed(Outcome.MIGRATION_REQUIRED, start, end, parentDirect, sha(unrelated.getBytes(StandardCharsets.UTF_8)), parentDirect);
+        return new Parsed(Outcome.MIGRATION_REQUIRED, start, end, parentDirect, Sha256.hex(unrelated), parentDirect);
     }
 
     private static String assignmentKey(String line) {
@@ -292,14 +292,6 @@ public final class CodexTomlConfiguration {
             esc = dbl && c == '\\' && !esc;
         }
         return line;
-    }
-
-    private static String sha(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     private static void atomicWrite(Path path, String text) throws IOException {

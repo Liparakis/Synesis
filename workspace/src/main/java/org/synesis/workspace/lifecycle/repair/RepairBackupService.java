@@ -5,12 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
@@ -40,17 +38,6 @@ public final class RepairBackupService {
         return workspaceRoot.resolve("admin").resolve("repair-backups").resolve(executionId);
     }
 
-    private static String computeFileSha256(Path file) throws IOException {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = Files.readAllBytes(file);
-            byte[] digest = md.digest(bytes);
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IOException("SHA-256 algorithm unavailable", ex);
-        }
-    }
-
     /**
      * Creates an atomic backup of a target administrative file prior to mutation.
      *
@@ -76,7 +63,7 @@ public final class RepairBackupService {
         String fileName = targetFile.getFileName().toString();
         Path backupFile = backupDir.resolve(fileName + ".bak");
 
-        String contentHash = computeFileSha256(targetFile);
+        String contentHash = Sha256.hex(targetFile);
         Files.copy(targetFile, backupFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
 
         Path manifestFile = backupDir.resolve("manifest.json");
@@ -121,7 +108,7 @@ public final class RepairBackupService {
             throw new IOException("Backup file missing for rollback: " + backupPath);
         }
 
-        String actualBackupHash = computeFileSha256(backupPath);
+        String actualBackupHash = Sha256.hex(backupPath);
         if (!expectedHash.equals(actualBackupHash)) {
             throw new IOException("Backup file hash mismatch for rollback: expected " + expectedHash + " but found " + actualBackupHash);
         }

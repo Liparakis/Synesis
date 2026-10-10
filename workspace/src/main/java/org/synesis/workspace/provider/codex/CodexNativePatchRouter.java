@@ -4,17 +4,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.project.ProjectPathResolver;
 
 /**
@@ -82,14 +80,6 @@ public final class CodexNativePatchRouter {
         }
         applyHunk(current, oldLines, newLines);
         return String.join("\n", current);
-    }
-
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException unavailable) {
-            throw new IllegalStateException("SHA-256 is required by the runtime", unavailable);
-        }
     }
 
     private static void applyHunk(List<String> current, List<String> oldLines, List<String> newLines) {
@@ -173,7 +163,7 @@ public final class CodexNativePatchRouter {
                         after,
                         true,
                         false,
-                        beforeBytes == null ? null : sha256(beforeBytes),
+                        beforeBytes == null ? null : Sha256.hex(beforeBytes),
                         createOnly));
                 if (!result.success()) {
                     return new RouteResult(false, result.message());

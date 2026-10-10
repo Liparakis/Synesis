@@ -4,11 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,6 +16,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
@@ -104,16 +102,6 @@ public final class DoctorService {
         this.processInspector = Objects.requireNonNull(processInspector, "processInspector");
     }
 
-    private static String computeHash(String text) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            return "00000000000000000000000000000000";
-        }
-    }
-
     /**
      * Evaluates read-only diagnostics over the specified control root.
      *
@@ -153,7 +141,7 @@ public final class DoctorService {
                     "project",
                     false,
                     DoctorRecommendation.NO_ACTION,
-                    computeHash("healthy"),
+                    Sha256.hex("healthy"),
                     Map.of()));
         }
 
@@ -198,7 +186,7 @@ public final class DoctorService {
                             "installation",
                             false,
                             DoctorRecommendation.REINSTALL_SYNESIS,
-                            computeHash("missing_launcher"),
+                            Sha256.hex("missing_launcher"),
                             Map.of()));
                 }
             }
@@ -216,7 +204,7 @@ public final class DoctorService {
                     "project",
                     false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                    computeHash("proj_not_init"),
+                    Sha256.hex("proj_not_init"),
                     Map.of()));
             return null;
         }
@@ -232,7 +220,7 @@ public final class DoctorService {
                         "project_schema",
                         false,
                         DoctorRecommendation.PREPARE_PROJECT_MIGRATION,
-                        computeHash("project_schema_unsupported"),
+                        Sha256.hex("project_schema_unsupported"),
                         Map.of()));
                 return migration.projectId().isBlank() ? null : migration.projectId();
             }
@@ -247,7 +235,7 @@ public final class DoctorService {
                     "project",
                     false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                    computeHash("proj_invalid"),
+                    Sha256.hex("proj_invalid"),
                     Map.of()));
             return null;
         }
@@ -274,7 +262,7 @@ public final class DoctorService {
                             "event_log",
                             false,
                             DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                            computeHash("event_log_fail"),
+                            Sha256.hex("event_log_fail"),
                             Map.of()));
                 } else {
                     findings.add(new DoctorFinding(failureCode,
@@ -285,7 +273,7 @@ public final class DoctorService {
                             "event_log",
                             false,
                             DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                            computeHash("durable_ambiguous"),
+                            Sha256.hex("durable_ambiguous"),
                             Map.of()));
                 }
             }
@@ -307,7 +295,7 @@ public final class DoctorService {
                         "session_lease",
                         false,
                         DoctorRecommendation.PREPARE_RECONCILIATION_PLAN,
-                        computeHash("stale_lease_" + lease.connectionInstanceId()),
+                        Sha256.hex("stale_lease_" + lease.connectionInstanceId()),
                         Map.of()));
             } else if (state == SessionLeaseState.AMBIGUOUS) {
                 findings.add(new DoctorFinding(DoctorFindingCode.AMBIGUOUS_SESSION_LIVENESS,
@@ -318,7 +306,7 @@ public final class DoctorService {
                         "session_lease",
                         false,
                         DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                        computeHash("ambiguous_lease_" + lease.connectionInstanceId()),
+                        Sha256.hex("ambiguous_lease_" + lease.connectionInstanceId()),
                         Map.of()));
             }
         }
@@ -338,7 +326,7 @@ public final class DoctorService {
                             "cleanup",
                             false,
                             DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
-                            computeHash("cleanup_rec"),
+                            Sha256.hex("cleanup_rec"),
                             Map.of()));
                     break;
                 }
@@ -364,7 +352,7 @@ public final class DoctorService {
                         "admin_lock",
                         true,
                         DoctorRecommendation.PREPARE_REPAIR_PLAN,
-                        computeHash("stale_cleanup_lock"),
+                        Sha256.hex("stale_cleanup_lock"),
                         Map.of()));
             }
 
@@ -379,7 +367,7 @@ public final class DoctorService {
                         "admin_lock",
                         true,
                         DoctorRecommendation.PREPARE_REPAIR_PLAN,
-                        computeHash("stale_reconc_lock"),
+                        Sha256.hex("stale_reconc_lock"),
                         Map.of()));
             }
 
@@ -394,7 +382,7 @@ public final class DoctorService {
                         "admin_lock",
                         true,
                         DoctorRecommendation.PREPARE_REPAIR_PLAN,
-                        computeHash("stale_repair_lock"),
+                        Sha256.hex("stale_repair_lock"),
                         Map.of()));
             }
 
@@ -420,7 +408,7 @@ public final class DoctorService {
                     "command_namespace",
                     false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                    computeHash("command_namespace_unsafe"),
+                    Sha256.hex("command_namespace_unsafe"),
                     details));
         } else if (!report.enumerationComplete() || report.staleIndexCount() > 0 || report.olderFormatCount() > 0) {
             findings.add(new DoctorFinding(DoctorFindingCode.COMMAND_NAMESPACE_RECONCILIATION_REQUIRED,
@@ -431,7 +419,7 @@ public final class DoctorService {
                     "command_namespace",
                     true,
                     DoctorRecommendation.PREPARE_REPAIR_PLAN,
-                    computeHash("command_namespace_reconcile"),
+                    Sha256.hex("command_namespace_reconcile"),
                     details));
         }
         if (report.eligibleTerminalCount() > 0 || report.pinnedEvidenceCount() > 0 || report.deadAnchorCount() > 0 || report.liveAtCapacityCount() > 0) {
@@ -443,7 +431,7 @@ public final class DoctorService {
                     "command_namespace",
                     false,
                     DoctorRecommendation.RUN_CLEANUP_DRY_RUN,
-                    computeHash("command_namespace_retention"),
+                    Sha256.hex("command_namespace_retention"),
                     details));
         }
         if (report.leaseGapRevisionMismatchCount() > 0 || report.deferredMutationCount() > 0 || report.cleanCloseDetachBlockedCount() > 0) {
@@ -455,7 +443,7 @@ public final class DoctorService {
                     "command_namespace",
                     false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                    computeHash("command_namespace_deferred"),
+                    Sha256.hex("command_namespace_deferred"),
                     details));
         }
     }
@@ -490,7 +478,7 @@ public final class DoctorService {
                             "admin_plan",
                             true,
                             DoctorRecommendation.PREPARE_REPAIR_PLAN,
-                            computeHash(file.getFileName().toString()),
+                            Sha256.hex(file.getFileName().toString()),
                             Map.of()));
                 }
             }
@@ -525,7 +513,7 @@ public final class DoctorService {
                         "provider_config",
                         false,
                         DoctorRecommendation.PREPARE_PROVIDER_MIGRATION,
-                        computeHash(entry.provider()),
+                        Sha256.hex(entry.provider()),
                         Map.of("provider", entry.provider())));
             } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.MALFORMED) {
                 findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_MALFORMED,
@@ -536,7 +524,7 @@ public final class DoctorService {
                         "provider_config",
                         false,
                         DoctorRecommendation.REVIEW_PROVIDER_CONFIGURATION,
-                        computeHash(entry.provider() + "_malformed"),
+                        Sha256.hex(entry.provider() + "_malformed"),
                         Map.of("provider", entry.provider())));
             } else if (entry.outcome() == ProviderConfigMigrationService.Outcome.DUPLICATE_SYNSESIS_ENTRY) {
                 findings.add(new DoctorFinding(DoctorFindingCode.PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED,
@@ -547,7 +535,7 @@ public final class DoctorService {
                         "provider_config",
                         false,
                         DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
-                        computeHash(entry.provider() + "_duplicate"),
+                        Sha256.hex(entry.provider() + "_duplicate"),
                         Map.of("provider", entry.provider())));
             }
         }
@@ -593,7 +581,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_replay"),
+                                Sha256.hex(journal.getFileName().toString() + "_replay"),
                                 Map.of()));
                     }
                     if (journalText.contains("backup_missing") || journalText.contains("restore_failed")) {
@@ -605,7 +593,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_backup"),
+                                Sha256.hex(journal.getFileName().toString() + "_backup"),
                                 Map.of()));
                     }
                     if (journalText.contains("active_session_blocks_project_migration")) {
@@ -617,7 +605,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_session"),
+                                Sha256.hex(journal.getFileName().toString() + "_session"),
                                 Map.of()));
                     }
                     if (journalText.contains("RESTORE_REQUIRED") && !journalText.contains("RESTORE_VERIFIED") && !journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
@@ -629,7 +617,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restore_pending"),
+                                Sha256.hex(journal.getFileName().toString() + "_restore_pending"),
                                 Map.of()));
                     }
                     if (journalText.contains("RESTORE_FAILED_REQUIRES_REVIEW")) {
@@ -641,7 +629,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restore_review"),
+                                Sha256.hex(journal.getFileName().toString() + "_restore_review"),
                                 Map.of()));
                     }
                     if (journalText.contains("FAILED_RESTORED")) {
@@ -653,7 +641,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_restored"),
+                                Sha256.hex(journal.getFileName().toString() + "_restored"),
                                 Map.of()));
                     }
                     if (journalText.contains("ROLLBACK_PENDING") || journalText.contains("ROLLBACK_REQUIRES_HUMAN_REVIEW")) {
@@ -665,7 +653,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString() + "_rollback"),
+                                Sha256.hex(journal.getFileName().toString() + "_rollback"),
                                 Map.of()));
                     }
                     String last = lines.getLast();
@@ -678,7 +666,7 @@ public final class DoctorService {
                                 "migration_transaction",
                                 false,
                                 DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                                computeHash(journal.getFileName().toString()),
+                                Sha256.hex(journal.getFileName().toString()),
                                 Map.of()));
                     }
                 } catch (Exception corrupt) {
@@ -690,7 +678,7 @@ public final class DoctorService {
                             "migration_transaction",
                             false,
                             DoctorRecommendation.REVIEW_UPDATE_TRANSACTION,
-                            computeHash(journal.getFileName().toString() + "_corrupt"),
+                            Sha256.hex(journal.getFileName().toString() + "_corrupt"),
                             Map.of()));
                 }
             }

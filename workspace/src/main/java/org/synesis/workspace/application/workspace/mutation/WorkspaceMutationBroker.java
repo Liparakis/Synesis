@@ -1,17 +1,14 @@
 package org.synesis.workspace.application.workspace.mutation;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -21,6 +18,7 @@ import java.util.UUID;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.filesystem.BoundedFileLock;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.project.ActionGuardrail;
@@ -55,31 +53,7 @@ public final class WorkspaceMutationBroker {
                 + (request.newContent() == null ? "" : request.newContent()) + "\n"
                 + (request.expectedPreviousHash() == null ? "" : request.expectedPreviousHash())
                 + "\n" + request.createOnly();
-        return sha256(payload.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (java.security.NoSuchAlgorithmException unavailable) {
-            throw new IllegalStateException("SHA-256 is required by the runtime", unavailable);
-        }
-    }
-
-    private static String sha256(Path path) throws IOException {
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (java.security.NoSuchAlgorithmException unavailable) {
-            throw new IllegalStateException("SHA-256 is required by the runtime", unavailable);
-        }
-        try (InputStream input = Files.newInputStream(path)) {
-            byte[] buffer = new byte[8192];
-            for (int count; (count = input.read(buffer)) >= 0;) {
-                digest.update(buffer, 0, count);
-            }
-        }
-        return HexFormat.of().formatHex(digest.digest());
+        return Sha256.hex(payload);
     }
 
     /**
@@ -140,7 +114,7 @@ public final class WorkspaceMutationBroker {
         String updatedRevision = null;
         if (success && mutatedPath != null) {
             try {
-                updatedRevision = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(mutatedPath)));
+                updatedRevision = Sha256.hex(Files.readAllBytes(mutatedPath));
             } catch (Exception ignored) {
             }
         }
@@ -382,7 +356,7 @@ public final class WorkspaceMutationBroker {
         }
         Path canonicalWorktree = assignedWorktree.toRealPath();
         Files.createDirectories(lockDirectory);
-        String key = sha256(canonicalWorktree.toString().getBytes(StandardCharsets.UTF_8));
+        String key = Sha256.hex(canonicalWorktree.toString());
         return new MutationLockLocation(lockDirectory.resolve(key + ".lock"), canonicalWorktree);
     }
 
@@ -414,7 +388,7 @@ public final class WorkspaceMutationBroker {
                         request, binding, null);
             }
             try {
-                String actualHash = sha256(targetFile);
+                String actualHash = Sha256.hex(targetFile);
                 if (!request.expectedPreviousHash().equalsIgnoreCase(actualHash)) {
                     return evaluateAndRecord(false, Decision.STALE_CONTEXT, "HASH_MISMATCH",
                             "Previous content hash mismatch", decisionId, interceptionEvidence,

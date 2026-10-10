@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.PlanIntegrity;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 /**
@@ -135,7 +135,7 @@ public final class ReconciliationPlanStore {
         ReconciliationPlan unsignedPlan = new ReconciliationPlan(1, planId, projectId, root.toString(), workspaceRoot.toString(), System.currentTimeMillis(), totalInspectedCount, executableCount, "UNSIGNED", entries);
 
         String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = PlanIntegrity.sha256Utf8(canonicalContent);
+        String contentHash = Sha256.hex(canonicalContent);
 
         ReconciliationPlan finalPlan = new ReconciliationPlan(unsignedPlan.schemaVersion(),
                 unsignedPlan.planId(),
@@ -198,7 +198,7 @@ public final class ReconciliationPlanStore {
                 plan.executableCount(),
                 "UNSIGNED",
                 plan.entries());
-        String expectedHash = PlanIntegrity.sha256Utf8(serializeCanonical(unsigned));
+        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
         if (!expectedHash.equals(plan.contentHash())) {
             throw new IOException("Reconciliation plan content hash integrity verification failed for " + planId);
         }

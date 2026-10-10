@@ -4,10 +4,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -49,11 +48,7 @@ public final class AdministrativeStateLocator {
     public static String identity(Path commonDirectory) {
         Objects.requireNonNull(commonDirectory, "commonDirectory");
         String canonical = canonicalPath(commonDirectory).toString().replace('\\', '/');
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception failure) {
-            throw new IllegalStateException("repository identity hashing unavailable", failure);
-        }
+        return Sha256.hex(canonical);
     }
 
     /**

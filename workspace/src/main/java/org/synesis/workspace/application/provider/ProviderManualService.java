@@ -8,12 +8,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.mcp.contract.McpToolCatalog;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -56,14 +55,6 @@ public final class ProviderManualService {
     private static String content(String provider) {
         return CONTENT_PREFIX + CLAIM_GUIDANCE + CAPABILITY_CONFLICT_GUIDANCE + CONTRACT_GUIDANCE + IMPLEMENT_GUIDANCE + INTERACTIVE_GUIDANCE + CONTINUITY_GUIDANCE + "MCP wire compatibility digest: `" + McpToolCatalog.wireCompatibilityDigest() + "`\n"
                 + "MCP catalog content digest: `" + McpToolCatalog.catalogContentDigest() + "`\n" + "Provider guidance renderer: `" + provider + "`\n";
-    }
-
-    private static String hash(byte[] bytes) throws IOException {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (Exception failure) {
-            throw new IOException("manual hash unavailable", failure);
-        }
     }
 
     private static void deleteTree(Path root) throws IOException {
@@ -130,7 +121,7 @@ public final class ProviderManualService {
         try {
             Path manual = staging.resolve(MANUAL_FILE);
             String content = content(provider);
-            String hash = hash(content.getBytes(StandardCharsets.UTF_8));
+            String hash = Sha256.hex(content);
             Files.writeString(manual, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             Map<String, Object> manifest = new LinkedHashMap<>();
             manifest.put("provider", provider);
@@ -180,9 +171,9 @@ public final class ProviderManualService {
             }
             int version = raw.get("version") instanceof Number n ? n.intValue() : 0;
             String expected = String.valueOf(raw.get("contentHash"));
-            String actual = hash(Files.readAllBytes(manual));
+            String actual = Sha256.hex(Files.readAllBytes(manual));
             String canonicalContent = content(provider);
-            String canonical = hash(canonicalContent.getBytes(StandardCharsets.UTF_8));
+            String canonical = Sha256.hex(canonicalContent);
             String expectedArtifact = String.valueOf(raw.get("guidanceArtifactDigest"));
             String actualArtifact = McpToolCatalog.guidanceArtifactDigest(MANUAL_NAME, provider, Files.readAllBytes(manual));
             boolean valid = provider.equals(String.valueOf(raw.get("provider"))) && MANUAL_NAME.equals(String.valueOf(raw.get("name"))) && version == VERSION && expected.equals(canonical) && actual.equals(canonical)
