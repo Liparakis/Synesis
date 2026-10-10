@@ -2,6 +2,8 @@ package org.synesis.cli.command.coordination;
 
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.CoordinationCliSupport;
+import org.synesis.cli.command.CoordinationEventFollower;
 import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

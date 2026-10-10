@@ -1,4 +1,4 @@
-package org.synesis.cli.command.coordination;
+package org.synesis.cli.command;
 
 import java.io.IOException;
 import java.net.URI;

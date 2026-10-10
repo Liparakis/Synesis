@@ -1,4 +1,4 @@
-package org.synesis.cli.command.coordination;
+package org.synesis.cli.daemon;
 
 import java.awt.*;
 import java.io.IOException;

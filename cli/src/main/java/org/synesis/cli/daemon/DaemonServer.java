@@ -28,7 +28,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
-import org.synesis.cli.command.coordination.BrowserLauncher;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;

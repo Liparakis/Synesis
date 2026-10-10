@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.command.CliHarness.Result;
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;

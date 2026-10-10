@@ -1,4 +1,4 @@
-package org.synesis.cli.command.coordination;
+package org.synesis.cli.daemon;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -9,6 +9,8 @@ import java.time.Duration;
 import java.util.concurrent.locks.LockSupport;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.CoordinationCliSupport;
+import org.synesis.cli.daemon.BrowserLauncher;
 import org.synesis.cli.daemon.DaemonClient;
 import org.synesis.cli.daemon.RuntimeReadyLine;
 import org.synesis.cli.exit.ExitCodes;

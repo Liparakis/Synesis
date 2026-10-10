@@ -4,6 +4,7 @@ package org.synesis.cli.command.coordination;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import picocli.CommandLine.Command;

@@ -1,4 +1,4 @@
-package org.synesis.cli.command.coordination;
+package org.synesis.cli.command;
 
 import java.io.Serial;
 import java.net.URI;

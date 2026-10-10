@@ -2,7 +2,7 @@ package org.synesis.cli.command.task;
 
 
 import org.synesis.cli.bootstrap.CliRuntime;
-import org.synesis.cli.command.coordination.CoordinationCliSupport;
+import org.synesis.cli.command.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskClaim;
