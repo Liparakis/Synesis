@@ -43,11 +43,15 @@ class Syn037CompletionValidationTest {
     private String previousHome;
 
     private static void configureValidation(Path metadata, java.util.UUID projectId, java.time.Instant createdAt) throws Exception {
+        configureValidation(metadata, projectId, createdAt, PortableTestCommand.validation());
+    }
+
+    private static void configureValidation(Path metadata, java.util.UUID projectId, java.time.Instant createdAt, List<String> argv) throws Exception {
         Map<String, Object> value = new java.util.LinkedHashMap<>();
         value.put("schemaVersion", 2);
         value.put("projectId", projectId.toString());
         value.put("createdAt", createdAt.toString());
-        value.put("validation", Map.of("argv", PortableTestCommand.validation(), "workingDirectory", ".", "timeoutSeconds", 120));
+        value.put("validation", Map.of("argv", argv, "workingDirectory", ".", "timeoutSeconds", 120));
         Files.writeString(metadata, ProviderJson.write(value) + System.lineSeparator());
     }
 
@@ -92,6 +96,44 @@ class Syn037CompletionValidationTest {
         } else {
             System.setProperty("user.home", previousHome);
         }
+    }
+
+    /**
+     * The project's validation command is the gate on what a lane may publish: when it fails, the
+     * finish is refused with the evidence and nothing is published or integrated.
+     */
+    @Test
+    void failingProjectValidationRefusesTheFinishAndPublishesNothing(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.name", "Synesis Test");
+        git(root, "config", "user.email", "synesis-test@example.invalid");
+        Files.createDirectories(root.resolve("src"));
+        Files.writeString(root.resolve("src/task_tracker.txt"), "pending");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "baseline");
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectInitResult initialized = projectService.init(root, false);
+        configureValidation(initialized.location().metadataFile(), initialized.location().projectId(), initialized.location().createdAt(),
+                List.of("git", "rev-parse", "--verify", "refs/heads/branch-that-does-not-exist"));
+        git(root, "add", ".synesis/project.json");
+        git(root, "commit", "-m", "configure validation");
+        RepositoryPrivateStateService.ensure(root);
+        ProviderTestSupport.install(projectService.locate(root), "codex");
+        AgentResponse session = new AgentSessionService().ensureSession(new SessionResolutionRequest(root, "codex", "syn037-failing", null, false));
+        assertEquals(AgentStatus.READY, session.status(), session.toJson());
+        ProjectLocation location = projectService.locate(root);
+        new WorkspaceCollaborationService().announce(root, "codex", "syn037-failing", "Implement task tracker", "src/task_tracker.txt becomes implemented", List.of(ResourceSelector.pathExact("src/task_tracker.txt")));
+        Path lane = Path.of(new ProviderSessionBindingService().find(location, "codex", "syn037-failing").orElseThrow().worktreePath());
+        Files.writeString(lane.resolve("src/task_tracker.txt"), "implemented");
+
+        AgentResponse refused = new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(root, "codex", "syn037-failing", "Implement task tracker"));
+
+        assertEquals(AgentStatus.BLOCKED, refused.status(), refused.toJson());
+        assertTrue(refused.toJson().contains("validation_failed"), refused.toJson());
+        assertEvidenceMap(resultMap(refused).get("validation"));
+        PredictionEventStore store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+        assertTrue(store.taskCompletionProjection().allSnapshots().isEmpty(), "a refused finish publishes nothing");
+        assertEquals(List.of("pending"), Files.readAllLines(root.resolve("src/task_tracker.txt")), "nothing was integrated");
     }
 
     @Test
