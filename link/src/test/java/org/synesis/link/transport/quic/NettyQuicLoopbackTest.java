@@ -148,8 +148,10 @@ final class NettyQuicLoopbackTest {
         "heartbeat acknowledgement did not arrive");
   }
 
+  // The waits on a child JVM are longer than the child's own deadlines, so on a slow machine the
+  // child reports what went wrong instead of the test giving up first.
   private static void waitForPath(Path path) {
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45);
     while (!Files.exists(path) && System.nanoTime() < deadline) {
       java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
     }
@@ -418,7 +420,7 @@ final class NettyQuicLoopbackTest {
         .start();
     Process server = null;
     try {
-      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45);
       while (!Files.exists(clientMaterial) && System.nanoTime() < deadline) {
         java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25));
       }
@@ -430,8 +432,8 @@ final class NettyQuicLoopbackTest {
           serverResult.toString())
           .redirectErrorStream(true)
           .start();
-      assertTrue(client.waitFor(20, TimeUnit.SECONDS), "client did not exit");
-      assertTrue(server.waitFor(20, TimeUnit.SECONDS), "server did not exit");
+      assertTrue(client.waitFor(60, TimeUnit.SECONDS), "client did not exit");
+      assertTrue(server.waitFor(60, TimeUnit.SECONDS), "server did not exit");
       assertEquals(0, client.exitValue(), readProcessOutput(client));
       assertEquals(0, server.exitValue(), readProcessOutput(server));
       assertEquals("OK",
@@ -510,7 +512,7 @@ final class NettyQuicLoopbackTest {
       assertTrue(Files.readString(clientResult)
           .contains("|LIVE|"));
       client.destroyForcibly();
-      assertTrue(server.waitFor(10, TimeUnit.SECONDS), "server did not classify abrupt loss");
+      assertTrue(server.waitFor(30, TimeUnit.SECONDS), "server did not classify abrupt loss");
       assertEquals(0, server.exitValue(), readProcessOutput(server));
       String terminal = Files.readString(serverResult);
       assertTrue(terminal.contains("|TERMINAL|TRANSPORT_CLOSED")

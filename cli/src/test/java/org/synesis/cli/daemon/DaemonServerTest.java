@@ -208,7 +208,15 @@ final class DaemonServerTest {
             client.getOutputStream().flush();
 
             server.close();
-            assertEquals(-1, client.getInputStream().read());
+            // The daemon closes the socket with the partial request still unread. Linux then resets the
+            // connection instead of ending the stream, so either one shows that the socket was closed.
+            int read;
+            try {
+                read = client.getInputStream().read();
+            } catch (java.net.SocketException reset) {
+                read = -1;
+            }
+            assertEquals(-1, read);
         } finally {
             server.close();
             serving.join(TimeUnit.SECONDS.toMillis(3));

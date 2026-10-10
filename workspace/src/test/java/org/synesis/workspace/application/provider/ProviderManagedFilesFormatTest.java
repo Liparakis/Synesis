@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,9 +23,12 @@ import org.synesis.workspace.application.project.ProjectLocation;
  */
 class ProviderManagedFilesFormatTest {
 
-  /** The installed launcher, as the JSON-escaped Windows path the hook commands embed. */
+  /**
+   * The quoted launcher of a hook command, as JSON text: a Windows path has its backslashes
+   * doubled and a Unix path has none. Which launcher is resolved depends on the machine.
+   */
   private static final Pattern LAUNCHER_PATH =
-      Pattern.compile("[A-Za-z]:(?:\\\\\\\\[^\\\\\"]+)*\\\\\\\\synesis\\.exe");
+      Pattern.compile("\\\\\"(?:[^\"\\\\]|\\\\\\\\)+\\\\\" hook ");
 
   /** The profile directory argument of the Claude hook command. */
   private static final Pattern PROFILE_PATH = Pattern.compile("(--profile \\\\\")(.*?)(\\\\\")");
@@ -118,7 +122,7 @@ class ProviderManagedFilesFormatTest {
     String text = Files.readString(file, StandardCharsets.UTF_8);
     return LAUNCHER_PATH
         .matcher(PROFILE_PATH.matcher(text).replaceAll("$1<PROFILE>$3"))
-        .replaceAll("<LAUNCHER>");
+        .replaceAll(Matcher.quoteReplacement("\\\"<LAUNCHER>\\\" hook "));
   }
 
   private static void restore(String key, String value) {

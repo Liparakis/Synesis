@@ -216,7 +216,8 @@ final class DaemonServerRoutingTest {
         Thread serving = serve(server);
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("status-daemon/endpoint.json"));
-            Map<String, Object> opened = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_PROJECT", "project", project.toString())));
+            // This test is about runtime handles. Opening a real browser would make it depend on the machine having one.
+            Map<String, Object> opened = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_PROJECT", "project", project.toString(), "openBrowser", false)));
             assertEquals("READY", opened.get("state"));
 
             FakeRuntime runtime = starter.runtime(project);
