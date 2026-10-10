@@ -1,10 +1,9 @@
 package org.synesis.coordination.application;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.security.GeneralSecurityException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -44,12 +43,15 @@ public final class CoordinationService {
     private static final int SUBSCRIBER_CAPACITY = 1024;
 
     private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity coordinatorIdentity;
-    private final Map<CommandId, PredictionEvent> commandResults = new HashMap<>();
     private final CopyOnWriteArrayList<Subscription> subscribers = new CopyOnWriteArrayList<>();
 
     /**
      * Creates a service over an opened event store.
+     *
+     * <p>The store names the project log. Other writers append to that log through their own stores, so the service
+     * decides and reads on a store replayed from disk for each call and never on the one it was built with.</p>
      *
      * @param store               event store
      * @param coordinatorIdentity identity used to sign durable coordinator events
@@ -58,14 +60,23 @@ public final class CoordinationService {
         this.store = CoordinationNullException.requireNonNull(store, "store");
         this.coordinatorIdentity = CoordinationNullException.requireNonNull(coordinatorIdentity,
                 "coordinator identity");
-        store.events().forEach(event -> {
+        this.appends = new ProjectAppends(store);
+    }
+
+    /**
+     * Finds the event a command already produced; older or non-command events are replayable but not idempotency keys.
+     */
+    private static Optional<PredictionEvent> appliedEvent(PredictionEventStore current, CommandId identity) {
+        for (PredictionEvent event : current.events()) {
             try {
-                CoordinationCommand command = CoordinationCommand.decode(event.payload());
-                commandResults.put(command.identity(), event);
+                if (CoordinationCommand.decode(event.payload()).identity().equals(identity)) {
+                    return Optional.of(event);
+                }
             } catch (IOException ignored) {
-                // Older or non-command events remain replayable but are not idempotency keys.
+                // Not a command event.
             }
-        });
+        }
+        return Optional.empty();
     }
 
     /**
@@ -156,6 +167,10 @@ public final class CoordinationService {
     /**
      * Authenticates and applies a command exactly once.
      *
+     * <p>Duplicate detection, authorization, and the append all run on a store replayed under the project append lock,
+     * so a command another writer already applied is recognized and authority is judged on the current log. The
+     * service monitor stays so that live fan-out cannot interleave with a subscription's replay and registration.</p>
+     *
      * @param command signed command
      * @return resulting event, including the prior result for a duplicate command
      * @throws IOException              when persistence fails
@@ -166,19 +181,33 @@ public final class CoordinationService {
         if (!command.verify() || !command.projectIdentity().equals(store.projectIdentity())) {
             throw new CoordinationSecurityException("invalid coordination command");
         }
-        PredictionEvent prior = commandResults.get(command.identity());
-        if (prior != null) {
-            return prior;
+        return appends.call(current -> {
+            Optional<PredictionEvent> prior = appliedEvent(current, command.identity());
+            if (prior.isPresent()) {
+                return prior.get();
+            }
+            authorize(current, command);
+            PredictionEvent event = current.append(command.predictionId(),
+                    command.type(),
+                    coordinatorIdentity.nodeId(),
+                    command.encoded(),
+                    coordinatorIdentity);
+            subscribers.forEach(subscription -> subscription.offer(event));
+            return event;
+        });
+    }
+
+    /**
+     * Replays the durable log for a read; the lock is not needed because events become visible by atomic move.
+     */
+    // shortcut: every read replays and re-verifies the whole log, as the other services do; keep one replayed
+    // store per durable head here if the control plane becomes slow on long logs.
+    private PredictionEventStore fresh() {
+        try {
+            return appends.fresh();
+        } catch (IOException | GeneralSecurityException failure) {
+            throw new UncheckedIOException(new IOException("coordination log unreadable", failure));
         }
-        authorize(command);
-        PredictionEvent event = store.append(command.predictionId(),
-                command.type(),
-                coordinatorIdentity.nodeId(),
-                command.encoded(),
-                coordinatorIdentity);
-        commandResults.put(command.identity(), event);
-        subscribers.forEach(subscription -> subscription.offer(event));
-        return event;
     }
 
     /**
@@ -199,7 +228,7 @@ public final class CoordinationService {
      */
     public synchronized List<PredictionEvent> replayAfter(EventSequence sequence) {
         long cursor = CoordinationNullException.requireNonNull(sequence, "event sequence").value();
-        return store.events().stream().filter(event -> event.sequence() > cursor).toList();
+        return fresh().events().stream().filter(event -> event.sequence() > cursor).toList();
     }
 
     /**
@@ -247,7 +276,7 @@ public final class CoordinationService {
      * @return sequence
      */
     public long headSequence() {
-        return store.headSequence();
+        return fresh().headSequence();
     }
 
     /**
@@ -256,7 +285,7 @@ public final class CoordinationService {
      * @return projection
      */
     public PredictionProjection projection() {
-        return store.projection();
+        return fresh().projection();
     }
 
     /**
@@ -265,7 +294,7 @@ public final class CoordinationService {
      * @return coordination projection
      */
     public CoordinationProjection coordinationProjection() {
-        return store.coordinationProjection();
+        return fresh().coordinationProjection();
     }
 
     /**
@@ -274,7 +303,7 @@ public final class CoordinationService {
      * @return collaboration projection
      */
     public CollaborationProjection collaborationProjection() {
-        return store.collaborationProjection();
+        return fresh().collaborationProjection();
     }
 
     /**
@@ -283,7 +312,7 @@ public final class CoordinationService {
      * @return work-group projection
      */
     public WorkGroupProjection workGroupProjection() {
-        return store.workGroupProjection();
+        return fresh().workGroupProjection();
     }
 
     /**
@@ -292,7 +321,7 @@ public final class CoordinationService {
      * @return capability request projection
      */
     public CapabilityRequestProjection capabilityRequestProjection() {
-        return store.capabilityRequestProjection();
+        return fresh().capabilityRequestProjection();
     }
 
     /**
@@ -319,23 +348,24 @@ public final class CoordinationService {
      * @return active validation context when found
      */
     public Optional<ValidationContextRecord> validationContext(CapabilityRequestHandle handle) {
-        return store.capabilityRequestProjection()
+        return fresh().capabilityRequestProjection()
                 .findValidationContext(CoordinationNullException.requireNonNull(handle, "handle"));
     }
 
     /**
      * Authenticates a command according to the authority owner of its event type.
      */
-    private void authorize(CoordinationCommand command) throws IOException, GeneralSecurityException {
+    private void authorize(PredictionEventStore current, CoordinationCommand command)
+            throws IOException, GeneralSecurityException {
         switch (command.type()) {
             case TASK_CREATED -> authorizeTaskCreation(command);
             case TASK_CLAIMED -> authorizeTaskClaim(command);
             case OWNERSHIP_CLAIMED -> authorizeOwnershipClaim(command);
-            case TASK_RELEASED -> authorizeTaskRelease(command);
-            case OWNERSHIP_RELEASED -> authorizeOwnershipRelease(command);
+            case TASK_RELEASED -> authorizeTaskRelease(current, command);
+            case OWNERSHIP_RELEASED -> authorizeOwnershipRelease(current, command);
             default -> {
                 if (!isCoordinatorManagedEvent(command.type())) {
-                    authorizePredictionCommand(command);
+                    authorizePredictionCommand(current, command);
                 }
             }
         }
@@ -344,9 +374,10 @@ public final class CoordinationService {
     /**
      * Validates the current owner before releasing a task claim.
      */
-    private void authorizeTaskRelease(CoordinationCommand command) throws IOException, GeneralSecurityException {
+    private void authorizeTaskRelease(PredictionEventStore current, CoordinationCommand command)
+            throws IOException, GeneralSecurityException {
         TaskClaim claim = TaskClaim.decode(command.payload());
-        CoordinationTaskView task = coordinationProjection().task(command.taskIdentity())
+        CoordinationTaskView task = current.coordinationProjection().task(command.taskIdentity())
                 .orElseThrow(() -> new CoordinationSecurityException("TASK_NOT_FOUND"));
         if (!claim.taskIdentity().equals(command.taskIdentity()) || task.ownerNode().filter(command.actorNode()::equals)
                 .isEmpty()) {
@@ -357,11 +388,12 @@ public final class CoordinationService {
     /**
      * Validates the current owner before releasing an ownership claim.
      */
-    private void authorizeOwnershipRelease(CoordinationCommand command) throws IOException, GeneralSecurityException {
+    private void authorizeOwnershipRelease(PredictionEventStore current, CoordinationCommand command)
+            throws IOException, GeneralSecurityException {
         OwnershipClaim claim = OwnershipClaim.decode(command.payload());
-        OwnershipClaim current = coordinationProjection().ownership(claim.capabilityIdentity())
+        OwnershipClaim held = current.coordinationProjection().ownership(claim.capabilityIdentity())
                 .orElseThrow(() -> new CoordinationSecurityException("OWNERSHIP_NOT_FOUND"));
-        if (!claim.taskIdentity().equals(command.taskIdentity()) || !command.actorNode().equals(current.ownerNode())) {
+        if (!claim.taskIdentity().equals(command.taskIdentity()) || !command.actorNode().equals(held.ownerNode())) {
             throw new CoordinationSecurityException("ACTOR_NOT_AUTHORIZED");
         }
     }
@@ -369,8 +401,9 @@ public final class CoordinationService {
     /**
      * Applies requester/owner authority for the prediction-specific lifecycle.
      */
-    private void authorizePredictionCommand(CoordinationCommand command) throws IOException, GeneralSecurityException {
-        PredictionContract contract = contractFor(command);
+    private void authorizePredictionCommand(PredictionEventStore current, CoordinationCommand command)
+            throws IOException, GeneralSecurityException {
+        PredictionContract contract = contractFor(current, command);
         NodeId actor = command.actorNode();
         boolean requester = actor.equals(contract.requesterNode()) && logicalMatches(command,
                 contract.requesterSupervisor(),
@@ -395,7 +428,8 @@ public final class CoordinationService {
      * @param command authenticated command to evaluate
      * @throws IOException when payload validation or durable I/O fails
      */
-    private PredictionContract contractFor(CoordinationCommand command) throws IOException {
+    private PredictionContract contractFor(PredictionEventStore current, CoordinationCommand command)
+            throws IOException {
         if (command.type() == PredictionEventType.PREDICTION_CREATED) {
             PredictionContract contract = decodeContract(command.payload());
             if (!contract.predictionIdentity().equals(command.predictionIdentity()) || !contract.projectIdentity()
@@ -404,7 +438,7 @@ public final class CoordinationService {
             }
             return contract;
         }
-        for (PredictionEvent event : store.events()) {
+        for (PredictionEvent event : current.events()) {
             if (event.predictionId().equals(command.predictionIdentity().value())
                     && event.type() == PredictionEventType.PREDICTION_CREATED) {
                 return decodeContract(CoordinationCommand.decode(event.payload()).payload());
