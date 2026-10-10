@@ -336,4 +336,19 @@ public enum PredictionEventType {
     public int wireCode() {
         return wireCode;
     }
+
+    /**
+     * Tells whether this event advances a prediction's own lifecycle, as opposed to belonging to another
+     * projection of the shared event sequence.
+     *
+     * @return true for the prediction lifecycle events
+     */
+    public boolean isPredictionLifecycle() {
+        return switch (this) {
+            case PREDICTION_CREATED, PREDICTION_ROUTED, REQUEST_RECEIVED, ACCEPTED_EXACT, ACCEPTED_EQUIVALENT,
+                 CONTRACT_REVISED, IMPLEMENTATION_STARTED, PATCH_READY, CAPABILITY_AVAILABLE, VALIDATION_STARTED,
+                 SPECULATION_RETIRED, PREDICTION_INVALIDATED, REQUEST_REJECTED, PREDICTION_EXPIRED -> true;
+            default -> false;
+        };
+    }
 }

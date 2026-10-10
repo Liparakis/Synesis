@@ -2,12 +2,10 @@ package org.synesis.coordination.domain.collaboration;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.ProviderSessionId;
@@ -23,16 +21,14 @@ import org.synesis.coordination.exception.CoordinationNullException;
 /**
  * Deterministic projection of active work intents and resource claims.
  */
-@SuppressWarnings({"DuplicatedCode", "ExtractMethodRecommender"})
 public final class CollaborationProjection {
 
     private final Map<WorkIntentId, WorkIntent> intents = new LinkedHashMap<>();
-    private final Map<RequestId, CoordinationRequest> requests = new LinkedHashMap<>();
+    private final CoordinationRequests requests;
     private final Map<WorkIntentId, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
-    private final Map<ProviderSessionId, ProviderSessionTerminalPayload> terminalSessions = new LinkedHashMap<>();
+    private final ProviderSessionFences sessionFences;
     private final Map<ParticipantId, Participant> participantHistory = new LinkedHashMap<>();
     private final Map<WorkIntentId, WorkIntentId> successorIntents = new LinkedHashMap<>();
-    private final Set<RequestId> acknowledgedInboxItems = new HashSet<>();
     private boolean activated;
     /**
      * Sequence of the newest applied event other than a heartbeat. A completion envelope stays
@@ -44,6 +40,19 @@ public final class CollaborationProjection {
      * Creates an empty collaboration projection.
      */
     public CollaborationProjection() {
+        requests = new CoordinationRequests();
+        sessionFences = new ProviderSessionFences();
+    }
+
+    private CollaborationProjection(CollaborationProjection source) {
+        intents.putAll(source.intents);
+        requests = new CoordinationRequests(source.requests);
+        noChangeCompletions.putAll(source.noChangeCompletions);
+        sessionFences = new ProviderSessionFences(source.sessionFences);
+        participantHistory.putAll(source.participantHistory);
+        successorIntents.putAll(source.successorIntents);
+        activated = source.activated;
+        lastStateChangeSequence = source.lastStateChangeSequence;
     }
 
     /**
@@ -88,49 +97,6 @@ public final class CollaborationProjection {
     }
 
     /**
-     * Rebinds one pending review obligation when its producer or reviewer role continues.
-     *
-     * @param source       recovery-held source lane
-     * @param target       authorized successor lane
-     * @param continuation participant identities for the transition
-     * @param request      current coordination request
-     * @return updated request, or the original request when unrelated
-     */
-    private static CoordinationRequest retargetReviewRequest(WorkIntent source,
-            WorkIntent target,
-            LaneContinuation continuation,
-            CoordinationRequest request) {
-        if (source.role() == WorkIntent.Role.PRODUCER && request.status() == CoordinationRequest.Status.PENDING
-                && request.kind() == CoordinationRequest.Kind.REVIEW && request.targetIdentity()
-                .equals(continuation.sourceOwner()) && request.conflictingIntent().equals(source.identity())) {
-            return new CoordinationRequest(request.requestId(),
-                    request.projectId(),
-                    request.requester(),
-                    continuation.targetOwner().value(),
-                    target.intentId(),
-                    request.kind(),
-                    request.proposal(),
-                    request.status(),
-                    request.snapshotId());
-        }
-        if (source.role() == WorkIntent.Role.REVIEWER && (request.status() == CoordinationRequest.Status.PENDING
-                || request.status() == CoordinationRequest.Status.ACCEPTED)
-                && request.kind() == CoordinationRequest.Kind.REVIEW && request.requesterIdentity()
-                .equals(continuation.sourceOwner())) {
-            return new CoordinationRequest(request.requestId(),
-                    request.projectId(),
-                    continuation.targetOwner().value(),
-                    request.target(),
-                    request.conflictingIntentId(),
-                    request.kind(),
-                    request.proposal(),
-                    request.status(),
-                    request.snapshotId());
-        }
-        return request;
-    }
-
-    /**
      * Applies one collaboration event.
      *
      * @param event event
@@ -152,7 +118,7 @@ public final class CollaborationProjection {
                 }
             }
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
-            case COORDINATION_RESPONDED -> respond(CollaborationCodec.decodeResponse(event.payload()));
+            case COORDINATION_RESPONDED -> requests.respond(CollaborationCodec.decodeResponse(event.payload()));
             case PARTICIPANT_HEARTBEAT ->
                     heartbeat(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())),
                             event.createdAtEpochMillis());
@@ -164,7 +130,7 @@ public final class CollaborationProjection {
             case RECOVERY_SNAPSHOT_HELD -> recoveryHeld(CollaborationCodec.decodeRecovery(event.payload()));
             case PARTICIPANT_REVOKED -> revoked(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
             case INBOX_ITEM_ACKNOWLEDGED ->
-                    acknowledge(new RequestId(CollaborationCodec.decodeUuidText(event.payload())));
+                    requests.acknowledge(new RequestId(CollaborationCodec.decodeUuidText(event.payload())));
             case PARTICIPANT_CANCELLED ->
                     cancelled(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
             case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
@@ -172,7 +138,8 @@ public final class CollaborationProjection {
                     detached(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
             case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
             case PROVIDER_SESSION_TERMINALIZED ->
-                    terminalize(ProviderSessionTerminalPayload.decode(event.payload()), event.sequence());
+                    sessionFences.terminalize(ProviderSessionTerminalPayload.decode(event.payload()),
+                            event.sequence());
             default -> {
             }
         }
@@ -188,17 +155,7 @@ public final class CollaborationProjection {
      * @throws IOException invalid transition
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        CollaborationProjection candidate = new CollaborationProjection();
-        candidate.intents.putAll(intents);
-        candidate.requests.putAll(requests);
-        candidate.noChangeCompletions.putAll(noChangeCompletions);
-        candidate.terminalSessions.putAll(terminalSessions);
-        candidate.participantHistory.putAll(participantHistory);
-        candidate.successorIntents.putAll(successorIntents);
-        candidate.acknowledgedInboxItems.addAll(acknowledgedInboxItems);
-        candidate.activated = activated;
-        candidate.lastStateChangeSequence = lastStateChangeSequence;
-        candidate.apply(event);
+        new CollaborationProjection(this).apply(event);
     }
 
     /**
@@ -299,7 +256,7 @@ public final class CollaborationProjection {
      * @return requests
      */
     public synchronized List<CoordinationRequest> requests() {
-        return List.copyOf(requests.values());
+        return requests.all();
     }
 
     /**
@@ -350,7 +307,7 @@ public final class CollaborationProjection {
      * @return true when terminalized
      */
     public synchronized boolean isSessionTerminal(ProviderSessionId sessionId) {
-        return terminalSessions.containsKey(CoordinationNullException.requireNonNull(sessionId, "session ID"));
+        return sessionFences.isSessionTerminal(sessionId);
     }
 
     /**
@@ -360,8 +317,7 @@ public final class CollaborationProjection {
      * @return true when fenced
      */
     public synchronized boolean isParticipantTerminal(ParticipantId participant) {
-        return terminalSessions.values().stream().anyMatch(payload -> payload.participantIdentity()
-                .equals(CoordinationNullException.requireNonNull(participant, "participant")));
+        return sessionFences.isParticipantTerminal(participant);
     }
 
     /**
@@ -381,7 +337,7 @@ public final class CollaborationProjection {
      * @return true when acknowledged
      */
     public synchronized boolean inboxAcknowledged(RequestId itemId) {
-        return acknowledgedInboxItems.contains(CoordinationNullException.requireNonNull(itemId, "item ID"));
+        return requests.isAcknowledged(CoordinationNullException.requireNonNull(itemId, "item ID"));
     }
 
     /**
@@ -665,41 +621,11 @@ public final class CollaborationProjection {
         if (isParticipantTerminal(request.requesterIdentity()) || isParticipantTerminal(request.targetIdentity())) {
             throw new CoordinationException("SESSION_TERMINAL");
         }
-        if (requests.containsKey(request.identity())) {
-            throw new CoordinationException("REQUEST_EXISTS");
-        }
+        requests.requireAbsent(request);
         if (!intents.containsKey(request.conflictingIntent())) {
             throw new CoordinationException("INTENT_NOT_FOUND");
         }
-        requests.put(request.identity(), request);
-    }
-
-    /**
-     * Applies an authorized response to the matching pending coordination request.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private void respond(CoordinationResponsePayload response) throws IOException {
-        CoordinationRequest current = requests.get(response.request());
-        if (current == null) {
-            throw new CoordinationException("REQUEST_NOT_FOUND");
-        }
-        if (current.status() != CoordinationRequest.Status.PENDING) {
-            if (current.status() == response.status()) {
-                return;
-            }
-            throw new CoordinationException("REQUEST_ALREADY_RESOLVED");
-        }
-        requests.put(current.identity(),
-                new CoordinationRequest(current.requestId(),
-                        current.projectId(),
-                        current.requester(),
-                        current.target(),
-                        current.conflictingIntentId(),
-                        current.kind(),
-                        response.proposal().isBlank() ? current.proposal() : response.proposal(),
-                        response.status(),
-                        current.snapshotId()));
+        requests.add(request);
     }
 
     /**
@@ -840,7 +766,7 @@ public final class CollaborationProjection {
         intents.remove(source.identity());
         intents.put(target.identity(), target);
         successorIntents.put(source.identity(), target.identity());
-        retargetReviewRequests(source, target, continuation);
+        requests.retargetReviews(source, target, continuation);
         refreshParticipant(continuation.sourceOwner(), Participant.State.DETACHED, null);
         refreshParticipant(continuation.targetOwner(), Participant.State.ACTIVE, target);
     }
@@ -884,17 +810,6 @@ public final class CollaborationProjection {
     }
 
     /**
-     * Moves only review requests whose producer or reviewer identity is being continued.
-     *
-     * @param source       recovery-held source lane
-     * @param target       authorized successor lane
-     * @param continuation participant identities for the transition
-     */
-    private void retargetReviewRequests(WorkIntent source, WorkIntent target, LaneContinuation continuation) {
-        requests.replaceAll((requestId, request) -> retargetReviewRequest(source, target, continuation, request));
-    }
-
-    /**
      * Applies the revoked lifecycle transition after validating its authority.
      *
      * @throws IOException when payload validation or durable I/O fails
@@ -913,13 +828,6 @@ public final class CollaborationProjection {
      */
     private void dropIntentsOf(ParticipantId participant) {
         intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
-    }
-
-    /**
-     * Marks the identified inbox item as acknowledged.
-     */
-    private void acknowledge(RequestId itemId) {
-        acknowledgedInboxItems.add(itemId);
     }
 
     /**
@@ -950,33 +858,6 @@ public final class CollaborationProjection {
         rejectRevoked(current);
         participantHistory.put(participant, current.withState(Participant.State.DETACHED).withClaims(List.of()));
         dropIntentsOf(participant);
-    }
-
-    /**
-     * Fences a provider session using its exact optimistic revision and terminal evidence.
-     *
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private void terminalize(ProviderSessionTerminalPayload payload, long eventSequence) throws IOException {
-
-        if (payload.validatedRevision() != eventSequence - 1L) {
-            throw new CoordinationException("TERMINAL_REVISION_STALE");
-        }
-
-        ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionIdentity());
-
-        if (previous != null) {
-            if (!previous.equals(payload)) {
-                throw new CoordinationException("TERMINAL_SESSION_CONFLICT");
-            }
-            return;
-        }
-
-        if (terminalSessions.values().stream()
-                .anyMatch(existing -> existing.participantIdentity().equals(payload.participantIdentity()))) {
-            throw new CoordinationException("TERMINAL_PARTICIPANT_CONFLICT");
-        }
-        terminalSessions.put(payload.sessionIdentity(), payload);
     }
 
     /**

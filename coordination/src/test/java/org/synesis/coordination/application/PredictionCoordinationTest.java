@@ -20,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
 import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.identity.CapabilityId;
@@ -681,5 +682,36 @@ class PredictionCoordinationTest {
             assertEquals(9, requesterClient.replayAfter(0).size());
             assertEquals(9, ownerClient.replayAfter(0).size());
         }
+    }
+
+    @Test
+    void predictionAndCoordinationValidationMatchApplyOnACopyAndLeaveTheProjectionsUntouched() throws Exception {
+        Path root = Files.createTempDirectory("synesis-validate-copy-");
+        UUID project = UUID.randomUUID();
+        UUID prediction = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(root, project);
+        store.append(prediction, PredictionEventType.PREDICTION_CREATED, identity.nodeId(),
+                contract(project, prediction, identity.nodeId()).encoded(), identity);
+        store.append(prediction, PredictionEventType.PREDICTION_ROUTED, identity.nodeId(), new byte[0], identity);
+        CoordinationService service = new CoordinationService(store, NodeIdentity.generate());
+        service.submit(CoordinationCommand.create(UUID.randomUUID(),
+                project,
+                taskId,
+                PredictionEventType.TASK_CREATED,
+                identity.nodeId(),
+                new CoordinationTask(taskId, project, "prediction status", "workspace.prediction-status",
+                        identity.nodeId(), "sup-a", "worker-a").encoded(),
+                identity));
+        service.submit(CoordinationCommand.create(UUID.randomUUID(),
+                project,
+                taskId,
+                PredictionEventType.TASK_CLAIMED,
+                identity.nodeId(),
+                new TaskClaim(taskId, identity.nodeId(), "sup-a", "worker-a").encoded(),
+                identity));
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(store.events());
     }
 }

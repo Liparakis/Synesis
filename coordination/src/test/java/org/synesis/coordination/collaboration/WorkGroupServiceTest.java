@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
@@ -63,5 +64,21 @@ final class WorkGroupServiceTest {
         service.issue(new LaneGrant(grantId, groupId, intentId, "agt-reviewer", 1, true));
         assertThrows(Exception.class, () -> service.consume(grantId, "agt-other", intentId, 1));
         service.consume(grantId, "agt-reviewer", intentId, 1);
+    }
+
+    @Test
+    void workGroupValidationMatchesApplyOnACopyAndLeavesTheProjectionUntouched(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID intentId = UUID.randomUUID();
+        UUID grantId = UUID.randomUUID();
+        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project),
+                NodeIdentity.generate());
+        service.create(new WorkGroup(groupId, project, "parallel", "tests", 1, WorkGroup.Status.ACTIVE));
+        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-target", 3, true));
+        service.consume(grantId, "agt-target", intentId, 3);
+        service.close(groupId, WorkGroup.Status.COMPLETED, 1);
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(new PredictionEventStore(temp, project).events());
     }
 }

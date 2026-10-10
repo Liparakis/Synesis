@@ -5,12 +5,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
-import org.synesis.coordination.domain.identity.IntegrationAttemptId;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
@@ -27,21 +27,22 @@ import org.synesis.coordination.exception.CoordinationNullException;
  */
 public final class TaskCompletionProjection {
 
+    private static final String REVIEW_ACCEPTANCE_REQUIRED = "REVIEW_ACCEPTANCE_REQUIRED";
+
     private final Map<TaskId, TaskCompletionState> taskStates = new LinkedHashMap<>();
     private final Map<TaskId, List<TaskSnapshotRecord>> snapshotsByTask = new LinkedHashMap<>();
     private final Map<SnapshotId, TaskSnapshotRecord> snapshotsById = new LinkedHashMap<>();
     private final Map<SnapshotId, TaskCompletionState> snapshotStates = new LinkedHashMap<>();
-    private final Map<IntegrationAttemptId, IntegrationAttemptRecord> attempts = new LinkedHashMap<>();
+    private final IntegrationAttemptLedger attempts;
     private final Map<TaskId, CompletionPreparedPayload> prepared = new LinkedHashMap<>();
     private final Map<PreparedRevisionKey, CompletionPreparedPayload> preparedByRevision = new LinkedHashMap<>();
     private final Map<SnapshotId, TaskCompletionState> integrationPriorStates = new LinkedHashMap<>();
-    private IntegrationAttemptId activeAttemptId = null;
-    private CommitId lastControlHeadAdvanced = null;
 
     /**
      * Creates an empty task completion projection.
      */
     public TaskCompletionProjection() {
+        attempts = new IntegrationAttemptLedger();
     }
 
     /**
@@ -54,12 +55,10 @@ public final class TaskCompletionProjection {
         source.snapshotsByTask.forEach((taskId, history) -> snapshotsByTask.put(taskId, List.copyOf(history)));
         snapshotsById.putAll(source.snapshotsById);
         snapshotStates.putAll(source.snapshotStates);
-        attempts.putAll(source.attempts);
+        attempts = new IntegrationAttemptLedger(source.attempts);
         prepared.putAll(source.prepared);
         preparedByRevision.putAll(source.preparedByRevision);
         integrationPriorStates.putAll(source.integrationPriorStates);
-        activeAttemptId = source.activeAttemptId;
-        lastControlHeadAdvanced = source.lastControlHeadAdvanced;
     }
 
     /**
@@ -68,6 +67,31 @@ public final class TaskCompletionProjection {
     private static boolean isIntegrationEligibleState(TaskCompletionState state) {
         return state == TaskCompletionState.INTEGRATION_PENDING || state == TaskCompletionState.SNAPSHOT_READY
                 || state == TaskCompletionState.READY_FOR_INTEGRATION || state == TaskCompletionState.REVIEW_ACCEPTED;
+    }
+
+    /**
+     * Gate every path into the integrated state passes. A rejected snapshot never integrates and fails with the
+     * caller's {@code rejectedCode}; otherwise {@code reviewSatisfied}, computed by the caller because each path
+     * accepts a different set of prior states, must hold.
+     */
+    private static void requireIntegrable(TaskCompletionState current, boolean reviewSatisfied, String rejectedCode)
+            throws CoordinationException {
+        if (current == TaskCompletionState.REVIEW_REJECTED) {
+            throw new CoordinationException(rejectedCode);
+        }
+        if (!reviewSatisfied) {
+            throw new CoordinationException(REVIEW_ACCEPTANCE_REQUIRED);
+        }
+    }
+
+    /**
+     * Resolves the snapshots of an integration payload that this projection knows; unknown ids are skipped.
+     */
+    private List<TaskSnapshotRecord> knownSnapshots(IntegrationAttemptPayload payload) {
+        return payload.taskSnapshotIds().stream()
+                .map(snapshotId -> snapshotsById.get(new SnapshotId(snapshotId)))
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     /**
@@ -392,10 +416,7 @@ public final class TaskCompletionProjection {
      * @return active attempt when present
      */
     public synchronized Optional<IntegrationAttemptRecord> activeIntegrationAttempt() {
-        if (activeAttemptId == null) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(attempts.get(activeAttemptId));
+        return attempts.active();
     }
 
     /**
@@ -404,7 +425,7 @@ public final class TaskCompletionProjection {
      * @return last advanced commit or {@code null}
      */
     public synchronized String lastControlHeadAdvanced() {
-        return lastControlHeadAdvanced == null ? null : lastControlHeadAdvanced.value();
+        return attempts.lastControlHeadAdvanced();
     }
 
     /**
@@ -555,22 +576,16 @@ public final class TaskCompletionProjection {
                 payload.taskSnapshotIds(),
                 payload.expectedControlHead(),
                 payload.integrationCommitSha(),
-                "started",
+                IntegrationAttemptLedger.STARTED,
                 "",
                 event.createdAtEpochMillis(),
                 0L);
-        attempts.put(payload.identity(), record);
-        activeAttemptId = payload.identity();
-        for (String snapshotId : payload.taskSnapshotIds()) {
-            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
-            if (snapshot != null) {
-                TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-                if (!isIntegrationEligibleState(current)) {
-                    throw new CoordinationException("REVIEW_ACCEPTANCE_REQUIRED");
-                }
-                integrationPriorStates.put(snapshot.snapshotIdentity(), current);
-                setSnapshotState(snapshot, TaskCompletionState.INTEGRATING);
-            }
+        attempts.begin(payload.identity(), record);
+        for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
+            TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
+            requireIntegrable(current, isIntegrationEligibleState(current), REVIEW_ACCEPTANCE_REQUIRED);
+            integrationPriorStates.put(snapshot.snapshotIdentity(), current);
+            setSnapshotState(snapshot, TaskCompletionState.INTEGRATING);
         }
     }
 
@@ -582,28 +597,18 @@ public final class TaskCompletionProjection {
      */
     private void processAttemptFailed(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        IntegrationAttemptRecord current = attempts.get(payload.identity());
-        if (current != null) {
-            attempts.put(payload.identity(),
-                    current.withOutcome("pending".equalsIgnoreCase(payload.status()) ? "pending" : "failed",
-                            payload.failureReason(),
-                            event.createdAtEpochMillis()));
-        }
-        if (payload.identity().equals(activeAttemptId)) {
-            activeAttemptId = null;
-        }
-        for (String snapshotId : payload.taskSnapshotIds()) {
-            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
-            if (snapshot != null) {
-                TaskCompletionState state = "pending".equalsIgnoreCase(payload.status())
-                        ? integrationPriorStates.remove(snapshot.snapshotIdentity())
-                        : TaskCompletionState.INTEGRATION_FAILED;
-                if (state == null) {
-                    state = snapshot.reviewRequired() ? TaskCompletionState.REVIEW_ACCEPTED
-                            : TaskCompletionState.INTEGRATION_PENDING;
-                }
-                setSnapshotState(snapshot, state);
+        boolean pending = IntegrationAttemptLedger.PENDING.equalsIgnoreCase(payload.status());
+        attempts.finish(payload.identity(),
+                current -> current.withOutcome(pending ? IntegrationAttemptLedger.PENDING
+                        : IntegrationAttemptLedger.FAILED, payload.failureReason(), event.createdAtEpochMillis()));
+        for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
+            TaskCompletionState state = pending ? integrationPriorStates.remove(snapshot.snapshotIdentity())
+                    : TaskCompletionState.INTEGRATION_FAILED;
+            if (state == null) {
+                state = snapshot.reviewRequired() ? TaskCompletionState.REVIEW_ACCEPTED
+                        : TaskCompletionState.INTEGRATION_PENDING;
             }
+            setSnapshotState(snapshot, state);
         }
     }
 
@@ -615,20 +620,13 @@ public final class TaskCompletionProjection {
      */
     private void processAttemptConflicted(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        IntegrationAttemptRecord current = attempts.get(payload.identity());
-        if (current != null) {
-            attempts.put(payload.identity(),
-                    current.withOutcome("conflict", payload.failureReason(), event.createdAtEpochMillis()));
-        }
-        if (payload.identity().equals(activeAttemptId)) {
-            activeAttemptId = null;
-        }
-        for (String snapshotId : payload.taskSnapshotIds()) {
-            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
-            if (snapshot != null) {
-                integrationPriorStates.remove(snapshot.snapshotIdentity());
-                setSnapshotState(snapshot, TaskCompletionState.REPAIR_REQUIRED);
-            }
+        attempts.finish(payload.identity(),
+                current -> current.withOutcome(IntegrationAttemptLedger.CONFLICT,
+                        payload.failureReason(),
+                        event.createdAtEpochMillis()));
+        for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
+            integrationPriorStates.remove(snapshot.snapshotIdentity());
+            setSnapshotState(snapshot, TaskCompletionState.REPAIR_REQUIRED);
         }
     }
 
@@ -640,11 +638,8 @@ public final class TaskCompletionProjection {
      */
     private void processIntegrationBlocked(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        for (String snapshotId : payload.taskSnapshotIds()) {
-            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
-            if (snapshot != null) {
-                setSnapshotState(snapshot, TaskCompletionState.INTEGRATION_BLOCKED);
-            }
+        for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
+            setSnapshotState(snapshot, TaskCompletionState.INTEGRATION_BLOCKED);
         }
     }
 
@@ -656,11 +651,8 @@ public final class TaskCompletionProjection {
      */
     private void processRepairRequired(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        for (String snapshotId : payload.taskSnapshotIds()) {
-            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
-            if (snapshot != null) {
-                setSnapshotState(snapshot, TaskCompletionState.REPAIR_REQUIRED);
-            }
+        for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
+            setSnapshotState(snapshot, TaskCompletionState.REPAIR_REQUIRED);
         }
     }
 
@@ -672,10 +664,7 @@ public final class TaskCompletionProjection {
      */
     private void processCommitCreated(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        IntegrationAttemptRecord current = attempts.get(payload.identity());
-        if (current != null) {
-            attempts.put(payload.identity(), current.withCommit(payload.integrationCommitSha()));
-        }
+        attempts.update(payload.identity(), current -> current.withCommit(payload.integrationCommitSha()));
     }
 
     /**
@@ -686,16 +675,10 @@ public final class TaskCompletionProjection {
      */
     private void processBranchAdvanced(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        lastControlHeadAdvanced = new CommitId(payload.integrationCommitSha());
-        IntegrationAttemptRecord current = attempts.get(payload.identity());
-        if (current != null) {
-            attempts.put(payload.identity(),
-                    current.withCommit(payload.integrationCommitSha())
-                            .withOutcome("advanced", "", event.createdAtEpochMillis()));
-        }
-        if (payload.identity().equals(activeAttemptId)) {
-            activeAttemptId = null;
-        }
+        attempts.advanceHead(new CommitId(payload.integrationCommitSha()));
+        attempts.finish(payload.identity(),
+                current -> current.withCommit(payload.integrationCommitSha())
+                        .withOutcome(IntegrationAttemptLedger.ADVANCED, "", event.createdAtEpochMillis()));
     }
 
     /**
@@ -712,13 +695,10 @@ public final class TaskCompletionProjection {
             return;
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-        if (current == TaskCompletionState.REVIEW_REJECTED) {
-            throw new CoordinationException("REJECTED_SNAPSHOT_CANNOT_INTEGRATE");
-        }
-        if (snapshot.reviewRequired() && current != TaskCompletionState.REVIEW_ACCEPTED
-                && integrationPriorStates.get(snapshot.snapshotIdentity()) != TaskCompletionState.REVIEW_ACCEPTED) {
-            throw new CoordinationException("REVIEW_ACCEPTANCE_REQUIRED");
-        }
+        requireIntegrable(current,
+                !snapshot.reviewRequired() || current == TaskCompletionState.REVIEW_ACCEPTED
+                        || integrationPriorStates.get(snapshot.snapshotIdentity()) == TaskCompletionState.REVIEW_ACCEPTED,
+                "REJECTED_SNAPSHOT_CANNOT_INTEGRATE");
         setSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
     }
 
@@ -745,10 +725,10 @@ public final class TaskCompletionProjection {
             return;
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-        if (current == TaskCompletionState.REVIEW_REJECTED || (snapshot.reviewRequired()
-                && current != TaskCompletionState.INTEGRATED && current != TaskCompletionState.REVIEW_ACCEPTED)) {
-            throw new CoordinationException("REVIEW_ACCEPTANCE_REQUIRED");
-        }
+        requireIntegrable(current,
+                !snapshot.reviewRequired() || current == TaskCompletionState.INTEGRATED
+                        || current == TaskCompletionState.REVIEW_ACCEPTED,
+                REVIEW_ACCEPTANCE_REQUIRED);
         setSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
     }
 

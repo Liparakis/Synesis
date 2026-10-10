@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.application.ContinuationResult;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
@@ -1787,5 +1788,22 @@ final class WorkIntentServiceTest {
         assertEquals(1,
                 replayed.events().stream().filter(event -> event.type() == PredictionEventType.REPAIR_LANE_CREATED)
                         .count());
+    }
+
+    @Test
+    void collaborationValidationMatchesApplyOnACopyAndLeavesTheProjectionUntouched(@TempDir Path temp)
+            throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        WorkIntent owner = intent(project, "agt-owner", ResourceSelector.pathExact("src/task_tracker.py"));
+        assertTrue(service.announce(owner).acquired());
+        CoordinationRequest request = service.request("agt-contender",
+                owner.intentId(),
+                CoordinationRequest.Kind.CONTRACT,
+                "Agree on TaskTracker API v1");
+        service.respond("agt-owner", request.requestId(), CoordinationRequest.Status.ACCEPTED, "API accepted");
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(new PredictionEventStore(temp, project).events());
     }
 }

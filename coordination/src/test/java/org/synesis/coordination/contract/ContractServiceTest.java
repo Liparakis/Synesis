@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
@@ -58,5 +59,17 @@ final class ContractServiceTest {
         ContractRecord current = new PredictionEventStore(temp, project).contractProjection().contract(contractId);
         assertEquals(1, current.revision());
         assertEquals(ContractRecord.Status.ACTIVE, current.status());
+    }
+
+    @Test
+    void contractProjectionValidationMatchesApplyOnACopyAndLeavesTheProjectionUntouched(@TempDir Path temp)
+            throws Exception {
+        UUID project = UUID.randomUUID(), contractId = UUID.randomUUID(), intentId = UUID.randomUUID();
+        ContractService service = new ContractService(new PredictionEventStore(temp, project), NodeIdentity.generate());
+        ContractRecord first = service.publish(contractId, "agt-owner", "API v1", List.of("src/task_tracker.py"));
+        service.bind(intentId, "agt-consumer", contractId, first.revision());
+        service.publish(contractId, "agt-owner", "API v2", List.of("src/task_tracker.py"));
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(new PredictionEventStore(temp, project).events());
     }
 }

@@ -25,6 +25,11 @@ public final class ContractProjection {
     public ContractProjection() {
     }
 
+    private ContractProjection(ContractProjection source) {
+        contracts.putAll(source.contracts);
+        dependencies.putAll(source.dependencies);
+    }
+
     /**
      * Applies a contract event.
      *
@@ -32,6 +37,7 @@ public final class ContractProjection {
      * @throws IOException if the event violates contract invariants
      */
     public synchronized void apply(PredictionEvent event) throws IOException {
+        CoordinationNullException.requireNonNull(event, "event");
         switch (event.type()) {
             case CONTRACT_PUBLISHED -> publish(ContractCodec.decodePublish(event.payload()));
             case CONTRACT_DEPENDENCY_BOUND -> bind(ContractCodec.decodeDependency(event.payload()));
@@ -48,10 +54,7 @@ public final class ContractProjection {
      * @throws IOException if the event violates contract invariants
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        ContractProjection copy = new ContractProjection();
-        copy.contracts.putAll(contracts);
-        copy.dependencies.putAll(dependencies);
-        copy.apply(event);
+        new ContractProjection(this).apply(event);
     }
 
     /**

@@ -35,6 +35,16 @@ public final class WorkGroupProjection {
     public WorkGroupProjection() {
     }
 
+    private WorkGroupProjection(WorkGroupProjection source) {
+        groups.putAll(source.groups);
+        grants.putAll(source.grants);
+        consumedGrants.addAll(source.consumedGrants);
+        continuationGrants.addAll(source.continuationGrants);
+        supersededGrants.addAll(source.supersededGrants);
+        revokedGrants.addAll(source.revokedGrants);
+        validations.putAll(source.validations);
+    }
+
     /**
      * Applies one group or grant event.
      *
@@ -88,14 +98,7 @@ public final class WorkGroupProjection {
      * @throws IOException invalid transition
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        WorkGroupProjection copy = new WorkGroupProjection();
-        copy.groups.putAll(groups);
-        copy.grants.putAll(grants);
-        copy.consumedGrants.addAll(consumedGrants);
-        copy.continuationGrants.addAll(continuationGrants);
-        copy.supersededGrants.addAll(supersededGrants);
-        copy.revokedGrants.addAll(revokedGrants);
-        copy.validations.putAll(validations);
+        WorkGroupProjection copy = new WorkGroupProjection(this);
         copy.apply(event);
     }
 
@@ -315,39 +318,66 @@ public final class WorkGroupProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void migrateReviewGrants(LaneContinuation continuation) throws IOException {
-        WorkIntent.Role role = continuation.targetIntent().role();
-        if (role != WorkIntent.Role.REVIEWER && role != WorkIntent.Role.PRODUCER) {
-            return;
-        }
-        List<LaneGrant> historical = List.copyOf(grants.values());
-        for (LaneGrant grant : historical) {
-            if (!grant.group().equals(continuation.targetIntent().group()) || (role == WorkIntent.Role.REVIEWER
-                    ? !grant.targetParticipantIdentity().equals(continuation.sourceOwner())
-                    : !grant.targetIntent().equals(continuation.sourceIntent())) || (role == WorkIntent.Role.PRODUCER
-                    && grant.snapshotId() != null) || continuationGrants.contains(grant.identity())
-                    || supersededGrants.contains(grant.identity()) || validations.values().stream()
-                    .anyMatch(validation -> validation.grantId().equals(grant.grantId()))) {
+        boolean reviewer = continuation.targetIntent().role() == WorkIntent.Role.REVIEWER;
+        for (LaneGrant grant : List.copyOf(grants.values())) {
+            if (!grant.group().equals(continuation.targetIntent().group())
+                    || continuationGrants.contains(grant.identity()) || supersededGrants.contains(grant.identity())
+                    || validations.containsKey(grant.identity())) {
+                continue;
+            }
+            LaneGrant successor = reviewer ? reviewerSuccessor(grant, continuation)
+                    : producerSuccessor(grant, continuation);
+            if (successor == null) {
                 continue;
             }
             supersededGrants.add(grant.identity());
-            UUID successorGrantId = UUID.nameUUIDFromBytes(("review-successor-grant:" + grant.grantId() + ":" + (
-                    role == WorkIntent.Role.REVIEWER ? continuation.targetOwner().value()
-                            : continuation.targetIntent().identity().value())).getBytes(StandardCharsets.UTF_8));
-            if (!grants.containsKey(new LaneGrantId(successorGrantId))) {
-                issue(role == WorkIntent.Role.REVIEWER ? new LaneGrant(successorGrantId,
-                        grant.group().value(),
-                        grant.targetIntent().value(),
-                        continuation.targetOwner().value(),
-                        grant.epoch().value(),
-                        grant.singleUse(),
-                        grant.snapshotId()) : new LaneGrant(successorGrantId,
-                        grant.group().value(),
-                        continuation.targetIntent().identity().value(),
-                        grant.targetParticipantIdentity().value(),
-                        continuation.targetIntent().intentVersion().value(),
-                        grant.singleUse()));
+            if (!grants.containsKey(successor.identity())) {
+                issue(successor);
             }
         }
+    }
+
+    /**
+     * Builds the successor of an unreviewed grant held by the source owner, now addressed to the target owner.
+     *
+     * @return successor grant, or {@code null} when the grant does not belong to the source owner
+     */
+    private static LaneGrant reviewerSuccessor(LaneGrant grant, LaneContinuation continuation) {
+        if (!grant.targetParticipantIdentity().equals(continuation.sourceOwner())) {
+            return null;
+        }
+        return new LaneGrant(successorGrantId(grant, continuation.targetOwner().value()),
+                grant.group().value(),
+                grant.targetIntent().value(),
+                continuation.targetOwner().value(),
+                grant.epoch().value(),
+                grant.singleUse(),
+                grant.snapshotId());
+    }
+
+    /**
+     * Builds the successor of a snapshot-less grant on the source intent, now addressed to the target intent.
+     *
+     * @return successor grant, or {@code null} when the grant is for another intent or already names a snapshot
+     */
+    private static LaneGrant producerSuccessor(LaneGrant grant, LaneContinuation continuation) {
+        if (!grant.targetIntent().equals(continuation.sourceIntent()) || grant.snapshotId() != null) {
+            return null;
+        }
+        return new LaneGrant(successorGrantId(grant, continuation.targetIntent().identity().value()),
+                grant.group().value(),
+                continuation.targetIntent().identity().value(),
+                grant.targetParticipantIdentity().value(),
+                continuation.targetIntent().intentVersion().value(),
+                grant.singleUse());
+    }
+
+    /**
+     * Derives the persisted successor grant identifier; the seed text is part of the durable event history.
+     */
+    private static UUID successorGrantId(LaneGrant grant, Object target) {
+        return UUID.nameUUIDFromBytes(
+                ("review-successor-grant:" + grant.grantId() + ":" + target).getBytes(StandardCharsets.UTF_8));
     }
 
     /**

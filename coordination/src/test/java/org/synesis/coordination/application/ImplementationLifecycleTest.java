@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
@@ -324,5 +325,30 @@ class ImplementationLifecycleTest {
         assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, record.state());
         assertEquals(1, proj.findLatestImplementation(handle.value()).orElseThrow().revisionNumber());
         assertEquals("def1", proj.findLatestImplementation(handle.value()).orElseThrow().commitSha());
+    }
+
+    @Test
+    void capabilityValidationMatchesApplyOnACopyAndLeavesTheProjectionUntouched(@TempDir Path tempDir)
+            throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
+        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+        UUID lineage = UUID.randomUUID();
+        CapabilityContract contract = new CapabilityContract("UUID id", "Optional<P>", List.of("behavior"),
+                List.of("test"));
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requester.nodeId(),
+                new CapabilityRequestPayload(handle, "catalog.product-query", requester.nodeId(), owner.nodeId(),
+                        lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode(), requester);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, owner.nodeId(),
+                new CapabilityRequestPayload(handle, "catalog.product-query", requester.nodeId(), owner.nodeId(),
+                        lineage, contract, CapabilityLifecycleState.ACCEPTED, null, CAPABILITY_CREATED_AT_SEQUENCE)
+                        .encode(), owner);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, owner.nodeId(),
+                new ImplementationEventPayload(handle, lineage, 1, "abc0", "def1", List.of("src/Main.java"),
+                        "First revision", "", "", List.of(), "").encode(), owner);
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(store.events());
     }
 }

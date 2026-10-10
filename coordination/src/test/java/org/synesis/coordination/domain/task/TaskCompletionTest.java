@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.ProjectionValidation;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -274,5 +275,45 @@ class TaskCompletionTest {
         assertEquals(TaskCompletionState.ACTIVE, store.taskCompletionProjection().taskState(taskId));
         assertTrue(store.taskCompletionProjection().findPrepared(taskId).isEmpty());
         assertEquals(2, store.collaborationProjection().intent(laneId).orElseThrow().version());
+    }
+
+    @Test
+    void taskCompletionValidationMatchesApplyOnACopyAndLeavesTheProjectionUntouched(@TempDir Path tempDir)
+            throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        NodeIdentity worker = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
+        CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
+                "cmp_100",
+                taskId,
+                1,
+                "base1",
+                "refs/synesis/prepared/cmp_100",
+                "tree1",
+                List.of("file.txt"));
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(taskId,
+                "snap_100",
+                worker.nodeId(),
+                "sup-1",
+                "worker-1",
+                "sess-1",
+                "base1",
+                "commit1",
+                List.of("file.txt"),
+                List.of(),
+                "First task snapshot");
+        store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, worker.nodeId(),
+                prepared.encode(), worker);
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, worker.nodeId(),
+                snapshot.encode(), worker);
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED, worker.nodeId(),
+                new IntegrationAttemptPayload("att_1", projectId, List.of("snap_100"), "head1", "intg1", "started", "")
+                        .encode(), worker);
+        store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED, worker.nodeId(),
+                new IntegrationAttemptPayload("att_1", projectId, List.of("snap_100"), "head1", "intg1", "failed",
+                        "gate").encode(), worker);
+
+        ProjectionValidation.assertValidateMatchesApplyOnCopy(store.events());
     }
 }
