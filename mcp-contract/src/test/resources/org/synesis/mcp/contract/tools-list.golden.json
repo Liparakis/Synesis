@@ -1,0 +1,1641 @@
+[
+  {
+    "description": "Ensures an active, verified Synesis workspace session. Keep every task member inside task, including role, workGroupId, reviewTargets, intentId, claimEpoch, and claims; top-level task fields beside a task object are rejected. Before visible task mutation, include task.goal, task.acceptance, task.claims, and any knownDependencies as structured capability identifiers to announce intent and acquire the exact repository-relative ownership selectors; likelyScopes alone does not announce work or acquire claims. To extend a lane, follow the projected ensure_session continuation with its exact task.intentId and task.claimEpoch; existing claims and dependencies are retained.",
+    "inputSchema": {
+      "properties": {
+        "refresh": {
+          "type": "boolean"
+        },
+        "task": {
+          "properties": {
+            "acceptance": {
+              "description": "Announced acceptance criteria",
+              "type": "string"
+            },
+            "claimEpoch": {
+              "description": "Exact current claim epoch required to extend a lane",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "claims": {
+              "description": "Intent and ownership selectors acquired by this session; keep them disjoint from other work",
+              "items": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "path_exact",
+                      "path_subtree"
+                    ],
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Repository-relative path",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "goal": {
+              "description": "Announced task goal",
+              "type": "string"
+            },
+            "intentId": {
+              "description": "Exact current intent required to extend a lane",
+              "format": "uuid",
+              "type": "string"
+            },
+            "knownDependencies": {
+              "description": "Explicit capability identifiers required by this task; prose and file changes do not create dependencies",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "likelyScopes": {
+              "description": "Descriptive planning hints only; these do not announce intent or acquire ownership",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "repairIntentId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "repairSnapshotId": {
+              "type": "string"
+            },
+            "reviewTargets": {
+              "description": "Non-ownership selectors identifying producer work this reviewer may review",
+              "items": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "path_exact",
+                      "path_subtree"
+                    ],
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Repository-relative path",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "role": {
+              "description": "Semantic review-routing role; it does not change ownership claims",
+              "enum": [
+                "producer",
+                "reviewer"
+              ],
+              "type": "string"
+            },
+            "unwindCompletion": {
+              "description": "Authorized unwind of this caller's prepared but unpublished completion",
+              "type": "boolean"
+            },
+            "workGroupId": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "name": "ensure_session"
+  },
+  {
+    "description": "Reads text file content from the assigned worktree or REVIEW snapshot. During capability validation, provide capabilityRequestHandle and implementationRevision from get_next_action to read that request's exact immutable validation revision.",
+    "inputSchema": {
+      "properties": {
+        "capabilityRequestHandle": {
+          "description": "Exact requester-owned capability handle shown for the current validation",
+          "pattern": "^req_[A-Za-z0-9]{12,64}$",
+          "type": "string"
+        },
+        "endLine": {
+          "description": "1-based ending line number (default: EOF)",
+          "type": "integer"
+        },
+        "implementationRevision": {
+          "description": "Exact implementation revision shown for the current validation",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxBytes": {
+          "description": "Maximum UTF-8 bytes to return (default: 65536)",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Repository-relative file path",
+          "type": "string"
+        },
+        "startLine": {
+          "description": "1-based starting line number (default: 1)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "read_file"
+  },
+  {
+    "description": "Applies a structured file patch to the assigned worktree.",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "Full file content for creation mode",
+          "type": "string"
+        },
+        "create": {
+          "description": "Set true for new file creation",
+          "type": "boolean"
+        },
+        "edits": {
+          "description": "List of replacement edits (required for modification)",
+          "items": {
+            "properties": {
+              "expectedOccurrences": {
+                "type": "integer"
+              },
+              "find": {
+                "type": "string"
+              },
+              "replace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "find",
+              "replace",
+              "expectedOccurrences"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "expectedHash": {
+          "description": "SHA-256 hex string of existing contentHash returned by synesis.read_file (required for modification)",
+          "type": "string"
+        },
+        "path": {
+          "description": "Repository-relative file path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "apply_patch"
+  },
+  {
+    "description": "Executes direct argv inside the assigned worktree or REVIEW snapshot. During capability validation, provide capabilityRequestHandle and implementationRevision from get_next_action to run tests against that request's exact immutable validation revision.",
+    "inputSchema": {
+      "properties": {
+        "argv": {
+          "description": "Executable and arguments passed directly without a shell",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "capabilityRequestHandle": {
+          "description": "Exact requester-owned capability handle shown for the current validation",
+          "pattern": "^req_[A-Za-z0-9]{12,64}$",
+          "type": "string"
+        },
+        "implementationRevision": {
+          "description": "Exact implementation revision shown for the current validation",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeoutSeconds": {
+          "description": "Execution timeout in seconds; default 120",
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workingDirectory": {
+          "description": "Relative lane directory; default '.'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "type": "object"
+    },
+    "name": "run_command"
+  },
+  {
+    "description": "Retrieves the highest-priority actionable coordination item. Call without arguments to read the durable coordination inbox. The optional completionRequested boolean is a call-local request to evaluate completion; after implementation, tests, and acceptance criteria are complete, call get_next_action once with completionRequested:true to request the exact publication projection. Missing or false continues implementation and does not inherit a prior request. The optional integrationCheck input is a read-only compatibility check of explicitly supplied candidate facts; it never advances a lane or WorkGroup and must not replace empty-argument polling or be treated as lifecycle completion. If the response is workflow IMPLEMENT without a concrete recommendedTool and arguments, continue ordinary coding in the assigned worktree and do not inspect protected .synesis/** metadata. Execute each concrete recommendedTool with its exact arguments before another lifecycle action. For repeated WAIT (including recommendedTool=get_next_action), IMPLEMENT, or blocked projections, compare workflow.actionId, honor workflow.retryAfterMs (default 5000 ms), and stop after workflow.maxUnchangedPolls unchanged responses (default 3). Reset the count when actionId changes. At the limit, report the stalled actionId and stop polling until a fresh state-change signal or human input; an active WorkGroup alone does not justify repeated unchanged calls.",
+    "inputSchema": {
+      "properties": {
+        "completionRequested": {
+          "description": "Request completion projection for this call only; false or absent continues implementation",
+          "type": "boolean"
+        },
+        "integrationCheck": {
+          "description": "Read-only compatibility facts; never advances lifecycle. Do not use as a substitute for get_next_action with empty arguments or to close a lane.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_next_action"
+  },
+  {
+    "description": "Submits one strict capability or collaboration request. A capability_request includes the complete API contract. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
+    "inputSchema": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "capability_request"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "capability": {
+                  "type": "string"
+                },
+                "capabilityRequestHandle": {
+                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "type": "string"
+                },
+                "contract": {
+                  "properties": {
+                    "acceptanceTests": {
+                      "description": "Acceptance criteria for the published implementation",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "compatibility": {
+                      "description": "Compatibility and evolution requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "concurrency": {
+                      "description": "Concurrency, ordering, and consistency guarantees",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "errorSemantics": {
+                      "description": "Failure cases and observable results",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "description": "Input names, types, constraints, and defaults",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "invariants": {
+                      "description": "Conditions that always remain true",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "output": {
+                      "description": "Output type and semantics",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "performance": {
+                      "description": "Latency and resource requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "purpose": {
+                      "description": "What callers use this API for",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requiredBehavior": {
+                      "description": "Required operational behavior",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "sideEffects": {
+                      "description": "Externally visible effects",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "object"
+                },
+                "contractRevision": {
+                  "description": "Exact contract revision shown in the current request projection",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "ownerAuthorityLineageId": {
+                  "description": "Durable authority lineage of the intended capability publisher",
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "revisionResponse": {
+                  "enum": [
+                    "accept",
+                    "counter",
+                    "cancel"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "capability",
+                "contract"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "contract_request"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "conflictingIntentId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "contractId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "proposal": {
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "conflictingIntentId",
+                "proposal"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "collaboration_status",
+                "contract_proposal",
+                "scope_revision",
+                "handoff",
+                "work_group_join",
+                "continuation",
+                "work_group_create"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "properties": {
+                "acceptance": {
+                  "type": "string"
+                },
+                "artifact": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "capability": {
+                  "type": "string"
+                },
+                "capabilityRequestHandle": {
+                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "type": "string"
+                },
+                "claimEpoch": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "conflictingIntentId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "contract": {
+                  "properties": {
+                    "acceptanceTests": {
+                      "description": "Acceptance criteria for the published implementation",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "compatibility": {
+                      "description": "Compatibility and evolution requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "concurrency": {
+                      "description": "Concurrency, ordering, and consistency guarantees",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "errorSemantics": {
+                      "description": "Failure cases and observable results",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "description": "Input names, types, constraints, and defaults",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "invariants": {
+                      "description": "Conditions that always remain true",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "output": {
+                      "description": "Output type and semantics",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "performance": {
+                      "description": "Latency and resource requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "purpose": {
+                      "description": "What callers use this API for",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requiredBehavior": {
+                      "description": "Required operational behavior",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "sideEffects": {
+                      "description": "Externally visible effects",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "object"
+                },
+                "contractId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "contractRevision": {
+                  "description": "Exact contract revision shown in the current request projection",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "goal": {
+                  "type": "string"
+                },
+                "grantId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "intentId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "ownerAuthorityLineageId": {
+                  "description": "Durable authority lineage of the intended capability publisher",
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "proposal": {
+                  "type": "string"
+                },
+                "reviewPolicy": {
+                  "properties": {
+                    "independenceRequired": {
+                      "type": "boolean"
+                    },
+                    "mandatory": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "mandatory",
+                    "independenceRequired"
+                  ],
+                  "type": "object"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "revisionResponse": {
+                  "enum": [
+                    "accept",
+                    "counter",
+                    "cancel"
+                  ],
+                  "type": "string"
+                },
+                "selectors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "snapshotId": {
+                  "type": "string"
+                },
+                "targetParticipant": {
+                  "type": "string"
+                },
+                "workGroupId": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "capability_request",
+            "collaboration_status",
+            "contract_proposal",
+            "contract_request",
+            "scope_revision",
+            "handoff",
+            "work_group_join",
+            "continuation",
+            "work_group_create"
+          ],
+          "type": "string"
+        },
+        "payload": {
+          "properties": {
+            "acceptance": {
+              "type": "string"
+            },
+            "artifact": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "capability": {
+              "type": "string"
+            },
+            "capabilityRequestHandle": {
+              "pattern": "^req_[A-Za-z0-9]{12,64}$",
+              "type": "string"
+            },
+            "claimEpoch": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "conflictingIntentId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "contract": {
+              "properties": {
+                "acceptanceTests": {
+                  "description": "Acceptance criteria for the published implementation",
+                  "items": {
+                    "maxLength": 1000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "compatibility": {
+                  "description": "Compatibility and evolution requirements",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "concurrency": {
+                  "description": "Concurrency, ordering, and consistency guarantees",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "errorSemantics": {
+                  "description": "Failure cases and observable results",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "inputs": {
+                  "description": "Input names, types, constraints, and defaults",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "invariants": {
+                  "description": "Conditions that always remain true",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "output": {
+                  "description": "Output type and semantics",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "performance": {
+                  "description": "Latency and resource requirements",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "purpose": {
+                  "description": "What callers use this API for",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "requiredBehavior": {
+                  "description": "Required operational behavior",
+                  "items": {
+                    "maxLength": 1000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "sideEffects": {
+                  "description": "Externally visible effects",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "purpose",
+                "inputs",
+                "output",
+                "requiredBehavior",
+                "errorSemantics",
+                "sideEffects",
+                "invariants",
+                "compatibility",
+                "performance",
+                "concurrency",
+                "acceptanceTests"
+              ],
+              "type": "object"
+            },
+            "contractId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "contractRevision": {
+              "description": "Exact contract revision shown in the current request projection",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "goal": {
+              "type": "string"
+            },
+            "grantId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "intentId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "ownerAuthorityLineageId": {
+              "description": "Durable authority lineage of the intended capability publisher",
+              "format": "uuid",
+              "type": "string"
+            },
+            "proposal": {
+              "type": "string"
+            },
+            "reviewPolicy": {
+              "properties": {
+                "independenceRequired": {
+                  "type": "boolean"
+                },
+                "mandatory": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "mandatory",
+                "independenceRequired"
+              ],
+              "type": "object"
+            },
+            "revision": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "revisionResponse": {
+              "enum": [
+                "accept",
+                "counter",
+                "cancel"
+              ],
+              "type": "string"
+            },
+            "selectors": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "targetParticipant": {
+              "type": "string"
+            },
+            "workGroupId": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "name": "request_coordination"
+  },
+  {
+    "description": "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required. capability_response is fenced to the exact contractRevision shown in the owner inbox; revise also requires a complete replacement contract. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
+    "inputSchema": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "capability_response"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "capabilityRequestHandle": {
+                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "type": "string"
+                },
+                "contractRevision": {
+                  "description": "Exact contract revision shown in the owner inbox",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "response": {
+                  "enum": [
+                    "accept",
+                    "revise",
+                    "reject"
+                  ],
+                  "type": "string"
+                },
+                "revision": {
+                  "properties": {
+                    "acceptanceTests": {
+                      "description": "Acceptance criteria for the published implementation",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "compatibility": {
+                      "description": "Compatibility and evolution requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "concurrency": {
+                      "description": "Concurrency, ordering, and consistency guarantees",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "errorSemantics": {
+                      "description": "Failure cases and observable results",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "description": "Input names, types, constraints, and defaults",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "invariants": {
+                      "description": "Conditions that always remain true",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "output": {
+                      "description": "Output type and semantics",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "performance": {
+                      "description": "Latency and resource requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "purpose": {
+                      "description": "What callers use this API for",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requiredBehavior": {
+                      "description": "Required operational behavior",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "sideEffects": {
+                      "description": "Externally visible effects",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "capabilityRequestHandle",
+                "response",
+                "contractRevision"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "coordination_response"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "coordinationRequest": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "coordinationStatus": {
+                  "enum": [
+                    "ACCEPTED",
+                    "REVISED",
+                    "REJECTED",
+                    "CANCELLED",
+                    "COMPLETED"
+                  ],
+                  "type": "string"
+                },
+                "proposal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "coordinationRequest",
+                "coordinationStatus"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "implementation_validation"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "capabilityRequestHandle": {
+                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "type": "string"
+                },
+                "failedAcceptanceTests": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "implementationRevision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "inboxItemId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "result": {
+                  "enum": [
+                    "inspect",
+                    "accepted",
+                    "revision_required",
+                    "rejected"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "inboxItemId",
+                "capabilityRequestHandle",
+                "implementationRevision",
+                "result"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "inbox_acknowledge",
+                "inbox_resolve",
+                "review_validation"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "properties": {
+                "capabilityRequestHandle": {
+                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "type": "string"
+                },
+                "claimEpoch": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "contractRevision": {
+                  "description": "Exact contract revision shown in the owner inbox",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "coordinationRequest": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "coordinationStatus": {
+                  "enum": [
+                    "ACCEPTED",
+                    "REVISED",
+                    "REJECTED",
+                    "CANCELLED",
+                    "COMPLETED"
+                  ],
+                  "type": "string"
+                },
+                "failedAcceptanceTests": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "grantId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "implementationRevision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "inboxItemId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "intentId": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "proposal": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "enum": [
+                    "ACCEPTED",
+                    "REVISED",
+                    "REJECTED",
+                    "CANCELLED",
+                    "COMPLETED"
+                  ],
+                  "type": "string"
+                },
+                "response": {
+                  "enum": [
+                    "accept",
+                    "revise",
+                    "reject"
+                  ],
+                  "type": "string"
+                },
+                "result": {
+                  "enum": [
+                    "inspect",
+                    "accepted",
+                    "revision_required",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                "revision": {
+                  "properties": {
+                    "acceptanceTests": {
+                      "description": "Acceptance criteria for the published implementation",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "compatibility": {
+                      "description": "Compatibility and evolution requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "concurrency": {
+                      "description": "Concurrency, ordering, and consistency guarantees",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "errorSemantics": {
+                      "description": "Failure cases and observable results",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "inputs": {
+                      "description": "Input names, types, constraints, and defaults",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "invariants": {
+                      "description": "Conditions that always remain true",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "output": {
+                      "description": "Output type and semantics",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "performance": {
+                      "description": "Latency and resource requirements",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "purpose": {
+                      "description": "What callers use this API for",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requiredBehavior": {
+                      "description": "Required operational behavior",
+                      "items": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    },
+                    "sideEffects": {
+                      "description": "Externally visible effects",
+                      "maxLength": 2000,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "object"
+                },
+                "snapshotId": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "capability_response",
+            "coordination_response",
+            "inbox_acknowledge",
+            "inbox_resolve",
+            "implementation_validation",
+            "review_validation"
+          ],
+          "type": "string"
+        },
+        "payload": {
+          "properties": {
+            "capabilityRequestHandle": {
+              "pattern": "^req_[A-Za-z0-9]{12,64}$",
+              "type": "string"
+            },
+            "claimEpoch": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "contractRevision": {
+              "description": "Exact contract revision shown in the owner inbox",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "coordinationRequest": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "coordinationStatus": {
+              "enum": [
+                "ACCEPTED",
+                "REVISED",
+                "REJECTED",
+                "CANCELLED",
+                "COMPLETED"
+              ],
+              "type": "string"
+            },
+            "failedAcceptanceTests": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "grantId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "implementationRevision": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "inboxItemId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "intentId": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "proposal": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "resolution": {
+              "enum": [
+                "ACCEPTED",
+                "REVISED",
+                "REJECTED",
+                "CANCELLED",
+                "COMPLETED"
+              ],
+              "type": "string"
+            },
+            "response": {
+              "enum": [
+                "accept",
+                "revise",
+                "reject"
+              ],
+              "type": "string"
+            },
+            "result": {
+              "enum": [
+                "inspect",
+                "accepted",
+                "revision_required",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            "revision": {
+              "properties": {
+                "acceptanceTests": {
+                  "description": "Acceptance criteria for the published implementation",
+                  "items": {
+                    "maxLength": 1000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "compatibility": {
+                  "description": "Compatibility and evolution requirements",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "concurrency": {
+                  "description": "Concurrency, ordering, and consistency guarantees",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "errorSemantics": {
+                  "description": "Failure cases and observable results",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "inputs": {
+                  "description": "Input names, types, constraints, and defaults",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "invariants": {
+                  "description": "Conditions that always remain true",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "output": {
+                  "description": "Output type and semantics",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "performance": {
+                  "description": "Latency and resource requirements",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "purpose": {
+                  "description": "What callers use this API for",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "requiredBehavior": {
+                  "description": "Required operational behavior",
+                  "items": {
+                    "maxLength": 1000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "sideEffects": {
+                  "description": "Externally visible effects",
+                  "maxLength": 2000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "purpose",
+                "inputs",
+                "output",
+                "requiredBehavior",
+                "errorSemantics",
+                "sideEffects",
+                "invariants",
+                "compatibility",
+                "performance",
+                "concurrency",
+                "acceptanceTests"
+              ],
+              "type": "object"
+            },
+            "snapshotId": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "name": "respond_coordination"
+  },
+  {
+    "description": "Publishes an immutable claimed-source snapshot for the accepted capability request and exact owner intent. Supply contractRevision, intentId, claimEpoch, and expectedTreeHash from the current get_next_action projection; stale evidence is rejected.",
+    "inputSchema": {
+      "properties": {
+        "capabilityRequestHandle": {
+          "description": "Server-issued capability request handle",
+          "pattern": "^req_[A-Za-z0-9]{12,64}$",
+          "type": "string"
+        },
+        "claimEpoch": {
+          "description": "Exact active owner claim epoch from the current projection",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "contractRevision": {
+          "description": "Exact accepted contract revision from the current projection",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "expectedTreeHash": {
+          "description": "Projected Git tree hash for the claimed source snapshot",
+          "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$",
+          "type": "string"
+        },
+        "intentId": {
+          "description": "Exact active owner intent ID from the current projection",
+          "format": "uuid",
+          "type": "string"
+        },
+        "summary": {
+          "description": "Human-readable summary of this implementation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capabilityRequestHandle",
+        "contractRevision",
+        "intentId",
+        "claimEpoch",
+        "expectedTreeHash"
+      ],
+      "type": "object"
+    },
+    "name": "publish_capability_implementation"
+  },
+  {
+    "description": "Validates, publishes, integrates, and closes this isolated lane. A no_change outcome is an explicit, evidence-bound completion for a declared clean verification task; it is never inferred from provider exit. An explicit terminal session request is evaluated separately and may be refused when any authority remains.",
+    "inputSchema": {
+      "properties": {
+        "claimEpoch": {
+          "description": "Current intent claim epoch from get_next_action",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "expectedRevision": {
+          "description": "Current project event revision from get_next_action",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "intentId": {
+          "description": "Server-issued active intent identifier from get_next_action",
+          "format": "uuid",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Terminal artifact outcome; no_change requires the server's clean-worktree validation",
+          "enum": [
+            "snapshot",
+            "no_change"
+          ],
+          "type": "string"
+        },
+        "participant": {
+          "description": "Exact participant handle from get_next_action",
+          "type": "string"
+        },
+        "summary": {
+          "description": "Human-readable summary of completed task work",
+          "type": "string"
+        },
+        "terminalSession": {
+          "description": "Explicit opt-in: after this lane completes, request irreversible terminalization of this exact provider session; default false",
+          "type": "boolean"
+        },
+        "workGroupId": {
+          "description": "Server-issued work-group identifier from get_next_action",
+          "format": "uuid",
+          "type": "string"
+        },
+        "workGroupVersion": {
+          "description": "Current work-group version from get_next_action",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "finish_lane"
+  },
+  {
+    "description": "Permanently fences and cancels this isolated lane.",
+    "inputSchema": {
+      "properties": {
+        "reason": {
+          "description": "Cancellation reason string (1-1000 characters)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "cancel_lane"
+  }
+]
