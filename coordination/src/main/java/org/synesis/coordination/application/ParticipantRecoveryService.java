@@ -124,11 +124,7 @@ final class ParticipantRecoveryService {
         boolean callerOwnsSuccessor =
                 successor.identity().equals(continuation.targetIntent().identity()) && successor.participantIdentity()
                         .equals(continuation.targetOwner());
-        return new ContinuationResult(
-                callerOwnsSuccessor ? ContinuationStatus.COMMITTED : ContinuationStatus.ALREADY_COMMITTED,
-                successor.identity(),
-                successor.participantIdentity(),
-                callerOwnsSuccessor);
+        return ContinuationResult.observed(successor, callerOwnsSuccessor);
     }
 
     /**

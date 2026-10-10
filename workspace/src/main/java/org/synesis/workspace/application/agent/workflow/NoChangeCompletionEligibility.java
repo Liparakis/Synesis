@@ -79,9 +79,7 @@ final class NoChangeCompletionEligibility {
             }
             boolean targetsThisIntent = grant.targetIntentId().equals(intent.intentId()) && grant.claimEpoch() == intent.version();
             boolean targetsCaller = grant.targetParticipant().equals(participant);
-            if ((targetsThisIntent || targetsCaller) && !store.workGroupProjection().grantSuperseded(grant.grantId()) && !store.workGroupProjection().continuationGrant(grant.grantId()) && (
-                    store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId()) && store.workGroupProjection().reviewValidationForGrant(grant.grantId())
-                            .isEmpty()))) {
+            if ((targetsThisIntent || targetsCaller) && store.workGroupProjection().grantUnresolved(grant.identity())) {
                 return denied("NO_CHANGE_REVIEW_OBLIGATION");
             }
         }

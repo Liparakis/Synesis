@@ -220,6 +220,18 @@ public final class WorkGroupProjection {
     }
 
     /**
+     * Returns whether a grant still obliges its holder: it is available, or consumed without a review decision,
+     * and it is neither superseded nor a continuation grant.
+     *
+     * @param id typed grant identity
+     * @return whether the grant is unresolved
+     */
+    public synchronized boolean grantUnresolved(LaneGrantId id) {
+        return !continuationGrant(id) && !grantSuperseded(id)
+                && (grantAvailable(id) || (grantConsumed(id) && reviewValidationForGrant(id).isEmpty()));
+    }
+
+    /**
      * Returns all recorded review decisions.
      *
      * @return immutable decisions

@@ -58,14 +58,11 @@ final class LaneCompletionRules {
      */
     private static boolean hasUnresolvedGrant(PredictionEventStore current, WorkIntent intent) {
         return current.workGroupProjection().grants().stream().filter(grant -> grant.group().equals(intent.group()))
-                .filter(grant -> !current.workGroupProjection().continuationGrant(grant.identity()))
                 .filter(grant -> current.collaborationProjection().successorIntent(grant.targetIntent()).isEmpty())
-                .filter(grant -> !current.workGroupProjection().grantSuperseded(grant.identity())).filter(grant ->
+                .filter(grant ->
                         (grant.targetIntent().equals(intent.identity()) && grant.epoch().equals(intent.claimEpoch()))
                                 || grant.targetParticipantIdentity().equals(intent.participantIdentity()))
-                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.identity()) || (
-                        current.workGroupProjection().grantConsumed(grant.identity()) && current.workGroupProjection()
-                                .reviewValidationForGrant(grant.identity()).isEmpty()));
+                .anyMatch(grant -> current.workGroupProjection().grantUnresolved(grant.identity()));
     }
 
     /**
@@ -146,12 +143,8 @@ final class LaneCompletionRules {
      */
     static boolean hasUnresolvedGroupGrants(PredictionEventStore current, WorkGroupId workGroupId) {
         return current.workGroupProjection().grants().stream().filter(grant -> grant.group().equals(workGroupId))
-                .filter(grant -> !current.workGroupProjection().continuationGrant(grant.identity()))
                 .filter(grant -> current.collaborationProjection().successorIntent(grant.targetIntent()).isEmpty())
-                .filter(grant -> !current.workGroupProjection().grantSuperseded(grant.identity()))
-                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.identity()) || (
-                        current.workGroupProjection().grantConsumed(grant.identity()) && current.workGroupProjection()
-                                .reviewValidationForGrant(grant.identity()).isEmpty()));
+                .anyMatch(grant -> current.workGroupProjection().grantUnresolved(grant.identity()));
     }
 
     /**

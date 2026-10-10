@@ -702,7 +702,7 @@ static boolean hasPublishedReviewRequiredSnapshot(PredictionEventStore store, Wo
     static boolean hasExplicitReviewGrant(PredictionEventStore store, LaneGrant grant, String participantId) {
         return store.collaborationProjection().requests().stream().filter(request -> request.kind() == CoordinationRequest.Kind.REVIEW).filter(request -> request.status() == CoordinationRequest.Status.ACCEPTED)
                 .filter(request -> request.requester().equals(participantId)).filter(request -> request.conflictingIntentId().equals(grant.targetIntentId()))
-                .anyMatch(request -> UUID.nameUUIDFromBytes(("synesis-review-grant:" + request.requestId()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).equals(grant.grantId()));
+                .anyMatch(request -> LaneGrant.reviewGrantId(request.requestId()).equals(grant.grantId()));
     }
 
 /**

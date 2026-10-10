@@ -1,5 +1,6 @@
 package org.synesis.coordination.domain.collaboration;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
@@ -64,6 +65,18 @@ public record LaneGrant(UUID grantId, UUID workGroupId, UUID targetIntentId, Str
         if (snapshotId != null && (snapshotId.isBlank() || snapshotId.length() > 256)) {
             throw new CoordinationArgumentException("invalid review snapshot ID");
         }
+    }
+
+    /**
+     * Derives the identifier of the grant issued for an accepted review request.
+     *
+     * <p>The derivation is persisted: a retry after a lost append must recompute the same identifier.</p>
+     *
+     * @param requestId review request ID
+     * @return deterministic grant ID for that request
+     */
+    public static UUID reviewGrantId(UUID requestId) {
+        return UUID.nameUUIDFromBytes(("synesis-review-grant:" + requestId).getBytes(StandardCharsets.UTF_8));
     }
 
     /**

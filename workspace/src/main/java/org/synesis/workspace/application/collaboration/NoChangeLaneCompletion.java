@@ -98,9 +98,7 @@ final class NoChangeLaneCompletion {
             throw new IOException("NO_CHANGE_COMPLETION_EVIDENCE_STALE");
         }
         boolean participantObligation = store.workGroupProjection().grants().stream().filter(grant -> grant.workGroupId().equals(expectedWorkGroupId)).filter(grant -> grant.targetParticipant().equals(participant))
-                .filter(grant -> !store.workGroupProjection().continuationGrant(grant.grantId())).filter(grant -> !store.workGroupProjection().grantSuperseded(grant.grantId()))
-                .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId()) && store.workGroupProjection()
-                        .reviewValidationForGrant(grant.grantId()).isEmpty()));
+                .anyMatch(grant -> store.workGroupProjection().grantUnresolved(grant.identity()));
         if (participantObligation) {
             throw new IOException("NO_CHANGE_REVIEW_OBLIGATION");
         }

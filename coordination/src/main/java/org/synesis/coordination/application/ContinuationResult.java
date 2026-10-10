@@ -1,6 +1,7 @@
 package org.synesis.coordination.application;
 
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -17,20 +18,17 @@ public record ContinuationResult(ContinuationStatus outcome, WorkIntentId succes
                                  boolean callerOwnsSuccessor) {
 
     /**
-     * Creates a result from the legacy status spelling.
+     * Reports an already-durable successor: committed when the caller owns it, already committed otherwise.
      *
-     * @param status               existing outcome name
-     * @param successorIntentId    current successor intent
-     * @param successorParticipant current successor participant
-     * @param callerOwnsSuccessor  whether the caller matches that successor
+     * @param successor           durable successor lane
+     * @param callerOwnsSuccessor whether the caller matches that successor
+     * @return result describing the observed successor
      */
-    public ContinuationResult(String status,
-            UUID successorIntentId,
-            String successorParticipant,
-            boolean callerOwnsSuccessor) {
-        this(ContinuationStatus.valueOf(status),
-                new WorkIntentId(successorIntentId),
-                new ParticipantId(successorParticipant),
+    public static ContinuationResult observed(WorkIntent successor, boolean callerOwnsSuccessor) {
+        return new ContinuationResult(
+                callerOwnsSuccessor ? ContinuationStatus.COMMITTED : ContinuationStatus.ALREADY_COMMITTED,
+                successor.identity(),
+                successor.participantIdentity(),
                 callerOwnsSuccessor);
     }
 

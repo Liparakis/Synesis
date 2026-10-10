@@ -137,7 +137,7 @@ final class RecoveryLaneContinuation {
         if (existingSuccessor.isPresent()) {
             WorkIntent successor = store.collaborationProjection().intent(existingSuccessor.get()).orElseThrow(() -> new IOException("CONTINUATION_SUCCESSOR_NOT_FOUND"));
             boolean callerOwnsSuccessor = successor.participant().equals(targetParticipant);
-            return new ContinuationResult(callerOwnsSuccessor ? "COMMITTED" : "ALREADY_COMMITTED", successor.intentId(), successor.participant(), callerOwnsSuccessor);
+            return ContinuationResult.observed(successor, callerOwnsSuccessor);
         }
         WorkIntent source = store.collaborationProjection().intent(sourceIntentId).orElseThrow(() -> new IOException("CONTINUATION_SOURCE_NOT_FOUND"));
         List<ProviderSessionBindingService.Binding> sourceBindings = new ProviderSessionBindingService().list(location, provider)
