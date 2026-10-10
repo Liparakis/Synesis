@@ -145,7 +145,7 @@ expiry, and `WAITING_FOR_CONNECT` state.
 ```
 
 Delegates to the stored `PreparedHost.importAnswer` for legacy SLO1/SLA2
-operations. Compact SLB1 and SLB2 operations reject this command because the
+operations. Compact SLB2 operations reject this command because the
 compact flow is one-way. The legacy operation closes its one-shot handle and returns
 `CONNECTED` or a typed redacted onboarding error.
 

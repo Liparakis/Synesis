@@ -147,6 +147,10 @@ final class DaemonServerTest {
             assertTrue(Boolean.TRUE.equals(compactUnresolved.get("ok")));
             assertEquals("URI_UNRESOLVED", compactUnresolved.get("state"));
 
+            Map<String, Object> retiredSlb1 = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "synesis://join/SLB1-AAAA")));
+            assertFalse(Boolean.TRUE.equals(retiredSlb1.get("ok")));
+            assertEquals("REQUEST_REJECTED", retiredSlb1.get("error"));
+
             Map<String, Object> rejected = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "https://example.test/SLO1-test")));
             assertFalse(Boolean.TRUE.equals(rejected.get("ok")));
             assertEquals("REQUEST_REJECTED", rejected.get("error"));

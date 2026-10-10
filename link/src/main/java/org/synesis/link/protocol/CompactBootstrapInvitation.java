@@ -30,10 +30,9 @@ import org.synesis.link.identity.NodeIdentity;
 /**
  * A compact, signed, one-way first-contact invitation.
  *
- * <p>The current encoder emits the minimized {@code SLB2} wire revision. The
- * decoder also retains the original {@code SLB1} representation for migration
- * and compatibility. Both revisions intentionally carry one endpoint hint
- * instead of a complete {@link org.synesis.link.candidate.CandidateDescriptor}.
+ * <p>The only wire revision is the minimized {@code SLB2} layout. It intentionally
+ * carries one endpoint hint instead of a complete
+ * {@link org.synesis.link.candidate.CandidateDescriptor}.
  * The inviter's compact Ed25519 public key and signature remain pre-contact
  * trust material: the existing Link handshake authenticates the key supplied
  * by the invitation, so learning an arbitrary key from the peer would be TOFU.
@@ -48,16 +47,10 @@ import org.synesis.link.identity.NodeIdentity;
  */
 public final class CompactBootstrapInvitation {
 
-  /** Compact bootstrap format version. */
-  public static final int FORMAT_VERSION = 1;
-  /** Minimized compact bootstrap format version. */
-  public static final int MINIMIZED_FORMAT_VERSION = 2;
   /** Maximum compact invitation payload in bytes. */
   public static final int MAX_BYTES = 256;
   /** Maximum compact invitation URI length accepted by the parser. */
   public static final int MAX_LINK_CHARS = 512;
-  /** Size of the legacy SLB1 single-use admission capability. */
-  public static final int CAPABILITY_BYTES = 16;
   /** Size of the minimized single-use admission capability. */
   public static final int MINIMIZED_CAPABILITY_BYTES = 12;
   /** Maximum compact invitation lifetime. */
@@ -65,15 +58,12 @@ public final class CompactBootstrapInvitation {
   /** Clock skew tolerated when checking the issue time. */
   public static final Duration DEFAULT_CLOCK_SKEW = Duration.ofMinutes(2);
 
-  private static final int MAGIC = 0x534C4231;
   private static final int SIGNATURE_BYTES = 64;
   private static final int RAW_PUBLIC_KEY_BYTES = 32;
   private static final int MAX_ADDRESS_BYTES = 16;
   private static final long MAX_EPOCH_SECONDS = 0xFFFF_FFFFL;
   private static final byte[] ED25519_SPKI_PREFIX = HexFormat.of()
       .parseHex("302a300506032b6570032100");
-  private static final byte[] SESSION_DOMAIN = "synesis-link/SLB1/session"
-      .getBytes(StandardCharsets.US_ASCII);
   private static final byte[] MINIMIZED_SESSION_DOMAIN = "synesis-link/SLB2/session"
       .getBytes(StandardCharsets.US_ASCII);
   private static final Comparator<Candidate> ENDPOINT_ORDER = Comparator
@@ -95,21 +85,15 @@ public final class CompactBootstrapInvitation {
   private final byte[] unsigned;
   private final byte[] signature;
   private final UUID sessionId;
-  private final int wireVersion;
 
-  private CompactBootstrapInvitation(int wireVersion, ProtocolVersion protocolVersion,
+  private CompactBootstrapInvitation(ProtocolVersion protocolVersion,
       Instant issuedAt, Instant expiresAt, byte[] capability, byte[] hostPublicKey,
       Candidate endpoint, byte[] signature) {
-    this.wireVersion = wireVersion;
-    if (wireVersion != FORMAT_VERSION && wireVersion != MINIMIZED_FORMAT_VERSION) {
-      throw new IllegalArgumentException("unsupported compact invitation wire revision");
-    }
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.issuedAt = Objects.requireNonNull(issuedAt, "issued at");
     this.expiresAt = Objects.requireNonNull(expiresAt, "expires at");
     validateInterval(issuedAt, expiresAt);
-    this.capability = wireVersion == MINIMIZED_FORMAT_VERSION
-        ? copyMinimizedCapability(capability) : copyCapability(capability);
+    this.capability = copyMinimizedCapability(capability);
     this.hostPublicKey = copyCompactPublicKey(hostPublicKey);
     this.endpoint = validateEndpoint(endpoint);
     this.unsigned = encodeUnsigned();
@@ -117,37 +101,8 @@ public final class CompactBootstrapInvitation {
     if (this.signature.length != SIGNATURE_BYTES || this.unsigned.length + SIGNATURE_BYTES > MAX_BYTES) {
       throw new IllegalArgumentException("compact invitation exceeds supported bound");
     }
-    this.sessionId = wireVersion == MINIMIZED_FORMAT_VERSION
-        ? sessionIdForMinimizedKey(this.hostPublicKey, this.capability, this.issuedAt,
-            this.expiresAt)
-        : sessionIdForCompactKey(this.hostPublicKey, this.capability, this.issuedAt,
-            this.expiresAt);
-  }
-
-  /**
-   * Creates and signs one legacy SLB1 compact invitation.
-   *
-   * @param host       durable inviter identity
-   * @param version    Link protocol version
-   * @param issuedAt   inclusive issue instant
-   * @param expiresAt  exclusive expiry instant; no later than ten minutes after issue
-   * @param capability fresh single-use capability
-   * @param endpoint   one non-relay UDP endpoint hint
-   * @return canonical signed invitation
-   * @throws GeneralSecurityException if signing fails
-   * @throws IllegalArgumentException if a field exceeds the compact bounds
-   */
-  public static CompactBootstrapInvitation create(NodeIdentity host, ProtocolVersion version,
-      Instant issuedAt, Instant expiresAt, byte[] capability, Candidate endpoint)
-      throws GeneralSecurityException {
-    Objects.requireNonNull(host, "host identity");
-    byte[] compactKey = compactPublicKey(host.publicKeyEncoded());
-    CompactBootstrapInvitation unsigned = new CompactBootstrapInvitation(FORMAT_VERSION, version,
-        issuedAt.truncatedTo(ChronoUnit.SECONDS), expiresAt.truncatedTo(ChronoUnit.SECONDS),
-        capability, compactKey, endpoint, new byte[SIGNATURE_BYTES]);
-    return new CompactBootstrapInvitation(FORMAT_VERSION, version, unsigned.issuedAt,
-        unsigned.expiresAt,
-        unsigned.capability, compactKey, endpoint, host.sign(unsigned.unsigned));
+    this.sessionId = sessionIdForMinimizedKey(this.hostPublicKey, this.capability,
+        this.issuedAt, this.expiresAt);
   }
 
   /**
@@ -177,65 +132,12 @@ public final class CompactBootstrapInvitation {
       throw new IllegalArgumentException("SLB2 supports only Link protocol v1");
     }
     byte[] compactKey = compactPublicKey(host.publicKeyEncoded());
-    CompactBootstrapInvitation unsigned = new CompactBootstrapInvitation(
-        MINIMIZED_FORMAT_VERSION, version,
+    CompactBootstrapInvitation unsigned = new CompactBootstrapInvitation(version,
         issuedAt.truncatedTo(ChronoUnit.SECONDS), expiresAt.truncatedTo(ChronoUnit.SECONDS),
         capability, compactKey, endpoint, new byte[SIGNATURE_BYTES]);
-    return new CompactBootstrapInvitation(MINIMIZED_FORMAT_VERSION, version,
+    return new CompactBootstrapInvitation(version,
         unsigned.issuedAt, unsigned.expiresAt, unsigned.capability, compactKey, endpoint,
         host.sign(unsigned.unsigned));
-  }
-
-  /**
-   * Decodes a bounded canonical legacy SLB1 invitation without trusting its signature.
-   *
-   * @param encoded complete compact invitation bytes
-   * @return decoded invitation requiring {@link #verifyAt(Instant, Duration)} before use
-   * @throws IOException if framing, bounds, or canonical values are invalid
-   */
-  public static CompactBootstrapInvitation decode(byte[] encoded) throws IOException {
-    Objects.requireNonNull(encoded, "compact invitation");
-    if (encoded.length == 0 || encoded.length > MAX_BYTES) {
-      throw new IOException("compact invitation is oversized");
-    }
-    try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
-      if (input.readInt() != MAGIC || input.readUnsignedByte() != FORMAT_VERSION) {
-        throw new IOException("unsupported compact invitation format");
-      }
-      ProtocolVersion version = new ProtocolVersion(input.readUnsignedByte(),
-          input.readUnsignedByte());
-      Instant issued = readEpoch(input);
-      Instant expires = readEpoch(input);
-      byte[] capability = readFixed(input, CAPABILITY_BYTES);
-      byte[] publicKey = readFixed(input, RAW_PUBLIC_KEY_BYTES);
-      int typeCode = input.readUnsignedByte();
-      CandidateType[] types = CandidateType.values();
-      if (typeCode >= types.length || types[typeCode] == CandidateType.RELAY) {
-        throw new IOException("invalid compact endpoint type");
-      }
-      int addressLength = input.readUnsignedByte();
-      if (addressLength != 4 && addressLength != MAX_ADDRESS_BYTES) {
-        throw new IOException("compact endpoint address must be IPv4 or IPv6");
-      }
-      byte[] address = readFixed(input, addressLength);
-      int port = input.readUnsignedShort();
-      if (port == 0) {
-        throw new IOException("compact endpoint port is zero");
-      }
-      byte[] signature = readFixed(input, SIGNATURE_BYTES);
-      if (input.available() != 0) {
-        throw new IOException("trailing compact invitation bytes");
-      }
-      Candidate endpoint = new Candidate(types[typeCode], InetAddress.getByAddress(address), port, 0);
-       CompactBootstrapInvitation value = new CompactBootstrapInvitation(FORMAT_VERSION, version,
-           issued, expires, capability, publicKey, endpoint, signature);
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical compact invitation");
-      }
-      return value;
-    } catch (EOFException | IllegalArgumentException | java.time.DateTimeException exception) {
-      throw new IOException("malformed compact invitation", exception);
-    }
   }
 
   /**
@@ -279,7 +181,7 @@ public final class CompactBootstrapInvitation {
           ? CandidateType.IPV6 : CandidateType.MANUAL;
       Candidate endpoint = new Candidate(type, InetAddress.getByAddress(address), port, 0);
       CompactBootstrapInvitation value = new CompactBootstrapInvitation(
-          MINIMIZED_FORMAT_VERSION, ProtocolVersion.V1, issued, expires, capability, publicKey,
+          ProtocolVersion.V1, issued, expires, capability, publicKey,
           endpoint, signature);
       if (!Arrays.equals(encoded, value.encoded())) {
         throw new IOException("non-canonical minimized compact invitation");
@@ -312,9 +214,6 @@ public final class CompactBootstrapInvitation {
        if (path == null || path.length() <= 6) {
          throw new IOException("invalid compact invitation link format");
        }
-       if (path.startsWith("/SLB1-")) {
-         return decode(Base64.getUrlDecoder().decode(path.substring(6)));
-       }
        if (path.startsWith("/SLB2-")) {
          return decodeMinimized(Base64.getUrlDecoder().decode(path.substring(6)));
        }
@@ -325,14 +224,13 @@ public final class CompactBootstrapInvitation {
   }
 
   /**
-   * Checks whether a URI selects one of the compact bootstrap revisions.
+   * Checks whether a URI selects the compact bootstrap revision.
    *
    * @param link candidate URI
-   * @return {@code true} for the strict SLB1 or SLB2 join prefix
+   * @return {@code true} for the strict SLB2 join prefix
    */
   public static boolean isShareLink(String link) {
-    return link != null && (link.startsWith("synesis://join/SLB1-")
-        || link.startsWith("synesis://join/SLB2-"));
+    return link != null && link.startsWith("synesis://join/SLB2-");
   }
 
   /**
@@ -383,9 +281,7 @@ public final class CompactBootstrapInvitation {
    * @return copyable signed compact invitation
    */
   public String shareLink() {
-    String prefix = wireVersion == MINIMIZED_FORMAT_VERSION
-        ? "synesis://join/SLB2-" : "synesis://join/SLB1-";
-    return prefix + Base64.getUrlEncoder()
+    return "synesis://join/SLB2-" + Base64.getUrlEncoder()
         .withoutPadding()
         .encodeToString(encoded());
   }
@@ -477,30 +373,6 @@ public final class CompactBootstrapInvitation {
   }
 
   /**
-   * Derives the session identifier used by admission before endpoint selection.
-   *
-   * @param hostPublicKey canonical X.509 host public key
-   * @param capability   compact admission capability
-   * @param issuedAt     issue instant
-   * @param expiresAt    expiry instant
-   * @return deterministic session identifier
-   */
-  public static UUID sessionIdFor(byte[] hostPublicKey, byte[] capability, Instant issuedAt,
-      Instant expiresAt) {
-    Objects.requireNonNull(hostPublicKey, "host public key");
-    Objects.requireNonNull(capability, "capability");
-    Objects.requireNonNull(issuedAt, "issued at");
-    Objects.requireNonNull(expiresAt, "expires at");
-    Instant canonicalIssuedAt = issuedAt.truncatedTo(ChronoUnit.SECONDS);
-    Instant canonicalExpiresAt = expiresAt.truncatedTo(ChronoUnit.SECONDS);
-    validateInterval(canonicalIssuedAt, canonicalExpiresAt);
-    byte[] compactCapability = copyCapability(capability);
-    byte[] compactKey = compactPublicKey(hostPublicKey);
-    return sessionIdForCompactKey(compactKey, compactCapability, canonicalIssuedAt,
-        canonicalExpiresAt);
-  }
-
-  /**
    * Derives the session identifier used by the minimized admission path.
    *
    * @param hostPublicKey canonical X.509 host public key
@@ -522,13 +394,6 @@ public final class CompactBootstrapInvitation {
     byte[] compactKey = compactPublicKey(hostPublicKey);
     return sessionIdForMinimizedKey(compactKey, compactCapability, canonicalIssuedAt,
         canonicalExpiresAt);
-  }
-
-  private static UUID sessionIdForCompactKey(byte[] compactKey, byte[] capability,
-      Instant issuedAt, Instant expiresAt) {
-    byte[] digest = sha256(SESSION_DOMAIN, compactKey, capability,
-        longBytes(issuedAt.getEpochSecond()), longBytes(expiresAt.getEpochSecond()));
-    return uuidFromDigest(digest);
   }
 
   private static UUID sessionIdForMinimizedKey(byte[] compactKey, byte[] capability,
@@ -560,13 +425,6 @@ public final class CompactBootstrapInvitation {
   private static byte[] copyCompactPublicKey(byte[] value) {
     if (value == null || value.length != RAW_PUBLIC_KEY_BYTES) {
       throw new IllegalArgumentException("compact public key must contain 32 bytes");
-    }
-    return value.clone();
-  }
-
-  private static byte[] copyCapability(byte[] value) {
-    if (value == null || value.length != CAPABILITY_BYTES) {
-      throw new IllegalArgumentException("compact capability must contain 16 bytes");
     }
     return value.clone();
   }
@@ -612,27 +470,12 @@ public final class CompactBootstrapInvitation {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
         byte[] address = endpoint.address().getAddress();
-        if (wireVersion == MINIMIZED_FORMAT_VERSION) {
-          output.writeInt((int) issuedAt.getEpochSecond());
-          output.writeShort(Math.toIntExact(Duration.between(issuedAt, expiresAt).getSeconds()));
-          output.write(capability);
-          output.write(hostPublicKey);
-          output.write(address);
-          output.writeShort(endpoint.port());
-        } else {
-          output.writeInt(MAGIC);
-          output.writeByte(FORMAT_VERSION);
-          output.writeByte(protocolVersion.major());
-          output.writeByte(protocolVersion.minor());
-          output.writeInt((int) issuedAt.getEpochSecond());
-          output.writeInt((int) expiresAt.getEpochSecond());
-          output.write(capability);
-          output.write(hostPublicKey);
-          output.writeByte(endpoint.type().ordinal());
-          output.writeByte(address.length);
-          output.write(address);
-          output.writeShort(endpoint.port());
-        }
+        output.writeInt((int) issuedAt.getEpochSecond());
+        output.writeShort(Math.toIntExact(Duration.between(issuedAt, expiresAt).getSeconds()));
+        output.write(capability);
+        output.write(hostPublicKey);
+        output.write(address);
+        output.writeShort(endpoint.port());
       }
       if (bytes.size() + SIGNATURE_BYTES > MAX_BYTES) {
         throw new IllegalArgumentException("compact invitation exceeds supported bound");

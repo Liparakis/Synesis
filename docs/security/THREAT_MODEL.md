@@ -10,7 +10,7 @@ liveness state, stream metadata, and resource capacity.
 | Threat                                              | Boundary              | Mitigation                                                    | Residual risk / verification                       |
 |-----------------------------------------------------|-----------------------|---------------------------------------------------------------|----------------------------------------------------|
 | Forged or replayed descriptors                      | descriptor input      | canonical bytes, signatures, expiry, node-ID binding          | tamper and expiry tests                            |
-| Forged, replayed, or oversized compact bootstrap    | SLB1/SLB2 parser/admission | canonical bounded record, host signature, 16/12-byte capability, derived expiry, single-use admission | compact parser, tamper, expiry, and replay tests |
+| Forged, replayed, or oversized compact bootstrap    | SLB2 parser/admission | canonical bounded record, host signature, 12-byte capability, derived expiry, single-use admission | compact parser, tamper, expiry, and replay tests |
 | Impersonation or certificate substitution           | QUIC handshake        | expected long-term identity proof; TLS alone is insufficient  | wrong-key and substitution tests                   |
 | Downgrade or replay                                 | protocol negotiation  | explicit versions, transcript binding, no 0-RTT               | replay/downgrade tests                             |
 | Malformed/oversized input                           | wire parser           | validate before allocation and hard bounds                    | parser tests                                       |
@@ -82,8 +82,7 @@ untrusted routing input and cannot carry normal Link application traffic.
 The normal SLB2 invitation is a bounded canonical record signed by the host
 identity. It expires after ten minutes and carries a random 12-byte (96-bit)
 single-use capability, the host's compact Ed25519 public key, and one signed
-non-relay UDP endpoint hint. SLB1 remains decode-compatible with its original
-16-byte capability. The URI revision removes redundant inner framing and
+non-relay UDP endpoint hint. The URI revision removes redundant inner framing and
 derives expiry from signed issue plus lifetime; it does not remove the host
 signature. The key and signature prevent an endpoint-only MITM; the endpoint
 is never treated as identity. No private key, project credential, or permanent

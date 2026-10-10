@@ -23,45 +23,6 @@ final class CompactBootstrapInvitationTest {
   private static final Instant EXPIRES = ISSUED.plus(Duration.ofMinutes(10));
 
   @Test
-  void roundTripsSignedIpv4InvitationAndDerivesStableSession() throws Exception {
-    NodeIdentity host = NodeIdentity.generate();
-    byte[] capability = new byte[CompactBootstrapInvitation.CAPABILITY_BYTES];
-    new Random(7).nextBytes(capability);
-    Candidate endpoint = new Candidate(CandidateType.MANUAL,
-        InetAddress.getByName("198.51.100.10"), 45_678, 9);
-
-    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.create(host,
-        ProtocolVersion.V1, ISSUED, EXPIRES, capability, endpoint);
-    CompactBootstrapInvitation parsed = CompactBootstrapInvitation.fromShareLink(
-        invitation.shareLink());
-
-    assertArrayEquals(invitation.encoded(), parsed.encoded());
-    assertTrue(parsed.verifyAt(ISSUED.plusSeconds(30), Duration.ofMinutes(2)));
-    assertEquals(host.nodeId(), parsed.hostNodeId());
-    assertArrayEquals(host.publicKeyEncoded(), parsed.publicKeyEncoded());
-    assertEquals(CompactBootstrapInvitation.sessionIdFor(host.publicKeyEncoded(), capability,
-        ISSUED, EXPIRES), parsed.sessionId());
-    assertEquals(0, parsed.endpoint().priority());
-    assertEquals(135, parsed.encoded().length);
-    assertEquals(200, parsed.shareLink().length());
-    assertFalse(new String(parsed.encoded(), java.nio.charset.StandardCharsets.ISO_8859_1)
-        .contains("SLD1"));
-  }
-
-  @Test
-  void ipv6PayloadRemainsBoundedAndCanonical() throws Exception {
-    NodeIdentity host = NodeIdentity.generate();
-    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.create(host,
-        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
-        new Candidate(CandidateType.IPV6, InetAddress.getByName("2001:db8::10"), 4_433, 0));
-
-    assertEquals(147, invitation.encoded().length);
-    assertEquals(216, invitation.shareLink().length());
-    assertEquals(invitation.shareLink(),
-        CompactBootstrapInvitation.fromShareLink(invitation.shareLink()).shareLink());
-  }
-
-  @Test
   void minimizedSlb2Ipv4RetainsAuthenticationAndHitsSizeBudget() throws Exception {
     NodeIdentity host = NodeIdentity.generate();
     byte[] capability = new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES];
@@ -133,12 +94,12 @@ final class CompactBootstrapInvitationTest {
   @Test
   void tamperingAndExpiryFailClosed() throws Exception {
     NodeIdentity host = NodeIdentity.generate();
-    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.create(host,
-        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.createMinimized(host,
+        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
         new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.4"), 4433, 0));
     byte[] tampered = invitation.encoded();
     tampered[tampered.length - 1] ^= 1;
-    CompactBootstrapInvitation parsed = CompactBootstrapInvitation.decode(tampered);
+    CompactBootstrapInvitation parsed = CompactBootstrapInvitation.decodeMinimized(tampered);
 
     assertFalse(parsed.verifyAt(ISSUED.plusSeconds(1), Duration.ofMinutes(2)));
     assertFalse(invitation.verifyAt(EXPIRES, Duration.ZERO));
@@ -148,41 +109,34 @@ final class CompactBootstrapInvitationTest {
   @Test
   void rejectsTrailingBytesAndInvalidLifetime() throws Exception {
     NodeIdentity host = NodeIdentity.generate();
-    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.create(host,
-        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.createMinimized(host,
+        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
         new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.5"), 4433, 0));
     byte[] trailing = java.util.Arrays.copyOf(invitation.encoded(), invitation.encoded().length + 1);
     trailing[trailing.length - 1] = 1;
 
-    assertThrows(java.io.IOException.class, () -> CompactBootstrapInvitation.decode(trailing));
+    assertThrows(java.io.IOException.class, () -> CompactBootstrapInvitation.decodeMinimized(trailing));
     assertThrows(IllegalArgumentException.class,
-        () -> CompactBootstrapInvitation.create(host, ProtocolVersion.V1, ISSUED,
+        () -> CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, ISSUED,
             ISSUED.plus(CompactBootstrapInvitation.MAX_LIFETIME).plusSeconds(1),
-            new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+            new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
             new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.5"), 4433, 0)));
   }
 
   @Test
-  void rejectsUnsupportedVersionAndUnsafeEndpoint() throws Exception {
+  void rejectsUnsafeEndpoint() throws Exception {
     NodeIdentity host = NodeIdentity.generate();
-    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.create(host,
-        ProtocolVersion.V1, ISSUED, EXPIRES, new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
-        new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.6"), 4433, 0));
-    byte[] unsupported = invitation.encoded();
-    unsupported[4] = 2;
-    assertThrows(java.io.IOException.class,
-        () -> CompactBootstrapInvitation.decode(unsupported));
     assertThrows(IllegalArgumentException.class,
-        () -> CompactBootstrapInvitation.create(host, ProtocolVersion.V1, ISSUED, EXPIRES,
-            new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+        () -> CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, ISSUED, EXPIRES,
+            new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
             new Candidate(CandidateType.RELAY, InetAddress.getByName("203.0.113.6"), 4433, 0)));
     assertThrows(IllegalArgumentException.class,
-        () -> CompactBootstrapInvitation.create(host, ProtocolVersion.V1, ISSUED, EXPIRES,
-            new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+        () -> CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, ISSUED, EXPIRES,
+            new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
             new Candidate(CandidateType.MANUAL, InetAddress.getByName("0.0.0.0"), 4433, 0)));
     assertThrows(IllegalArgumentException.class,
-        () -> CompactBootstrapInvitation.create(host, ProtocolVersion.V1, ISSUED, EXPIRES,
-            new byte[CompactBootstrapInvitation.CAPABILITY_BYTES],
+        () -> CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, ISSUED, EXPIRES,
+            new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
             new Candidate(CandidateType.IPV6, InetAddress.getByName("fe80::1"), 4433, 0)));
   }
 
@@ -194,5 +148,20 @@ final class CompactBootstrapInvitationTest {
         InetAddress.getByName("198.51.100.10"), 4433, 99);
 
     assertEquals(reflexive, CompactBootstrapInvitation.selectEndpoint(List.of(lan, reflexive)));
+  }
+
+  @Test
+  void retiredSlb1LinkIsRejectedLikeAnyUnknownPrefix() throws Exception {
+    NodeIdentity host = NodeIdentity.generate();
+    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.createMinimized(host,
+        ProtocolVersion.V1, ISSUED, EXPIRES,
+        new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
+        new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.8"), 4434, 0));
+    String slb1 = invitation.shareLink().replace("SLB2-", "SLB1-");
+
+    assertFalse(CompactBootstrapInvitation.isShareLink(slb1));
+    assertEquals("unsupported compact invitation link format", assertThrows(
+        java.io.IOException.class, () -> CompactBootstrapInvitation.fromShareLink(slb1))
+        .getMessage());
   }
 }

@@ -55,24 +55,6 @@ final class InvitationAdmissionTest {
   }
 
   @Test
-  void compactCapabilityRetainsSingleUseAdmissionSemantics() throws Exception {
-    NodeIdentity initiator = NodeIdentity.generate();
-    NodeIdentity responder = NodeIdentity.generate();
-    UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[16];
-    capability[0] = 7;
-    HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
-        SynesisLink.ALPN,
-        sessionId, 1, 2, new byte[]{1}, new byte[]{2}, capability, initiator.nodeId(),
-        initiator.publicKeyEncoded(), responder.nodeId(), responder.publicKeyEncoded());
-    try (InvitationAdmission admission = new InvitationAdmission(sessionId, capability)) {
-      assertTrue(admission.reserve(transcript));
-      admission.authenticated();
-      assertFalse(admission.reserve(transcript));
-    }
-  }
-
-  @Test
   void minimizedCapabilityRetainsSingleUseAdmissionSemantics() throws Exception {
     NodeIdentity initiator = NodeIdentity.generate();
     NodeIdentity responder = NodeIdentity.generate();

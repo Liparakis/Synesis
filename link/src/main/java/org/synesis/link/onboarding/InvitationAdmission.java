@@ -37,14 +37,13 @@ public final class InvitationAdmission implements AutoCloseable {
    * Creates one single-use admission state for a signed invitation capability.
    *
    * @param sessionId  invited session identifier
-   * @param capability invitation capability bytes; legacy invitations use 32 bytes, SLB1 compact
-   *                   invitations use 16 bytes, and SLB2 invitations use 12 bytes
+   * @param capability invitation capability bytes; legacy invitations use 32 bytes and SLB2
+   *                   compact invitations use 12 bytes
    */
   public InvitationAdmission(UUID sessionId, byte[] capability) {
     this.sessionId = sessionId;
     this.capability = capability.clone();
     if (capability.length != SessionInvitation.CAPABILITY_BYTES
-        && capability.length != CompactBootstrapInvitation.CAPABILITY_BYTES
         && capability.length != CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES) {
       throw new IllegalArgumentException("invalid invitation capability");
     }

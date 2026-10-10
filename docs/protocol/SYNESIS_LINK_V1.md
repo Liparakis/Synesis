@@ -69,7 +69,7 @@ Ed25519 public key, and one signed non-relay UDP endpoint hint. The URI
 revision fixes the Link protocol to v1; exact payload length selects IPv4 or
 IPv6, so the payload does not repeat an inner magic, protocol, candidate-type,
 or address-length field. The expiry is derived from signed issue plus
-lifetime. SLB1 remains a strict decode-compatible legacy compact format.
+lifetime.
 The public key and detached signature are retained before contact because the
 joiner must authenticate the intended durable node; the endpoint and port are
 retained because a peer needs some destination before it can send the first
@@ -84,8 +84,7 @@ wire candidates because their interface scope cannot be represented safely in
 this artifact. Endpoint selection prefers a server-reflexive candidate when
 configured, then deterministic direct candidates.
 
-The exact SLB1 IPv4/IPv6 sizes are 135/147 raw bytes and 200/216 URI
-characters. SLB2 is 120/132 raw bytes and 180/196 URI characters. The 32-byte
+The exact SLB2 IPv4/IPv6 sizes are 120/132 raw bytes and 180/196 URI characters. The 32-byte
 Ed25519 public key and 64-byte Ed25519 signature are the irreducible identity
 trust floor for the existing self-contained non-TOFU construction. Removing
 the detached signature would allow endpoint and key substitution; the normal
