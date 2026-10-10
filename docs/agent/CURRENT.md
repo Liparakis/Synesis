@@ -1,3 +1,205 @@
+# 2026-10-10 — Owner timeout, same-provider agents, and cancel_lane proven by real runs
+
+Uncommitted. Build `0.1.0-dev.owner-went-ahead-20261010`: the builds below plus one fix found here.
+Disposable project `Documents\TestingSynesisOnClaude`, reset before each test. The bootstrapper wrote
+the goal, started and stopped controller runs, set one environment variable, and observed; it
+assigned nothing and relayed nothing.
+
+Fix: a request its owner superseded by finishing now follows the requester's lane to the session that
+continues it (`CapabilityRequestProjection.processLaneContinuation`). Before, it stayed with the
+predecessor, so a requester that came back after the owner had finished was told only that its
+dependency was integrated. Found by the first pass of test 1.
+
+Verification: `:coordination:check :link:check :workspace:check :mcp:check :cli:check`, coordination
+116, link 111, workspace 508 (1 skipped), MCP 125, CLI 85, 0 failures.
+
+Test 1, the owner's bounded wait. The goal carried one extra policy line: the owner answers a
+`task_store.api` request with its own contract as a revision. The requester was kept away by running
+phase A with `--max-resumes 0` and then starting only the owner's provider (phase B), then only the
+requester's (phase C). Codex `gpt-6-luna` medium, Claude Code `claude-opus-5-5` high.
+
+- Pass 1, wait of 420 s, previous build. Claude Code, the owner, proposed its contract at 03:23:17,
+  asked to finish, and was told `waiting` / `requester_response_pending` with the deadline. In phase B
+  a new Claude Code process continued the owner's lane, was told the same, and stopped at 03:26:36.
+  Nothing was recorded after that. The controller kept the run open and resumed the agent at
+  03:30:17, the deadline to the second. It continued the lane, finished at 03:30:46, the request was
+  recorded `SUPERSEDED` / `OWNER_FINISHED_WITHOUT_REQUESTER_ANSWER`, and the lane was integrated. In
+  phase C Codex continued the requester's lane, built on the integrated module, and the work group
+  completed (34 tests pass). It was NOT told the owner had gone ahead: the defect fixed above.
+- Pass 2, wait of 300 s, this build. The owner proposed at 03:39:59. In phase B the owner's agent
+  waited inside its turn, finished at 03:45:12 after the 03:44:59 deadline, and the request was
+  superseded. In phase C Codex continued the requester's lane and its inbox carried
+  `ownerProceededWithoutAnswer` with the owner's proposed contract and the guidance text. Work group
+  `COMPLETED`, 28 tests pass.
+
+Test 2a, two agents of one provider: two Claude Code agents (`claude-opus-5-5`, high) on the unchanged
+negotiated goal. `COMPLETED` in 519 s with one resume. Request, acceptance, publication, validation;
+the owner stopped after publishing and, resumed, continued its own lane, not its peer's, which was
+never suspended. Both lanes integrated, 56 tests pass.
+
+Test 2b, `cancel_lane`: two Claude Code agents (`sonnet`, low) on a goal with two parts, one of which
+(`docs/USAGE.md`) already met its acceptance; the goal said to cancel such a lane with a reason. One
+agent announced a lane on that file, read it, and called `cancel_lane` with a reason:
+`TASK_CANCELLATION_REQUESTED`, `TASK_CANCELLED`, `DEPENDENCY_INVALIDATED`, `SESSION_FINALIZED`,
+`PARTICIPANT_CANCELLED`. The other lane integrated and the work group `COMPLETED` in 74 s.
+
+Observed and not changed:
+
+- After `cancel_lane`, `get_next_action` answers `blocked` / `coordination_intent_required` rather
+  than saying the lane is closed, as it does after a finished lane.
+- With two agents of one provider the controller cannot tell whose lane is open. The agent that had
+  cancelled was resumed once for its sibling's progress and had nothing to do.
+- In test 1 the returning Codex agent mistyped the lane identifier in its first continuation call and
+  was answered `CONTINUATION_SOURCE_NOT_FOUND`; it retried with the projected value.
+
+NOT REACHED: the timeout with Codex as the owner. Its MCP server does not inherit the controller's
+environment, so a non-default wait set that way would not reach it; the default applies.
+
+# 2026-10-10 — Codex with Claude Code on Opus 5.5: negotiated run COMPLETED through two resumes
+
+Uncommitted. Build `0.1.0-dev.successor-refresh-20261010`: the changes of the entry below plus one fix.
+
+Fix: a session that holds its lane by continuation is now moved onto the new control head when it
+has uncommitted claimed work and the control branch advanced, by the same refresh every other
+session gets (same session, same claims, work carried over, old worktree left untouched). When that
+refresh declines, for instance because the control branch changed a file the session claims, the
+session keeps its recovered worktree as before. `McpRecoveryContinuationTest` asserted the old
+behaviour (same worktree path after the control branch advanced); that assertion now states what
+matters (same session, recovered work present, control-branch content visible), and a new test pins
+the fallback. Approved by the owner of this project.
+
+Verification: `:coordination:check :link:check :workspace:check :mcp:check :cli:check`, coordination
+115, link 111, workspace 508 (1 skipped), MCP 125, CLI 85, 0 failures.
+
+Real run, same disposable project, prompt, and agents (Codex `gpt-6-luna` medium first, Claude Code
+`claude-opus-5-5` high), started by `synesis agents run`: `COMPLETED` in 406 s, two resumes, both of
+Codex.
+
+1. Both lanes announced in one work group. Codex requested `task_store.api` and stopped.
+2. Claude Code accepted the contract as requested. Codex was resumed, continued its own lane, and
+   wrote the CLI and its tests against the accepted contract, then stopped.
+3. Claude Code published its implementation. Codex was resumed again, continued its lane again,
+   inspected the implementation in the validation workspace, ran the owner's tests, and accepted it.
+4. Claude Code finished and was integrated. Codex was told `workspace_stale`; `ensure_session` now
+   answered `ready` on a refreshed worktree, its tests passed against the integrated module, and it
+   finished and was integrated.
+5. Work group `COMPLETED`. `python -m unittest` passes 32 tests on the control branch.
+
+Reached by real providers in one run: request, acceptance, publication, validation, two controller
+resumes each regaining the lane by continuation, a successor's workspace refresh, integration of both
+lanes, and work-group completion.
+
+NOT REACHED in any real run: the owner's bounded wait expiring. In this run the owner accepted the
+request as it stood; in the previous one the requester answered the owner's proposal in time. That
+rule, the supersession it records, and the requester's "owner went ahead" path rest on tests alone.
+Also not reached: the deadline wake-up of the controller, `cancel_lane`, and a run with a second
+agent of the same provider.
+
+# 2026-10-10 — Resumed agents regain their lanes and a full negotiation runs; STALLED on a successor's stale workspace
+
+Uncommitted. Build `0.1.0-dev.owner-grace-20261010`. Two changes, made after the run recorded in the
+entry below, and one real run on them.
+
+Changes:
+
+- A capability owner waits a bounded time for the answer to a contract it proposed
+  (`RequesterAnswerPolicy`: two minutes; `SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS` or the system property
+  `synesis.requesterAnswerGraceSeconds`). Inside that time a completion request answers `waiting` /
+  `requester_response_pending` with `requesterAnswerDeadlineEpochMillis`, and `finish_lane` refuses for
+  the same reason. After it the owner may finish; finishing appends `CAPABILITY_REQUEST_SUPERSEDED`
+  with reason `OWNER_FINISHED_WITHOUT_REQUESTER_ANSWER`. The requester is then told the owner went
+  ahead, shown the owner's last proposal, and told the owner's files are released. A superseded
+  request is no longer a dependency of the requester's snapshot and no longer blocks its completion.
+  Decided by the owner of this project: an owner must not be held for a late requester, and rework on
+  a released file costs less than a reserved agent.
+- `synesis agents run` gives every process it starts its own connection identity and records the
+  connection closed when the process exits. Codex kills its MCP server, so its lease stayed `ACTIVE`
+  and Synesis waited its five-minute abrupt-loss grace before a resumed process could continue the
+  lane; that is why the first real resume failed. The controller also resumes a stopped agent once
+  when an answer deadline of its provider has passed, and does not end the run while one is pending,
+  because the log does not move at that moment. Not done: one stable identity per agent. A lease keeps
+  its first process's identity, and a session a peer has already suspended would be fenced.
+
+Not closed: the supersede event and the completion-prepared event are two appends. A requester that
+polls and files a new request between them gets a request against a lane about to close. The window
+is milliseconds and was not observed.
+
+Verification: `:coordination:check :link:check :workspace:check :mcp:check :cli:check`, coordination
+115, link 111, workspace 508 (1 skipped), MCP 124, CLI 85, 0 failures. New tests cover the wait, the
+refusal, supersession, the late answer, the requester's finish, the controller's connection handling,
+and its deadline wake-up.
+
+Real run, same project, prompt, and agents as below (Codex `gpt-6-luna` medium first, Claude Code
+`claude-opus-5-5` high): `STALLED` after 239 s with two resumes. PARTIAL, and much further than before.
+
+1. Codex requested `task_store.api` and stopped. The controller closed its connection.
+2. Claude Code answered with a revised contract, and its following poll suspended the stopped session
+   and held its recovery snapshot. The controller resumed Codex, which was offered the continuation
+   of its own lane, took it, and accepted the revised contract.
+3. Claude Code published the implementation and stopped. Codex inspected it in the validation
+   workspace, ran the owner's 28 tests there, and accepted it: `VALIDATED`.
+4. The controller resumed Claude Code, which continued its lane, finished, and was integrated.
+5. Codex, holding uncommitted `task_cli.py` and `test_task_cli.py`, was told `workspace_stale`.
+   `ensure_session` answered `workspace_not_ready` / `CONTROL_BASE_ADVANCED` and every read was
+   refused. It stopped. Nothing progressed after it stopped, so the controller ended the run.
+
+Reached for the first time by real providers: capability request, owner counter-proposal, requester
+acceptance, `publish_capability_implementation`, validation, a controller resume that regained a lane,
+and lane continuation for both providers.
+
+Defect that ended it: a session that holds its lane by continuation never has its workspace refreshed.
+`ProviderSessionBindingService.ensure` moves any other session with uncommitted claimed work onto the
+new control head and carries that work over; for a continuation successor it keeps the old worktree,
+and `McpRecoveryContinuationTest` asserts exactly that. Such a session can still finish from its stale
+base, but it cannot read or test against what was just integrated, which is what a requester needs.
+Every controller resume makes the agent a successor, so this is now the common case. Not fixed in
+this build because it changes behaviour an existing recovery test pins; fixed in the entry above.
+
+NOT REACHED: integration of the requester's lane and work-group completion in a negotiated run, and
+the owner's bounded wait expiring in a real run (the requester answered in time).
+
+# 2026-10-10 — Codex with Claude Code on Opus 5.5: negotiation reached, then STALLED on the first real resume
+
+Uncommitted. Build `0.1.0-dev.class-splits-20261010`, same disposable project and prompt as the entry
+below, started by `synesis agents run` with Codex (`gpt-6-luna`, medium) first and Claude Code
+(`claude-opus-5-5`, high effort) second. Result: `STALLED` after 209 s with one resume. PARTIAL.
+
+What happened, from the event log and both agent logs:
+
+1. Both lanes were announced in one work group. Codex declared `task_store.api`, was told
+   `needs_capability`, and created a capability request (`CAPABILITY_REQUEST_CREATED`).
+2. Codex polled `owner_response_pending` four times and its process ended, as a headless agent does.
+3. Claude Code, the owner, wrote and tested the storage module, read the request, and answered with a
+   revised contract (`CAPABILITY_REQUEST_CONTRACT_REVISED`, request state `REVISION_REQUESTED`).
+4. The controller resumed Codex: the first resume any real run has needed.
+5. The resumed Codex process could not reach its lane. Its new MCP server was given a new Synesis
+   session (`session-786da7a9…`, the lane belongs to `session-cb07510d…`). `get_next_action` answered
+   `coordination_intent_required` and listed its own lane as another participant's active work;
+   `ensure_session` with that lane's `intentId` and `claimEpoch` answered `policy_denied` /
+   `request_human_help` / `SCOPE_EXTENSION_INTENT_NOT_FOUND`. It gave up and exited.
+6. Claude Code asked to finish while its revised contract was unanswered, was allowed to, and its lane
+   integrated. It then waited on the open work group and exited.
+7. Nothing progressed further. The Codex lane is still `ACTIVE`, the request is still
+   `REVISION_REQUESTED`, the work group is `ACTIVE`. The control branch holds the storage module only;
+   its 30 tests pass.
+
+Defects this exposes. None is in code the class splits moved differently; the mechanisms are the same
+on the previous build, which never resumed an agent.
+
+- A resumed agent does not get its lane back. `SynesisMcpServer` takes its connection identity from
+  `SYNESIS_MCP_CONNECTION_INSTANCE_ID` and otherwise generates a random one per process. The managed
+  Codex launcher passes that variable; `synesis agents run` does not, so every resumed process is a
+  stranger to its own lane. The only route back is recovery continuation, which needs the old session
+  to be suspended first, and the controller does not count a suspension as a reason to resume.
+- An owner may finish while a contract it proposed is unanswered. The earlier fix covers a request the
+  owner has not answered and an implementation awaiting a verdict, not this state. What the requester
+  is then told was NOT REACHED, because the requester never got back to its lane.
+- `SCOPE_EXTENSION_INTENT_NOT_FOUND` with `request_human_help` is a dead end for an agent that is
+  trying to resume its own work.
+
+NOT REACHED: contract acceptance, `publish_capability_implementation`, validation, integration of the
+requester's lane, work-group completion.
+
 # 2026-10-10 — Refactored build installed and run with Codex and Claude Code; two installer defects fixed
 
 Uncommitted. Build `0.1.0-dev.class-splits-20261010`, from `master` at `14e8fdde` plus the two fixes
