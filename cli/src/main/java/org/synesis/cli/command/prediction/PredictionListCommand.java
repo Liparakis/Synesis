@@ -46,7 +46,7 @@ public final class PredictionListCommand implements Callable<Integer> {
             var location = CoordinationCliSupport.project(runtime, project);
             PredictionProjection projection = new PredictionProjection();
             var ids = new LinkedHashMap<UUID, Boolean>();
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+            for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (event.type() == PredictionEventType.PREDICTION_CREATED) {
                     ids.put(event.predictionId(), true);
                 }

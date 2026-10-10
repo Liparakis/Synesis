@@ -8,7 +8,7 @@ import com.google.zxing.qrcode.QRCodeWriter;
 /**
  * Renders an exact share link as a compact Unicode terminal QR.
  */
-public final class CompactQrRenderer implements QrRenderer {
+final class CompactQrRenderer {
 
     private static final int BORDER_MODULES = 2;
     private final int terminalWidth;
@@ -20,7 +20,7 @@ public final class CompactQrRenderer implements QrRenderer {
      * @param terminalWidth    available terminal columns
      * @param unicodeSupported whether QR glyphs can be encoded
      */
-    public CompactQrRenderer(int terminalWidth, boolean unicodeSupported) {
+    CompactQrRenderer(int terminalWidth, boolean unicodeSupported) {
         if (terminalWidth < 1) {
             throw new IllegalArgumentException("terminal width must be positive");
         }
@@ -43,8 +43,7 @@ public final class CompactQrRenderer implements QrRenderer {
      * @return compact QR text
      * @throws IllegalArgumentException when the terminal cannot represent it
      */
-    @Override
-    public String render(String link) {
+    String render(String link) {
         if (link == null || link.isBlank()) {
             throw new IllegalArgumentException("share link is blank");
         }

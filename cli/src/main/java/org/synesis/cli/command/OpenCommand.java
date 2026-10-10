@@ -31,7 +31,7 @@ public final class OpenCommand implements Callable<Integer> {
      * @param runtime composed CLI runtime
      */
     public OpenCommand(CliRuntime runtime) {
-        this(runtime, (value, suppliedUri) -> DaemonClient.request(value, "OPEN_URI", null, suppliedUri, true));
+        this(runtime, (value, suppliedUri) -> DaemonClient.request("OPEN_URI", null, suppliedUri, true));
     }
 
     OpenCommand(CliRuntime runtime, UriRequester requester) {

@@ -1,7 +1,6 @@
 package org.synesis.cli.bootstrap;
 
 import java.nio.file.Path;
-import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.cli.terminal.Terminal;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -18,7 +17,6 @@ import org.synesis.workspace.application.sync.SyncApplicationService;
  *
  * @param onboarding         Link onboarding façade
  * @param terminal           terminal boundary
- * @param readinessInspector local readiness inspector
  * @param projectService     project discovery and initialization service
  * @param constraintService  constraint service
  * @param guardrailService   guardrail service
@@ -27,7 +25,7 @@ import org.synesis.workspace.application.sync.SyncApplicationService;
  * @param providerService    provider lifecycle service
  * @since 1.0
  */
-public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector, ProjectApplicationService projectService, ConstraintApplicationService constraintService,
+public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplicationService projectService, ConstraintApplicationService constraintService,
                          GuardrailApplicationService guardrailService, HookApplicationService hookService, SyncApplicationService syncService, ProviderApplicationService providerService) {
 
     /**
@@ -35,12 +33,10 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
      *
      * @param onboarding         Link façade
      * @param terminal           terminal boundary
-     * @param readinessInspector local readiness inspector
      */
-    public CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInspector readinessInspector) {
+    public CliRuntime(Onboarding onboarding, Terminal terminal) {
         this(onboarding,
                 terminal,
-                readinessInspector,
                 new ProjectApplicationService(),
                 new ConstraintApplicationService(),
                 new GuardrailApplicationService(),
@@ -54,7 +50,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
      *
      * @param onboarding         Link onboarding façade
      * @param terminal           terminal boundary
-     * @param readinessInspector local readiness inspector
      * @param projectService     project discovery and initialization service
      * @param constraintService  constraint service
      * @param guardrailService   guardrail service
@@ -74,7 +69,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ReadinessInsp
     public static CliRuntime defaults(Terminal terminal) {
         StatusRenderer renderer = new StatusRenderer(terminal);
         Path profile = IdentityBootstrap.defaultDirectory();
-        return new CliRuntime(new Onboarding(profile, renderer), terminal, new ReadinessInspector(profile));
+        return new CliRuntime(new Onboarding(profile, renderer), terminal);
     }
 
     /**

@@ -43,7 +43,7 @@ public final class OwnershipShowCommand implements Callable<Integer> {
         try {
             CoordinationCommand found = null;
             OwnershipClaim current = null;
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+            for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (event.type() != PredictionEventType.OWNERSHIP_CLAIMED && event.type() != PredictionEventType.OWNERSHIP_RELEASED) {
                     continue;
                 }

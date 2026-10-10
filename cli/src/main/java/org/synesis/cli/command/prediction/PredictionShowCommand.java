@@ -50,7 +50,7 @@ public final class PredictionShowCommand implements Callable<Integer> {
             PredictionProjection projection = new PredictionProjection();
             PredictionContract contract = null;
             long sequence = 0;
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+            for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (!event.predictionId().equals(prediction)) {
                     continue;
                 }

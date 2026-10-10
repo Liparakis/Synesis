@@ -49,7 +49,7 @@ public final class UiCommand implements Callable<Integer> {
     public Integer call() {
         if (durationSeconds <= 0) {
             try {
-                Map<String, Object> response = DaemonClient.request(runtime, "OPEN_UI", project, null, !noBrowser);
+                Map<String, Object> response = DaemonClient.request("OPEN_UI", project, null, !noBrowser);
                 if (Boolean.TRUE.equals(response.get("browserOpened"))) {
                     runtime.terminal().stdout("SYNESIS_UI_OPENED");
                 } else if ("BROWSER_OPEN_FAILED".equals(response.get("state"))) {

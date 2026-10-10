@@ -55,7 +55,7 @@ public final class TaskClaimCommand implements Callable<Integer> {
             var identity = CoordinationCliSupport.loadIdentity(profile);
             TaskClaim claim = new TaskClaim(taskId, identity.nodeId(), supervisor, worker);
             var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), supervisor, worker, claim.encoded(), identity);
-            var event = CoordinationCliSupport.submit(CoordinationCliSupport.endpoint(endpoint), command);
+            var event = CoordinationCliSupport.submit(endpoint, command);
             runtime.terminal().stdout("TASK_CLAIMED=true");
             runtime.terminal().stdout("TASK_ID=" + taskId);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());

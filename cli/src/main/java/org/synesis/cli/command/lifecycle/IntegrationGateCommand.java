@@ -47,7 +47,7 @@ public final class IntegrationGateCommand implements Callable<Integer> {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
             PredictionProjection projection = new PredictionProjection();
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+            for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (event.predictionId().equals(prediction)) {
                     projection.apply(event);
                 }

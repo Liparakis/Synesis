@@ -94,25 +94,13 @@ public final class CoordinationCliSupport {
     }
 
     /**
-     * Replays coordination events after a sequence.
+     * Replays every coordination event from the start of the log.
      *
      * @param endpoint coordination HTTP endpoint
-     * @param after    exclusive sequence cursor
-     * @return events after the cursor
+     * @return all events
      * @throws Exception if replay fails
      */
-    @SuppressWarnings("SameParameterValue")
-    public static List<PredictionEvent> replay(URI endpoint, long after) throws Exception {
-        return new CoordinationHttpClient(endpoint).replayAfter(after);
-    }
-
-    /**
-     * Validates a coordination endpoint.
-     *
-     * @param value endpoint to validate
-     * @return the non-null endpoint
-     */
-    public static URI endpoint(URI value) {
-        return Objects.requireNonNull(value, "endpoint");
+    public static List<PredictionEvent> replay(URI endpoint) throws Exception {
+        return new CoordinationHttpClient(endpoint).replayAfter(0);
     }
 }

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
-import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
@@ -57,7 +56,7 @@ final class InitCommandTest {
         ByteArrayOutputStream errors = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(errors));
         Path profile = root.resolve("profile");
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal);
 
         int exitCode = SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime);
 

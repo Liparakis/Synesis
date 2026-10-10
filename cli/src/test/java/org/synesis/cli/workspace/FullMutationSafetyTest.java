@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
-import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
@@ -34,7 +33,7 @@ class FullMutationSafetyTest {
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
         StatusRenderer renderer = new StatusRenderer(terminal);
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, renderer), terminal, new ReadinessInspector(profile));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, renderer), terminal);
         return new Invocation(runtime, out, err);
     }
 

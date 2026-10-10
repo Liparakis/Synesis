@@ -13,7 +13,6 @@ import java.util.concurrent.Callable;
 import org.junit.jupiter.api.Test;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.RootCommand;
-import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
@@ -31,7 +30,7 @@ final class SynesisCliParsingTest {
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
         StatusRenderer renderer = new StatusRenderer(terminal);
-        return new Invocation(new CliRuntime(new Onboarding(profile, renderer), terminal, new ReadinessInspector(profile)), profile, out, err);
+        return new Invocation(new CliRuntime(new Onboarding(profile, renderer), terminal), profile, out, err);
     }
 
     private static PrintStream stream(ByteArrayOutputStream target) {

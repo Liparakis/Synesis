@@ -14,24 +14,24 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * <p>The protocol is deliberately smaller than a general RPC system. It is a
  * single JSON object per line and carries no project authority material.</p>
  */
-public final class DaemonProtocol {
+final class DaemonProtocol {
 
     /**
      * Maximum UTF-8 bytes accepted for one request line.
      */
-    public static final int MAX_REQUEST_BYTES = 8 * 1024;
+    static final int MAX_REQUEST_BYTES = 8 * 1024;
     /**
      * Maximum characters accepted for the IPC bearer.
      */
-    public static final int MAX_TOKEN_CHARS = 256;
+    static final int MAX_TOKEN_CHARS = 256;
     /**
      * Maximum characters accepted for a project path.
      */
-    public static final int MAX_PROJECT_CHARS = 4 * 1024;
+    private static final int MAX_PROJECT_CHARS = 4 * 1024;
     /**
      * Maximum characters accepted for a deep-link URI.
      */
-    public static final int MAX_URI_CHARS = 64 * 1024;
+    private static final int MAX_URI_CHARS = 64 * 1024;
 
     private DaemonProtocol() {
     }
@@ -43,7 +43,7 @@ public final class DaemonProtocol {
      * @return validated request
      * @throws IOException when the line is malformed, oversized, or unsupported
      */
-    public static Request parse(String line) throws IOException {
+    static Request parse(String line) throws IOException {
         Objects.requireNonNull(line, "line");
         if (line.isBlank() || line.getBytes(StandardCharsets.UTF_8).length > MAX_REQUEST_BYTES) {
             throw new IOException("daemon request is empty or oversized");
@@ -101,7 +101,7 @@ public final class DaemonProtocol {
      * @param values JSON-compatible request values
      * @return one request line
      */
-    public static String writeRequest(Map<String, Object> values) {
+    static String writeRequest(Map<String, Object> values) {
         return ProviderJson.write(Objects.requireNonNull(values, "values"));
     }
 
@@ -130,7 +130,7 @@ public final class DaemonProtocol {
     /**
      * Supported local daemon operations.
      */
-    public enum Operation {
+    enum Operation {
         /**
          * Open the current project's browser UI through the daemon.
          */
@@ -168,7 +168,7 @@ public final class DaemonProtocol {
      * @param projectId   selected project identifier, when applicable
      * @param openBrowser whether the daemon may open the default browser
      */
-    public record Request(String token, Operation operation, String project, String uri, String selectionId, String projectId, boolean openBrowser) {
+    record Request(String token, Operation operation, String project, String uri, String selectionId, String projectId, boolean openBrowser) {
 
     }
 }

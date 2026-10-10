@@ -58,7 +58,7 @@ public final class TaskCreateCommand implements Callable<Integer> {
             UUID taskId = UUID.randomUUID();
             CoordinationTask task = new CoordinationTask(taskId, location.projectId(), title, capability, identity.nodeId(), supervisor, worker);
             var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, identity.nodeId(), supervisor, worker, task.encoded(), identity);
-            var event = CoordinationCliSupport.submit(CoordinationCliSupport.endpoint(endpoint), command);
+            var event = CoordinationCliSupport.submit(endpoint, command);
             runtime.terminal().stdout("TASK_CREATED=true");
             runtime.terminal().stdout("TASK_ID=" + taskId);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());

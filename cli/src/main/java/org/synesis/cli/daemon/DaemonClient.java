@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -33,7 +32,6 @@ public final class DaemonClient {
     /**
      * Ensures the daemon is running and sends one bounded operation.
      *
-     * @param runtime       CLI runtime used for diagnostics
      * @param operationName operation name to send
      * @param project       project path, when required
      * @param uri           deep-link URI, when required
@@ -41,8 +39,7 @@ public final class DaemonClient {
      * @return daemon response
      * @throws IOException when startup or IPC fails
      */
-    public static Map<String, Object> request(CliRuntime runtime, String operationName, Path project, String uri, boolean openBrowser) throws IOException {
-        Objects.requireNonNull(runtime, "runtime");
+    public static Map<String, Object> request(String operationName, Path project, String uri, boolean openBrowser) throws IOException {
         Objects.requireNonNull(operationName, "operationName");
         final DaemonProtocol.Operation operation;
         try {

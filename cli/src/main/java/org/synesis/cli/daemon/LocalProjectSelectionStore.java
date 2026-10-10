@@ -1,6 +1,5 @@
 package org.synesis.cli.daemon;
 
-import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -82,24 +81,11 @@ final class LocalProjectSelectionStore {
         return new Creation(selectionId, projects, expiresAt);
     }
 
-    synchronized Claim claim(UUID selectionId, UUID selectedProjectId, byte[] invitationDigest, List<UUID> currentlyEligibleProjectIds) {
-        Objects.requireNonNull(selectionId, "selection ID");
-        Objects.requireNonNull(selectedProjectId, "selected project ID");
-        byte[] digest = exactDigest(invitationDigest);
-        List<UUID> eligible = immutableProjects(currentlyEligibleProjectIds);
-        Context context = contexts.get(selectionId);
-        return claim(selectionId, selectedProjectId, currentlyEligibleProjectIds, context, digest);
-    }
-
     synchronized Claim claim(UUID selectionId, UUID selectedProjectId, List<UUID> currentlyEligibleProjectIds) {
         Objects.requireNonNull(selectionId, "selection ID");
         Objects.requireNonNull(selectedProjectId, "selected project ID");
         List<UUID> eligible = immutableProjects(currentlyEligibleProjectIds);
         Context context = contexts.get(selectionId);
-        return claim(selectionId, selectedProjectId, eligible, context, null);
-    }
-
-    private Claim claim(UUID selectionId, UUID selectedProjectId, List<UUID> eligible, Context context, byte[] expectedDigest) {
         if (context == null) {
             return Claim.failure("SELECTION_UNKNOWN");
         }
@@ -110,9 +96,6 @@ final class LocalProjectSelectionStore {
         }
         if (context.state() == State.CONSUMED) {
             return Claim.failure("SELECTION_CONSUMED");
-        }
-        if (expectedDigest != null && !MessageDigest.isEqual(context.invitationDigest(), expectedDigest)) {
-            return Claim.failure("INVITATION_MISMATCH");
         }
         if (!context.eligibleProjectIds().contains(selectedProjectId)) {
             return Claim.failure("PROJECT_NOT_ELIGIBLE");

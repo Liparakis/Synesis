@@ -16,7 +16,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies bounded, invitation-bound, one-shot local project selection.
+ * Verifies bounded, one-shot local project selection.
  */
 final class LocalProjectSelectionStoreTest {
 
@@ -28,7 +28,7 @@ final class LocalProjectSelectionStoreTest {
     private static LocalProjectSelectionStore.Claim claim(LocalProjectSelectionStore store, LocalProjectSelectionStore.Creation creation, CountDownLatch ready) throws Exception {
         ready.countDown();
         ready.await();
-        return store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_X, List.of(PROJECT_ONE));
+        return store.claim(creation.selectionId(), PROJECT_ONE, List.of(PROJECT_ONE));
     }
 
     private static String assertCapacity(LocalProjectSelectionStore store) {
@@ -47,20 +47,16 @@ final class LocalProjectSelectionStoreTest {
     }
 
     @Test
-    void validSelectionIsBoundToInvitationAndConsumedOnce() {
+    void validSelectionIsConsumedOnce() {
         MutableClock clock = new MutableClock();
         LocalProjectSelectionStore store = new LocalProjectSelectionStore(clock, 4, Duration.ofMinutes(1));
         LocalProjectSelectionStore.Creation creation = store.create("X", DIGEST_X, List.of(PROJECT_ONE, PROJECT_TWO));
 
-        LocalProjectSelectionStore.Claim mismatch = store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_Y, List.of(PROJECT_ONE, PROJECT_TWO));
-        assertFalse(mismatch.accepted());
-        assertEquals("INVITATION_MISMATCH", mismatch.error());
-
-        LocalProjectSelectionStore.Claim accepted = store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_X, List.of(PROJECT_ONE, PROJECT_TWO));
+        LocalProjectSelectionStore.Claim accepted = store.claim(creation.selectionId(), PROJECT_ONE, List.of(PROJECT_ONE, PROJECT_TWO));
         assertTrue(accepted.accepted());
         assertEquals("X", accepted.invitation());
 
-        LocalProjectSelectionStore.Claim duplicate = store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_X, List.of(PROJECT_ONE, PROJECT_TWO));
+        LocalProjectSelectionStore.Claim duplicate = store.claim(creation.selectionId(), PROJECT_ONE, List.of(PROJECT_ONE, PROJECT_TWO));
         assertFalse(duplicate.accepted());
         assertEquals("SELECTION_CONSUMED", duplicate.error());
     }
@@ -69,9 +65,9 @@ final class LocalProjectSelectionStoreTest {
     void selectionRejectsUnknownProjectAndProjectThatBecameIneligible() {
         LocalProjectSelectionStore store = new LocalProjectSelectionStore();
         LocalProjectSelectionStore.Creation creation = store.create("X", DIGEST_X, List.of(PROJECT_ONE));
-        assertEquals("PROJECT_NOT_ELIGIBLE", store.claim(creation.selectionId(), PROJECT_TWO, DIGEST_X, List.of(PROJECT_ONE)).error());
-        assertEquals("PROJECT_UNAVAILABLE", store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_X, List.of()).error());
-        assertEquals("SELECTION_UNKNOWN", store.claim(UUID.randomUUID(), PROJECT_ONE, DIGEST_X, List.of(PROJECT_ONE)).error());
+        assertEquals("PROJECT_NOT_ELIGIBLE", store.claim(creation.selectionId(), PROJECT_TWO, List.of(PROJECT_ONE)).error());
+        assertEquals("PROJECT_UNAVAILABLE", store.claim(creation.selectionId(), PROJECT_ONE, List.of()).error());
+        assertEquals("SELECTION_UNKNOWN", store.claim(UUID.randomUUID(), PROJECT_ONE, List.of(PROJECT_ONE)).error());
     }
 
     @Test
@@ -81,7 +77,7 @@ final class LocalProjectSelectionStoreTest {
         LocalProjectSelectionStore.Creation creation = store.create("X", DIGEST_X, List.of(PROJECT_ONE));
         assertEquals("SELECTION_CAPACITY", assertCapacity(store));
         clock.advance(Duration.ofSeconds(2));
-        assertEquals("SELECTION_EXPIRED", store.claim(creation.selectionId(), PROJECT_ONE, DIGEST_X, List.of(PROJECT_ONE)).error());
+        assertEquals("SELECTION_EXPIRED", store.claim(creation.selectionId(), PROJECT_ONE, List.of(PROJECT_ONE)).error());
     }
 
     @Test

@@ -49,7 +49,7 @@ public final class TaskShowCommand implements Callable<Integer> {
             var location = CoordinationCliSupport.project(runtime, project);
             CoordinationTask task = null;
             TaskClaim claim = null;
-            for (var event : CoordinationCliSupport.replay(endpoint, 0)) {
+            for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (!event.predictionId().equals(taskId)) {
                     continue;
                 }

@@ -11,7 +11,7 @@ import org.synesis.link.onboarding.OnboardingEventType;
 public final class StatusRenderer implements Consumer<OnboardingEvent> {
 
     private final Terminal terminal;
-    private final QrRenderer qr;
+    private final CompactQrRenderer qr;
 
     /**
      * Creates a renderer bound to one terminal.

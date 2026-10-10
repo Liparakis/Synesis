@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.synesis.cli.bootstrap.CliRuntime;
-import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
@@ -34,7 +33,7 @@ final class OpenCommandTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal);
         AtomicReference<String> received = new AtomicReference<>();
         String uri = "synesis://join/a%2Fb?x=a%26b+%25#frag with & | ;";
         OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> {
@@ -52,7 +51,7 @@ final class OpenCommandTest {
     void requiresExactlyOneUriArgument() throws Exception {
         Path profile = Files.createTempDirectory("synesis-open-arity").resolve("profile");
         ConsoleTerminal terminal = new ConsoleTerminal();
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal);
         OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> Map.of("ok", true, "state", "DISPATCHED"));
 
         assertEquals(ExitCodes.USAGE, new CommandLine(command).execute());
@@ -63,7 +62,7 @@ final class OpenCommandTest {
     void mapsUnresolvedRoutingToBoundedFailure() throws Exception {
         Path profile = Files.createTempDirectory("synesis-open-unresolved").resolve("profile");
         ConsoleTerminal terminal = new ConsoleTerminal();
-        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal, new ReadinessInspector(profile));
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal);
         OpenCommand command = new OpenCommand(runtime, (ignored, supplied) -> Map.of("ok", true, "state", "URI_UNRESOLVED"));
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, new CommandLine(command).execute("synesis://join/invalid"));

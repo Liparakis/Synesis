@@ -392,8 +392,7 @@ final class DaemonServer implements AutoCloseable {
         try {
             RuntimeHandle host = runtimeFor(projects.getFirst());
             URI base = host.uiUri();
-            String separator = base.toString().contains("?") ? "&" : "&";
-            URI picker = URI.create(base + separator + "selectionId=" + selectionId);
+            URI picker = URI.create(base + "&selectionId=" + selectionId);
             return BrowserLauncher.open(picker);
         } catch (IOException | RuntimeException unavailable) {
             return false;
