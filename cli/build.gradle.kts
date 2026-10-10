@@ -398,13 +398,11 @@ val nativeMcpLauncher = tasks.register("nativeMcpLauncher") {
         "Native cross-platform launcher packaging uses execution-time process and file APIs."
     )
     inputs.files(rootProject.fileTree("bootstrap") {
-        include("*.go")
+        include("**/*.go")
         include("go.mod")
         include("go.sum")
-        include("cmd/synesis-mcp/*.go")
-        include("cmd/synesis-folder-picker/*.go")
         include("*.syso")
-        include("assets/*.png")
+        include("assets/**/*.png")
     })
     inputs.property("bundlePlatform", bundlePlatform)
     inputs.property("hostPlatform", hostPlatform)

@@ -6,8 +6,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +16,8 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"unicode"
+
+	"synesis/bootstrap/internal/payload"
 )
 
 const synesisMainClass = "org.synesis.cli.SynesisCli"
@@ -119,7 +118,7 @@ func requireReleaseHealth(layout runtimeLayout) error {
 	if profile != maximumReleaseProfile {
 		return nil
 	}
-	doctor := filepath.Join(layout.workingDirectory, "bin", installerName())
+	doctor := filepath.Join(layout.workingDirectory, "bin", payload.InstallerName())
 	if !fileExists(doctor) {
 		return errors.New("installation doctor missing")
 	}
@@ -142,13 +141,6 @@ func withVersionedLauncher(environment []string, layout runtimeLayout) []string 
 		name = "synesis.cmd"
 	}
 	return append(environment, "SYNESIS_LAUNCHER="+filepath.Join(layout.workingDirectory, "bin", name))
-}
-
-func installerName() string {
-	if runtime.GOOS == "windows" {
-		return "synesis-installer.exe"
-	}
-	return "synesis-installer"
 }
 
 func resolveLayout(executable string) (runtimeLayout, error) {
@@ -202,44 +194,20 @@ func resolveActivePayload(root string) (string, string, error) {
 	}
 	if err := json.Unmarshal(data, &pointer); err != nil ||
 		pointer.SchemaVersion != 1 || pointer.Version == "" ||
-		!validPayloadDirectory(pointer.PayloadDirectory) || pointer.ManifestHash == "" {
+		!payload.ValidDirectory(pointer.PayloadDirectory) || pointer.ManifestHash == "" {
 		return "", "", errors.New("active pointer invalid")
 	}
 	versionsRoot := filepath.Join(root, "versions")
 	payloadRoot := filepath.Join(versionsRoot, pointer.PayloadDirectory)
-	if !pathWithin(versionsRoot, payloadRoot) || !directoryExists(payloadRoot) {
+	if !payload.PathWithin(versionsRoot, payloadRoot) || !directoryExists(payloadRoot) {
 		return "", "", errors.New("active pointer payload invalid")
 	}
 	manifestPath := filepath.Join(payloadRoot, "manifest.json")
 	manifest, err := os.ReadFile(manifestPath)
-	if err != nil || digest(manifest) != pointer.ManifestHash {
+	if err != nil || payload.Digest(manifest) != pointer.ManifestHash {
 		return "", "", errors.New("active payload manifest invalid")
 	}
 	return payloadRoot, pointer.ProtectionProfile, nil
-}
-
-func validPayloadDirectory(value string) bool {
-	if value == "" || len(value) > 160 || filepath.IsAbs(value) || filepath.VolumeName(value) != "" {
-		return false
-	}
-	for _, character := range value {
-		if !(unicode.IsLetter(character) || unicode.IsDigit(character) || strings.ContainsRune(".-_", character)) {
-			return false
-		}
-	}
-	return value != "." && value != ".." && !strings.Contains(value, "..")
-}
-
-func pathWithin(parent, child string) bool {
-	parent, _ = filepath.Abs(parent)
-	child, _ = filepath.Abs(child)
-	relative, err := filepath.Rel(parent, child)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
-}
-
-func digest(data []byte) string {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
 }
 
 func resolveJava(bundled string) (string, error) {

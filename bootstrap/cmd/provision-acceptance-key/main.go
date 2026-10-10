@@ -5,13 +5,14 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"synesis/bootstrap/internal/releasemanifest"
 )
 
 func main() {
@@ -52,7 +53,6 @@ func provision(explicit string) error {
 	if err := os.WriteFile(path, []byte(encoded), 0o600); err != nil {
 		return err
 	}
-	fingerprint := sha256.Sum256(public)
-	fmt.Printf("ACCEPTANCE_KEY_PATH=%s\nPUBLIC_KEY_B64=%s\nPUBLIC_KEY_ID=%x\n", path, base64.StdEncoding.EncodeToString(public), fingerprint[:])
+	fmt.Printf("ACCEPTANCE_KEY_PATH=%s\nPUBLIC_KEY_B64=%s\nPUBLIC_KEY_ID=%s\n", path, base64.StdEncoding.EncodeToString(public), releasemanifest.AcceptanceKeyID(public))
 	return nil
 }

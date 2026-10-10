@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"synesis/bootstrap/internal/payload"
 )
 
 // migrationReference records the source fingerprint and durable plan state
@@ -79,7 +79,7 @@ func inspectProviderMigration(paths installPaths, provider, sourcePath string) (
 	if err != nil {
 		return ref, err
 	}
-	ref.SourceHash = sha256Hex(data)
+	ref.SourceHash = payload.Digest(data)
 	if strings.Count(string(data), `"synesis"`) > 1 {
 		ref.State = "AMBIGUOUS"
 		return ref, errors.New("provider config duplicate Synesis entry")
@@ -122,7 +122,7 @@ func inspectCodexTomlMigration(paths installPaths, sourcePath string) (migration
 	if err != nil {
 		return ref, err
 	}
-	ref.SourceHash = sha256Hex(data)
+	ref.SourceHash = payload.Digest(data)
 	text := string(data)
 	if strings.Count(text, "[mcp_servers.synesis]") > 1 || strings.Contains(text, "mcp_servers.synesis.") {
 		ref.State = "AMBIGUOUS"
@@ -191,9 +191,9 @@ func inspectProjectMigration(root string) (migrationReference, error) {
 		SchemaVersion int `json:"schemaVersion"`
 	}
 	if json.Unmarshal(data, &metadata) != nil {
-		return migrationReference{Kind: "project", State: "AMBIGUOUS", SourcePath: path, SourceHash: sha256Hex(data)}, nil
+		return migrationReference{Kind: "project", State: "AMBIGUOUS", SourcePath: path, SourceHash: payload.Digest(data)}, nil
 	}
-	ref := migrationReference{Kind: "project", SourcePath: path, SourceHash: sha256Hex(data)}
+	ref := migrationReference{Kind: "project", SourcePath: path, SourceHash: payload.Digest(data)}
 	if metadata.SchemaVersion == 1 {
 		ref.State = "UP_TO_DATE"
 		return ref, nil
@@ -283,7 +283,7 @@ func executePreparedMigrations(paths installPaths, plan updatePlan) (func() erro
 		if err != nil {
 			return nil, err
 		}
-		if sha256Hex(data) != ref.SourceHash {
+		if payload.Digest(data) != ref.SourceHash {
 			return nil, errors.New("migration source stale")
 		}
 		if err := os.WriteFile(backup, data, 0o600); err != nil {
@@ -300,13 +300,13 @@ func executePreparedMigrations(paths installPaths, plan updatePlan) (func() erro
 			if err != nil {
 				return err
 			}
-			if sha256Hex(data) != item.expected {
+			if payload.Digest(data) != item.expected {
 				return errors.New("migration backup hash mismatch")
 			}
 			if err := os.WriteFile(item.source, data, 0o600); err != nil {
 				return err
 			}
-			if restored, err := os.ReadFile(item.source); err != nil || sha256Hex(restored) != sha256Hex(data) {
+			if restored, err := os.ReadFile(item.source); err != nil || payload.Digest(restored) != payload.Digest(data) {
 				return errors.New("migration restore hash mismatch")
 			}
 		}
@@ -361,52 +361,4 @@ func runStableMigrationCommand(launcher string, args []string, projectRoot strin
 		return errors.New("migration command reported unresolved state")
 	}
 	return nil
-}
-
-func sha256Hex(data []byte) string {
-	digest := sha256.Sum256(data)
-	return hex.EncodeToString(digest[:])
-}
-
-func appendUpdateTransactionState(paths installPaths, planID, state, reason string) error {
-	if err := os.MkdirAll(paths.executions, 0o700); err != nil {
-		return err
-	}
-	entry := struct {
-		PlanID string `json:"planId"`
-		State  string `json:"state"`
-		Reason string `json:"reason,omitempty"`
-	}{planID, state, reason}
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-	file, err := os.OpenFile(filepath.Join(paths.executions, planID+".jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = file.Write(append(data, '\n'))
-	return err
-}
-
-func latestUpdatePlan(paths installPaths, planID string) bool {
-	entries, err := os.ReadDir(paths.plans)
-	if err != nil {
-		return false
-	}
-	var latestName string
-	var latestTime time.Time
-	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".plan.json") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil || (!latestTime.IsZero() && !info.ModTime().After(latestTime)) {
-			continue
-		}
-		latestName = strings.TrimSuffix(entry.Name(), ".plan.json")
-		latestTime = info.ModTime()
-	}
-	return latestName == planID
 }

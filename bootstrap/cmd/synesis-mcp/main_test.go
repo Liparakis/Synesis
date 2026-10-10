@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	payloadrules "synesis/bootstrap/internal/payload"
 )
 
 func TestResolveLayoutForInstalledDistribution(t *testing.T) {
@@ -93,7 +95,7 @@ func TestResolveLayoutForActiveInstalledPayload(t *testing.T) {
 		Version          string `json:"version"`
 		PayloadDirectory string `json:"payloadDirectory"`
 		ManifestHash     string `json:"manifestHash"`
-	}{1, "0.1.0", "release-1", digest(manifest)})
+	}{1, "0.1.0", "release-1", payloadrules.Digest(manifest)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +180,7 @@ func TestMaximumReleaseFailsClosedWithoutAnAcceptingDoctor(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(payload, "bin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(payload, "bin", installerName()), []byte("not an executable"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(payload, "bin", payloadrules.InstallerName()), []byte("not an executable"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := requireReleaseHealth(runtimeLayout{workingDirectory: payload, installRoot: install, protectionProfile: maximumReleaseProfile}); err == nil {

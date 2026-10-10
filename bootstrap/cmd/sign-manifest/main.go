@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"synesis/bootstrap/internal/releasemanifest"
 )
 
 const (
@@ -41,7 +43,7 @@ func run(manifestPath, signaturePath string) error {
 		return fmt.Errorf("read %s: %w", manifestPath, err)
 	}
 
-	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(key, data)) + "\n"
+	sig := releasemanifest.EncodeSignature(ed25519.Sign(key, data))
 	if err := os.WriteFile(signaturePath, []byte(sig), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", signaturePath, err)
 	}
