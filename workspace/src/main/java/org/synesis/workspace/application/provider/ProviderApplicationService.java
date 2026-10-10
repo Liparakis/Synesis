@@ -3,7 +3,6 @@ package org.synesis.workspace.application.provider;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,26 +12,24 @@ import java.util.Objects;
 import org.synesis.mcp.contract.McpToolCatalog;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.provider.ProviderHookConfiguration.EmptySessionStart;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
-import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.METADATA_SCHEMA;
 import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.atomicWrite;
 import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.metadata;
-import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.object;
 import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.readObject;
 import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.schemaVersion;
 import static org.synesis.workspace.application.provider.ProviderHealthProbes.probeMcp;
-import static org.synesis.workspace.application.provider.ProviderHealthProbes.recordStoreHealthy;
 import static org.synesis.workspace.application.provider.ProviderHealthProbes.syntheticCheck;
-import static org.synesis.workspace.application.provider.ProviderHookConfiguration.isTracked;
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.managedCommandMatches;
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.managedEntries;
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.materializeHook;
-import static org.synesis.workspace.application.provider.ProviderHookConfiguration.providerConflict;
+import static org.synesis.workspace.application.provider.ProviderHookConfiguration.mergeManagedHooks;
+import static org.synesis.workspace.application.provider.ProviderHookConfiguration.removeManagedHooks;
 import static org.synesis.workspace.application.provider.ProviderProjectInstructions.ensureProjectInstructions;
 import static org.synesis.workspace.application.provider.ProviderProjectInstructions.removeProjectInstructions;
 import static org.synesis.workspace.application.provider.ProviderResults.decorate;
@@ -42,7 +39,7 @@ import static org.synesis.workspace.application.provider.ProviderResults.simple;
 import static org.synesis.workspace.application.provider.ProviderResults.withValue;
 
 /**
- * Owns provider lifecycle, local metadata, configuration merging, and diagnostics.
+ * Owns provider lifecycle, local metadata, and configuration merging.
  */
 @SuppressWarnings("DuplicatedCode")
 public final class ProviderApplicationService {
@@ -54,19 +51,6 @@ public final class ProviderApplicationService {
      * Creates the default provider service.
      */
     public ProviderApplicationService() {
-    }
-
-    /**
-     * Returns the launcher a provider hook should run from one directory, or {@code null} when the
-     * directory has none.
-     *
-     * @param directory directory that may hold Synesis launchers
-     * @param windows   whether Windows launcher names apply
-     * @return absolute launcher path, or {@code null}
-     * @see ProviderLauncherResolution#launcherIn(Path, boolean)
-     */
-    static Path launcherIn(Path directory, boolean windows) {
-        return ProviderLauncherResolution.launcherIn(directory, windows);
     }
 
     /**
@@ -132,32 +116,15 @@ public final class ProviderApplicationService {
                     return failure(id, "OBSOLETE_PROVIDER_STATE", "PROVIDER_INSTALL_RESULT", 10);
                 }
             }
-            Map<String, Object> expectedHook = provider.managedHook(launcher, profile);
             boolean already;
-            if ("codex".equals(provider.id())) {
+            if (provider.sharesHookFileWithUser()) {
                 // Codex hook ownership is classified and materialized by the
                 // fail-closed path before any provider session authority exists.
                 materializeHook(location.root(), provider, launcher, profile);
                 already = Files.exists(metadata(location, provider));
             } else {
                 Map<String, Object> root = readObject(config);
-                Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
-                List<Object> hooks = ProviderConfigurationFiles.list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
-                already = hooks.stream().filter(provider::isManagedHook).count() == 1 && expectedHook.equals(hooks.stream().filter(provider::isManagedHook).findFirst().orElse(null)) && Files.exists(metadata(location,
-                        provider));
-                hooks.removeIf(provider::isManagedHook);
-                hooks.add(expectedHook);
-                List<Object> sessionHooks = ProviderConfigurationFiles.list(group.get("SessionStart"));
-                sessionHooks.removeIf(provider::isManagedSessionHook);
-                Map<String, Object> expectedSessionHook = provider.managedSessionHook(launcher, profile);
-                if (expectedSessionHook != null) {
-                    sessionHooks.add(expectedSessionHook);
-                }
-                if (sessionHooks.isEmpty()) {
-                    group.remove("SessionStart");
-                } else {
-                    group.put("SessionStart", sessionHooks);
-                }
+                already = mergeManagedHooks(root, provider, launcher, profile, EmptySessionStart.DROP) && Files.exists(metadata(location, provider));
                 atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
             }
             Path mcpLauncher = mcpLauncherPath();
@@ -165,26 +132,11 @@ public final class ProviderApplicationService {
             String instructionsStatus = ensureProjectInstructions(location, provider);
             McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(provider);
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("schemaVersion", METADATA_SCHEMA);
-            metadata.put("provider", provider.id());
-            metadata.put("supportLevel", provider.supportLevel().name());
-            metadata.put("installedAt", Instant.now().toString());
-            metadata.put("configurationPath", config.toAbsolutePath().normalize().toString());
-            metadata.put("launcherPath", launcher.toAbsolutePath().normalize().toString());
-            metadata.put("mcpLauncherPath", mcpLauncher.toAbsolutePath().normalize().toString());
-            metadata.put("profilePath", profile.toAbsolutePath().normalize().toString());
-            metadata.put("managedEntryId", provider.managedHookId());
-            metadata.put("mcpConfigStatus", mcpStatus);
-            metadata.put("mcpHealth", health.status());
-            metadata.put("manualVersion", manual.version());
-            metadata.put("manualContentHash", manual.contentHash());
-            metadata.put("wireCompatibilityDigest", manual.wireCompatibilityDigest());
-            metadata.put("catalogContentDigest", manual.catalogContentDigest());
-            metadata.put("guidanceArtifactDigest", manual.guidanceArtifactDigest());
-            metadata.put("manualPath", manualService.skillDirectory(provider.id()).resolve("SKILL.md").toString());
-            metadata.put("lastSyntheticCheck", synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
-            atomicWrite(metadata(location, provider), ProviderJson.write(metadata) + System.lineSeparator());
+            ProviderMetadata installed = new ProviderMetadata(provider.id(), provider.supportLevel().name(), Instant.now().toString(), config.toAbsolutePath().normalize().toString(),
+                    launcher.toAbsolutePath().normalize().toString(), mcpLauncher.toAbsolutePath().normalize().toString(), profile.toAbsolutePath().normalize().toString(), provider.managedHookId(),
+                    mcpStatus, health.status(), manual.version(), manual.contentHash(), manual.wireCompatibilityDigest(), manual.catalogContentDigest(), manual.guidanceArtifactDigest(),
+                    manualService.skillDirectory(provider.id()).resolve("SKILL.md").toString(), synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? "PASSED" : "FAILED");
+            atomicWrite(metadata(location, provider), ProviderJson.write(installed.toMap()) + System.lineSeparator());
             String result = synthetic.blocked() && synthetic.allowed() && synthetic.validJson() && health.passed() && !provider.requiresRealValidation() ? (already ? "ALREADY_INSTALLED" : "SUCCESS") : "DEGRADED";
             ProviderResult installedResult = result(provider, result, synthetic, config, profile, mcpStatus);
             installedResult = withValue(installedResult, "SYNESIS_MANUAL", "ATTESTED");
@@ -220,7 +172,7 @@ public final class ProviderApplicationService {
         ProviderIntegration resolvedProvider = provider(id);
         String resolvedId = resolvedProvider == null ? id : resolvedProvider.id();
         ProviderResult result = decorate(location, resolvedId, statusInternal(location, resolvedId), null);
-        if (resolvedProvider != null && "codex".equals(resolvedId)) {
+        if (resolvedProvider != null && resolvedProvider.usesGlobalMcpConfiguration()) {
             try {
                 Path path = resolvedProvider.mcpConfigurationPath(location.root());
                 CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(path, mcpLauncherPath());
@@ -273,13 +225,13 @@ public final class ProviderApplicationService {
         try {
             Map<String, Object> root = configPresent ? readObject(config) : Map.of();
             int count = configPresent ? managedEntries(root, provider).size() : 0;
-            Map<String, Object> metadata = metadataPresent ? readObject(metadataPath) : Map.of();
-            boolean schemaValid = !metadataPresent || schemaVersion(metadata.get("schemaVersion"));
-            boolean validMetadata = metadataPresent && schemaValid && provider.id().equals(String.valueOf(metadata.get("provider"))) && provider.supportLevel().name().equals(String.valueOf(metadata.get("supportLevel")));
-            boolean launcherPresent = validMetadata && Files.isRegularFile(Path.of(String.valueOf(metadata.get("launcherPath"))));
-            boolean profilePresent = validMetadata && Files.isDirectory(Path.of(String.valueOf(metadata.get("profilePath"))));
-            boolean configurationCorrect =
-                    count == 1 && launcherPresent && profilePresent && managedCommandMatches(root, provider, Path.of(String.valueOf(metadata.get("launcherPath"))), Path.of(String.valueOf(metadata.get("profilePath"))));
+            Map<String, Object> stored = metadataPresent ? readObject(metadataPath) : Map.of();
+            ProviderMetadata metadata = ProviderMetadata.fromMap(stored);
+            boolean schemaValid = !metadataPresent || schemaVersion(stored.get("schemaVersion"));
+            boolean validMetadata = metadataPresent && schemaValid && provider.id().equals(metadata.provider()) && provider.supportLevel().name().equals(metadata.supportLevel());
+            boolean launcherPresent = validMetadata && Files.isRegularFile(Path.of(metadata.launcherPath()));
+            boolean profilePresent = validMetadata && Files.isDirectory(Path.of(metadata.profilePath()));
+            boolean configurationCorrect = count == 1 && launcherPresent && profilePresent && managedCommandMatches(root, provider, Path.of(metadata.launcherPath()), Path.of(metadata.profilePath()));
             if (!schemaValid) {
                 return failure(id, "OBSOLETE_PROVIDER_STATE", "PROVIDER_STATUS", 3);
             }
@@ -291,11 +243,11 @@ public final class ProviderApplicationService {
             }
             var synthetic = syntheticCheck(provider);
             String state = synthetic.blocked() && synthetic.allowed() && synthetic.validJson() ? (provider.requiresRealValidation() ? "DEGRADED" : "HEALTHY") : "BROKEN";
-            boolean wireCompatible = McpToolCatalog.wireCompatibilityDigest().equals(String.valueOf(metadata.get("wireCompatibilityDigest")));
-            boolean catalogFresh = McpToolCatalog.catalogContentDigest().equals(String.valueOf(metadata.get("catalogContentDigest")));
+            boolean wireCompatible = McpToolCatalog.wireCompatibilityDigest().equals(metadata.wireCompatibilityDigest());
+            boolean catalogFresh = McpToolCatalog.catalogContentDigest().equals(metadata.catalogContentDigest());
             Path managedManual = manualService.skillDirectory(provider.id()).resolve("SKILL.md");
             boolean guidanceValid = manual.valid() && Files.isRegularFile(managedManual) && McpToolCatalog.guidanceArtifactDigest(ProviderManualService.MANUAL_NAME, provider.id(), Files.readAllBytes(managedManual))
-                    .equals(String.valueOf(metadata.get("guidanceArtifactDigest")));
+                    .equals(metadata.guidanceArtifactDigest());
             if (!wireCompatible) {
                 state = "DEGRADED";
             }
@@ -335,40 +287,8 @@ public final class ProviderApplicationService {
             return simple("PROVIDER_UNINSTALL_RESULT", "NOT_INSTALLED", 0);
         }
         try {
-            if ("codex".equals(provider.id()) && Files.exists(config)) {
-                if (Files.isSymbolicLink(config) || !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS) || isTracked(location.root())) {
-                    throw providerConflict("tracked or non-regular hook cannot be rewritten");
-                }
-            }
-            boolean removed = false;
-            if (Files.exists(config)) {
-                Map<String, Object> root = readObject(config);
-                Map<String, Object> group = object(root.get(provider.hookGroup()));
-                if (group != null) {
-                    List<Object> hooks = ProviderConfigurationFiles.list(group.get("PreToolUse"));
-                    removed = hooks.removeIf(provider::isManagedHook);
-                    List<Object> sessionHooks = ProviderConfigurationFiles.list(group.get("SessionStart"));
-                    boolean removedSession = sessionHooks.removeIf(provider::isManagedSessionHook);
-                    removed = removed || removedSession;
-                    if (sessionHooks.isEmpty()) {
-                        group.remove("SessionStart");
-                    } else {
-                        group.put("SessionStart", sessionHooks);
-                    }
-                    if (hooks.isEmpty()) {
-                        group.remove("PreToolUse");
-                    }
-                    if (group.isEmpty()) {
-                        root.remove(provider.hookGroup());
-                    }
-                    if (root.isEmpty()) {
-                        Files.deleteIfExists(config);
-                    } else {
-                        atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
-                    }
-                }
-            }
-            if (!"codex".equals(provider.id())) {
+            boolean removed = removeManagedHooks(location.root(), provider);
+            if (!provider.usesGlobalMcpConfiguration()) {
                 removeMcpConfig(location, provider);
             }
             removeProjectInstructions(location, provider);
@@ -378,7 +298,7 @@ public final class ProviderApplicationService {
             } catch (ProviderSessionBindingService.BindingException ignored) {
                 // Status exposes a broken binding; managed hook removal remains complete.
             }
-            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0, "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "GLOBAL_MCP_CONFIG_PRESERVED", Boolean.toString("codex".equals(provider.id())), "UNRELATED_CONFIGURATION_PRESERVED", "true");
+            return simple("PROVIDER_UNINSTALL_RESULT", "SUCCESS", 0, "MANAGED_HOOK_REMOVED", Boolean.toString(removed), "GLOBAL_MCP_CONFIG_PRESERVED", Boolean.toString(provider.usesGlobalMcpConfiguration()), "UNRELATED_CONFIGURATION_PRESERVED", "true");
         } catch (IllegalArgumentException failure) {
             return failure(id, "INVALID_CONFIG", "PROVIDER_UNINSTALL_RESULT", 10);
         } catch (Exception failure) {
@@ -400,7 +320,7 @@ public final class ProviderApplicationService {
         if (provider == null) {
             return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", 2);
         }
-        if (!"codex".equals(provider.id())) {
+        if (!provider.usesGlobalMcpConfiguration()) {
             return failure(id, "GLOBAL_MCP_UNSUPPORTED", "PROVIDER_UNINSTALL_RESULT", 2);
         }
         try {
@@ -425,35 +345,6 @@ public final class ProviderApplicationService {
 
     private void removeMcpConfig(ProjectLocation location, ProviderIntegration provider) {
         mcpConfiguration.remove(location, provider);
-    }
-
-    /**
-     * Runs provider diagnostics for doctor.
-     *
-     * @param location project location
-     * @return structured report
-     */
-    public DoctorResult diagnose(ProjectLocation location) {
-        List<String> lines = new ArrayList<>();
-        boolean broken = false;
-        for (ProviderIntegration provider : ProviderRegistry.providers()) {
-            ProviderResult result = status(location, provider.id());
-            String state = result.values().getOrDefault("PROVIDER_STATUS", result.values().getOrDefault("ERROR", "BROKEN"));
-            if ("BROKEN".equals(state) || "INVALID_CONFIG".equals(state)) {
-                broken = true;
-            }
-            if (!"NOT_INSTALLED".equals(state)) {
-                lines.add("PROVIDER_" + provider.id().toUpperCase().replace('-', '_') + "=" + state);
-            }
-        }
-        lines.add("WARN=Claude Code integration remains EXPERIMENTAL.");
-        lines.add("WARN=Codex project hooks require explicit trust and real-agent validation.");
-        boolean recordsHealthy = recordStoreHealthy(location);
-        if (!recordsHealthy) {
-            broken = true;
-        }
-        lines.add("RECORD_STORE=" + (recordsHealthy ? "PASS" : "FAIL"));
-        return new DoctorResult(broken ? "BROKEN" : "HEALTHY_WITH_WARNINGS", List.copyOf(lines));
     }
 
     private ProviderIntegration provider(String id) {
@@ -508,22 +399,6 @@ public final class ProviderApplicationService {
          */
         public ProviderResult {
             values = Collections.unmodifiableMap(new LinkedHashMap<>(values));
-        }
-    }
-
-    /**
-     * Structured doctor provider result.
-     *
-     * @param result overall state
-     * @param lines  diagnostic lines
-     */
-    public record DoctorResult(String result, List<String> lines) {
-
-        /**
-         * Copies diagnostic lines.
-         */
-        public DoctorResult {
-            lines = List.copyOf(lines);
         }
     }
 }

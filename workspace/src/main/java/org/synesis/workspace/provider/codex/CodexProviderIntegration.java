@@ -77,20 +77,6 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     }
 
     /**
-     * Builds the Codex TOML MCP entry.
-     *
-     * @param launcher    stable launcher
-     * @param projectRoot ignored project root
-     * @return TOML-compatible entry values
-     */
-    @Override
-    public Map<String, Object> managedMcpServer(Path launcher, Path projectRoot) {
-        Map<String, Object> server = new LinkedHashMap<>(ProviderIntegration.super.managedMcpServer(launcher, projectRoot));
-        server.remove("version");
-        return server;
-    }
-
-    /**
      * Runs Codex with {@code codex exec}, reading the prompt from standard input, without
      * bypassing its approval or sandbox policy. Codex finds the Synesis server through its own
      * configuration and the project through the working directory.
@@ -161,6 +147,21 @@ public final class CodexProviderIntegration implements ProviderIntegration {
 
     @Override
     public boolean requiresRealValidation() {
+        return true;
+    }
+
+    @Override
+    public boolean sharesHookFileWithUser() {
+        return true;
+    }
+
+    @Override
+    public boolean usesGlobalMcpConfiguration() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsManagedContinuity() {
         return true;
     }
 

@@ -29,7 +29,7 @@ final class ProviderMcpConfigurationService {
             return "UNSUPPORTED";
         }
         try {
-            if ("codex".equals(provider.id())) {
+            if (provider.usesGlobalMcpConfiguration()) {
                 CodexTomlConfiguration.Inspection before = CodexTomlConfiguration.inspect(configPath, launcher);
                 if (before.outcome() == CodexTomlConfiguration.Outcome.MALFORMED || before.outcome() == CodexTomlConfiguration.Outcome.DUPLICATE_SYNSESIS_ENTRY
                         || before.outcome() == CodexTomlConfiguration.Outcome.UNSUPPORTED_SCHEMA) {
@@ -64,7 +64,7 @@ final class ProviderMcpConfigurationService {
         Path configPath = provider.mcpConfigurationPath(location.root());
         if (configPath != null && Files.exists(configPath)) {
             try {
-                if ("codex".equals(provider.id())) {
+                if (provider.usesGlobalMcpConfiguration()) {
                     CodexTomlConfiguration.remove(configPath);
                     cleanObsoleteProjectFile(location.root().resolve(".codex/mcp.json"));
                 } else {
@@ -83,7 +83,7 @@ final class ProviderMcpConfigurationService {
         if (configPath == null || !Files.exists(configPath)) {
             return "NOT_PRESENT";
         }
-        if (!"codex".equals(provider.id())) {
+        if (!provider.usesGlobalMcpConfiguration()) {
             throw new IllegalArgumentException("global MCP removal is only supported for Codex");
         }
         CodexTomlConfiguration.Inspection inspection = CodexTomlConfiguration.inspect(configPath, null);

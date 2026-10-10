@@ -265,7 +265,7 @@ public final class ProviderConfigMigrationService {
             return new Entry(provider.id(), "", "", Outcome.UNSUPPORTED_SCHEMA, launcher.toString());
         }
         config = config.toAbsolutePath().normalize();
-        if ("codex".equals(provider.id())) {
+        if (provider.usesGlobalMcpConfiguration()) {
             try {
                 CodexTomlConfiguration.Inspection inspected = CodexTomlConfiguration.inspect(config, launcher);
                 Outcome outcome = switch (inspected.outcome()) {

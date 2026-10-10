@@ -63,28 +63,101 @@ final class ProviderHookConfiguration {
         return windowsCommand == null || windowsCommand.equals(configuredWindows);
     }
 
-    static void materializeHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile) throws IOException {
-        if ("codex".equals(provider.id())) {
-            materializeCodexHook(worktree, provider, launcher, profile);
-            return;
-        }
-        Path config = provider.configurationPath(worktree);
-        Map<String, Object> root = Files.exists(config) ? readObject(config) : new LinkedHashMap<>();
+    /**
+     * What a merge does with a {@code SessionStart} list that ends up empty. The control project's
+     * file drops the key; the copy written into a lane worktree has always kept the empty array.
+     */
+    enum EmptySessionStart {
+        KEEP,
+        DROP
+    }
+
+    /**
+     * Replaces the provider's managed entries in the hook group of {@code root}, leaving every other
+     * entry in place.
+     *
+     * @return whether the group already held exactly the current managed pre-tool entry
+     */
+    static boolean mergeManagedHooks(Map<String, Object> root, ProviderIntegration provider, Path launcher, Path profile, EmptySessionStart whenEmpty) {
         Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
-        List<Object> hooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
-        hooks.removeIf(provider::isManagedHook);
-        hooks.add(provider.managedHook(launcher, profile));
-        List<Object> sessionHooks = list(group.get("SessionStart"));
+        List<Object> preToolHooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
+        boolean current = preToolHooks.stream().filter(provider::isManagedHook).count() == 1 && provider.managedHook(launcher, profile).equals(preToolHooks.stream().filter(provider::isManagedHook).findFirst().orElse(null));
+        replaceManagedHooks(group, preToolHooks, list(group.get("SessionStart")), provider, launcher, profile, whenEmpty);
+        return current;
+    }
+
+    private static void replaceManagedHooks(Map<String, Object> group, List<Object> preToolHooks, List<Object> sessionHooks, ProviderIntegration provider, Path launcher, Path profile,
+            EmptySessionStart whenEmpty) {
+        preToolHooks.removeIf(provider::isManagedHook);
+        preToolHooks.add(provider.managedHook(launcher, profile));
         sessionHooks.removeIf(provider::isManagedSessionHook);
         Map<String, Object> sessionHook = provider.managedSessionHook(launcher, profile);
         if (sessionHook != null) {
             sessionHooks.add(sessionHook);
         }
-        group.put("SessionStart", sessionHooks);
+        group.put("PreToolUse", preToolHooks);
+        if (sessionHooks.isEmpty() && whenEmpty == EmptySessionStart.DROP) {
+            group.remove("SessionStart");
+        } else {
+            group.put("SessionStart", sessionHooks);
+        }
+    }
+
+    /**
+     * Removes the provider's managed entries from the hook file under {@code projectRoot}, then drops
+     * the keys and the file that the removal leaves empty.
+     *
+     * @return whether a managed entry was removed
+     */
+    static boolean removeManagedHooks(Path projectRoot, ProviderIntegration provider) throws IOException {
+        Path config = provider.configurationPath(projectRoot);
+        if (!Files.exists(config)) {
+            return false;
+        }
+        if (provider.sharesHookFileWithUser() && (Files.isSymbolicLink(config) || !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS) || isTracked(projectRoot))) {
+            throw providerConflict("tracked or non-regular hook cannot be rewritten");
+        }
+        Map<String, Object> root = readObject(config);
+        Map<String, Object> group = object(root.get(provider.hookGroup()));
+        if (group == null) {
+            return false;
+        }
+        List<Object> hooks = list(group.get("PreToolUse"));
+        boolean removed = hooks.removeIf(provider::isManagedHook);
+        List<Object> sessionHooks = list(group.get("SessionStart"));
+        boolean removedSession = sessionHooks.removeIf(provider::isManagedSessionHook);
+        removed = removed || removedSession;
+        if (sessionHooks.isEmpty()) {
+            group.remove("SessionStart");
+        } else {
+            group.put("SessionStart", sessionHooks);
+        }
+        if (hooks.isEmpty()) {
+            group.remove("PreToolUse");
+        }
+        if (group.isEmpty()) {
+            root.remove(provider.hookGroup());
+        }
+        if (root.isEmpty()) {
+            Files.deleteIfExists(config);
+        } else {
+            atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
+        }
+        return removed;
+    }
+
+    static void materializeHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile) throws IOException {
+        if (provider.sharesHookFileWithUser()) {
+            materializeSharedHook(worktree, provider, launcher, profile);
+            return;
+        }
+        Path config = provider.configurationPath(worktree);
+        Map<String, Object> root = readObject(config);
+        mergeManagedHooks(root, provider, launcher, profile, EmptySessionStart.KEEP);
         atomicWrite(config, ProviderJson.write(root) + System.lineSeparator());
     }
 
-    private static void materializeCodexHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile) throws IOException {
+    private static void materializeSharedHook(Path worktree, ProviderIntegration provider, Path launcher, Path profile) throws IOException {
         Path config = provider.configurationPath(worktree).toAbsolutePath().normalize();
         Object lock = HOOK_LOCKS.computeIfAbsent(config, ignored -> new Object());
         synchronized (lock) {
@@ -141,15 +214,7 @@ final class ProviderHookConfiguration {
                     throw providerConflict("session hook ownership is ambiguous");
                 }
             }
-            preToolHooks.removeIf(provider::isManagedHook);
-            preToolHooks.add(provider.managedHook(launcher, profile));
-            sessionHooks.removeIf(provider::isManagedSessionHook);
-            Map<String, Object> sessionHook = provider.managedSessionHook(launcher, profile);
-            if (sessionHook != null) {
-                sessionHooks.add(sessionHook);
-            }
-            group.put("PreToolUse", preToolHooks);
-            group.put("SessionStart", sessionHooks);
+            replaceManagedHooks(group, preToolHooks, sessionHooks, provider, launcher, profile, EmptySessionStart.KEEP);
             String updated = ProviderJson.write(root) + System.lineSeparator();
             if (Files.isSymbolicLink(config) || (Files.exists(config, java.nio.file.LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
                 throw providerConflict("hook path changed to a non-regular file");

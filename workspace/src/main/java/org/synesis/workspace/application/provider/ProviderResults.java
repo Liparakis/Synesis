@@ -11,6 +11,7 @@ import org.synesis.workspace.application.provider.ProviderApplicationService.Pro
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Builds the {@link ProviderResult} values that install, status, and uninstall report, and adds the
@@ -68,7 +69,8 @@ final class ProviderResults {
     }
 
     private static String continuityMode(ProjectLocation location, String provider) {
-        if (!"codex".equals(provider)) {
+        ProviderIntegration integration = ProviderRegistry.find(provider);
+        if (integration == null || !integration.supportsManagedContinuity()) {
             return "SESSION_BOUND";
         }
         Path directory = location.synesisDirectory().resolve("local/runtime/managed-continuity");

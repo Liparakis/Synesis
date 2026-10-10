@@ -17,7 +17,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.synesis.mcp.contract.McpToolCatalog;
-import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -39,24 +38,6 @@ import static org.synesis.workspace.application.provider.ProviderConfigurationFi
 final class ProviderHealthProbes {
 
     private ProviderHealthProbes() {
-    }
-
-    static boolean recordStoreHealthy(ProjectLocation location) {
-        Path records = location.profile().resolve("records");
-        if (!Files.isDirectory(records)) {
-            return false;
-        }
-        try (var paths = Files.walk(records)) {
-            for (Path path : paths.filter(file -> file.toString().endsWith(".sdr")).toList()) {
-                DecisionRecord record = DecisionRecord.decode(Files.readAllBytes(path));
-                if (!record.verify()) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (Exception failure) {
-            return false;
-        }
     }
 
     private static String readWithTimeout(BufferedReader reader) throws Exception {

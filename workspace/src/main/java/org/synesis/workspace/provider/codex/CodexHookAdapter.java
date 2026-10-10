@@ -1,8 +1,5 @@
 package org.synesis.workspace.provider.codex;
 
-import java.io.InputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -22,7 +19,6 @@ import org.synesis.workspace.project.ProjectPathResolver;
  */
 public final class CodexHookAdapter {
 
-    private static final int MAX_INPUT_BYTES = 128 * 1024;
     private static final int MAX_REASON_LENGTH = 1_500;
 
     /**
@@ -63,28 +59,6 @@ public final class CodexHookAdapter {
 
     private static String escape(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\b", "\\b").replace("\f", "\\f").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-    }
-
-    /**
-     * Reads and processes one bounded Codex hook event.
-     *
-     * @param inputStream event input
-     * @return fail-closed or silent hook result
-     */
-    @SuppressWarnings("unused")
-    public Result processStream(InputStream inputStream) {
-        if (inputStream == null) {
-            return invalid("Missing hook input");
-        }
-        try {
-            byte[] bytes = inputStream.readNBytes(MAX_INPUT_BYTES + 1);
-            if (bytes.length > MAX_INPUT_BYTES) {
-                return invalid("Hook input exceeds the maximum accepted size");
-            }
-            return processJson(new String(bytes, StandardCharsets.UTF_8));
-        } catch (IOException failure) {
-            return invalid("Could not read hook input");
-        }
     }
 
     /**

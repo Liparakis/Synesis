@@ -292,6 +292,36 @@ public interface ProviderIntegration {
     }
 
     /**
+     * Reports whether the hook file lives in the user's checkout and may hold hooks Synesis does not
+     * own, so it is classified and rewritten only under the fail-closed ownership checks.
+     *
+     * @return true when the hook file is shared with the user
+     */
+    default boolean sharesHookFileWithUser() {
+        return false;
+    }
+
+    /**
+     * Reports whether the provider's MCP configuration is one user-wide file shared by every
+     * project, rather than a file inside the project.
+     *
+     * @return true when the MCP configuration is user-wide
+     */
+    default boolean usesGlobalMcpConfiguration() {
+        return false;
+    }
+
+    /**
+     * Reports whether Synesis can run this provider with managed continuity, in which it owns the
+     * provider runtime and its thread.
+     *
+     * @return true when managed continuity is supported
+     */
+    default boolean supportsManagedContinuity() {
+        return false;
+    }
+
+    /**
      * Reports whether trust and real-agent evidence are required for health.
      *
      * @return true when synthetic checks alone cannot produce a healthy state

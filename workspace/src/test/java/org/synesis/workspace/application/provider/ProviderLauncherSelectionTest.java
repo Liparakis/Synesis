@@ -16,13 +16,13 @@ final class ProviderLauncherSelectionTest {
 
     @Test
     void windowsPrefersTheNativeLauncherAndFallsBackToTheScript(@TempDir Path bin) throws Exception {
-        assertNull(ProviderApplicationService.launcherIn(bin, true));
+        assertNull(ProviderLauncherResolution.launcherIn(bin, true));
 
         Path script = Files.createFile(bin.resolve("synesis.cmd"));
-        assertEquals(script.toAbsolutePath().normalize(), ProviderApplicationService.launcherIn(bin, true), "an installation without the native launcher keeps working");
+        assertEquals(script.toAbsolutePath().normalize(), ProviderLauncherResolution.launcherIn(bin, true), "an installation without the native launcher keeps working");
 
         Path nativeLauncher = Files.createFile(bin.resolve("synesis.exe"));
-        assertEquals(nativeLauncher.toAbsolutePath().normalize(), ProviderApplicationService.launcherIn(bin, true));
+        assertEquals(nativeLauncher.toAbsolutePath().normalize(), ProviderLauncherResolution.launcherIn(bin, true));
     }
 
     @Test
@@ -30,16 +30,16 @@ final class ProviderLauncherSelectionTest {
         Files.createDirectory(bin.resolve("synesis.exe"));
         Path script = Files.createFile(bin.resolve("synesis.cmd"));
 
-        assertEquals(script.toAbsolutePath().normalize(), ProviderApplicationService.launcherIn(bin, true));
+        assertEquals(script.toAbsolutePath().normalize(), ProviderLauncherResolution.launcherIn(bin, true));
     }
 
     @Test
     void otherPlatformsUseTheUnsuffixedLauncherOnly(@TempDir Path bin) throws Exception {
         Files.createFile(bin.resolve("synesis.exe"));
         Files.createFile(bin.resolve("synesis.cmd"));
-        assertNull(ProviderApplicationService.launcherIn(bin, false));
+        assertNull(ProviderLauncherResolution.launcherIn(bin, false));
 
         Path launcher = Files.createFile(bin.resolve("synesis"));
-        assertEquals(launcher.toAbsolutePath().normalize(), ProviderApplicationService.launcherIn(bin, false));
+        assertEquals(launcher.toAbsolutePath().normalize(), ProviderLauncherResolution.launcherIn(bin, false));
     }
 }
