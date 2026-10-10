@@ -35,11 +35,12 @@ public final class DecisionStore {
   /**
    * Maximum head entries accepted by one read-only snapshot.
    */
-  public static final int MAX_HEAD_SNAPSHOT = 1_024;
+  private static final int MAX_HEAD_SNAPSHOT = 1_024;
   /**
-   * Maximum immutable revisions retained for one decision record.
+   * Maximum immutable revisions retained for one decision record. The store never accepts a
+   * chain longer than it will read back.
    */
-  private static final int MAX_REVISIONS_PER_RECORD = 64;
+  public static final int MAX_REVISIONS_PER_RECORD = 64;
   /**
    * Binary marker used to reject non-head files as head pointers.
    */
@@ -48,10 +49,6 @@ public final class DecisionStore {
    * Version of the compact head-pointer encoding.
    */
   private static final int HEAD_VERSION = 1;
-  /**
-   * Profile-local root containing revisions, heads, and quarantined conflicts.
-   */
-  private final Path root;
   /**
    * Project namespace every accepted revision must match.
    */
@@ -77,7 +74,7 @@ public final class DecisionStore {
    * @throws IOException if durable bytes are corrupt or filesystem access fails
    */
   public DecisionStore(Path root, UUID projectId) throws IOException {
-    this.root = Objects.requireNonNull(root, "root");
+    Objects.requireNonNull(root, "root");
     this.projectId = Objects.requireNonNull(projectId, "project ID");
     this.decisions = root.resolve("decisions");
     this.heads = root.resolve("heads");
@@ -124,11 +121,27 @@ public final class DecisionStore {
     }
   }
 
-  private static long bytesToRevision(byte[] bytes) throws IOException {
-    try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
-      input.readInt();
-      input.readUnsignedByte();
-      return input.readLong();
+  /**
+   * A first revision has no predecessor; every later one is the tip's next revision and names the
+   * tip's digest as its predecessor.
+   */
+  private static boolean extendsChain(Head tip, DecisionRecord record) {
+    if (tip == null) {
+      return record.revision() == 1 && record.previousDigest() == null;
+    }
+    return record.revision() == tip.revision() + 1
+        && Arrays.equals(record.previousDigest(), tip.digest);
+  }
+
+  private static Head tipOf(DecisionRecord record) {
+    return new Head(record.revision(), record.digest());
+  }
+
+  private static boolean signatureVerifies(DecisionRecord record) {
+    try {
+      return record.verify();
+    } catch (GeneralSecurityException exception) {
+      return false;
     }
   }
 
@@ -168,13 +181,8 @@ public final class DecisionStore {
     }
   }
 
-  /**
-   * Returns the root path of this store.
-   *
-   * @return root path directory
-   */
-  public Path rootPath() {
-    return root;
+  private boolean isAuthentic(DecisionRecord record) {
+    return projectId.equals(record.projectId()) && signatureVerifies(record);
   }
 
   /**
@@ -191,14 +199,7 @@ public final class DecisionStore {
    */
   public synchronized SaveResult save(DecisionRecord record, Head expectedBase) throws IOException {
     Objects.requireNonNull(record, "record");
-    if (!projectId.equals(record.projectId())) {
-      return SaveResult.CORRUPT;
-    }
-    try {
-      if (!record.verify()) {
-        return SaveResult.CORRUPT;
-      }
-    } catch (GeneralSecurityException exception) {
+    if (!isAuthentic(record)) {
       return SaveResult.CORRUPT;
     }
     Path revisionPath = revisionPath(record.recordId(), record.revision());
@@ -214,7 +215,7 @@ public final class DecisionStore {
       if (expectedBase != null) {
         return SaveResult.STALE_BASE;
       }
-      if (record.revision() != 1 || record.previousDigest() != null) {
+      if (!extendsChain(null, record)) {
         return SaveResult.CONFLICT;
       }
     } else {
@@ -224,10 +225,12 @@ public final class DecisionStore {
       if (!current.equals(expectedBase)) {
         return SaveResult.STALE_BASE;
       }
-      if (record.revision() != current.revision() + 1
-          || !Arrays.equals(record.previousDigest(), current.digest())) {
+      if (!extendsChain(current, record)) {
         return SaveResult.CONFLICT;
       }
+    }
+    if (record.revision() > MAX_REVISIONS_PER_RECORD) {
+      return SaveResult.REVISION_LIMIT;
     }
     atomicWrite(revisionPath, record.encoded());
     atomicWrite(headPath(record.recordId()),
@@ -246,19 +249,12 @@ public final class DecisionStore {
    */
   public synchronized SaveResult applyRemote(DecisionRecord record) throws IOException {
     Objects.requireNonNull(record, "record");
-    if (!projectId.equals(record.projectId())) {
-      return SaveResult.CORRUPT;
-    }
-    try {
-      if (!record.verify()) {
-        return SaveResult.CORRUPT;
-      }
-    } catch (GeneralSecurityException exception) {
+    if (!isAuthentic(record)) {
       return SaveResult.CORRUPT;
     }
     Head current = readHead(record.recordId());
     if (current == null) {
-      if (record.revision() == 1 && record.previousDigest() == null) {
+      if (extendsChain(null, record)) {
         return save(record, null);
       }
       quarantine(record);
@@ -271,8 +267,7 @@ public final class DecisionStore {
       quarantine(record);
       return record.revision() < current.revision() ? SaveResult.STALE_BASE : SaveResult.CONFLICT;
     }
-    if (record.revision() == current.revision() + 1
-        && Arrays.equals(record.previousDigest(), current.digest())) {
+    if (extendsChain(current, record)) {
       return save(record, current);
     }
     quarantine(record);
@@ -290,12 +285,8 @@ public final class DecisionStore {
     if (!projectId.equals(record.projectId())) {
       throw new IOException("project mismatch");
     }
-    try {
-      if (!record.verify()) {
-        throw new IOException("invalid remote signature");
-      }
-    } catch (GeneralSecurityException exception) {
-      throw new IOException("invalid remote signature", exception);
+    if (!signatureVerifies(record)) {
+      throw new IOException("invalid remote signature");
     }
     Path directory = conflicts.resolve(record.recordId()
         .toString());
@@ -397,35 +388,27 @@ public final class DecisionStore {
             if (!recordId.equals(record.recordId()) || !projectId.equals(record.projectId())) {
               throw new IOException("revision identity mismatch");
             }
-            if (!record.verify()) {
+            if (!signatureVerifies(record)) {
               throw new IOException("invalid revision signature");
             }
             if (revisions.put(record.revision(), record) != null) {
               throw new IOException("duplicate revision number");
             }
           }
-        } catch (GeneralSecurityException exception) {
-          throw new IOException("invalid revision signature", exception);
         }
         if (revisions.isEmpty()) {
           continue;
         }
-        DecisionRecord previous = null;
+        Head recovered = null;
         for (DecisionRecord record : revisions.values()
             .stream()
             .sorted(Comparator.comparingLong(DecisionRecord::revision))
             .toList()) {
-          if (previous == null) {
-            if (record.revision() != 1 || record.previousDigest() != null) {
-              throw new IOException("broken revision chain");
-            }
-          } else if (record.revision() != previous.revision() + 1
-              || !Arrays.equals(record.previousDigest(), previous.digest())) {
+          if (!extendsChain(recovered, record)) {
             throw new IOException("broken revision chain");
           }
-          previous = record;
+          recovered = tipOf(record);
         }
-        Head recovered = new Head(previous.revision(), previous.digest());
         Head existing = readHead(recordId);
         if (!recovered.equals(existing)) {
           atomicWrite(headPath(recordId), encodeHead(recovered));
@@ -452,6 +435,7 @@ public final class DecisionStore {
       throw new IOException("decision revision bound is invalid");
     }
     DecisionRecord previous = null;
+    Head tip = null;
     for (Path file : files) {
       DecisionRecord record = readRevisionFile(file);
       long revision = parseRevisionName(file);
@@ -459,24 +443,15 @@ public final class DecisionStore {
           || !projectId.equals(record.projectId())) {
         throw new IOException("decision identity is invalid");
       }
-      try {
-        if (!record.verify()) {
-          throw new IOException("decision signature is invalid");
-        }
-      } catch (GeneralSecurityException exception) {
-        throw new IOException("decision signature is invalid", exception);
+      if (!signatureVerifies(record)) {
+        throw new IOException("decision signature is invalid");
       }
-      if (previous == null) {
-        if (record.revision() != 1 || record.previousDigest() != null) {
-          throw new IOException("decision chain is invalid");
-        }
-      } else if (record.revision() != previous.revision() + 1
-          || !Arrays.equals(record.previousDigest(), previous.digest())) {
+      if (!extendsChain(tip, record)) {
         throw new IOException("decision chain is invalid");
       }
+      tip = tipOf(record);
       previous = record;
     }
-    Head tip = new Head(previous.revision(), previous.digest());
     if (!tip.equals(head)) {
       throw new IOException("decision head is stale");
     }
@@ -498,12 +473,8 @@ public final class DecisionStore {
         || !recordId.equals(record.recordId())) {
       throw new IOException("revision identity mismatch");
     }
-    try {
-      if (!record.verify()) {
-        throw new IOException("invalid revision signature");
-      }
-    } catch (GeneralSecurityException exception) {
-      throw new IOException("invalid revision signature", exception);
+    if (!signatureVerifies(record)) {
+      throw new IOException("invalid revision signature");
     }
     return record;
   }
@@ -515,11 +486,13 @@ public final class DecisionStore {
     }
     byte[] bytes = Files.readAllBytes(path);
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
-      if (input.readInt() != HEAD_MAGIC || input.readUnsignedByte() != HEAD_VERSION
-          || input.readLong() <= 0) {
+      if (input.readInt() != HEAD_MAGIC || input.readUnsignedByte() != HEAD_VERSION) {
         throw new IOException("corrupt head");
       }
-      long revision = bytesToRevision(bytes);
+      long revision = input.readLong();
+      if (revision <= 0) {
+        throw new IOException("corrupt head");
+      }
       byte[] digest = input.readNBytes(32);
       if (digest.length != 32 || input.available() != 0) {
         throw new IOException("corrupt head");
@@ -527,6 +500,54 @@ public final class DecisionStore {
       return new Head(revision, digest);
     } catch (RuntimeException exception) {
       throw new IOException("corrupt head", exception);
+    }
+  }
+
+  /**
+   * Counts record directories whose chain cannot be trusted: unparsable name, missing head, an
+   * unreadable or unverifiable revision from 1 to the head, a broken link, or a head digest that is
+   * not the last revision's. Revisions beyond the head are not examined, and an unlistable store
+   * counts as one more.
+   *
+   * @return number of corrupt record directories
+   */
+  public synchronized int corruptRecordCount() {
+    int corrupt = 0;
+    if (!Files.isDirectory(decisions)) {
+      return corrupt;
+    }
+    try (var recordDirs = Files.list(decisions)) {
+      for (Path recordDir : recordDirs.filter(Files::isDirectory)
+          .toList()) {
+        if (!chainIsIntact(recordDir)) {
+          corrupt++;
+        }
+      }
+    } catch (IOException exception) {
+      corrupt++;
+    }
+    return corrupt;
+  }
+
+  private boolean chainIsIntact(Path recordDir) {
+    try {
+      UUID recordId = UUID.fromString(recordDir.getFileName()
+          .toString());
+      Head head = readHead(recordId);
+      if (head == null) {
+        return false;
+      }
+      Head tip = null;
+      for (long revision = 1; revision <= head.revision(); revision++) {
+        DecisionRecord record = readRevision(recordId, revision);
+        if (!extendsChain(tip, record)) {
+          return false;
+        }
+        tip = tipOf(record);
+      }
+      return head.equals(tip);
+    } catch (IOException | RuntimeException exception) {
+      return false;
     }
   }
 
@@ -562,7 +583,12 @@ public final class DecisionStore {
     /**
      * The candidate fails signature, project, or structural trust checks.
      */
-    CORRUPT
+    CORRUPT,
+    /**
+     * The candidate would extend the chain past {@link #MAX_REVISIONS_PER_RECORD}, which the store
+     * refuses to read back.
+     */
+    REVISION_LIMIT
   }
 
   /**
@@ -597,17 +623,6 @@ public final class DecisionStore {
      */
     public byte[] digest() {
       return digest.clone();
-    }
-
-    /**
-     * Returns the lowercase hexadecimal head digest.
-     *
-     * @return digest text
-     */
-    @SuppressWarnings("unused")
-    public String digestHex() {
-      return java.util.HexFormat.of()
-          .formatHex(digest);
     }
 
     @Override

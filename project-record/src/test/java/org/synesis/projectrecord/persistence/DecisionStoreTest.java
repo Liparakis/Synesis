@@ -28,7 +28,13 @@ final class DecisionStoreTest {
   private static DecisionRecord record(Ed25519Signer signer, long revision, byte[] previous,
       String title)
       throws Exception {
-    return DecisionRecord.create(PROJECT, RECORD, revision, previous, signer.nodeId(),
+    return record(signer, RECORD, revision, previous, title);
+  }
+
+  private static DecisionRecord record(Ed25519Signer signer, UUID recordId, long revision,
+      byte[] previous, String title)
+      throws Exception {
+    return DecisionRecord.create(PROJECT, recordId, revision, previous, signer.nodeId(),
         signer.nodeId(),
         DecisionStatus.PROPOSED, TIME, TIME, title, "rationale", List.of(
             new DecisionEvidence("test", "reference", new byte[32])), signer);
@@ -97,5 +103,83 @@ final class DecisionStoreTest {
     assertEquals(DecisionStore.SaveResult.CORRUPT, store.save(tampered, null));
     assertTrue(store.head(RECORD)
         .isEmpty());
+  }
+
+  @Test
+  void recoveryRejectsRevisionWithCorruptedSignature() throws Exception {
+    Path root = Files.createTempDirectory("decision-recover-signature-");
+    Ed25519Signer signer = Ed25519Signer.generate();
+    new DecisionStore(root, PROJECT).save(record(signer, 1, null, "one"), null);
+    flipLastByte(revisionFile(root, RECORD));
+    java.io.IOException failure = assertThrows(java.io.IOException.class,
+        () -> new DecisionStore(root, PROJECT));
+    assertEquals("invalid revision signature", failure.getMessage());
+  }
+
+  @Test
+  void quarantineRejectsBadSignatureAndForeignProject() throws Exception {
+    Ed25519Signer signer = Ed25519Signer.generate();
+    DecisionStore store = new DecisionStore(Files.createTempDirectory("decision-quarantine-"),
+        PROJECT);
+    byte[] bytes = record(signer, 1, null, "one").encoded();
+    bytes[bytes.length - 1] ^= 1;
+    DecisionRecord tampered = DecisionRecord.decode(bytes);
+    assertEquals("invalid remote signature",
+        assertThrows(java.io.IOException.class, () -> store.quarantine(tampered)).getMessage());
+    DecisionStore other = new DecisionStore(Files.createTempDirectory("decision-other-"),
+        UUID.randomUUID());
+    assertEquals("project mismatch",
+        assertThrows(java.io.IOException.class,
+            () -> other.quarantine(record(signer, 1, null, "one"))).getMessage());
+  }
+
+  @Test
+  void corruptRecordCountSeesOnlyTheCorruptedRecord() throws Exception {
+    Path root = Files.createTempDirectory("decision-audit-");
+    Ed25519Signer signer = Ed25519Signer.generate();
+    DecisionStore store = new DecisionStore(root, PROJECT);
+    UUID healthy = UUID.fromString("55555555-5555-5555-5555-555555555555");
+    assertEquals(DecisionStore.SaveResult.APPLIED,
+        store.save(record(signer, healthy, 1, null, "healthy"), null));
+    assertEquals(DecisionStore.SaveResult.APPLIED, store.save(record(signer, 1, null, "one"), null));
+    assertEquals(0, store.corruptRecordCount());
+
+    flipLastByte(revisionFile(root, RECORD));
+    assertEquals(1, store.corruptRecordCount());
+  }
+
+  @Test
+  void storeRefusesRevisionsItCouldNotReadBack() throws Exception {
+    Path root = Files.createTempDirectory("decision-limit-");
+    Ed25519Signer signer = Ed25519Signer.generate();
+    DecisionStore store = new DecisionStore(root, PROJECT);
+    DecisionRecord previous = null;
+    for (int revision = 1; revision <= DecisionStore.MAX_REVISIONS_PER_RECORD; revision++) {
+      DecisionRecord next = record(signer, revision, previous == null ? null : previous.digest(),
+          "r" + revision);
+      assertEquals(DecisionStore.SaveResult.APPLIED,
+          store.save(next, previous == null ? null : store.headState(RECORD).orElseThrow()));
+      previous = next;
+    }
+    DecisionRecord beyond = record(signer, DecisionStore.MAX_REVISIONS_PER_RECORD + 1,
+        previous.digest(), "beyond");
+    assertEquals(DecisionStore.SaveResult.REVISION_LIMIT,
+        store.save(beyond, store.headState(RECORD).orElseThrow()));
+    assertEquals(DecisionStore.SaveResult.REVISION_LIMIT, store.applyRemote(beyond));
+    assertEquals(1, store.verifiedHeads(10).size());
+    assertEquals(DecisionStore.MAX_REVISIONS_PER_RECORD, store.head(RECORD).orElseThrow().revision());
+    assertFalse(Files.exists(root.resolve("conflicts").resolve(RECORD.toString())));
+  }
+
+  private static Path revisionFile(Path root, UUID recordId) {
+    return root.resolve("decisions")
+        .resolve(recordId.toString())
+        .resolve("1.sdr");
+  }
+
+  private static void flipLastByte(Path file) throws java.io.IOException {
+    byte[] bytes = Files.readAllBytes(file);
+    bytes[bytes.length - 1] ^= 1;
+    Files.write(file, bytes);
   }
 }

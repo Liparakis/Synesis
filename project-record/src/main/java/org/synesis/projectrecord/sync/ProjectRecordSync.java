@@ -43,7 +43,7 @@ public final class ProjectRecordSync {
       case DUPLICATE -> Code.DUPLICATE;
       case STALE_BASE -> Code.REMOTE_STALE;
       case CONFLICT -> Code.CONFLICT;
-      case CORRUPT -> Code.REJECTED;
+      case CORRUPT, REVISION_LIMIT -> Code.REJECTED;
     };
   }
 
@@ -53,7 +53,7 @@ public final class ProjectRecordSync {
       case DUPLICATE -> RecordMessage.ResultCode.DUPLICATE;
       case STALE_BASE -> RecordMessage.ResultCode.REMOTE_STALE;
       case CONFLICT -> RecordMessage.ResultCode.CONFLICT;
-      case CORRUPT -> RecordMessage.ResultCode.REJECTED;
+      case CORRUPT, REVISION_LIMIT -> RecordMessage.ResultCode.REJECTED;
     };
   }
 

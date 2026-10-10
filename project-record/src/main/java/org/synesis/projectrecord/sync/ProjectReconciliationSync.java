@@ -1,7 +1,6 @@
 package org.synesis.projectrecord.sync;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +35,7 @@ public final class ProjectReconciliationSync {
   /**
    * Maximum revisions per record (safety bound).
    */
-  public static final int MAX_REVISIONS = 100;
+  public static final int MAX_REVISIONS = DecisionStore.MAX_REVISIONS_PER_RECORD;
   /**
    * Maximum session bytes transferred (safety bound).
    */
@@ -585,6 +584,7 @@ public final class ProjectReconciliationSync {
               case DUPLICATE -> RecordStatus.DUPLICATE;
               case STALE_BASE -> RecordStatus.REMOTE_STALE;
               case CONFLICT, CORRUPT -> RecordStatus.CONFLICT;
+              case REVISION_LIMIT -> RecordStatus.REJECTED;
             };
             result.complete(ReconciliationMessage.clientUploadAck(config.projectId(),
                     record.recordId(),
@@ -736,49 +736,7 @@ public final class ProjectReconciliationSync {
   }
 
   private int countCorruptRecords() {
-    Path root = store.rootPath();
-    Path decisions = root.resolve("decisions");
-    if (!java.nio.file.Files.isDirectory(decisions)) {
-      return 0;
-    }
-    int corruptCount = 0;
-    try (var recordDirs = java.nio.file.Files.list(decisions)) {
-      for (Path recordDir : recordDirs.filter(java.nio.file.Files::isDirectory)
-          .toList()) {
-        try {
-          UUID recordId = UUID.fromString(recordDir.getFileName()
-              .toString());
-          Optional<DecisionStore.Head> headOpt = store.headState(recordId);
-          if (headOpt.isEmpty()) {
-            corruptCount++;
-            continue;
-          }
-          DecisionStore.Head head = headOpt.get();
-          byte[] expectedPrevDigest = null;
-          for (long r = 1; r <= head.revision(); r++) {
-            DecisionRecord rec = store.readRevision(recordId, r);
-            if (r == 1) {
-              if (rec.previousDigest() != null) {
-                throw new IOException("first revision parent digest not null");
-              }
-            } else {
-              if (!Arrays.equals(rec.previousDigest(), expectedPrevDigest)) {
-                throw new IOException("broken hash chain");
-              }
-            }
-            expectedPrevDigest = rec.digest();
-          }
-          if (!Arrays.equals(head.digest(), expectedPrevDigest)) {
-            throw new IOException("head pointer mismatch");
-          }
-        } catch (Exception e) {
-          corruptCount++;
-        }
-      }
-    } catch (IOException e) {
-      corruptCount++;
-    }
-    return corruptCount;
+    return store.corruptRecordCount();
   }
 
   /**
