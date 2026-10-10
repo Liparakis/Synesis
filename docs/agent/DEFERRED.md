@@ -144,7 +144,7 @@ activation/uninstall/registry boundaries, the accepted native activation ADR,
 focused ownership tests, and a visual reference for the requested wizard
 controls are recorded in SYN-067 and ADR-0080; final build and test evidence is
 recorded in `docs/evidence/SYN-067-windows-setup-wizard-2026-09-13.md` and
-`docs/agent/checkpoints/CP-0944.md`.
+checkpoint CP-0944 (the checkpoint files were removed from the tree; Git history has them).
 **Public-claims impact:** Synesis may claim only a per-user Windows wizard and
 owned `synesis://` registration after the bounded installer evidence passes.
 It must not claim privileged machine-wide installation, daemon termination,

@@ -61,9 +61,6 @@ stale, reordered, malformed, and oversized input is rejected deterministically.
 
 ## Fitness functions
 
-- `scripts/agent-doctor.ps1` rejects obvious scope leakage, secrets, stale task state, and missing
-  package-info once
-  Java exists.
 - Gradle compile/test/Javadoc tasks must pass with warnings treated as failures where tooling
   permits.
 - Public API tests must not import internal transport types.

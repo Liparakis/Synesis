@@ -1,1 +1,0 @@
-Placeholder-contract fixture case.

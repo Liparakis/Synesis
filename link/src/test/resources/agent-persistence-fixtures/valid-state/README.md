@@ -1,1 +1,0 @@
-Valid-state fixture case.
