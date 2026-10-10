@@ -4,9 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
-import org.synesis.workspace.infrastructure.digest.Sha256;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.application.project.ProjectCommandSpec;
 
 /**
  * Canonicalizes bounded typed JSON-RPC request IDs for durable lookup.
@@ -16,7 +14,7 @@ public final class ProjectCommandCanonicalizer {
     /**
      * Maximum UTF-8-independent Java character count for one request ID.
      */
-    public static final int MAX_REQUEST_ID_LENGTH = 256;
+    static final int MAX_REQUEST_ID_LENGTH = 256;
 
     private ProjectCommandCanonicalizer() {
     }
@@ -62,12 +60,12 @@ public final class ProjectCommandCanonicalizer {
      */
     public static String requestDigest(List<String> argv, String workingDirectory, Integer timeoutSeconds) {
         Objects.requireNonNull(argv, "argv");
-        return digest(Map.of("argv",
+        return CommandDurableFormat.canonicalDigest(Map.of("argv",
                 List.copyOf(argv),
                 "workingDirectory",
                 workingDirectory == null || workingDirectory.isBlank() ? "." : workingDirectory,
                 "timeoutSeconds",
-                timeoutSeconds == null ? ProjectProcessExecutor.DEFAULT_TIMEOUT_SECONDS : timeoutSeconds));
+                timeoutSeconds == null ? ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS : timeoutSeconds));
     }
 
     /**
@@ -80,7 +78,7 @@ public final class ProjectCommandCanonicalizer {
      * @return SHA-256 semantic digest
      */
     public static String semanticDigest(String requestDigest, String provider, String connectionInstanceId, String scopeLocator) {
-        return digest(Map.of("requestDigest",
+        return CommandDurableFormat.canonicalDigest(Map.of("requestDigest",
                 Objects.requireNonNull(requestDigest, "requestDigest"),
                 "provider",
                 Objects.requireNonNull(provider, "provider"),
@@ -97,15 +95,7 @@ public final class ProjectCommandCanonicalizer {
      * @param requestId canonical typed JSON-RPC request ID
      * @return SHA-256 keyed request locator
      */
-    public static String requestKey(String anchorId, String requestId) {
-        return digest(Map.of("anchorId", Objects.requireNonNull(anchorId, "anchorId"), "requestId", Objects.requireNonNull(requestId, "requestId")));
-    }
-
-    private static String digest(Map<String, Object> value) {
-        try {
-            return Sha256.hex(ProviderJson.write(value));
-        } catch (Exception failure) {
-            throw new IllegalStateException("command digest unavailable", failure);
-        }
+    static String requestKey(String anchorId, String requestId) {
+        return CommandDurableFormat.canonicalDigest(Map.of("anchorId", Objects.requireNonNull(anchorId, "anchorId"), "requestId", Objects.requireNonNull(requestId, "requestId")));
     }
 }

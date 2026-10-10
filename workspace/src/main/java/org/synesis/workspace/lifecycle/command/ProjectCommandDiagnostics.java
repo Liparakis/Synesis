@@ -1,7 +1,6 @@
 package org.synesis.workspace.lifecycle.command;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,12 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Performs a bounded, read-only projection of the durable command namespace.
  */
-@SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandDiagnostics {
 
     private ProjectCommandDiagnostics() {
@@ -35,16 +32,16 @@ public final class ProjectCommandDiagnostics {
             return Report.absent();
         }
         Counters counters = new Counters();
-        Path index = root.resolve("namespace.json");
+        Path index = root.resolve(ProjectCommandNamespace.INDEX_FILE);
         Map<String, Object> indexValue = readObject(index, ProjectCommandNamespace.MAX_INDEX_BYTES, counters);
         if (indexValue == null) {
             counters.corruptObjectCount++;
         }
-        enumerateLocks(root.resolve("locks"), counters);
-        enumerateScopes(root.resolve("scopes"), counters);
-        enumerateAnchors(root.resolve("process-scopes"), counters);
+        enumerateLocks(root.resolve(ProjectCommandNamespace.LOCKS), counters);
+        enumerateScopes(root.resolve(ProjectCommandNamespace.SCOPES), counters);
+        enumerateAnchors(root.resolve(ProjectCommandNamespace.PROCESS_SCOPES), counters);
         enumerateTemporaries(root, counters);
-        counters.liveAtCapacityCount = counters.recordCounts.entrySet().stream().filter(entry -> entry.getValue() >= 8_192 && !counters.deadAnchorIds.contains(entry.getKey())).mapToInt(ignored -> 1).sum();
+        counters.liveAtCapacityCount = counters.recordCounts.entrySet().stream().filter(entry -> entry.getValue() >= ProjectCommandNamespace.MAX_REQUEST_IDS_PER_LIVE_ANCHOR && !counters.deadAnchorIds.contains(entry.getKey())).mapToInt(ignored -> 1).sum();
 
         boolean staleIndex = indexValue != null && number(indexValue, "scopeCount") != counters.scopeCount;
         return new Report(true,
@@ -110,8 +107,8 @@ public final class ProjectCommandDiagnostics {
                     continue;
                 }
                 counters.scopeCount++;
-                readObject(scope.resolve("scope.json"), ProjectCommandNamespace.MAX_SCOPE_BYTES, counters);
-                Path records = scope.resolve("records");
+                readObject(scope.resolve(ProjectCommandNamespace.SCOPE_FILE), ProjectCommandNamespace.MAX_SCOPE_BYTES, counters);
+                Path records = scope.resolve(ProjectCommandNamespace.RECORDS);
                 int recordsForScope = 0;
                 if (Files.isDirectory(records)) {
                     try (DirectoryStream<Path> recordStream = Files.newDirectoryStream(records, "*.json")) {
@@ -131,7 +128,7 @@ public final class ProjectCommandDiagnostics {
                             }
                             String phase = value.get("phase") instanceof String text ? text : "";
                             if (ProjectCommandPhase.TERMINAL.name().equals(phase)) {
-                                if (Boolean.TRUE.equals(value.get("pinned")) || Boolean.TRUE.equals(value.get("acceptancePinned")) || Boolean.TRUE.equals(value.get("checkpointPinned"))) {
+                                if (ProjectCommandRecord.pinnedForCensus(value)) {
                                     counters.pinnedEvidenceCount++;
                                 } else {
                                     counters.eligibleTerminalCount++;
@@ -143,11 +140,11 @@ public final class ProjectCommandDiagnostics {
                         counters.enumerationComplete = false;
                     }
                 }
-                if (recordsForScope > 65_536) {
+                if (recordsForScope > ProjectCommandNamespace.MAX_RECORDS_PER_SCOPE) {
                     counters.corruptObjectCount++;
                     counters.formatValid = false;
                 }
-                Path history = scope.resolve("terminal-history");
+                Path history = scope.resolve(ProjectCommandNamespace.TERMINAL_HISTORY);
                 if (Files.isDirectory(history)) {
                     try (DirectoryStream<Path> historyStream = Files.newDirectoryStream(history, "*.json")) {
                         for (Path ignored : historyStream) {
@@ -179,14 +176,13 @@ public final class ProjectCommandDiagnostics {
                     continue;
                 }
                 counters.anchorCount++;
-                Map<String, Object> value = readObject(directory.resolve("anchor.json"), ProjectCommandNamespace.MAX_ANCHOR_BYTES, counters);
+                Map<String, Object> value = readObject(directory.resolve(ProjectCommandNamespace.ANCHOR_FILE), ProjectCommandNamespace.MAX_ANCHOR_BYTES, counters);
                 if (value == null) {
                     continue;
                 }
                 Object raw = value.get("processIdentity");
                 if (raw instanceof Map<?, ?> process && process.get("pid") instanceof Number pid && process.get("processStartTime") instanceof Number start) {
-                    var handle = ProcessHandle.of(pid.longValue());
-                    if (handle.isEmpty() || handle.get().info().startInstant().map(instant -> instant.toEpochMilli() != start.longValue()).orElse(true)) {
+                    if (ProjectCommandProcessAnchor.startTimeGone(pid.longValue(), start.longValue())) {
                         counters.deadAnchorCount++;
                         if (value.get("anchorId") instanceof String anchorId) {
                             counters.deadAnchorIds.add(anchorId);
@@ -217,29 +213,8 @@ public final class ProjectCommandDiagnostics {
     }
 
     private static Map<String, Object> readObject(Path path, int maxBytes, Counters counters) {
-        if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
-            counters.corruptObjectCount++;
-            counters.formatValid = false;
-            return null;
-        }
         try {
-            byte[] bytes = Files.readAllBytes(path);
-            if (bytes.length > maxBytes) {
-                counters.corruptObjectCount++;
-                counters.formatValid = false;
-                return null;
-            }
-            Object parsed = ProviderJson.parse(new String(bytes, StandardCharsets.UTF_8));
-            if (!(parsed instanceof Map<?, ?> raw)) {
-                throw new IOException("not object");
-            }
-            Map<String, Object> value = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : raw.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    throw new IOException("invalid key");
-                }
-                value.put(key, entry.getValue());
-            }
+            Map<String, Object> value = CommandDurableFormat.readUnverified(path, maxBytes, ProjectCommandNamespace.DURABLE_OBJECT);
             try {
                 CommandDurableFormat.verify(value);
             } catch (CommandFormatException format) {

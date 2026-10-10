@@ -1,21 +1,25 @@
 package org.synesis.workspace.lifecycle.command;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.synesis.workspace.application.project.ProjectCommandAdmissionService;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.command.CommandDurableFormat.ReadCodes;
 
 /**
  * Persists and verifies bounded project-command records under one namespace scope.
  */
-@SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandStore {
+
+    /**
+     * Records are read without the regular-file check and size bound the namespace objects get,
+     * so a record the store accepted before keeps being accepted.
+     */
+    private static final ReadCodes RECORD = new ReadCodes(null, null, "COMMAND_RECORD_NOT_OBJECT", "COMMAND_RECORD_KEY_INVALID", "COMMAND_RECORD_CORRUPT");
+    private static final ReadCodes SCOPE = new ReadCodes(null, null, "COMMAND_SCOPE_NOT_OBJECT", "COMMAND_SCOPE_KEY_INVALID", null);
 
     /**
      * Canonical host-wide namespace under which command scopes are stored.
@@ -29,20 +33,6 @@ public final class ProjectCommandStore {
      */
     public ProjectCommandStore(Path namespaceRoot) {
         this.namespaceRoot = Objects.requireNonNull(namespaceRoot, "namespaceRoot").toAbsolutePath().normalize();
-    }
-
-    private static void validateLocator(String locator) throws IOException {
-        if (locator == null || locator.isBlank() || locator.length() > 256 || locator.contains("/") || locator.contains("\\") || ".".equals(locator) || "..".equals(locator)) {
-            throw new IOException("COMMAND_LOCATOR_INVALID");
-        }
-    }
-
-    private static long readSchema(Path path) throws IOException {
-        Object parsed = ProviderJson.parse(Files.readString(path, StandardCharsets.UTF_8));
-        if (!(parsed instanceof Map<?, ?> raw) || !(raw.get("schemaVersion") instanceof Number number)) {
-            throw new CommandFormatException("COMMAND_FORMAT_FIELD_MISSING:schemaVersion");
-        }
-        return number.longValue();
     }
 
     private static int countJson(Path directory) throws IOException {
@@ -60,10 +50,6 @@ public final class ProjectCommandStore {
             }
         }
         return count;
-    }
-
-    private static String key(String anchorId, String requestId) {
-        return ProjectCommandCanonicalizer.requestKey(anchorId, requestId);
     }
 
     private static Map<String, Object> toMap(ProjectCommandRecord record) {
@@ -118,14 +104,7 @@ public final class ProjectCommandStore {
     }
 
     private static Map<String, Object> copyMap(Map<?, ?> source) throws CommandFormatException {
-        Map<String, Object> copy = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : source.entrySet()) {
-            if (!(entry.getKey() instanceof String key)) {
-                throw new CommandFormatException("COMMAND_RECORD_RESPONSE_KEY_INVALID");
-            }
-            copy.put(key, entry.getValue());
-        }
-        return copy;
+        return CommandDurableFormat.stringKeyed(source, "COMMAND_RECORD_RESPONSE_KEY_INVALID");
     }
 
     private static String string(Map<String, Object> value, String key) throws CommandFormatException {
@@ -167,22 +146,32 @@ public final class ProjectCommandStore {
      * @throws IOException if the record is corrupt or incompatible
      */
     private static Map<String, Object> readRecord(Path path) throws IOException {
-        try {
-            Object parsed = ProviderJson.parse(Files.readString(path, StandardCharsets.UTF_8));
-            if (!(parsed instanceof Map<?, ?> parsedMap)) {
-                throw new CommandFormatException("COMMAND_RECORD_NOT_OBJECT");
+        return CommandDurableFormat.read(path, CommandDurableFormat.UNBOUNDED, RECORD);
+    }
+
+    /**
+     * Applies the record lifecycle: a new record starts as revision 1 in STARTING, and an existing
+     * one moves forward one revision and to a later phase until it is TERMINAL or AMBIGUOUS.
+     */
+    private static void requireTransition(Optional<Stored> current, ProjectCommandRecord next) throws CommandFormatException {
+        if (current.isEmpty()) {
+            if (next.revision() != 1L || next.phase() != ProjectCommandPhase.STARTING) {
+                throw new CommandFormatException("COMMAND_RECORD_INITIAL_STATE_INVALID");
             }
-            Map<String, Object> value = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : parsedMap.entrySet()) {
-                if (!(entry.getKey() instanceof String name)) {
-                    throw new CommandFormatException("COMMAND_RECORD_KEY_INVALID");
-                }
-                value.put(name, entry.getValue());
-            }
-            CommandDurableFormat.verify(value);
-            return value;
-        } catch (RuntimeException failure) {
-            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
+            return;
+        }
+        ProjectCommandRecord previous = current.get().record();
+        if (current.get().schemaVersion() != CommandDurableFormat.SCHEMA_VERSION) {
+            throw new CommandFormatException("COMMAND_FORMAT_MIGRATION_REQUIRED");
+        }
+        if (previous.phase() == ProjectCommandPhase.TERMINAL || previous.phase() == ProjectCommandPhase.AMBIGUOUS) {
+            throw new CommandFormatException("COMMAND_RECORD_BLOCKING_OR_TERMINAL_IMMUTABLE");
+        }
+        if (next.revision() != previous.revision() + 1L) {
+            throw new CommandFormatException("COMMAND_RECORD_REVISION_STALE");
+        }
+        if (next.phase().ordinal() <= previous.phase().ordinal()) {
+            throw new CommandFormatException("COMMAND_RECORD_PHASE_ORDER_INVALID");
         }
     }
 
@@ -194,52 +183,17 @@ public final class ProjectCommandStore {
      */
     public void save(ProjectCommandRecord record) throws IOException {
         Objects.requireNonNull(record, "record");
-        validateLocator(record.scopeLocator());
-        validateLocator(record.anchorId());
-        try (ProjectCommandNamespace namespace = ProjectCommandNamespace.open(namespaceRoot)) {
-            if (!namespace.isHeld()) {
-                throw new IOException("COMMAND_NAMESPACE_LOCK_UNAVAILABLE");
-            }
-            Optional<ProjectCommandRecord> current = find(record.scopeLocator(), record.anchorId(), record.requestId());
-            if (current.isPresent()) {
-                Path currentTarget = scopePath(record.scopeLocator()).resolve("records").resolve(key(record.anchorId(), record.requestId()) + ".json");
-                if (readSchema(currentTarget) != CommandDurableFormat.SCHEMA_VERSION) {
-                    throw new CommandFormatException("COMMAND_FORMAT_MIGRATION_REQUIRED");
-                }
-                if (current.get().phase() == ProjectCommandPhase.TERMINAL || current.get().phase() == ProjectCommandPhase.AMBIGUOUS) {
-                    throw new CommandFormatException("COMMAND_RECORD_BLOCKING_OR_TERMINAL_IMMUTABLE");
-                }
-                if (record.revision() != current.get().revision() + 1L) {
-                    throw new CommandFormatException("COMMAND_RECORD_REVISION_STALE");
-                }
-                if (record.phase().ordinal() <= current.get().phase().ordinal()) {
-                    throw new CommandFormatException("COMMAND_RECORD_PHASE_ORDER_INVALID");
-                }
-            } else if (record.revision() != 1L || record.phase() != ProjectCommandPhase.STARTING) {
-                throw new CommandFormatException("COMMAND_RECORD_INITIAL_STATE_INVALID");
-            }
-            Path scope = scopePath(record.scopeLocator());
-            Path target = scope.resolve("records").resolve(key(record.anchorId(), record.requestId()) + ".json");
-            if (!Files.exists(target) && countJson(scope.resolve("records")) >= ProjectCommandNamespace.MAX_RECORDS_PER_SCOPE) {
+        ProjectCommandNamespace.requireLocator(record.scopeLocator());
+        ProjectCommandNamespace.requireLocator(record.anchorId());
+        try (ProjectCommandNamespace _ = ProjectCommandNamespace.open(namespaceRoot)) {
+            Optional<Stored> current = load(record.scopeLocator(), record.anchorId(), record.requestId());
+            requireTransition(current, record);
+            Path records = ProjectCommandNamespace.recordsDirectory(namespaceRoot, record.scopeLocator());
+            if (current.isEmpty() && countJson(records) >= ProjectCommandNamespace.MAX_RECORDS_PER_SCOPE) {
                 throw new IOException("COMMAND_SCOPE_RECORD_CAPACITY_EXCEEDED");
             }
-            Map<String, Object> value = toMap(record);
-            String json = ProviderJson.write(CommandDurableFormat.withIntegrity(value));
-            if (json.getBytes(StandardCharsets.UTF_8).length > ProjectCommandNamespace.MAX_SCOPE_BYTES) {
-                throw new IOException("COMMAND_RECORD_SIZE_LIMIT");
-            }
-            Files.createDirectories(target.getParent());
-            Path temporary = target.resolveSibling(target.getFileName() + ".tmp-" + java.util.UUID.randomUUID());
-            Files.writeString(temporary, json, StandardCharsets.UTF_8);
-            try {
-                try {
-                    Files.move(temporary, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                    Files.move(temporary, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                }
-            } finally {
-                Files.deleteIfExists(temporary);
-            }
+            Path target = records.resolve(ProjectCommandCanonicalizer.requestKey(record.anchorId(), record.requestId()) + ".json");
+            CommandDurableFormat.write(target, CommandDurableFormat.withIntegrity(toMap(record)), ProjectCommandNamespace.MAX_SCOPE_BYTES, "COMMAND_RECORD_SIZE_LIMIT");
         }
     }
 
@@ -253,23 +207,9 @@ public final class ProjectCommandStore {
      * @throws IOException if state is corrupt or incompatible
      */
     public Optional<ProjectCommandRecord> find(String scopeLocator, String anchorId, String requestId) throws IOException {
-        validateLocator(scopeLocator);
-        validateLocator(anchorId);
-        Path target = namespaceRoot.resolve("scopes").resolve(scopeLocator).resolve("records").resolve(key(anchorId, requestId) + ".json");
-        if (!Files.exists(target)) {
-            return Optional.empty();
-        }
-        verifyAnchorAndScope(scopeLocator, anchorId);
-        try {
-            Map<String, Object> value = readRecord(target);
-            ProjectCommandRecord record = fromMap(value);
-            if (!record.scopeLocator().equals(scopeLocator) || !record.anchorId().equals(anchorId) || !record.requestId().equals(requestId)) {
-                throw new CommandFormatException("COMMAND_RECORD_KEY_MISMATCH");
-            }
-            return Optional.of(record);
-        } catch (RuntimeException failure) {
-            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
-        }
+        ProjectCommandNamespace.requireLocator(scopeLocator);
+        ProjectCommandNamespace.requireLocator(anchorId);
+        return load(scopeLocator, anchorId, requestId).map(Stored::record);
     }
 
     /**
@@ -281,9 +221,9 @@ public final class ProjectCommandStore {
      * @throws IOException if a record is corrupt or incompatible
      */
     public int countForAnchor(String scopeLocator, String anchorId) throws IOException {
-        validateLocator(scopeLocator);
-        validateLocator(anchorId);
-        Path records = namespaceRoot.resolve("scopes").resolve(scopeLocator).resolve("records");
+        ProjectCommandNamespace.requireLocator(scopeLocator);
+        ProjectCommandNamespace.requireLocator(anchorId);
+        Path records = ProjectCommandNamespace.recordsDirectory(namespaceRoot, scopeLocator);
         if (!Files.isDirectory(records)) {
             return 0;
         }
@@ -300,7 +240,7 @@ public final class ProjectCommandStore {
                     Map<String, Object> value = readRecord(file);
                     if (anchorId.equals(value.get("anchorId"))) {
                         matching++;
-                        if (matching > ProjectCommandAdmissionService.MAX_REQUEST_IDS_PER_LIVE_ANCHOR) {
+                        if (matching > ProjectCommandNamespace.MAX_REQUEST_IDS_PER_LIVE_ANCHOR) {
                             return matching;
                         }
                     }
@@ -321,8 +261,8 @@ public final class ProjectCommandStore {
      */
     public boolean hasBlockingRecords(PhysicalWorktreeIdentity worktree) throws IOException {
         Objects.requireNonNull(worktree, "worktree");
-        validateLocator(worktree.locator());
-        Path records = scopePath(worktree.locator()).resolve("records");
+        ProjectCommandNamespace.requireLocator(worktree.locator());
+        Path records = ProjectCommandNamespace.recordsDirectory(namespaceRoot, worktree.locator());
         if (!Files.isDirectory(records)) {
             return false;
         }
@@ -339,12 +279,30 @@ public final class ProjectCommandStore {
         return false;
     }
 
-    private Path scopePath(String scopeLocator) {
-        return namespaceRoot.resolve("scopes").resolve(scopeLocator);
+    /**
+     * Reads the keyed record once, with the schema it was written under, after verifying the
+     * anchor and scope it belongs to.
+     */
+    private Optional<Stored> load(String scopeLocator, String anchorId, String requestId) throws IOException {
+        Path target = ProjectCommandNamespace.recordsDirectory(namespaceRoot, scopeLocator).resolve(ProjectCommandCanonicalizer.requestKey(anchorId, requestId) + ".json");
+        if (!Files.exists(target)) {
+            return Optional.empty();
+        }
+        verifyAnchorAndScope(scopeLocator, anchorId);
+        try {
+            Map<String, Object> value = readRecord(target);
+            ProjectCommandRecord record = fromMap(value);
+            if (!record.scopeLocator().equals(scopeLocator) || !record.anchorId().equals(anchorId) || !record.requestId().equals(requestId)) {
+                throw new CommandFormatException("COMMAND_RECORD_KEY_MISMATCH");
+            }
+            return Optional.of(new Stored(record, number(value, "schemaVersion")));
+        } catch (RuntimeException failure) {
+            throw new CommandFormatException("COMMAND_RECORD_CORRUPT", failure);
+        }
     }
 
     private void verifyAnchorAndScope(String scopeLocator, String anchorId) throws IOException {
-        Path anchorPath = namespaceRoot.resolve("process-scopes").resolve(anchorId).resolve("anchor.json");
+        Path anchorPath = ProjectCommandNamespace.anchorFile(namespaceRoot, anchorId);
         if (!Files.isRegularFile(anchorPath) || Files.isSymbolicLink(anchorPath)) {
             throw new CommandFormatException("COMMAND_ANCHOR_MISSING");
         }
@@ -352,22 +310,11 @@ public final class ProjectCommandStore {
         if (!scopeLocator.equals(anchor.scopeLocator())) {
             throw new CommandFormatException("COMMAND_ANCHOR_SCOPE_MISMATCH");
         }
-        Path scopeMetadata = namespaceRoot.resolve("scopes").resolve(scopeLocator).resolve("scope.json");
+        Path scopeMetadata = ProjectCommandNamespace.scopeDirectory(namespaceRoot, scopeLocator).resolve(ProjectCommandNamespace.SCOPE_FILE);
         if (!Files.isRegularFile(scopeMetadata) || Files.isSymbolicLink(scopeMetadata)) {
             throw new CommandFormatException("COMMAND_SCOPE_MISSING");
         }
-        Object parsed = ProviderJson.parse(Files.readString(scopeMetadata, StandardCharsets.UTF_8));
-        if (!(parsed instanceof Map<?, ?> raw)) {
-            throw new CommandFormatException("COMMAND_SCOPE_NOT_OBJECT");
-        }
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : raw.entrySet()) {
-            if (!(entry.getKey() instanceof String key)) {
-                throw new CommandFormatException("COMMAND_SCOPE_KEY_INVALID");
-            }
-            metadata.put(key, entry.getValue());
-        }
-        CommandDurableFormat.verify(metadata);
+        Map<String, Object> metadata = CommandDurableFormat.read(scopeMetadata, CommandDurableFormat.UNBOUNDED, SCOPE);
         if (!scopeLocator.equals(metadata.get("worktreeLocator")) || !(metadata.get("realPath") instanceof String path)) {
             throw new CommandFormatException("COMMAND_SCOPE_IDENTITY_MISMATCH");
         }
@@ -375,5 +322,12 @@ public final class ProjectCommandStore {
         if (!scopeLocator.equals(stored.locator())) {
             throw new CommandFormatException("COMMAND_SCOPE_REAL_PATH_MISMATCH");
         }
+    }
+
+    /**
+     * A record together with the schema version its file was written under.
+     */
+    private record Stored(ProjectCommandRecord record, long schemaVersion) {
+
     }
 }

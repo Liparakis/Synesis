@@ -5,13 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
@@ -22,63 +18,80 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  * lock; callers must hold that lock while reconciling the index with scope, anchor, and lock
  * records so a stale index cannot authorize a command by itself.</p>
  */
-@SuppressWarnings("DuplicatedCode")
 public final class ProjectCommandNamespace implements AutoCloseable {
 
     /**
+     * Maximum request IDs retained by one live process anchor.
+     */
+    public static final int MAX_REQUEST_IDS_PER_LIVE_ANCHOR = 8_192;
+    /**
      * Maximum serialized namespace index size in bytes.
      */
-    public static final int MAX_INDEX_BYTES = 16 * 1024 * 1024;
+    static final int MAX_INDEX_BYTES = 16 * 1024 * 1024;
     /**
      * Maximum number of indexed scope/anchor entries.
      */
-    public static final int MAX_INDEX_ENTRIES = 20_480;
+    static final int MAX_INDEX_ENTRIES = 20_480;
     /**
      * Maximum physical-worktree scope directories.
      */
-    public static final int MAX_SCOPES = 4_096;
+    static final int MAX_SCOPES = 4_096;
     /**
      * Maximum process-anchor directories.
      */
-    public static final int MAX_ANCHORS = 16_384;
+    static final int MAX_ANCHORS = 16_384;
     /**
      * Maximum permanent worktree lock files.
      */
-    public static final int MAX_LOCKS = 65_536;
-    /**
-     * Maximum aliases retained for one physical scope.
-     */
-    @SuppressWarnings("unused")
-    public static final int MAX_SCOPE_ALIASES = 32;
+    static final int MAX_LOCKS = 65_536;
     /**
      * Maximum request records and reservations per scope.
      */
-    public static final int MAX_RECORDS_PER_SCOPE = 65_536;
+    static final int MAX_RECORDS_PER_SCOPE = 65_536;
     /**
      * Maximum serialized scope metadata size in bytes.
      */
-    public static final int MAX_SCOPE_BYTES = 256 * 1024;
+    static final int MAX_SCOPE_BYTES = 256 * 1024;
     /**
      * Maximum serialized anchor metadata size in bytes.
      */
-    public static final int MAX_ANCHOR_BYTES = 128 * 1024;
+    static final int MAX_ANCHOR_BYTES = 128 * 1024;
     /**
      * Maximum path identity size in UTF-8 bytes.
      */
-    public static final int MAX_PATH_IDENTITY_BYTES = 32 * 1024;
+    static final int MAX_PATH_IDENTITY_BYTES = 32 * 1024;
     /**
      * Maximum namespace entries inspected during one reconciliation pass.
      */
-    public static final int MAX_INSPECTED_ENTRIES = 131_072;
+    static final int MAX_INSPECTED_ENTRIES = 131_072;
     /**
      * Maximum temporary/stale artifacts inspected during one pass.
      */
-    public static final int MAX_TEMPORARY_ENTRIES = 256;
+    static final int MAX_TEMPORARY_ENTRIES = 256;
+
+    static final String INDEX_FILE = "namespace.json";
+    static final String LOCK_FILE = "namespace.lock";
+    static final String PROCESS_SCOPES = "process-scopes";
+    static final String LOCKS = "locks";
+    static final String SCOPES = "scopes";
+    static final String SCOPE_FILE = "scope.json";
+    static final String ANCHOR_FILE = "anchor.json";
+    static final String RECORDS = "records";
+    static final String TERMINAL_HISTORY = "terminal-history";
+
     /**
-     * Maximum complete namespace reconciliation retries.
+     * Failure codes of a scope, anchor, or other durable object read under the namespace lock.
      */
-    @SuppressWarnings("unused")
-    public static final int MAX_RETRIES = 3;
+    static final CommandDurableFormat.ReadCodes DURABLE_OBJECT = new CommandDurableFormat.ReadCodes("COMMAND_DURABLE_OBJECT_INVALID",
+            "COMMAND_DURABLE_OBJECT_SIZE_LIMIT",
+            "COMMAND_DURABLE_OBJECT_NOT_OBJECT",
+            "COMMAND_DURABLE_OBJECT_KEY_INVALID",
+            "COMMAND_DURABLE_OBJECT_CORRUPT");
+    private static final CommandDurableFormat.ReadCodes INDEX = new CommandDurableFormat.ReadCodes("COMMAND_NAMESPACE_INDEX_INVALID",
+            "COMMAND_NAMESPACE_SIZE_LIMIT",
+            "COMMAND_NAMESPACE_INDEX_NOT_OBJECT",
+            "COMMAND_NAMESPACE_INDEX_KEY_INVALID",
+            "COMMAND_NAMESPACE_INDEX_CORRUPT");
 
     /**
      * Normalized host-wide namespace root.
@@ -107,10 +120,10 @@ public final class ProjectCommandNamespace implements AutoCloseable {
 
     private ProjectCommandNamespace(Path root, CommandPermanentLock namespaceLock) throws IOException {
         this.root = root;
-        this.indexPath = root.resolve("namespace.json");
-        this.processScopesPath = root.resolve("process-scopes");
-        this.locksPath = root.resolve("locks");
-        this.scopesPath = root.resolve("scopes");
+        this.indexPath = root.resolve(INDEX_FILE);
+        this.processScopesPath = root.resolve(PROCESS_SCOPES);
+        this.locksPath = root.resolve(LOCKS);
+        this.scopesPath = root.resolve(SCOPES);
         this.namespaceLock = namespaceLock;
         if (!Files.exists(indexPath)) {
             writeIndex(Map.of("scopeCount", 0L, "anchorCount", 0L));
@@ -130,10 +143,10 @@ public final class ProjectCommandNamespace implements AutoCloseable {
     public static ProjectCommandNamespace open(Path root) throws IOException {
         Objects.requireNonNull(root, "root");
         Path normalized = root.toAbsolutePath().normalize();
-        Files.createDirectories(normalized.resolve("process-scopes"));
-        Files.createDirectories(normalized.resolve("locks"));
-        Files.createDirectories(normalized.resolve("scopes"));
-        return new ProjectCommandNamespace(normalized, CommandPermanentLock.open(normalized.resolve("namespace.lock")));
+        Files.createDirectories(normalized.resolve(PROCESS_SCOPES));
+        Files.createDirectories(normalized.resolve(LOCKS));
+        Files.createDirectories(normalized.resolve(SCOPES));
+        return new ProjectCommandNamespace(normalized, CommandPermanentLock.open(normalized.resolve(LOCK_FILE)));
     }
 
     /**
@@ -144,9 +157,9 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @return verified process anchor
      * @throws IOException if the anchor is missing, corrupt, or incompatible
      */
-    public static ProjectCommandProcessAnchor readAnchor(Path namespaceRoot, String anchorId) throws IOException {
+    static ProjectCommandProcessAnchor readAnchor(Path namespaceRoot, String anchorId) throws IOException {
         Objects.requireNonNull(namespaceRoot, "namespaceRoot");
-        Path path = namespaceRoot.toAbsolutePath().normalize().resolve("process-scopes").resolve(boundedLocator(anchorId)).resolve("anchor.json");
+        Path path = anchorFile(namespaceRoot.toAbsolutePath().normalize(), boundedLocator(anchorId));
         Map<String, Object> value = readDurable(path, MAX_ANCHOR_BYTES);
         if (!anchorId.equals(string(value, "anchorId"))) {
             throw new CommandFormatException("COMMAND_ANCHOR_ID_MISMATCH");
@@ -160,61 +173,46 @@ public final class ProjectCommandNamespace implements AutoCloseable {
         return new ProjectCommandProcessAnchor(anchorId, string(value, "scopeLocator"), identity, number(value, "createdAtEpochMillis"));
     }
 
-    private static void writeAtomically(Path target, String content) throws IOException {
-        Path temporary = target.resolveSibling(target.getFileName() + "." + UUID.randomUUID() + ".tmp");
-        Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try {
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    private static String boundedLocator(String locator) throws IOException {
-        Objects.requireNonNull(locator, "locator");
-        if (locator.isBlank() || locator.contains("/") || locator.contains("\\") || locator.length() > 256) {
+    /**
+     * Validates a scope or anchor locator, which becomes one path segment under the namespace.
+     *
+     * @param locator candidate locator
+     * @return the same locator
+     * @throws IOException with {@code COMMAND_LOCATOR_INVALID} when it is missing, over-long, or could leave its directory
+     */
+    static String requireLocator(String locator) throws IOException {
+        if (locator == null || locator.isBlank() || locator.length() > 256 || locator.contains("/") || locator.contains("\\") || ".".equals(locator) || "..".equals(locator)) {
             throw new IOException("COMMAND_LOCATOR_INVALID");
         }
         return locator;
     }
 
+    static Path scopeDirectory(Path root, String scopeLocator) {
+        return root.resolve(SCOPES).resolve(scopeLocator);
+    }
+
+    static Path recordsDirectory(Path root, String scopeLocator) {
+        return scopeDirectory(root, scopeLocator).resolve(RECORDS);
+    }
+
+    static Path anchorFile(Path root, String anchorId) {
+        return root.resolve(PROCESS_SCOPES).resolve(anchorId).resolve(ANCHOR_FILE);
+    }
+
+    static Path lockFile(Path root, String scopeLocator) {
+        return root.resolve(LOCKS).resolve(scopeLocator + ".lock");
+    }
+
+    private static String boundedLocator(String locator) throws IOException {
+        return requireLocator(Objects.requireNonNull(locator, "locator"));
+    }
+
     private static void writeDurable(Path target, Map<String, Object> value, int maxBytes) throws IOException {
-        String json = ProviderJson.write(CommandDurableFormat.withIntegrity(value));
-        if (json.getBytes(StandardCharsets.UTF_8).length > maxBytes) {
-            throw new IOException("COMMAND_DURABLE_OBJECT_SIZE_LIMIT");
-        }
-        writeAtomically(target, json);
+        CommandDurableFormat.write(target, CommandDurableFormat.withIntegrity(value), maxBytes, "COMMAND_DURABLE_OBJECT_SIZE_LIMIT");
     }
 
     private static Map<String, Object> readDurable(Path path, int maxBytes) throws IOException {
-        if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
-            throw new CommandFormatException("COMMAND_DURABLE_OBJECT_INVALID");
-        }
-        byte[] bytes = Files.readAllBytes(path);
-        if (bytes.length > maxBytes) {
-            throw new CommandFormatException("COMMAND_DURABLE_OBJECT_SIZE_LIMIT");
-        }
-        try {
-            Object parsed = ProviderJson.parse(new String(bytes, StandardCharsets.UTF_8));
-            if (!(parsed instanceof Map<?, ?> parsedMap)) {
-                throw new CommandFormatException("COMMAND_DURABLE_OBJECT_NOT_OBJECT");
-            }
-            Map<String, Object> value = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : parsedMap.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    throw new CommandFormatException("COMMAND_DURABLE_OBJECT_KEY_INVALID");
-                }
-                value.put(key, entry.getValue());
-            }
-            CommandDurableFormat.verify(value);
-            return value;
-        } catch (RuntimeException failure) {
-            throw new CommandFormatException("COMMAND_DURABLE_OBJECT_CORRUPT", failure);
-        }
+        return CommandDurableFormat.read(path, maxBytes, DURABLE_OBJECT);
     }
 
     private static void validatePathIdentity(Path path) throws IOException {
@@ -266,7 +264,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
                 if (++count > MAX_SCOPES || !Files.isDirectory(path) || Files.isSymbolicLink(path)) {
                     throw new IOException("COMMAND_NAMESPACE_ENUMERATION_INVALID");
                 }
-                readDurable(path.resolve("scope.json"), MAX_SCOPE_BYTES);
+                readDurable(path.resolve(SCOPE_FILE), MAX_SCOPE_BYTES);
             }
         }
         return count;
@@ -337,14 +335,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
         if (!(raw instanceof Map<?, ?> parsed)) {
             throw new CommandFormatException("COMMAND_ANCHOR_FIELD_MISSING:processIdentity");
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : parsed.entrySet()) {
-            if (!(entry.getKey() instanceof String name)) {
-                throw new CommandFormatException("COMMAND_ANCHOR_FIELD_INVALID:processIdentity");
-            }
-            result.put(name, entry.getValue());
-        }
-        return result;
+        return CommandDurableFormat.stringKeyed(parsed, "COMMAND_ANCHOR_FIELD_INVALID:processIdentity");
     }
 
     /**
@@ -352,7 +343,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      *
      * @return normalized namespace root
      */
-    public Path root() {
+    Path root() {
         return root;
     }
 
@@ -361,18 +352,8 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      *
      * @return permanent lock path
      */
-    public Path namespaceLockPath() {
-        return root.resolve("namespace.lock");
-    }
-
-    /**
-     * Returns the process-scope directory root.
-     *
-     * @return process-scope root
-     */
-    @SuppressWarnings("unused")
-    public Path processScopesPath() {
-        return processScopesPath;
+    Path namespaceLockPath() {
+        return root.resolve(LOCK_FILE);
     }
 
     /**
@@ -380,7 +361,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      *
      * @return scope root
      */
-    public Path scopesPath() {
+    Path scopesPath() {
         return scopesPath;
     }
 
@@ -391,9 +372,8 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @return permanent lock path
      * @throws IOException if the locator or lock object is invalid
      */
-    public Path worktreeLockPath(String worktreeLocator) throws IOException {
-        String safe = boundedLocator(worktreeLocator);
-        Path path = locksPath.resolve(safe + ".lock");
+    Path worktreeLockPath(String worktreeLocator) throws IOException {
+        Path path = lockFile(root, boundedLocator(worktreeLocator));
         if (Files.exists(path) && (!Files.isRegularFile(path) || Files.isSymbolicLink(path))) {
             throw new IOException("COMMAND_LOCK_OBJECT_INVALID");
         }
@@ -421,12 +401,12 @@ public final class ProjectCommandNamespace implements AutoCloseable {
         if (!Files.exists(scope) && countEntries(scopesPath, MAX_SCOPES) >= MAX_SCOPES) {
             throw new IOException("COMMAND_SCOPE_CAPACITY_EXCEEDED");
         }
-        Files.createDirectories(scope.resolve("records"));
+        Files.createDirectories(scope.resolve(RECORDS));
         Files.createDirectories(scope.resolve("reservations"));
         Files.createDirectories(scope.resolve("replay"));
         Files.createDirectories(scope.resolve("audit"));
         worktreeLockPath(locator);
-        Path metadataPath = scope.resolve("scope.json");
+        Path metadataPath = scope.resolve(SCOPE_FILE);
         if (Files.exists(metadataPath)) {
             Map<String, Object> existing = readDurable(metadataPath, MAX_SCOPE_BYTES);
             if (number(existing, "schemaVersion") != CommandDurableFormat.SCHEMA_VERSION) {
@@ -450,11 +430,9 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * Persists one immutable process anchor under its process-scope directory.
      *
      * @param anchor process anchor to persist
-     * @return anchor metadata path
      * @throws IOException if persistence fails
      */
-    @SuppressWarnings({"unused", "UnusedReturnValue"})
-    public Path writeAnchor(ProjectCommandProcessAnchor anchor) throws IOException {
+    public void writeAnchor(ProjectCommandProcessAnchor anchor) throws IOException {
         Objects.requireNonNull(anchor, "anchor");
         String locator = boundedLocator(anchor.anchorId());
         Path directory = processScopesPath.resolve(locator);
@@ -462,7 +440,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
             throw new IOException("COMMAND_ANCHOR_CAPACITY_EXCEEDED");
         }
         Files.createDirectories(directory);
-        Path anchorPath = directory.resolve("anchor.json");
+        Path anchorPath = anchorFile(root, locator);
         if (Files.exists(anchorPath)) {
             Map<String, Object> existing = readDurable(anchorPath, MAX_ANCHOR_BYTES);
             if (number(existing, "schemaVersion") != CommandDurableFormat.SCHEMA_VERSION) {
@@ -471,7 +449,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
             if (!anchor.equals(readAnchor(anchor.anchorId()))) {
                 throw new CommandFormatException("COMMAND_ANCHOR_IDENTITY_CHANGED");
             }
-            return anchorPath;
+            return;
         }
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("anchorId", anchor.anchorId());
@@ -486,7 +464,6 @@ public final class ProjectCommandNamespace implements AutoCloseable {
         process.put("connectionNonce", identity.connectionNonce());
         metadata.put("processIdentity", process);
         writeDurable(anchorPath, metadata, MAX_ANCHOR_BYTES);
-        return anchorPath;
     }
 
     /**
@@ -496,7 +473,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @return verified process anchor
      * @throws IOException if the anchor is missing, corrupt, or incompatible
      */
-    public ProjectCommandProcessAnchor readAnchor(String anchorId) throws IOException {
+    ProjectCommandProcessAnchor readAnchor(String anchorId) throws IOException {
         return readAnchor(root, anchorId);
     }
 
@@ -506,7 +483,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @param index bounded index fields
      * @throws IOException if limits or atomic persistence fail
      */
-    public void writeIndex(Map<String, Object> index) throws IOException {
+    void writeIndex(Map<String, Object> index) throws IOException {
         Objects.requireNonNull(index, "index");
         Map<String, Object> value = new LinkedHashMap<>(index);
         if (Files.exists(indexPath)) {
@@ -529,11 +506,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
         if (countIndexEntries(durable) > MAX_INDEX_ENTRIES) {
             throw new IOException("COMMAND_NAMESPACE_ENTRY_LIMIT");
         }
-        String json = ProviderJson.write(durable);
-        if (json.getBytes(StandardCharsets.UTF_8).length > MAX_INDEX_BYTES) {
-            throw new IOException("COMMAND_NAMESPACE_SIZE_LIMIT");
-        }
-        writeAtomically(indexPath, json);
+        CommandDurableFormat.write(indexPath, durable, MAX_INDEX_BYTES, "COMMAND_NAMESPACE_SIZE_LIMIT");
     }
 
     /**
@@ -542,30 +515,12 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @return verified index fields
      * @throws IOException if the index is missing, corrupt, or incompatible
      */
-    public Map<String, Object> readIndex() throws IOException {
-        if (!Files.isRegularFile(indexPath) || Files.isSymbolicLink(indexPath)) {
-            throw new CommandFormatException("COMMAND_NAMESPACE_INDEX_INVALID");
-        }
-        byte[] bytes = Files.readAllBytes(indexPath);
-        if (bytes.length > MAX_INDEX_BYTES) {
-            throw new CommandFormatException("COMMAND_NAMESPACE_SIZE_LIMIT");
-        }
+    Map<String, Object> readIndex() throws IOException {
+        Map<String, Object> value = CommandDurableFormat.read(indexPath, MAX_INDEX_BYTES, INDEX);
         try {
-            Object parsed = ProviderJson.parse(new String(bytes, StandardCharsets.UTF_8));
-            if (!(parsed instanceof Map<?, ?> map)) {
-                throw new CommandFormatException("COMMAND_NAMESPACE_INDEX_NOT_OBJECT");
-            }
-            Map<String, Object> value = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    throw new CommandFormatException("COMMAND_NAMESPACE_INDEX_KEY_INVALID");
-                }
-                value.put(key, entry.getValue());
-            }
-            CommandDurableFormat.verify(value);
             return Map.copyOf(value);
-        } catch (RuntimeException failure) {
-            throw new CommandFormatException("COMMAND_NAMESPACE_INDEX_CORRUPT", failure);
+        } catch (NullPointerException nullValue) {
+            throw new CommandFormatException(INDEX.corrupt(), nullValue);
         }
     }
 
@@ -577,7 +532,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      *                     bound
      */
     @SuppressWarnings("UnusedReturnValue")
-    public Map<String, Object> reconcileIndex() throws IOException {
+    Map<String, Object> reconcileIndex() throws IOException {
         if (!isHeld()) {
             throw new IOException("COMMAND_NAMESPACE_LOCK_REQUIRED");
         }
@@ -603,7 +558,7 @@ public final class ProjectCommandNamespace implements AutoCloseable {
      * @return true while the namespace lock is held
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-    public boolean isHeld() {
+    boolean isHeld() {
         return namespaceLock.isHeld();
     }
 

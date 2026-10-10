@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
@@ -20,8 +19,8 @@ import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
  * Pins the JSON a {@link ProjectCommandStore} writes for each command phase and the directory
  * layout it creates.
  *
- * <p>Record file names and request digests are hashes of a {@code Map.of} rendering, whose key
- * order differs between JVM runs, so those are matched against both possible renderings.
+ * <p>Record file names are SHA-256 of the key-sorted JSON of the anchor and request ID, so they are
+ * the same in every JVM run.
  */
 class ProjectCommandStoreFormatTest {
 
@@ -53,12 +52,8 @@ class ProjectCommandStoreFormatTest {
     new ProjectCommandStore(root).save(record);
 
     Path records = root.resolve("scopes/scope-1/records");
-    String key = Sha256.hex("{\"anchorId\":\"anchor-1\",\"requestId\":\"n:1\"}");
-    String reversedKey = Sha256.hex("{\"requestId\":\"n:1\",\"anchorId\":\"anchor-1\"}");
     Path file =
-        Files.exists(records.resolve(key + ".json"))
-            ? records.resolve(key + ".json")
-            : records.resolve(reversedKey + ".json");
+        records.resolve("01ae1f44fe93719f8af8eb3974f3453e4e741aa84d0dbb60c4e23b620c61a9a4.json");
     assertTrue(Files.isRegularFile(file));
     assertEquals(
         List.of(

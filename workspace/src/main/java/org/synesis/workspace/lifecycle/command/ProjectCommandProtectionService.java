@@ -52,7 +52,7 @@ public final class ProjectCommandProtectionService {
             namespace.close();
             namespace = null;
             worktreeLock = CommandPermanentLock.open(worktreeLockPath);
-            return new ProtectionPermit(admission, worktreeLock, identity.locator());
+            return new ProtectionPermit(admission, worktreeLock);
         } catch (IOException | RuntimeException failure) {
             if (worktreeLock != null) {
                 worktreeLock.close();
@@ -75,23 +75,11 @@ public final class ProjectCommandProtectionService {
 
         private final ReentrantLock admission;
         private final CommandPermanentLock worktreeLock;
-        private final String worktreeLocator;
         private boolean closed;
 
-        private ProtectionPermit(ReentrantLock admission, CommandPermanentLock worktreeLock, String worktreeLocator) {
+        private ProtectionPermit(ReentrantLock admission, CommandPermanentLock worktreeLock) {
             this.admission = admission;
             this.worktreeLock = worktreeLock;
-            this.worktreeLocator = worktreeLocator;
-        }
-
-        /**
-         * Returns the protected physical-worktree locator.
-         *
-         * @return worktree locator
-         */
-        @SuppressWarnings("unused")
-        public String worktreeLocator() {
-            return worktreeLocator;
         }
 
         /**

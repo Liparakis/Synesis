@@ -1,8 +1,6 @@
 package org.synesis.workspace.lifecycle.command;
 
-import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
@@ -29,6 +27,49 @@ public record ProjectCommandProcessAnchor(String anchorId, String scopeLocator, 
     }
 
     /**
+     * Decides whether the anchoring process still runs, comparing the full recorded identity:
+     * start time, executable, and command line. Evidence the platform withholds makes the answer
+     * {@link Liveness#UNKNOWN}, never dead.
+     *
+     * @return liveness of the anchoring process
+     */
+    Liveness liveness() {
+        var handle = ProcessHandle.of(processIdentity.pid());
+        if (handle.isEmpty()) {
+            return Liveness.DEAD;
+        }
+        ProcessHandle.Info info = handle.get().info();
+        if (info.startInstant().isEmpty() || info.command().isEmpty() || info.commandLine().isEmpty()) {
+            return Liveness.UNKNOWN;
+        }
+        boolean same = info.startInstant().get().toEpochMilli() == processIdentity.processStartTime() && info.command().get().equals(processIdentity.executableIdentity())
+                && info.commandLine().get().equals(processIdentity.commandLine());
+        return same ? Liveness.LIVE : Liveness.DEAD;
+    }
+
+    /**
+     * Diagnostics' coarser variant of {@link #liveness()}, working from a stored pid and start time
+     * only: the process counts as gone when it is absent, when its start time is withheld, or when
+     * it differs. {@link #liveness()} treats a withheld start time as unknown, and also compares
+     * executable and command line.
+     *
+     * @param pid                 recorded process ID
+     * @param recordedStartMillis recorded process start time in epoch milliseconds
+     * @return true when no process with that pid and start time is running
+     */
+    static boolean startTimeGone(long pid, long recordedStartMillis) {
+        var handle = ProcessHandle.of(pid);
+        return handle.isEmpty() || handle.get().info().startInstant().map(instant -> instant.toEpochMilli() != recordedStartMillis).orElse(true);
+    }
+
+    /**
+     * Whether the process an anchor names is running.
+     */
+    enum Liveness {
+        LIVE, DEAD, UNKNOWN
+    }
+
+    /**
      * Creates an anchor from captured process evidence.
      *
      * @param scopeLocator         physical scope locator
@@ -42,22 +83,5 @@ public record ProjectCommandProcessAnchor(String anchorId, String scopeLocator, 
         String material = scopeLocator + "\n" + processIdentity.pid() + "\n" + processIdentity.executableIdentity() + "\n" + processIdentity.commandLine() + "\n" + processIdentity.processStartTime() + "\n"
                 + processIdentity.connectionNonce() + "\n" + createdAtEpochMillis;
         return new ProjectCommandProcessAnchor("v1-" + Sha256.hex(material), scopeLocator, processIdentity, createdAtEpochMillis);
-    }
-
-    /**
-     * Captures one fresh anchor for the current MCP process.
-     *
-     * @param scopeLocator physical scope locator
-     * @return fresh process anchor
-     */
-    @SuppressWarnings("unused")
-    public static ProjectCommandProcessAnchor fresh(String scopeLocator) {
-        long now = Instant.now().toEpochMilli();
-        ProcessHandle.Info info = ProcessHandle.current().info();
-        String executable = info.command().orElse("unknown");
-        String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(Instant::toEpochMilli).orElse(now);
-        SessionProcessIdentity identity = new SessionProcessIdentity(ProcessHandle.current().pid(), executable, commandLine, start, UUID.randomUUID().toString());
-        return capture(scopeLocator, identity, now);
     }
 }

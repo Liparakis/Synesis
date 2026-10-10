@@ -52,6 +52,37 @@ public record ProjectCommandRecord(String anchorId, String scopeLocator, String 
     }
 
     /**
+     * Returns whether a stored record carries a pin that the diagnostics census counts as retained
+     * evidence. It honors fewer pins than {@link #pinnedForCleanup}: a record pinned only for
+     * repair or reconciliation still counts as eligible here.
+     *
+     * @param stored parsed record fields
+     * @return true when the record is pinned for the census
+     */
+    static boolean pinnedForCensus(Map<String, Object> stored) {
+        return anyFlag(stored, "pinned", "acceptancePinned", "checkpointPinned");
+    }
+
+    /**
+     * Returns whether a stored record carries any pin that blocks dead-anchor cleanup.
+     *
+     * @param stored parsed record fields
+     * @return true when cleanup must retain the record
+     */
+    static boolean pinnedForCleanup(Map<String, Object> stored) {
+        return anyFlag(stored, "pinned", "repairPinned", "reconciliationPinned", "acceptancePinned", "checkpointPinned");
+    }
+
+    private static boolean anyFlag(Map<String, Object> stored, String... flags) {
+        for (String flag : flags) {
+            if (Boolean.TRUE.equals(stored.get(flag))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns whether this record is blocking for callers.
      *
      * @return true for STARTING, RUNNING, and AMBIGUOUS phases

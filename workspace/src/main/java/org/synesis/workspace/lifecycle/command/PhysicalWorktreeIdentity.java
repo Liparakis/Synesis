@@ -56,17 +56,4 @@ public record PhysicalWorktreeIdentity(String locator, Path realPath) {
         }
         return capture(result.canonical() == null ? result.normalized() : result.canonical());
     }
-
-    /**
-     * Compares complete physical identity using the filesystem's same-file check.
-     *
-     * @param other identity to compare
-     * @return whether both paths identify the same filesystem object
-     * @throws IOException if filesystem identity cannot be checked
-     */
-    @SuppressWarnings("unused")
-    public boolean isSameFile(PhysicalWorktreeIdentity other) throws IOException {
-        Objects.requireNonNull(other, "other");
-        return Files.isSameFile(realPath, other.realPath);
-    }
 }

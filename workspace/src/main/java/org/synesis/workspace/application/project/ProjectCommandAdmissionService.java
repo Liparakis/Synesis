@@ -25,11 +25,6 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandTerminalResolution;
  */
 public final class ProjectCommandAdmissionService {
 
-    /**
-     * Maximum request IDs retained by one live process anchor.
-     */
-    public static final int MAX_REQUEST_IDS_PER_LIVE_ANCHOR = 8_192;
-
     private final ProjectCommandService commandService;
     private final ProjectCommandProtectionService protectionService;
     private final ProjectCommandStore store;
@@ -140,7 +135,7 @@ public final class ProjectCommandAdmissionService {
             if (raced.isPresent()) {
                 return blocked(AgentReason.COMMAND_AMBIGUOUS, "REQUEST_APPEARED_DURING_ADMISSION_GAP");
             }
-            if (store.countForAnchor(worktree.locator(), anchor.anchorId()) >= MAX_REQUEST_IDS_PER_LIVE_ANCHOR) {
+            if (store.countForAnchor(worktree.locator(), anchor.anchorId()) >= ProjectCommandNamespace.MAX_REQUEST_IDS_PER_LIVE_ANCHOR) {
                 return blocked(AgentReason.COMMAND_CAPACITY_EXCEEDED, "LIVE_PROCESS_REQUEST_CAPACITY");
             }
             long now = System.currentTimeMillis();

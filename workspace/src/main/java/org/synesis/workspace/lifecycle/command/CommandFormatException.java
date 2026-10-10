@@ -6,7 +6,7 @@ import java.io.Serial;
 /**
  * Signals incompatible, corrupt, or unverifiable durable command state.
  */
-public final class CommandFormatException extends IOException {
+final class CommandFormatException extends IOException {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -16,7 +16,7 @@ public final class CommandFormatException extends IOException {
      *
      * @param message stable diagnostic message
      */
-    public CommandFormatException(String message) {
+    CommandFormatException(String message) {
         super(message);
     }
 
@@ -26,7 +26,7 @@ public final class CommandFormatException extends IOException {
      * @param message stable diagnostic message
      * @param cause   underlying failure
      */
-    public CommandFormatException(String message, Throwable cause) {
+    CommandFormatException(String message, Throwable cause) {
         super(message, cause);
     }
 }

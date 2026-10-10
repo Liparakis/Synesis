@@ -1,11 +1,9 @@
 package org.synesis.workspace.lifecycle.command;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -14,19 +12,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * Performs bounded dead-anchor terminal-evidence maintenance under existing cleanup authority.
  */
-@SuppressWarnings("DuplicatedCode")
-public final class ProjectCommandMaintenanceService {
+final class ProjectCommandMaintenanceService {
 
     /**
-     * Creates a command maintenance service.
+     * Unlike the store, cleanup refuses symbolic-link and oversized records and lets parse failures propagate.
      */
-    public ProjectCommandMaintenanceService() {
-    }
+    private static final CommandDurableFormat.ReadCodes RECORD = new CommandDurableFormat.ReadCodes("COMMAND_RECORD_INVALID",
+            "COMMAND_RECORD_SIZE_LIMIT",
+            "COMMAND_RECORD_NOT_OBJECT",
+            "COMMAND_RECORD_KEY_INVALID",
+            null);
 
     private static List<Map<String, Object>> readRecords(Path records, String anchorId) throws IOException {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -71,41 +70,15 @@ public final class ProjectCommandMaintenanceService {
     }
 
     private static Map<String, Object> readObject(Path path) throws IOException {
-        if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
-            throw new CommandFormatException("COMMAND_RECORD_INVALID");
-        }
-        byte[] bytes = Files.readAllBytes(path);
-        if (bytes.length > ProjectCommandNamespace.MAX_SCOPE_BYTES) {
-            throw new CommandFormatException("COMMAND_RECORD_SIZE_LIMIT");
-        }
-        Object parsed = ProviderJson.parse(new String(bytes, StandardCharsets.UTF_8));
-        if (!(parsed instanceof Map<?, ?> raw)) {
-            throw new CommandFormatException("COMMAND_RECORD_NOT_OBJECT");
-        }
-        Map<String, Object> value = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : raw.entrySet()) {
-            if (!(entry.getKey() instanceof String key)) {
-                throw new CommandFormatException("COMMAND_RECORD_KEY_INVALID");
-            }
-            value.put(key, entry.getValue());
-        }
-        CommandDurableFormat.verify(value);
-        return value;
+        return CommandDurableFormat.read(path, ProjectCommandNamespace.MAX_SCOPE_BYTES, RECORD);
     }
 
     private static void requireDead(ProjectCommandProcessAnchor anchor) throws IOException {
-        var handle = ProcessHandle.of(anchor.processIdentity().pid());
-        if (handle.isEmpty()) {
-            return;
-        }
-        ProcessHandle.Info info = handle.get().info();
-        if (info.startInstant().isEmpty() || info.command().isEmpty() || info.commandLine().isEmpty()) {
-            throw new IOException("COMMAND_ANCHOR_PROCESS_LIVENESS_AMBIGUOUS");
-        }
-        boolean same = info.startInstant().get().toEpochMilli() == anchor.processIdentity().processStartTime() && info.command().get().equals(anchor.processIdentity().executableIdentity()) && info.commandLine().get()
-                .equals(anchor.processIdentity().commandLine());
-        if (same) {
-            throw new IOException("COMMAND_ANCHOR_PROCESS_STILL_LIVE");
+        switch (anchor.liveness()) {
+            case UNKNOWN -> throw new IOException("COMMAND_ANCHOR_PROCESS_LIVENESS_AMBIGUOUS");
+            case LIVE -> throw new IOException("COMMAND_ANCHOR_PROCESS_STILL_LIVE");
+            case DEAD -> {
+            }
         }
     }
 
@@ -122,27 +95,6 @@ public final class ProjectCommandMaintenanceService {
             }
         }
         return count;
-    }
-
-    private static void atomicWrite(Path target, String value) throws IOException {
-        Path temporary = target.resolveSibling(target.getFileName() + ".tmp-" + UUID.randomUUID());
-        Files.writeString(temporary, value, StandardCharsets.UTF_8);
-        try {
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    private static String locator(String value) throws IOException {
-        if (value == null || value.isBlank() || value.length() > 256 || value.contains("/") || value.contains("\\") || ".".equals(value) || "..".equals(value)) {
-            throw new IOException("COMMAND_LOCATOR_INVALID");
-        }
-        return value;
     }
 
     private static String string(Map<String, Object> value, String key) throws IOException {
@@ -169,24 +121,23 @@ public final class ProjectCommandMaintenanceService {
      * @return cleanup result
      * @throws IOException when state is missing, corrupt, unsupported, pinned, or still live
      */
-    public CleanupResult cleanupDeadAnchor(Path namespaceRoot, String anchorId, Instant now, Duration retention) throws IOException {
+    CleanupResult cleanupDeadAnchor(Path namespaceRoot, String anchorId, Instant now, Duration retention) throws IOException {
         Objects.requireNonNull(namespaceRoot, "namespaceRoot");
         Objects.requireNonNull(anchorId, "anchorId");
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(retention, "retention");
         Path root = namespaceRoot.toAbsolutePath().normalize();
-        Path anchorPath = root.resolve("process-scopes").resolve(locator(anchorId)).resolve("anchor.json");
+        Path anchorPath = ProjectCommandNamespace.anchorFile(root, ProjectCommandNamespace.requireLocator(anchorId));
         ProjectCommandProcessAnchor anchor = ProjectCommandNamespace.readAnchor(root, anchorId);
         requireDead(anchor);
 
-        Path scope = root.resolve("scopes").resolve(locator(anchor.scopeLocator()));
-        Path records = scope.resolve("records");
+        Path scope = ProjectCommandNamespace.scopeDirectory(root, ProjectCommandNamespace.requireLocator(anchor.scopeLocator()));
+        Path records = scope.resolve(ProjectCommandNamespace.RECORDS);
         List<Map<String, Object>> terminal = readRecords(records, anchorId);
         long latest = anchor.createdAtEpochMillis();
         for (Map<String, Object> value : terminal) {
             latest = Math.max(latest, number(value));
-            if (Boolean.TRUE.equals(value.get("pinned")) || Boolean.TRUE.equals(value.get("repairPinned")) || Boolean.TRUE.equals(value.get("reconciliationPinned")) || Boolean.TRUE.equals(value.get("acceptancePinned"))
-                    || Boolean.TRUE.equals(value.get("checkpointPinned"))) {
+            if (ProjectCommandRecord.pinnedForCleanup(value)) {
                 throw new IOException("COMMAND_PINNED_EVIDENCE_RETAINED");
             }
         }
@@ -194,7 +145,7 @@ public final class ProjectCommandMaintenanceService {
             throw new IOException("COMMAND_DEAD_ANCHOR_RETENTION_ACTIVE");
         }
 
-        Path lockPath = root.resolve("locks").resolve(locator(anchor.scopeLocator()) + ".lock");
+        Path lockPath = ProjectCommandNamespace.lockFile(root, ProjectCommandNamespace.requireLocator(anchor.scopeLocator()));
         if (!Files.isRegularFile(lockPath) || Files.isSymbolicLink(lockPath)) {
             throw new IOException("COMMAND_PERMANENT_LOCK_MISSING");
         }
@@ -213,7 +164,7 @@ public final class ProjectCommandMaintenanceService {
             ProjectCommandProcessAnchor current = ProjectCommandNamespace.readAnchor(root, anchorId);
             requireDead(current);
             List<Map<String, Object>> reread = readRecords(records, anchorId);
-            Path history = scope.resolve("terminal-history");
+            Path history = scope.resolve(ProjectCommandNamespace.TERMINAL_HISTORY);
             Files.createDirectories(history);
             Map<String, Object> compacted = new LinkedHashMap<>();
             compacted.put("anchorId", anchorId);
@@ -222,12 +173,8 @@ public final class ProjectCommandMaintenanceService {
                     ProjectCommandCanonicalizer.requestKey(current.processIdentity().executableIdentity(), current.processIdentity().commandLine() + ":" + current.processIdentity().processStartTime()));
             compacted.put("records", compactedRecords(reread));
             compacted.put("compactedAtEpochMillis", now.toEpochMilli());
-            String json = ProviderJson.write(CommandDurableFormat.withIntegrity(compacted));
-            if (json.getBytes(StandardCharsets.UTF_8).length > ProjectCommandNamespace.MAX_SCOPE_BYTES) {
-                throw new IOException("COMMAND_TERMINAL_HISTORY_SIZE_LIMIT");
-            }
             Path historyPath = history.resolve(anchorId + "-" + UUID.randomUUID() + ".json");
-            atomicWrite(historyPath, json);
+            CommandDurableFormat.write(historyPath, CommandDurableFormat.withIntegrity(compacted), ProjectCommandNamespace.MAX_SCOPE_BYTES, "COMMAND_TERMINAL_HISTORY_SIZE_LIMIT");
             for (Map<String, Object> value : reread) {
                 Path record = records.resolve(ProjectCommandCanonicalizer.requestKey(string(value, "anchorId"), string(value, "requestId")) + ".json");
                 Files.deleteIfExists(record);
@@ -236,7 +183,7 @@ public final class ProjectCommandMaintenanceService {
                 Files.delete(anchorPath);
             }
             Files.deleteIfExists(anchorPath.getParent());
-            namespace.writeIndex(Map.of("scopeCount", countDirectories(root.resolve("scopes")), "anchorCount", countDirectories(root.resolve("process-scopes")), "terminalHistoryCompactions", 1L));
+            namespace.writeIndex(Map.of("scopeCount", countDirectories(root.resolve(ProjectCommandNamespace.SCOPES)), "anchorCount", countDirectories(root.resolve(ProjectCommandNamespace.PROCESS_SCOPES)), "terminalHistoryCompactions", 1L));
             return new CleanupResult(anchorId, reread.size(), historyPath, true);
         }
     }
@@ -249,7 +196,7 @@ public final class ProjectCommandMaintenanceService {
      * @param historyPath          compact terminal-history evidence path
      * @param lockRetained         whether the permanent worktree lock remains
      */
-    public record CleanupResult(String anchorId, int compactedRecordCount, Path historyPath, boolean lockRetained) {
+    record CleanupResult(String anchorId, int compactedRecordCount, Path historyPath, boolean lockRetained) {
 
     }
 }

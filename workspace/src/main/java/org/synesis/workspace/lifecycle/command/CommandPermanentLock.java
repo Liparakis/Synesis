@@ -11,15 +11,18 @@ import java.util.Objects;
 
 /**
  * Holds an OS file lock while preserving the permanent lock object on disk.
+ *
+ * <p>Not built on {@code BoundedFileLock}: that helper opens with {@code CREATE}, raises different
+ * timeout and interrupt messages, and does not require a pre-existing regular lock object, while
+ * callers here depend on {@code COMMAND_LOCK_OBJECT_INVALID}, {@code COMMAND_LOCK_TIMEOUT}, and
+ * {@code COMMAND_LOCK_INTERRUPTED}.</p>
  */
-public final class CommandPermanentLock implements AutoCloseable {
+final class CommandPermanentLock implements AutoCloseable {
 
-    private final Path path;
     private final FileChannel channel;
     private final FileLock lock;
 
-    private CommandPermanentLock(Path path, FileChannel channel, FileLock lock) {
-        this.path = path;
+    private CommandPermanentLock(FileChannel channel, FileLock lock) {
         this.channel = channel;
         this.lock = lock;
     }
@@ -31,7 +34,7 @@ public final class CommandPermanentLock implements AutoCloseable {
      * @return held lock handle
      * @throws IOException if the object is invalid or cannot be locked
      */
-    public static CommandPermanentLock open(Path path) throws IOException {
+    static CommandPermanentLock open(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
         Path normalized = path.toAbsolutePath().normalize();
         Files.createDirectories(Objects.requireNonNull(normalized.getParent(), "lock parent"));
@@ -59,7 +62,7 @@ public final class CommandPermanentLock implements AutoCloseable {
                 try {
                     FileLock lock = channel.tryLock();
                     if (lock != null) {
-                        return new CommandPermanentLock(normalized, channel, lock);
+                        return new CommandPermanentLock(channel, lock);
                     }
                 } catch (OverlappingFileLockException ignored) {
                     // Another local thread/process owns the object.
@@ -80,20 +83,11 @@ public final class CommandPermanentLock implements AutoCloseable {
     }
 
     /**
-     * Returns the permanent lock object's normalized path.
-     *
-     * @return permanent lock path
-     */
-    public Path path() {
-        return path;
-    }
-
-    /**
      * Returns whether this process still holds the lock.
      *
      * @return true while the OS lock is valid
      */
-    public boolean isHeld() {
+    boolean isHeld() {
         return lock.isValid();
     }
 

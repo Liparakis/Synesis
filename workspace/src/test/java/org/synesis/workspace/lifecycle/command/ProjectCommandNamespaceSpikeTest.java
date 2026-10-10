@@ -17,7 +17,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.synesis.workspace.application.project.ProjectCommandAdmissionService;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
@@ -264,13 +263,13 @@ class ProjectCommandNamespaceSpikeTest {
     minimal.put("anchorId", "anchor-capacity");
     String json = org.synesis.workspace.infrastructure.json.ProviderJson.write(
         CommandDurableFormat.withIntegrity(minimal));
-    for (int index = 0; index < ProjectCommandAdmissionService.MAX_REQUEST_IDS_PER_LIVE_ANCHOR + 1;
+    for (int index = 0; index < ProjectCommandNamespace.MAX_REQUEST_IDS_PER_LIVE_ANCHOR + 1;
         index++) {
       Files.writeString(records.resolve(index + ".json"), json, StandardCharsets.UTF_8);
     }
 
     ProjectCommandStore store = new ProjectCommandStore(namespaceRoot);
-    assertEquals(ProjectCommandAdmissionService.MAX_REQUEST_IDS_PER_LIVE_ANCHOR + 1,
+    assertEquals(ProjectCommandNamespace.MAX_REQUEST_IDS_PER_LIVE_ANCHOR + 1,
         store.countForAnchor(worktree.locator(), "anchor-capacity"));
   }
 
