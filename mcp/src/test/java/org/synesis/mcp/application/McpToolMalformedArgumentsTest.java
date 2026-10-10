@@ -2,6 +2,7 @@ package org.synesis.mcp.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,13 +18,19 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.mcp.contract.McpToolCatalog;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
+import org.synesis.workspace.application.provider.continuity.ProviderThreadOwnershipStore;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -75,7 +82,11 @@ class McpToolMalformedArgumentsTest {
     }
 
     private static McpProtocolHandler handler(String provider) {
-        return new McpProtocolHandler(new AgentSessionService(), root, provider, "conn-" + CONNECTIONS.incrementAndGet());
+        return handler(provider, "conn-" + CONNECTIONS.incrementAndGet());
+    }
+
+    private static McpProtocolHandler handler(String provider, String connection) {
+        return new McpProtocolHandler(new AgentSessionService(), root, provider, connection);
     }
 
     private static String q(String json) {
@@ -241,6 +252,103 @@ class McpToolMalformedArgumentsTest {
             Map<String, Object> reply = innerResponse(call(handler("codex"), "ensure_session", "{'task':{'goal':'g','acceptance':'a','claims':" + entry + "}}"));
             assertEquals("ready", reply.get("status"), entry);
         }
+    }
+
+    @Test
+    void aMalformedToolCallEnvelopeIsAnInvalidParamsErrorBeforeAnyOtherGate() {
+        McpProtocolHandler handler = handler("codex");
+        assertEquals(q("{'jsonrpc':'2.0','id':7,'error':{'code':-32602,'message':'Invalid params: missing params object'}}"),
+                handler.handleMessage(q("{'jsonrpc':'2.0','id':7,'method':'tools/call'}")));
+        assertEquals(q("{'jsonrpc':'2.0','id':7,'error':{'code':-32602,'message':'raw MCP tool name required'}}"),
+                handler.handleMessage(q("{'jsonrpc':'2.0','id':7,'method':'tools/call','params':{'name':'synesis.read_file','arguments':{}}}")));
+        assertEquals(q("{'jsonrpc':'2.0','id':7,'error':{'code':-32602,'message':'tool arguments must be an object'}}"),
+                handler.handleMessage(q("{'jsonrpc':'2.0','id':7,'method':'tools/call','params':{'name':'read_file','arguments':5}}")));
+    }
+
+    @Test
+    void anInvalidPinnedRootStopsEveryCallBeforeAdmissionAttestationAndDispatch() throws Exception {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), Files.createTempDirectory("synesis-mcp-invalid-pin-"), "claude", "conn-" + CONNECTIONS.incrementAndGet(), true);
+        String refusal = "{'status':'retry_required','reason':'workspace_not_ready','nextAction':'ensure_session','result':{'error':'PROJECT_ROOT_PIN_INVALID'}}";
+        for (String tool : List.of("bogus", "apply_patch", "ensure_session")) {
+            assertText(refusal, call(handler, tool, "{}"));
+        }
+    }
+
+    /** Issues a managed attachment for a fresh codex binding and returns the handler that carries it. */
+    private static McpProtocolHandler managedHandler(String connection, boolean completed) throws Exception {
+        ProjectLocation location = new ProjectApplicationService().locate(root);
+        var binding = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var ownership = ProviderThreadOwnershipStore.storeFor(location).acquire(location.projectId().toString(), "codex", connection + "-thread", binding.sessionId());
+        var store = ManagedAttachmentService.storeFor(location, binding.sessionId());
+        var issued = new ManagedAttachmentService().issueFromOwnership(location, location.projectId().toString(), "codex", binding.sessionId(), "normal-provider-home", ownership, store);
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), root, "codex", connection, new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"), true, issued.record());
+        if (completed) {
+            new ManagedAttachmentService().activate(store, 1L);
+            assertTrue(new ProviderSessionBindingService().complete(location, "codex", connection));
+        }
+        return handler;
+    }
+
+    private static void assertManagedRefusal(String reason, String frame) {
+        String body = "{\"status\":\"blocked\",\"reason\":\"" + reason + "\"}";
+        assertEquals("{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"" + body.replace("\"", "\\\"") + "\"}],\"isError\":true}}", frame);
+    }
+
+    @Test
+    void aPendingManagedConnectionIsQuarantinedBeforeAttestationAndDispatch() throws Exception {
+        McpProtocolHandler handler = managedHandler("conn-managed-pending", false);
+        for (String tool : List.of("bogus", "apply_patch", "get_next_action")) {
+            assertManagedRefusal("managed_attachment_pending", call(handler, tool, "{}"));
+        }
+    }
+
+    @Test
+    void aCompletedManagedConnectionIsRejectedOutsideTheThreeReviewCoordinationTools() throws Exception {
+        McpProtocolHandler handler = managedHandler("conn-managed-completed", true);
+        for (String tool : List.of("ensure_session", "read_file", "apply_patch", "run_command", "publish_capability_implementation", "finish_lane", "cancel_lane", "bogus")) {
+            assertManagedRefusal("managed_attachment_rejected", call(handler, tool, "{}"));
+        }
+        for (String tool : List.of("get_next_action", "request_coordination", "respond_coordination")) {
+            assertFalse(call(handler, tool, "{}").contains("managed_attachment_"), tool);
+        }
+    }
+
+    @Test
+    void aProoflessConnectionOnAManagedBindingNeedsItsProof() throws Exception {
+        managedHandler("conn-managed-proofless", false);
+        McpProtocolHandler proofless = new McpProtocolHandler(new AgentSessionService(), root.getParent(), "codex", "conn-managed-proofless", false);
+        proofless.handleMessage(q("{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'rootUri':'" + root.toUri() + "'}}"));
+        for (String tool : List.of("ensure_session", "bogus")) {
+            assertManagedRefusal("managed_attachment_proof_required", call(proofless, tool, "{}"));
+        }
+    }
+
+    @Test
+    void aFencedRecoveryLaneIsStoppedBeforeAttestationAndDispatch() throws Exception {
+        String connection = "conn-fenced-" + CONNECTIONS.incrementAndGet();
+        McpProtocolHandler handler = handler("codex", connection);
+        assertEquals("ready", innerResponse(call(handler, "ensure_session", "{}")).get("status"));
+        var binding = new ProviderSessionBindingService().find(new ProjectApplicationService().locate(root), "codex", connection).orElseThrow();
+        Files.writeString(Path.of(binding.worktreePath()).resolve("unfinished.txt"), "keep this work\n");
+        new WorkspaceCollaborationService().announce(root, "codex", connection, "Implement the task", "Preserve unfinished work on disconnect", List.of(ResourceSelector.pathExact("unfinished.txt")));
+        handler.close();
+        for (String tool : List.of("apply_patch", "get_next_action", "bogus")) {
+            assertText(denied("reason", "SESSION_EPOCH_FENCED", "request_human_help"), call(handler, tool, "{}"));
+        }
+    }
+
+    @Test
+    void aBoundConnectionWhoseRecoveryStateIsUnreadableFailsClosedExceptForTheClosingInboxRead() throws Exception {
+        String connection = "conn-completed-" + CONNECTIONS.incrementAndGet();
+        McpProtocolHandler handler = handler("codex", connection);
+        assertEquals("ready", innerResponse(call(handler, "ensure_session", "{}")).get("status"));
+        assertTrue(new ProviderSessionBindingService().complete(new ProjectApplicationService().locate(root), "codex", connection));
+        for (String tool : List.of("apply_patch", "finish_lane", "bogus")) {
+            assertText(denied("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE", "request_human_help"), call(handler, tool, "{}"));
+        }
+        Map<String, Object> closingRead = innerResponse(call(handler, "get_next_action", "{}"));
+        assertEquals("completed", closingRead.get("status"));
+        assertEquals("COMPLETED", ((Map<?, ?>) closingRead.get("result")).get("state"));
     }
 
     @Test

@@ -27,11 +27,8 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 final class McpManagedAdmission {
 
     /**
-     * Whether the launcher authenticated this process as managed continuity.
-     */
-    private final boolean managedAdmission;
-    /**
-     * Binding and generation authenticated for a managed process-local connection.
+     * Binding authenticated for a managed process-local connection; {@code null} when the launcher did
+     * not authenticate this process as managed continuity.
      */
     private final String managedBindingSessionId;
     /**
@@ -54,20 +51,17 @@ final class McpManagedAdmission {
     /**
      * Creates the admission policy for one connection.
      *
-     * @param managedAdmission             whether the launcher authenticated this process as managed continuity
-     * @param managedBindingSessionId      binding authenticated for a managed connection, or {@code null}
+     * @param managedBindingSessionId      binding authenticated for a managed connection, or {@code null} when unmanaged
      * @param managedAttachmentGeneration  authenticated attachment generation, or {@code 0} when unmanaged
      * @param provider                     stable provider ID associated with this connection's binding
      * @param connectionInstanceId         connection incarnation used to prevent cross-connection authority reuse
      * @param authorityResolver            resolver for the exact provider and connection binding
      */
-    McpManagedAdmission(boolean managedAdmission,
-            String managedBindingSessionId,
+    McpManagedAdmission(String managedBindingSessionId,
             long managedAttachmentGeneration,
             String provider,
             String connectionInstanceId,
             SessionAuthorityResolver authorityResolver) {
-        this.managedAdmission = managedAdmission;
         this.managedBindingSessionId = managedBindingSessionId;
         this.managedAttachmentGeneration = managedAttachmentGeneration;
         this.provider = provider;
@@ -89,7 +83,7 @@ final class McpManagedAdmission {
      * @return current managed admission state
      */
     ManagedAdmissionState managedAdmissionState(boolean completedReviewTool, Path activeProjectRoot, boolean projectRootResolved) {
-        if (!managedAdmission) {
+        if (managedBindingSessionId == null) {
             return prooflessManagedAdmissionState(activeProjectRoot, projectRootResolved);
         }
         try {

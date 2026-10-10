@@ -1,7 +1,6 @@
 package org.synesis.mcp;
 
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.UUID;
 import org.synesis.mcp.application.McpProtocolHandler;
 import org.synesis.mcp.transport.stdio.McpStdioServer;
@@ -12,7 +11,6 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
-import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 
 /**
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.
@@ -108,8 +106,7 @@ public final class SynesisMcpServer {
                         .toAbsolutePath().normalize());
 
         AgentSessionService sessionService = new AgentSessionService();
-        SessionProcessIdentity processIdentity = captureProcessIdentity(connectionInstanceId);
-        McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, projectRootPinned, managedAttachment != null, managedAttachment);
+        McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider, connectionInstanceId, projectRootPinned, managedAttachment);
         McpStdioServer server = new McpStdioServer(handler);
 
         try {
@@ -203,20 +200,5 @@ public final class SynesisMcpServer {
     private static String boundedEnvironmentOrNull(String name) {
         String value = System.getenv(name);
         return value == null || value.isBlank() || value.length() > MAX_ENVIRONMENT_LENGTH ? null : value.trim();
-    }
-
-    /**
-     * Captures this process's identity for session lease ownership.
-     *
-     * @param connectionInstanceId connection selector, combined with a random suffix into the identity nonce
-     * @return identity with the process id, command, start time, and nonce
-     */
-    private static SessionProcessIdentity captureProcessIdentity(String connectionInstanceId) {
-        ProcessHandle self = ProcessHandle.current();
-        ProcessHandle.Info info = self.info();
-        String executable = info.command().orElse("unknown");
-        String commandLine = info.commandLine().orElse(executable);
-        long start = info.startInstant().map(Instant::toEpochMilli).orElse(System.currentTimeMillis());
-        return new SessionProcessIdentity(self.pid(), executable, commandLine, start, connectionInstanceId + ":" + UUID.randomUUID());
     }
 }

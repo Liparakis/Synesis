@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.synesis.mcp.application.McpManagedAdmission.ManagedAdmissionState;
 import org.synesis.mcp.contract.McpToolCatalog;
@@ -79,9 +80,9 @@ public final class McpProtocolHandler {
      */
     private static final String SERVER_VERSION = "0.1.0-SNAPSHOT";
     /**
-     * Prefix of internal dispatch names; the wire contract advertises raw tool names only.
+     * Prefix the unknown-tool error puts before the raw name; the wire contract advertises raw tool names only.
      */
-    private static final String TOOL_PREFIX = "synesis.";
+    private static final String UNKNOWN_TOOL_PREFIX = "synesis.";
     /**
      * JSON-RPC 2.0 error code: the message was not valid JSON.
      */
@@ -165,32 +166,19 @@ public final class McpProtocolHandler {
     private final McpSessionEstablishment sessionEstablishment;
 
     /**
-     * Creates an MCP protocol handler.
+     * Creates a handler for tests that bind an unpinned root and no managed attachment.
      *
      * @param sessionService       application session service
      * @param projectRoot          canonical control project root path
      * @param provider             stable provider name
      * @param connectionInstanceId unique process connection-instance ID
      */
-    public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, McpSessionLease.captureProcessIdentity(connectionInstanceId), false, false);
+    McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, false);
     }
 
     /**
-     * Creates an MCP protocol handler with process identity captured by the server entrypoint.
-     *
-     * @param sessionService       application session service
-     * @param projectRoot          canonical control project root path
-     * @param provider             stable provider name
-     * @param connectionInstanceId unique process connection-instance ID
-     * @param processIdentity      one immutable identity captured for this MCP process
-     */
-    public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId, SessionProcessIdentity processIdentity) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, false);
-    }
-
-    /**
-     * Creates an MCP protocol handler for tests that pin the root and capture process identity themselves.
+     * Creates a handler for tests that pin the root and bind no managed attachment.
      *
      * @param sessionService       application session service
      * @param projectRoot          initial launcher project root path
@@ -199,48 +187,13 @@ public final class McpProtocolHandler {
      * @param projectRootPinned    whether {@code projectRoot} came from an explicit launcher setting
      */
     McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId, boolean projectRootPinned) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, McpSessionLease.captureProcessIdentity(connectionInstanceId), projectRootPinned, false);
+        this(sessionService, projectRoot, provider, connectionInstanceId, projectRootPinned, null);
     }
 
     /**
-     * Creates an MCP protocol handler with explicit launcher-root provenance.
+     * Creates the handler of one MCP process, capturing that process's identity.
      *
-     * @param sessionService       application session service
-     * @param projectRoot          initial launcher project root path
-     * @param provider             stable provider name
-     * @param connectionInstanceId unique process connection-instance ID
-     * @param processIdentity      one immutable identity captured for this MCP process
-     * @param projectRootPinned    whether {@code projectRoot} came from an explicit launcher setting
-     */
-    public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId, SessionProcessIdentity processIdentity, boolean projectRootPinned) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, projectRootPinned, false);
-    }
-
-    /**
-     * Creates an MCP handler after an explicit managed attachment admission.
-     *
-     * @param sessionService       application session service
-     * @param projectRoot          initial launcher project root
-     * @param provider             stable provider name
-     * @param connectionInstanceId exact connection selector
-     * @param processIdentity      captured process identity
-     * @param projectRootPinned    whether the root was launcher-pinned
-     * @param managedAdmission     whether exact managed proof was verified at startup
-     */
-    public McpProtocolHandler(AgentSessionService sessionService,
-            Path projectRoot,
-            String provider,
-            String connectionInstanceId,
-            SessionProcessIdentity processIdentity,
-            boolean projectRootPinned,
-            boolean managedAdmission) {
-        this(sessionService, projectRoot, provider, connectionInstanceId, processIdentity, projectRootPinned, managedAdmission, null);
-    }
-
-    /**
-     * Creates an MCP handler after managed transport admission.
-     *
-     * <p>A pending record authenticates only the launch-local transport. Tool
+     * <p>A pending managed record authenticates only the launch-local transport. Tool
      * calls remain quarantined until the durable record is promoted to {@code ACTIVE}; the handler
      * re-reads that record so the same process connection can be promoted without resupplying
      * proof.</p>
@@ -249,18 +202,31 @@ public final class McpProtocolHandler {
      * @param projectRoot          initial launcher project root
      * @param provider             stable provider name
      * @param connectionInstanceId exact connection selector
+     * @param projectRootPinned    whether the root was launcher-pinned
+     * @param managedAttachment    authenticated non-secret attachment metadata, or {@code null} when
+     *                             the launcher did not authenticate managed continuity
+     */
+    public McpProtocolHandler(AgentSessionService sessionService, Path projectRoot, String provider, String connectionInstanceId, boolean projectRootPinned, ManagedAttachmentRecord managedAttachment) {
+        this(sessionService, projectRoot, provider, connectionInstanceId, McpSessionLease.captureProcessIdentity(connectionInstanceId), projectRootPinned, managedAttachment);
+    }
+
+    /**
+     * Creates a handler whose process identity the caller captured.
+     *
+     * @param sessionService       application session service
+     * @param projectRoot          initial launcher project root
+     * @param provider             stable provider name
+     * @param connectionInstanceId exact connection selector
      * @param processIdentity      captured process identity
      * @param projectRootPinned    whether the root was launcher-pinned
-     * @param managedAdmission     whether managed transport proof was verified
-     * @param managedAttachment    authenticated non-secret attachment metadata
+     * @param managedAttachment    authenticated non-secret attachment metadata, or {@code null}
      */
-    public McpProtocolHandler(AgentSessionService sessionService,
+    McpProtocolHandler(AgentSessionService sessionService,
             Path projectRoot,
             String provider,
             String connectionInstanceId,
             SessionProcessIdentity processIdentity,
             boolean projectRootPinned,
-            boolean managedAdmission,
             ManagedAttachmentRecord managedAttachment) {
         Objects.requireNonNull(sessionService, "sessionService");
         WorkspaceReadService readService = new WorkspaceReadService();
@@ -287,19 +253,14 @@ public final class McpProtocolHandler {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.connectionInstanceId = Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         this.commandProcessIdentity = Objects.requireNonNull(processIdentity, "processIdentity");
-        if (managedAdmission && managedAttachment == null) {
-            throw new IllegalArgumentException("managed attachment metadata required");
-        }
-        if (managedAttachment != null && !managedAdmission) {
-            throw new IllegalArgumentException("managed attachment requires managed admission");
-        }
+        boolean managedAdmission = managedAttachment != null;
         String managedBindingSessionId = managedAttachment == null ? null : managedAttachment.bindingSessionId();
         long managedAttachmentGeneration = managedAttachment == null ? 0L : managedAttachment.generation();
         if (managedAttachment != null && managedAttachment.status() != ManagedAttachmentRecord.Status.ACTIVE && managedAttachment.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
             throw new IllegalArgumentException("managed attachment is not transport-admissible");
         }
         this.projectRoots = new McpProjectRootSelection(projectRoot, projectRootPinned);
-        this.admission = new McpManagedAdmission(managedAdmission, managedBindingSessionId, managedAttachmentGeneration, provider, connectionInstanceId, authorityResolver);
+        this.admission = new McpManagedAdmission(managedBindingSessionId, managedAttachmentGeneration, provider, connectionInstanceId, authorityResolver);
         this.lease = new McpSessionLease(authorityResolver, collaborationService, leaseService, leasePolicy, provider, connectionInstanceId);
         this.commands = new McpDurableCommand(commandAdmissionService, reviewSnapshotAccessService, validationSnapshotAccessService, provider, connectionInstanceId, processIdentity, lease);
         this.workspaceTools = new McpWorkspaceTools(readService, patchService, provider, connectionInstanceId);
@@ -345,35 +306,46 @@ public final class McpProtocolHandler {
     }
 
     /**
-     * Determines whether this operation can increase authority and therefore needs attestation.
+     * What a tool call must satisfy before dispatch, one row per catalog tool.
      *
-     * @param name      internal dispatch name, including the tool prefix
-     * @param arguments tool arguments, possibly {@code null}
-     * @return {@code true} when the call needs a valid provider manual attestation
+     * @param attestation       whether these arguments, possibly {@code null}, can increase authority and so need a
+     *                          valid provider manual attestation
+     * @param completedBindings whether a completed managed connection may still call the tool
+     * @param skipsLease        whether the call leaves the ordinary activity lease renewal to the tool itself
      */
-    private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
-        return switch (name) {
-            // Every coordination request needs an attestation, the status read included. The decision
-            // must not depend on argument keys the payload normalizer ignores, or a caller could add one
-            // to an authority-increasing request and skip the gate.
-            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH, TOOL_PREFIX + McpToolCatalog.RUN_COMMAND, TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, TOOL_PREFIX + McpToolCatalog.FINISH_LANE,
-                 TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> true;
-            case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION ->
-                    arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
-            case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
-            default -> false;
-        };
+    private record ToolPolicy(Predicate<Map<String, Object>> attestation, boolean completedBindings, boolean skipsLease) {
+
+        private static final Predicate<Map<String, Object>> NEVER = arguments -> false;
+        private static final Predicate<Map<String, Object>> ALWAYS = arguments -> true;
+        /** Policy of a tool with no extra requirement, and of a name the catalog does not know. */
+        private static final ToolPolicy UNRESTRICTED = new ToolPolicy(NEVER, false, false);
     }
 
     /**
-     * Restricts completed managed connections to the three permitted review coordination calls.
-     *
-     * @param toolName internal dispatch name
-     * @return {@code true} for get_next_action, request_coordination, and respond_coordination
+     * Per-tool admission policy. The attestation decision of {@code request_coordination} must not
+     * depend on argument keys the payload normalizer ignores, or a caller could add one to an
+     * authority-increasing request and skip the gate; the status read needs it too.
+     * {@code run_command} and {@code finish_lane} skip the lease renewal: the first anchors its own
+     * process, and a lane being closed has no liveness to renew while completion stays authoritative.
      */
-    private static boolean completedReviewTool(String toolName) {
-        return (TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION).equals(toolName) || (TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION).equals(toolName) || (TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION).equals(
-                toolName);
+    private static final Map<String, ToolPolicy> TOOL_POLICIES = Map.of(
+            McpToolCatalog.ENSURE_SESSION, new ToolPolicy(McpProtocolHandler::unwindOrRepairRequested, false, false),
+            McpToolCatalog.READ_FILE, ToolPolicy.UNRESTRICTED,
+            McpToolCatalog.APPLY_PATCH, new ToolPolicy(ToolPolicy.ALWAYS, false, false),
+            McpToolCatalog.RUN_COMMAND, new ToolPolicy(ToolPolicy.ALWAYS, false, true),
+            McpToolCatalog.GET_NEXT_ACTION, new ToolPolicy(ToolPolicy.NEVER, true, false),
+            McpToolCatalog.REQUEST_COORDINATION, new ToolPolicy(ToolPolicy.ALWAYS, true, false),
+            McpToolCatalog.RESPOND_COORDINATION, new ToolPolicy(McpProtocolHandler::responseKindPresent, true, false),
+            McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, new ToolPolicy(ToolPolicy.ALWAYS, false, false),
+            McpToolCatalog.FINISH_LANE, new ToolPolicy(ToolPolicy.ALWAYS, false, true),
+            McpToolCatalog.CANCEL_LANE, ToolPolicy.UNRESTRICTED);
+
+    private static boolean unwindOrRepairRequested(Map<String, Object> arguments) {
+        return arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
+    }
+
+    private static boolean responseKindPresent(Map<String, Object> arguments) {
+        return arguments == null || arguments.get("kind") != null;
     }
 
     /**
@@ -577,82 +549,156 @@ public final class McpProtocolHandler {
         } catch (IllegalArgumentException invalidCall) {
             return createErrorResponse(id, INVALID_PARAMS, invalidCall.getMessage());
         }
-
-        // The wire contract advertises raw names only; the prefix is internal dispatch notation.
-        String name = TOOL_PREFIX + call.name();
+        String tool = call.name();
         Map<String, Object> arguments = call.arguments().orElse(null);
+        ToolPolicy policy = TOOL_POLICIES.getOrDefault(tool, ToolPolicy.UNRESTRICTED);
 
-        if (projectRoots.projectRootAuthorityFailure() != null) {
-            AgentResponse mismatch = new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, Map.of("error", projectRoots.projectRootAuthorityFailure()));
-            return textResultResponse(id, mismatch.toJson());
+        String refusal = refuseProjectRootAuthorityFailure(id);
+        if (refusal != null) {
+            return refusal;
         }
-        ManagedAdmissionState managedState = admission.managedAdmissionState(completedReviewTool(name), projectRoots.activeProjectRoot(), projectRoots.projectRootResolved());
-        if (managedState != ManagedAdmissionState.ACTIVE && managedState != ManagedAdmissionState.REVIEW_ONLY) {
-            return admission.managedAdmissionResponse(id, managedState);
+        ManagedAdmissionState managedState = admission.managedAdmissionState(policy.completedBindings(), projectRoots.activeProjectRoot(), projectRoots.projectRootResolved());
+        refusal = refuseUnadmittedManagedConnection(id, managedState);
+        if (refusal != null) {
+            return refusal;
         }
+        renewLeaseForActivity(policy, managedState);
+        refusal = refuseFencedRecovery(id, tool, arguments);
+        if (refusal != null) {
+            return refusal;
+        }
+        refusal = refuseMissingAttestation(id, policy, arguments);
+        if (refusal != null) {
+            return refusal;
+        }
+        return dispatch(id, tool, arguments);
+    }
 
-        AgentResponse agentResponse;
-        boolean durableCommand = name.equals(TOOL_PREFIX + McpToolCatalog.RUN_COMMAND);
-        boolean noChangeCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE) && arguments != null && arguments.get("outcome") instanceof String outcome && "no_change".equalsIgnoreCase(outcome);
-        boolean snapshotCompletion = name.equals(TOOL_PREFIX + McpToolCatalog.FINISH_LANE);
-        // finish_lane carries an optimistic event-log revision in its
-        // projected evidence.  Heartbeats no longer invalidate that envelope,
-        // but a lane that is being closed has no liveness to renew, so the
-        // ordinary lease heartbeat is still skipped here.  Completion itself
-        // remains authoritative; all other non-command calls retain the
-        // normal activity heartbeat.
-        if (managedState != ManagedAdmissionState.REVIEW_ONLY && !durableCommand && !noChangeCompletion && !snapshotCompletion) {
+    /**
+     * Stops every call while the connection's project root is latched as unauthoritative.
+     *
+     * @param id JSON-RPC request identifier
+     * @return the refusal reply, or {@code null} to continue
+     */
+    private String refuseProjectRootAuthorityFailure(Object id) {
+        if (projectRoots.projectRootAuthorityFailure() == null) {
+            return null;
+        }
+        AgentResponse mismatch = new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, Map.of("error", projectRoots.projectRootAuthorityFailure()));
+        return textResultResponse(id, mismatch.toJson());
+    }
+
+    /**
+     * Stops a call from a managed connection whose attachment does not admit it.
+     *
+     * @param id           JSON-RPC request identifier
+     * @param managedState the admission state read for this call
+     * @return the refusal reply, or {@code null} to continue
+     */
+    private String refuseUnadmittedManagedConnection(Object id, ManagedAdmissionState managedState) {
+        if (managedState == ManagedAdmissionState.ACTIVE || managedState == ManagedAdmissionState.REVIEW_ONLY) {
+            return null;
+        }
+        return admission.managedAdmissionResponse(id, managedState);
+    }
+
+    /**
+     * Renews the session lease for ordinary activity. Not a refusal: a completed binding, a durable
+     * command and a lane completion have no liveness to renew here.
+     *
+     * @param policy       policy of the called tool
+     * @param managedState the admission state read for this call
+     */
+    private void renewLeaseForActivity(ToolPolicy policy, ManagedAdmissionState managedState) {
+        if (managedState != ManagedAdmissionState.REVIEW_ONLY && !policy.skipsLease()) {
             lease.renewLease(projectRoots.activeProjectRoot());
         }
+    }
 
-        // Active bindings still pass through the normal recovery fence below. Completed
-        // bindings reach only the completion service's exact durable-result replay checks.
-        boolean exactCompletedNoChangeReplay = sessionEstablishment.isSessionBound() && noChangeCompletion && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
-        if (sessionEstablishment.isSessionBound() && !exactCompletedNoChangeReplay) {
-            try {
-                if (collaborationService.recoveryFenced(projectRoots.activeProjectRoot(), provider, connectionInstanceId)) {
-                    return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_EPOCH_FENCED").toJson());
-                }
-            } catch (Exception failure) {
-                // A lane that completed has no active binding left to fence, and its agent's
-                // closing inbox read must be told so rather than sent to a human. Only that
-                // read is let through: every mutating tool still fails closed here.
-                boolean closingRead = name.equals(TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION) && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
-                if (!closingRead) {
-                    System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
-                    return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_RECOVERY_STATE_UNAVAILABLE").toJson());
-                }
+    /**
+     * Stops a bound connection whose lane is recovery-fenced or whose recovery state cannot be read.
+     * Active bindings pass through the fence; completed bindings reach only the completion service's
+     * exact durable-result replay checks.
+     *
+     * @param id        JSON-RPC request identifier
+     * @param tool      raw tool name
+     * @param arguments tool arguments, possibly {@code null}
+     * @return the refusal reply, or {@code null} to continue
+     */
+    private String refuseFencedRecovery(Object id, String tool, Map<String, Object> arguments) {
+        if (!sessionEstablishment.isSessionBound()) {
+            return null;
+        }
+        boolean noChangeCompletion = McpToolCatalog.FINISH_LANE.equals(tool) && arguments != null && arguments.get("outcome") instanceof String outcome && "no_change".equalsIgnoreCase(outcome);
+        if (noChangeCompletion && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot())) {
+            return null;
+        }
+        try {
+            if (collaborationService.recoveryFenced(projectRoots.activeProjectRoot(), provider, connectionInstanceId)) {
+                return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_EPOCH_FENCED").toJson());
+            }
+        } catch (Exception failure) {
+            // A lane that completed has no active binding left to fence, and its agent's
+            // closing inbox read must be told so rather than sent to a human. Only that
+            // read is let through: every mutating tool still fails closed here.
+            boolean closingRead = McpToolCatalog.GET_NEXT_ACTION.equals(tool) && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
+            if (!closingRead) {
+                System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
+                return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_RECOVERY_STATE_UNAVAILABLE").toJson());
             }
         }
+        return null;
+    }
 
-        if (requiresManualAttestation(name, arguments)) {
-            var attestation = manualService.attest(provider);
-            if (!attestation.valid()) {
-                Map<String, Object> details = new LinkedHashMap<>();
-                details.put("manual", attestation.reason());
-                details.put("authorityReductionAllowed", true);
-                return manualAttestationRequiredResponse(id, details);
-            }
+    /**
+     * Stops an authority-increasing call from a provider without a valid manual attestation.
+     *
+     * @param id        JSON-RPC request identifier
+     * @param policy    policy of the called tool
+     * @param arguments tool arguments, possibly {@code null}
+     * @return the refusal reply, or {@code null} to continue
+     */
+    private String refuseMissingAttestation(Object id, ToolPolicy policy, Map<String, Object> arguments) {
+        if (!policy.attestation().test(arguments)) {
+            return null;
         }
+        var attestation = manualService.attest(provider);
+        if (attestation.valid()) {
+            return null;
+        }
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("manual", attestation.reason());
+        details.put("authorityReductionAllowed", true);
+        return manualAttestationRequiredResponse(id, details);
+    }
 
-        switch (name) {
-            case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION -> {
+    /**
+     * Runs the tool once every gate has admitted the call.
+     *
+     * @param id        JSON-RPC request identifier
+     * @param tool      raw tool name
+     * @param arguments tool arguments, possibly {@code null}
+     * @return the tool's reply frame, or the unknown-tool error
+     */
+    private String dispatch(Object id, String tool, Map<String, Object> arguments) {
+        AgentResponse agentResponse;
+        switch (tool) {
+            case McpToolCatalog.ENSURE_SESSION -> {
                 return sessionEstablishment.ensureSession(id, arguments, projectRoots.activeProjectRoot());
             }
-            case TOOL_PREFIX + McpToolCatalog.READ_FILE -> agentResponse = workspaceTools.readFile(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH -> agentResponse = workspaceTools.applyPatch(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.RUN_COMMAND -> agentResponse = commands.runCommand(id, arguments, projectRoots.activeProjectRoot(), projectRoots.projectRootAuthorityFailure());
-            case TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION -> agentResponse = coordinationTools.getNextAction(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> agentResponse = coordinationTools.requestCoordination(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> agentResponse = coordinationTools.respondCoordination(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> agentResponse = coordinationTools.publishCapabilityImplementation(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> agentResponse = coordinationTools.finishLane(arguments, projectRoots.activeProjectRoot());
-            case TOOL_PREFIX + McpToolCatalog.CANCEL_LANE -> agentResponse = coordinationTools.cancelLane(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.READ_FILE -> agentResponse = workspaceTools.readFile(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.APPLY_PATCH -> agentResponse = workspaceTools.applyPatch(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.RUN_COMMAND -> agentResponse = commands.runCommand(id, arguments, projectRoots.activeProjectRoot(), projectRoots.projectRootAuthorityFailure());
+            case McpToolCatalog.GET_NEXT_ACTION -> agentResponse = coordinationTools.getNextAction(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.REQUEST_COORDINATION -> agentResponse = coordinationTools.requestCoordination(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.RESPOND_COORDINATION -> agentResponse = coordinationTools.respondCoordination(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> agentResponse = coordinationTools.publishCapabilityImplementation(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.FINISH_LANE -> agentResponse = coordinationTools.finishLane(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.CANCEL_LANE -> agentResponse = coordinationTools.cancelLane(arguments, projectRoots.activeProjectRoot());
             default -> {
-                return errorTextResultResponse(id, "Unknown tool: " + name);
+                return errorTextResultResponse(id, "Unknown tool: " + UNKNOWN_TOOL_PREFIX + tool);
             }
         }
-
         return textResultResponse(id, agentResponse.toJson());
     }
 }

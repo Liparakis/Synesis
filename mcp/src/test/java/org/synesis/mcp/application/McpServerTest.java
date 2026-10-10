@@ -130,7 +130,7 @@ class McpServerTest {
                 "normal-provider-home",
                 ownership,
                 ManagedAttachmentService.storeFor(location, binding.sessionId()));
-        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "pending-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"), true, true, issued.record());
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "pending-connection", new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"), true, issued.record());
 
         assertTrue(handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}").contains("synesis"));
         String tools = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
@@ -165,7 +165,6 @@ class McpServerTest {
                 "codex",
                 "completed-review-connection",
                 new SessionProcessIdentity(1L, "test", "test", 1L, "nonce"),
-                true,
                 true,
                 issued.record());
 
