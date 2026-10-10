@@ -170,7 +170,9 @@ class ProjectProcessExecutorTest {
         AtomicReference<ExecutionResult> reference = new AtomicReference<>();
         Thread caller = new Thread(() -> reference.set(run(root, PortableTestCommand.fixture("partial", "partial", "1", "5"), 30)));
         caller.start();
-        Thread.sleep(250);
+        // The child is a JVM that prints and then stays alive for five seconds. The interrupt must
+        // land after it has printed, and a loaded machine needs more than 250 ms to start a JVM.
+        Thread.sleep(2_000);
         caller.interrupt();
         caller.join(10_000);
         assertNotNull(reference.get(), "cancelled execution did not return");
