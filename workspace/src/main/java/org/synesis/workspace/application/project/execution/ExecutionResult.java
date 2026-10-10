@@ -4,6 +4,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import org.synesis.workspace.agent.AgentNextAction;
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+
 /**
  * Bounded structured evidence from one process execution.
  *
@@ -54,6 +59,36 @@ public record ExecutionResult(ProjectProcessExecutor.Outcome outcome, Integer ex
         result.put("stdoutBytesRetained", stdoutBytesRetained);
         result.put("stderrBytesRetained", stderrBytesRetained);
         return result;
+    }
+
+    /**
+     * Maps the outcome to the agent-facing response status, reason, and next action.
+     *
+     * @param payload result object to return with the response
+     * @return agent response carrying {@code payload}
+     */
+    public AgentResponse toAgentResponse(Map<String, Object> payload) {
+        AgentStatus status = switch (outcome) {
+            case COMPLETED -> AgentStatus.COMPLETED;
+            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
+        };
+        AgentReason reason = switch (outcome) {
+            case COMPLETED -> null;
+            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
+            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
+            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
+            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
+            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
+            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
+            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
+            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
+        };
+        AgentNextAction nextAction = switch (outcome) {
+            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
+            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentNextAction.REQUEST_HUMAN_HELP;
+        };
+        return new AgentResponse(status, reason, nextAction, payload);
     }
 
     /**

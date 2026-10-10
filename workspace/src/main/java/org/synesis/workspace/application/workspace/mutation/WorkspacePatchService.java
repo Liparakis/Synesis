@@ -2,6 +2,8 @@ package org.synesis.workspace.application.workspace.mutation;
 
 import org.synesis.workspace.application.workspace.ReadinessResult;
 
+import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
+
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 import java.io.IOException;
@@ -12,7 +14,6 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.agent.AgentWorkspaceGuidance;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -49,15 +50,6 @@ public final class WorkspacePatchService {
         this.collaborationService = new WorkspaceCollaborationService();
     }
 
-    private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
-        return new AgentResponse(AgentStatus.BLOCKED,
-                AgentReason.WORKSPACE_MISMATCH,
-                null,
-                new AgentWorkspaceGuidance(controlRoot.toString(),
-                        assignedWorktree.toString(),
-                        "The target exists in the control checkout, not this assigned worktree. " + "Stop native mutations and relaunch the provider from assignedWorktree."));
-    }
-
     private static int countOccurrences(String text, String find) {
         if (text == null || find == null || find.isEmpty()) {
             return 0;
@@ -85,7 +77,7 @@ public final class WorkspacePatchService {
         // 1. Session & Worktree Verification
         Path root = request.controlRoot().toAbsolutePath().normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
 
         ProjectLocation location;
@@ -94,7 +86,7 @@ public final class WorkspacePatchService {
             location = projectService.locate(root);
             readiness = readinessService.assessMutation(location, request.provider(), request.connectionInstanceId(), request.relativePath());
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
         if (!readiness.ready()) {
             return readiness.response();
@@ -103,7 +95,7 @@ public final class WorkspacePatchService {
 
         // 2. Relative Path & Traversal Validation
         String rawPath = request.relativePath();
-        if (Path.of(rawPath).isAbsolute() || rawPath.contains("..")) {
+        if (WorkspacePathPolicy.isAbsolute(rawPath) || WorkspacePathPolicy.containsTraversal(rawPath)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
@@ -115,7 +107,7 @@ public final class WorkspacePatchService {
         }
 
         // Protected internal target check (.synesis, .codex, .git)
-        if (WorkspaceMutationBroker.isProtectedTarget(resolvedRelative)) {
+        if (WorkspacePathPolicy.isProtectedTarget(resolvedRelative)) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROTECTED_CONFIGURATION, null, null);
         }
 
@@ -126,7 +118,7 @@ public final class WorkspacePatchService {
 
         Path targetFile = assignedWorktree.resolve(resolvedRelative).toAbsolutePath().normalize();
         try {
-            if (!WorkspaceMutationBroker.targetResolvesWithinWorktree(assignedWorktree,
+            if (!WorkspacePathPolicy.targetResolvesWithinWorktree(assignedWorktree,
                     targetFile)) {
                 return AgentResponse.blocked(AgentReason.INVALID_PATH);
             }
@@ -134,7 +126,7 @@ public final class WorkspacePatchService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
         if (!Files.exists(targetFile) && Files.exists(root.resolve(resolvedRelative))) {
-            return workspaceMismatch(root, assignedWorktree);
+            return WorkspaceReadinessService.workspaceMismatch(root, assignedWorktree);
         }
 
         String proposedNewContent;

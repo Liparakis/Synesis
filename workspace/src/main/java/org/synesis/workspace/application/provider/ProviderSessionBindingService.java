@@ -564,39 +564,39 @@ public final class ProviderSessionBindingService {
     }
 
     /**
-     * Verifies a live managed continuation without requiring the control checkout to remain at the
-     * binding's admission base.
+     * Lets a provider continue after a sibling lane advanced the control base, when the failed
+     * check was exactly {@code CONTROL_BASE_ADVANCED}.
      *
-     * <p>A sibling lane may publish and integrate an immutable snapshot while
-     * this managed provider remains attached to its own clean isolated worktree. The exact active
-     * attachment is the additional fence that permits that provider to continue; an ordinary or
-     * inactive binding must continue to use the strict current-control-base check.</p>
-     *
-     * @param location project location
-     * @param binding  exact provider binding
-     * @param cwd      provider event working directory
-     * @return workspace verification result
-     */
-    public synchronized WorkspaceCheck verifyManagedContinuationWorkspace(ProjectLocation location, Binding binding, Path cwd) {
-        return ProviderWorkspaceVerification.verifyManagedContinuationWorkspace(location, binding, cwd);
-    }
-
-    /**
-     * Verifies a mutation continuation on the exact assigned worktree when the target remains inside
-     * the binding's active collaboration claim.
-     *
-     * <p>This permits a claimed lane to continue after a sibling integrates its snapshot. It does
-     * not permit a changed worker generation, another worktree, or a target outside the active claim.
-     * The collaboration service also applies its completion and publication fences.</p>
+     * <p>A sibling lane may publish and integrate an immutable snapshot while a live managed
+     * provider remains attached to its own clean isolated worktree; the exact active attachment
+     * permits it to continue. A mutation target that stays inside the binding's active
+     * collaboration claim has the same boundary, and the collaboration service applies its
+     * completion and publication fences. A changed worker generation, another worktree, or a
+     * target outside the claim is not permitted. An ordinary or inactive binding keeps the strict
+     * current-control-base result.</p>
      *
      * @param location     initialized project location
      * @param binding      exact provider binding
      * @param cwd          provider event working directory
-     * @param relativePath claimed mutation target
-     * @return workspace verification result
+     * @param check        result of the strict verification
+     * @param mutationPath claimed mutation target, or {@code null} for reads and commands
+     * @return {@code check}, or the verified continuation result
      */
-    public synchronized WorkspaceCheck verifyClaimedMutationContinuationWorkspace(ProjectLocation location, Binding binding, Path cwd, String relativePath) {
-        return ProviderWorkspaceVerification.verifyClaimedMutationContinuationWorkspace(location, binding, cwd, relativePath);
+    public synchronized WorkspaceCheck continueAfterControlBaseAdvance(ProjectLocation location, Binding binding, Path cwd, WorkspaceCheck check, String mutationPath) {
+        if (check.verified() || !"CONTROL_BASE_ADVANCED".equals(check.code())) {
+            return check;
+        }
+        WorkspaceCheck managed = ProviderWorkspaceVerification.verifyManagedContinuationWorkspace(location, binding, cwd);
+        if (managed.verified()) {
+            return managed;
+        }
+        if (mutationPath != null) {
+            WorkspaceCheck claimed = ProviderWorkspaceVerification.verifyClaimedMutationContinuationWorkspace(location, binding, cwd, mutationPath);
+            if (claimed.verified()) {
+                return claimed;
+            }
+        }
+        return check;
     }
 
     /**

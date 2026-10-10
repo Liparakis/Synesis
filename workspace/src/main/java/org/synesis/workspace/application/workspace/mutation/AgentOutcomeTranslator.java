@@ -6,6 +6,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationResult;
 
@@ -25,14 +26,6 @@ public final class AgentOutcomeTranslator {
      * Creates an outcome translator.
      */
     public AgentOutcomeTranslator() {
-    }
-
-    private static boolean isProtectedTarget(String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            return false;
-        }
-        String normalized = relativePath.replace('\\', '/').toLowerCase();
-        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/") || normalized.startsWith(".git/") || normalized.equals(".synesis") || normalized.equals(".codex") || normalized.equals(".git");
     }
 
     private static String extractCapability(String message) {
@@ -63,7 +56,7 @@ public final class AgentOutcomeTranslator {
         return switch (decision) {
             case ALLOW -> new TranslatedOutcome(AgentResponse.completed(path, result.updatedRevision()), decision, reasonCode, result.decisionId(), result.interceptionEvidence(), false, false, false);
             case DENY_POLICY -> {
-                boolean isProtected = "PROTECTED_CONFIGURATION_TARGET".equalsIgnoreCase(reasonCode) || isProtectedTarget(path);
+                boolean isProtected = "PROTECTED_CONFIGURATION_TARGET".equalsIgnoreCase(reasonCode) || WorkspacePathPolicy.isProtectedNamespace(path);
                 AgentReason reason = isProtected ? AgentReason.PROTECTED_CONFIGURATION : AgentReason.POLICY_DENIED;
                 yield new TranslatedOutcome(AgentResponse.blocked(reason), decision, reasonCode, result.decisionId(), result.interceptionEvidence(), false, false, false);
             }

@@ -14,10 +14,8 @@ import java.util.function.Consumer;
 import java.util.List;
 import java.util.Objects;
 
-import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
-import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
@@ -58,35 +56,6 @@ public final class ProjectCommandService {
         this.executor = Objects.requireNonNull(executor, "executor");
     }
 
-    private static AgentStatus statusFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> AgentStatus.COMPLETED;
-            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
-        };
-    }
-
-    private static AgentReason reasonFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> null;
-            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
-            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
-            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
-            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
-            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
-            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
-            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
-            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
-        };
-    }
-
-    private static AgentNextAction nextActionFor(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentNextAction.REQUEST_HUMAN_HELP;
-        };
-    }
-
     private static long getDirectoryLastModified(Path path) {
         try {
             return Files.exists(path) ? Files.getLastModifiedTime(path).toMillis() : 0L;
@@ -114,7 +83,7 @@ public final class ProjectCommandService {
         Objects.requireNonNull(observer, "observer");
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
 
         ProjectLocation location;
@@ -123,7 +92,7 @@ public final class ProjectCommandService {
             location = projectService.locate(root);
             readiness = readinessService.assess(location, request.provider(), request.connectionInstanceId());
         } catch (Exception failure) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
         if (!readiness.ready()) {
             return readiness.response();
@@ -137,7 +106,7 @@ public final class ProjectCommandService {
             return AgentResponse.blocked(AgentReason.PROTECTED_CONFIGURATION);
         }
 
-        return new AgentResponse(statusFor(result.outcome()), reasonFor(result.outcome()), nextActionFor(result.outcome()), result.toMap());
+        return result.toAgentResponse(result.toMap());
     }
 
     /**

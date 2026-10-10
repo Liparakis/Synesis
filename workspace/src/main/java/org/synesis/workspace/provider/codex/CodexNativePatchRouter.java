@@ -11,6 +11,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.project.ProjectPathResolver;
@@ -132,7 +133,7 @@ public final class CodexNativePatchRouter {
         for (CodexApplyPatchParser.FileChange change : parsed.changes()) {
             String section = section(lines, change.sourcePath());
             String resolvedRelative = ProjectPathResolver.resolve(worktree, change.sourcePath());
-            if (WorkspaceMutationBroker.isProtectedTarget(resolvedRelative)) {
+            if (WorkspacePathPolicy.isProtectedTarget(resolvedRelative)) {
                 return new RouteResult(false, "Native patch target is protected by Synesis");
             }
             Path target = worktree.resolve(resolvedRelative).normalize();
@@ -140,7 +141,7 @@ public final class CodexNativePatchRouter {
                 return new RouteResult(false, "Native patch target escapes the assigned worktree");
             }
             try {
-                if (!WorkspaceMutationBroker.targetResolvesWithinWorktree(worktree, target)) {
+                if (!WorkspacePathPolicy.targetResolvesWithinWorktree(worktree, target)) {
                     return new RouteResult(false,
                             "Native patch target escapes the assigned worktree");
                 }

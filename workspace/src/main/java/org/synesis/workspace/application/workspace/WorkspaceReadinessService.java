@@ -7,6 +7,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.agent.AgentWorkspaceGuidance;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
@@ -41,6 +42,32 @@ public final class WorkspaceReadinessService {
     public WorkspaceReadinessService(ProviderSessionBindingService bindingService) {
         this.bindingService = Objects.requireNonNull(bindingService, "bindingService");
         this.providerService = new ProviderApplicationService();
+    }
+
+    /**
+     * Builds the response for a project or session that is not ready to be inspected at all.
+     *
+     * @return retry response asking the caller to ensure its session
+     */
+    public static AgentResponse workspaceNotReady() {
+        return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+    }
+
+    /**
+     * Builds the response for a target that exists in the control checkout but not in the assigned
+     * worktree.
+     *
+     * @param controlRoot      control checkout
+     * @param assignedWorktree assigned worktree
+     * @return blocked response with relaunch guidance
+     */
+    public static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
+        return new AgentResponse(AgentStatus.BLOCKED,
+                AgentReason.WORKSPACE_MISMATCH,
+                null,
+                new AgentWorkspaceGuidance(controlRoot.toString(),
+                        assignedWorktree.toString(),
+                        "The target exists in the control checkout, not this assigned worktree. " + "Stop native mutations and relaunch the provider from assignedWorktree."));
     }
 
     private static ReadinessResult unavailable(AgentReason reason, String internalReason) {
@@ -136,22 +163,8 @@ public final class WorkspaceReadinessService {
             Path worktree = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
             ProviderSessionBindingService.WorkspaceCheck workspaceCheck = allowCommittedGeneration ? bindingService.verifyCompletionWorkspace(location, binding, worktree)
                     : allowControlBaseAdvance ? bindingService.verifyNoChangeWorkspace(location, binding, worktree) : bindingService.verifyWorkspace(location, binding, worktree);
-            if (!workspaceCheck.verified() && "CONTROL_BASE_ADVANCED".equals(workspaceCheck.code())) {
-                // A live managed provider owns an exact isolated worktree and
-                // may continue after a sibling integrates its snapshot into
-                // the control checkout. Exact claimed mutation targets have
-                // the same continuation boundary; unclaimed reads and commands
-                // remain subject to the current control-base check.
-                ProviderSessionBindingService.WorkspaceCheck managedContinuation = bindingService.verifyManagedContinuationWorkspace(location, binding, worktree);
-                if (managedContinuation.verified()) {
-                    workspaceCheck = managedContinuation;
-                } else if (mutationPath != null) {
-                    ProviderSessionBindingService.WorkspaceCheck claimedContinuation = bindingService.verifyClaimedMutationContinuationWorkspace(location, binding, worktree, mutationPath);
-                    if (claimedContinuation.verified()) {
-                        workspaceCheck = claimedContinuation;
-                    }
-                }
-            }
+            // Unclaimed reads and commands remain subject to the current control-base check.
+            workspaceCheck = bindingService.continueAfterControlBaseAdvance(location, binding, worktree, workspaceCheck, mutationPath);
             if (!workspaceCheck.verified()) {
                 return unavailable(AgentReason.WORKSPACE_STALE, workspaceCheck.code());
             }

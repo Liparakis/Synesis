@@ -137,7 +137,7 @@ public final class CapabilityValidationSnapshotAccessService {
         result.put("workspace", "capability_validation_snapshot");
         result.put("capabilityRequestHandle", access.requestHandle());
         result.put("implementationRevision", access.revision());
-        return new AgentResponse(commandStatus(execution), commandReason(execution), commandNextAction(execution), result);
+        return execution.toAgentResponse(result);
     }
 
     private static AccessResult denied(String error) {
@@ -146,35 +146,6 @@ public final class CapabilityValidationSnapshotAccessService {
 
     private static AgentResponse blocked(String error) {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("reason", error));
-    }
-
-    private static AgentStatus commandStatus(ExecutionResult result) {
-        return switch (result.outcome()) {
-            case COMPLETED -> AgentStatus.COMPLETED;
-            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
-        };
-    }
-
-    private static AgentReason commandReason(ExecutionResult result) {
-        return switch (result.outcome()) {
-            case COMPLETED -> null;
-            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
-            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
-            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
-            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
-            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
-            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
-            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
-            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
-        };
-    }
-
-    private static AgentNextAction commandNextAction(ExecutionResult result) {
-        return switch (result.outcome()) {
-            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentNextAction.REQUEST_HUMAN_HELP;
-        };
     }
 
     /**

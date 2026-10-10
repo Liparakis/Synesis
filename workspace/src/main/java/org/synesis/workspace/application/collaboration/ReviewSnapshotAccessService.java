@@ -137,35 +137,6 @@ public final class ReviewSnapshotAccessService {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", error));
     }
 
-    private static AgentStatus commandStatus(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> AgentStatus.COMPLETED;
-            case NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> AgentStatus.BLOCKED;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentStatus.FAILED;
-        };
-    }
-
-    private static AgentReason commandReason(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED -> null;
-            case NON_ZERO_EXIT -> AgentReason.COMMAND_FAILED;
-            case COMMAND_WORKING_DIRECTORY_INVALID -> AgentReason.COMMAND_WORKING_DIRECTORY_INVALID;
-            case COMMAND_EXECUTABLE_NOT_FOUND -> AgentReason.COMMAND_EXECUTABLE_NOT_FOUND;
-            case COMMAND_PERMISSION_DENIED -> AgentReason.COMMAND_PERMISSION_DENIED;
-            case COMMAND_TIMED_OUT -> AgentReason.COMMAND_TIMEOUT;
-            case COMMAND_CANCELLED -> AgentReason.COMMAND_CANCELLED;
-            case COMMAND_START_FAILED -> AgentReason.COMMAND_START_FAILED;
-            case COMMAND_TERMINATED -> AgentReason.COMMAND_TERMINATED;
-        };
-    }
-
-    private static AgentNextAction commandNextAction(ProjectProcessExecutor.Outcome outcome) {
-        return switch (outcome) {
-            case COMPLETED, NON_ZERO_EXIT, COMMAND_WORKING_DIRECTORY_INVALID, COMMAND_EXECUTABLE_NOT_FOUND, COMMAND_PERMISSION_DENIED -> null;
-            case COMMAND_TIMED_OUT, COMMAND_CANCELLED, COMMAND_START_FAILED, COMMAND_TERMINATED -> AgentNextAction.REQUEST_HUMAN_HELP;
-        };
-    }
-
     /**
      * Resolves the single pending review snapshot authorized for one exact provider connection.
      *
@@ -249,7 +220,7 @@ public final class ReviewSnapshotAccessService {
         result.put("reviewGrantId", access.grant().grantId().toString());
         result.put("reviewSnapshotId", access.snapshot().snapshotId());
         result.put("reviewCommitSha", access.snapshot().commitSha());
-        return new AgentResponse(commandStatus(execution.outcome()), commandReason(execution.outcome()), commandNextAction(execution.outcome()), result);
+        return execution.toAgentResponse(result);
     }
 
     /**

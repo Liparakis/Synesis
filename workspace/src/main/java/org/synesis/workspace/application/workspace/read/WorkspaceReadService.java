@@ -2,6 +2,8 @@ package org.synesis.workspace.application.workspace.read;
 
 import org.synesis.workspace.application.workspace.ReadinessResult;
 
+import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
+
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 
 import java.io.IOException;
@@ -16,7 +18,6 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.agent.AgentWorkspaceGuidance;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.integration.CapabilityValidationSnapshotAccessService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -50,21 +51,6 @@ public final class WorkspaceReadService {
         this.validationSnapshotAccessService = new CapabilityValidationSnapshotAccessService();
     }
 
-    private static boolean isInvalidOrProtectedPath(String path) {
-        if (path == null || path.isBlank()) {
-            return true;
-        }
-        try {
-            if (Path.of(path).isAbsolute() || path.contains("..")) {
-                return true;
-            }
-        } catch (RuntimeException invalidPath) {
-            return true;
-        }
-        String normalized = path.replace('\\', '/').toLowerCase(java.util.Locale.ROOT);
-        return normalized.startsWith(".synesis/") || normalized.startsWith(".codex/") || normalized.startsWith(".git/") || normalized.equals(".synesis") || normalized.equals(".codex") || normalized.equals(".git");
-    }
-
     private static void addReviewMetadata(Map<String, Object> result, ReviewSnapshotAccessService.Access reviewAccess) {
         if (reviewAccess == null) {
             return;
@@ -73,15 +59,6 @@ public final class WorkspaceReadService {
         result.put("reviewGrantId", reviewAccess.grant().grantId().toString());
         result.put("reviewSnapshotId", reviewAccess.snapshot().snapshotId());
         result.put("reviewCommitSha", reviewAccess.snapshot().commitSha());
-    }
-
-    private static AgentResponse workspaceMismatch(Path controlRoot, Path assignedWorktree) {
-        return new AgentResponse(AgentStatus.BLOCKED,
-                AgentReason.WORKSPACE_MISMATCH,
-                null,
-                new AgentWorkspaceGuidance(controlRoot.toString(),
-                        assignedWorktree.toString(),
-                        "The target exists in the control checkout, not this assigned worktree. " + "Stop native mutations and relaunch the provider from assignedWorktree."));
     }
 
     private static boolean isBinary(byte[] bytes) {
@@ -121,11 +98,11 @@ public final class WorkspaceReadService {
         // 1. Session & Worktree Verification
         Path root = request.controlRoot().toAbsolutePath().normalize();
         if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
 
         String rawPath = request.relativePath();
-        if (isInvalidOrProtectedPath(rawPath)) {
+        if (WorkspacePathPolicy.isInvalidOrProtectedReadPath(rawPath)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
@@ -163,7 +140,7 @@ public final class WorkspaceReadService {
                 }
             }
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+            return WorkspaceReadinessService.workspaceNotReady();
         }
 
         // 2. Relative Path & Traversal Validation
@@ -175,7 +152,7 @@ public final class WorkspaceReadService {
         }
 
         // Protected internal path check (.synesis, .codex, .git)
-        if (isInvalidOrProtectedPath(resolvedRelative)) {
+        if (WorkspacePathPolicy.isInvalidOrProtectedReadPath(resolvedRelative)) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
 
@@ -184,7 +161,7 @@ public final class WorkspaceReadService {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
         }
         if (!Files.exists(targetFile) && Files.isRegularFile(root.resolve(resolvedRelative))) {
-            return workspaceMismatch(root, assignedWorktree);
+            return WorkspaceReadinessService.workspaceMismatch(root, assignedWorktree);
         }
 
         // A valid repository-relative target may be intentionally absent in a
