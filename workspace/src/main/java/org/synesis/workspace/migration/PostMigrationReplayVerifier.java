@@ -30,13 +30,7 @@ import org.synesis.workspace.infrastructure.digest.Sha256;
  * Replays the existing durable event store and compares canonical semantic projection snapshots
  * before and after a project migration.
  */
-public final class PostMigrationReplayVerifier {
-
-    /**
-     * Creates a replay verifier with no mutable state.
-     */
-    public PostMigrationReplayVerifier() {
-    }
+final class PostMigrationReplayVerifier {
 
     private static String projectionFingerprint(PredictionEventStore store) {
         Map<String, Object> state = new TreeMap<>();
@@ -133,7 +127,7 @@ public final class PostMigrationReplayVerifier {
      * @throws IOException              if durable state cannot be read
      * @throws GeneralSecurityException if event verification fails
      */
-    public MigrationSemanticSnapshot capture(ProjectLocation location) throws IOException, GeneralSecurityException {
+    MigrationSemanticSnapshot capture(ProjectLocation location) throws IOException, GeneralSecurityException {
         Objects.requireNonNull(location, "location");
         String nodeId = new IdentityBootstrap(location.profile().resolve("link")).inspect().nodeId();
         if (nodeId.isBlank()) {
@@ -161,7 +155,7 @@ public final class PostMigrationReplayVerifier {
      * @param after  post-migration snapshot
      * @return comparison result
      */
-    public ProjectionReplayVerificationResult compare(MigrationSemanticSnapshot before, MigrationSemanticSnapshot after) {
+    ProjectionReplayVerificationResult compare(MigrationSemanticSnapshot before, MigrationSemanticSnapshot after) {
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
         boolean events = before.eventBytesHash().equals(after.eventBytesHash()) && before.eventHead() == after.eventHead();
@@ -185,13 +179,13 @@ public final class PostMigrationReplayVerifier {
      * @param eventHashChainValid     event-chain verification result
      * @param snapshotReferencesValid snapshot-reference verification result
      */
-    public record MigrationSemanticSnapshot(String projectId, String nodeId, long eventHead, String eventBytesHash, String snapshotBytesHash, String projectionFingerprint, boolean eventHashChainValid,
+    record MigrationSemanticSnapshot(String projectId, String nodeId, long eventHead, String eventBytesHash, String snapshotBytesHash, String projectionFingerprint, boolean eventHashChainValid,
                                             boolean snapshotReferencesValid) {
 
         /**
          * Validates snapshot values.
          */
-        public MigrationSemanticSnapshot {
+        MigrationSemanticSnapshot {
             Objects.requireNonNull(projectId, "projectId");
             Objects.requireNonNull(nodeId, "nodeId");
             Objects.requireNonNull(eventBytesHash, "eventBytesHash");
@@ -211,13 +205,13 @@ public final class PostMigrationReplayVerifier {
      * @param identitiesUnchanged     project and node identities match
      * @param reason                  stable result reason
      */
-    public record ProjectionReplayVerificationResult(boolean eventLogBytesUnchanged, boolean eventHashChainValid, boolean allProjectionsReplayed, boolean semanticStateEquivalent, boolean snapshotReferencesValid,
+    record ProjectionReplayVerificationResult(boolean eventLogBytesUnchanged, boolean eventHashChainValid, boolean allProjectionsReplayed, boolean semanticStateEquivalent, boolean snapshotReferencesValid,
                                                      boolean identitiesUnchanged, String reason) {
 
         /**
          * Validates result values.
          */
-        public ProjectionReplayVerificationResult {
+        ProjectionReplayVerificationResult {
             Objects.requireNonNull(reason, "reason");
         }
 
@@ -226,7 +220,7 @@ public final class PostMigrationReplayVerifier {
          *
          * @return true when safe
          */
-        public boolean successful() {
+        boolean successful() {
             return eventLogBytesUnchanged && eventHashChainValid && allProjectionsReplayed && semanticStateEquivalent && snapshotReferencesValid && identitiesUnchanged;
         }
     }

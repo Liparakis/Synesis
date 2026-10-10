@@ -32,7 +32,7 @@ import org.synesis.workspace.application.provider.session.ProviderSessionTermina
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
-import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
@@ -415,7 +415,7 @@ public final class AgentNextActionService {
                 AgentNextAction.REQUEST_HUMAN_HELP,
                 Map.of(NextActionKeys.REASON, "SESSION_TERMINAL_STATE_UNAVAILABLE",
                         "causeType", cause.getClass().getSimpleName(),
-                        "causeCode", DoctorService.classifyDurableStateFailure(cause).value()));
+                        "causeCode", DoctorFindingCode.classifyDurableStateFailure(cause).value()));
     }
 
     /**

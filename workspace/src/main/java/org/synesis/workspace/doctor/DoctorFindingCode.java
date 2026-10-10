@@ -1,5 +1,7 @@
 package org.synesis.workspace.doctor;
 
+import org.synesis.coordination.exception.CoordinationException;
+
 /**
  * Closed enumeration of stable machine-readable diagnostic finding codes.
  *
@@ -304,5 +306,27 @@ public enum DoctorFindingCode {
      */
     public String value() {
         return value;
+    }
+
+    /**
+     * Maps an event-store read failure to the bounded categories shared by Doctor and the agent
+     * workflow responses.
+     *
+     * @param failure failure raised while reading durable coordination state
+     * @return {@link #EVENT_LOG_VERIFICATION_FAILURE} when the log or a signature failed
+     *         verification, otherwise {@link #DURABLE_STATE_AMBIGUOUS}
+     */
+    public static DoctorFindingCode classifyDurableStateFailure(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < 32; depth++, current = current.getCause()) {
+            if (current instanceof CoordinationException coordinationFailure
+                    && "invalid coordination event log".equals(coordinationFailure.code())) {
+                return EVENT_LOG_VERIFICATION_FAILURE;
+            }
+            if (current instanceof java.security.GeneralSecurityException) {
+                return EVENT_LOG_VERIFICATION_FAILURE;
+            }
+        }
+        return DURABLE_STATE_AMBIGUOUS;
     }
 }

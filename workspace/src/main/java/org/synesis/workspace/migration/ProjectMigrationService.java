@@ -41,7 +41,7 @@ public final class ProjectMigrationService {
      * Creates a service using the global Synesis administrative root.
      */
     public ProjectMigrationService() {
-        this(defaultAdminRoot());
+        this(MigrationLayout.defaultAdminRoot());
     }
 
     /**
@@ -67,12 +67,14 @@ public final class ProjectMigrationService {
                 Map.of("metadata", e.metadata().toString(), "sourceSchema", e.sourceSchema(), "targetSchema", e.targetSchema(), "sourceHash", e.sourceHash(), "outcome", e.outcome().name(), "projectId", e.projectId())));
     }
 
-    private static Path defaultAdminRoot() {
-        String base = System.getenv("LOCALAPPDATA");
-        if (base == null || base.isBlank()) {
-            base = Path.of(System.getProperty("user.home"), "AppData", "Local").toString();
-        }
-        return Path.of(base, "Synesis", "admin");
+    /**
+     * Lists the directories of the global administrative root that hold update and migration
+     * execution journals.
+     *
+     * @return the journal directories, or none when no home directory can be resolved
+     */
+    public static List<Path> transactionJournalDirectories() {
+        return MigrationLayout.transactionJournalDirectories();
     }
 
     /**
@@ -124,7 +126,7 @@ public final class ProjectMigrationService {
         Path root = workingDirectory.toAbsolutePath().normalize();
         Entry entry = inspect(root);
         Plan plan = new Plan("pmig-project-" + UUID.randomUUID().toString().replace("-", ""), Instant.now(), root, entry, List.of(entry.metadata()));
-        Path dir = adminRoot.resolve("migration-plans");
+        Path dir = MigrationLayout.plans(adminRoot);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve(plan.planId() + ".json"), planJson(plan), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         return plan;
@@ -141,7 +143,7 @@ public final class ProjectMigrationService {
         if (planId == null || !planId.matches("pmig-project-[a-zA-Z0-9]+")) {
             throw new IOException("invalid migration plan");
         }
-        Object value = ProviderJson.parse(Files.readString(adminRoot.resolve("migration-plans").resolve(planId + ".json")));
+        Object value = ProviderJson.parse(Files.readString(MigrationLayout.plans(adminRoot).resolve(planId + ".json")));
         if (!(value instanceof Map<?, ?> map) || !(map.get("entry") instanceof Map<?, ?> e)) {
             throw new IOException("invalid migration plan");
         }
@@ -230,9 +232,7 @@ public final class ProjectMigrationService {
             if (!replayResult.successful()) {
                 return new Result(Outcome.FAILED, replayResult.reason(), true, false);
             }
-            Path journal = adminRoot.resolve("migration-executions").resolve(plan.planId() + ".jsonl");
-            Files.createDirectories(journal.getParent());
-            Files.writeString(journal, "outcome=UP_TO_DATE projectId=" + current.projectId() + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            MigrationLayout.appendLine(MigrationLayout.journal(adminRoot, plan.planId()), "outcome=UP_TO_DATE projectId=" + current.projectId());
             return new Result(Outcome.UP_TO_DATE, "project_migration_not_required", true, true);
         }
     }
@@ -313,18 +313,11 @@ public final class ProjectMigrationService {
     }
 
     private void appendJournal(String planId, String state) throws IOException {
-        Path journal = adminRoot.resolve("migration-executions").resolve(planId + ".jsonl");
-        Files.createDirectories(journal.getParent());
-        Files.writeString(journal, "state=" + state + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        MigrationLayout.appendState(MigrationLayout.journal(adminRoot, planId), state);
     }
 
     private void appendTargetHash(String planId, Path target, String hash) throws IOException {
-        Path journal = adminRoot.resolve("migration-executions").resolve(planId + ".jsonl");
-        Files.writeString(journal,
-                ProviderJson.write(Map.of("state", "MIGRATION_TARGET", "target", target.toString(), "hash", hash)) + System.lineSeparator(),
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.APPEND);
+        MigrationLayout.appendTargetHash(MigrationLayout.journal(adminRoot, planId), target, hash);
     }
 
     /**

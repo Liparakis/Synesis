@@ -125,7 +125,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.lifecycle.reconciliation`: `ReconciliationAction`, `ReconciliationExecutionJournal`, `ReconciliationExecutionLock`, `ReconciliationExecutionRecord`, `ReconciliationPlan`, `ReconciliationPlanEntry`, `ReconciliationPlanStore`, `ReconciliationService`
 - `org.synesis.workspace.lifecycle.recovery`: `RecoverySnapshotService`
 - `org.synesis.workspace.lifecycle.repair`: `RepairAction`, `RepairBackupService`, `RepairExecutionJournal`, `RepairExecutionLock`, `RepairPlan`, `RepairPlanEntry`, `RepairPlanStore`, `RepairService`
-- `org.synesis.workspace.migration`: `PostMigrationReplayVerifier`, `ProjectMigrationRestorationService`, `ProjectMigrationService`, `ProviderConfigMigrationService`
+- `org.synesis.workspace.migration`: `ProjectMigrationService`, `ProviderConfigMigrationService`
 - `org.synesis.workspace.project`: `ActionGuardrail`, `ProjectPathResolver`
 - `org.synesis.workspace.provider`: `ProviderIntegration`, `ProviderMcpEvidenceTier`, `ProviderRegistry`, `ProviderSupportLevel`
 - `org.synesis.workspace.provider.claude`: `ClaudeCodeHookAdapter`, `ClaudeCodeProviderIntegration`

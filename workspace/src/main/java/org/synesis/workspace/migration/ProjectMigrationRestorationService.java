@@ -25,11 +25,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * Creates verified project-metadata backups and restores only the files in a prepared migration
  * manifest.
  */
-public final class ProjectMigrationRestorationService {
-
-    /** Creates a service for verified project-metadata restoration. */
-    public ProjectMigrationRestorationService() {
-    }
+final class ProjectMigrationRestorationService {
 
     private static void restoreFile(MutableFile file, String expectedCurrentHash, RestoreFailureInjector injector) throws IOException {
         Path target = file.target().toAbsolutePath().normalize();
@@ -87,7 +83,7 @@ public final class ProjectMigrationRestorationService {
                 throw new IOException("project_restore_backup_invalid");
             }
         }
-        Path expectedRoot = adminRoot.toAbsolutePath().normalize().resolve("migration-backups").resolve(manifest.planId());
+        Path expectedRoot = MigrationLayout.backupRoot(adminRoot, manifest.planId());
         for (MutableFile file : manifest.files()) {
             if (!file.backup().toAbsolutePath().normalize().startsWith(expectedRoot)) {
                 throw new IOException("project_restore_backup_invalid");
@@ -156,11 +152,6 @@ public final class ProjectMigrationRestorationService {
         return Sha256.hex(value.toString().getBytes(StandardCharsets.UTF_8));
     }
 
-    private static void append(Path journal, String state) throws IOException {
-        Files.createDirectories(journal.getParent());
-        Files.writeString(journal, "state=" + state + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-    }
-
     private static Map<Path, String> recoverExpectedHashes(Path journal) {
         Map<Path, String> expected = new java.util.HashMap<>();
         if (!Files.isRegularFile(journal)) {
@@ -182,15 +173,6 @@ public final class ProjectMigrationRestorationService {
             // The caller will fail closed when an expected hash remains unavailable.
         }
         return expected;
-    }
-
-    private static void appendExpectedHash(Path journal, Path target, String hash) throws IOException {
-        Files.createDirectories(journal.getParent());
-        Files.writeString(journal,
-                ProviderJson.write(Map.of("state", "MIGRATION_TARGET", "target", target.toString(), "hash", hash)) + System.lineSeparator(),
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.APPEND);
     }
 
     private static String string(Map<?, ?> map, String key) throws IOException {
@@ -243,7 +225,7 @@ public final class ProjectMigrationRestorationService {
      * @return verified manifest
      * @throws IOException if any target or backup cannot be verified
      */
-    public BackupManifest prepare(Path adminRoot,
+    BackupManifest prepare(Path adminRoot,
             String planId,
             ProjectLocation location,
             int sourceSchema,
@@ -269,7 +251,7 @@ public final class ProjectMigrationRestorationService {
      * @return verified manifest
      * @throws IOException if any target or backup cannot be verified
      */
-    public BackupManifest prepare(Path adminRoot,
+    BackupManifest prepare(Path adminRoot,
             String planId,
             String planHash,
             ProjectLocation location,
@@ -283,7 +265,7 @@ public final class ProjectMigrationRestorationService {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(files, "files");
         Objects.requireNonNull(before, "before");
-        Path backupRoot = adminRoot.toAbsolutePath().normalize().resolve("migration-backups").resolve(planId);
+        Path backupRoot = MigrationLayout.backupRoot(adminRoot, planId);
         if (backupRoot.startsWith(location.root().toAbsolutePath().normalize())) {
             throw new IOException("migration backup must be outside project checkout");
         }
@@ -348,7 +330,7 @@ public final class ProjectMigrationRestorationService {
      * @param expectedCurrentHashes hashes written by this migration
      * @return bounded restoration result
      */
-    public Result restore(Path adminRoot, BackupManifest manifest, ProjectLocation location, PostMigrationReplayVerifier.MigrationSemanticSnapshot before, Map<Path, String> expectedCurrentHashes) {
+    Result restore(Path adminRoot, BackupManifest manifest, ProjectLocation location, PostMigrationReplayVerifier.MigrationSemanticSnapshot before, Map<Path, String> expectedCurrentHashes) {
         return restore(adminRoot, manifest, location, before, expectedCurrentHashes, null);
     }
 
@@ -358,29 +340,29 @@ public final class ProjectMigrationRestorationService {
             PostMigrationReplayVerifier.MigrationSemanticSnapshot before,
             Map<Path, String> expectedCurrentHashes,
             RestoreFailureInjector injector) {
-        Path journal = adminRoot.toAbsolutePath().normalize().resolve("migration-executions").resolve(manifest.planId() + ".jsonl");
+        Path journal = MigrationLayout.journal(adminRoot, manifest.planId());
         try {
             Map<Path, String> expected = new java.util.HashMap<>(expectedCurrentHashes);
             if (expected.isEmpty()) {
                 expected.putAll(recoverExpectedHashes(journal));
             }
             for (Map.Entry<Path, String> entry : expected.entrySet()) {
-                appendExpectedHash(journal, entry.getKey(), entry.getValue());
+                MigrationLayout.appendTargetHash(journal, entry.getKey(), entry.getValue());
             }
-            append(journal, "RESTORE_REQUIRED");
+            MigrationLayout.appendState(journal, "RESTORE_REQUIRED");
             verifyManifest(adminRoot, manifest);
             verifyIdentityAndRepository(manifest, location);
-            append(journal, "RESTORE_PRECONDITIONS_VERIFIED");
-            append(journal, "RESTORING_METADATA");
+            MigrationLayout.appendState(journal, "RESTORE_PRECONDITIONS_VERIFIED");
+            MigrationLayout.appendState(journal, "RESTORING_METADATA");
             for (MutableFile file : manifest.files()) {
                 if (!file.target().toAbsolutePath().normalize().startsWith(location.synesisDirectory()) || forbiddenMetadataPath(file.target(), location) || hasSymlinkAncestor(file.target(),
                         location.synesisDirectory())) {
                     throw new IOException("project_restore_target_changed");
                 }
                 restoreFile(file, expected.get(file.target()), injector);
-                append(journal, "METADATA_RESTORED " + file.target());
+                MigrationLayout.appendState(journal, "METADATA_RESTORED " + file.target());
             }
-            append(journal, "RESTORE_REPLAY_VERIFYING");
+            MigrationLayout.appendState(journal, "RESTORE_REPLAY_VERIFYING");
             ProjectLocation reopened = new ProjectApplicationService().require(location.root());
             if (!reopened.projectId().equals(location.projectId())) {
                 throw new IOException("project_restore_target_changed");
@@ -390,7 +372,7 @@ public final class ProjectMigrationRestorationService {
             boolean keysUnchanged = keyFingerprint(location).equals(manifest.keyBytesHash());
             boolean identities = comparison.identitiesUnchanged() && keysUnchanged && manifest.projectId().equals(after.projectId()) && manifest.nodeId().equals(after.nodeId());
             if (!comparison.successful() || !identities) {
-                append(journal, "RESTORE_FAILED_REQUIRES_REVIEW project_restore_replay_failed");
+                MigrationLayout.appendState(journal, "RESTORE_FAILED_REQUIRES_REVIEW project_restore_replay_failed");
                 return new Result(Outcome.REQUIRES_HUMAN_REVIEW,
                         "project_restore_replay_failed",
                         false,
@@ -401,7 +383,7 @@ public final class ProjectMigrationRestorationService {
                         comparison.snapshotReferencesValid(),
                         identities);
             }
-            append(journal, "RESTORE_VERIFIED");
+            MigrationLayout.appendState(journal, "RESTORE_VERIFIED");
             return new Result(Outcome.RESTORED,
                     "project_restore_verified",
                     true,
@@ -413,7 +395,7 @@ public final class ProjectMigrationRestorationService {
                     true);
         } catch (Exception failure) {
             try {
-                append(journal, "RESTORE_FAILED_REQUIRES_REVIEW project_restore_requires_human_review");
+                MigrationLayout.appendState(journal, "RESTORE_FAILED_REQUIRES_REVIEW project_restore_requires_human_review");
             } catch (IOException ignored) {
                 // Preserve the bounded human-review result even if journaling is unavailable.
             }
@@ -429,8 +411,8 @@ public final class ProjectMigrationRestorationService {
      * @return verified manifest
      * @throws IOException if the manifest is absent or tampered
      */
-    public BackupManifest load(Path adminRoot, String planId) throws IOException {
-        Path root = adminRoot.toAbsolutePath().normalize().resolve("migration-backups").resolve(planId);
+    BackupManifest load(Path adminRoot, String planId) throws IOException {
+        Path root = MigrationLayout.backupRoot(adminRoot, planId);
         Object parsed = ProviderJson.parse(Files.readString(root.resolve("manifest.json"), StandardCharsets.UTF_8));
         if (!(parsed instanceof Map<?, ?> map)) {
             throw new IOException("invalid migration backup manifest");
@@ -469,7 +451,7 @@ public final class ProjectMigrationRestorationService {
     /**
      * Restoration outcome.
      */
-    public enum Outcome {
+    enum Outcome {
         /**
          * Every planned file and post-restore verification passed.
          */
@@ -503,12 +485,12 @@ public final class ProjectMigrationRestorationService {
      * @param sourceHash original content hash
      * @param backupHash backup content hash
      */
-    public record MutableFile(Path target, Path backup, String sourceHash, String backupHash) {
+    record MutableFile(Path target, Path backup, String sourceHash, String backupHash) {
 
         /**
          * Validates a manifest entry.
          */
-        public MutableFile {
+        MutableFile {
             Objects.requireNonNull(target, "target");
             Objects.requireNonNull(backup, "backup");
             Objects.requireNonNull(sourceHash, "source hash");
@@ -532,13 +514,13 @@ public final class ProjectMigrationRestorationService {
      * @param files                 exact mutable files
      * @param manifestHash          canonical manifest hash
      */
-    public record BackupManifest(String planId, String planHash, String projectId, String nodeId, String keyBytesHash, String repositoryIdentity, int sourceSchema, int targetSchema, String rollbackCompatibility,
+    record BackupManifest(String planId, String planHash, String projectId, String nodeId, String keyBytesHash, String repositoryIdentity, int sourceSchema, int targetSchema, String rollbackCompatibility,
                                  long creationSequence, List<MutableFile> files, String manifestHash) {
 
         /**
          * Validates and freezes a manifest.
          */
-        public BackupManifest {
+        BackupManifest {
             Objects.requireNonNull(planId, "plan ID");
             Objects.requireNonNull(planHash, "plan hash");
             Objects.requireNonNull(projectId, "project ID");
@@ -564,13 +546,13 @@ public final class ProjectMigrationRestorationService {
      * @param snapshotReferencesValid snapshot references valid
      * @param identitiesUnchanged     identities unchanged
      */
-    public record Result(Outcome outcome, String reason, boolean metadataRestored, boolean eventLogBytesUnchanged, boolean eventHashChainValid, boolean allProjectionsReplayed, boolean semanticStateEquivalent,
+    record Result(Outcome outcome, String reason, boolean metadataRestored, boolean eventLogBytesUnchanged, boolean eventHashChainValid, boolean allProjectionsReplayed, boolean semanticStateEquivalent,
                          boolean snapshotReferencesValid, boolean identitiesUnchanged) {
 
         /**
          * Validates a restoration result.
          */
-        public Result {
+        Result {
             Objects.requireNonNull(outcome, "outcome");
             Objects.requireNonNull(reason, "reason");
         }
