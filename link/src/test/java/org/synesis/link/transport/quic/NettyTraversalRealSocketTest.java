@@ -83,8 +83,10 @@ final class NettyTraversalRealSocketTest {
           new byte[TraversalOffer.DIGEST_BYTES], issued, expires,
           new byte[TraversalOffer.NONCE_BYTES],
           initiatorDescriptor);
-      initiatorExchange = new NettyTraversalExchange(initiatorChannel, Duration.ofSeconds(2), null);
-      responderExchange = new NettyTraversalExchange(responderChannel, Duration.ofSeconds(2),
+      // The exchange is over loopback and normally takes milliseconds. The timeout only bounds a
+      // failure, and two seconds was not enough on a starved CI runner.
+      initiatorExchange = new NettyTraversalExchange(initiatorChannel, Duration.ofSeconds(15), null);
+      responderExchange = new NettyTraversalExchange(responderChannel, Duration.ofSeconds(15),
           received -> {
             try {
               if (!received.verifyAt(Instant.now(), TraversalOffer.DEFAULT_CLOCK_SKEW,
@@ -103,7 +105,7 @@ final class NettyTraversalRealSocketTest {
                   ((InetSocketAddress) responderChannel.localAddress()).getAddress(),
                   responderPort, 1)))
           .toCompletableFuture()
-          .get(5, TimeUnit.SECONDS);
+          .get(20, TimeUnit.SECONDS);
 
       assertEquals(offer.digest().length, answer.offerDigest().length);
       assertArrayEquals(offer.digest(), answer.offerDigest());

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -150,12 +151,17 @@ final class NettyQuicLoopbackTest {
 
   // The waits on a child JVM are longer than the child's own deadlines, so on a slow machine the
   // child reports what went wrong instead of the test giving up first.
-  private static void waitForPath(Path path) {
+  private static void waitForPath(Path path, Process writer) throws java.io.IOException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45);
-    while (!Files.exists(path) && System.nanoTime() < deadline) {
+    while (!Files.exists(path) && writer.isAlive() && System.nanoTime() < deadline) {
       java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
     }
-    assertTrue(Files.exists(path), "timed out waiting for " + path.getFileName());
+    if (!Files.exists(path)) {
+      // A child that gave up says why on its output; a child still running has nothing to add.
+      fail(writer.isAlive() ? "timed out waiting for " + path.getFileName()
+          : path.getFileName() + " was never written; the process exited with " + writer.exitValue()
+              + ": " + readProcessOutput(writer));
+    }
   }
 
   @Test
@@ -501,14 +507,14 @@ final class NettyQuicLoopbackTest {
         .start();
     Process server = null;
     try {
-      waitForPath(clientMaterial);
+      waitForPath(clientMaterial, client);
       server = new ProcessBuilder(javaExecutable, "--enable-native-access=ALL-UNNAMED", "-cp",
           classpath,
           NettyQuicPeerProcess.class.getName(), "server", clientMaterial.toString(),
           serverReady.toString(),
           serverResult.toString()).redirectErrorStream(true)
           .start();
-      waitForPath(clientResult);
+      waitForPath(clientResult, client);
       assertTrue(Files.readString(clientResult)
           .contains("|LIVE|"));
       client.destroyForcibly();
