@@ -407,6 +407,25 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
     }
 
     /**
+     * Reason recorded on a request that its owner superseded by finishing without the
+     * requester's answer to a contract the owner had proposed.
+     */
+    public static final String OWNER_FINISHED_WITHOUT_ANSWER = "OWNER_FINISHED_WITHOUT_REQUESTER_ANSWER";
+
+    /**
+     * Reports whether this request ended because its owner finished without the requester's
+     * answer.
+     *
+     * <p>Such a request binds nobody, but it is the only record of what the owner last proposed
+     * and of why the requester holds no agreement, so the requester still has to be told.</p>
+     *
+     * @return {@code true} for a request superseded for that reason
+     */
+    public boolean ownerFinishedWithoutAnswer() {
+        return state == CapabilityLifecycleState.SUPERSEDED && OWNER_FINISHED_WITHOUT_ANSWER.equals(reason);
+    }
+
+    /**
      * Checks whether this request has the exact stored requester actor fields.
      *
      * @param scope authenticated actor scope to compare

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -58,6 +59,16 @@ final class LaneCompletionProjection {
             CapabilityLifecycleState.VALIDATING);
 
     private static final String IMPLEMENTATION_AWAITING_VALIDATION = "IMPLEMENTATION_AWAITING_VALIDATION";
+
+    /**
+     * Reason reported while an owner's proposed contract is inside its answer period.
+     */
+    static final String CONTRACT_PROPOSAL_AWAITING_REQUESTER = "CONTRACT_PROPOSAL_AWAITING_REQUESTER";
+
+    /**
+     * Result field carrying the time after which the owner may finish without the answer.
+     */
+    static final String REQUESTER_ANSWER_DEADLINE = "requesterAnswerDeadlineEpochMillis";
 
     private LaneCompletionProjection() {
     }
@@ -432,6 +443,62 @@ final class LaneCompletionProjection {
         result.put(NextActionKeys.REASON, IMPLEMENTATION_AWAITING_VALIDATION);
         result.put(NextActionKeys.PENDING, unjudged.size());
         return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
+    }
+
+    /**
+     * Returns the bounded wait an owner observes before finishing while a contract it proposed is
+     * still unanswered.
+     *
+     * <p>The requester may accept or counter, and only an open owner lane can act on either. The
+     * wait ends at a stated time whether or not the answer comes, so a late or absent requester
+     * never keeps the owner's agent reserved: after it the completion request is projected as
+     * usual, and finishing records the request as superseded by the owner's work.</p>
+     *
+     * @param store     current project projection
+     * @param lane      the caller's lane
+     * @param actor     capability identity of the caller
+     * @param nowMillis current time in epoch milliseconds
+     * @return the wait, or {@code null} when no proposal of this lane is inside its answer period
+     */
+    static AgentResponse awaitedRequesterAnswer(PredictionEventStore store, LaneScope lane, CapabilityActor actor, long nowMillis) {
+        WorkIntent intent = activeIntentOf(store, lane.participantId()).orElse(null);
+        if (intent == null) {
+            return null;
+        }
+        List<CapabilityRequestRecord> unanswered = unansweredProposals(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId()).stream()
+                .filter(candidate -> RequesterAnswerPolicy.ownerMustWait(candidate, nowMillis))
+                .toList();
+        if (unanswered.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, unanswered.getFirst().handle().value());
+        result.put(NextActionKeys.REASON, CONTRACT_PROPOSAL_AWAITING_REQUESTER);
+        result.put(REQUESTER_ANSWER_DEADLINE, unanswered.stream().mapToLong(RequesterAnswerPolicy::answerDeadlineEpochMillis).max().orElseThrow());
+        result.put("guidance", "Your proposed contract has not been answered yet. Poll until the deadline; after it you may finish without the answer.");
+        result.put(NextActionKeys.PENDING, unanswered.size());
+        return new AgentResponse(AgentStatus.WAITING, AgentReason.REQUESTER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
+    }
+
+    /**
+     * Returns the requests this lane owns whose proposed contract the requester has not answered.
+     *
+     * @param store        current project projection
+     * @param intent       the owner's active intent
+     * @param nodeId       caller node identity
+     * @param supervisorId caller supervisor identity
+     * @param workerId     caller worker identity
+     * @return the unanswered proposals in projection order
+     */
+    static List<CapabilityRequestRecord> unansweredProposals(PredictionEventStore store, WorkIntent intent, String nodeId, String supervisorId, String workerId) {
+        if (intent == null) {
+            return List.of();
+        }
+        return store.capabilityRequestProjection().records().values().stream()
+                .filter(candidate -> candidate.matchesOwner(nodeId, supervisorId, workerId))
+                .filter(candidate -> candidate.authorityLineageId().equals(intent.authorityLineageId()))
+                .filter(RequesterAnswerPolicy::awaitsRequesterAnswer)
+                .toList();
     }
 
     /**

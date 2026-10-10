@@ -188,6 +188,11 @@ public enum AgentReason {
     OWNER_REQUEST_PENDING("owner_request_pending"),
 
     /**
+     * A contract this owner proposed is waiting, for a bounded time, on the requester's answer.
+     */
+    REQUESTER_RESPONSE_PENDING("requester_response_pending"),
+
+    /**
      * Implementation is available and validation is required.
      */
     VALIDATION_REQUIRED("validation_required"),

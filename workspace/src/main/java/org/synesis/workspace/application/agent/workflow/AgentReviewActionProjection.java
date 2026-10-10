@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import java.util.UUID;
 
 import org.synesis.coordination.application.PeerDependencyPolicy;
+import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
@@ -249,7 +250,10 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
             return true;
         }
         var projection = store.capabilityRequestProjection();
-        List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).toList();
+        // A request its owner superseded by finishing is no obligation of the requester: nothing
+        // was agreed, and the dependency is judged like one that was never requested.
+        List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId))
+                .filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
         Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
         Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
         if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {

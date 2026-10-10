@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.synesis.coordination.application.PeerDependencyPolicy;
+import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
@@ -127,6 +128,7 @@ public final class CapabilityRequestService {
             ProviderSessionBindingService.Binding binding) {
         java.util.Set<String> requested = projection.findAllForRequester(requesterNodeId).stream()
                 .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
+                .filter(record -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record))
                 .map(CapabilityRequestRecord::capability)
                 .collect(java.util.stream.Collectors.toSet());
         return PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, requested);
@@ -418,6 +420,16 @@ public final class CapabilityRequestService {
             return staleRevisionResponse(record, "CAPABILITY_NAME_MISMATCH");
         }
 
+        if (RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record)) {
+            // The answer arrives after the owner stopped waiting for it. Calling that a stale
+            // request would leave the requester with nothing to do; say what happened instead.
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("capability", record.capability());
+            result.put("reason", RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER);
+            result.put("proposedContract", capabilityContractMap(record.contract()));
+            result.put("guidance", "The owner stopped waiting for this answer and finished. It may have built a different design than you asked for; the integrated code is what counts. Its files are released, so you can claim them if you need a change.");
+            return new AgentResponse(AgentStatus.READY, null, null, result);
+        }
         if (record.state() == CapabilityLifecycleState.CANCELLED || record.state() == CapabilityLifecycleState.EXPIRED || record.state() == CapabilityLifecycleState.SUPERSEDED
                 || record.state() == CapabilityLifecycleState.REJECTED) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);

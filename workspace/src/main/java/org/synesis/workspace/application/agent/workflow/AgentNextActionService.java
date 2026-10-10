@@ -556,6 +556,10 @@ public final class AgentNextActionService {
             if (awaitedVerdict != null) {
                 return awaitedVerdict;
             }
+            AgentResponse awaitedAnswer = LaneCompletionProjection.awaitedRequesterAnswer(store, lane, actor, System.currentTimeMillis());
+            if (awaitedAnswer != null) {
+                return awaitedAnswer;
+            }
             AgentResponse completion = LaneCompletionProjection.completionRequestAction(snapshotService, store, lane, actor);
             if (completion != null) {
                 return completion;

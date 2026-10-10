@@ -230,7 +230,10 @@ public final class AgentWorkflowReducer {
                 return Map.of("tool", "get_next_action", "arguments", arguments);
             }
             case WAIT -> {
-                return Map.of("tool", "get_next_action", "arguments", Map.of());
+                // An owner waiting out its proposal's answer period asked to finish. Repeating
+                // that request is what turns the passed deadline into the finish action.
+                Map<String, Object> arguments = result.get(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE) != null ? Map.of("completionRequested", true) : Map.of();
+                return Map.of("tool", "get_next_action", "arguments", arguments);
             }
             default -> {
                 return null;
@@ -291,6 +294,9 @@ public final class AgentWorkflowReducer {
         // recovery polling from the envelope alone.
         if (result.get("recoveryDeadlineEpochMillis") != null) {
             workflow.put("recoveryDeadlineEpochMillis", result.get("recoveryDeadlineEpochMillis"));
+        }
+        if (result.get(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE) != null) {
+            workflow.put(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE, result.get(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE));
         }
         Map<?, ?> laneContext = firstIntent(result);
         if (laneContext.get("workGroupId") != null) {

@@ -182,6 +182,8 @@ public final class ImplementationPublicationService {
 
             List<CapabilityRequestRecord> dependencies = store.capabilityRequestProjection().findAllForRequester(ownerNodeId).stream()
                     .filter(record -> record.matchesRequester(ownerNodeId, binding.supervisorId(), binding.workerId()))
+                    // Superseded by an owner that finished without an answer: not a dependency.
+                    .filter(record -> !org.synesis.coordination.application.RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record))
                     .toList();
             TaskSnapshotRecord snapshot = snapshotService.createSnapshot(
                     intent.taskId(),

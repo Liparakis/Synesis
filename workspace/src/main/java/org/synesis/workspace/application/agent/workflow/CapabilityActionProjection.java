@@ -13,6 +13,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.synesis.coordination.application.PeerDependencyPolicy;
+import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
@@ -146,8 +147,12 @@ final class CapabilityActionProjection {
         if (intent.knownDependencies().isEmpty()) {
             return null;
         }
-        var requestedCapabilities = store.capabilityRequestProjection().findAllForRequester(actor.nodeId()).stream()
+        List<CapabilityRequestRecord> ownRequests = store.capabilityRequestProjection().findAllForRequester(actor.nodeId()).stream()
                 .filter(candidate -> candidate.matchesRequester(actor.nodeId(), actor.supervisorId(), actor.workerId()))
+                .toList();
+        // A request its owner superseded by finishing no longer stands for the dependency: the
+        // lane holds no agreement, so the dependency is judged like one never requested.
+        var requestedCapabilities = ownRequests.stream().filter(candidate -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(candidate))
                 .map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
         Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
         String missingDependency = intent.knownDependencies().stream()
@@ -155,7 +160,7 @@ final class CapabilityActionProjection {
                         && !locallyOwned.contains(dependency) && !integrated.contains(dependency))
                 .findFirst().orElse(null);
         if (missingDependency == null) {
-            return integrated.isEmpty() ? null : integratedDependencyResponse(integrated, intent);
+            return integrated.isEmpty() ? null : integratedDependencyResponse(integrated, intent, ownRequests);
         }
         if (PeerDependencyPolicy.awaitingPeerIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent)) {
             // Every lane that could own this is already closing; a request now could never be
@@ -256,10 +261,27 @@ final class CapabilityActionProjection {
      * Tells a lane that work it declared a dependency on is already integrated, so it should build
      * against that work in its own refreshed workspace instead of asking for an owner.
      */
-    private static AgentResponse integratedDependencyResponse(Set<String> integrated, WorkIntent intent) {
+    private static AgentResponse integratedDependencyResponse(Set<String> integrated, WorkIntent intent, List<CapabilityRequestRecord> ownRequests) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("dependenciesIntegrated", List.copyOf(integrated));
         result.put("dependencyGuidance", "The lane that provided these has completed and its work is integrated. Read it in your workspace and build against it; no capability request is needed.");
+        List<Map<String, Object>> wentAhead = ownRequests.stream()
+                .filter(RequesterAnswerPolicy::ownerFinishedWithoutAnswer)
+                .filter(request -> integrated.contains(request.capability()))
+                .map(request -> {
+                    Map<String, Object> proposal = new LinkedHashMap<>();
+                    proposal.put(NextActionKeys.CAPABILITY, request.capability());
+                    proposal.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, request.handle().value());
+                    proposal.put("proposedContract", capabilityContractMap(request));
+                    return proposal;
+                })
+                .toList();
+        if (!wentAhead.isEmpty()) {
+            // The requester must not assume its own draft was built. What the owner last proposed
+            // is the closest statement of what it did; the integrated code is the authority.
+            result.put("ownerProceededWithoutAnswer", wentAhead);
+            result.put("ownerProceededGuidance", "The owner did not receive your answer to its proposed contract in time and finished. It may have built a different design than you asked for: its last proposal is included, and the integrated code is what counts. The owner's files are released, so you can claim them if you need a change.");
+        }
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         return new AgentResponse(AgentStatus.READY, null, null, result);
     }
