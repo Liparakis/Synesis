@@ -9,8 +9,8 @@ import java.util.HexFormat;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
-import org.synesis.link.session.HandshakeException;
-import org.synesis.link.session.HandshakeFailureCode;
+import org.synesis.link.protocol.HandshakeException;
+import org.synesis.link.protocol.HandshakeFailureCode;
 import org.synesis.link.session.SessionCloseReason;
 
 /**

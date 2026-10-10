@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.HandshakeEnvelope;
 import org.synesis.link.protocol.HandshakeProof;
+import org.synesis.link.protocol.HandshakeRole;
+import org.synesis.link.protocol.HandshakeTranscript;
 import org.synesis.link.protocol.ProtocolVersion;
 
 /**

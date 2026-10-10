@@ -8,6 +8,8 @@ import java.util.Objects;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.HandshakeProof;
+import org.synesis.link.protocol.HandshakeRole;
+import org.synesis.link.protocol.HandshakeTranscript;
 
 /**
  * Establishes a transport-neutral session only after both identity proofs pass.

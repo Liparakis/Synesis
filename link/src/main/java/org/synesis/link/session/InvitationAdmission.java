@@ -1,4 +1,4 @@
-package org.synesis.link.onboarding;
+package org.synesis.link.session;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
-import org.synesis.link.session.HandshakeTranscript;
+import org.synesis.link.protocol.HandshakeTranscript;
 
 /**
  * Single-use host admission state shared by per-connection handshake state.

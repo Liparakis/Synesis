@@ -2,8 +2,6 @@ package org.synesis.link.protocol;
 
 import java.io.IOException;
 import java.util.Objects;
-import org.synesis.link.session.HandshakeException;
-import org.synesis.link.session.HandshakeFailureCode;
 
 /**
  * Bounded wire message used to close a rejected pre-session handshake.

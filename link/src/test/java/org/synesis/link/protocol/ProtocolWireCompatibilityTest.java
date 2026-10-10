@@ -17,9 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.candidate.CandidateType;
-import org.synesis.link.session.HandshakeFailureCode;
-import org.synesis.link.session.HandshakeRole;
-import org.synesis.link.session.HandshakeTranscript;
 
 /**
  * Pins the encoded bytes and share links of the invitation, descriptor, and handshake forms that

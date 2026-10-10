@@ -22,6 +22,7 @@ import org.synesis.link.candidate.CandidateProvider;
 import org.synesis.link.candidate.StunCandidateProvider;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.ProtocolVersion;
+import org.synesis.link.session.InvitationAdmission;
 import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;

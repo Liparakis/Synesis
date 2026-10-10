@@ -13,11 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateCancellation;
 import org.synesis.link.candidate.CandidatePair;
-import org.synesis.link.candidate.CandidateRacer;
 import org.synesis.link.candidate.CandidateType;
-import org.synesis.link.candidate.ConnectionAttempt;
 import org.synesis.link.candidate.ConnectionPolicy;
-import org.synesis.link.candidate.DirectConnectionResult;
 
 /**
  * Tests authenticated winner selection and loser cancellation.

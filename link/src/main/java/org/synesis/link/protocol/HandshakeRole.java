@@ -1,4 +1,4 @@
-package org.synesis.link.session;
+package org.synesis.link.protocol;
 
 /**
  * The two roles used when binding a handshake transcript.

@@ -1,4 +1,4 @@
-package org.synesis.link.candidate;
+package org.synesis.link.session;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +13,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import org.synesis.link.candidate.CandidateCancellation;
+import org.synesis.link.candidate.CandidatePair;
+import org.synesis.link.candidate.ConnectionAttemptDiagnostic;
+import org.synesis.link.candidate.ConnectionFailureCategory;
+import org.synesis.link.candidate.ConnectionPolicy;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 

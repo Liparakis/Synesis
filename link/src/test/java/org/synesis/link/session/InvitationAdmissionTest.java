@@ -1,4 +1,4 @@
-package org.synesis.link.onboarding;
+package org.synesis.link.session;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.ProtocolVersion;
-import org.synesis.link.session.HandshakeTranscript;
+import org.synesis.link.protocol.HandshakeTranscript;
+import org.synesis.link.session.InvitationAdmission;
 
 /**
  * Verifies single-use invitation admission and pre-authentication release rules.

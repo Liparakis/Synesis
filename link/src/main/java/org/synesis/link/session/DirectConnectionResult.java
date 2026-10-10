@@ -1,7 +1,9 @@
-package org.synesis.link.candidate;
+package org.synesis.link.session;
 
 import java.util.List;
 
+import org.synesis.link.candidate.ConnectionAttemptDiagnostic;
+import org.synesis.link.candidate.ConnectionFailureCategory;
 import org.synesis.link.session.PeerSession;
 
 /**

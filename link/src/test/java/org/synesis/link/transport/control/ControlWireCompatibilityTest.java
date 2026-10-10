@@ -14,8 +14,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.demo.DemoWorkStatus;
-import org.synesis.link.session.HandshakeFailureCode;
-import org.synesis.link.session.HandshakeRole;
+import org.synesis.link.protocol.HandshakeFailureCode;
+import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.session.SessionCloseReason;
 
 /**

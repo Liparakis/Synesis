@@ -10,8 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import org.synesis.link.session.HandshakeRole;
-import org.synesis.link.session.HandshakeTranscript;
 
 /**
  * Bounded control-stream envelope carrying one role proof and its transcript.

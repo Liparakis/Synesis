@@ -1,7 +1,8 @@
-package org.synesis.link.candidate;
+package org.synesis.link.session;
 
 import java.util.concurrent.CompletionStage;
 
+import org.synesis.link.candidate.CandidateCancellation;
 import org.synesis.link.session.PeerSession;
 
 /**

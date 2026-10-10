@@ -1,4 +1,4 @@
-package org.synesis.link.session;
+package org.synesis.link.protocol;
 
 import java.io.Serial;
 

@@ -19,7 +19,6 @@ import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.candidate.CandidatePair;
 import org.synesis.link.candidate.CandidatePairs;
 import org.synesis.link.candidate.CandidateType;
-import org.synesis.link.candidate.TraversalCoordinator;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.session.ReplayGuard;
 

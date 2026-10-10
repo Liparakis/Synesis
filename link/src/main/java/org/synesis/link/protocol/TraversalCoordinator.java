@@ -1,4 +1,4 @@
-package org.synesis.link.candidate;
+package org.synesis.link.protocol;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -14,6 +14,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import org.synesis.link.candidate.Candidate;
+import org.synesis.link.candidate.CandidatePair;
+import org.synesis.link.candidate.ConnectionFailureCategory;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalOffer;

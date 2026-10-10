@@ -1,4 +1,4 @@
-package org.synesis.link.session;
+package org.synesis.link.protocol;
 
 /**
  * Stable categories for authentication failures before session exposure.

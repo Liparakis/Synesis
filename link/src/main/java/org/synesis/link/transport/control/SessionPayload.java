@@ -3,8 +3,8 @@ package org.synesis.link.transport.control;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.UUID;
-import org.synesis.link.session.HandshakeException;
-import org.synesis.link.session.HandshakeFailureCode;
+import org.synesis.link.protocol.HandshakeException;
+import org.synesis.link.protocol.HandshakeFailureCode;
 import org.synesis.link.session.SessionCloseReason;
 
 /**
