@@ -1,11 +1,8 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -104,9 +101,8 @@ public final class OverlayForwardingFrame {
       OverlayCodecSupport.requireNoTrailing(input);
       OverlayForwardingFrame result = new OverlayForwardingFrame(project, destination, message,
           hops, inner);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical forwarding frame");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical forwarding frame");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException failure) {
       throw new IOException("malformed forwarding frame", failure);
@@ -128,22 +124,16 @@ public final class OverlayForwardingFrame {
   }
 
   private byte[] encodeComplete() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, projectId);
-        output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
-        OverlayCodecSupport.writeUuid(output, messageId);
-        output.writeByte(remainingHops);
-        output.writeShort(innerRecord.length);
-        output.write(innerRecord);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, projectId);
+      output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
+      OverlayCodecSupport.writeUuid(output, messageId);
+      output.writeByte(remainingHops);
+      output.writeShort(innerRecord.length);
+      output.write(innerRecord);
+    });
   }
 
   /**

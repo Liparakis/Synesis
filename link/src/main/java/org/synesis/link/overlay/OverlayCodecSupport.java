@@ -1,5 +1,6 @@
 package org.synesis.link.overlay;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -138,15 +139,35 @@ final class OverlayCodecSupport {
   }
 
   static byte[] uuidBytes(java.util.UUID value) {
-    try {
-      java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream(16);
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        writeUuid(output, value);
-      }
-      return bytes.toByteArray();
+    return encode(output -> writeUuid(output, value));
+  }
+
+  /** Writes the fields of one record into memory, which cannot fail with an I/O error. */
+  static byte[] encode(FieldWriter fields) {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (DataOutputStream output = new DataOutputStream(bytes)) {
+      fields.write(output);
     } catch (IOException impossible) {
       throw new AssertionError(impossible);
     }
+    return bytes.toByteArray();
+  }
+
+  /**
+   * Rejects a decoded record whose canonical re-encoding differs from the input, which is what
+   * keeps signed bytes non-malleable.
+   */
+  static void requireCanonical(byte[] reencoded, byte[] original, String message)
+      throws IOException {
+    if (!Arrays.equals(reencoded, original)) {
+      throw new IOException(message);
+    }
+  }
+
+  @FunctionalInterface
+  interface FieldWriter {
+
+    void write(DataOutputStream output) throws IOException;
   }
 
   static byte[] x25519PublicKeyBytes(java.security.KeyPair keyPair) {

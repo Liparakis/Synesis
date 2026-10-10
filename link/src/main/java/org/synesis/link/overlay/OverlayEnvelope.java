@@ -1,11 +1,8 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -109,9 +106,8 @@ public final class OverlayEnvelope {
       OverlayEnvelope result = new OverlayEnvelope(project, message, origin, destination, session,
           sequence,
           ciphertext);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical overlay envelope");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical overlay envelope");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException failure) {
       throw new IOException("malformed overlay envelope", failure);
@@ -130,38 +126,26 @@ public final class OverlayEnvelope {
         || ciphertextLength > MAX_CIPHERTEXT_BYTES) {
       throw new IllegalArgumentException("invalid envelope associated-data field");
     }
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream(160);
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, projectId);
-        OverlayCodecSupport.writeUuid(output, messageId);
-        output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
-        output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
-        OverlayCodecSupport.writeUuid(output, sessionId);
-        output.writeLong(sequence);
-        output.writeShort(ciphertextLength);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, projectId);
+      OverlayCodecSupport.writeUuid(output, messageId);
+      output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
+      output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
+      OverlayCodecSupport.writeUuid(output, sessionId);
+      output.writeLong(sequence);
+      output.writeShort(ciphertextLength);
+    });
   }
 
   private byte[] encodeComplete() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.write(
-            associatedData(projectId, messageId, originNodeId, destinationNodeId, sessionId,
-                sequence, ciphertext.length));
-        output.write(ciphertext);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return OverlayCodecSupport.encode(output -> {
+      output.write(
+          associatedData(projectId, messageId, originNodeId, destinationNodeId, sessionId,
+              sequence, ciphertext.length));
+      output.write(ciphertext);
+    });
   }
 
   /**

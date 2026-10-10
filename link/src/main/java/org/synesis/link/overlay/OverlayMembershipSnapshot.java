@@ -1,9 +1,7 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
@@ -53,6 +51,8 @@ public final class OverlayMembershipSnapshot {
   private final byte[] unsignedBytes;
   private final byte[] signature;
   private final byte[] encoded;
+  // Immutable bytes and keys fix the outcome, so it is decided once; a failed check stays failed.
+  private final boolean signatureValid;
 
   private OverlayMembershipSnapshot(UUID projectId, String authorityNodeId, long revision,
       Instant issuedAt, Instant expiresAt, List<Member> members, byte[] unsignedBytes,
@@ -84,6 +84,7 @@ public final class OverlayMembershipSnapshot {
     if (encoded.length > MAX_BYTES) {
       throw new IllegalArgumentException("membership snapshot exceeds supported bound");
     }
+    this.signatureValid = verifyAuthority();
   }
 
   /**
@@ -168,9 +169,8 @@ public final class OverlayMembershipSnapshot {
       OverlayMembershipSnapshot result = new OverlayMembershipSnapshot(project, authority, revision,
           issued,
           expires, sorted, unsigned, signature);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical membership snapshot");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical membership snapshot");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException |
              java.time.DateTimeException failure) {
@@ -209,31 +209,26 @@ public final class OverlayMembershipSnapshot {
     }
     OverlayCodecSupport.requireMillis(issuedAt, "issued at");
     OverlayCodecSupport.requireMillis(expiresAt, "expires at");
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, projectId);
-        output.write(OverlayCodecSupport.nodeIdBytes(authorityNodeId));
-        output.writeLong(revision);
-        output.writeLong(issuedAt.toEpochMilli());
-        output.writeLong(expiresAt.toEpochMilli());
-        output.writeByte(members.size());
-        for (Member member : members) {
-          output.write(OverlayCodecSupport.nodeIdBytes(member.nodeId()));
-          output.writeByte(member.status());
-          OverlayCodecSupport.writeBytes(output, member.publicKeyEncoded(),
-              OverlayCodecSupport.MAX_PUBLIC_KEY_BYTES, "membership public key");
-        }
+    byte[] unsigned = OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, projectId);
+      output.write(OverlayCodecSupport.nodeIdBytes(authorityNodeId));
+      output.writeLong(revision);
+      output.writeLong(issuedAt.toEpochMilli());
+      output.writeLong(expiresAt.toEpochMilli());
+      output.writeByte(members.size());
+      for (Member member : members) {
+        output.write(OverlayCodecSupport.nodeIdBytes(member.nodeId()));
+        output.writeByte(member.status());
+        OverlayCodecSupport.writeBytes(output, member.publicKeyEncoded(),
+            OverlayCodecSupport.MAX_PUBLIC_KEY_BYTES, "membership public key");
       }
-      if (bytes.size() > MAX_BYTES) {
-        throw new IllegalArgumentException("membership snapshot exceeds supported bound");
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
+    });
+    if (unsigned.length > MAX_BYTES) {
+      throw new IllegalArgumentException("membership snapshot exceeds supported bound");
     }
+    return unsigned;
   }
 
   private byte[] encodeComplete() {
@@ -252,11 +247,30 @@ public final class OverlayMembershipSnapshot {
    * @return true only for a valid signed snapshot
    */
   public boolean verify() {
+    return signatureValid;
+  }
+
+  /**
+   * Returns whether {@code signature} is a valid signature over {@code message} by the key this
+   * snapshot binds to an active member. A revoked or unknown node never verifies, so callers need
+   * no separate membership check before trusting the result.
+   *
+   * @param nodeId    claimed signer
+   * @param message   exact signed bytes
+   * @param signature signature bytes
+   * @return true only for an active member's valid signature
+   * @throws GeneralSecurityException if the member's key or the signature is malformed
+   */
+  boolean verifiedSignature(String nodeId, byte[] message, byte[] signature)
+      throws GeneralSecurityException {
+    Member signer = find(members, nodeId).orElse(null);
+    return signer != null && signer.status() == STATUS_ACTIVE
+        && NodeIdentity.verifySignature(signer.publicKeyEncoded(), message, signature);
+  }
+
+  private boolean verifyAuthority() {
     try {
-      Member authority = find(members, authorityNodeId).orElse(null);
-      return authority != null && authority.status() == STATUS_ACTIVE
-          && NodeIdentity.verifySignature(authority.publicKeyEncoded(), unsignedBytes,
-          signature);
+      return verifiedSignature(authorityNodeId, unsignedBytes, signature);
     } catch (GeneralSecurityException failure) {
       return false;
     }

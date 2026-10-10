@@ -1,11 +1,8 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -103,9 +100,8 @@ public final class OverlayMembershipPropagationFrame {
       }
       OverlayMembershipPropagationFrame result = new OverlayMembershipPropagationFrame(membership,
           remainingHops);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical membership propagation frame");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical membership propagation frame");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException failure) {
       throw new IOException("malformed membership propagation frame", failure);
@@ -167,22 +163,16 @@ public final class OverlayMembershipPropagationFrame {
   }
 
   private byte[] encodeComplete() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, membership.projectId());
-        output.write(OverlayCodecSupport.nodeIdBytes(membership.authorityNodeId()));
-        output.writeLong(membership.revision());
-        output.writeByte(remainingHops);
-        byte[] membershipBytes = membership.encoded();
-        output.writeShort(membershipBytes.length);
-        output.write(membershipBytes);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, membership.projectId());
+      output.write(OverlayCodecSupport.nodeIdBytes(membership.authorityNodeId()));
+      output.writeLong(membership.revision());
+      output.writeByte(remainingHops);
+      byte[] membershipBytes = membership.encoded();
+      output.writeShort(membershipBytes.length);
+      output.write(membershipBytes);
+    });
   }
 }

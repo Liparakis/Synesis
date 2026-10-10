@@ -101,23 +101,38 @@ public final class OverlayMembershipPropagation {
 
   private CompletionStage<Void> sendToPeers(OverlayMembershipPropagationFrame frame,
       String excludedPeer) {
+    // Every allowed peer is attempted at once: a peer whose send fails or never completes must not
+    // keep the new membership from the others. The first failure is reported after all have
+    // settled.
     List<CompletableFuture<Void>> sends = new ArrayList<>();
+    Throwable firstFailure = null;
     for (var entry : peers.snapshot().entrySet()) {
       if (entry.getKey().equals(excludedPeer) || !membership.current().allows(entry.getKey())) {
         continue;
       }
+      Throwable failure = null;
       try {
         CompletionStage<Void> send = entry.getValue().send(frame);
         if (send == null) {
-          return CompletableFuture.failedFuture(
-              new IllegalStateException("membership peer transport returned no completion"));
+          failure = new IllegalStateException("membership peer transport returned no completion");
+        } else {
+          sends.add(send.toCompletableFuture());
         }
-        sends.add(send.toCompletableFuture());
-      } catch (RuntimeException failure) {
-        return CompletableFuture.failedFuture(failure);
+      } catch (RuntimeException thrown) {
+        failure = thrown;
+      }
+      if (firstFailure == null) {
+        firstFailure = failure;
       }
     }
-    return CompletableFuture.allOf(sends.toArray(CompletableFuture[]::new));
+    CompletableFuture<Void> settled =
+        CompletableFuture.allOf(sends.toArray(CompletableFuture[]::new));
+    if (firstFailure == null) {
+      return settled;
+    }
+    Throwable reported = firstFailure;
+    return settled.handle((ignored, alsoFailed) -> null)
+        .thenCompose(ignored -> CompletableFuture.<Void>failedFuture(reported));
   }
 
   /**

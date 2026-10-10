@@ -1,9 +1,7 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -193,34 +191,29 @@ public final class OverlayKeyAgreement {
       String destinationNodeId, UUID sessionId, long membershipRevision, byte[] nonce,
       byte[] ephemeral,
       byte[] transcriptHash, byte[] signature) {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(magic);
-        output.writeByte(VERSION);
-        output.writeByte(kind);
-        OverlayCodecSupport.writeUuid(output, projectId);
-        output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
-        output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
-        OverlayCodecSupport.writeUuid(output, sessionId);
-        output.writeLong(membershipRevision);
-        output.write(nonce);
-        output.write(ephemeral);
-        if (transcriptHash != null) {
-          output.write(transcriptHash);
-        }
-        if (signature != null) {
-          output.writeShort(signature.length);
-          output.write(signature);
-        }
+    byte[] record = OverlayCodecSupport.encode(output -> {
+      output.writeInt(magic);
+      output.writeByte(VERSION);
+      output.writeByte(kind);
+      OverlayCodecSupport.writeUuid(output, projectId);
+      output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
+      output.write(OverlayCodecSupport.nodeIdBytes(destinationNodeId));
+      OverlayCodecSupport.writeUuid(output, sessionId);
+      output.writeLong(membershipRevision);
+      output.write(nonce);
+      output.write(ephemeral);
+      if (transcriptHash != null) {
+        output.write(transcriptHash);
       }
-      if (bytes.size() > MAX_BYTES) {
-        throw new IllegalArgumentException("key-agreement record exceeds supported bound");
+      if (signature != null) {
+        output.writeShort(signature.length);
+        output.write(signature);
       }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
+    });
+    if (record.length > MAX_BYTES) {
+      throw new IllegalArgumentException("key-agreement record exceeds supported bound");
     }
+    return record;
   }
 
   private static byte[] fixed(byte[] value, int length, String field) {
@@ -366,9 +359,8 @@ public final class OverlayKeyAgreement {
         InitRecord result = new InitRecord(project, origin, destination, session, revision, nonce,
             ephemeral,
             signature);
-        if (!Arrays.equals(result.encoded, bytes)) {
-          throw new IOException("non-canonical key-agreement INIT");
-        }
+        OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+            "non-canonical key-agreement INIT");
         return result;
       } catch (java.io.EOFException | IllegalArgumentException failure) {
         throw new IOException("malformed key-agreement INIT", failure);
@@ -401,9 +393,7 @@ public final class OverlayKeyAgreement {
       OverlayKeyAgreement.validateMembership(projectId, membershipRevision, originNodeId,
           destinationNodeId,
           membership);
-      OverlayMembershipSnapshot.Member member = membership.member(originNodeId).orElseThrow(
-          () -> new GeneralSecurityException("origin is not a member"));
-      if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
+      if (!membership.verifiedSignature(originNodeId, unsignedBytes, signature)) {
         throw new GeneralSecurityException("invalid key-agreement INIT signature");
       }
     }
@@ -589,9 +579,8 @@ public final class OverlayKeyAgreement {
         ResponseRecord result = new ResponseRecord(project, origin, destination, session, revision,
             nonce,
             ephemeral, transcript, signature);
-        if (!Arrays.equals(result.encoded, bytes)) {
-          throw new IOException("non-canonical key-agreement RESPONSE");
-        }
+        OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+            "non-canonical key-agreement RESPONSE");
         return result;
       } catch (java.io.EOFException | IllegalArgumentException failure) {
         throw new IOException("malformed key-agreement RESPONSE", failure);
@@ -630,9 +619,7 @@ public final class OverlayKeyAgreement {
       OverlayKeyAgreement.validateMembership(projectId, membershipRevision, originNodeId,
           destinationNodeId,
           membership);
-      OverlayMembershipSnapshot.Member member = membership.member(destinationNodeId).orElseThrow(
-          () -> new GeneralSecurityException("destination is not a member"));
-      if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
+      if (!membership.verifiedSignature(destinationNodeId, unsignedBytes, signature)) {
         throw new GeneralSecurityException("invalid key-agreement response signature");
       }
     }

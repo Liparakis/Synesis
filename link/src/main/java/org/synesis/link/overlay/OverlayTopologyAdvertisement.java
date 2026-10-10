@@ -1,9 +1,7 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.DateTimeException;
@@ -140,9 +138,8 @@ public final class OverlayTopologyAdvertisement {
           normalized);
       OverlayTopologyAdvertisement result = new OverlayTopologyAdvertisement(project, origin,
           membershipRevision, sequence, expires, normalized, unsigned, signature);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical topology advertisement");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical topology advertisement");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException | DateTimeException failure) {
       throw new IOException("malformed topology advertisement", failure);
@@ -179,28 +176,23 @@ public final class OverlayTopologyAdvertisement {
       throw new IllegalArgumentException("topology revisions must be positive");
     }
     OverlayCodecSupport.requireMillis(expiresAt, "topology expiry");
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, projectId);
-        output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
-        output.writeLong(membershipRevision);
-        output.writeLong(sequence);
-        output.writeLong(expiresAt.toEpochMilli());
-        output.writeByte(adjacentNodeIds.size());
-        for (String adjacentNodeId : adjacentNodeIds) {
-          output.write(OverlayCodecSupport.nodeIdBytes(adjacentNodeId));
-        }
+    byte[] unsigned = OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, projectId);
+      output.write(OverlayCodecSupport.nodeIdBytes(originNodeId));
+      output.writeLong(membershipRevision);
+      output.writeLong(sequence);
+      output.writeLong(expiresAt.toEpochMilli());
+      output.writeByte(adjacentNodeIds.size());
+      for (String adjacentNodeId : adjacentNodeIds) {
+        output.write(OverlayCodecSupport.nodeIdBytes(adjacentNodeId));
       }
-      if (bytes.size() > MAX_BYTES) {
-        throw new IllegalArgumentException("topology advertisement exceeds supported bound");
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
+    });
+    if (unsigned.length > MAX_BYTES) {
+      throw new IllegalArgumentException("topology advertisement exceeds supported bound");
     }
+    return unsigned;
   }
 
   /**
@@ -224,9 +216,7 @@ public final class OverlayTopologyAdvertisement {
         throw new GeneralSecurityException("topology advertisement names an unauthorized neighbor");
       }
     }
-    OverlayMembershipSnapshot.Member member = membership.member(originNodeId)
-        .orElseThrow(() -> new GeneralSecurityException("topology origin is not a member"));
-    if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
+    if (!membership.verifiedSignature(originNodeId, unsignedBytes, signature)) {
       throw new GeneralSecurityException("invalid topology signature");
     }
   }

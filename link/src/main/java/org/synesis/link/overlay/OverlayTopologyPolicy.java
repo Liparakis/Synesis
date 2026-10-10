@@ -113,22 +113,4 @@ public final class OverlayTopologyPolicy {
     Objects.requireNonNull(nodeId, "node ID");
     return desiredNeighbors(members).getOrDefault(nodeId, List.of());
   }
-
-  /**
-   * Returns the configured full-mesh threshold.
-   *
-   * @return threshold
-   */
-  public int fullMeshThreshold() {
-    return fullMeshThreshold;
-  }
-
-  /**
-   * Returns the configured circular shortcut distance.
-   *
-   * @return shortcut distance
-   */
-  public int shortcutDistance() {
-    return shortcutDistance;
-  }
 }

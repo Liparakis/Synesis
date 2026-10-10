@@ -491,6 +491,36 @@ final class OverlayProtocolTest {
   }
 
   @Test
+  void membershipPropagationContinuesAfterPeerFailuresAndReturnsFirstFailure() throws Exception {
+    NodeIdentity local = NodeIdentity.generate();
+    NodeIdentity[] remotes = {NodeIdentity.generate(), NodeIdentity.generate(),
+        NodeIdentity.generate()};
+    UUID projectId = UUID.randomUUID();
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+    OverlayPeerRegistry<OverlayMembershipPropagation.PeerTransport> peers =
+        new OverlayPeerRegistry<>();
+    AtomicInteger sends = new AtomicInteger();
+    IllegalStateException firstFailure = new IllegalStateException("first peer failed");
+    OverlayMembershipPropagation.PeerTransport transport = frame -> {
+      if (sends.getAndIncrement() == 0) {
+        throw firstFailure;
+      }
+      return CompletableFuture.completedFuture(null);
+    };
+    for (NodeIdentity remote : remotes) {
+      peers.bind(remote.nodeId(), transport);
+    }
+    OverlayMembershipPropagation propagation = new OverlayMembershipPropagation(local.nodeId(),
+        new OverlayMembershipView(membership(projectId, 1, local, remotes)), peers);
+    OverlayMembershipSnapshot refreshed = membership(projectId, 2, local, remotes);
+
+    CompletionException failure = assertThrows(CompletionException.class,
+        () -> propagation.publish(refreshed, now).toCompletableFuture().join());
+    assertSame(firstFailure, failure.getCause());
+    assertEquals(3, sends.get(), "later peers must still be attempted after a failed send");
+  }
+
+  @Test
   void eightMemberOverlayRoutesOpaqueMessagesInBothDirections() throws Exception {
     List<NodeIdentity> members = new ArrayList<>();
     for (int index = 0; index < 8; index++) {

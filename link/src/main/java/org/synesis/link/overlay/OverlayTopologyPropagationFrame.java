@@ -1,11 +1,8 @@
 package org.synesis.link.overlay;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -97,9 +94,8 @@ public final class OverlayTopologyPropagationFrame {
       }
       OverlayTopologyPropagationFrame result = new OverlayTopologyPropagationFrame(advertisement,
           remainingHops);
-      if (!Arrays.equals(result.encoded, bytes)) {
-        throw new IOException("non-canonical topology propagation frame");
-      }
+      OverlayCodecSupport.requireCanonical(result.encoded, bytes,
+          "non-canonical topology propagation frame");
       return result;
     } catch (java.io.EOFException | IllegalArgumentException failure) {
       throw new IOException("malformed topology propagation frame", failure);
@@ -161,22 +157,16 @@ public final class OverlayTopologyPropagationFrame {
   }
 
   private byte[] encodeComplete() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeInt(MAGIC);
-        output.writeByte(VERSION);
-        OverlayCodecSupport.writeUuid(output, advertisement.projectId());
-        output.write(OverlayCodecSupport.nodeIdBytes(advertisement.originNodeId()));
-        output.writeLong(advertisement.sequence());
-        output.writeByte(remainingHops);
-        byte[] advertisementBytes = advertisement.encoded();
-        output.writeShort(advertisementBytes.length);
-        output.write(advertisementBytes);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return OverlayCodecSupport.encode(output -> {
+      output.writeInt(MAGIC);
+      output.writeByte(VERSION);
+      OverlayCodecSupport.writeUuid(output, advertisement.projectId());
+      output.write(OverlayCodecSupport.nodeIdBytes(advertisement.originNodeId()));
+      output.writeLong(advertisement.sequence());
+      output.writeByte(remainingHops);
+      byte[] advertisementBytes = advertisement.encoded();
+      output.writeShort(advertisementBytes.length);
+      output.write(advertisementBytes);
+    });
   }
 }
