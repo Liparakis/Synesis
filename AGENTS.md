@@ -31,17 +31,69 @@ Synesis may be used normally in **external disposable acceptance projects** crea
 
 ---
 
-## Required skills
+## Skills
 
-When applicable to repository work, use:
+Use these skills when they apply to the work. Names below are the Claude Code names. Other harnesses may expose the same skills under different names or prefixes, so use the equivalent.
 
-- `graphify`
-- `constaint-driver-architecture`
-- `ponytail`
+| Skill | Use it for |
+| --- | --- |
+| `graphify` | First stop for codebase questions when `graphify-out/graph.json` exists: `graphify query`, `graphify path`, `graphify explain`. Run `graphify update .` after code changes. `graphify-out/` is generated and gitignored. Never hand-edit it or commit it. |
+| `constraint-driven-architecture` | New capabilities, architecture decisions, ADRs, and repository-level architecture review. Skip it for ordinary fixes and small changes. |
+| `ponytail:ponytail` | Default coding discipline: solve the task with the least code and the fewest new concepts. Reuse before writing, delete before adding. |
+| `pstack:poteto-mode` and the pstack skills it routes to | Workflow and principles: `pstack:architect` for shape-before-code on non-trivial work, `pstack:blast-radius` and `pstack:interrogate` before risky changes, `pstack:tdd`, `pstack:fix-ci`, `pstack:deslop` and `pstack:unslop` for cleanup. |
+| `pstack:thermo-nuclear-code-quality-review` | Strict maintainability and abstraction review of a substantial change before calling it done. Run it on any change that adds or reshapes an abstraction, a module boundary, or a public API. |
 
-Use the skills as working methods, not as excuses to impose abstractions the repository does not already support.
+Use skills as working methods, not as excuses to impose abstractions the repository does not already support.
 
 If a skill is unavailable in the current harness, say so and continue using the repository's existing conventions rather than inventing a substitute process.
+
+These skills govern work on the Synesis source repository. A blind acceptance agent receives only the bootstrapper's prompt, and skills must not be used to hand it hidden task knowledge.
+
+### Skill precedence
+
+This file wins over any skill, hook, or routing mandate, and the hard rules have no exceptions. When a skill's default behavior conflicts with a rule here, follow the rule here and say which skill step you skipped. The conflicts that actually arise:
+
+- **Commits, pushes, pull requests.** Skills that ship, babysit, or fix CI (for example `pstack:babysit`, `pstack:fix-ci`, `pstack:make-pr-easy-to-review`) must not commit, push, open or edit a pull request, or post comments unless the current task explicitly authorizes it.
+- **Scratch artifacts.** Audit trails, todolists, review reports, benchmark output, and similar scratch files that a skill wants to write belong outside the checkout, in the operating system's temporary directory. If one must live inside the checkout, leave it untracked, never commit it, and report it. Do not edit `.gitignore` for this.
+- **Minimal change.** `ponytail` and `pstack:principle-subtract-before-you-add` mean the least code and the fewest concepts. They do not override "Change shape" below.
+- **Comments.** `pstack:no-comments`, `pstack:deslop`, and `pstack:unslop` remove noise comments only. Keep comments that record why, and keep the Javadocs the documentation gates require.
+- **Redesign.** `pstack:principle-redesign-from-first-principles` and thermo-nuclear "code judo" restructuring stay inside the owning responsibility and must preserve published contracts (see Public contract stability).
+- **Subagent models.** Test subagents follow "Test subagent model", not pstack's model sheet or its default effort. Other pstack subagents follow the sheet.
+
+---
+
+## Design principles
+
+The code should achieve four things. The skills carry the general technique. This section states the targets and the parts specific to this repository.
+
+- **Good abstractions.** An abstraction names a concept the repository already shows in repeated behavior, repeated policy, durable state, or an existing invariant. It hides a decision behind a small interface and has one reason to change. Recognizing an existing concept and giving it one representation is not invention. Speculative layers, managers, factories, and wrappers are.
+- **Clean patterns.** Solve a problem the way the neighboring code already solves it, and the same way in every equivalent path. One explicit representation of a policy beats several special cases kept in sync by hand.
+- **Understandable code.** A maintainer can tell locally what the code does, why it is that way, and who owns the state it touches. Orchestration reads top to bottom over named policy, and names come from the domain.
+- **Modular API, stable contracts.** Each module owns one responsibility and exposes the smallest surface it needs. Default to package-private. Keep the contract separate from the implementation, and put extension points only where variation already exists.
+
+### Public contract stability
+
+Published contracts are the public Java API of a module, the MCP and CLI surface, wire formats, and anything persisted in durable project state. Do not break them as a side effect of other work.
+
+- Evolve additively: add new methods, optional fields, new types, or new versions rather than changing the meaning of an existing one.
+- Readers tolerate unknown fields and values where the format allows it. Writers keep emitting what existing readers understand.
+- When a replacement is needed, add it beside the old form, migrate every caller in the repository, deprecate the old form with a stated replacement, and remove it in a separate, explicitly authorized change.
+- When a break looks unavoidable, first look for an adapter or a versioned form. A breaking change to a published contract needs an ADR and explicit human approval.
+- Internal, package-private, and test-only code is not a published contract. Change it freely when every caller is migrated in the same change.
+- Telling an accidental behavior from a promised one is part of the work. Inspect callers, docs, and tests before treating either as fixed.
+
+### Priority order
+
+When goals conflict, earlier wins:
+
+1. correctness;
+2. authority and safety properties;
+3. stability of published contracts;
+4. coherent responsibility boundaries and explicit invariants;
+5. realistic boundary and failure handling;
+6. understandable, testable code;
+7. evidence;
+8. bounded scope.
 
 ---
 
@@ -52,327 +104,75 @@ Before making changes:
 1. Inspect the current repository state.
 2. Read the current operating/project documents if present.
 3. Read the latest relevant evidence, checkpoints, ADRs, and test-matrix material.
-4. Inspect the actual source and tests involved.
-5. Inspect important callers, consumers, and neighboring implementations when they materially affect the behavior being changed.
-6. Reconcile documentation with implementation before editing.
+4. Inspect the actual source and tests involved, and the callers and neighboring implementations that affect the behavior being changed.
+5. Reconcile documentation with implementation before editing.
 
-If summaries, old notes, or prior chat context disagree with the repository:
-
-**current source + newest durable repository documents win.**
-
-Do not assume old task descriptions still match the code.
+If summaries, old notes, or prior chat context disagree with the repository, **current source + newest durable repository documents win.**
 
 ---
 
-## General engineering rules
+## Engineering rules
 
-### Work source-first
+Only what the skills do not already say, or what this repository needs stated its own way.
 
-- Inspect before editing.
-- Understand the affected responsibility before choosing the patch shape.
-- Follow existing terminology and conventions.
-- Reuse existing mechanisms when they already express the required behavior.
-- Do not introduce parallel abstractions for concepts the codebase already models.
-- Do not rename or restructure unrelated areas merely to make the current task easier.
-- Prefer the smallest **coherent engineering change** that fully expresses and enforces the actual invariant.
-- Diff size is not a quality metric.
-- A broader local rewrite is preferable to a smaller patch when the smaller patch leaves the affected responsibility duplicated, implicit, brittle, misleading, unsafe, or difficult to test.
+### Change shape
 
-Existing source is evidence of current behavior. It is not proof that every local implementation decision is desirable or must be preserved.
+- Make the smallest **coherent responsibility-level change** that fully expresses and enforces the invariant. Diff size is not a quality metric in either direction.
+- For a meaningful change, first identify the invariant, the component that owns it, the externally observable behavior, the trust boundaries and authoritative state involved, the failure modes, and the tests or evidence that define expected behavior.
+- When the task exposes a responsibility that is duplicated, implicit, unsafe, or hard to test, restructure that responsibility instead of stacking another special case on it, and fix adjacent defects that come from the same missing invariant. Do not rewrite a representation that is already coherent.
+- Existing source is evidence of current behavior. It is not proof that the behavior is intended.
+- A change is out of scope when it alters a separate responsibility that is not needed to enforce, validate, or safely integrate the invariant. That rules out repository-wide cleanup, naming churn, unrelated modernization, dependency replacement, and formatting churn. Record unrelated failures and cleanup. Do not fold them into the change.
 
-### Reconstruct the contract before editing
-
-For meaningful changes, determine what the affected component is actually responsible for before modifying it.
-
-Identify:
-
-- the externally observable behavior;
-- the invariant being introduced, restored, or protected;
-- the component or responsibility that owns that invariant;
-- the inputs and trust boundaries involved;
-- the authoritative state, where applicable;
-- the important failure modes;
-- lifecycle/resource ownership, where applicable;
-- retry, replay, concurrency, and restart behavior, where applicable;
-- the tests or evidence that currently define expected behavior.
-
-Do not reduce the task to the failing line if the failing line is only a symptom of a poorly represented responsibility.
-
-### Transform the affected responsibility, not merely the failing line
-
-The goal is not the smallest textual diff. The goal is the smallest **coherent responsibility-level change**.
-
-When a task exposes a responsibility that is poorly represented, duplicated, implicit, unsafe, difficult to validate, or difficult to test, agents may restructure that responsibility even when the immediate defect could be patched more narrowly.
-
-Before choosing an implementation:
-
-1. Identify the actual behavioral invariant being changed or restored.
-2. Identify the component or responsibility that owns that invariant.
-3. Inspect the complete affected component, its important callers, and its focused tests.
-4. Determine whether the existing representation makes the invariant explicit and difficult to violate.
-5. Look for adjacent defects or unsafe assumptions that arise from the same underlying responsibility.
-6. Decide whether a narrow patch or a local structural transformation produces the more coherent result.
-
-Prefer a local structural transformation when it makes the affected responsibility:
-
-- more explicit;
-- easier to reason about;
-- harder to misuse;
-- safer at boundary conditions;
-- easier to test independently;
-- less duplicated;
-- more consistent internally;
-- more consistent with repository terminology and architecture.
-
-Examples of appropriate transformation include:
-
-- replacing repeated special-case conditionals with an explicit representation of the underlying policy;
-- extracting deterministic policy from orchestration code;
-- centralizing behavior that must remain consistent across multiple paths;
-- separating validation, mapping, policy selection, persistence, transport, resource access, or response construction when those are genuinely distinct responsibilities;
-- introducing named constants, collections, or value representations when they correspond to real behavior or policy already present in the code;
-- changing helper visibility when package-level access materially improves focused testability without unnecessarily expanding the public API;
-- correcting nearby edge cases that are manifestations of the same missing or incorrectly represented invariant;
-- using APIs according to their actual lifecycle and ownership semantics rather than preserving an accidental existing pattern;
-- replacing several individually correct branches with one representation of the rule they collectively implement.
-
-Do not preserve an implementation solely because it already works on the happy path.
-
-Do not preserve accidental complexity merely to minimize the diff.
-
-Do not force a rewrite when the existing representation is already coherent.
-
-### Separate orchestration from policy
-
-High-level methods should preferably communicate the flow of the operation.
-
-When useful, isolate deterministic or independently meaningful policy such as:
-
-- validation;
-- route/path interpretation;
-- authorization decisions;
-- state transition eligibility;
-- cache policy;
-- content/type selection;
-- retry policy;
-- mapping;
-- serialization rules;
-- resource lookup;
-- response/header construction;
-- failure classification.
-
-Do not extract helpers merely to shorten methods.
-
-Extract behavior when giving it a name makes an actual rule, invariant, responsibility, or policy easier to understand and test.
-
-A useful test is:
-
-> Can a maintainer understand the operation from the orchestration method and inspect the named policies independently when more detail is needed?
-
-### Prefer explicit invariants
-
-Important behavior should not depend on maintainers mentally reconstructing a rule from scattered conditionals.
-
-When several branches, constants, or call sites collectively express one policy:
-
-- identify the underlying concept;
-- represent it once where practical;
-- name it using repository terminology;
-- make violations difficult or obvious.
-
-Prefer:
-
-**one explicit representation of a policy**
-
-over:
-
-**several individually correct special cases that must remain synchronized manually.**
-
-### Improve testability deliberately
-
-When restructuring affected code, consider whether important deterministic behavior can be tested directly without exercising unrelated machinery.
-
-Where appropriate:
-
-- isolate pure policy;
-- keep deterministic transformations separate from I/O;
-- use package-private visibility rather than public exposure when focused tests need access;
-- avoid requiring an entire server, process, network stack, filesystem, or state machine merely to verify a small deterministic rule.
-
-Do not distort production architecture purely for tests.
-
-Do not expose internals publicly solely to make testing easier.
-
-### Look beyond the happy path
-
-For meaningful changes, reason about applicable boundary and adversarial cases.
-
-Depending on the responsibility, consider:
-
-- malformed input;
-- missing input;
-- empty input;
-- unexpected encodings or characters;
-- traversal or namespace escape;
-- unknown enum/type/version values;
-- stale state;
-- duplicate requests;
-- retries;
-- partial failure;
-- interrupted work;
-- resource absence;
-- resource ownership and cleanup;
-- invalid lifecycle order;
-- cache staleness;
-- unversioned versus versioned resources;
-- integer/range boundaries;
-- concurrent actors;
-- replay after restart;
-- corrupted or contradictory state.
-
-Do not add hypothetical defenses with no relationship to the affected boundary.
-
-Do investigate realistic failure modes implied by the component's actual inputs and responsibilities.
-
-### Do not invent architecture
-
-Do not create names, layers, services, events, states, ownership models, factories, managers, wrappers, or abstractions simply because they sound clean.
-
-Before introducing a new concept, determine:
-
-- whether the repository already has one;
-- which existing code owns the behavior;
-- which durable state represents it;
-- how it is validated;
-- how it fails;
-- how it recovers;
-- how it is tested.
-
-If a new concept is genuinely required, derive it from the missing invariant and integrate it into existing architecture.
-
-This rule forbids **speculative concepts**. It does not forbid extracting a concept that is already demonstrably present in repeated behavior, repeated policy, existing state, or an existing invariant.
-
-Recognizing an existing concept and giving it one coherent representation is not architectural invention.
-
-### Preserve authority boundaries
+### Authority boundaries
 
 For any security-, lifecycle-, coordination-, identity-, or ownership-sensitive change:
 
-- identify the current authority source;
-- identify what proves authority;
-- identify what invalidates it;
-- avoid implicit fallback;
-- avoid "latest known" guessing;
-- avoid treating correlation metadata as authority;
+- identify the current authority source, what proves authority, and what invalidates it;
+- avoid implicit fallback and "latest known" guessing;
+- do not treat correlation metadata as authority;
 - fail closed when authoritative state is ambiguous.
 
-Never weaken an authority check simply to make a test or acceptance flow pass.
+Never weaken an authority check to make a test or acceptance flow pass.
 
-### Preserve durable history
+### Durable history
 
 When work changes owner, state, reviewer, lifecycle, or recovery status:
 
 - preserve historical lineage where the current architecture expects it;
 - do not rewrite history to make the new state look original;
-- make replay/restart behavior deterministic;
+- make replay and restart behavior deterministic;
 - make stale actions fail safely.
 
-### Concurrency and replay
+### Failure, replay, and concurrency
 
-For mutating coordination/state-machine work, reason about:
+For meaningful changes, reason about the cases the component's real inputs and responsibilities imply:
 
-- duplicate requests;
-- retries after lost responses;
-- stale actions;
-- concurrent actors;
-- process interruption;
-- restart/replay;
-- partial progress;
-- idempotency;
-- race fencing.
+- malformed, missing, empty, or unexpectedly encoded input, including traversal and namespace escape;
+- unknown enum, type, or version values, and unversioned versus versioned resources;
+- stale state, duplicate requests, retries after lost responses, and idempotency;
+- partial failure, interrupted work, and corrupted or contradictory state;
+- concurrent actors and race fencing;
+- restart and replay.
 
-Do not claim crash safety without testing the actual durable boundaries being claimed.
+Do not add defenses with no relationship to the affected boundary. Do not claim crash safety without testing the durable boundaries being claimed.
 
-### Keep scope bounded
+### Resource ownership
 
-Scope is bounded primarily by **responsibility**, not by line count.
-
-Do not turn a narrow defect into an unrelated subsystem or repository-wide refactor.
-
-However, when requested work exposes multiple problems belonging to the same owning responsibility or the same missing invariant, fix that responsibility coherently rather than stacking another narrow special case onto it.
-
-A larger local rewrite is acceptable when it produces a materially clearer, safer, more internally consistent, or more testable representation of the required behavior.
-
-A change is not out of scope merely because it touches more lines than the minimal patch.
-
-A change is out of scope when it alters a separate responsibility whose behavior is not necessary to understand, enforce, validate, or safely integrate the requested invariant.
-
-Do not use a narrow task as justification for:
-
-- repository-wide cleanup;
-- speculative architecture;
-- broad naming churn;
-- unrelated modernization;
-- aesthetic refactoring;
-- dependency replacement unrelated to the invariant;
-- formatting churn outside the affected area.
-
-If unrelated failures or cleanup are discovered:
-
-- record them;
-- isolate them;
-- do not silently fold them into the current change.
-
-### Do not confuse restraint with passivity
-
-Repository safety does not mean preserving weak local design forever.
-
-Agents are expected to exercise engineering judgment.
-
-When the existing implementation:
-
-- duplicates the same rule in several places;
-- encodes a policy only through incidental control flow;
-- has an obvious edge-case defect within the affected responsibility;
-- misuses API lifecycle or ownership semantics;
-- makes deterministic behavior unnecessarily difficult to test;
-- creates inconsistent behavior between equivalent paths;
-- relies on a misleading abstraction;
-- or obscures the invariant the task is intended to enforce;
-
-fix the underlying local representation when doing so remains within the affected responsibility.
-
-Do not intentionally leave a known defect in the same responsibility merely because the original request described only one manifestation of it.
+When an object is a closable resource or a lifecycle boundary, determine who owns it before changing how it is closed. Cleanup of an owned resource is deterministic. Closing a borrowed resource is as wrong as leaking an owned one.
 
 ---
 
-## Engineering review pass
+## Review pass
 
-After implementing a meaningful change, review the result as though reviewing another engineer's pull request.
+After a meaningful change, review it as though it were another engineer's pull request. For a substantial change, run `pstack:thermo-nuclear-code-quality-review`, act on the findings that belong to the owning responsibility, and record the rest.
 
-Ask:
+The skills cover abstraction and readability review. Also check what they do not:
 
-- Is the important invariant explicit, or only implied by control flow?
-- Is the same policy represented in more than one place?
-- Did the implementation inherit an unsafe assumption merely because the old code had it?
-- Are equivalent paths governed by the same rule?
-- Are malformed, missing, stale, duplicate, boundary, or partial inputs handled correctly where relevant?
-- Are lifecycle and resource ownership semantics correct?
+- Are authority checks intact, and does ambiguous state still fail closed?
 - Can failure leave partially applied or contradictory state?
-- Could orchestration code be simpler if deterministic policy were isolated?
-- Can important deterministic behavior be tested without exercising unrelated machinery?
-- Did the change introduce a new abstraction that the repository does not actually need?
-- Is an abstraction merely hiding complexity rather than expressing a real concept?
-- Did the transformation remain within the owning responsibility?
-- Did the implementation create needless compatibility behavior because the old code happened to behave that way?
-- Are names describing actual domain concepts and policies?
-- Would a maintainer encountering this code six months later understand why the important decisions exist?
-
-Fix issues found during this review before considering the implementation complete.
-
-Do not stop at:
-
-**the requested test now passes.**
+- Are equivalent paths governed by the same rule?
+- Does the change break or reinterpret a published contract? Accidental behavior may change. A published contract may not.
+- Did the change stay within the owning responsibility?
 
 A passing test is evidence, not proof that the representation is good.
 
@@ -380,53 +180,29 @@ A passing test is evidence, not proof that the representation is good.
 
 ## Repository hygiene
 
-- Preserve unrelated user work.
-- Do not delete untracked files merely because they are unfamiliar.
-- Do not rewrite evidence/history files unless the task actually requires it.
-- Do not make formatting-only churn across unrelated files.
-- Do not silently normalize line endings across the repository.
+In addition to the hard rule above:
+
+- Do not rewrite evidence or history files unless the task requires it.
+- Do not make formatting-only churn or normalize line endings across unrelated files.
 - Do not bypass generated-file or checked-in-artifact conventions.
 - Do not edit `.synesis` manually in disposable targets.
-- Do not create `.synesis` in the Synesis source repository at all.
 
 ---
 
 ## Testing workflow
 
-Work from narrow to broad.
+Work from narrow to broad:
 
-Typical order:
+1. focused unit tests for the changed behavior and the edge cases it exposes;
+2. focused integration tests;
+3. relevant module suite;
+4. broader workspace/MCP/coordination suites where applicable;
+5. architecture/static/Javadocs/format/catalog/validator gates;
+6. real disposable acceptance only after source-level behavior is credible.
 
-1. focused unit tests for the changed behavior;
-2. focused tests for deterministic policy or edge cases exposed by the change;
-3. focused integration tests;
-4. relevant module suite;
-5. broader workspace/MCP/coordination suites where applicable;
-6. architecture/static/Javadocs/format/catalog/validator gates;
-7. real disposable acceptance only after source-level behavior is credible.
+For a regression, prove both the originally observed failure and representative boundary cases of the same responsibility.
 
-For regressions, prefer proving both:
-
-- the originally observed failure or missing invariant;
-- representative boundary cases belonging to the same responsibility.
-
-Do not add tests solely to mirror implementation structure.
-
-Prefer tests that describe externally meaningful behavior, invariants, policy, and failure semantics.
-
-Do not call a test or suite PASS if it was:
-
-- interrupted;
-- timed out;
-- skipped unexpectedly;
-- hung;
-- never run.
-
-Report those states honestly.
-
-Do not paper over existing unrelated failures to make a milestone appear green.
-
-Do not weaken implementation semantics merely to preserve a test whose expectation represents accidental behavior rather than an intentional contract.
+Do not call a test or suite PASS if it was interrupted, timed out, skipped unexpectedly, hung, or never run. Report those states as they are. Do not paper over unrelated failures to make a milestone look green.
 
 When an existing test conflicts with a newly clarified invariant:
 
@@ -435,236 +211,41 @@ When an existing test conflicts with a newly clarified invariant:
 3. update the test only when the source of truth supports the new behavior;
 4. report the semantic change explicitly.
 
+Do not weaken implementation semantics to preserve a test that encodes accidental behavior.
+
+### Evidence claims
+
+Distinguish `source semantics proven` from `real current-build acceptance proven`. Do not promote deterministic or unit evidence into a claim about an untested real environment.
+
+Do not describe a refactor as behavior-preserving if it intentionally changes an edge case, policy, lifecycle rule, caching behavior, failure mode, or externally observable contract. State the semantic change.
+
 ---
 
 ## Test subagent model — HARD RULE
 
-Any subagent spawned to implement, run, debug, investigate, or review tests must be explicitly launched with:
+Any subagent spawned to write, run, debug, investigate, or review tests must be explicitly launched with exactly one of these configurations:
 
 ```text
-model: gpt-6-luna
-reasoning effort: low | medium | high
+model: Sonnet 5.5 (claude-sonnet-5-5)    reasoning effort: medium
+model: GPT 6 Luna (gpt-6-luna)           reasoning effort: medium
 ```
 
-Never rely on inherited or default model settings. Prefer `low` effort unless the task genuinely requires more.
+Use the one native to the harness: Sonnet 5.5 in Claude Code, GPT 6 Luna in Codex. If both are available, either is allowed. Prefer the one the task names. No other model and no other effort. Never rely on inherited or default settings.
 
-Immediately after launch and before substantive work, perform a bounded check for authoritative effective session metadata.
+In Claude Code, launch with the `Agent` tool, `model: sonnet`, and `subagent_type: pstack:effort-medium`, so the effort is set by the agent rather than inherited. The `sonnet` alias follows the current Sonnet, so confirm it resolves to Sonnet 5.5.
 
-### Effective metadata available
+Immediately after launch and before substantive work, make a bounded check for authoritative effective session metadata.
 
-When the harness exposes authoritative effective session metadata:
-
-1. Verify the effective model and reasoning effort immediately after launch and before substantive work.
-2. Continue only when the model is `gpt-6-luna` and the effort is `low`, `medium`, or `high`.
-3. If either exposed value does not match, terminate the subagent, discard its work, and reassign the same task using the required model and an allowed effort.
-
-### Effective metadata unavailable
-
-When the harness does not expose one or both effective values after a bounded check:
-
-1. The spawn or launch call must still explicitly specify `gpt-6-luna` and an allowed effort. Inherited or default model selection remains forbidden.
-2. Record the metadata limitation, exact requested model and effort, and spawned agent or session identifier before substantive work.
-3. Allow the subagent to proceed under that explicitly pinned launch configuration.
-4. Do not claim that effective runtime settings were verified; report: `launch configuration explicitly pinned; effective runtime metadata unavailable in this harness.`
-5. If later evidence reveals that the actual model or effort differs from the requested values, terminate the subagent, discard its work, and replace it.
-
-This rule applies to any subagent that:
-
-- writes tests;
-- runs tests;
-- debugs test failures;
-- investigates test behavior;
-- reviews test results.
-
----
-
-## Validation and evidence
-
-For any meaningful change, be able to state:
-
-- what failed before;
-- what invariant was missing or violated;
-- what source behavior changed;
-- why the change belongs where it was made;
-- whether the implementation was patched narrowly or structurally transformed, and why;
-- what authority/security properties remain intact;
-- how malformed/boundary input behaves where relevant;
-- how resource ownership/lifecycle behaves where relevant;
-- how retries, races, stale state, and restart behave where relevant;
-- what tests prove;
-- what tests do not prove.
-
-Distinguish clearly between:
-
-```text
-source semantics proven
-```
-
-and:
-
-```text
-real current-build acceptance proven
-```
-
-Do not promote deterministic/unit evidence into a claim about an untested real environment.
-
-Do not describe a refactor as behavior-preserving if it intentionally changes an edge case, policy, lifecycle rule, caching behavior, failure mode, or externally observable contract.
-
-Make those semantic improvements explicit.
-
----
-
-## Code quality
-
-Prefer code whose structure communicates the behavior.
-
-### Names
-
-Use names that describe:
-
-- the domain concept;
-- the invariant;
-- the policy;
-- the lifecycle state;
-- the authority source;
-- the operation's actual responsibility.
-
-Avoid names whose only purpose is to make newly extracted code appear abstract.
-
-### Constants and collections
-
-Extract literals when they represent:
-
-- policy;
-- protocol values;
-- repeated domain concepts;
-- security rules;
-- lifecycle rules;
-- externally meaningful configuration.
-
-Do not extract every literal mechanically.
-
-A named constant should communicate something the literal alone does not.
-
-### Helpers
-
-A helper should preferably correspond to a meaningful operation or policy.
-
-Good reasons to extract include:
-
-- removing duplicated policy;
-- making an invariant independently understandable;
-- making deterministic behavior testable;
-- separating I/O from decision logic;
-- clarifying orchestration;
-- centralizing failure behavior.
-
-Poor reasons include:
-
-- arbitrary line-count reduction;
-- creating abstraction for appearance;
-- wrapping a single obvious call without adding meaning.
-
-### Control flow
-
-Prefer control flow that makes failure and success paths obvious.
-
-For externally supplied or authority-sensitive input:
-
-- validate early;
-- fail closed;
-- avoid implicit fallback unless fallback is explicitly part of the contract.
-
-Prefer early rejection when it makes the valid path simpler.
-
-### Resource ownership
-
-Use APIs according to their actual ownership contracts.
-
-When an object represents a closable resource or lifecycle boundary, determine who owns it and ensure cleanup is deterministic.
-
-Do not rely on incidental process cleanup when the API exposes explicit ownership.
-
-Do not introduce closing behavior until ownership is understood; closing a borrowed resource can be as incorrect as leaking an owned one.
+- **Metadata available.** Continue only when the effective model and effort match an allowed configuration. On a mismatch, terminate the subagent, discard its work, and reassign the task with an allowed configuration.
+- **Metadata unavailable.** Record the limitation, the exact requested model and effort, and the agent or session identifier, then let the subagent proceed under its pinned launch configuration. Do not claim the runtime settings were verified. Report: `launch configuration explicitly pinned; effective runtime metadata unavailable in this harness.` If later evidence shows a different model or effort, terminate the subagent, discard its work, and replace it.
 
 ---
 
 ## Documentation
 
-Update durable docs when behavior or architecture materially changes.
+Update durable docs when behavior or architecture materially changes. Use the repository's existing conventions for planning, ADRs, evidence, checkpoints, and test matrices. Do not invent a new document type when an existing one serves the purpose.
 
-Do not create documentation that merely restates implementation noise.
-
-Use existing repository conventions for planning, ADRs, evidence, checkpoints, and test matrices.
-
-Do not invent a new document type when an existing one already serves the purpose.
-
-### Source documentation
-
-Document **why**, not merely **what**.
-
-Useful documentation includes:
-
-- invariants;
-- security assumptions;
-- authority rules;
-- lifecycle and ownership rules;
-- surprising API behavior;
-- failure and recovery semantics;
-- protocol assumptions;
-- non-obvious edge cases;
-- caching/versioning assumptions;
-- concurrency constraints;
-- reasons a tempting alternative is intentionally not used.
-
-Avoid comments or Javadocs that merely:
-
-- restate a method name;
-- narrate obvious syntax;
-- explain trivial getters/setters;
-- describe obvious constants;
-- repeat type information already present in the signature;
-- inflate the apparent completeness of the implementation.
-
-Public and package-visible contracts should be documented when their behavior, constraints, or role is not self-evident.
-
-Private implementation details should be documented when the reasoning would otherwise be lost.
-
-Documentation volume is not a quality metric.
-
----
-
-## Implementation quality bar
-
-For meaningful production changes, optimize for:
-
-1. correctness;
-2. preservation of authority and safety properties;
-3. coherent responsibility boundaries;
-4. explicit invariants;
-5. realistic boundary and failure handling;
-6. maintainability;
-7. testability;
-8. evidence;
-9. bounded scope.
-
-Do **not** optimize for minimum diff size as an independent goal.
-
-Prefer:
-
-- semantic improvement over cosmetic refactoring;
-- explicit policy over duplicated special cases;
-- coherent local design over incremental patch accumulation;
-- meaningful tests over implementation-mirroring tests;
-- repository concepts over invented abstractions;
-- fail-closed behavior over ambiguous fallback;
-- clear ownership over accidental lifecycle behavior.
-
-A small patch is excellent when the component is already well modeled.
-
-A larger local transformation is excellent when that is what is required to make the affected responsibility coherent.
-
-Neither is inherently preferable based on line count.
+In source, document why and not what: invariants, authority and security assumptions, lifecycle and ownership rules, failure and recovery semantics, protocol and versioning assumptions, concurrency constraints, and why a tempting alternative is not used. Document public and package-visible contracts whose behavior, constraints, or role is not self-evident. Documentation volume is not a quality metric.
 
 ---
 
@@ -678,46 +259,6 @@ They do not authorize Synesis use inside the Synesis source repository.
 
 Use the project's normal Synesis MCP integration for all project reads,
 mutations, and lifecycle actions. Do not edit `.synesis` manually.
-
-### Synesis usage
-
-- Use Synesis tools for project reads, file changes, and commands.
-- One persistent MCP connection owns one provider binding and one isolated worker context.
-- After `synesis init` succeeds, install the integration matching the responding harness before starting work:
-    - Claude Code: `synesis provider install claude`
-    - Codex: `synesis provider install codex`
-- The matching provider executable must already exist for that harness. Installing one provider is not a substitute for another.
-- After `synesis.ensure_session` succeeds, keep the provider in the current project directory and use Synesis MCP for reads, writes, and commands.
-- Synesis performs those operations in the assigned worktree.
-- Do not switch branches, change into another worker's worktree, or edit another worker's files manually.
-- Native provider hooks are optional and may be unavailable. They do not replace Synesis MCP.
-- If a native mutation causes `workspace_mismatch`, stop native mutation and verify state through `synesis.read_file`.
-- Reads carry revisions. Use the matching revision when applying a patch.
-- Do not directly modify the control checkout.
-- On identity, ownership, freshness, revision, or workspace failure: stop mutation and inspect read-only state.
-- The MCP surface contains exactly 10 tools.
-- Follow `get_next_action`'s projected tool and typed arguments.
-- A ready session is not yet an announced collaboration intent.
-- Before mutating visible task files, call `ensure_session` with `task.goal`, `task.acceptance`, and `task.claims`.
-- Claims must contain the exact repository-relative files/subtrees assigned to that responsibility.
-- Use `path_exact` or `path_subtree`.
-- Keep claims disjoint.
-- Do not guess or overlap ownership.
-- `likelyScopes` is descriptive only and does not acquire ownership.
-- There is no separate announce tool; task/claim declaration is the intent announcement.
-- Call `get_next_action` with no arguments to read the durable coordination inbox.
-- `integrationCheck` evaluates supplied compatibility facts only. It does not advance lifecycle state and must not replace normal inbox polling.
-- If a mutating tool returns a concrete `nextAction` / `recommendedTool` with typed arguments, execute that exact continuation before choosing another lifecycle action.
-- After any completed Synesis mutation, call `get_next_action` again.
-- If `get_next_action` reports `IMPLEMENT` without a concrete lifecycle action, continue visible assigned work normally.
-- Do not call `finish_lane` merely because coding appears complete.
-- Execute lifecycle actions only when Synesis projects the exact tool and arguments.
-- If visible work is complete or blocked while the WorkGroup/other participants remain active, perform bounded waits and continue polling.
-- If `WAIT` projects `get_next_action` with `{}`, wait a bounded interval and execute that continuation.
-- Remain engaged while grants, snapshots, review decisions, coordination requests, or WorkGroup completion remain unresolved.
-- Do not report project success merely because one lane is complete.
-
----
 
 ## Blind multi-agent acceptance
 
@@ -795,6 +336,9 @@ At the end of substantial work, report:
 - structural transformation performed, if any, and why it remained within the owning responsibility;
 - relevant authority/replay/concurrency implications;
 - relevant boundary/failure/lifecycle implications;
+- impact on published contracts (public API, wire formats, tool schemas, CLI surface, persisted formats), including any deprecation introduced;
+- skills used, and any skill step skipped because of this file;
+- test subagent model and effort, and whether they were verified or only pinned at launch;
 - focused test results;
 - broad suite results;
 - real acceptance evidence;
