@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.UUID;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
@@ -16,6 +17,8 @@ import org.synesis.coordination.exception.CoordinationStateException;
  */
 public final class SpeculationWorkspace implements AutoCloseable {
 
+    private static final String METADATA_FILE = "speculation.meta";
+    private static final String BASE_COMMIT_KEY = "baseCommit=";
     private final Path repositoryRoot;
     private final Path metadataDirectory;
     private final Path worktree;
@@ -115,6 +118,22 @@ public final class SpeculationWorkspace implements AutoCloseable {
     }
 
     /**
+     * Reads the base commit that {@link #create()} recorded for a prediction.
+     *
+     * @param localRoot    local `.synesis` state root
+     * @param predictionId prediction identifier
+     * @return the recorded base commit, or empty when the metadata has no base commit line
+     * @throws IOException when the metadata file is missing or unreadable
+     */
+    public static Optional<String> recordedBaseCommit(Path localRoot, UUID predictionId) throws IOException {
+        Path metadata = localRoot.resolve("speculation").resolve(predictionId.toString()).resolve(METADATA_FILE);
+        return Files.readAllLines(metadata).stream()
+                .filter(line -> line.startsWith(BASE_COMMIT_KEY))
+                .findFirst()
+                .map(line -> line.substring(BASE_COMMIT_KEY.length()));
+    }
+
+    /**
      * Runs fail-closed conflict and whitespace checks on the isolated tree.
      *
      * @return gate result
@@ -155,7 +174,7 @@ public final class SpeculationWorkspace implements AutoCloseable {
             return;
         }
         runGit("worktree", "remove", "--force", worktree.toString());
-        Files.deleteIfExists(metadataDirectory.resolve("speculation.meta"));
+        Files.deleteIfExists(metadataDirectory.resolve(METADATA_FILE));
         Files.deleteIfExists(metadataDirectory);
         created = false;
     }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -42,8 +43,8 @@ public final class CheckActionCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = runtime.projectService().require(Path.of(project == null ? "." : project));
-            Path resolved = profile == null ? location.profile() : Path.of(profile);
+            var location = ProjectOptions.locate(runtime, project);
+            Path resolved = ProjectOptions.profile(location, profile);
             var result = runtime.guardrailService().check(resolved, location.root(), scope, "check-action", action);
             runtime.terminal().stdout("PROJECT_ID=" + location.projectId());
             if (result.outcome() == ActionGuardrail.Outcome.BLOCKED || result.outcome() == ActionGuardrail.Outcome.WARNING) {

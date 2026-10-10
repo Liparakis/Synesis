@@ -8,7 +8,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CoordinationTask;
 import picocli.CommandLine.Command;
@@ -53,19 +52,16 @@ public final class TaskCreateCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
             UUID taskId = UUID.randomUUID();
-            CoordinationTask task = new CoordinationTask(taskId, location.projectId(), title, capability, identity.nodeId(), supervisor, worker);
-            var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CREATED, identity.nodeId(), supervisor, worker, task.encoded(), identity);
-            var event = CoordinationCliSupport.submit(endpoint, command);
+            CoordinationTask task = new CoordinationTask(taskId, signer.location().projectId(), title, capability, signer.identity().nodeId(), supervisor, worker);
+            var event = signer.submit(endpoint, taskId, PredictionEventType.TASK_CREATED, supervisor, worker, task.encoded());
             runtime.terminal().stdout("TASK_CREATED=true");
             runtime.terminal().stdout("TASK_ID=" + taskId);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("TASK_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "TASK_ERROR", failure);
         }
     }
 }

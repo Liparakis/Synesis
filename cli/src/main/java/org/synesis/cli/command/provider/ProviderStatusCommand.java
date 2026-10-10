@@ -3,6 +3,7 @@ package org.synesis.cli.command.provider;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -36,7 +37,7 @@ public final class ProviderStatusCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = runtime.projectService().require(Path.of(project == null ? "." : project));
+            var location = ProjectOptions.locate(runtime, project);
             var result = runtime.providerService().status(location, provider);
             result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
             return result.exitCode();

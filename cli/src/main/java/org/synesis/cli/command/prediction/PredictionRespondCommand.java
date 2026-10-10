@@ -9,7 +9,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -55,8 +54,7 @@ public final class PredictionRespondCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
             PredictionEventType type = switch (action.toLowerCase(java.util.Locale.ROOT)) {
                 case "receive" -> PredictionEventType.REQUEST_RECEIVED;
                 case "exact" -> PredictionEventType.ACCEPTED_EXACT;
@@ -65,15 +63,13 @@ public final class PredictionRespondCommand implements Callable<Integer> {
                 case "reject" -> PredictionEventType.REQUEST_REJECTED;
                 default -> throw new IllegalArgumentException("INVALID_RESPONSE_ACTION");
             };
-            var event = CoordinationCliSupport.submit(endpoint,
-                    CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), prediction, type, identity.nodeId(), supervisor, worker, reason.getBytes(StandardCharsets.UTF_8), identity));
+            var event = signer.submit(endpoint, prediction, type, supervisor, worker, reason.getBytes(StandardCharsets.UTF_8));
             runtime.terminal().stdout("PREDICTION_RESPONSE=" + type);
             runtime.terminal().stdout("PREDICTION_ID=" + prediction);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("PREDICTION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "PREDICTION_ERROR", failure);
         }
     }
 }

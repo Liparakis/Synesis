@@ -9,7 +9,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionContract;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import picocli.CommandLine.Command;
@@ -96,15 +95,14 @@ public final class PredictionCreateCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
             if (expiresAt == 0) {
                 expiresAt = System.currentTimeMillis() + 600_000L;
             }
             UUID predictionId = UUID.randomUUID();
             PredictionContract contract = new PredictionContract(predictionId,
-                    location.projectId(),
-                    identity.nodeId(),
+                    signer.location().projectId(),
+                    signer.identity().nodeId(),
                     supervisor,
                     worker,
                     taskId,
@@ -130,10 +128,8 @@ public final class PredictionCreateCommand implements Callable<Integer> {
                     confidence,
                     risk,
                     expiresAt);
-            var created = CoordinationCliSupport.submit(endpoint,
-                    CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), predictionId, PredictionEventType.PREDICTION_CREATED, identity.nodeId(), supervisor, worker, contract.encoded(), identity));
-            var routed = CoordinationCliSupport.submit(endpoint,
-                    CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), predictionId, PredictionEventType.PREDICTION_ROUTED, identity.nodeId(), supervisor, worker, new byte[0], identity));
+            var created = signer.submit(endpoint, predictionId, PredictionEventType.PREDICTION_CREATED, supervisor, worker, contract.encoded());
+            var routed = signer.submit(endpoint, predictionId, PredictionEventType.PREDICTION_ROUTED, supervisor, worker, new byte[0]);
             runtime.terminal().stdout("PREDICTION_CREATED=true");
             runtime.terminal().stdout("PREDICTION_ID=" + predictionId);
             runtime.terminal().stdout("REQUEST_ID=" + created.eventId());
@@ -141,8 +137,7 @@ public final class PredictionCreateCommand implements Callable<Integer> {
             runtime.terminal().stdout("ROUTED_SEQUENCE=" + routed.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("PREDICTION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "PREDICTION_ERROR", failure);
         }
     }
 }

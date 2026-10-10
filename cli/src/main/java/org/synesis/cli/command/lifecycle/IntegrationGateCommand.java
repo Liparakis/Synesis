@@ -52,16 +52,15 @@ public final class IntegrationGateCommand implements Callable<Integer> {
                     projection.apply(event);
                 }
             }
-            String base = java.nio.file.Files.readAllLines(location.synesisDirectory().resolve("local").resolve("speculation").resolve(prediction.toString()).resolve("speculation.meta")).stream()
-                    .filter(s -> s.startsWith("baseCommit=")).findFirst().orElseThrow().substring(11);
-            SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(), location.synesisDirectory().resolve("local"), prediction, base);
+            Path localRoot = location.synesisDirectory().resolve("local");
+            String base = SpeculationWorkspace.recordedBaseCommit(localRoot, prediction).orElseThrow();
+            SpeculationWorkspace workspace = new SpeculationWorkspace(location.root(), localRoot, prediction, base);
             PredictionIntegrationResult result = PredictionIntegrationGate.evaluate(projection.state(prediction).map(Enum::name).filter("AVAILABLE"::equals).isPresent(), workspace.gate());
             runtime.terminal().stdout(result.status());
             runtime.terminal().stdout("REASON=" + result.reason());
             return result.accepted() ? ExitCodes.OK : ExitCodes.LOCAL_CONFIGURATION;
         } catch (Exception failure) {
-            runtime.terminal().stderr("INTEGRATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "INTEGRATION_ERROR", failure);
         }
     }
 }

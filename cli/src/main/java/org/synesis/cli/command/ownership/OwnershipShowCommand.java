@@ -6,7 +6,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import picocli.CommandLine.Command;
@@ -41,20 +40,20 @@ public final class OwnershipShowCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            CoordinationCommand found = null;
+            boolean found = false;
             OwnershipClaim current = null;
             for (var event : CoordinationCliSupport.replay(endpoint)) {
                 if (event.type() != PredictionEventType.OWNERSHIP_CLAIMED && event.type() != PredictionEventType.OWNERSHIP_RELEASED) {
                     continue;
                 }
-                OwnershipClaim claim = OwnershipClaim.decode(CoordinationCommand.decode(event.payload()).payload());
+                OwnershipClaim claim = OwnershipClaim.decode(CoordinationCliSupport.commandPayload(event));
                 if (!claim.capability().equals(capability)) {
                     continue;
                 }
-                found = CoordinationCommand.decode(event.payload());
+                found = true;
                 current = event.type() == PredictionEventType.OWNERSHIP_CLAIMED ? claim : null;
             }
-            if (found == null || current == null) {
+            if (!found || current == null) {
                 throw new IllegalArgumentException("OWNERSHIP_NOT_FOUND");
             }
             runtime.terminal().stdout("CAPABILITY=" + current.capability());
@@ -64,8 +63,7 @@ public final class OwnershipShowCommand implements Callable<Integer> {
             runtime.terminal().stdout("INTENT_VERSION=" + current.intentVersion());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("OWNERSHIP_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "OWNERSHIP_ERROR", failure);
         }
     }
 }

@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
 import org.synesis.workspace.application.agent.run.AgentRunController;
@@ -94,7 +95,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
         List<AgentRunController.AgentSpec> specifications = new ArrayList<>();
         String startPrompt;
         try {
-            location = runtime.projectService().require(Path.of(project == null ? "." : project));
+            location = ProjectOptions.locate(runtime, project);
             if ((prompt == null) == (promptFile == null)) {
                 throw new IllegalArgumentException("give exactly one of --prompt and --prompt-file");
             }

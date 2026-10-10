@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
 import picocli.CommandLine.Command;
@@ -53,7 +54,7 @@ public final class SyncJoinCommand implements Callable<Integer> {
             }
             Path candidate = project != null && Files.isDirectory(Path.of(project)) ? Path.of(project) : Path.of(".");
             var location = runtime.projectService().require(candidate);
-            Path resolved = profile == null ? location.profile() : Path.of(profile);
+            Path resolved = ProjectOptions.profile(location, profile);
             var result = runtime.syncService().join(resolved, projectId, record, expectedHost, invitation);
             result.values().forEach((key, value) -> {
                 if ("ERROR".equals(key)) {

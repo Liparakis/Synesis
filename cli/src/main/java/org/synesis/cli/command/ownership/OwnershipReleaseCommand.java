@@ -9,7 +9,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import picocli.CommandLine.Command;
@@ -56,18 +55,15 @@ public final class OwnershipReleaseCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
-            OwnershipClaim claim = new OwnershipClaim(taskId, capability, identity.nodeId(), supervisor, scopes, intentVersion);
-            var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), supervisor, "owner", claim.encoded(), identity);
-            var event = CoordinationCliSupport.submit(endpoint, command);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
+            OwnershipClaim claim = new OwnershipClaim(taskId, capability, signer.identity().nodeId(), supervisor, scopes, intentVersion);
+            var event = signer.submit(endpoint, taskId, PredictionEventType.OWNERSHIP_RELEASED, supervisor, "owner", claim.encoded());
             runtime.terminal().stdout("OWNERSHIP_RELEASED=true");
             runtime.terminal().stdout("CAPABILITY=" + capability);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("OWNERSHIP_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "OWNERSHIP_ERROR", failure);
         }
     }
 }

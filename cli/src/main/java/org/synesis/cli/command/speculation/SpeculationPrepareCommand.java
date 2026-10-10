@@ -49,8 +49,7 @@ public final class SpeculationPrepareCommand implements Callable<Integer> {
             runtime.terminal().stdout("WORKTREE=" + workspace.worktree());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "SPECULATION_ERROR", failure);
         }
     }
 }

@@ -1,7 +1,6 @@
 package org.synesis.cli.command.speculation;
 
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import java.util.UUID;
@@ -10,7 +9,6 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
 
@@ -45,9 +43,9 @@ public final class SpeculationRetireCommand implements Callable<Integer> {
     }
 
     static void close(org.synesis.workspace.application.project.ProjectLocation location, UUID id) throws Exception {
-        Path metadata = location.synesisDirectory().resolve("local").resolve("speculation").resolve(id.toString()).resolve("speculation.meta");
-        String base = Files.readAllLines(metadata).stream().filter(s -> s.startsWith("baseCommit=")).findFirst().orElseThrow().substring(11);
-        new SpeculationWorkspace(location.root(), location.synesisDirectory().resolve("local"), id, base).close();
+        Path localRoot = location.synesisDirectory().resolve("local");
+        String base = SpeculationWorkspace.recordedBaseCommit(localRoot, id).orElseThrow();
+        new SpeculationWorkspace(location.root(), localRoot, id, base).close();
     }
 
     /**
@@ -56,15 +54,13 @@ public final class SpeculationRetireCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
-            CoordinationCliSupport.submit(endpoint, CoordinationCommand.create(UUID.randomUUID(), location.projectId(), prediction, PredictionEventType.SPECULATION_RETIRED, identity.nodeId(), new byte[0], identity));
-            close(location, prediction);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
+            signer.submit(endpoint, prediction, PredictionEventType.SPECULATION_RETIRED, new byte[0]);
+            close(signer.location(), prediction);
             runtime.terminal().stdout("SPECULATION_RETIRED=true");
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "SPECULATION_ERROR", failure);
         }
     }
 }

@@ -1,7 +1,6 @@
 package org.synesis.cli.command.speculation;
 
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import java.util.UUID;
@@ -10,7 +9,6 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.speculation.SpeculationGateResult;
 import org.synesis.coordination.domain.speculation.SpeculationWorkspace;
@@ -47,13 +45,8 @@ public final class SpeculationValidateCommand implements Callable<Integer> {
     }
 
     private static String readBaseCommit(ProjectLocation location, UUID prediction) throws java.io.IOException {
-        Path metadata = location.synesisDirectory().resolve("local").resolve("speculation").resolve(prediction.toString()).resolve("speculation.meta");
-        for (String line : Files.readAllLines(metadata)) {
-            if (line.startsWith("baseCommit=")) {
-                return line.substring(11);
-            }
-        }
-        throw new IllegalArgumentException("SPECULATION_METADATA_INVALID");
+        return SpeculationWorkspace.recordedBaseCommit(location.synesisDirectory().resolve("local"), prediction)
+                .orElseThrow(() -> new IllegalArgumentException("SPECULATION_METADATA_INVALID"));
     }
 
     /**
@@ -69,13 +62,11 @@ public final class SpeculationValidateCommand implements Callable<Integer> {
             if (!gate.accepted()) {
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
-            var identity = CoordinationCliSupport.loadIdentity(profile);
-            CoordinationCliSupport.submit(endpoint, CoordinationCommand.create(UUID.randomUUID(), location.projectId(), prediction, PredictionEventType.VALIDATION_STARTED, identity.nodeId(), new byte[0], identity));
+            new CoordinationCliSupport.Signer(location, CoordinationCliSupport.loadIdentity(profile)).submit(endpoint, prediction, PredictionEventType.VALIDATION_STARTED, new byte[0]);
             runtime.terminal().stdout("VALIDATION_STARTED=true");
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "SPECULATION_ERROR", failure);
         }
     }
 }

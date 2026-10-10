@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -43,10 +44,7 @@ public final class ProjectCreateCommand implements Callable<Integer> {
     @SuppressWarnings("DuplicatedCode")
     public Integer call() {
         try {
-            var location = runtime.projectService().require(project == null ? Path.of(".") : Path.of(project));
-            if (profile != null) {
-                location = new ProjectLocation(location.root(), location.synesisDirectory(), location.metadataFile(), Path.of(profile), location.projectId(), location.createdAt());
-            }
+            var location = ProjectOptions.locate(runtime, project, profile);
             var result = runtime.projectService().createProject(location, peer);
             runtime.terminal().stdout("NODE_ID=" + result.nodeId());
             runtime.terminal().stdout("PROJECT_ID=" + result.projectId());

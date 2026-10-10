@@ -4,7 +4,6 @@ package org.synesis.cli.command.task;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskClaim;
 import picocli.CommandLine.Command;
@@ -51,18 +50,15 @@ public final class TaskClaimCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
-            TaskClaim claim = new TaskClaim(taskId, identity.nodeId(), supervisor, worker);
-            var command = CoordinationCommand.createAs(UUID.randomUUID(), location.projectId(), taskId, PredictionEventType.TASK_CLAIMED, identity.nodeId(), supervisor, worker, claim.encoded(), identity);
-            var event = CoordinationCliSupport.submit(endpoint, command);
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
+            TaskClaim claim = new TaskClaim(taskId, signer.identity().nodeId(), supervisor, worker);
+            var event = signer.submit(endpoint, taskId, PredictionEventType.TASK_CLAIMED, supervisor, worker, claim.encoded());
             runtime.terminal().stdout("TASK_CLAIMED=true");
             runtime.terminal().stdout("TASK_ID=" + taskId);
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + event.sequence());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("TASK_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "TASK_ERROR", failure);
         }
     }
 }

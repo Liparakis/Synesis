@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
 import org.synesis.projectrecord.domain.ProjectConstraint;
@@ -52,10 +53,7 @@ public final class ConstraintCreateCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = runtime.projectService().require(project == null ? Path.of(".") : Path.of(project));
-            if (profile != null) {
-                location = new ProjectLocation(location.root(), location.synesisDirectory(), location.metadataFile(), Path.of(profile), location.projectId(), location.createdAt());
-            }
+            var location = ProjectOptions.locate(runtime, project, profile);
             ProjectConstraint.Effect parsed = "warn".equalsIgnoreCase(effect) ? ProjectConstraint.Effect.WARN : ProjectConstraint.Effect.BLOCK;
             var result = runtime.constraintService().create(location, title, rationale, scope, parsed);
             runtime.terminal().stdout("PROJECT_ID=" + result.projectId());

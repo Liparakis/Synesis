@@ -8,7 +8,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -44,18 +43,16 @@ public final class SpeculationInvalidateCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            var location = CoordinationCliSupport.project(runtime, project);
-            var identity = CoordinationCliSupport.loadIdentity(profile);
-            CoordinationCliSupport.submit(endpoint, CoordinationCommand.create(UUID.randomUUID(), location.projectId(), prediction, PredictionEventType.PREDICTION_INVALIDATED, identity.nodeId(), new byte[0], identity));
+            var signer = CoordinationCliSupport.Signer.resolve(runtime, project, profile);
+            signer.submit(endpoint, prediction, PredictionEventType.PREDICTION_INVALIDATED, new byte[0]);
             try {
-                SpeculationRetireCommand.close(location, prediction);
+                SpeculationRetireCommand.close(signer.location(), prediction);
             } catch (java.io.IOException ignored) {
             }
             runtime.terminal().stdout("PREDICTION_INVALIDATED=true");
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("SPECULATION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "SPECULATION_ERROR", failure);
         }
     }
 }

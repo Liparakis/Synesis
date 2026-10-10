@@ -57,8 +57,7 @@ public final class PredictionListCommand implements Callable<Integer> {
             runtime.terminal().stdout("PREDICTIONS=" + ids.size());
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("PREDICTION_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "PREDICTION_ERROR", failure);
         }
     }
 }

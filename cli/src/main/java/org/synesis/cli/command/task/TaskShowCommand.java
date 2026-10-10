@@ -8,7 +8,6 @@ import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.coordination.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.TaskClaim;
@@ -53,12 +52,12 @@ public final class TaskShowCommand implements Callable<Integer> {
                 if (!event.predictionId().equals(taskId)) {
                     continue;
                 }
-                var command = CoordinationCommand.decode(event.payload());
+                byte[] payload = CoordinationCliSupport.commandPayload(event);
                 if (event.type() == PredictionEventType.TASK_CREATED) {
-                    task = CoordinationTask.decode(command.payload());
+                    task = CoordinationTask.decode(payload);
                 }
                 if (event.type() == PredictionEventType.TASK_CLAIMED) {
-                    claim = TaskClaim.decode(command.payload());
+                    claim = TaskClaim.decode(payload);
                 }
                 if (event.type() == PredictionEventType.TASK_RELEASED) {
                     claim = null;
@@ -74,8 +73,7 @@ public final class TaskShowCommand implements Callable<Integer> {
             runtime.terminal().stdout("OWNER_NODE=" + (claim == null ? "UNCLAIMED" : claim.ownerNodeId()));
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("TASK_ERROR=" + failure.getMessage());
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return CoordinationCliSupport.fail(runtime, "TASK_ERROR", failure);
         }
     }
 }
