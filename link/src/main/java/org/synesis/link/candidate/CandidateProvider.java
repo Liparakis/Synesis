@@ -1,7 +1,6 @@
 package org.synesis.link.candidate;
 
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -20,14 +19,6 @@ public interface CandidateProvider extends AutoCloseable {
    * @return provider identifier
    */
   String id();
-
-  /**
-   * Returns the candidate types this provider may return.
-   *
-   * @return immutable supported-type set
-   */
-  @SuppressWarnings("unused")
-  Set<CandidateType> supportedTypes();
 
   /**
    * Starts one bounded discovery operation.

@@ -821,7 +821,7 @@ public final class Onboarding {
           host.publicKeyEncoded());
       try (CandidateRacer racer = new CandidateRacer(
           new ConnectionPolicy(8, 8, 2, Duration.ofMillis(100),
-              Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(2), 16))) {
+              Duration.ofSeconds(10), Duration.ofSeconds(20), 16))) {
         DirectConnectionResult result = racer.race(pairs, host.nodeId(),
                 pair -> ClientQuicConnectionAttempt.attempt(local.identity(), host,
                     transcript, clientUdp, pair, applicationHandler))
@@ -1207,7 +1207,6 @@ public final class Onboarding {
         emit(OnboardingEventType.TRAVERSAL_STARTED, "");
         try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 8, 2,
             Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20),
-            Duration.ofSeconds(2),
             16))) {
           DirectConnectionResult result = racer.race(pairs, host.nodeId(),
                   pair -> ClientQuicConnectionAttempt.attempt(identity, host,
@@ -1256,7 +1255,7 @@ public final class Onboarding {
         emit(OnboardingEventType.TRAVERSAL_STARTED, "");
         try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 8, 2,
             Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20),
-            Duration.ofSeconds(2), 16))) {
+            16))) {
           DirectConnectionResult result = racer.race(pairs, compactInvitation.hostNodeId(),
                   pair -> ClientQuicConnectionAttempt.attempt(identity, compactInvitation.hostNodeId(),
                       compactInvitation.publicKeyEncoded(), transcript, udp, pair,

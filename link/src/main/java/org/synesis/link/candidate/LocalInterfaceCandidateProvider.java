@@ -6,7 +6,6 @@ import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -40,11 +39,6 @@ public final class LocalInterfaceCandidateProvider implements CandidateProvider 
   @Override
   public String id() {
     return id;
-  }
-
-  @Override
-  public Set<CandidateType> supportedTypes() {
-    return Set.of(CandidateType.LAN, CandidateType.IPV6);
   }
 
   @Override

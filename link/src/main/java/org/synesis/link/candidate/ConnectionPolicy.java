@@ -11,13 +11,11 @@ import java.time.Duration;
  * @param staggerDelay          delay between launches
  * @param perAttemptTimeout     individual attempt deadline
  * @param globalRaceTimeout     whole-race deadline
- * @param loserCleanupTimeout   cleanup budget for losing attempts
  * @param maxDiagnostics        maximum retained attempt diagnostics
  */
 public record ConnectionPolicy(int maxCandidatePairs, int maxAttempts, int maxConcurrentAttempts,
                                Duration staggerDelay, Duration perAttemptTimeout,
-                               Duration globalRaceTimeout,
-                               Duration loserCleanupTimeout, int maxDiagnostics) {
+                               Duration globalRaceTimeout, int maxDiagnostics) {
 
   /**
    * Validates race limits and ordered timeouts.
@@ -26,7 +24,7 @@ public record ConnectionPolicy(int maxCandidatePairs, int maxAttempts, int maxCo
     if (maxConcurrentAttempts < 1 || maxDiagnostics < 1
         || maxConcurrentAttempts > maxAttempts || maxAttempts > maxCandidatePairs
         || staggerDelay.isNegative() || perAttemptTimeout.isZero() || perAttemptTimeout.isNegative()
-        || globalRaceTimeout.compareTo(perAttemptTimeout) < 0 || loserCleanupTimeout.isNegative()) {
+        || globalRaceTimeout.compareTo(perAttemptTimeout) < 0) {
       throw new IllegalArgumentException("invalid connection policy");
     }
   }

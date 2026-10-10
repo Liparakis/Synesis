@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -113,24 +114,6 @@ public final class OverlayForwarder {
   }
 
   /**
-   * Returns the newest membership snapshot used for validation and routing.
-   *
-   * @return current signed membership snapshot
-   */
-  public OverlayMembershipSnapshot membership() {
-    return membership.current();
-  }
-
-  /**
-   * Returns the currently bound direct peer IDs.
-   *
-   * @return immutable direct-peer IDs
-   */
-  public java.util.Set<String> directPeerIds() {
-    return peers.nodeIds();
-  }
-
-  /**
    * Routes or delivers one frame without exposing its inner payload.
    *
    * @param frame received or locally-created frame
@@ -168,14 +151,9 @@ public final class OverlayForwarder {
                 "physical sender is not an authorized direct peer"));
       }
       if (frame.destinationNodeId().equals(localNodeId)) {
-        if (!duplicateGuard.firstSeen(frame, now)) {
-          return failed(new OverlayForwardingException(OverlayForwardingException.Failure.DUPLICATE,
-              "duplicate overlay frame"));
-        }
-        CompletionStage<Void> delivered = deliveryHandler.deliver(frame);
-        return delivered == null ? failed(new OverlayForwardingException(
+        return sendOnce(frame, now, deliveryHandler::deliver,
             OverlayForwardingException.Failure.DESTINATION_UNAVAILABLE,
-            "destination delivery is unavailable")) : delivered;
+            "destination delivery is unavailable", frame);
       }
       if (frame.remainingHops() == 0) {
         return failed(
@@ -191,14 +169,9 @@ public final class OverlayForwarder {
               OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE,
               "selected relay has no transport binding"));
         }
-        if (!duplicateGuard.firstSeen(frame, now)) {
-          return failed(new OverlayForwardingException(OverlayForwardingException.Failure.DUPLICATE,
-              "duplicate overlay frame"));
-        }
-        CompletionStage<Void> sent = relayTransport.send(frame.forwardOneHop());
-        return sent == null ? failed(new OverlayForwardingException(
+        return sendOnce(frame, now, relayTransport::send,
             OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE,
-            "relay transport returned no completion")) : sent;
+            "relay transport returned no completion", frame.forwardOneHop());
       }
       if (route.kind() != OverlayRoute.Kind.DIRECT
           && route.kind() != OverlayRoute.Kind.PEER_TRANSIT) {
@@ -213,14 +186,9 @@ public final class OverlayForwarder {
             new OverlayForwardingException(OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE,
                 "selected next hop is unavailable"));
       }
-      if (!duplicateGuard.firstSeen(frame, now)) {
-        return failed(new OverlayForwardingException(OverlayForwardingException.Failure.DUPLICATE,
-            "duplicate overlay frame"));
-      }
-      CompletionStage<Void> sent = transport.send(frame.forwardOneHop());
-      return sent == null ? failed(new OverlayForwardingException(
+      return sendOnce(frame, now, transport::send,
           OverlayForwardingException.Failure.NEXT_HOP_UNAVAILABLE,
-          "next-hop transport returned no completion")) : sent;
+          "next-hop transport returned no completion", frame.forwardOneHop());
     } catch (OverlayForwardingException failure) {
       return failed(failure);
     } catch (GeneralSecurityException failure) {
@@ -228,6 +196,23 @@ public final class OverlayForwarder {
     } catch (RuntimeException failure) {
       return failed(failure);
     }
+  }
+
+  /**
+   * Records the frame in the duplicate guard before sending, so a retry after a failed send is
+   * rejected as a duplicate.
+   */
+  private CompletionStage<Void> sendOnce(OverlayForwardingFrame frame, Instant now,
+      Function<OverlayForwardingFrame, CompletionStage<Void>> send,
+      OverlayForwardingException.Failure missingCompletion, String missingMessage,
+      OverlayForwardingFrame outgoing) {
+    if (!duplicateGuard.firstSeen(frame, now)) {
+      return failed(new OverlayForwardingException(OverlayForwardingException.Failure.DUPLICATE,
+          "duplicate overlay frame"));
+    }
+    CompletionStage<Void> completion = send.apply(outgoing);
+    return completion == null
+        ? failed(new OverlayForwardingException(missingCompletion, missingMessage)) : completion;
   }
 
   private void validateFrame(OverlayForwardingFrame frame, Instant now)

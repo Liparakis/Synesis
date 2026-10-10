@@ -91,26 +91,8 @@ public final class OverlayTopologyView {
     return Acceptance.ACCEPTED;
   }
 
-  /**
-   * Removes expired advertisements.
-   *
-   * @param now current time
-   * @return number removed
-   */
-  public synchronized int pruneExpired(Instant now) {
-    Objects.requireNonNull(now, "now");
-    int before = advertisements.size();
+  private void pruneExpired(Instant now) {
     advertisements.values().removeIf(value -> value.isExpiredAt(now));
-    return before - advertisements.size();
-  }
-
-  /**
-   * Returns a stable copy of the stored advertisements.
-   *
-   * @return advertisements by origin
-   */
-  public synchronized Map<String, OverlayTopologyAdvertisement> advertisements() {
-    return Map.copyOf(advertisements);
   }
 
   /**
@@ -135,23 +117,6 @@ public final class OverlayTopologyView {
    */
   public synchronized boolean removeOrigin(String originNodeId) {
     return advertisements.remove(Objects.requireNonNull(originNodeId, "origin node ID")) != null;
-  }
-
-  /**
-   * Builds the currently advertised directed adjacency graph.
-   *
-   * @param now current time
-   * @return immutable graph with sorted neighbor lists
-   */
-  public synchronized Map<String, List<String>> adjacencyGraph(Instant now) {
-    Objects.requireNonNull(now, "now");
-    pruneExpired(now);
-    Map<String, List<String>> result = new LinkedHashMap<>();
-    advertisements.values().stream().sorted(java.util.Comparator.comparing(
-        OverlayTopologyAdvertisement::originNodeId)).forEach(advertisement ->
-        result.put(advertisement.originNodeId(),
-            List.copyOf(new ArrayList<>(advertisement.adjacentNodeIds()))));
-    return Map.copyOf(result);
   }
 
   /**

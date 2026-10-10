@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetAddress;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -65,11 +64,6 @@ final class CandidateGathererTest {
    */
   private record StubProvider(String id, CompletableFuture<List<Candidate>> result)
       implements CandidateProvider {
-
-    @Override
-    public Set<CandidateType> supportedTypes() {
-      return Set.of(CandidateType.MANUAL);
-    }
 
     @Override
     public CompletableFuture<List<Candidate>> gather(CandidateCancellation cancellation) {

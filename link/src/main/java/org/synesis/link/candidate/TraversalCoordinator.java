@@ -75,17 +75,8 @@ public final class TraversalCoordinator implements AutoCloseable {
    */
   public synchronized void accept(TraversalOffer offer, TraversalAnswer answer, Instant now,
       Duration allowedClockSkew) throws GeneralSecurityException, IOException {
-    ensureState(State.NEW);
-    Objects.requireNonNull(offer, "offer");
-    Objects.requireNonNull(answer, "answer");
-    if (!sessionId.equals(offer.sessionId()) || !sessionId.equals(answer.sessionId())
-        || !localIdentity.nodeId().equals(offer.initiatorNodeId())
-        || !expectedRemoteNodeId.equals(answer.responderNodeId())
-        || !offer.verifyAt(now, allowedClockSkew, expectedRemoteNodeId)
-        || !answer.verifyAt(now, allowedClockSkew, offer)) {
-      throw new IllegalArgumentException("traversal exchange is not bound to this coordinator");
-    }
-    state = State.READY;
+    acceptBound(offer, answer, now, allowedClockSkew, localIdentity.nodeId(),
+        expectedRemoteNodeId);
   }
 
   /**
@@ -107,13 +98,20 @@ public final class TraversalCoordinator implements AutoCloseable {
   public synchronized void acceptAsAnswerer(TraversalOffer offer, TraversalAnswer answer,
       Instant now,
       Duration allowedClockSkew) throws GeneralSecurityException, IOException {
+    acceptBound(offer, answer, now, allowedClockSkew, expectedRemoteNodeId,
+        localIdentity.nodeId());
+  }
+
+  private void acceptBound(TraversalOffer offer, TraversalAnswer answer, Instant now,
+      Duration allowedClockSkew, String initiatorNodeId, String responderNodeId)
+      throws GeneralSecurityException, IOException {
     ensureState(State.NEW);
     Objects.requireNonNull(offer, "offer");
     Objects.requireNonNull(answer, "answer");
     if (!sessionId.equals(offer.sessionId()) || !sessionId.equals(answer.sessionId())
-        || !expectedRemoteNodeId.equals(offer.initiatorNodeId())
-        || !localIdentity.nodeId().equals(answer.responderNodeId())
-        || !offer.verifyAt(now, allowedClockSkew, localIdentity.nodeId())
+        || !initiatorNodeId.equals(offer.initiatorNodeId())
+        || !responderNodeId.equals(answer.responderNodeId())
+        || !offer.verifyAt(now, allowedClockSkew, responderNodeId)
         || !answer.verifyAt(now, allowedClockSkew, offer)) {
       throw new IllegalArgumentException("traversal exchange is not bound to this coordinator");
     }

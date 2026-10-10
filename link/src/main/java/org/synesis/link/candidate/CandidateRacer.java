@@ -1,6 +1,5 @@
 package org.synesis.link.candidate;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -298,7 +297,7 @@ public final class CandidateRacer implements AutoCloseable {
     private void addDiagnostic(CandidatePair pair, ConnectionFailureCategory category) {
       if (diagnostics.size() < policy.maxDiagnostics()) {
         diagnostics.add(
-            new ConnectionAttemptDiagnostic(pair.identifier(), category, "attempt", Duration.ZERO));
+            new ConnectionAttemptDiagnostic(pair.identifier(), category));
       }
     }
 

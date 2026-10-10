@@ -186,7 +186,7 @@ public final class DemoCli {
           identity.nodeId(), identity.publicKeyEncoded(), descriptor.nodeId(),
           descriptor.publicKeyEncoded());
       try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(8, 1, 1, Duration.ZERO,
-          Duration.ofSeconds(20), Duration.ofSeconds(30), Duration.ofSeconds(2), 16))) {
+          Duration.ofSeconds(20), Duration.ofSeconds(30), 16))) {
         CandidatePair pair = pairs.getFirst();
         DirectConnectionResult connection = racer.race(pairs, expected,
                 value -> attempt(identity, descriptor, transcript, clientUdp, value))

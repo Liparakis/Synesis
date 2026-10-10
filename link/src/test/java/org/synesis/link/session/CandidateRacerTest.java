@@ -91,7 +91,7 @@ final class CandidateRacerTest {
 
     try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(
         4, 4, 2, java.time.Duration.ZERO, java.time.Duration.ofSeconds(1),
-        java.time.Duration.ofSeconds(3), java.time.Duration.ofSeconds(1), 16))) {
+        java.time.Duration.ofSeconds(3), 16))) {
       CandidateRacer.Operation operation = racer.race(List.of(first, second), "remote", pair -> {
         if (pair.equals(first)) {
           return new StubAttempt(pending, cancelled);

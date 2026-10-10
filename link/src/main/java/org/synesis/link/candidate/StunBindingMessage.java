@@ -72,7 +72,7 @@ public final class StunBindingMessage {
     ByteBuffer input = ByteBuffer.wrap(response);
     int messageType = input.getShort() & 0xffff;
     int messageLength = input.getShort() & 0xffff;
-    if (messageType != BINDING_SUCCESS || (messageType & 0xC000) != 0) {
+    if (messageType != BINDING_SUCCESS) {
       throw new IOException("not a STUN Binding success response");
     }
     if (messageLength > response.length - HEADER_BYTES || (messageLength & 3) != 0
@@ -105,11 +105,7 @@ public final class StunBindingMessage {
       if (type == XOR_MAPPED_ADDRESS || (type == MAPPED_ADDRESS && mapped == null)) {
         InetSocketAddress candidate = decodeAddress(value, type == XOR_MAPPED_ADDRESS,
             transactionId);
-        if (type == XOR_MAPPED_ADDRESS) {
-          mapped = candidate;
-        } else if (mapped == null) {
-          mapped = candidate;
-        }
+        mapped = candidate;
       }
     }
     if (input.position() != end || mapped == null) {

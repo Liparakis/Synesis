@@ -206,15 +206,6 @@ public final class OverlayReconciler implements AutoCloseable {
   }
 
   /**
-   * Returns the current policy-required neighbor IDs for this member.
-   *
-   * @return immutable desired neighbors
-   */
-  public synchronized Set<String> desiredNeighbors() {
-    return desiredNeighbors(membership.current());
-  }
-
-  /**
    * Returns currently usable authenticated physical neighbors.
    *
    * @return immutable live neighbor IDs

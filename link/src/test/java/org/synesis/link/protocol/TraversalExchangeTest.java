@@ -1,6 +1,7 @@
 package org.synesis.link.protocol;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,5 +109,40 @@ final class TraversalExchangeTest {
     assertTrue(guard.accept(fingerprint));
     assertFalse(guard.accept(fingerprint));
     assertThrows(IllegalStateException.class, () -> guard.accept("second"));
+  }
+
+  @Test
+  void answererSideAcceptsItsExchangeAndRejectsOthers() throws Exception {
+    NodeIdentity initiator = NodeIdentity.generate();
+    NodeIdentity responder = NodeIdentity.generate();
+    UUID sessionId = UUID.randomUUID();
+    TraversalOffer offer = TraversalOffer.create(initiator, responder.nodeId(), sessionId,
+        digest("invitation"), ISSUED, EXPIRES, bytes(1), descriptor(initiator, 4401));
+    TraversalAnswer answer = TraversalAnswer.create(responder, offer, descriptor(responder, 4402),
+        bytes(2));
+    Instant now = ISSUED.plusSeconds(1);
+
+    TraversalCoordinator accepted = new TraversalCoordinator(responder, initiator.nodeId(),
+        sessionId, 2);
+    accepted.acceptAsAnswerer(offer, answer, now, TraversalOffer.DEFAULT_CLOCK_SKEW);
+    assertEquals(TraversalCoordinator.State.READY, accepted.state());
+
+    TraversalCoordinator wrongSession = new TraversalCoordinator(responder, initiator.nodeId(),
+        UUID.randomUUID(), 2);
+    assertThrows(IllegalArgumentException.class, () -> wrongSession.acceptAsAnswerer(offer,
+        answer, now, TraversalOffer.DEFAULT_CLOCK_SKEW));
+    TraversalCoordinator wrongPeer = new TraversalCoordinator(responder,
+        NodeIdentity.generate().nodeId(), sessionId, 2);
+    assertThrows(IllegalArgumentException.class, () -> wrongPeer.acceptAsAnswerer(offer, answer,
+        now, TraversalOffer.DEFAULT_CLOCK_SKEW));
+    TraversalCoordinator wrongLocal = new TraversalCoordinator(NodeIdentity.generate(),
+        initiator.nodeId(), sessionId, 2);
+    assertThrows(IllegalArgumentException.class, () -> wrongLocal.acceptAsAnswerer(offer, answer,
+        now, TraversalOffer.DEFAULT_CLOCK_SKEW));
+    TraversalCoordinator expired = new TraversalCoordinator(responder, initiator.nodeId(),
+        sessionId, 2);
+    assertThrows(IllegalArgumentException.class, () -> expired.acceptAsAnswerer(offer, answer,
+        EXPIRES, TraversalOffer.DEFAULT_CLOCK_SKEW));
+    assertEquals(TraversalCoordinator.State.NEW, expired.state());
   }
 }

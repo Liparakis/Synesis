@@ -48,14 +48,6 @@ public final class StunCandidateProvider implements CandidateProvider {
   }
 
   /**
-   * @return the server-reflexive candidate type
-   */
-  @Override
-  public java.util.Set<CandidateType> supportedTypes() {
-    return java.util.Set.of(CandidateType.SERVER_REFLEXIVE);
-  }
-
-  /**
    * Starts one Binding transaction.
    *
    * @param cancellation cooperative cancellation signal

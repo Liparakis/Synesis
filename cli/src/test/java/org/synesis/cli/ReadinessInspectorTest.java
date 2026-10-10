@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.synesis.cli.diagnostics.ReadinessInspector;
 import org.synesis.cli.diagnostics.ReadinessReport;
 import org.synesis.link.candidate.CandidateProvider;
-import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.identity.IdentityBootstrap;
 
 /**
@@ -60,11 +59,6 @@ final class ReadinessInspectorTest {
             @Override
             public String id() {
                 return "test-empty";
-            }
-
-            @Override
-            public java.util.Set<CandidateType> supportedTypes() {
-                return java.util.Set.of();
             }
 
             @Override
