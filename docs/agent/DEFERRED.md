@@ -1,3 +1,30 @@
+## 2026-10-10 — Codebase remaster: subsystems with no production caller
+
+The remaster survey found subsystems that no production code constructs. They
+are tested, and some may be parked on purpose. The owner decided to keep them
+unchanged and review each one separately. The remaster neither deletes nor
+restructures them, and this entry does not activate any of them.
+
+- `link`: `OverlayReconciler`, `OverlayKeyAgreement`, and `OverlayEnvelope`.
+- `relay`: `OverlayRelayClient`, used only by tests and the acceptance entry
+  point.
+- `workspace`: Codex managed continuity (`ManagedCodexProcessLauncher`,
+  `lifecycle.codex.runtime`, `WindowsJobObjectProcessTreeSupervisor`, and the
+  parts of `ManagedAttachmentService` only tests call).
+- `workspace`: project migration backup and restore
+  (`ProjectMigrationService.executeInjected`,
+  `ProjectMigrationRestorationService`).
+- `workspace`: `ManagedBaselineTransactionService.recover` and its phase hook.
+- `workspace`: `ProjectCommandMaintenanceService.cleanupDeadAnchor`.
+- `coordination`: the ownership registry stack.
+- `link`: the legacy SYN1 and SLO1 host flows in `Onboarding`, which only tests
+  produce.
+
+For each, the open question is whether to wire it in, keep it parked with a
+stated reason, or remove it.
+
+Plan: `docs/plans/codebase-remaster-2026-10-10.md`; ADR-0088.
+
 ## 2026-09-19 — SYN-082 continuation-authority scope review
 
 The explicit successor-authority goal activates the bounded continuation slice
