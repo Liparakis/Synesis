@@ -1,3 +1,50 @@
+# 2026-10-11 — Lane cancellation made to work for real agents: five defects closed
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster4-20261010` to `remaster8`. Fourteen further
+runs on the cancel goal of the entry below, almost all two Codex agents (`gpt-6-luna`, medium), each
+in a new disposable project under `Documents\SynesisRemasterAcceptance`. Each defect was found by a
+run, fixed with a test that fails without the fix, and run again.
+
+1. Cancelling a lane did not re-evaluate its work group. A group whose last open lane was cancelled
+   stayed `ACTIVE`, so the project could not complete, and another agent announced the cancelled
+   lane again. Cancellation now closes a settled group: `COMPLETED` when a lane of it produced a
+   snapshot or a no-change completion, `CANCELLED` when every lane was cancelled. The cancelled
+   lane's session is answered `completed`, state `CANCELLED`, workflow `CLOSE`.
+2. A lane that asked to finish with nothing changed was told only `IMPLEMENT`. The answer now adds
+   `nothingToPublish`, the blocker `nothing_to_publish`, `cancel_lane` among the permitted
+   operations, and an instruction.
+3. `cancel_lane` failed with `internal_failure` for a lane that had filed a capability request: the
+   request's cancellation was recorded as bare handle bytes the log cannot decode, after the task
+   had been recorded as cancelled. On master too. Requests no owner accepted are now cancelled in
+   the readable form; a lane whose request an owner accepted is refused with
+   `capability_request_open` and records nothing.
+4. Every open of the event store deleted all temporary event files without a lock, so a reader could
+   delete or trip over the file another process was appending through. One run ended
+   `AGENT_RUN_FAILED` on it. On master too. Only temporary files older than a minute are removed now.
+5. `cancel_lane` could report success with the lane still open: it closed the lane through a second
+   session lookup and discarded the failure. It now closes the lane of the session it admitted and
+   a failure fails the call. Why that lookup rejected a session holding its lane by continuation was
+   not established; the lookup is gone, not repaired.
+
+| Build | Runs | Result |
+| --- | --- | --- |
+| remaster4 (fix 1) | Codex pair twice, Claude Code pair (`sonnet`, low) once | 2 `COMPLETED`; 1 `STALLED` on defect 2 |
+| remaster5 (fixes 1, 2) | Codex pair three times | 3 `COMPLETED` |
+| remaster6 (fix 2 reshaped) | Codex pair twice; Codex with Claude Code, negotiated goal, once | negotiated `COMPLETED`; 1 `AGENT_RUN_FAILED` on defect 4; 1 `RESUME_LIMIT_REACHED` after 16 resumes on defect 3 |
+| remaster7 (fixes 1 to 4) | Codex pair three times | 2 `COMPLETED`; 1 `STALLED` on defect 5 |
+| remaster8 (fixes 1 to 5) | Codex pair four times | 3 `COMPLETED`, two of them cancelling a lane held by continuation; 1 `STALLED` without any cancellation |
+
+The last stall is the agents' own: they split the goal into the storage module and its tests, the
+owner would not publish until the tests existed, and the tests could not run until it published.
+Synesis answered the owner `implementationPending` with no blocker. Not changed.
+
+Still as recorded below and not changed: a resumed agent whose own lane had finished is told
+`coordination_intent_required` in its new session; and one `ensure_session` carrying a task answered
+`ready` without establishing the intent, where the agent's next attempt succeeded.
+
+Verification: `:coordination:check :workspace:check :mcp:check :cli:check`, coordination 188,
+workspace 592 (1 skipped), MCP 152, CLI 113, 0 failures.
+
 # 2026-10-10 — Remaster branch run by real agents: one regression fixed, one controller race closed
 
 Branch `remaster/2026-10-10`. Builds `0.1.0-dev.remaster-20261010`, `remaster2` (command record
