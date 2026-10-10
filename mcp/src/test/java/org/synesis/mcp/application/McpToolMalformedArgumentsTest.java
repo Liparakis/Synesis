@@ -257,6 +257,9 @@ class McpToolMalformedArgumentsTest {
         String frame = "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"details\":{\"manual\":\"MANUAL_MISSING\",\"authorityReductionAllowed\":true}}";
         assertText(frame.replace('"', '\''), call(unattested, "apply_patch", "{'path':'README.md','create':true,'content':'x'}"));
         assertText(frame.replace('"', '\''), call(unattested, "request_coordination", "{'kind':'collaboration_status','payload':{}}"));
+        // A key outside the schema must not exempt a request: the normalizer ignores it and would still run the operation.
+        assertText(frame.replace('"', '\''), call(unattested, "request_coordination", "{'kind':'collaboration_status','payload':{},'collaborationOperation':'status'}"));
+        assertText(frame.replace('"', '\''), call(unattested, "request_coordination", "{'kind':'collaboration_status','payload':{},'coordinationRequest':'status'}"));
         assertText("{'status':'blocked','reason':'manual_attestation_required','claims':'REJECTED'}",
                 call(unattested, "ensure_session", "{'task':{'goal':'g','acceptance':'a','claims':[{'path':'unattested.txt'}]}}"));
     }

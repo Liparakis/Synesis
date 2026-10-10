@@ -353,28 +353,16 @@ public final class McpProtocolHandler {
      */
     private static boolean requiresManualAttestation(String name, Map<String, Object> arguments) {
         return switch (name) {
-            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH, TOOL_PREFIX + McpToolCatalog.RUN_COMMAND, TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> true;
+            // Every coordination request needs an attestation, the status read included. The decision
+            // must not depend on argument keys the payload normalizer ignores, or a caller could add one
+            // to an authority-increasing request and skip the gate.
+            case TOOL_PREFIX + McpToolCatalog.APPLY_PATCH, TOOL_PREFIX + McpToolCatalog.RUN_COMMAND, TOOL_PREFIX + McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, TOOL_PREFIX + McpToolCatalog.FINISH_LANE,
+                 TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> true;
             case TOOL_PREFIX + McpToolCatalog.ENSURE_SESSION ->
                     arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
-            case TOOL_PREFIX + McpToolCatalog.REQUEST_COORDINATION -> arguments == null || !carriesRetiredStatusKeys(arguments);
             case TOOL_PREFIX + McpToolCatalog.RESPOND_COORDINATION -> arguments == null || arguments.get("kind") != null;
             default -> false;
         };
-    }
-
-    /**
-     * Recognizes the top-level keys of the retired status request. Every coordination request that
-     * follows the schema, {@code collaboration_status} included, needs an attestation; the schema
-     * accepts none of these keys, yet a call that carries one is still exempt.
-     *
-     * @param arguments non-null tool arguments of {@code request_coordination}
-     * @return {@code true} when the call names the status operation, or blanks both {@code kind} and the operation
-     */
-    private static boolean carriesRetiredStatusKeys(Map<String, Object> arguments) {
-        Object operation = arguments.get("collaborationOperation");
-        return "status".equals(operation)
-                || "status".equals(arguments.get("coordinationRequest"))
-                || arguments.get("kind") instanceof String kind && kind.isBlank() && operation instanceof String text && text.isBlank();
     }
 
     /**
