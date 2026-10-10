@@ -83,7 +83,8 @@ class IntegrationQueueTest {
                 List.of(changedPath),
                 capabilityDependencies,
                 "snapshot",
-                provenance);
+                provenance,
+                false);
         CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId, "cmp_" + snapshotId, laneId, 1, snapshot.baseCommit(), preparedRef, tree, snapshot.changedPaths());
         store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, identity.nodeId(), prepared.encode(), identity);
         store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
@@ -344,10 +345,24 @@ class IntegrationQueueTest {
                 "owner",
                 ownerLineage,
                 contract,
-                CapabilityLifecycleState.ACCEPTED,
-                null);
+                CapabilityLifecycleState.AWAITING_OWNER,
+                null,
+                0);
         store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, identity.nodeId(), request.encode(), identity);
-        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, identity.nodeId(), request.encode(), identity);
+        CapabilityRequestPayload accepted = new CapabilityRequestPayload(handle,
+                "task-tracker-api",
+                identity.nodeId(),
+                "sup",
+                "dependent",
+                identity.nodeId(),
+                "sup",
+                "owner",
+                ownerLineage,
+                contract,
+                CapabilityLifecycleState.ACCEPTED,
+                null,
+                store.capabilityRequestProjection().findByHandle(handle).orElseThrow().contractRevision());
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, identity.nodeId(), accepted.encode(), identity);
         ImplementationEventPayload implementation = new ImplementationEventPayload(handle, ownerLineage, 1, base, ownerCommit, List.of("src/api.py"), "owner", "", "", List.of(), "");
         store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, identity.nodeId(), implementation.encode(), identity);
         ImplementationEventPayload validationStarted = new ImplementationEventPayload(handle, ownerLineage, 1, base, ownerCommit, List.of("src/api.py"), "owner", "", "", List.of(), "");

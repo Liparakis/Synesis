@@ -1,6 +1,5 @@
 package org.synesis.coordination.domain.integration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.synesis.coordination.WireGolden.id;
 import static org.synesis.coordination.WireGolden.pin;
 
@@ -31,21 +30,6 @@ class IntegrationWireFormatTest {
                 "ses-é");
         pin("implementationEvent", "494d504c00000003000000147265715f41424344454647484a4b4c4d32333435123456789abcdef00fedcba987654301000000020000000862617365303132330000000a636f6d6d697434353637000000020000000a7372632f612e6a6176610000000b7372632fc3a92e6a6176610000000b73756d6d61727920e29c93000000064641494c454400000009726561736f6e20ce940000000100000007546573744f6e650000000a2f776f726b2f74726565000000067365732dc3a9", "trailing=accepted | truncated=CoordinationException: Truncated implementation payload", payload, ImplementationEventPayload::encode,
                 ImplementationEventPayload::decode);
-    }
-
-    @Test
-    void implementationUnresolvedLineageIdIsDerivedFromTheHandle() {
-        ImplementationEventPayload payload = new ImplementationEventPayload(HANDLE,
-                1,
-                "base",
-                "commit",
-                List.of(),
-                "summary",
-                "PASSED",
-                "ok",
-                List.of(),
-                "/work");
-        assertEquals("919dc2ad-a23e-3472-9910-8e8ab021c6e6", payload.authorityLineageId().toString(), "implLineage lineage");
     }
 
     @Test

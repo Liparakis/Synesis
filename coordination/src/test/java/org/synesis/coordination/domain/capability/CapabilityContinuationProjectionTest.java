@@ -3,9 +3,6 @@ package org.synesis.coordination.domain.capability;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -34,10 +31,10 @@ final class CapabilityContinuationProjectionTest {
         CapabilityRequestProjection projection = new CapabilityRequestProjection();
         apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode());
         apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, 1).encode());
         apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
                 new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "published", "", "", List.of(), "").encode());
         apply(projection, projectId, signer, 4, PredictionEventType.CAPABILITY_VALIDATION_STARTED,
@@ -65,33 +62,6 @@ final class CapabilityContinuationProjectionTest {
     }
 
     @Test
-    void v1ContinuationPayloadRemainsReadable(@TempDir Path temp) throws Exception {
-        var target = new WorkIntent(UUID.randomUUID(), UUID.randomUUID(), "agt_successor", "codex", UUID.randomUUID(), "task", "acceptance", "base",
-                List.of(ResourceSelector.pathExact("file")), 2, UUID.randomUUID(), UUID.randomUUID(), WorkIntent.Status.ANNOUNCED,
-                WorkIntent.Role.PRODUCER, List.of(), List.of());
-        UUID grant = UUID.randomUUID();
-        UUID sourceIntent = UUID.randomUUID();
-        byte[] intent = CollaborationCodec.encodeIntent(target);
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(bytes);
-        out.writeInt(0x53434e31);
-        writeUuid(out, grant);
-        writeUuid(out, sourceIntent);
-        out.writeInt(intent.length);
-        out.write(intent);
-        writeText(out, "agt_predecessor");
-        writeText(out, "agt_successor");
-        out.writeLong(1);
-        writeText(out, "snapshot#hash");
-        out.flush();
-
-        LaneContinuation decoded = CollaborationCodec.decodeContinuation(bytes.toByteArray());
-        assertEquals(grant, decoded.grantId());
-        assertEquals(sourceIntent, decoded.sourceIntent().value());
-        assertTrue(decoded.sourceActorScope() == null);
-    }
-
-    @Test
     void ownerContinuationRetargetsPendingResponseWithoutRevisingTheContract(@TempDir Path temp) throws Exception {
         UUID projectId = UUID.randomUUID();
         var signer = new IdentityBootstrap(temp.resolve("link")).loadOrCreate().identity();
@@ -102,7 +72,7 @@ final class CapabilityContinuationProjectionTest {
         CapabilityRequestProjection projection = new CapabilityRequestProjection();
         apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode());
         CapabilityActorScope source = new CapabilityActorScope("owner-node", "owner-supervisor", "owner-worker", "old-owner-session");
         CapabilityActorScope successor = new CapabilityActorScope("successor-node", "successor-supervisor", "successor-worker", "new-owner-session");
         var target = new WorkIntent(UUID.randomUUID(), projectId, "agt_owner_successor", "codex", UUID.randomUUID(), "task", "acceptance", "base",
@@ -133,10 +103,10 @@ final class CapabilityContinuationProjectionTest {
         CapabilityRequestProjection projection = new CapabilityRequestProjection();
         apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode());
         apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, 1).encode());
         byte[] implementation = new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "published", "", "", List.of(), "").encode();
         apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, implementation);
         apply(projection, projectId, signer, 4, PredictionEventType.CAPABILITY_VALIDATION_STARTED,
@@ -187,14 +157,14 @@ final class CapabilityContinuationProjectionTest {
         CapabilityRequestProjection projection = new CapabilityRequestProjection();
         apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, draft, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, draft, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode());
         apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
-                        "owner-node", "owner-supervisor", "owner-worker", lineage, proposed, CapabilityLifecycleState.REVISION_REQUESTED, "Null ids must be rejected", -1).encode());
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, proposed, CapabilityLifecycleState.REVISION_REQUESTED, "Null ids must be rejected", 1).encode());
         apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED,
                 new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
                         "owner-node", "owner-supervisor", "owner-worker", lineage, proposed, CapabilityLifecycleState.SUPERSEDED,
-                        CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER, -1).encode());
+                        CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER, 2).encode());
         assertTrue(projection.findByHandle(handle).orElseThrow().ownerFinishedWithoutAnswer());
 
         // The requester was away while the owner waited and finished. Whoever continues the
@@ -228,16 +198,5 @@ final class CapabilityContinuationProjectionTest {
         PredictionEvent event = PredictionEvent.create(project, UUID.randomUUID(), sequence, type, signer.nodeId(), payload, new byte[32], signer,
                 System.currentTimeMillis());
         projection.apply(event);
-    }
-
-    private static void writeUuid(DataOutputStream out, UUID value) throws Exception {
-        out.writeLong(value.getMostSignificantBits());
-        out.writeLong(value.getLeastSignificantBits());
-    }
-
-    private static void writeText(DataOutputStream out, String value) throws Exception {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
-        out.write(bytes);
     }
 }

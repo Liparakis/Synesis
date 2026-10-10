@@ -265,7 +265,8 @@ final class McpSyn039SliceTest {
                 List.of("todo.py"),
                 List.of(),
                 "reviewable Todo",
-                provenance);
+                provenance,
+                false);
         git(project, "update-ref", "refs/synesis/snapshots/snap_reviewable", commit);
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
     }

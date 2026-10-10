@@ -2,7 +2,6 @@ package org.synesis.coordination.domain.prediction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.List;
@@ -69,12 +68,12 @@ class PredictionEventWireCompatibilityTest {
     }
 
     @Test
-    void removedIntentFormatsRequireFreshInitialization() {
+    void removedIntentFormatsAreRejectedAsUnknown() {
         for (int version = 1; version <= 6; version++) {
             int removedVersion = version;
             IOException failure = assertThrows(IOException.class,
                     () -> CollaborationCodec.decodeIntent(new byte[]{0x53, 0x49, 0x4e, (byte) ('0' + removedVersion)}));
-            assertTrue(failure.getMessage().contains("fresh initialization required"), failure.getMessage());
+            assertEquals("unsupported intent format", failure.getMessage());
         }
     }
 

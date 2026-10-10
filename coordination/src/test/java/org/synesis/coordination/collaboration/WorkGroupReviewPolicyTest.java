@@ -1,13 +1,11 @@
 package org.synesis.coordination.collaboration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -28,63 +26,9 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
- * Verifies durable review policy and compatibility with historical work-group events.
+ * Verifies durable review policy and the work-group, request, and grant wire formats.
  */
 final class WorkGroupReviewPolicyTest {
-
-    private static byte[] legacyPayload(UUID groupId, UUID projectId) throws Exception {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(0x53474731);
-            writeUuid(output, groupId);
-            writeUuid(output, projectId);
-            writeText(output, "legacy goal");
-            writeText(output, "legacy acceptance");
-            output.writeLong(1);
-            output.writeByte(WorkGroup.Status.ACTIVE.ordinal());
-        }
-        return bytes.toByteArray();
-    }
-
-    private static byte[] legacyRequestPayload(UUID requestId, UUID projectId, UUID intentId) throws Exception {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(0x53525131);
-            writeUuid(output, requestId);
-            writeUuid(output, projectId);
-            writeText(output, "reviewer");
-            writeText(output, "producer");
-            writeUuid(output, intentId);
-            output.writeByte(CoordinationRequest.Kind.REVIEW.ordinal());
-            writeText(output, "legacy review");
-        }
-        return bytes.toByteArray();
-    }
-
-    private static byte[] legacyGrantPayload(UUID grantId, UUID groupId, UUID intentId) throws Exception {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(0x53475231);
-            writeUuid(output, grantId);
-            writeUuid(output, groupId);
-            writeUuid(output, intentId);
-            writeText(output, "reviewer");
-            output.writeLong(3);
-            output.writeBoolean(true);
-        }
-        return bytes.toByteArray();
-    }
-
-    private static void writeUuid(DataOutputStream output, UUID value) throws Exception {
-        output.writeLong(value.getMostSignificantBits());
-        output.writeLong(value.getLeastSignificantBits());
-    }
-
-    private static void writeText(DataOutputStream output, String value) throws Exception {
-        byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
-        output.writeInt(encoded.length);
-        output.write(encoded);
-    }
 
     @Test
     void mandatoryIndependentPolicySurvivesGroupEncoding() throws Exception {
@@ -101,18 +45,6 @@ final class WorkGroupReviewPolicyTest {
         assertEquals(group, decoded);
         assertTrue(decoded.reviewPolicy().mandatory());
         assertTrue(decoded.reviewPolicy().independenceRequired());
-    }
-
-    @Test
-    void historicalWorkGroupPayloadDefaultsToNoReviewPolicy() throws Exception {
-        UUID groupId = UUID.randomUUID();
-        UUID projectId = UUID.randomUUID();
-
-        WorkGroup decoded = CollaborationCodec.decodeWorkGroup(legacyPayload(groupId, projectId));
-
-        assertEquals(groupId, decoded.workGroupId());
-        assertEquals(projectId, decoded.projectId());
-        assertEquals(ReviewPolicy.none(), decoded.reviewPolicy());
     }
 
     @Test
@@ -239,7 +171,7 @@ final class WorkGroupReviewPolicyTest {
     }
 
     @Test
-    void snapshotBoundRequestsAndGrantsRoundTripAndLegacyPayloadsStillDecode() throws Exception {
+    void snapshotBoundRequestsAndGrantsRoundTrip() throws Exception {
         UUID requestId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         UUID intentId = UUID.randomUUID();
@@ -253,12 +185,26 @@ final class WorkGroupReviewPolicyTest {
                 CoordinationRequest.Status.PENDING,
                 "snap_exact");
         assertEquals(request, CollaborationCodec.decodeRequest(CollaborationCodec.encodeRequest(request)));
-        assertNull(CollaborationCodec.decodeRequest(legacyRequestPayload(requestId, projectId, intentId)).snapshotId());
 
         UUID grantId = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
         LaneGrant grant = new LaneGrant(grantId, groupId, intentId, "reviewer", 3, true, "snap_exact");
         assertEquals(grant, CollaborationCodec.decodeLaneGrant(CollaborationCodec.encodeLaneGrant(grant)));
-        assertNull(CollaborationCodec.decodeLaneGrant(legacyGrantPayload(grantId, groupId, intentId)).snapshotId());
+    }
+
+    @Test
+    void supersededFormatVersionsAreRejectedAsUnknown() {
+        assertEquals("unsupported group format", assertThrows(IOException.class,
+                () -> CollaborationCodec.decodeWorkGroup(magic(0x53474731))).getMessage());
+        assertEquals("unsupported request format", assertThrows(IOException.class,
+                () -> CollaborationCodec.decodeRequest(magic(0x53525131))).getMessage());
+        assertEquals("unsupported grant format", assertThrows(IOException.class,
+                () -> CollaborationCodec.decodeLaneGrant(magic(0x53475231))).getMessage());
+        assertEquals("unsupported continuation format", assertThrows(IOException.class,
+                () -> CollaborationCodec.decodeContinuation(magic(0x53434e31))).getMessage());
+    }
+
+    private static byte[] magic(int magic) {
+        return ByteBuffer.allocate(Integer.BYTES).putInt(magic).array();
     }
 }

@@ -62,7 +62,8 @@ class IntegrationOrchestrationServiceTest {
         var store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
         String head = gitOutput(root, "rev-parse", "HEAD");
         UUID task = UUID.randomUUID();
-        var snapshot = new TaskSnapshotRecord(task, "snap_already_integrated", "node", "supervisor", "worker", "session", head, head, List.of("README.md"), List.of(), "snapshot", 1L);
+        var snapshot = new TaskSnapshotRecord(task, "snap_already_integrated", "node", "supervisor", "worker", "session", head, head, List.of("README.md"), List.of(), "snapshot", 1L,
+                new org.synesis.coordination.domain.task.SnapshotProvenance(task, task, "node", "session", 1, List.of(), List.of(), List.of(), head, head), false);
         var payload = new TaskSnapshotPayload(task,
                 snapshot.snapshotId(),
                 snapshot.nodeId(),
@@ -74,7 +75,8 @@ class IntegrationOrchestrationServiceTest {
                 snapshot.changedPaths(),
                 List.of(),
                 snapshot.summary(),
-                snapshot.provenance());
+                snapshot.provenance(),
+                false);
         store.append(task, PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
         var stale = new PredictionEventStore(store.rootDirectory(), location.projectId());
         var peer = new PredictionEventStore(store.rootDirectory(), location.projectId());
@@ -142,7 +144,8 @@ class IntegrationOrchestrationServiceTest {
                     snapshot.changedPaths(),
                     snapshot.capabilityDependencies(),
                     snapshot.summary(),
-                    snapshot.provenance());
+                    snapshot.provenance(),
+                    false);
             store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
 
             long eventCount = eventCount(store);
@@ -230,7 +233,8 @@ class IntegrationOrchestrationServiceTest {
                     snapshot.changedPaths(),
                     snapshot.capabilityDependencies(),
                     snapshot.summary(),
-                    snapshot.provenance());
+                    snapshot.provenance(),
+                    false);
             store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
 
             var response = new IntegrationOrchestrationService().orchestrateIntegration(root, store, identity);

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
@@ -34,6 +35,7 @@ class WorkerAuthorizationBoundaryTest {
                 "node-1",
                 "sup-2",
                 "worker-2",
+                UUID.randomUUID(),
                 contract,
                 CapabilityLifecycleState.AWAITING_OWNER,
                 null,
@@ -82,11 +84,16 @@ class WorkerAuthorizationBoundaryTest {
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
         CapabilityContract contract = new CapabilityContract("in", "out", List.of(), List.of());
 
-        // V1 record without worker/supervisor fields (empty strings)
+        // Record without worker/supervisor fields (empty strings)
         CapabilityRequestRecord rec = new CapabilityRequestRecord(handle,
                 "catalog.query",
                 "node-1",
+                "",
+                "",
                 "node-2",
+                "",
+                "",
+                UUID.randomUUID(),
                 contract,
                 CapabilityLifecycleState.AWAITING_OWNER,
                 null,

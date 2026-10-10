@@ -40,17 +40,4 @@ public record ValidationContextRecord(CapabilityRequestHandle handle, int revisi
             throw new CoordinationArgumentException("worktreePath must not be blank");
         }
     }
-
-    /**
-     * Retains the prior projection constructor for historical contexts without a session fence.
-     *
-     * @param handle capability request handle
-     * @param revisionNumber implementation revision under validation
-     * @param worktreePath validation worktree path
-     * @param startedAtMillis validation start time
-     */
-    public ValidationContextRecord(CapabilityRequestHandle handle, int revisionNumber, String worktreePath, long startedAtMillis) {
-        this(handle, revisionNumber, worktreePath, "", startedAtMillis);
-    }
-
 }

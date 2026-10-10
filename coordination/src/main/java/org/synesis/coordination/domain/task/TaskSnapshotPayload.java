@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
 import org.synesis.coordination.exception.CoordinationException;
@@ -79,52 +78,6 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     }
 
     /**
-     * Constructs a payload with the pre-review-gate shape.
-     *
-     * <p>Historical and direct test callers default to an unreviewed snapshot;
-     * reviewed publication uses the canonical constructor with the explicit review flag.</p>
-     *
-     * @param taskId                 task ID
-     * @param snapshotId             snapshot ID
-     * @param nodeId                 node ID
-     * @param supervisorId           supervisor ID
-     * @param workerId               worker ID
-     * @param providerSessionId      session ID
-     * @param baseCommit             base commit
-     * @param commitSha              commit SHA
-     * @param changedPaths           changed paths
-     * @param capabilityDependencies dependencies
-     * @param summary                summary
-     * @param provenance             immutable lane provenance
-     */
-    public TaskSnapshotPayload(UUID taskId,
-            String snapshotId,
-            String nodeId,
-            String supervisorId,
-            String workerId,
-            String providerSessionId,
-            String baseCommit,
-            String commitSha,
-            List<String> changedPaths,
-            List<String> capabilityDependencies,
-            String summary,
-            SnapshotProvenance provenance) {
-        this(taskId,
-                snapshotId,
-                nodeId,
-                supervisorId,
-                workerId,
-                providerSessionId,
-                baseCommit,
-                commitSha,
-                changedPaths,
-                capabilityDependencies,
-                summary,
-                provenance,
-                false);
-    }
-
-    /**
      * Constructs a payload with default provenance for a minimal snapshot record.
      *
      * @param taskId                 task ID
@@ -170,7 +123,8 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
                         List.of(),
                         List.of(),
                         commitSha,
-                        commitSha));
+                        commitSha),
+                false);
     }
 
     /**
@@ -184,8 +138,8 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         CoordinationNullException.requireNonNull(encoded, "encoded payload");
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            int version = readVersion(in);
-            return readPayload(in, version);
+            readHeader(in);
+            return readPayload(in);
         } catch (RuntimeException failure) {
             throw new CoordinationException("Malformed task snapshot payload", failure);
         }
@@ -195,29 +149,25 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
      * Reads and validates the binary payload header.
      *
      * @param in input positioned at the payload start
-     * @return supported payload version
      * @throws IOException when the magic or version is unsupported
      */
-    private static int readVersion(DataInputStream in) throws IOException {
+    private static void readHeader(DataInputStream in) throws IOException {
         if (in.readInt() != MAGIC) {
             throw new CoordinationException("Unsupported task snapshot payload format");
         }
-        int version = in.readInt();
-        if (version < 1 || version > VERSION) {
+        if (in.readInt() != VERSION) {
             throw new CoordinationException("Unsupported task snapshot payload version");
         }
-        return version;
     }
 
     /**
      * Reads the payload fields following a validated header.
      *
-     * @param in      input positioned after the header
-     * @param version supported payload version
+     * @param in input positioned after the header
      * @return decoded payload
      * @throws IOException when a bounded field is truncated or malformed
      */
-    private static TaskSnapshotPayload readPayload(DataInputStream in, int version) throws IOException {
+    private static TaskSnapshotPayload readPayload(DataInputStream in) throws IOException {
         UUID taskId = readUuid(in);
         String snapshotId = readText(in);
         String nodeId = readText(in);
@@ -231,14 +181,8 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         List<String> dependencies = readTextList(in);
 
         String summary = readText(in);
-        SnapshotProvenance provenance = readProvenance(in,
-                version,
-                taskId,
-                nodeId,
-                providerSessionId,
-                dependencies,
-                commitSha);
-        boolean reviewRequired = readReviewRequirement(in, version);
+        SnapshotProvenance provenance = readProvenance(in);
+        boolean reviewRequired = in.readBoolean();
         return new TaskSnapshotPayload(taskId,
                 snapshotId,
                 nodeId,
@@ -271,40 +215,16 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     }
 
     /**
-     * Decodes the version-specific lane provenance section.
+     * Decodes the lane provenance section.
      *
-     * @param in                input positioned at the provenance section
-     * @param version           supported payload version
-     * @param taskId            task identity from the payload header
-     * @param nodeId            node identity from the payload header
-     * @param providerSessionId provider session from the payload header
-     * @param dependencies      capability dependencies from the payload body
-     * @param commitSha         committed snapshot hash
+     * @param in input positioned at the provenance section
      * @return decoded provenance
      * @throws IOException when provenance fields are truncated or malformed
      */
-    private static SnapshotProvenance readProvenance(DataInputStream in,
-            int version,
-            UUID taskId,
-            String nodeId,
-            String providerSessionId,
-            List<String> dependencies,
-            String commitSha) throws IOException {
-        if (version == 1) {
-            return new SnapshotProvenance(taskId,
-                    taskId,
-                    nodeId,
-                    providerSessionId,
-                    1,
-                    dependencies,
-                    List.of(),
-                    List.of(),
-                    commitSha,
-                    commitSha);
-        }
+    private static SnapshotProvenance readProvenance(DataInputStream in) throws IOException {
         UUID group = readUuid(in);
         UUID lane = readUuid(in);
-        UUID authorityLineage = version >= 4 ? readUuid(in) : WorkIntent.defaultAuthorityLineage(lane);
+        UUID authorityLineage = readUuid(in);
         String participant = readText(in);
         String binding = readText(in);
         long epoch = in.readLong();
@@ -313,7 +233,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         List<String> claims = readList(in);
         String snapshotRef = readText(in);
         String integrity = readText(in);
-        String artifacts = version >= 3 ? readText(in) : "UNRECORDED";
+        String artifacts = readText(in);
         return new SnapshotProvenance(group,
                 lane,
                 authorityLineage,
@@ -326,18 +246,6 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
                 snapshotRef,
                 integrity,
                 artifacts);
-    }
-
-    /**
-     * Reads the review-gate bit introduced in payload version 5.
-     *
-     * @param in      input positioned at the optional review flag
-     * @param version supported payload version
-     * @return whether the snapshot requires review before integration
-     * @throws IOException if the encoded flag is truncated
-     */
-    private static boolean readReviewRequirement(DataInputStream in, int version) throws IOException {
-        return version == 5 && in.readBoolean();
     }
 
     /**

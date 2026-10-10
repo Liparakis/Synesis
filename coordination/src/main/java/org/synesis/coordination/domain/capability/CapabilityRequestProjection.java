@@ -428,14 +428,14 @@ public final class CapabilityRequestProjection {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
         requireExpectedContractRevision(current, payload);
-        if (payload.expectedContractRevision() >= 0 && (current.state() == CapabilityLifecycleState.CANCELLED || current.state() == CapabilityLifecycleState.EXPIRED
+        if ((current.state() == CapabilityLifecycleState.CANCELLED || current.state() == CapabilityLifecycleState.EXPIRED
                 || current.state() == CapabilityLifecycleState.SUPERSEDED || current.state() == CapabilityLifecycleState.REJECTED
                 || current.state() == CapabilityLifecycleState.ACCEPTED || current.state() == CapabilityLifecycleState.IMPLEMENTING
                 || current.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || current.state() == CapabilityLifecycleState.VALIDATING
                 || current.state() == CapabilityLifecycleState.VALIDATED)) {
             throw new CoordinationException("TERMINAL_CAPABILITY_REQUEST_CANNOT_BE_REVISED");
         }
-        if (payload.expectedContractRevision() >= 0 && payload.state() != CapabilityLifecycleState.AWAITING_OWNER && payload.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+        if (payload.state() != CapabilityLifecycleState.AWAITING_OWNER && payload.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
             throw new CoordinationException("INVALID_CAPABILITY_CONTRACT_REVISION_STATE");
         }
         CapabilityRequestRecord updated = current.withUpdate(payload.state(),
@@ -460,10 +460,10 @@ public final class CapabilityRequestProjection {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
         requireExpectedContractRevision(current, payload);
-        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+        if (current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
             throw new CoordinationException("STALE_CAPABILITY_REQUEST_ACCEPTANCE");
         }
-        if (payload.expectedContractRevision() >= 0 && !current.contract().isEquivalent(payload.contract())) {
+        if (!current.contract().isEquivalent(payload.contract())) {
             throw new CoordinationException("CAPABILITY_CONTRACT_REVISION_MISMATCH");
         }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.ACCEPTED,
@@ -487,7 +487,7 @@ public final class CapabilityRequestProjection {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
         requireExpectedContractRevision(current, payload);
-        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER) {
+        if (current.state() != CapabilityLifecycleState.AWAITING_OWNER) {
             throw new CoordinationException("STALE_CAPABILITY_REQUEST_REJECTION");
         }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.REJECTED,
@@ -511,7 +511,7 @@ public final class CapabilityRequestProjection {
             throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
         }
         requireExpectedContractRevision(current, payload);
-        if (payload.expectedContractRevision() >= 0 && current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+        if (current.state() != CapabilityLifecycleState.AWAITING_OWNER && current.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
             throw new CoordinationException("STALE_CAPABILITY_REQUEST_CANCELLATION");
         }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.CANCELLED,
@@ -675,8 +675,7 @@ public final class CapabilityRequestProjection {
 
     private static void requireExpectedContractRevision(CapabilityRequestRecord current,
             CapabilityRequestPayload payload) throws IOException {
-        long expected = payload.expectedContractRevision();
-        if (expected >= 0 && expected != current.contractRevision()) {
+        if (payload.expectedContractRevision() != current.contractRevision()) {
             throw new CoordinationException("CAPABILITY_CONTRACT_REVISION_STALE");
         }
     }

@@ -209,7 +209,8 @@ final class MultiChatLogicalWorkspaceTest {
                 snapshot.changedPaths(),
                 snapshot.capabilityDependencies(),
                 snapshot.summary(),
-                snapshot.provenance());
+                snapshot.provenance(),
+                false);
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
 
         // Advance the control checkout independently.  The repair lane must

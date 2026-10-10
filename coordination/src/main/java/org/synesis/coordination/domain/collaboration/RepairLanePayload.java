@@ -20,10 +20,8 @@ import org.synesis.coordination.exception.CoordinationNullException;
 /**
  * Signed payload for atomic source-scope transfer to a repair lane.
  *
- * <p>The V2 fields bind the transfer to the immutable conflicting snapshot,
- * the control head from which the repair worktree was materialized, and both claim epochs.  The decoder retains a
- * bounded V1 reader solely
- * so historical event logs remain replayable; new events are always encoded as V2.</p>
+ * <p>The fields bind the transfer to the immutable conflicting snapshot,
+ * the control head from which the repair worktree was materialized, and both claim epochs.</p>
  *
  * @param sourceIntentId      published source intent
  * @param targetIntent        newly authorized repair intent
@@ -35,7 +33,6 @@ import org.synesis.coordination.exception.CoordinationNullException;
 public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, String snapshotId,
                                 String expectedControlHead, long sourceClaimEpoch, long targetClaimEpoch) {
 
-    private static final int V1_MAGIC = 0x52505231;
     private static final int V2_MAGIC = 0x52505232;
     private static final int MAX_TEXT = 64 * 1024;
 
@@ -56,18 +53,6 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
     }
 
     /**
-     * Creates a metadata-free payload for callers that only replay historical transfer events.  New repair operations
-     * should use the full
-     * constructor.
-     *
-     * @param sourceIntentId source intent
-     * @param targetIntent   target intent
-     */
-    public RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent) {
-        this(sourceIntentId, targetIntent, "", "", 0L, 0L);
-    }
-
-    /**
      * Decodes the transfer payload.
      *
      * @param encoded bytes
@@ -78,7 +63,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != V1_MAGIC && magic != V2_MAGIC) {
+            if (magic != V2_MAGIC) {
                 throw new CoordinationException("unsupported repair payload");
             }
             UUID source = new UUID(in.readLong(), in.readLong());
@@ -91,9 +76,6 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
                 throw new CoordinationException("truncated repair payload");
             }
             WorkIntent target = CollaborationCodec.decodeIntent(intent);
-            if (magic == V1_MAGIC) {
-                return new RepairLanePayload(source, target);
-            }
             String snapshot = readText(in);
             String head = readText(in);
             long sourceEpoch = in.readLong();

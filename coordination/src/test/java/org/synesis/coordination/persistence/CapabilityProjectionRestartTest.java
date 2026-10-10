@@ -25,6 +25,8 @@ import org.synesis.link.identity.NodeIdentity;
  */
 class CapabilityProjectionRestartTest {
 
+    private static final UUID LINEAGE = UUID.randomUUID();
+
     /**
      * Builds a request event payload for one stage of the restart scenario.
      *
@@ -34,6 +36,7 @@ class CapabilityProjectionRestartTest {
      * @param contract  capability contract for this stage
      * @param state     lifecycle state represented by the payload
      * @param reason    optional revision reason
+     * @param revision  contract revision the event is based on
      * @return encoded-event payload for the request stage
      */
     private static CapabilityRequestPayload capabilityRequestPayload(CapabilityRequestHandle handle,
@@ -41,14 +44,17 @@ class CapabilityProjectionRestartTest {
             NodeIdentity owner,
             CapabilityContract contract,
             CapabilityLifecycleState state,
-            String reason) {
+            String reason,
+            long revision) {
         return new CapabilityRequestPayload(handle,
                 "catalog.product-query",
                 requester.nodeId(),
                 owner.nodeId(),
+                LINEAGE,
                 contract,
                 state,
-                reason);
+                reason,
+                revision);
     }
 
     @Test
@@ -71,7 +77,8 @@ class CapabilityProjectionRestartTest {
                 ownerIdentity,
                 contract,
                 CapabilityLifecycleState.AWAITING_OWNER,
-                null);
+                null,
+                0);
         assertEquals(new CapabilityId("catalog.product-query"), createdPayload.capabilityIdentity());
         assertEquals(new NodeId(requesterIdentity.nodeId()), createdPayload.requesterNodeIdentity());
         store1.append(UUID.randomUUID(),
@@ -90,7 +97,8 @@ class CapabilityProjectionRestartTest {
                 ownerIdentity,
                 revisedContract,
                 CapabilityLifecycleState.REVISION_REQUESTED,
-                "Existing catalog API requires revised behavior");
+                "Existing catalog API requires revised behavior",
+                store1.capabilityRequestProjection().findByHandle(handle).orElseThrow().contractRevision());
         store1.append(UUID.randomUUID(),
                 PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
                 ownerIdentity.nodeId(),

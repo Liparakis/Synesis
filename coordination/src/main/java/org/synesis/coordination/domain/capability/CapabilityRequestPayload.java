@@ -18,7 +18,7 @@ import org.synesis.coordination.exception.CoordinationInvariantError;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
- * Encodes and decodes durable payload data for capability events. Versions 1-3 remain readable; version 4 stores
+ * Encodes and decodes durable payload data for capability events. The payload stores
  * the complete API contract and the contract revision expected by a state-changing response.
  *
  * @param handle                public request handle
@@ -33,7 +33,7 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * @param contract              capability contract specification
  * @param state                 current request lifecycle state
  * @param reason                optional rejection or revision reason
- * @param expectedContractRevision revision required by a response, or {@code -1} for legacy unversioned events
+ * @param expectedContractRevision revision required by a response
  * @since 1.0
  */
 public record CapabilityRequestPayload(CapabilityRequestHandle handle, String capability, String requesterNodeId,
@@ -43,6 +43,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
                                        long expectedContractRevision) {
 
     private static final int MAGIC = 0x53435250; // "SCRP"
+    private static final int VERSION = 4;
     private static final int MAX_ENCODED_BYTES = 64 * 1024;
 
     /**
@@ -60,7 +61,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
      * @param contract              capability contract specification
      * @param state                 current request lifecycle state
      * @param reason                optional rejection or revision reason
-     * @param expectedContractRevision revision being answered, or {@code -1} for a legacy unversioned event
+     * @param expectedContractRevision revision being answered
      */
     public CapabilityRequestPayload {
         CoordinationNullException.requireNonNull(handle, "handle");
@@ -74,88 +75,12 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
         CoordinationNullException.requireNonNull(authorityLineageId, "authorityLineageId");
         CoordinationNullException.requireNonNull(contract, "contract");
         CoordinationNullException.requireNonNull(state, "state");
-        if (expectedContractRevision < -1) {
-            throw new CoordinationArgumentException("expectedContractRevision must be -1 or greater");
+        if (expectedContractRevision < 0) {
+            throw new CoordinationArgumentException("expectedContractRevision must not be negative");
         }
         if (capability.isBlank() || capability.length() > 128) {
             throw new CoordinationArgumentException("capability must be between 1 and 128 characters");
         }
-    }
-
-    /**
-     * Retains the prior worker-aware payload constructor for legacy callers.
-     *
-     * @param handle public request handle
-     * @param capability requested capability identifier
-     * @param requesterNodeId authenticated requester node
-     * @param requesterSupervisorId authenticated requester supervisor
-     * @param requesterWorkerId authenticated requester worker
-     * @param ownerNodeId assigned owner node
-     * @param ownerSupervisorId assigned owner supervisor
-     * @param ownerWorkerId assigned owner worker
-     * @param authorityLineageId durable authority lineage
-     * @param contract complete negotiated capability contract
-     * @param state request lifecycle state
-     * @param reason optional rejection or revision reason
-     */
-    public CapabilityRequestPayload(CapabilityRequestHandle handle,
-            String capability,
-            String requesterNodeId,
-            String requesterSupervisorId,
-            String requesterWorkerId,
-            String ownerNodeId,
-            String ownerSupervisorId,
-            String ownerWorkerId,
-            UUID authorityLineageId,
-            CapabilityContract contract,
-            CapabilityLifecycleState state,
-            String reason) {
-        this(handle,
-                capability,
-                requesterNodeId,
-                requesterSupervisorId,
-                requesterWorkerId,
-                ownerNodeId,
-                ownerSupervisorId,
-                ownerWorkerId,
-                authorityLineageId,
-                contract,
-                state,
-                reason,
-                -1);
-    }
-
-    /**
-     * Convenience constructor for version 1 node-only payloads.
-     *
-     * @param handle          public request handle
-     * @param capability      capability identifier
-     * @param requesterNodeId requester node identity
-     * @param ownerNodeId     assigned owner node identity
-     * @param contract        capability contract specification
-     * @param state           current request lifecycle state
-     * @param reason          optional rejection or revision reason
-     */
-    public CapabilityRequestPayload(CapabilityRequestHandle handle,
-            String capability,
-            String requesterNodeId,
-            String ownerNodeId,
-            CapabilityContract contract,
-            CapabilityLifecycleState state,
-            String reason) {
-        this(handle,
-                capability,
-                requesterNodeId,
-                "",
-                "",
-                ownerNodeId,
-                "",
-                "",
-                unresolvedLineage(handle),
-                contract,
-                state,
-                reason,
-                -1);
     }
 
     /**
@@ -169,7 +94,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
      * @param contract complete negotiated capability contract
      * @param state request lifecycle state
      * @param reason optional rejection or revision reason
-     * @param expectedContractRevision revision the response is based on, or {@code -1} for legacy data
+     * @param expectedContractRevision revision the response is based on
      */
     public CapabilityRequestPayload(CapabilityRequestHandle handle,
             String capability,
@@ -196,7 +121,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
     }
 
     /**
-     * Decodes historical versions and the current complete-contract payload.
+     * Decodes a complete-contract payload.
      *
      * @param encoded encoded payload bytes
      * @return decoded payload instance
@@ -211,63 +136,43 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             int version = in.readInt();
-            if (magic != MAGIC || (version < 1 || version > 4)) {
+            if (magic != MAGIC || version != VERSION) {
                 throw new CoordinationException("Unsupported capability request payload format");
             }
 
             CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
             String capability = readText(in);
             String requesterNodeId = readText(in);
-            String requesterSupervisorId = "";
-            String requesterWorkerId = "";
-            String ownerNodeId;
-            String ownerSupervisorId = "";
-            String ownerWorkerId = "";
-            UUID authorityLineageId;
+            String requesterSupervisorId = readText(in);
+            String requesterWorkerId = readText(in);
+            String ownerNodeId = readText(in);
+            String ownerSupervisorId = readText(in);
+            String ownerWorkerId = readText(in);
+            UUID authorityLineageId = readUuid(in);
+            long expectedContractRevision = in.readLong();
 
-            if (version == 1) {
-                ownerNodeId = readText(in);
-            } else {
-                requesterSupervisorId = readText(in);
-                requesterWorkerId = readText(in);
-                ownerNodeId = readText(in);
-                ownerSupervisorId = readText(in);
-                ownerWorkerId = readText(in);
-            }
-            authorityLineageId = version >= 3 ? readUuid(in) : unresolvedLineage(handle);
-            long expectedContractRevision = version >= 4 ? in.readLong() : -1;
-
-            CapabilityContract contract;
-            if (version >= 4) {
-                String purpose = readText(in);
-                String inputs = readText(in);
-                String output = readText(in);
-                List<String> requiredBehavior = readTextList(in);
-                List<String> acceptanceTests = readTextList(in);
-                String errorSemantics = readText(in);
-                String sideEffects = readText(in);
-                String invariants = readText(in);
-                String compatibility = readText(in);
-                String performance = readText(in);
-                String concurrency = readText(in);
-                contract = new CapabilityContract(purpose,
-                        inputs,
-                        output,
-                        requiredBehavior,
-                        errorSemantics,
-                        sideEffects,
-                        invariants,
-                        compatibility,
-                        performance,
-                        concurrency,
-                        acceptanceTests);
-            } else {
-                String inputs = readText(in);
-                String output = readText(in);
-                List<String> requiredBehavior = readTextList(in);
-                List<String> acceptanceTests = readTextList(in);
-                contract = new CapabilityContract(inputs, output, requiredBehavior, acceptanceTests);
-            }
+            String purpose = readText(in);
+            String inputs = readText(in);
+            String output = readText(in);
+            List<String> requiredBehavior = readTextList(in);
+            List<String> acceptanceTests = readTextList(in);
+            String errorSemantics = readText(in);
+            String sideEffects = readText(in);
+            String invariants = readText(in);
+            String compatibility = readText(in);
+            String performance = readText(in);
+            String concurrency = readText(in);
+            CapabilityContract contract = new CapabilityContract(purpose,
+                    inputs,
+                    output,
+                    requiredBehavior,
+                    errorSemantics,
+                    sideEffects,
+                    invariants,
+                    compatibility,
+                    performance,
+                    concurrency,
+                    acceptanceTests);
             CapabilityLifecycleState state = CapabilityLifecycleState.fromValue(readText(in));
             String reasonRaw = readText(in);
             String reason = reasonRaw.isBlank() ? null : reasonRaw;
@@ -360,14 +265,6 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
     }
 
     /**
-     * Derives a stable lineage when an older payload omitted it.
-     */
-    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
-        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value()).getBytes(
-                StandardCharsets.UTF_8));
-    }
-
-    /**
      * Returns the requested capability as a typed identity.
      *
      * @return capability identity
@@ -386,7 +283,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
     }
 
     /**
-     * Encodes this payload into binary event format (Version 4).
+     * Encodes this payload into binary event format.
      *
      * @return encoded payload bytes
      */
@@ -395,7 +292,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
             out.writeInt(MAGIC);
-            out.writeInt(4); // Version 4
+            out.writeInt(VERSION);
             writeText(out, handle.value());
             writeText(out, capability);
             writeText(out, requesterNodeId);

@@ -26,25 +26,15 @@ import org.synesis.coordination.exception.CoordinationNullException;
  */
 public final class CollaborationCodec {
 
-    private static final int MAGIC_INTENT = 0x53494e31;
-    private static final int MAGIC_INTENT_V2 = 0x53494e32;
-    private static final int MAGIC_INTENT_V3 = 0x53494e33;
-    private static final int MAGIC_INTENT_V4 = 0x53494e34;
-    private static final int MAGIC_INTENT_V5 = 0x53494e35;
-    private static final int MAGIC_INTENT_V6 = 0x53494e36;
     private static final int MAGIC_INTENT_V7 = 0x53494e37;
     private static final int MAGIC_RELEASE = 0x53524c31;
     private static final int MAGIC_NO_CHANGE_COMPLETION = 0x534e4331;
-    private static final int MAGIC_REQUEST = 0x53525131;
     private static final int MAGIC_REQUEST_V2 = 0x53525132;
     private static final int MAGIC_RESPONSE = 0x53525331;
     private static final int MAGIC_HEARTBEAT = 0x53484231;
     private static final int MAGIC_HANDOFF = 0x53484631;
-    private static final int MAGIC_GROUP = 0x53474731;
     private static final int MAGIC_GROUP_V2 = 0x53474732;
-    private static final int MAGIC_GRANT = 0x53475231;
     private static final int MAGIC_GRANT_V2 = 0x53475232;
-    private static final int MAGIC_CONTINUATION = 0x53434e31;
     private static final int MAGIC_CONTINUATION_V2 = 0x53434e32;
 
     /**
@@ -109,10 +99,6 @@ public final class CollaborationCodec {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             if (magic != MAGIC_INTENT_V7) {
-                if (magic == MAGIC_INTENT || magic == MAGIC_INTENT_V2 || magic == MAGIC_INTENT_V3
-                        || magic == MAGIC_INTENT_V4 || magic == MAGIC_INTENT_V5 || magic == MAGIC_INTENT_V6) {
-                    throw new CoordinationException("unsupported legacy intent format; fresh initialization required");
-                }
                 throw new CoordinationException("unsupported intent format");
             }
             UUID intentId = readUuid(in);
@@ -357,7 +343,7 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_REQUEST && magic != MAGIC_REQUEST_V2) {
+            if (magic != MAGIC_REQUEST_V2) {
                 throw new CoordinationException("unsupported request format");
             }
             UUID requestId = readUuid(in), projectId = readUuid(in);
@@ -368,7 +354,7 @@ public final class CollaborationCodec {
                 throw new CoordinationException("request kind");
             }
             String proposal = readText(in);
-            String snapshotId = magic == MAGIC_REQUEST_V2 && in.readBoolean() ? readText(in) : null;
+            String snapshotId = in.readBoolean() ? readText(in) : null;
             if (in.available() != 0) {
                 throw new CoordinationException("trailing request bytes");
             }
@@ -529,7 +515,7 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_CONTINUATION && magic != MAGIC_CONTINUATION_V2) {
+            if (magic != MAGIC_CONTINUATION_V2) {
                 throw new CoordinationException("unsupported continuation format");
             }
             UUID grant = readUuid(in);
@@ -549,7 +535,7 @@ public final class CollaborationCodec {
             String snapshot = readText(in);
             CapabilityActorScope sourceActor = null;
             CapabilityActorScope targetActor = null;
-            if (magic == MAGIC_CONTINUATION_V2 && in.readBoolean()) {
+            if (in.readBoolean()) {
                 sourceActor = readActorScope(in);
                 targetActor = readActorScope(in);
             }
@@ -745,15 +731,14 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_GROUP && magic != MAGIC_GROUP_V2) {
+            if (magic != MAGIC_GROUP_V2) {
                 throw new CoordinationException("unsupported group format");
             }
             UUID id = readUuid(in), project = readUuid(in);
             String goal = readText(in), acceptance = readText(in);
             long version = in.readLong();
             int status = in.readUnsignedByte();
-            ReviewPolicy reviewPolicy = magic == MAGIC_GROUP_V2 ? new ReviewPolicy(in.readBoolean(), in.readBoolean())
-                    : ReviewPolicy.none();
+            ReviewPolicy reviewPolicy = new ReviewPolicy(in.readBoolean(), in.readBoolean());
             if (status >= WorkGroup.Status.values().length || in.available() != 0) {
                 throw new CoordinationException("malformed group");
             }
@@ -808,14 +793,14 @@ public final class CollaborationCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
-            if (magic != MAGIC_GRANT && magic != MAGIC_GRANT_V2) {
+            if (magic != MAGIC_GRANT_V2) {
                 throw new CoordinationException("unsupported grant format");
             }
             UUID id = readUuid(in), group = readUuid(in), intent = readUuid(in);
             String target = readText(in);
             long epoch = in.readLong();
             boolean single = in.readBoolean();
-            String snapshotId = magic == MAGIC_GRANT_V2 && in.readBoolean() ? readText(in) : null;
+            String snapshotId = in.readBoolean() ? readText(in) : null;
             if (in.available() != 0) {
                 throw new CoordinationException("malformed grant");
             }

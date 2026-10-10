@@ -167,7 +167,8 @@ class AgentNextActionServiceTest {
                             List.of("PATH_EXACT:src/Product.java"),
                             "refs/synesis/snapshots/snap_recovery_contract_fence",
                             "integrity",
-                            "manifest"));
+                            "manifest"),
+                    false);
             snapshotStore.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, signer.nodeId(), queued.encode(), signer);
         }
         RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location, ownerBinding.sessionId());
@@ -469,7 +470,8 @@ class AgentNextActionServiceTest {
                         List.of("PATH_EXACT:src/Product.java"),
                         "refs/synesis/snapshots/snap_contract_fence",
                         "integrity-contract",
-                        "manifest-contract"));
+                        "manifest-contract"),
+                false);
         store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
         long eventsBeforePoll = store.headSequence();
 
@@ -1677,7 +1679,8 @@ class AgentNextActionServiceTest {
                 List.of("src/task_tracker.py"),
                 List.of(),
                 "Published source",
-                provenance);
+                provenance,
+                false);
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
 
         AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "claude", "reviewer-first"));
@@ -1760,7 +1763,8 @@ class AgentNextActionServiceTest {
                 List.of("tests/completed_review.py"),
                 List.of(),
                 "Completed review lane",
-                provenance);
+                provenance,
+                false);
         store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
         collaboration.release(controlRoot, "codex", "completed-reviewer");
         assertTrue(bindings.complete(location, "codex", "completed-reviewer"));

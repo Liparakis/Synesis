@@ -37,7 +37,10 @@ class TaskIntegrationServiceTest {
     TaskSnapshotRecord rec = new TaskSnapshotRecord(
         taskId, "snap_test", "node-1", "sup-1", "worker-1", "sess-1",
         "base", "commit", List.of("src/App.java"), List.of(), "Completed work",
-        System.currentTimeMillis());
+        System.currentTimeMillis(),
+        new org.synesis.coordination.domain.task.SnapshotProvenance(taskId, taskId, "node-1", "sess-1", 1, List.of(), List.of(), List.of(),
+            "commit", "commit"),
+        false);
 
     assertEquals(taskId, rec.taskId());
     assertEquals("snap_test", rec.snapshotId());
@@ -148,10 +151,14 @@ class TaskIntegrationServiceTest {
     git(root, "add", ".");
     git(root, "commit", "-m", "rejected snapshot");
     String rejectedCommit = gitOutput(root, "rev-parse", "HEAD");
+    UUID rejectedTask = UUID.randomUUID();
     TaskSnapshotRecord rejected = new TaskSnapshotRecord(
-        UUID.randomUUID(), "snap_rejected", "node", "supervisor", "worker", "session",
+        rejectedTask, "snap_rejected", "node", "supervisor", "worker", "session",
         baseCommit, rejectedCommit, List.of("src/Product.java"), List.of(), "Rejected snapshot",
-        System.currentTimeMillis());
+        System.currentTimeMillis(),
+        new org.synesis.coordination.domain.task.SnapshotProvenance(rejectedTask, rejectedTask, "node", "session", 1, List.of(), List.of(),
+            List.of(), rejectedCommit, rejectedCommit),
+        false);
     TaskSnapshotService service = new TaskSnapshotService();
     ResourceSelector claim = ResourceSelector.pathExact("src/Product.java");
 

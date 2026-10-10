@@ -1,7 +1,6 @@
 package org.synesis.coordination.domain.capability;
 
 
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -125,92 +124,6 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
     }
 
     /**
-     * Constructs a worker-aware request without an explicit authority lineage.
-     *
-     * @param handle                request handle
-     * @param capability            capability identifier
-     * @param requesterNodeId       requester node
-     * @param requesterSupervisorId requester supervisor
-     * @param requesterWorkerId     requester worker
-     * @param ownerNodeId           owner node
-     * @param ownerSupervisorId     owner supervisor
-     * @param ownerWorkerId         owner worker
-     * @param contract              capability contract
-     * @param state                 lifecycle state
-     * @param reason                optional reason
-     * @param createdAtEpochMillis  creation timestamp
-     * @param updatedAtEpochMillis  update timestamp
-     */
-    public CapabilityRequestRecord(CapabilityRequestHandle handle,
-            String capability,
-            String requesterNodeId,
-            String requesterSupervisorId,
-            String requesterWorkerId,
-            String ownerNodeId,
-            String ownerSupervisorId,
-            String ownerWorkerId,
-            CapabilityContract contract,
-            CapabilityLifecycleState state,
-            String reason,
-            long createdAtEpochMillis,
-            long updatedAtEpochMillis) {
-        this(handle,
-                capability,
-                requesterNodeId,
-                requesterSupervisorId,
-                requesterWorkerId,
-                ownerNodeId,
-                ownerSupervisorId,
-                ownerWorkerId,
-                unresolvedLineage(handle),
-                contract,
-                state,
-                reason,
-                createdAtEpochMillis,
-                updatedAtEpochMillis,
-                0);
-    }
-
-    /**
-     * Constructs a request without optional worker or supervisor identities.
-     *
-     * @param handle               request handle
-     * @param capability           capability identifier
-     * @param requesterNodeId      requester node
-     * @param ownerNodeId          owner node
-     * @param contract             capability contract
-     * @param state                lifecycle state
-     * @param reason               optional reason
-     * @param createdAtEpochMillis creation timestamp
-     * @param updatedAtEpochMillis update timestamp
-     */
-    public CapabilityRequestRecord(CapabilityRequestHandle handle,
-            String capability,
-            String requesterNodeId,
-            String ownerNodeId,
-            CapabilityContract contract,
-            CapabilityLifecycleState state,
-            String reason,
-            long createdAtEpochMillis,
-            long updatedAtEpochMillis) {
-        this(handle,
-                capability,
-                requesterNodeId,
-                "",
-                "",
-                ownerNodeId,
-                "",
-                "",
-                unresolvedLineage(handle),
-                contract,
-                state,
-                reason,
-                createdAtEpochMillis,
-                updatedAtEpochMillis,
-                0);
-    }
-
-    /**
      * Converts the serialized empty-string sentinel to an absent typed identity.
      *
      * @param value   serialized identity, or the empty optional-field sentinel
@@ -232,14 +145,6 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      */
     private static <T> T callerIdentity(String value, Function<String, T> factory) {
         return value == null || value.isBlank() ? null : factory.apply(value);
-    }
-
-    /**
-     * Derives a stable lineage when an older payload omitted it.
-     */
-    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
-        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value()).getBytes(
-                StandardCharsets.UTF_8));
     }
 
     /**

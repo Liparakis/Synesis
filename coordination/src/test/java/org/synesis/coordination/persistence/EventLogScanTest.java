@@ -35,9 +35,11 @@ class EventLogScanTest {
                 "catalog.product-query",
                 requester.nodeId(),
                 owner.nodeId(),
+                UUID.nameUUIDFromBytes(handle.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 new CapabilityContract("UUID id", "Optional<P>", List.of("behavior"), List.of("test")),
                 CapabilityLifecycleState.AWAITING_OWNER,
-                null);
+                null,
+                0L);
         store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requester.nodeId(), payload.encode(), requester);
     }
 

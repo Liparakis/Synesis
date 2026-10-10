@@ -60,7 +60,8 @@ final class CapabilityLineageTest {
                 lineage,
                 contract,
                 CapabilityLifecycleState.ACCEPTED,
-                null);
+                null,
+                0);
         assertEquals(lineage, CapabilityRequestPayload.decode(request.encode()).authorityLineageId());
 
         ImplementationEventPayload publication = new ImplementationEventPayload(handle,
@@ -103,7 +104,8 @@ final class CapabilityLineageTest {
                 List.of("src/a.py"),
                 List.of("req_123456789012"),
                 "summary",
-                provenance);
+                provenance,
+                false);
 
         assertEquals(lineage, TaskSnapshotPayload.decode(payload.encode()).provenance().authorityLineageId());
     }

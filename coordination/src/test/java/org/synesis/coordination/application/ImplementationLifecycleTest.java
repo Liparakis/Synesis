@@ -30,6 +30,9 @@ import org.synesis.link.identity.NodeIdentity;
  */
 class ImplementationLifecycleTest {
 
+    /** Sequence of the first event appended to a fresh store, which is the revision a request is created at. */
+    private static final long CAPABILITY_CREATED_AT_SEQUENCE = 1L;
+
     @Test
     void implementationEventPayloadRoundTrip() throws Exception {
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
@@ -76,6 +79,7 @@ class ImplementationLifecycleTest {
         PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
 
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+        UUID lineage = UUID.randomUUID();
         CapabilityContract contract = new CapabilityContract("UUID id",
                 "Optional<P>",
                 List.of("behavior"),
@@ -86,9 +90,11 @@ class ImplementationLifecycleTest {
                 "catalog.product-query",
                 requesterIdentity.nodeId(),
                 ownerIdentity.nodeId(),
+                lineage,
                 contract,
                 CapabilityLifecycleState.AWAITING_OWNER,
-                null);
+                null,
+                0);
         store.append(UUID.randomUUID(),
                 PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 requesterIdentity.nodeId(),
@@ -100,9 +106,11 @@ class ImplementationLifecycleTest {
                 "catalog.product-query",
                 requesterIdentity.nodeId(),
                 ownerIdentity.nodeId(),
+                lineage,
                 contract,
                 CapabilityLifecycleState.ACCEPTED,
-                null);
+                null,
+                CAPABILITY_CREATED_AT_SEQUENCE);
         store.append(UUID.randomUUID(),
                 PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
                 ownerIdentity.nodeId(),
@@ -114,6 +122,7 @@ class ImplementationLifecycleTest {
 
         // 3. Owner publishes implementation
         ImplementationEventPayload published = new ImplementationEventPayload(handle,
+                lineage,
                 1,
                 "abc0",
                 "def1",
@@ -140,6 +149,7 @@ class ImplementationLifecycleTest {
 
         // 4. Requester starts validation
         ImplementationEventPayload validationStarted = new ImplementationEventPayload(handle,
+                lineage,
                 1,
                 "abc0",
                 "def1",
@@ -162,6 +172,7 @@ class ImplementationLifecycleTest {
 
         // 5. Requester requests revision
         ImplementationEventPayload revRequired = new ImplementationEventPayload(handle,
+                lineage,
                 1,
                 "abc0",
                 "def1",
@@ -183,6 +194,7 @@ class ImplementationLifecycleTest {
 
         // 6. Owner publishes revision 2
         ImplementationEventPayload published2 = new ImplementationEventPayload(handle,
+                lineage,
                 2,
                 "def1",
                 "ghi2",
@@ -204,6 +216,7 @@ class ImplementationLifecycleTest {
 
         // 7. Requester validates revision 2 (start + validate in one sequence)
         ImplementationEventPayload val2Started = new ImplementationEventPayload(handle,
+                lineage,
                 2,
                 "def1",
                 "ghi2",
@@ -220,6 +233,7 @@ class ImplementationLifecycleTest {
                 requesterIdentity);
 
         ImplementationEventPayload validatedPayload = new ImplementationEventPayload(handle,
+                lineage,
                 2,
                 "def1",
                 "ghi2",
@@ -248,6 +262,7 @@ class ImplementationLifecycleTest {
         PredictionEventStore store1 = new PredictionEventStore(tempDir, projectId);
 
         CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+        UUID lineage = UUID.randomUUID();
         CapabilityContract contract = new CapabilityContract("UUID id",
                 "Optional<P>",
                 List.of("behavior"),
@@ -257,9 +272,11 @@ class ImplementationLifecycleTest {
                 "catalog.product-query",
                 requesterIdentity.nodeId(),
                 ownerIdentity.nodeId(),
+                lineage,
                 contract,
                 CapabilityLifecycleState.AWAITING_OWNER,
-                null);
+                null,
+                0);
         store1.append(UUID.randomUUID(),
                 PredictionEventType.CAPABILITY_REQUEST_CREATED,
                 requesterIdentity.nodeId(),
@@ -270,9 +287,11 @@ class ImplementationLifecycleTest {
                 "catalog.product-query",
                 requesterIdentity.nodeId(),
                 ownerIdentity.nodeId(),
+                lineage,
                 contract,
                 CapabilityLifecycleState.ACCEPTED,
-                null);
+                null,
+                CAPABILITY_CREATED_AT_SEQUENCE);
         store1.append(UUID.randomUUID(),
                 PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
                 ownerIdentity.nodeId(),
@@ -280,6 +299,7 @@ class ImplementationLifecycleTest {
                 ownerIdentity);
 
         ImplementationEventPayload published = new ImplementationEventPayload(handle,
+                lineage,
                 1,
                 "abc0",
                 "def1",

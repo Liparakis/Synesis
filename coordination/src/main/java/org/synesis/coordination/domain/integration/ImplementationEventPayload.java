@@ -80,7 +80,7 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
     }
 
     /**
-     * Retains the prior event constructor for non-validation and historical callers. The requester
+     * Creates an event for non-validation callers. The requester
      * session is empty, so it cannot establish authority for a new validation workspace.
      *
      * @param handle capability request handle
@@ -111,43 +111,6 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
     }
 
     /**
-     * Constructs a historical payload without explicit lineage metadata.
-     *
-     * @param handle                request handle
-     * @param revisionNumber        revision number
-     * @param baseCommit            base commit
-     * @param commitSha             implementation commit
-     * @param changedPaths          changed paths
-     * @param summary               summary
-     * @param validationResult      validation result
-     * @param validationReason      validation reason
-     * @param failedAcceptanceTests failed acceptance tests
-     * @param worktreePath          validation worktree
-     */
-    public ImplementationEventPayload(CapabilityRequestHandle handle,
-            int revisionNumber,
-            String baseCommit,
-            String commitSha,
-            List<String> changedPaths,
-            String summary,
-            String validationResult,
-            String validationReason,
-            List<String> failedAcceptanceTests,
-            String worktreePath) {
-        this(handle,
-                unresolvedLineage(handle),
-                revisionNumber,
-                baseCommit,
-                commitSha,
-                changedPaths,
-                summary,
-                validationResult,
-                validationReason,
-                failedAcceptanceTests,
-                worktreePath);
-    }
-
-    /**
      * Decodes an {@link ImplementationEventPayload} from binary format.
      *
      * @param encoded encoded payload bytes
@@ -160,11 +123,11 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             int version = in.readInt();
-            if (magic != MAGIC || (version != 1 && version != 2 && version != 3)) {
+            if (magic != MAGIC || version != VERSION) {
                 throw new CoordinationException("Unsupported implementation event payload format");
             }
             CapabilityRequestHandle handle = CapabilityRequestHandle.parse(readText(in));
-            UUID authorityLineageId = version >= 2 ? readUuid(in) : unresolvedLineage(handle);
+            UUID authorityLineageId = readUuid(in);
             int revisionNumber = in.readInt();
             String baseCommit = readText(in);
             String commitSha = readText(in);
@@ -190,7 +153,7 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
                 failedTests.add(readText(in));
             }
             String worktreePath = readText(in);
-            String requesterSessionId = version >= 3 ? readText(in) : "";
+            String requesterSessionId = readText(in);
             return new ImplementationEventPayload(handle,
                     authorityLineageId,
                     revisionNumber,
@@ -256,14 +219,6 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
      */
     private static UUID readUuid(DataInputStream in) throws IOException {
         return new UUID(in.readLong(), in.readLong());
-    }
-
-    /**
-     * Derives a stable lineage when an older payload omitted it.
-     */
-    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
-        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value()).getBytes(
-                StandardCharsets.UTF_8));
     }
 
     /**

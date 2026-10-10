@@ -1,6 +1,5 @@
 package org.synesis.coordination.domain.integration;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestHandle;
@@ -65,42 +64,6 @@ public record ImplementationRevisionRecord(CapabilityRequestHandle handle, UUID 
         if (summary.isBlank() || summary.length() > MAX_SUMMARY_LENGTH) {
             throw new CoordinationArgumentException("summary must be 1-" + MAX_SUMMARY_LENGTH + " characters");
         }
-    }
-
-    /**
-     * Constructs a historical implementation record without lineage metadata.
-     *
-     * @param handle            request handle
-     * @param revisionNumber    revision number
-     * @param baseCommit        base commit
-     * @param commitSha         implementation commit
-     * @param changedPaths      changed paths
-     * @param summary           summary
-     * @param publishedAtMillis publication time
-     */
-    public ImplementationRevisionRecord(CapabilityRequestHandle handle,
-            int revisionNumber,
-            String baseCommit,
-            String commitSha,
-            List<String> changedPaths,
-            String summary,
-            long publishedAtMillis) {
-        this(handle,
-                unresolvedLineage(handle),
-                revisionNumber,
-                baseCommit,
-                commitSha,
-                changedPaths,
-                summary,
-                publishedAtMillis);
-    }
-
-    /**
-     * Derives a stable lineage when an older payload omitted it.
-     */
-    private static UUID unresolvedLineage(CapabilityRequestHandle handle) {
-        return UUID.nameUUIDFromBytes(("synesis-unresolved-capability-lineage:" + handle.value()).getBytes(
-                StandardCharsets.UTF_8));
     }
 
     /**
