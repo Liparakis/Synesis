@@ -1,7 +1,8 @@
 # Codebase remaster plan
 
 **Date**: October 10, 2026
-**Status**: APPROVED on October 10, 2026. All waves are authorized.
+**Status**: EXECUTED on October 10, 2026. Approved the same day with all waves
+authorized. See [Outcome](#outcome) at the end for what was done and what was not.
 **Base**: `master` at `dc153cf5`. Work branch: `remaster/2026-10-10`.
 
 ## Goal and limits
@@ -779,3 +780,132 @@ Waves run in the order above. Within a wave, units that others depend on come
 first. Wave 0 has 7 units, wave 1 has 9, and waves 2 to 8 have 90 between them.
 Each unit is briefed to one Sonnet 5.5 subagent at medium effort, reviewed in
 full by the lead, gated, and committed on its own.
+
+## Outcome
+
+Executed on October 10, 2026 on `remaster/2026-10-10`. This section records what
+was done against the plan above. The plan text is left as approved.
+
+### What changed
+
+- 75 commits on the branch. Main code in scope went from 117,389 lines to
+  114,850 (2,539 fewer). Test code grew by about 10,050 lines, most of it
+  golden vectors and characterization tests that did not exist before.
+- Every wire and persisted form the plan named now has a byte-level pin test.
+- Waves 0 to 8 ran. Wave 9 (cross-module package moves) did not: see below.
+- Package cycles: `link` and `cli` have none and their architecture tests now fail
+  on a new one. `workspace` went from 15 mutually importing package pairs to 7,
+  held in an explicit allow-list in `WorkspacePackageArchitectureTest`.
+- Visibility: about 340 types and members that were `public` with every user in
+  their own package are package-private.
+
+### Rules that changed during execution
+
+- ADR-0088 was accepted during the run. Internal Java APIs, wire formats, and
+  persisted state may be redesigned before the first release when every producer
+  and consumer is migrated and Claude Code and Codex stay interoperable. The MCP
+  catalog and replies and the CLI surface stay stable. The "published contracts do
+  not change" paragraph at the top of this plan is superseded by that ADR.
+- Units whose tests overlap were sometimes gated together at the tip of a short
+  commit chain with one full `check`, instead of one gate per unit. Each unit was
+  still gated by its own agent in its own worktree first.
+
+### Format and behavior changes
+
+Each is in its own commit or named in the commit that carries it.
+
+- `SLB1` compact invitations are no longer read or written.
+- Superseded versions of the coordination payloads are no longer read.
+- Every coordination decoder rejects trailing bytes and reports truncated input as
+  its own error. Collection counts read from the wire are bounded.
+- The durable command request key is hashed in a fixed key order. Keys computed by
+  an earlier build do not match.
+- Control-plane JSON and the baseline journal are written with a fixed key order.
+- Repair plans record a fingerprint of the target's state. Plans saved by an
+  earlier build are skipped as stale and must be prepared again.
+- The cleanup lock's `processStartTime` field now holds the process start time.
+
+### Defects fixed
+
+Numbers refer to the list under "Recorded, not planned".
+
+- 1, 2, 4, 5, 6, 7, 8, 10, 11, 12, 14, 17 are fixed. 8, 10, 11 and 14 were
+  reproduced by a failing test first; 1 was reproduced by running the CLI.
+- 3 was wrong as recorded. The predicate was not always true: a
+  `request_coordination` call carrying a key outside the schema
+  (`collaborationOperation` or `coordinationRequest` set to `status`) skipped
+  manual attestation while the request still ran. That bypass was reproduced by a
+  failing test and closed.
+- Found during execution and fixed: coordination commands decided outside the
+  append lock; the durable command key depended on `Map.of` iteration order; a
+  record whose scope exceeded the byte bound could be saved and not read back;
+  `WorkGroupService.close` decided outside the lock; a reconciliation abort hid
+  the counts already applied; a lane completion was reported as an internal
+  failure when the follow-up lookup failed; `RepairExecutionLock` threw an
+  unchecked exception on re-entry and leaked its channel; repair removed its own
+  lock and counted unknown actions as completed; MCP replies with unstable key
+  order, a JSON-RPC internal error for wrong-typed arguments, and leaked Java
+  messages.
+
+### Not done, and why
+
+- 9, 13, 15, 16 are not fixed. None was reproduced. 16 is documented in the
+  WS-22 commit: the two checks differ in order, in codes, and in what they write.
+- Wave 9 was skipped. Splitting `coordination.domain.integration` changes names
+  that seven `workspace` files import, for no behavior gain. The cycle between the
+  `coordination` domain packages `task`, `collaboration`, `integration` and
+  `capability` remains.
+- CL-5 (one mode-selection policy for CLI commands) was tried and rejected in
+  review: it added about 100 lines and made the call sites harder to read.
+- The changed-path partition (WS-14) was not unified. Its three formulations
+  disagree on whether foreign-claimed paths count, on throwing versus returning
+  false, and on how often the worktree is inspected.
+- The workspace no-change completion check is stricter than the coordination rule
+  it mirrors (it does not skip grants whose target intent has a successor). It
+  fails closed, so it was left.
+
+### Still open
+
+Found by reading during execution. None is reproduced.
+
+- `ProviderSessionBindingService` declares its methods `synchronized`, but each
+  caller builds its own instance, so nothing is excluded. `ensure`, `revoke`, and
+  the write in `verifyWorkspaceTrust` read, modify, and write a binding file with
+  no cross-process lock.
+- `ProjectApplicationService.locate` and `require` write: they hide `.synesis` on
+  Windows and add entries to the repository's `info/exclude`. Listing known
+  projects does this for every remembered project.
+- `init` flattens most failures to `CONFLICT`; `initReplica` and `fork` pass the
+  specific code through.
+- `CleanupPlanStore` persists a hard-coded retention snapshot and
+  `CleanupExecutionService` discards the `RetentionPolicy` it is given.
+- `RepairBackupService` writes one manifest per execution, so only the last backup
+  can be restored, yet rollback journals a restore as successful. Planning marks
+  the corrupt-plan archive actions executable although they cannot work.
+- The cleanup lock has no host field. A lock file copied from another machine
+  would be judged by local process ids.
+- Diagnostics and Maintenance in the durable command package disagree on which
+  records are pinned and on process liveness when the start time is missing.
+- `DoctorService` swallows IO errors at five sites, and `DoctorFinding.details` is
+  never rendered.
+- A Codex hard stop whose journal fails to close never writes a checkpoint.
+- Live event subscribers miss events appended by another process. A fresh-store
+  read runs temporary-file cleanup that could remove another writer's file.
+- `ProjectAppends.freshUnder(lock)` checks that a lock is held, not that it is this
+  project's lock.
+- Two baseline journal phases, `LOCAL_STATE_INITIALIZED` and `PROVIDERS_REFRESHED`,
+  are written before the work they name is done.
+- The Claude Code hook adapter reads its input without a size bound and parses it
+  by substring scan; the Codex adapter uses the JSON parser with a 128 KiB bound.
+- `ExitCodes.DOCTOR_BROKEN` (exit 3) is never returned.
+- `SessionAuthorityResolver` hashes the connection id as given, while `ensure`,
+  `find` and `complete` trim it first.
+- The unwired subsystems are listed in `docs/agent/DEFERRED.md`.
+
+### Out-of-scope observations
+
+`docs/development/current-state.md` is dated August 30 and omits the `relay`
+module. `docs/current-state.md` does not exist. `docs/agent/CURRENT.md` mentions
+`EndpointCleanup`, which no longer exists. The Go bootstrap, `web-ui`, `scripts/`
+and the release tasks were not read beyond what a unit needed and were not
+changed.
