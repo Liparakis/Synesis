@@ -25,17 +25,14 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class RepairLaneTransfer {
 
-    private final PredictionEventStore store;
     private final NodeIdentity signer;
 
     /**
      * Validates and initializes this repair lane transfer.
      *
-     * @param store  project event store
      * @param signer identity used to sign the event
      */
-    RepairLaneTransfer(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+    RepairLaneTransfer(NodeIdentity signer) {
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -81,11 +78,13 @@ final class RepairLaneTransfer {
     /**
      * Applies the create repair lane locked transition to the current coordination projection.
      *
+     * @param current      fresh store opened while the project append lock is held
      * @param targetIntent proposed target intent
      * @throws IOException              when payload validation or durable I/O fails
      * @throws GeneralSecurityException when signing or signature verification fails
      */
-    void createRepairLaneLocked(WorkIntentId sourceIntentId,
+    void createRepairLaneLocked(PredictionEventStore current,
+            WorkIntentId sourceIntentId,
             SnapshotId snapshotId,
             CommitId expectedControlHead,
             WorkIntent targetIntent) throws IOException, GeneralSecurityException {
@@ -96,7 +95,6 @@ final class RepairLaneTransfer {
         if (snapshotId.value().isBlank() || expectedControlHead.value().isBlank()) {
             throw new CoordinationException("REPAIR_METADATA_REQUIRED");
         }
-        PredictionEventStore current = freshStore();
         var existingTarget = current.collaborationProjection().intent(targetIntent.identity());
         if (existingTarget.isPresent()) {
             if (!existingTarget.orElseThrow(CoordinationMissingElementException::new).equals(targetIntent)) {
@@ -110,15 +108,5 @@ final class RepairLaneTransfer {
         UUID eventId = UUID.nameUUIDFromBytes(("repair-lane:" + sourceIntentId.value() + ":" + targetIntent.identity()
                 .value() + ":" + snapshotId.value()).getBytes(StandardCharsets.UTF_8));
         current.append(eventId, PredictionEventType.REPAIR_LANE_CREATED, signer.nodeId(), payload.encode(), signer);
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 }

@@ -18,7 +18,6 @@ import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.SnapshotReference;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
-import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -37,9 +36,9 @@ import org.synesis.link.identity.NodeIdentity;
 public final class WorkIntentService {
 
     /**
-     * Event store whose projections are the source of current claim state.
+     * Opens the fresh stores whose projections are the source of current claim state.
      */
-    private final PredictionEventStore store;
+    private final ProjectAppends appends;
     /**
      * Owns claim announcement, scope extension, and explicit lane release.
      */
@@ -68,13 +67,13 @@ public final class WorkIntentService {
      * @param signer authenticated signing identity
      */
     public WorkIntentService(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         NodeIdentity eventSigner = CoordinationNullException.requireNonNull(signer, "signer");
-        this.laneClaims = new LaneClaimService(this.store, eventSigner);
-        this.laneCompletion = new LaneCompletionService(this.store, eventSigner);
-        this.repairLanes = new RepairLaneTransfer(this.store, eventSigner);
-        this.coordinationRequests = new CoordinationRequestService(this.store, eventSigner);
-        this.participantRecovery = new ParticipantRecoveryService(this.store, eventSigner);
+        this.laneClaims = new LaneClaimService(store, eventSigner);
+        this.laneCompletion = new LaneCompletionService(store, eventSigner);
+        this.repairLanes = new RepairLaneTransfer(eventSigner);
+        this.coordinationRequests = new CoordinationRequestService(store, eventSigner);
+        this.participantRecovery = new ParticipantRecoveryService(store, eventSigner);
     }
 
     /**
@@ -252,12 +251,11 @@ public final class WorkIntentService {
             SnapshotId snapshotId,
             CommitId expectedControlHead,
             WorkIntent targetIntent) throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            repairLanes.createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
-        }
+        appends.run(current -> repairLanes.createRepairLaneLocked(current,
+                sourceIntentId,
+                snapshotId,
+                expectedControlHead,
+                targetIntent));
     }
 
     /**
@@ -302,10 +300,11 @@ public final class WorkIntentService {
             CommitId expectedControlHead,
             WorkIntent targetIntent) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(lock, "project append lock");
-        if (!lock.isHeld()) {
-            throw new CoordinationException("event append lock unavailable");
-        }
-        repairLanes.createRepairLaneLocked(sourceIntentId, snapshotId, expectedControlHead, targetIntent);
+        repairLanes.createRepairLaneLocked(appends.freshUnder(lock),
+                sourceIntentId,
+                snapshotId,
+                expectedControlHead,
+                targetIntent);
     }
 
     /**
@@ -703,20 +702,10 @@ public final class WorkIntentService {
      */
     private List<WorkIntent> freshIntents() {
         try {
-            return freshStore().collaborationProjection().activeIntents();
+            return appends.fresh().collaborationProjection().activeIntents();
         } catch (Exception failure) {
             throw new CoordinationStateException("COLLABORATION_STATE_UNAVAILABLE", failure);
         }
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 
 }

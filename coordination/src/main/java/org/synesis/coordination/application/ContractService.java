@@ -12,11 +12,9 @@ import org.synesis.coordination.domain.identity.ContractRevision;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
-import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -24,7 +22,7 @@ import org.synesis.link.identity.NodeIdentity;
  */
 public final class ContractService {
 
-    private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity signer;
 
     /**
@@ -34,7 +32,7 @@ public final class ContractService {
      * @param signer signing identity
      */
     public ContractService(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -69,11 +67,7 @@ public final class ContractService {
             throws IOException, GeneralSecurityException {
         UUID rawContractId = CoordinationNullException.requireNonNull(contractId, "contract ID").value();
         String ownerHandle = CoordinationNullException.requireNonNull(owner, "owner").value();
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = fresh();
+        return appends.call(current -> {
             ContractRecord prior = current.contractProjection().contract(contractId);
             ContractRecord record = prior == null ? ContractRecord.create(rawContractId,
                     current.projectId(),
@@ -103,7 +97,7 @@ public final class ContractService {
                     published,
                     signer);
             return record;
-        }
+        });
     }
 
     /**
@@ -140,11 +134,7 @@ public final class ContractService {
         String participantHandle = CoordinationNullException.requireNonNull(participant, "participant").value();
         UUID rawContractId = CoordinationNullException.requireNonNull(contractId, "contract ID").value();
         long revisionNumber = CoordinationNullException.requireNonNull(revision, "revision").value();
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = fresh();
+        appends.run(current -> {
             ContractDependency dependency = new ContractDependency(rawIntentId,
                     participantHandle,
                     rawContractId,
@@ -155,7 +145,7 @@ public final class ContractService {
                     signer.nodeId(),
                     ContractCodec.encodeDependency(dependency),
                     signer);
-        }
+        });
     }
 
     /**
@@ -165,7 +155,7 @@ public final class ContractService {
      */
     public List<ContractRecord> contracts() {
         try {
-            return fresh().contractProjection().contracts();
+            return appends.fresh().contractProjection().contracts();
         } catch (Exception e) {
             throw new CoordinationStateException("CONTRACT_STATE_UNAVAILABLE", e);
         }
@@ -178,19 +168,9 @@ public final class ContractService {
      */
     public List<ContractDependency> dependencies() {
         try {
-            return fresh().contractProjection().dependencies();
+            return appends.fresh().contractProjection().dependencies();
         } catch (Exception e) {
             throw new CoordinationStateException("CONTRACT_STATE_UNAVAILABLE", e);
         }
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore fresh() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 }

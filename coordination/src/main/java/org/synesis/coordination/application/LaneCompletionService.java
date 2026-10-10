@@ -27,7 +27,7 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class LaneCompletionService {
 
-    private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity signer;
 
     /**
@@ -37,7 +37,7 @@ final class LaneCompletionService {
      * @param signer identity used to sign the event
      */
     LaneCompletionService(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -59,10 +59,7 @@ final class LaneCompletionService {
             throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(lock, "project append lock");
         CoordinationNullException.requireNonNull(snapshot, "snapshot");
-        if (!lock.isHeld()) {
-            throw new CoordinationException("event append lock unavailable");
-        }
-        PredictionEventStore current = freshStore();
+        PredictionEventStore current = appends.freshUnder(lock);
         TaskCompletionState snapshotState = current.taskCompletionProjection()
                 .snapshotState(snapshot.snapshotIdentity()).orElse(TaskCompletionState.ACTIVE);
         if (snapshotState != TaskCompletionState.INTEGRATED) {
@@ -111,11 +108,7 @@ final class LaneCompletionService {
      */
     NoChangeCompletion completeNoChange(NoChangeCompletion completion) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(completion, "completion");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        return appends.call(current -> {
             NoChangeCompletion previous = current.collaborationProjection()
                     .noChangeCompletion(completion.intentIdentity()).orElse(null);
             if (previous != null) {
@@ -137,7 +130,7 @@ final class LaneCompletionService {
                     signer);
             reevaluateNoChangeWorkGroup(current, intent.group());
             return completion;
-        }
+        });
     }
 
     /**
@@ -172,15 +165,5 @@ final class LaneCompletionService {
                 signer.nodeId(),
                 CollaborationCodec.encodeWorkGroup(completed),
                 signer);
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 }

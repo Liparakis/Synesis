@@ -21,7 +21,6 @@ import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -34,6 +33,7 @@ import org.synesis.link.identity.NodeIdentity;
 final class LaneClaimService {
 
     private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity signer;
 
     /**
@@ -44,6 +44,7 @@ final class LaneClaimService {
      */
     LaneClaimService(PredictionEventStore store, NodeIdentity signer) {
         this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -60,11 +61,7 @@ final class LaneClaimService {
         if (!store.projectId().equals(intent.projectId())) {
             throw new CoordinationArgumentException("intent project mismatch");
         }
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        return appends.call(current -> {
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {
                 return new ClaimResult(false, intent, conflicts);
@@ -92,7 +89,7 @@ final class LaneClaimService {
                     CollaborationCodec.encodeIntent(intent),
                     signer);
             return new ClaimResult(true, intent, List.of());
-        }
+        });
     }
 
     /**
@@ -124,11 +121,7 @@ final class LaneClaimService {
                 List.copyOf(CoordinationNullException.requireNonNull(requestedSelectors, "selectors"));
         List<String> dependencies = List.copyOf(CoordinationNullException.requireNonNull(requestedDependencies,
                 "dependencies"));
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore currentStore = freshStore();
+        return appends.call(currentStore -> {
             WorkIntent current = currentStore.collaborationProjection().intent(exactIntent)
                     .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
             if (!current.participantIdentity().equals(exactParticipant)) {
@@ -173,7 +166,7 @@ final class LaneClaimService {
                     extension.encode(),
                     signer);
             return new ClaimResult(true, amended, List.of());
-        }
+        });
     }
 
     /**
@@ -190,11 +183,7 @@ final class LaneClaimService {
         WorkIntentId intentIdentity = CoordinationNullException.requireNonNull(intentId, "intent ID");
         UUID intentUuid = intentIdentity.value();
         ParticipantId participantIdentity = CoordinationNullException.requireNonNull(participant, "participant");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             WorkIntent intent = current.collaborationProjection().intent(intentIdentity)
                     .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
             intent.requireOwnedBy(participantIdentity);
@@ -206,16 +195,6 @@ final class LaneClaimService {
                     signer.nodeId(),
                     CollaborationCodec.encodeRelease(intentUuid),
                     signer);
-        }
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
+        });
     }
 }

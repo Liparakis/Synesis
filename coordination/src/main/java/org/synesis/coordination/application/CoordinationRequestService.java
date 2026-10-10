@@ -28,7 +28,6 @@ import org.synesis.coordination.exception.CoordinationMissingElementException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -36,7 +35,7 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class CoordinationRequestService {
 
-    private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity signer;
 
     /**
@@ -46,7 +45,7 @@ final class CoordinationRequestService {
      * @param signer identity used to sign the event
      */
     CoordinationRequestService(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -368,11 +367,7 @@ final class CoordinationRequestService {
         WorkIntentId target = CoordinationNullException.requireNonNull(conflictingIntent, "conflicting intent");
         CoordinationRequest.Kind requestKind = CoordinationNullException.requireNonNull(kind, "request kind");
         String requestProposal = CoordinationNullException.requireNonNull(proposal, "proposal");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        return appends.call(current -> {
             if (requestKind == CoordinationRequest.Kind.REVIEW) {
                 Optional<CoordinationRequest> replay = existingReviewRequest(current,
                         requester,
@@ -399,7 +394,7 @@ final class CoordinationRequestService {
                     CollaborationCodec.encodeRequest(request),
                     signer);
             return request;
-        }
+        });
     }
 
     /**
@@ -542,11 +537,7 @@ final class CoordinationRequestService {
         WorkIntentId handoffIntent = CoordinationNullException.requireNonNull(intentIdentity, "intent ID");
         ParticipantId target = CoordinationNullException.requireNonNull(targetIdentity, "target participant");
         String handoffProposal = CoordinationNullException.requireNonNull(proposal, "proposal");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        return appends.call(current -> {
             WorkIntent intent = current.collaborationProjection().intent(handoffIntent)
                     .orElseThrow(() -> new CoordinationException("INTENT_NOT_FOUND"));
             intent.requireOwnedBy(owner);
@@ -575,7 +566,7 @@ final class CoordinationRequestService {
                     CollaborationCodec.encodeRequest(request),
                     signer);
             return request;
-        }
+        });
     }
 
     /**
@@ -597,11 +588,7 @@ final class CoordinationRequestService {
         if (status == CoordinationRequest.Status.PENDING) {
             throw new CoordinationArgumentException("pending is not a response");
         }
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             CoordinationRequest request = requireAddressedRequest(current, participant, requestId);
             validateReviewApproval(current, request, status);
             if (replayResolvedResponse(current, request, status)) {
@@ -618,7 +605,7 @@ final class CoordinationRequestService {
             if (status == CoordinationRequest.Status.ACCEPTED && request.kind() == CoordinationRequest.Kind.REVIEW) {
                 issueReviewGrantIfAbsent(current, request);
             }
-        }
+        });
     }
 
     /**
@@ -747,11 +734,7 @@ final class CoordinationRequestService {
             throws IOException, GeneralSecurityException {
         ParticipantId participant = CoordinationNullException.requireNonNull(participantIdentity, "participant");
         RequestId item = CoordinationNullException.requireNonNull(itemIdentity, "inbox item ID");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             requireInboxItem(current, participant, item);
             if (!current.collaborationProjection().inboxAcknowledged(item)) {
                 current.append(item.value(),
@@ -760,7 +743,7 @@ final class CoordinationRequestService {
                         CollaborationCodec.encodeUuidText(item),
                         signer);
             }
-        }
+        });
     }
 
     /**
@@ -782,11 +765,7 @@ final class CoordinationRequestService {
         }
         ParticipantId participant = CoordinationNullException.requireNonNull(participantIdentity, "participant");
         RequestId item = CoordinationNullException.requireNonNull(itemIdentity, "inbox item ID");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             CoordinationRequest request = requireInboxItem(current, participant, item);
             if (request.status() == CoordinationRequest.Status.PENDING) {
                 current.append(item.value(),
@@ -804,7 +783,7 @@ final class CoordinationRequestService {
                         CollaborationCodec.encodeUuidText(item),
                         signer);
             }
-        }
+        });
     }
 
     /**
@@ -814,19 +793,9 @@ final class CoordinationRequestService {
      */
     List<CoordinationRequest> requests() {
         try {
-            return freshStore().collaborationProjection().requests();
+            return appends.fresh().collaborationProjection().requests();
         } catch (Exception failure) {
             throw new CoordinationStateException("COLLABORATION_STATE_UNAVAILABLE", failure);
         }
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 }

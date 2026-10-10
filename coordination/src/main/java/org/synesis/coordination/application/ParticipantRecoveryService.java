@@ -22,7 +22,6 @@ import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationMissingElementException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -30,7 +29,7 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class ParticipantRecoveryService {
 
-    private final PredictionEventStore store;
+    private final ProjectAppends appends;
     private final NodeIdentity signer;
 
     /**
@@ -40,7 +39,7 @@ final class ParticipantRecoveryService {
      * @param signer identity used to sign the event
      */
     ParticipantRecoveryService(PredictionEventStore store, NodeIdentity signer) {
-        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.appends = new ProjectAppends(store);
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
@@ -181,11 +180,7 @@ final class ParticipantRecoveryService {
      * @throws GeneralSecurityException signing failure
      */
     void heartbeat(ParticipantId participant) throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             Optional<Participant.State> participantState = current.collaborationProjection().participantState(participant);
             if (participantState.isEmpty()) {
                 throw new CoordinationException("PARTICIPANT_NOT_FOUND");
@@ -200,7 +195,7 @@ final class ParticipantRecoveryService {
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant),
                     signer);
-        }
+        });
     }
 
     /**
@@ -211,11 +206,7 @@ final class ParticipantRecoveryService {
      * @throws GeneralSecurityException if signing fails
      */
     void suspend(ParticipantId participant) throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             boolean known = current.collaborationProjection().participantKey(participant).isPresent();
             if (!known) {
                 return;
@@ -227,7 +218,7 @@ final class ParticipantRecoveryService {
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant),
                     signer);
-        }
+        });
     }
 
     /**
@@ -240,11 +231,7 @@ final class ParticipantRecoveryService {
      */
     void holdRecovery(ParticipantId participant, SnapshotReference snapshotReference)
             throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
                     .orElseThrow(() -> new CoordinationException("PARTICIPANT_NOT_FOUND"));
             if (snapshotReference.value().isBlank()) {
@@ -255,7 +242,7 @@ final class ParticipantRecoveryService {
                     signer.nodeId(),
                     CollaborationCodec.encodeRecovery(new RecoveryEvidence(durableParticipant, snapshotReference)),
                     signer);
-        }
+        });
     }
 
     /**
@@ -323,11 +310,7 @@ final class ParticipantRecoveryService {
     private ContinuationResult continueFromRecovery(LaneContinuation continuation, boolean requireGrant)
             throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(continuation, "continuation");
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        return appends.call(current -> {
             Optional<WorkIntentId> successor = current.collaborationProjection()
                     .successorIntent(continuation.sourceIntent());
             if (successor.isPresent()) {
@@ -348,7 +331,7 @@ final class ParticipantRecoveryService {
                     continuation.targetIntent().identity(),
                     continuation.targetOwner(),
                     true);
-        }
+        });
     }
 
     /**
@@ -359,11 +342,7 @@ final class ParticipantRecoveryService {
      */
     private void appendParticipantEvent(ParticipantId participant, PredictionEventType type)
             throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
-            }
-            PredictionEventStore current = freshStore();
+        appends.run(current -> {
             ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
                     .orElseThrow(() -> new CoordinationException("PARTICIPANT_NOT_FOUND"));
             current.append(UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8)),
@@ -371,17 +350,7 @@ final class ParticipantRecoveryService {
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(durableParticipant),
                     signer);
-        }
-    }
-
-    /**
-     * Replays a fresh view of the project's durable coordination state.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private PredictionEventStore freshStore() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
+        });
     }
 
 }

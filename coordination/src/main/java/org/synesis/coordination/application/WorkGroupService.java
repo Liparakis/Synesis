@@ -20,7 +20,6 @@ import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.persistence.PredictionEventStore;
-import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -30,6 +29,7 @@ public final class WorkGroupService {
 
     private final PredictionEventStore store;
     private final NodeIdentity signer;
+    private final ProjectAppends appends;
 
     /**
      * Creates a service for one signed project log.
@@ -40,6 +40,7 @@ public final class WorkGroupService {
     public WorkGroupService(PredictionEventStore store, NodeIdentity signer) {
         this.store = CoordinationNullException.requireNonNull(store, "store");
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
+        this.appends = new ProjectAppends(store);
     }
 
     /**
@@ -76,7 +77,7 @@ public final class WorkGroupService {
         if (!store.projectIdentity().equals(group.project())) {
             throw new CoordinationArgumentException("group project mismatch");
         }
-        withLock(current -> current.append(group.workGroupId(),
+        appends.run(current -> current.append(group.workGroupId(),
                 PredictionEventType.WORK_GROUP_CREATED,
                 signer.nodeId(),
                 CollaborationCodec.encodeWorkGroup(group),
@@ -92,7 +93,7 @@ public final class WorkGroupService {
      */
     public void issue(LaneGrant grant) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(grant, "grant");
-        withLock(current -> current.append(grant.grantId(),
+        appends.run(current -> current.append(grant.grantId(),
                 PredictionEventType.LANE_GRANT_ISSUED,
                 signer.nodeId(),
                 CollaborationCodec.encodeLaneGrant(grant),
@@ -136,7 +137,7 @@ public final class WorkGroupService {
         WorkIntentId intent = CoordinationNullException.requireNonNull(intentIdentity, "intent ID");
         ClaimEpoch epoch = CoordinationNullException.requireNonNull(expectedEpoch, "claim epoch");
         UUID grantId = grantKey.value();
-        withLock(current -> {
+        appends.run(current -> {
             if (current.collaborationProjection().isParticipantTerminal(participant)) {
                 throw new CoordinationException("SESSION_TERMINAL");
             }
@@ -188,7 +189,7 @@ public final class WorkGroupService {
     public void revoke(LaneGrantId grantIdentity) throws IOException, GeneralSecurityException {
         LaneGrantId grantKey = CoordinationNullException.requireNonNull(grantIdentity, "grant ID");
         UUID grantId = grantKey.value();
-        withLock(current -> {
+        appends.run(current -> {
             LaneGrant grant = current.workGroupProjection().grants().stream()
                     .filter(candidate -> candidate.identity().equals(grantKey)).findFirst()
                     .orElseThrow(() -> new CoordinationException("LANE_GRANT_NOT_FOUND"));
@@ -229,57 +230,27 @@ public final class WorkGroupService {
         WorkGroupVersion version = CoordinationNullException.requireNonNull(expectedVersion, "work group version");
         WorkGroup.Status finalStatus = CoordinationNullException.requireNonNull(status, "group status");
         UUID groupId = group.value();
-        PredictionEventStore fresh = new PredictionEventStore(store.rootDirectory(), store.projectId());
-        WorkGroup current = fresh.workGroupProjection().group(group)
-                .orElseThrow(() -> new CoordinationException("WORK_GROUP_NOT_FOUND"));
-        if (!current.groupVersion().equals(version)) {
-            throw new CoordinationException("WORK_GROUP_VERSION_STALE");
-        }
-        if (finalStatus == WorkGroup.Status.ACTIVE) {
-            throw new CoordinationException("GROUP_STATUS_INVALID");
-        }
-        WorkGroup update = new WorkGroup(groupId,
-                current.projectId(),
-                current.goal(),
-                current.acceptance(),
-                current.version() + 1,
-                finalStatus,
-                current.reviewPolicy());
-        withLock(reloaded -> reloaded.append(groupId,
-                PredictionEventType.WORK_GROUP_STATUS_CHANGED,
-                signer.nodeId(),
-                CollaborationCodec.encodeWorkGroup(update),
-                signer));
-    }
-
-    /**
-     * Runs the append action within the project-wide lock.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private void withLock(AppendAction action) throws IOException, GeneralSecurityException {
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new CoordinationException("event append lock unavailable");
+        appends.run(current -> {
+            WorkGroup existing = current.workGroupProjection().group(group)
+                    .orElseThrow(() -> new CoordinationException("WORK_GROUP_NOT_FOUND"));
+            if (!existing.groupVersion().equals(version)) {
+                throw new CoordinationException("WORK_GROUP_VERSION_STALE");
             }
-            action.append(new PredictionEventStore(store.rootDirectory(), store.projectId()));
-        }
-    }
-
-    /**
-     * Encapsulates one append operation executed under the project lock.
-     */
-    @FunctionalInterface
-    private interface AppendAction {
-
-        /**
-         * Appends the type event to the durable coordination log.
-         *
-         * @param current fresh authoritative project projection
-         * @throws IOException              when payload validation or durable I/O fails
-         * @throws GeneralSecurityException when signing or signature verification fails
-         */
-        void append(PredictionEventStore current) throws IOException, GeneralSecurityException;
+            if (finalStatus == WorkGroup.Status.ACTIVE) {
+                throw new CoordinationException("GROUP_STATUS_INVALID");
+            }
+            WorkGroup update = new WorkGroup(groupId,
+                    existing.projectId(),
+                    existing.goal(),
+                    existing.acceptance(),
+                    existing.version() + 1,
+                    finalStatus,
+                    existing.reviewPolicy());
+            current.append(groupId,
+                    PredictionEventType.WORK_GROUP_STATUS_CHANGED,
+                    signer.nodeId(),
+                    CollaborationCodec.encodeWorkGroup(update),
+                    signer);
+        });
     }
 }
