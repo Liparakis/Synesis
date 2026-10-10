@@ -38,6 +38,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
+import org.synesis.workspace.application.collaboration.LaneIdentities;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
@@ -239,8 +240,8 @@ public final class AgentTaskCompletionService {
         return binding.taskId();
     }
 
-    private static UUID deriveIntentId(ProviderSessionBindingService.Binding binding, String provider) {
-        return UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    static String completionId(UUID laneId, long claimEpoch, String commitSha) {
+        return "cmp_" + UUID.nameUUIDFromBytes((laneId + "\n" + claimEpoch + "\n" + commitSha).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**
@@ -472,8 +473,7 @@ public final class AgentTaskCompletionService {
 
         // Pin the exact prepared tree and fence the lane before its snapshot becomes visible to
         // integration.
-        String completionId =
-                "cmp_" + UUID.nameUUIDFromBytes((snapshot.provenance().laneId() + "\n" + snapshot.provenance().claimEpoch() + "\n" + snapshot.commitSha()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String completionId = completionId(snapshot.provenance().laneId(), snapshot.provenance().claimEpoch(), snapshot.commitSha());
         if (!snapshotAlreadyExists) {
             // Direct callers may create a provisional ref; completion moves it behind a durable
             // prepared phase.
@@ -539,7 +539,7 @@ public final class AgentTaskCompletionService {
      */
     private static AgentResponse completedBindingResult(CompleteTaskRequest request, PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
         if (request.outcome() == CompletionOutcome.NO_CHANGE) {
-            UUID completedIntentId = deriveIntentId(binding, request.provider());
+            UUID completedIntentId = LaneIdentities.sessionIntentId(request.provider(), binding.sessionId());
             Optional<NoChangeCompletion> completed = store.collaborationProjection().noChangeCompletion(completedIntentId);
             if (completed.isPresent() && noChangeEvidenceMatches(request, binding, completed.get())) {
                 return noChangeCompletionResult(store, completed.get(), null);
@@ -658,8 +658,7 @@ public final class AgentTaskCompletionService {
     }
 
     private static boolean isCompletionBlockingCapability(CapabilityRequestRecord request) {
-        return request.state() == CapabilityLifecycleState.AWAITING_OWNER || request.state() == CapabilityLifecycleState.REVISION_REQUESTED || request.state() == CapabilityLifecycleState.IMPLEMENTING
-                || request.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || request.state() == CapabilityLifecycleState.VALIDATING;
+        return request.state().blocksRequesterCompletion();
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")

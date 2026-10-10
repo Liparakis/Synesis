@@ -137,6 +137,10 @@ public final class CapabilityRequestService {
         return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst();
     }
 
+    static UUID unscopedOwnerLineage(String ownerNodeId) {
+        return UUID.nameUUIDFromBytes(("synesis-unscoped-owner-lineage:" + ownerNodeId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private static UUID inferUniqueOwnerLineage(PredictionEventStore store, String requesterParticipant) {
         List<WorkIntent> candidates = store.collaborationProjection().activeIntents().stream().filter(intent -> !intent.participant().equals(requesterParticipant)).toList();
         if (candidates.size() != 1) {
@@ -253,14 +257,14 @@ public final class CapabilityRequestService {
         }
 
         UUID ownerLineage = request.ownerAuthorityLineageId() != null ? request.ownerAuthorityLineageId() : requesterIntent.isPresent() ? inferUniqueOwnerLineage(store, requesterIntent.get().participant())
-                : UUID.nameUUIDFromBytes(("synesis-unscoped-owner-lineage:" + ownerNodeId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                : unscopedOwnerLineage(ownerNodeId);
         if (ownerLineage == null) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "OWNER_LINEAGE_REQUIRED"));
         }
 
         // Check existing active request for (requester, capability)
         Optional<CapabilityRequestRecord> activeOpt = projection.findAllForRequester(requesterNodeId).stream().filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
-                .filter(record -> record.capability().equals(capability)).filter(record -> record.state() == CapabilityLifecycleState.AWAITING_OWNER || record.state() == CapabilityLifecycleState.REVISION_REQUESTED)
+                .filter(record -> record.capability().equals(capability)).filter(record -> record.state().isUnderNegotiation())
                 .findFirst();
 
         if (activeOpt.isPresent()) {
@@ -392,8 +396,7 @@ public final class CapabilityRequestService {
             result.put("guidance", "The owner stopped waiting for this answer and finished. It may have built a different design than you asked for; the integrated code is what counts. Its files are released, so you can claim them if you need a change.");
             return new AgentResponse(AgentStatus.READY, null, null, result);
         }
-        if (record.state() == CapabilityLifecycleState.CANCELLED || record.state() == CapabilityLifecycleState.EXPIRED || record.state() == CapabilityLifecycleState.SUPERSEDED
-                || record.state() == CapabilityLifecycleState.REJECTED) {
+        if (!record.state().bindsLanes()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);
         }
 
@@ -447,7 +450,7 @@ public final class CapabilityRequestService {
                 yield new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
             }
             case "cancel" -> {
-                if (record.state() != CapabilityLifecycleState.AWAITING_OWNER && record.state() != CapabilityLifecycleState.REVISION_REQUESTED) {
+                if (!record.state().isUnderNegotiation()) {
                     yield new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);
                 }
                 CapabilityRequestPayload payload = new CapabilityRequestPayload(record.handle(),

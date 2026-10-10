@@ -46,6 +46,10 @@ public final class ReviewValidationService {
     public ReviewValidationService() {
     }
 
+    static UUID validationEventId(UUID grantId, String snapshotId) {
+        return UUID.nameUUIDFromBytes(("review-validation:" + grantId + ":" + snapshotId).getBytes(StandardCharsets.UTF_8));
+    }
+
     private static AgentResponse blocked(String error, AgentNextAction action) {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, action, Map.of("error", error));
     }
@@ -137,7 +141,7 @@ public final class ReviewValidationService {
                     return blocked("REVIEW_SNAPSHOT_ALREADY_RESOLVED", AgentNextAction.RETRY);
                 }
                 if (existing.isEmpty()) {
-                    UUID eventId = UUID.nameUUIDFromBytes(("review-validation:" + grant.grantId() + ":" + snapshot.snapshotId()).getBytes(StandardCharsets.UTF_8));
+                    UUID eventId = validationEventId(grant.grantId(), snapshot.snapshotId());
                     store.append(eventId, PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(), decision.encode(), identity);
                 }
                 WorkGroup group = store.workGroupProjection().group(grant.workGroupId()).orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));

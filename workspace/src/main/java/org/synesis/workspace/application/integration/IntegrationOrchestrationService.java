@@ -110,11 +110,19 @@ public final class IntegrationOrchestrationService {
         }
     }
 
+    static String blockedAttemptId(String snapshotId) {
+        return "blocked_" + snapshotId;
+    }
+
+    static UUID blockedEventId(String blockedAttemptId) {
+        return UUID.nameUUIDFromBytes(blockedAttemptId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private static boolean blockedCandidateAppendFailed(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord candidate, String expectedControlHead, List<String> failures) {
         try {
-            String blockedId = "blocked_" + candidate.snapshotId();
+            String blockedId = blockedAttemptId(candidate.snapshotId());
             IntegrationAttemptPayload blocked = new IntegrationAttemptPayload(blockedId, store.projectId(), List.of(candidate.snapshotId()), expectedControlHead, "", "blocked", String.join(";", failures));
-            store.append(UUID.nameUUIDFromBytes(blockedId.getBytes(java.nio.charset.StandardCharsets.UTF_8)), PredictionEventType.INTEGRATION_BLOCKED, identity.nodeId(), blocked.encode(), identity);
+            store.append(blockedEventId(blockedId), PredictionEventType.INTEGRATION_BLOCKED, identity.nodeId(), blocked.encode(), identity);
             return false;
         } catch (Exception failure) {
             return true;
@@ -167,12 +175,11 @@ public final class IntegrationOrchestrationService {
                 }
                 if (!snapshot.provenance().claimSelectors().isEmpty()) {
                     boolean covered = snapshot.provenance().claimSelectors().stream().anyMatch(raw -> {
-                        int split = raw.indexOf(':');
-                        if (split < 1) {
+                        ResourceSelector selector = ResourceSelector.parse(raw).orElse(null);
+                        if (selector == null) {
                             return false;
                         }
                         try {
-                            ResourceSelector selector = new ResourceSelector(ResourceSelector.Kind.valueOf(raw.substring(0, split)), raw.substring(split + 1));
                             return selector.overlaps(ResourceSelector.pathExact(normalized));
                         } catch (RuntimeException invalid) {
                             return false;

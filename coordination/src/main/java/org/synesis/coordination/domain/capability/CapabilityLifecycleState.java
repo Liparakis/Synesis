@@ -157,6 +157,31 @@ public enum CapabilityLifecycleState {
     }
 
     /**
+     * Tells whether the owner has accepted the contract and the request has not ended since: acceptance,
+     * implementation, publication, validation, or a validated outcome.
+     *
+     * @return true for {@link #ACCEPTED}, {@link #IMPLEMENTING}, {@link #IMPLEMENTATION_AVAILABLE},
+     *         {@link #VALIDATING} and {@link #VALIDATED}
+     */
+    public boolean hasAcceptedContract() {
+        return acceptsImplementation() || this == IMPLEMENTATION_AVAILABLE || this == VALIDATING || this == VALIDATED;
+    }
+
+    /**
+     * Tells whether a request still keeps its requester's lane from finishing: the contract is under
+     * negotiation, or the owner is implementing, has published, or the requester is validating.
+     *
+     * <p>{@link #ACCEPTED} is not in this set, although {@link #hasOpenObligation()} includes it: a request
+     * the owner has accepted but not started does not hold the requester's lane back.</p>
+     *
+     * @return true for the negotiation states, {@link #IMPLEMENTING}, {@link #IMPLEMENTATION_AVAILABLE} and
+     *         {@link #VALIDATING}
+     */
+    public boolean blocksRequesterCompletion() {
+        return isUnderNegotiation() || this == IMPLEMENTING || this == IMPLEMENTATION_AVAILABLE || this == VALIDATING;
+    }
+
+    /**
      * Tells whether the requester has something to read or act on in a request.
      *
      * @return true for the open-obligation states and {@link #REJECTED}

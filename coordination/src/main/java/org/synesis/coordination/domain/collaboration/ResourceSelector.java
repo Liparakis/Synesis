@@ -1,5 +1,6 @@
 package org.synesis.coordination.domain.collaboration;
 
+import java.util.Optional;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
@@ -39,6 +40,35 @@ public record ResourceSelector(Kind kind, String value) {
      */
     public static ResourceSelector pathSubtree(String path) {
         return new ResourceSelector(Kind.PATH_SUBTREE, path);
+    }
+
+    /**
+     * Returns the persisted text of this selector: the kind name, a colon, and the value. Snapshot claim
+     * selectors are stored in this form.
+     *
+     * @return {@code KIND:value}
+     */
+    public String encode() {
+        return kind.name() + ":" + value;
+    }
+
+    /**
+     * Reads a selector from its persisted {@link #encode() text}.
+     *
+     * @param text persisted {@code KIND:value} text
+     * @return the selector, or empty when the text has no kind and value, names an unknown kind, or holds a
+     *         value that is not a valid selector
+     */
+    public static Optional<ResourceSelector> parse(String text) {
+        int separator = text.indexOf(':');
+        if (separator <= 0 || separator == text.length() - 1) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new ResourceSelector(Kind.valueOf(text.substring(0, separator)), text.substring(separator + 1)));
+        } catch (IllegalArgumentException invalid) {
+            return Optional.empty();
+        }
     }
 
     /**

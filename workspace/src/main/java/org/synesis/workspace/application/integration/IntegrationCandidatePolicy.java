@@ -83,8 +83,7 @@ final class IntegrationCandidatePolicy {
                 structuralFailures.add("MISSING_CAPABILITY_DEPENDENCY:" + dependencyHandle);
                 continue;
             }
-            if (capability.state() == CapabilityLifecycleState.REJECTED || capability.state() == CapabilityLifecycleState.CANCELLED || capability.state() == CapabilityLifecycleState.EXPIRED
-                    || capability.state() == CapabilityLifecycleState.SUPERSEDED) {
+            if (!capability.state().bindsLanes()) {
                 structuralFailures.add("STALE_CAPABILITY_DEPENDENCY:" + dependencyHandle);
                 continue;
             }

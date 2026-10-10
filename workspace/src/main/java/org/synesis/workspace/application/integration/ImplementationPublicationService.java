@@ -153,7 +153,7 @@ public final class ImplementationPublicationService {
             boolean replayState = state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
                     || state == CapabilityLifecycleState.VALIDATING
                     || state == CapabilityLifecycleState.VALIDATED;
-            if (!replayState && state != CapabilityLifecycleState.ACCEPTED && state != CapabilityLifecycleState.IMPLEMENTING) {
+            if (!state.hasAcceptedContract()) {
                 return blocked("CAPABILITY_REQUEST_NOT_PUBLISHABLE", AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
             }
 

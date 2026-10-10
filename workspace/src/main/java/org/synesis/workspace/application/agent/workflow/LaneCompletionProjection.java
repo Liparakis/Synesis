@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
@@ -45,18 +44,6 @@ final class LaneCompletionProjection {
      * Summary attached to every snapshot-publication finish payload.
      */
     private static final String PUBLISH_SNAPSHOT_SUMMARY = "Publish the completed immutable snapshot";
-
-    /**
-     * Capability states in which the owner still owes a reply, an implementation, or a revision,
-     * or is waiting for the requester's verdict. While any owned request is in one of them the
-     * owner's lane is not ready to be closed.
-     */
-    private static final Set<CapabilityLifecycleState> OWNER_OPEN_STATES = Set.of(CapabilityLifecycleState.AWAITING_OWNER,
-            CapabilityLifecycleState.REVISION_REQUESTED,
-            CapabilityLifecycleState.ACCEPTED,
-            CapabilityLifecycleState.IMPLEMENTING,
-            CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
-            CapabilityLifecycleState.VALIDATING);
 
     /**
      * Reason reported while an owner's proposed contract is inside its answer period.
@@ -109,7 +96,7 @@ final class LaneCompletionProjection {
             for (CapabilityRequestRecord request : store.capabilityRequestProjection().records().values()) {
                 if (!request.matchesOwner(actor.nodeId(), actor.supervisorId(), actor.workerId())
                         || !request.authorityLineageId().equals(intent.authorityLineageId())
-                        || (request.state() != CapabilityLifecycleState.ACCEPTED && request.state() != CapabilityLifecycleState.IMPLEMENTING)) {
+                        || !request.state().acceptsImplementation()) {
                     continue;
                 }
                 try {
@@ -524,7 +511,7 @@ final class LaneCompletionProjection {
                 .filter(candidate -> candidate.authorityLineageId().equals(intent.authorityLineageId()))
                 .toList();
         List<CapabilityRequestRecord> validated = owned.stream().filter(candidate -> candidate.state() == CapabilityLifecycleState.VALIDATED).toList();
-        if (validated.isEmpty() || owned.stream().anyMatch(candidate -> OWNER_OPEN_STATES.contains(candidate.state()))
+        if (validated.isEmpty() || owned.stream().anyMatch(candidate -> candidate.state().hasOpenObligation())
                 || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId())) {
             return null;
         }

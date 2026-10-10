@@ -96,7 +96,7 @@ public final class WorkspaceCollaborationService {
      */
     public static String participantHandle(String connectionInstanceId) {
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        return "agt_" + UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
+        return "agt_" + LaneIdentities.connectionUuid(connectionInstanceId);
     }
 
     /**
@@ -278,7 +278,7 @@ public final class WorkspaceCollaborationService {
      */
     public void release(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
-            UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
+            UUID intentId = LaneIdentities.sessionIntentId(provider, binding.sessionId());
             WorkIntentService service = new WorkIntentService(store, identity);
             WorkIntent current = store.collaborationProjection().intent(intentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
             service.release(intentId, participantHandle(binding.sessionId()), WorkIntentMutationPrecondition.capture(current));

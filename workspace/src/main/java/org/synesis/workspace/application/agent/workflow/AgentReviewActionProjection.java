@@ -592,17 +592,9 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
 static List<Map<String, Object>> snapshotReviewTargets(TaskSnapshotRecord snapshot) {
         List<Map<String, Object>> targets = new ArrayList<>();
         for (String encoded : snapshot.provenance().claimSelectors()) {
-            int separator = encoded.indexOf(':');
-            if (separator <= 0 || separator == encoded.length() - 1) {
-                continue;
-            }
-            try {
-                ResourceSelector selector = new ResourceSelector(ResourceSelector.Kind.valueOf(encoded.substring(0, separator)), encoded.substring(separator + 1));
-                targets.add(Map.of(NextActionKeys.KIND, selector.kind().name().toLowerCase(Locale.ROOT), "path", selector.value()));
-            } catch (IllegalArgumentException ignored) {
-                // Invalid historical selectors are omitted from agent guidance; server-side review
-                // admission still validates the immutable snapshot provenance.
-            }
+            // Invalid historical selectors are omitted from agent guidance; server-side review
+            // admission still validates the immutable snapshot provenance.
+            ResourceSelector.parse(encoded).ifPresent(selector -> targets.add(Map.of(NextActionKeys.KIND, selector.kind().name().toLowerCase(Locale.ROOT), "path", selector.value())));
         }
         return List.copyOf(targets);
     }
@@ -647,18 +639,8 @@ static boolean hasPublishedReviewRequiredSnapshot(PredictionEventStore store, Wo
      * Returns whether a reviewer declaration covers an already published snapshot claim.
      */
     static boolean reviewTargetsMatch(WorkIntent reviewer, TaskSnapshotRecord snapshot) {
-        return reviewer.reviewTargetSelectors().stream().allMatch(targetSelector -> snapshot.provenance().claimSelectors().stream().anyMatch(encoded -> {
-            int separator = encoded.indexOf(':');
-            if (separator <= 0 || separator == encoded.length() - 1) {
-                return false;
-            }
-            try {
-                ResourceSelector selector = new ResourceSelector(ResourceSelector.Kind.valueOf(encoded.substring(0, separator)), encoded.substring(separator + 1));
-                return targetSelector.overlaps(selector);
-            } catch (IllegalArgumentException ignored) {
-                return false;
-            }
-        }));
+        return reviewer.reviewTargetSelectors().stream().allMatch(targetSelector -> snapshot.provenance().claimSelectors().stream()
+                .anyMatch(encoded -> ResourceSelector.parse(encoded).map(targetSelector::overlaps).orElse(false)));
     }
 
 /**

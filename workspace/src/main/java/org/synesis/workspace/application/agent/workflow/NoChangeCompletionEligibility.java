@@ -109,8 +109,7 @@ final class NoChangeCompletionEligibility {
 
     private static boolean hasPendingCapability(PredictionEventStore store, String nodeId, String supervisorId, String workerId) {
         return store.capabilityRequestProjection().findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).map(CapabilityRequestRecord::state)
-                .anyMatch(state -> state == CapabilityLifecycleState.AWAITING_OWNER || state == CapabilityLifecycleState.REVISION_REQUESTED || state == CapabilityLifecycleState.ACCEPTED || state == CapabilityLifecycleState.IMPLEMENTING
-                        || state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || state == CapabilityLifecycleState.VALIDATING);
+                .anyMatch(CapabilityLifecycleState::hasOpenObligation);
     }
 
     private static Result denied(String reason) {

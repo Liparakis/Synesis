@@ -251,7 +251,7 @@ public final class TaskSnapshotService {
                 lane.claimEpoch(),
                 capabilityDependencies,
                 lane.handoffLineage(),
-                claims.stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList(),
+                claims.stream().map(ResourceSelector::encode).toList(),
                 SnapshotRefs.snapshotRef(snapshotId),
                 integrity(commitSha, materializedPaths),
                 artifactManifest.digest());

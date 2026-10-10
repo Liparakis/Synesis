@@ -104,11 +104,7 @@ final class NoChangeLaneCompletion {
         }
         boolean pendingDependency = store.capabilityRequestProjection().findAllForRequester(identity.nodeId()).stream()
                 .filter(candidate -> candidate.matchesRequester(identity.nodeId(), verifiedBinding.supervisorId(), verifiedBinding.workerId()))
-                .anyMatch(candidate -> candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.AWAITING_OWNER
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REVISION_REQUESTED
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTING
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
-                        || candidate.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.VALIDATING);
+                .anyMatch(candidate -> candidate.state().blocksRequesterCompletion());
         if (pendingDependency || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
             throw new IOException("NO_CHANGE_DEPENDENCY_PENDING");
         }

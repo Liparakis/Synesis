@@ -74,6 +74,10 @@ final class CapabilityActionProjection {
     private CapabilityActionProjection() {
     }
 
+    static String capabilityInboxItemId(String capabilityHandle) {
+        return UUID.nameUUIDFromBytes(("capability:" + capabilityHandle).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
     /**
      * Resolves capability-request work: unmet dependencies first, then owner duties, then the
      * requester's view of its own requests.
@@ -196,20 +200,13 @@ final class CapabilityActionProjection {
                     .filter(record -> record.capability().equals(dependency))
                     .filter(record -> record.authorityLineageId().equals(intent.authorityLineageId()))
                     .filter(record -> record.matchesOwner(actor.nodeId(), actor.supervisorId(), actor.workerId()))
-                    .filter(record -> record.state() != CapabilityLifecycleState.REJECTED
-                            && record.state() != CapabilityLifecycleState.CANCELLED
-                            && record.state() != CapabilityLifecycleState.EXPIRED
-                            && record.state() != CapabilityLifecycleState.SUPERSEDED)
+                    .filter(record -> record.state().bindsLanes())
                     .toList();
             if (!owned.isEmpty()) {
                 locallyOwned.add(dependency);
             }
             List<CapabilityRequestRecord> accepted = owned.stream()
-                    .filter(record -> record.state() == CapabilityLifecycleState.ACCEPTED
-                            || record.state() == CapabilityLifecycleState.IMPLEMENTING
-                            || record.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE
-                            || record.state() == CapabilityLifecycleState.VALIDATING
-                            || record.state() == CapabilityLifecycleState.VALIDATED)
+                    .filter(record -> record.state().hasAcceptedContract())
                     .toList();
             if (accepted.isEmpty()) {
                 continue;
@@ -340,7 +337,7 @@ final class CapabilityActionProjection {
         }
 
         List<CapabilityRequestRecord> ownerAccepted = capabilities.records().values().stream().filter(ownedByCaller)
-                .filter(candidate -> candidate.state() == CapabilityLifecycleState.ACCEPTED || candidate.state() == CapabilityLifecycleState.IMPLEMENTING).filter(inCallerLineage).toList();
+                .filter(candidate -> candidate.state().acceptsImplementation()).filter(inCallerLineage).toList();
         if (!ownerAccepted.isEmpty()) {
             return capabilityOwnerResponse(ownerAccepted, AgentStatus.READY, null, null);
         }
@@ -386,7 +383,7 @@ final class CapabilityActionProjection {
             result.put("acceptRevision", Map.of(NextActionKeys.TOOL, NextActionProtocol.ACTION_REQUEST_COORDINATION, NextActionKeys.ARGUMENTS, Map.of(NextActionKeys.KIND, NextActionProtocol.KIND_CAPABILITY_REQUEST, NextActionKeys.PAYLOAD, acceptPayload)));
             return new AgentResponse(AgentStatus.READY, AgentReason.REVISION_REQUIRED, AgentNextAction.REVISE_CAPABILITY_REQUEST, result);
         }
-        if (state == CapabilityLifecycleState.ACCEPTED || state == CapabilityLifecycleState.IMPLEMENTING) {
+        if (state.acceptsImplementation()) {
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, focus.authorityLineageId().toString());
             result.put(NextActionKeys.CONTRACT, capabilityContractMap(focus));
@@ -398,7 +395,7 @@ final class CapabilityActionProjection {
             // First open only the exact immutable revision; no validation verdict is executable yet.
             ImplementationRevisionRecord implementation = capabilities.findLatestImplementation(focus.handle().value()).orElse(null);
             int revision = implementation != null ? implementation.revisionNumber() : 1;
-            String inboxItemId = UUID.nameUUIDFromBytes(("capability:" + focus.handle().value()).getBytes(StandardCharsets.UTF_8)).toString();
+            String inboxItemId = capabilityInboxItemId(focus.handle().value());
             result.put(NextActionKeys.INBOX_ITEM_ID, inboxItemId);
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, focus.authorityLineageId().toString());
@@ -430,7 +427,7 @@ final class CapabilityActionProjection {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP,
                         Map.of(NextActionKeys.REASON, "VALIDATION_CONTEXT_UNAVAILABLE", NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value()));
             }
-            result.put(NextActionKeys.INBOX_ITEM_ID, UUID.nameUUIDFromBytes(("capability:" + focus.handle().value()).getBytes(StandardCharsets.UTF_8)).toString());
+            result.put(NextActionKeys.INBOX_ITEM_ID, capabilityInboxItemId(focus.handle().value()));
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, focus.authorityLineageId().toString());
             result.put(NextActionKeys.CONTRACT, capabilityContractMap(focus));
@@ -497,7 +494,7 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, request.authorityLineageId().toString());
         result.put(NextActionKeys.CONTRACT_REVISION, request.contractRevision());
         result.put(NextActionKeys.CONTRACT, capabilityContractMap(request));
-        if (request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING) {
+        if (request.state().acceptsImplementation()) {
             result.put("implementationPending", true);
             result.put(NextActionKeys.COMPLETION_REQUEST, COMPLETION_REQUEST);
         } else if (request.state() == CapabilityLifecycleState.VALIDATED) {
@@ -594,7 +591,7 @@ final class CapabilityActionProjection {
         return store.capabilityRequestProjection().records().values().stream()
                 .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
                 .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
-                .filter(request -> request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING)
+                .filter(request -> request.state().acceptsImplementation())
                 .findFirst();
     }
 

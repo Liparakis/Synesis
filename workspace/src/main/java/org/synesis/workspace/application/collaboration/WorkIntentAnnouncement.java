@@ -93,8 +93,8 @@ final class WorkIntentAnnouncement {
             throw new IOException("SESSION_EPOCH_FENCED");
         }
         WorkIntentService service = new WorkIntentService(store, identity);
-        UUID taskId = UUID.nameUUIDFromBytes(connectionInstanceId.getBytes(StandardCharsets.UTF_8));
-        UUID intentId = UUID.nameUUIDFromBytes((provider + ":" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
+        UUID taskId = LaneIdentities.connectionUuid(connectionInstanceId);
+        UUID intentId = LaneIdentities.sessionIntentId(provider, binding.sessionId());
         WorkIntent existingIntent = store.collaborationProjection().intent(intentId).orElse(null);
         if (existingIntent != null) {
             if (expectedIntentId != null && !expectedIntentId.equals(existingIntent.intentId())) {
@@ -135,7 +135,7 @@ final class WorkIntentAnnouncement {
         if (expectedIntentId != null || expectedClaimEpoch != null) {
             throw new IOException("SCOPE_EXTENSION_INTENT_NOT_FOUND");
         }
-        UUID defaultGroup = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(StandardCharsets.UTF_8));
+        UUID defaultGroup = defaultWorkGroupId(location.projectId());
         UUID group = workGroupId == null ? store.workGroupProjection().groups().stream().filter(candidate -> candidate.projectId().equals(location.projectId()))
                                            .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE).map(WorkGroup::workGroupId).findFirst()
                                            .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty() ? defaultGroup : UUID.randomUUID()) : workGroupId;
@@ -156,6 +156,14 @@ final class WorkIntentAnnouncement {
                 reviewTargetSelectors == null ? List.of() : reviewTargetSelectors,
                 knownDependencies == null ? List.of() : knownDependencies);
         return service.announce(intent);
+    }
+
+    static UUID defaultWorkGroupId(UUID projectId) {
+        return UUID.nameUUIDFromBytes(("default-work-group:" + projectId).getBytes(StandardCharsets.UTF_8));
+    }
+
+    static UUID repairJoinIntentId(UUID repairIntentId, String sessionId) {
+        return UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + sessionId).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -184,13 +192,13 @@ final class WorkIntentAnnouncement {
         if (!snapshot.provenance().snapshotRef().equals(SnapshotRefs.snapshotRef(snapshot.snapshotId()))) {
             throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");
         }
-        UUID targetId = UUID.nameUUIDFromBytes(("repair-join|" + repairIntentId + "|" + binding.sessionId()).getBytes(StandardCharsets.UTF_8));
+        UUID targetId = repairJoinIntentId(repairIntentId, binding.sessionId());
         WorkIntent existingTarget = store.collaborationProjection().intent(targetId).orElse(null);
         if (existingTarget != null) {
             List<String> expectedSelectors = snapshot.provenance().claimSelectors();
             if (!existingTarget.participant().equals(participantHandle(binding.sessionId())) || !existingTarget.workGroupId().equals(snapshot.provenance().workGroupId()) || !existingTarget.authorityLineageId()
                     .equals(snapshot.provenance().authorityLineageId()) || existingTarget.version() != snapshot.provenance().claimEpoch() + 1L || !existingTarget.selectors().stream()
-                    .map(selector -> selector.kind().name() + ":" + selector.value()).toList().equals(expectedSelectors)) {
+                    .map(ResourceSelector::encode).toList().equals(expectedSelectors)) {
                 throw new IOException("REPAIR_TARGET_MISMATCH");
             }
             return new ClaimResult(true, existingTarget, List.of());
@@ -201,7 +209,7 @@ final class WorkIntentAnnouncement {
         }
         if (!snapshot.provenance().laneId().equals(source.intentId()) || !snapshot.provenance().workGroupId().equals(source.workGroupId()) || !snapshot.provenance().authorityLineageId()
                 .equals(source.authorityLineageId()) || snapshot.provenance().claimEpoch() != source.version() || !snapshot.provenance().participant().equals(source.participant()) || !snapshot.provenance()
-                .claimSelectors().equals(source.selectors().stream().map(selector -> selector.kind().name() + ":" + selector.value()).toList())) {
+                .claimSelectors().equals(source.selectors().stream().map(ResourceSelector::encode).toList())) {
             throw new IOException("REPAIR_LINEAGE_OR_SCOPE_MISMATCH");
         }
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
