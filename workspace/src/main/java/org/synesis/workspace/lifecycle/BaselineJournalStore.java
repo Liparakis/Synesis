@@ -113,6 +113,6 @@ final class BaselineJournalStore {
         values.put("managedPathStates", journal.managedPathStates());
         values.put("expectedManagedDigests", journal.expectedManagedDigests());
         values.put("createdAt", Instant.now().toString());
-        return Map.copyOf(values);
+        return values;
     }
 }
