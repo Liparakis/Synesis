@@ -100,9 +100,17 @@ final class McpRecoveryContinuationTest {
         Files.writeString(project.resolve("README.md"), "# control advanced after continuation\n");
         git(project, "add", "README.md");
         git(project, "commit", "-m", "advance control after successor acquisition");
+        // The successor is moved onto the new control head like any session holding uncommitted
+        // claimed work: it stays the same session, keeps the work it recovered, and now sees
+        // what the control branch gained. Without that a successor could never read or test
+        // against work a peer integrated after the continuation.
         var refreshedSuccessor = bindings.ensure(location, "codex", "continuation-successor").binding();
         assertEquals(successorBinding.sessionId(), refreshedSuccessor.sessionId());
-        assertEquals(successorBinding.worktreePath(), refreshedSuccessor.worktreePath());
+        Path refreshedWorktree = Path.of(refreshedSuccessor.worktreePath());
+        assertNotEquals(successorBinding.worktreePath(), refreshedSuccessor.worktreePath());
+        assertEquals("durable partial output\n", Files.readString(refreshedWorktree.resolve("src/partial.txt")), "recovered work must be carried over unchanged");
+        assertEquals("# control advanced after continuation\n", Files.readString(refreshedWorktree.resolve("README.md")));
+        assertEquals("durable partial output\n", Files.readString(Path.of(successorBinding.worktreePath()).resolve("src/partial.txt")), "the worktree it left is not touched");
 
         Map<String, Object> completionProjection = innerResult(successor.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
         assertEquals("finish_lane", completionProjection.get("nextAction"), completionProjection.toString());
@@ -135,6 +143,50 @@ final class McpRecoveryContinuationTest {
         assertTrue(returned.conflicts().stream().anyMatch(conflict -> conflict.participant().equals(successorIntent.participant())));
         assertNotEquals(ownerBinding.sessionId(), successorBinding.sessionId());
         assertNotEquals(successorBinding.sessionId(), racerBinding.sessionId());
+    }
+
+    @Test
+    void successorKeepsItsRecoveredWorktreeWhenTheControlBranchChangedAFileItClaims(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("continuation-conflict-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+
+        AgentSessionService sessions = new AgentSessionService();
+        ensureAndTrust(sessions, location, project, "conflict-owner");
+        ensureAndTrust(sessions, location, project, "conflict-successor");
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var ownerBinding = bindings.find(location, "codex", "conflict-owner").orElseThrow();
+        var successorBinding = bindings.find(location, "codex", "conflict-successor").orElseThrow();
+        Path ownerWorktree = Path.of(ownerBinding.worktreePath());
+        Files.createDirectories(ownerWorktree.resolve("src"));
+        Files.writeString(ownerWorktree.resolve("src/partial.txt"), "durable partial output\n");
+
+        var claim = new WorkspaceCollaborationService().announce(project, "codex", "conflict-owner", "Implement the durable feature", "Publish and validate the feature",
+                List.of(ResourceSelector.pathExact("src/partial.txt")));
+        RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location, ownerBinding.sessionId());
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var intentService = new org.synesis.coordination.application.WorkIntentService(store(project), identity);
+        intentService.suspend(claim.intent().participant());
+        intentService.holdRecovery(claim.intent().participant(), snapshot.root().toString() + "#" + snapshot.contentHash());
+
+        McpProtocolHandler successor = new McpProtocolHandler(sessions, project, "codex", "conflict-successor");
+        Map<String, Object> discovered = continuationArguments(successor.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> continued = (Map<String, Object>) innerResult(successor.handleMessage(toolCall("request_coordination", ProviderJson.write(discovered)))).get("result");
+        assertEquals("CONTINUED", continued.get("status"), continued.toString());
+
+        // The control branch now holds a different version of the very file the successor
+        // recovered. Carrying the recovered copy onto that head would silently overwrite it, so
+        // the refresh declines and the successor keeps the worktree it was given.
+        Files.createDirectories(project.resolve("src"));
+        Files.writeString(project.resolve("src/partial.txt"), "another version on the control branch\n");
+        git(project, "add", "src/partial.txt");
+        git(project, "commit", "-m", "control changes the claimed file");
+
+        var retained = bindings.ensure(location, "codex", "conflict-successor").binding();
+        assertEquals(successorBinding.sessionId(), retained.sessionId());
+        assertEquals(successorBinding.worktreePath(), retained.worktreePath());
+        assertEquals("durable partial output\n", Files.readString(Path.of(retained.worktreePath()).resolve("src/partial.txt")));
     }
 
     @Test

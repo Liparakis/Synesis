@@ -187,6 +187,20 @@ public final class ProviderSessionBindingService {
                             Binding refreshed = refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
                             return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
                         }
+                        if (!worktreeClean) {
+                            // A session that continued a lane needs what its peers integrate as
+                            // much as any other: a requester cannot read or test against a
+                            // dependency that exists only on the new control head. The refresh
+                            // keeps the session, its claims, and its uncommitted work. Where it
+                            // cannot do so safely, the recovered worktree stays as it is, which is
+                            // what a continuation always got before.
+                            try {
+                                Binding refreshed = refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
+                                return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
+                            } catch (BindingException keepRecoveredWorktree) {
+                                // Falls through to retaining the existing worktree.
+                            }
+                        }
                         boolean activeManagedAttachment = hasActiveManagedAttachment(location, binding);
                         boolean activeNoChangeIntent = hasActiveNoChangeIntent(location, binding);
                         if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding) && !activeManagedAttachment && !activeNoChangeIntent && worktreeClean) {
