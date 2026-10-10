@@ -97,12 +97,7 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   }
 
   private static byte[] readBytes(ByteBuf message) {
-    if (message.readableBytes() > ControlFrame.MAX_FRAME) {
-      throw new IllegalArgumentException("frame too large");
-    }
-    byte[] value = new byte[message.readableBytes()];
-    message.readBytes(value);
-    return value;
+    return LengthPrefixedFrames.read(message, ControlFrame.MAX_FRAME, "frame too large");
   }
 
   @Override

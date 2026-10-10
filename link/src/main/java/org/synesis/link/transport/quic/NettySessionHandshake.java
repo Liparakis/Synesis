@@ -6,8 +6,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.codec.quic.QuicStreamChannel;
 import io.netty.util.AttributeKey;
 import java.time.Instant;
@@ -38,6 +36,7 @@ import org.synesis.link.session.SessionAuthenticator;
 import org.synesis.link.transport.control.ApplicationStreamCodec;
 import org.synesis.link.transport.control.ApplicationStreamTransport;
 import org.synesis.link.transport.control.DemoWorkTransport;
+import org.synesis.link.transport.control.LengthPrefixedFrames;
 import org.synesis.link.transport.control.NettyControlStream;
 
 /**
@@ -182,11 +181,7 @@ public final class NettySessionHandshake {
           channel.close();
           return;
         }
-        channel.pipeline()
-            .addLast(new LengthFieldBasedFrameDecoder(
-                ApplicationStreamCodec.MAX_FRAME_BYTES + Integer.BYTES, 0, Integer.BYTES, 0,
-                Integer.BYTES));
-        channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
+        LengthPrefixedFrames.install(channel.pipeline(), ApplicationStreamCodec.MAX_FRAME_BYTES);
         channel.pipeline().addLast(new ClientApplicationStreamHandler(state));
       }
     };
@@ -275,11 +270,7 @@ public final class NettySessionHandshake {
             attribute.set(state);
           }
         }
-        channel.pipeline()
-            .addLast(new LengthFieldBasedFrameDecoder(
-                HandshakeEnvelope.MAX_BYTES + Integer.BYTES, 0, Integer.BYTES, 0, Integer.BYTES));
-        channel.pipeline()
-            .addLast(new LengthFieldPrepender(Integer.BYTES));
+        LengthPrefixedFrames.install(channel.pipeline(), HandshakeEnvelope.MAX_BYTES);
         channel.pipeline()
             .addLast(new HandshakeStreamHandler(state));
       }
@@ -371,12 +362,8 @@ public final class NettySessionHandshake {
     }
 
     private static byte[] readBytes(ByteBuf message) {
-      if (message.readableBytes() > HandshakeEnvelope.MAX_BYTES) {
-        throw new IllegalArgumentException("handshake frame exceeds supported bound");
-      }
-      byte[] bytes = new byte[message.readableBytes()];
-      message.readBytes(bytes);
-      return bytes;
+      return LengthPrefixedFrames.read(message, HandshakeEnvelope.MAX_BYTES,
+          "handshake frame exceeds supported bound");
     }
 
     @Override
