@@ -69,8 +69,7 @@ public final class NettySessionHandshake {
       HandshakeTranscript transcript, HandshakeProof localProof, ReplayGuard replayGuard,
       CompletableFuture<PeerSession> result) {
     return clientStreamHandler(localIdentity, expectedRemoteNodeId, List.of(ProtocolVersion.V1),
-        transcript,
-        localProof, replayGuard, result);
+        transcript, localProof, replayGuard, result, LivenessConfiguration.DEFAULT, null);
   }
 
   /**
@@ -93,60 +92,12 @@ public final class NettySessionHandshake {
       CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
       PeerSession.ApplicationStreamHandler applicationHandler) {
     return clientStreamHandler(localIdentity, expectedRemoteNodeId, List.of(ProtocolVersion.V1),
-        transcript,
-        localProof, replayGuard, result, livenessConfiguration, applicationHandler);
+        transcript, localProof, replayGuard, result, livenessConfiguration, applicationHandler);
   }
 
   /**
-   * Creates an initiator handshake stream handler with explicit protocol support.
-   *
-   * @param localIdentity        local node identity
-   * @param expectedRemoteNodeId expected remote node identifier
-   * @param supportedVersions    supported protocol versions
-   * @param transcript           handshake transcript
-   * @param localProof           local handshake proof
-   * @param replayGuard          replay guard
-   * @param result               completion receiving the authenticated session
-   * @return configured client handshake handler
-   */
-  public static ChannelHandler clientStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
-      HandshakeProof localProof,
-      ReplayGuard replayGuard, CompletableFuture<PeerSession> result) {
-    return clientStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-        localProof,
-        replayGuard, result, LivenessConfiguration.DEFAULT);
-  }
-
-  /**
-   * Creates an initiator handshake stream handler with explicit liveness settings.
-   *
-   * @param localIdentity         local node identity
-   * @param expectedRemoteNodeId  expected remote node identifier
-   * @param supportedVersions     supported protocol versions
-   * @param transcript            handshake transcript
-   * @param localProof            local handshake proof
-   * @param replayGuard           replay guard
-   * @param result                completion receiving the authenticated session
-   * @param livenessConfiguration liveness settings
-   * @return configured client handshake handler
-   */
-  public static ChannelHandler clientStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions,
-      HandshakeTranscript transcript,
-      HandshakeProof localProof,
-      ReplayGuard replayGuard,
-      CompletableFuture<PeerSession> result,
-      LivenessConfiguration livenessConfiguration) {
-    return clientStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-        localProof,
-        replayGuard, result, livenessConfiguration, null);
-  }
-
-  /**
-   * Creates the most configurable initiator handshake stream handler.
+   * Creates an initiator handshake stream handler with explicit protocol support, liveness
+   * settings, and an application-stream hook.
    *
    * @param localIdentity         local node identity
    * @param expectedRemoteNodeId  expected remote node identifier
@@ -173,27 +124,8 @@ public final class NettySessionHandshake {
   }
 
   /**
-   * Creates the default responder handshake stream handler.
-   *
-   * @param localIdentity        local node identity
-   * @param expectedRemoteNodeId expected remote node identifier
-   * @param transcript           handshake transcript
-   * @param replayGuard          replay guard
-   * @param result               completion receiving the authenticated session
-   * @return configured server handshake handler
-   */
-  @SuppressWarnings("unused")
-  public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      HandshakeTranscript transcript, ReplayGuard replayGuard,
-      CompletableFuture<PeerSession> result) {
-    return serverStreamHandler(localIdentity, expectedRemoteNodeId, List.of(ProtocolVersion.V1),
-        transcript,
-        replayGuard, result);
-  }
-
-  /**
-   * Creates a responder handshake stream handler with explicit protocol support.
+   * Creates a responder handshake stream handler with explicit protocol support and default
+   * liveness settings.
    *
    * @param localIdentity        local node identity
    * @param expectedRemoteNodeId expected remote node identifier
@@ -206,8 +138,8 @@ public final class NettySessionHandshake {
       String expectedRemoteNodeId,
       List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
       CompletableFuture<PeerSession> result) {
-    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, null,
-        replayGuard, result);
+    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions,
+        replayGuard, result, LivenessConfiguration.DEFAULT, null);
   }
 
   /**
@@ -227,76 +159,8 @@ public final class NettySessionHandshake {
       List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
       CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
       PeerSession.ApplicationStreamHandler applicationHandler) {
-    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, null,
-        replayGuard,
-        result, livenessConfiguration, applicationHandler);
-  }
-
-  /**
-   * Creates a responder handshake stream handler with explicit transcript state.
-   *
-   * @param localIdentity        local node identity
-   * @param expectedRemoteNodeId expected remote node identifier
-   * @param supportedVersions    supported protocol versions
-   * @param transcript           handshake transcript
-   * @param replayGuard          replay guard
-   * @param result               completion receiving the authenticated session
-   * @return configured server handshake handler
-   */
-  public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
-      ReplayGuard replayGuard, CompletableFuture<PeerSession> result) {
-    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-        replayGuard,
-        result, LivenessConfiguration.DEFAULT);
-  }
-
-  /**
-   * Creates a responder handshake stream handler with explicit transcript and liveness settings.
-   *
-   * @param localIdentity         local node identity
-   * @param expectedRemoteNodeId  expected remote node identifier
-   * @param supportedVersions     supported protocol versions
-   * @param transcript            handshake transcript
-   * @param replayGuard           replay guard
-   * @param result                completion receiving the authenticated session
-   * @param livenessConfiguration liveness settings
-   * @return configured server handshake handler
-   */
-  public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions,
-      HandshakeTranscript transcript,
-      ReplayGuard replayGuard,
-      CompletableFuture<PeerSession> result,
-      LivenessConfiguration livenessConfiguration) {
-    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
-        replayGuard,
-        result, livenessConfiguration, null);
-  }
-
-  /**
-   * Creates the most configurable responder handshake stream handler.
-   *
-   * @param localIdentity         local node identity
-   * @param expectedRemoteNodeId  expected remote node identifier
-   * @param supportedVersions     supported protocol versions
-   * @param transcript            handshake transcript
-   * @param replayGuard           replay guard
-   * @param result                completion receiving the authenticated session
-   * @param livenessConfiguration liveness settings
-   * @param applicationHandler    optional application-stream handler
-   * @return configured server handshake handler
-   */
-  public static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
-      ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
-      LivenessConfiguration livenessConfiguration,
-      PeerSession.ApplicationStreamHandler applicationHandler) {
     return streamInitializer(
-        new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
+        new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
             null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, null,
             applicationHandler));
   }
@@ -360,29 +224,6 @@ public final class NettySessionHandshake {
 
   /**
    * Creates the invitation-accepting responder handshake stream handler.
-   *
-   * @param localIdentity         local node identity
-   * @param expectedRemoteNodeId  expected remote node identifier
-   * @param supportedVersions     supported protocol versions
-   * @param replayGuard           replay guard
-   * @param result                completion receiving the authenticated session
-   * @param livenessConfiguration liveness settings
-   * @param admission             invitation admission state
-   * @return configured invitation handshake handler
-   */
-  @SuppressWarnings("unused")
-  public static ChannelHandler serverInvitationStreamHandler(NodeIdentity localIdentity,
-      String expectedRemoteNodeId,
-      List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
-      CompletableFuture<PeerSession> result,
-      LivenessConfiguration livenessConfiguration, InvitationAdmission admission) {
-    return serverInvitationStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions,
-        replayGuard,
-        result, livenessConfiguration, admission, null);
-  }
-
-  /**
-   * Creates the most configurable invitation-accepting responder handshake stream handler.
    *
    * @param localIdentity         local node identity
    * @param expectedRemoteNodeId  expected remote node identifier
@@ -618,7 +459,7 @@ public final class NettySessionHandshake {
           HandshakeProof proof = SessionAuthenticator.createProof(state.localIdentity,
               state.transcript, state.localRole);
           send(context, proof);
-          complete(context, state.localProof == null ? proof : state.localProof, envelope.proof());
+          complete(context, proof, envelope.proof());
         } else {
           complete(context, state.localProof, envelope.proof());
         }

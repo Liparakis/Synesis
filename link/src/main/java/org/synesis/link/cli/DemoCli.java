@@ -49,6 +49,7 @@ import org.synesis.link.protocol.HandshakeProof;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.session.HandshakeRole;
 import org.synesis.link.session.HandshakeTranscript;
+import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;
 import org.synesis.link.session.SessionAuthenticator;
@@ -250,7 +251,8 @@ public final class DemoCli {
                 HandshakeRole.INITIATOR);
             connection.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(identity, descriptor.nodeId(),
-                        List.of(ProtocolVersion.V1), transcript, proof, new ReplayGuard(), established))
+                        List.of(ProtocolVersion.V1), transcript, proof, new ReplayGuard(), established,
+                        LivenessConfiguration.DEFAULT, null))
                 .addListener(stream -> {
                   if (!stream.isSuccess()) {
                     established.completeExceptionally(stream.cause());
