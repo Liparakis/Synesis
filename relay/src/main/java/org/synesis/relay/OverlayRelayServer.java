@@ -12,8 +12,6 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import java.net.InetSocketAddress;
@@ -27,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.overlay.OverlayForwardingFrame;
 import org.synesis.link.overlay.OverlayRelay;
-import org.synesis.link.overlay.OverlayRelayException;
 
 /**
  * One vertically scalable Netty TCP relay endpoint for bounded Synesis frames.
@@ -71,17 +68,6 @@ public final class OverlayRelayServer implements AutoCloseable {
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
-    private static int failureStatus(Throwable failure) {
-        Throwable current = failure;
-        while (current.getCause() != null && !(current instanceof OverlayRelayException)) {
-            current = current.getCause();
-        }
-        if (current instanceof OverlayRelayException relayFailure) {
-            return relayFailure.failure().ordinal() + 1;
-        }
-        return 255;
-    }
-
     /**
      * Starts the event-loop relay and returns its bound address.
      *
@@ -99,8 +85,7 @@ public final class OverlayRelayServer implements AutoCloseable {
                 @Override
                 protected void initChannel(SocketChannel channel) {
                     channel.pipeline().addLast(new IdleStateHandler(IDLE_TIMEOUT_SECONDS, 0, 0));
-                    channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(RelayWireCodec.MAX_PAYLOAD_BYTES + Integer.BYTES, 0, Integer.BYTES, 0, Integer.BYTES));
-                    channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
+                    RelayWireCodec.installFraming(channel.pipeline());
                     channel.pipeline().addLast(new RelayServerHandler());
                 }
             }).bind(bindAddress).sync().channel();
@@ -149,7 +134,6 @@ public final class OverlayRelayServer implements AutoCloseable {
     private final class RelayServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
         private OverlayRelay.Registration registration;
-        private RelayWireCodec.Hello hello;
         private ScheduledFuture<?> handshakeDeadline;
 
         @Override
@@ -170,7 +154,7 @@ public final class OverlayRelayServer implements AutoCloseable {
 
         private void acceptHello(ChannelHandlerContext context, byte[] bytes) {
             try {
-                hello = RelayWireCodec.decodeHello(bytes);
+                RelayWireCodec.Hello hello = RelayWireCodec.decodeHello(bytes);
                 RelayWireCodec.verifyHello(hello);
                 registration = relay.registerAuthenticated(hello.nodeId(), frame -> deliver(context, frame));
                 if (handshakeDeadline != null) {
@@ -185,7 +169,7 @@ public final class OverlayRelayServer implements AutoCloseable {
         private void acceptFrame(ChannelHandlerContext context, byte[] bytes) {
             final OverlayForwardingFrame frame;
             try {
-                frame = OverlayForwardingFrame.decode(RelayWireCodec.decodeFrame(bytes, 2));
+                frame = OverlayForwardingFrame.decode(RelayWireCodec.decodeFrame(bytes, RelayWireCodec.FRAME));
             } catch (Exception failure) {
                 context.close();
                 return;
@@ -195,7 +179,7 @@ public final class OverlayRelayServer implements AutoCloseable {
                 if (!context.channel().isActive()) {
                     return;
                 }
-                int status = failure == null ? 0 : failureStatus(failure);
+                int status = failure == null ? RelayWireCodec.STATUS_OK : RelayWireCodec.failureStatus(failure);
                 context.writeAndFlush(Unpooled.wrappedBuffer(RelayWireCodec.encodeFrameAck(frame.messageId(), status)));
             }));
         }

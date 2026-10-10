@@ -12,8 +12,6 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldPrepender;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
@@ -77,16 +75,13 @@ public final class OverlayRelayClient implements AutoCloseable {
             ChannelFuture connection = new Bootstrap().group(group).channel(NioSocketChannel.class).handler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 protected void initChannel(SocketChannel channel) {
-                    channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(RelayWireCodec.MAX_PAYLOAD_BYTES + Integer.BYTES, 0, Integer.BYTES, 0, Integer.BYTES));
-                    channel.pipeline().addLast(new LengthFieldPrepender(Integer.BYTES));
+                    RelayWireCodec.installFraming(channel.pipeline());
                     channel.pipeline().addLast(new RelayClientHandler());
                 }
             }).connect(serverAddress);
             connection.addListener(future -> {
                 if (!future.isSuccess()) {
                     failAll(future.cause());
-                } else {
-                    channel = connection.channel();
                 }
             });
         } catch (RuntimeException failure) {
@@ -150,10 +145,9 @@ public final class OverlayRelayClient implements AutoCloseable {
         public void channelActive(ChannelHandlerContext context) {
             channel = context.channel();
             try {
-                byte[] encodedHello = RelayWireCodec.encodeHello(identity);
-                hello = RelayWireCodec.decodeHello(encodedHello);
-                context.writeAndFlush(Unpooled.wrappedBuffer(encodedHello));
-            } catch (GeneralSecurityException | IOException failure) {
+                hello = RelayWireCodec.newHello(identity);
+                context.writeAndFlush(Unpooled.wrappedBuffer(hello.encoded()));
+            } catch (GeneralSecurityException failure) {
                 failAll(failure);
                 context.close();
             }
@@ -165,7 +159,7 @@ public final class OverlayRelayClient implements AutoCloseable {
             message.readBytes(bytes);
             try {
                 int type = RelayWireCodec.typeOf(bytes);
-                if (!authenticated && type == 1) {
+                if (!authenticated && type == RelayWireCodec.HELLO_ACK) {
                     RelayWireCodec.HelloAck ack = RelayWireCodec.decodeHelloAck(bytes);
                     RelayWireCodec.verifyHelloAck(ack, hello, expectedRelayNodeId, expectedRelayPublicKey);
                     authenticated = true;
@@ -175,14 +169,14 @@ public final class OverlayRelayClient implements AutoCloseable {
                 if (!authenticated) {
                     throw new IOException("relay frame arrived before authentication");
                 }
-                if (type == 3) {
-                    OverlayForwardingFrame frame = OverlayForwardingFrame.decode(RelayWireCodec.decodeFrame(bytes, 3));
+                if (type == RelayWireCodec.INBOUND_FRAME) {
+                    OverlayForwardingFrame frame = OverlayForwardingFrame.decode(RelayWireCodec.decodeFrame(bytes, RelayWireCodec.INBOUND_FRAME));
                     inboundHandler.accept(frame);
-                } else if (type == 4) {
+                } else if (type == RelayWireCodec.FRAME_ACK) {
                     RelayWireCodec.FrameAck ack = RelayWireCodec.decodeFrameAck(bytes);
                     CompletableFuture<Void> result = pending.remove(ack.messageId);
                     if (result != null) {
-                        if (ack.status == 0) {
+                        if (ack.status == RelayWireCodec.STATUS_OK) {
                             result.complete(null);
                         } else {
                             result.completeExceptionally(new IOException("relay rejected frame with status " + ack.status));

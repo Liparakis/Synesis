@@ -1,5 +1,6 @@
 package org.synesis.relay;
 
+import io.netty.channel.ChannelPipeline;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -15,6 +16,8 @@ import java.util.UUID;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.overlay.OverlayForwardingFrame;
+import org.synesis.link.overlay.OverlayRelayException;
+import org.synesis.link.transport.control.LengthPrefixedFrames;
 
 /**
  * Bounded relay control and frame codec.
@@ -24,11 +27,15 @@ final class RelayWireCodec {
     static final int MAX_PAYLOAD_BYTES = OverlayForwardingFrame.MAX_BYTES + 64;
     private static final int MAGIC = 0x534C5231;
     private static final int VERSION = 1;
-    private static final int HELLO = 0;
-    private static final int HELLO_ACK = 1;
-    private static final int FRAME = 2;
-    private static final int INBOUND_FRAME = 3;
-    private static final int FRAME_ACK = 4;
+    static final int HELLO = 0;
+    static final int HELLO_ACK = 1;
+    static final int FRAME = 2;
+    static final int INBOUND_FRAME = 3;
+    static final int FRAME_ACK = 4;
+    /** Frame-ack status of a frame the relay forwarded. */
+    static final int STATUS_OK = 0;
+    /** Frame-ack status of a failure that is not an {@link OverlayRelayException}. */
+    static final int STATUS_UNKNOWN_FAILURE = 255;
     private static final int NODE_ID_BYTES = 32;
     private static final int MAX_PUBLIC_KEY_BYTES = 256;
     private static final int SIGNATURE_BYTES = 64;
@@ -38,11 +45,19 @@ final class RelayWireCodec {
     }
 
     static byte[] encodeHello(NodeIdentity identity) throws GeneralSecurityException {
+        return newHello(identity).encoded();
+    }
+
+    static Hello newHello(NodeIdentity identity) throws GeneralSecurityException {
         Objects.requireNonNull(identity, "identity");
         byte[] nonce = new byte[NONCE_BYTES];
         new SecureRandom().nextBytes(nonce);
         byte[] unsigned = helloUnsigned(identity.nodeId(), identity.publicKeyEncoded(), nonce);
-        return appendSignature(unsigned, identity.sign(unsigned));
+        return new Hello(identity.nodeId(), identity.publicKeyEncoded(), nonce, identity.sign(unsigned));
+    }
+
+    static void installFraming(ChannelPipeline pipeline) {
+        LengthPrefixedFrames.install(pipeline, MAX_PAYLOAD_BYTES);
     }
 
     static Hello decodeHello(byte[] payload) throws IOException {
@@ -140,6 +155,17 @@ final class RelayWireCodec {
         } catch (EOFException failure) {
             throw new IOException("truncated relay record header", failure);
         }
+    }
+
+    static int failureStatus(Throwable failure) {
+        Throwable current = failure;
+        while (current.getCause() != null && !(current instanceof OverlayRelayException)) {
+            current = current.getCause();
+        }
+        if (current instanceof OverlayRelayException relayFailure) {
+            return relayFailure.failure().ordinal() + 1;
+        }
+        return STATUS_UNKNOWN_FAILURE;
     }
 
     static byte[] encodeFrameAck(UUID messageId, int status) {
@@ -318,6 +344,10 @@ final class RelayWireCodec {
 
         private byte[] unsigned() {
             return helloUnsigned(nodeId, publicKey, nonce);
+        }
+
+        byte[] encoded() {
+            return appendSignature(unsigned(), signature);
         }
 
         String nodeId() {

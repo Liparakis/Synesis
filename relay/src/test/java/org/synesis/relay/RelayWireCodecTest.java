@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.overlay.OverlayForwardingFrame;
+import org.synesis.link.overlay.OverlayRelayException;
 
 /**
  * Verifies relay authentication and frame wire vectors without opening a socket.
@@ -45,5 +46,14 @@ final class RelayWireCodecTest {
         RelayWireCodec.encodeFrameAck(frame.messageId(), 0));
     assertEquals(frame.messageId(), frameAck.messageId);
     assertEquals(0, frameAck.status);
+  }
+
+  @Test
+  void failureStatusIsTheFailureOrdinalPlusOneOrUnknown() {
+    OverlayRelayException noRoute =
+        new OverlayRelayException(OverlayRelayException.Failure.NO_ROUTE, "no route");
+    assertEquals(4, RelayWireCodec.failureStatus(noRoute));
+    assertEquals(4, RelayWireCodec.failureStatus(new IllegalStateException("wrapped", noRoute)));
+    assertEquals(255, RelayWireCodec.failureStatus(new IllegalStateException("other")));
   }
 }
