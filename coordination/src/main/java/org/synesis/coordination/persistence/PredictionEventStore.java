@@ -3,10 +3,9 @@ package org.synesis.coordination.persistence;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.security.GeneralSecurityException;
@@ -60,6 +59,11 @@ public final class PredictionEventStore {
      * Project namespace every loaded and appended event must match.
      */
     private final UUID projectId;
+    /**
+     * How often one append is made again after another writer took its sequence.
+     */
+    private static final int MAX_APPEND_ATTEMPTS = 8;
+
     /**
      * Age beyond which a temporary event file can only have been abandoned by a writer that died.
      */
@@ -192,16 +196,29 @@ public final class PredictionEventStore {
         // event or fork the hash chain.  Its in-memory projections remain a
         // caller concern; authority-sensitive services use fresh projections
         // at their boundaries.
-        Head durableHead = durableHead();
-        long sequence = durableHead.sequence() + 1L;
-        PredictionEvent event = createEvent(predictionId, type, actorNodeId, payload, signer, durableHead, sequence);
-        if (!event.verify()) {
-            throw new CoordinationSecurityException("event signature verification failed");
+        //
+        // Reading the head and placing the file are not one step across processes, and not every
+        // appender holds the project append lock. A sequence another writer took in between is
+        // never replaced: this append is made again on the new head.
+        for (int attempt = 1; ; attempt++) {
+            Head durableHead = durableHead();
+            long sequence = durableHead.sequence() + 1L;
+            PredictionEvent event = createEvent(predictionId, type, actorNodeId, payload, signer, durableHead, sequence);
+            if (!event.verify()) {
+                throw new CoordinationSecurityException("event signature verification failed");
+            }
+            validateProjections(event);
+            try {
+                persistEvent(event, sequence);
+            } catch (FileAlreadyExistsException taken) {
+                if (attempt >= MAX_APPEND_ATTEMPTS) {
+                    throw new CoordinationException("event append lost its sequence to other writers");
+                }
+                continue;
+            }
+            applyProjections(event);
+            return event;
         }
-        validateProjections(event);
-        persistEvent(event, sequence);
-        applyProjections(event);
-        return event;
     }
 
     /**
@@ -242,11 +259,14 @@ public final class PredictionEventStore {
     }
 
     /**
-     * Persists one encoded event through a forced temporary file and atomic move.
+     * Persists one encoded event through a forced temporary file that is then given its durable
+     * name. The name is only ever given to a sequence nobody holds: a hard link fails when the name
+     * exists, where a move would replace another writer's event.
      *
      * @param event    validated signed event
      * @param sequence durable event sequence
-     * @throws IOException when the durable file write or move fails
+     * @throws FileAlreadyExistsException when another writer already holds the sequence
+     * @throws IOException                when the durable file write or placement fails
      */
     private void persistEvent(PredictionEvent event, long sequence) throws IOException {
         Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
@@ -263,8 +283,12 @@ public final class PredictionEventStore {
             }
             invokeFaultInjector(AppendBoundary.BEFORE_DURABLE_MOVE);
             try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException unsupported) {
+                Files.createLink(target, temporary);
+            } catch (FileAlreadyExistsException taken) {
+                throw taken;
+            } catch (UnsupportedOperationException | IOException noHardLinks) {
+                // A file system without hard links. A move without options fails as well when
+                // the name exists.
                 Files.move(temporary, target);
             }
             invokeFaultInjector(AppendBoundary.AFTER_DURABLE_MOVE);

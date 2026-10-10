@@ -35,6 +35,40 @@ class EventLogScanTest {
 
     private static final String INVALID_LOG = "invalid coordination event log";
 
+    /**
+     * Two processes read the same head and both append. Neither event may be lost: before, the
+     * later durable move replaced the earlier writer's file, and an announced lane vanished from
+     * the log although its agent had been told it was accepted.
+     */
+    @Test
+    void appendThatLosesItsSequenceToAnotherWriterKeepsBothEvents(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        PredictionEventStore first = new PredictionEventStore(temp, project);
+        PredictionEventStore second = new PredictionEventStore(temp, project);
+        boolean[] raced = {false};
+        PredictionEventStore.setTestFaultInjector(reached -> {
+            if (reached == PredictionEventStore.AppendBoundary.BEFORE_DURABLE_MOVE && !raced[0]) {
+                raced[0] = true;
+                try {
+                    appendRequest(second, requester, owner, "req_TEST1234567890ABCDR2");
+                } catch (Exception failure) {
+                    throw new java.io.IOException(failure);
+                }
+            }
+        });
+        try {
+            appendRequest(first, requester, owner, "req_TEST1234567890ABCDR1");
+        } finally {
+            PredictionEventStore.clearTestFaultInjector();
+        }
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(2L, replayed.headSequence());
+        assertEquals(2, replayed.capabilityRequestProjection().records().size());
+    }
+
     @Test
     void openingAStoreLeavesATemporaryFileAnotherWriterIsStillUsingAndRemovesAnAbandonedOne(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
