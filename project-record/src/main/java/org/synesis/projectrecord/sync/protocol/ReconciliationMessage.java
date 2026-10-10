@@ -1,14 +1,17 @@
 package org.synesis.projectrecord.sync.protocol;
 
+import static org.synesis.projectrecord.sync.protocol.WireFields.readBytes;
+import static org.synesis.projectrecord.sync.protocol.WireFields.readText;
+import static org.synesis.projectrecord.sync.protocol.WireFields.readUuid;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeBytes;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeText;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeUuid;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,7 +21,6 @@ import java.util.UUID;
 /**
  * Bounded Project Reconciliation Protocol (PRP1) message codec.
  */
-@SuppressWarnings("DuplicatedCode")
 public final class ReconciliationMessage {
 
   /**
@@ -26,13 +28,30 @@ public final class ReconciliationMessage {
    */
   public static final int MAX_BYTES = 4_096;
   /**
-   * Magic prefix for PRP1.
+   * Download response status: the requested revision follows.
    */
-  public static final int MAGIC = 0x50525031;
+  public static final int DOWNLOAD_OK = 0;
   /**
-   * Protocol version.
+   * Download response status: the host has no such revision.
    */
-  public static final int VERSION = 1;
+  public static final int DOWNLOAD_NOT_FOUND = 1;
+  /**
+   * Download response status: the host failed to read the revision.
+   */
+  public static final int DOWNLOAD_IO_FAILURE = 2;
+  /**
+   * Final inventory ack status: every listed head matches the host.
+   */
+  public static final int FINAL_CONVERGED = 0;
+  /**
+   * Final inventory ack status: at least one listed head differs from the host.
+   */
+  public static final int FINAL_MISMATCH = 1;
+  private static final int MAGIC = 0x50525031;
+  private static final int VERSION = 1;
+  private static final int MAX_ENTRIES = 100;
+  private static final int MAX_TEXT_BYTES = 256;
+  private static final String INVALID_BYTES = "invalid payload bytes length";
   private final Kind kind;
   private final UUID projectId;
   private final int chunkIndex;
@@ -42,7 +61,7 @@ public final class ReconciliationMessage {
   private final byte[] recordBytes;
   private final UUID recordId;
   private final long revision;
-  private final int status; // status code or result code ordinal
+  private final int status; // download or final-ack status, or an upload result ordinal
   private final ErrorCode errorCode;
   private final String errorText;
 
@@ -64,6 +83,43 @@ public final class ReconciliationMessage {
     this.errorText = errorText;
   }
 
+  /** Project id only. */
+  private ReconciliationMessage(Kind kind, UUID projectId) {
+    this(kind, Objects.requireNonNull(projectId), 0, 0, 0, null, null, null, 0, 0, null, null);
+  }
+
+  /** Project id, chunk index and status. */
+  private ReconciliationMessage(Kind kind, UUID projectId, int chunkIndex, int status) {
+    this(kind, Objects.requireNonNull(projectId), chunkIndex, 0, 0, null, null, null, 0, status,
+        null, null);
+  }
+
+  /** Inventory chunk. */
+  private ReconciliationMessage(Kind kind, UUID projectId, int chunkIndex, int totalChunks,
+      int corruptCount, List<InventoryEntry> entries) {
+    this(kind, Objects.requireNonNull(projectId), chunkIndex, totalChunks, corruptCount, entries,
+        null, null, 0, 0, null, null);
+  }
+
+  /** Project id and record bytes. */
+  private ReconciliationMessage(Kind kind, UUID projectId, byte[] recordBytes) {
+    this(kind, Objects.requireNonNull(projectId), 0, 0, 0, null, recordBytes, null, 0, 0, null,
+        null);
+  }
+
+  /** A record revision, with its status and optional record bytes. */
+  private ReconciliationMessage(Kind kind, UUID projectId, UUID recordId, long revision,
+      int status, byte[] recordBytes) {
+    this(kind, Objects.requireNonNull(projectId), 0, 0, 0, null, recordBytes,
+        Objects.requireNonNull(recordId), revision, status, null, null);
+  }
+
+  /** Protocol error. */
+  private ReconciliationMessage(ErrorCode errorCode, String errorText) {
+    this(Kind.ERROR, null, 0, 0, 0, null, null, null, 0, 0, Objects.requireNonNull(errorCode),
+        Objects.requireNonNull(errorText));
+  }
+
   /**
    * Creates a project validation request.
    *
@@ -71,18 +127,7 @@ public final class ReconciliationMessage {
    * @return a validate project message
    */
   public static ReconciliationMessage validateProject(UUID projectId) {
-    return new ReconciliationMessage(Kind.VALIDATE_PROJECT,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        null,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.VALIDATE_PROJECT, projectId);
   }
 
   /**
@@ -92,18 +137,7 @@ public final class ReconciliationMessage {
    * @return a validate project ack message
    */
   public static ReconciliationMessage validateProjectAck(UUID projectId) {
-    return new ReconciliationMessage(Kind.VALIDATE_PROJECT_ACK,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        null,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.VALIDATE_PROJECT_ACK, projectId);
   }
 
   /**
@@ -121,18 +155,8 @@ public final class ReconciliationMessage {
       int totalChunks,
       int corruptCount,
       List<InventoryEntry> entries) {
-    return new ReconciliationMessage(Kind.INVENTORY_CHUNK,
-        Objects.requireNonNull(projectId),
-        chunkIndex,
-        totalChunks,
-        corruptCount,
-        entries,
-        null,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.INVENTORY_CHUNK, projectId, chunkIndex, totalChunks,
+        corruptCount, entries);
   }
 
   /**
@@ -143,18 +167,7 @@ public final class ReconciliationMessage {
    * @return an inventory chunk ack message
    */
   public static ReconciliationMessage inventoryChunkAck(UUID projectId, int chunkIndex) {
-    return new ReconciliationMessage(Kind.INVENTORY_CHUNK_ACK,
-        Objects.requireNonNull(projectId),
-        chunkIndex,
-        0,
-        0,
-        null,
-        null,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.INVENTORY_CHUNK_ACK, projectId, chunkIndex, 0);
   }
 
   /**
@@ -165,18 +178,7 @@ public final class ReconciliationMessage {
    * @return a client upload revision message
    */
   public static ReconciliationMessage clientUploadRevision(UUID projectId, byte[] recordBytes) {
-    return new ReconciliationMessage(Kind.CLIENT_UPLOAD_REVISION,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        recordBytes,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.CLIENT_UPLOAD_REVISION, projectId, recordBytes);
   }
 
   /**
@@ -190,18 +192,8 @@ public final class ReconciliationMessage {
    */
   public static ReconciliationMessage clientUploadAck(UUID projectId, UUID recordId, long revision,
       int resultCode) {
-    return new ReconciliationMessage(Kind.CLIENT_UPLOAD_ACK,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        null,
-        Objects.requireNonNull(recordId),
-        revision,
-        resultCode,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.CLIENT_UPLOAD_ACK, projectId, recordId, revision,
+        resultCode, null);
   }
 
   /**
@@ -214,18 +206,8 @@ public final class ReconciliationMessage {
    */
   public static ReconciliationMessage clientDownloadRequest(UUID projectId, UUID recordId,
       long revision) {
-    return new ReconciliationMessage(Kind.CLIENT_DOWNLOAD_REQUEST,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        null,
-        Objects.requireNonNull(recordId),
-        revision,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.CLIENT_DOWNLOAD_REQUEST, projectId, recordId, revision,
+        0, null);
   }
 
   /**
@@ -234,7 +216,8 @@ public final class ReconciliationMessage {
    * @param projectId   project identifier
    * @param recordId    record identifier
    * @param revision    revision number
-   * @param status      status code
+   * @param status      {@link #DOWNLOAD_OK}, {@link #DOWNLOAD_NOT_FOUND} or
+   *                    {@link #DOWNLOAD_IO_FAILURE}
    * @param recordBytes raw decision record bytes
    * @return a client download response message
    */
@@ -243,18 +226,8 @@ public final class ReconciliationMessage {
       long revision,
       int status,
       byte[] recordBytes) {
-    return new ReconciliationMessage(Kind.CLIENT_DOWNLOAD_RESPONSE,
-        Objects.requireNonNull(projectId),
-        0,
-        0,
-        0,
-        null,
-        recordBytes,
-        Objects.requireNonNull(recordId),
-        revision,
-        status,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.CLIENT_DOWNLOAD_RESPONSE, projectId, recordId, revision,
+        status, recordBytes);
   }
 
   /**
@@ -272,18 +245,8 @@ public final class ReconciliationMessage {
       int totalChunks,
       int corruptCount,
       List<InventoryEntry> entries) {
-    return new ReconciliationMessage(Kind.FINAL_INVENTORY_CHUNK,
-        Objects.requireNonNull(projectId),
-        chunkIndex,
-        totalChunks,
-        corruptCount,
-        entries,
-        null,
-        null,
-        0,
-        0,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.FINAL_INVENTORY_CHUNK, projectId, chunkIndex,
+        totalChunks, corruptCount, entries);
   }
 
   /**
@@ -291,23 +254,13 @@ public final class ReconciliationMessage {
    *
    * @param projectId  project identifier
    * @param chunkIndex index of chunk acknowledged
-   * @param status     status code
+   * @param status     {@link #FINAL_CONVERGED} or {@link #FINAL_MISMATCH}
    * @return a final inventory chunk ack message
    */
   public static ReconciliationMessage finalInventoryChunkAck(UUID projectId, int chunkIndex,
       int status) {
-    return new ReconciliationMessage(Kind.FINAL_INVENTORY_CHUNK_ACK,
-        Objects.requireNonNull(projectId),
-        chunkIndex,
-        0,
-        0,
-        null,
-        null,
-        null,
-        0,
-        status,
-        null,
-        null);
+    return new ReconciliationMessage(Kind.FINAL_INVENTORY_CHUNK_ACK, projectId, chunkIndex,
+        status);
   }
 
   /**
@@ -318,18 +271,7 @@ public final class ReconciliationMessage {
    * @return an error message
    */
   public static ReconciliationMessage error(ErrorCode errorCode, String text) {
-    return new ReconciliationMessage(Kind.ERROR,
-        null,
-        0,
-        0,
-        0,
-        null,
-        null,
-        null,
-        0,
-        0,
-        Objects.requireNonNull(errorCode),
-        Objects.requireNonNull(text));
+    return new ReconciliationMessage(errorCode, text);
   }
 
   /**
@@ -360,29 +302,14 @@ public final class ReconciliationMessage {
       ReconciliationMessage msg = switch (kind) {
         case VALIDATE_PROJECT -> validateProject(project);
         case VALIDATE_PROJECT_ACK -> validateProjectAck(project);
-        case INVENTORY_CHUNK -> {
-          int chunk = input.readInt();
-          int total = input.readInt();
-          int corrupt = input.readInt();
-          int count = input.readInt();
-          if (count < 0 || count > 100) {
-            throw new IOException("invalid inventory entry count");
-          }
-          List<InventoryEntry> list = new ArrayList<>(count);
-          for (int i = 0; i < count; i++) {
-            UUID rec = readUuid(input);
-            long ver = input.readLong();
-            byte[] dig = input.readNBytes(32);
-            list.add(new InventoryEntry(rec, ver, dig));
-          }
-          yield inventoryChunk(project, chunk, total, corrupt, list);
-        }
+        case INVENTORY_CHUNK -> readInventoryChunk(input, kind, project,
+            "invalid inventory entry count");
         case INVENTORY_CHUNK_ACK -> {
           int chunk = input.readInt();
           yield inventoryChunkAck(project, chunk);
         }
         case CLIENT_UPLOAD_REVISION -> {
-          byte[] recBytes = readBytes(input);
+          byte[] recBytes = readBytes(input, INVALID_BYTES);
           yield clientUploadRevision(project, recBytes);
         }
         case CLIENT_UPLOAD_ACK -> {
@@ -401,26 +328,11 @@ public final class ReconciliationMessage {
           long rev = input.readLong();
           int stat = input.readInt();
           int marker = input.readUnsignedByte();
-          byte[] recBytes = marker == 1 ? readBytes(input) : null;
+          byte[] recBytes = marker == 1 ? readBytes(input, INVALID_BYTES) : null;
           yield clientDownloadResponse(project, rec, rev, stat, recBytes);
         }
-        case FINAL_INVENTORY_CHUNK -> {
-          int chunk = input.readInt();
-          int total = input.readInt();
-          int corrupt = input.readInt();
-          int count = input.readInt();
-          if (count < 0 || count > 100) {
-            throw new IOException("invalid final inventory entry count");
-          }
-          List<InventoryEntry> list = new ArrayList<>(count);
-          for (int i = 0; i < count; i++) {
-            UUID rec = readUuid(input);
-            long ver = input.readLong();
-            byte[] dig = input.readNBytes(32);
-            list.add(new InventoryEntry(rec, ver, dig));
-          }
-          yield finalInventoryChunk(project, chunk, total, corrupt, list);
-        }
+        case FINAL_INVENTORY_CHUNK -> readInventoryChunk(input, kind, project,
+            "invalid final inventory entry count");
         case FINAL_INVENTORY_CHUNK_ACK -> {
           int chunk = input.readInt();
           int stat = input.readInt();
@@ -431,7 +343,7 @@ public final class ReconciliationMessage {
           if (errCode >= ErrorCode.values().length) {
             throw new IOException("unknown error code");
           }
-          String text = readText(input);
+          String text = readText(input, MAX_TEXT_BYTES, INVALID_BYTES);
           yield error(ErrorCode.values()[errCode], text);
         }
       };
@@ -444,53 +356,35 @@ public final class ReconciliationMessage {
     }
   }
 
-  private static UUID readUuid(DataInputStream input) throws IOException {
-    return new UUID(input.readLong(), input.readLong());
+  private static ReconciliationMessage readInventoryChunk(DataInputStream input, Kind kind,
+      UUID project, String invalidCountMessage) throws IOException {
+    int chunk = input.readInt();
+    int total = input.readInt();
+    int corrupt = input.readInt();
+    int count = input.readInt();
+    if (count < 0 || count > MAX_ENTRIES) {
+      throw new IOException(invalidCountMessage);
+    }
+    List<InventoryEntry> list = new ArrayList<>(count);
+    for (int i = 0; i < count; i++) {
+      UUID rec = readUuid(input);
+      long ver = input.readLong();
+      byte[] dig = input.readNBytes(32);
+      list.add(new InventoryEntry(rec, ver, dig));
+    }
+    return new ReconciliationMessage(kind, project, chunk, total, corrupt, list);
   }
 
-  private static void writeUuid(DataOutputStream output, UUID value) throws IOException {
-    output.writeLong(value.getMostSignificantBits());
-    output.writeLong(value.getLeastSignificantBits());
-  }
-
-  private static byte[] readBytes(DataInputStream input) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > input.available()) {
-      throw new IOException("invalid payload bytes length");
+  private void writeInventoryChunk(DataOutputStream output) throws IOException {
+    output.writeInt(chunkIndex);
+    output.writeInt(totalChunks);
+    output.writeInt(corruptCount);
+    output.writeInt(entries.size());
+    for (InventoryEntry entry : entries) {
+      writeUuid(output, entry.recordId());
+      output.writeLong(entry.headVersion());
+      output.write(entry.headDigest());
     }
-    return input.readNBytes(length);
-  }
-
-  private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-    if (value == null || value.length == 0 || value.length > 65_535) {
-      throw new IllegalArgumentException("invalid payload bytes length");
-    }
-    output.writeShort(value.length);
-    output.write(value);
-  }
-
-  private static String readText(DataInputStream input) throws IOException {
-    byte[] bytes = readBytes(input);
-    if (bytes.length > 256) {
-      throw new IOException("text exceeds bound");
-    }
-    try {
-      return StandardCharsets.UTF_8.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(bytes))
-          .toString();
-    } catch (CharacterCodingException exception) {
-      throw new IOException("invalid UTF-8", exception);
-    }
-  }
-
-  private static void writeText(DataOutputStream output, String value) throws IOException {
-    byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-    if (bytes.length > 256) {
-      throw new IllegalArgumentException("text exceeds bound");
-    }
-    writeBytes(output, bytes);
   }
 
   /**
@@ -575,7 +469,7 @@ public final class ReconciliationMessage {
   }
 
   /**
-   * Returns status/result code ordinal.
+   * Returns the download status, final-ack status, or upload result ordinal, by message kind.
    *
    * @return status or result code
    */
@@ -588,7 +482,6 @@ public final class ReconciliationMessage {
    *
    * @return error category
    */
-  @SuppressWarnings("unused")
   public ErrorCode errorCode() {
     return errorCode;
   }
@@ -620,23 +513,13 @@ public final class ReconciliationMessage {
         switch (kind) {
           case VALIDATE_PROJECT, VALIDATE_PROJECT_ACK -> {
           }
-          case INVENTORY_CHUNK, FINAL_INVENTORY_CHUNK -> {
-            output.writeInt(chunkIndex);
-            output.writeInt(totalChunks);
-            output.writeInt(corruptCount);
-            output.writeInt(entries.size());
-            for (InventoryEntry entry : entries) {
-              writeUuid(output, entry.recordId());
-              output.writeLong(entry.headVersion());
-              output.write(entry.headDigest());
-            }
-          }
+          case INVENTORY_CHUNK, FINAL_INVENTORY_CHUNK -> writeInventoryChunk(output);
           case INVENTORY_CHUNK_ACK -> output.writeInt(chunkIndex);
           case FINAL_INVENTORY_CHUNK_ACK -> {
             output.writeInt(chunkIndex);
             output.writeInt(status);
           }
-          case CLIENT_UPLOAD_REVISION -> writeBytes(output, recordBytes);
+          case CLIENT_UPLOAD_REVISION -> writeBytes(output, recordBytes, INVALID_BYTES);
           case CLIENT_UPLOAD_ACK -> {
             writeUuid(output, recordId);
             output.writeLong(revision);
@@ -652,12 +535,12 @@ public final class ReconciliationMessage {
             output.writeInt(status);
             output.writeByte(recordBytes == null ? 0 : 1);
             if (recordBytes != null) {
-              writeBytes(output, recordBytes);
+              writeBytes(output, recordBytes, INVALID_BYTES);
             }
           }
           case ERROR -> {
             output.writeByte(errorCode.ordinal());
-            writeText(output, errorText);
+            writeText(output, errorText, MAX_TEXT_BYTES, INVALID_BYTES);
           }
         }
       }

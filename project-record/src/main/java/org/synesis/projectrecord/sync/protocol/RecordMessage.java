@@ -1,13 +1,17 @@
 package org.synesis.projectrecord.sync.protocol;
 
+import static org.synesis.projectrecord.sync.protocol.WireFields.readBytes;
+import static org.synesis.projectrecord.sync.protocol.WireFields.readText;
+import static org.synesis.projectrecord.sync.protocol.WireFields.readUuid;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeBytes;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeText;
+import static org.synesis.projectrecord.sync.protocol.WireFields.writeUuid;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.UUID;
@@ -27,6 +31,7 @@ public final class RecordMessage {
   public static final int MAX_ERROR_TEXT_BYTES = 256;
   private static final int MAGIC = 0x53525031;
   private static final int VERSION = 1;
+  private static final String INVALID_BYTES = "invalid message bytes";
   private final Kind kind;
   private final UUID projectId;
   private final UUID recordId;
@@ -183,7 +188,7 @@ public final class RecordMessage {
   }
 
   private static RecordMessage decodeRecord(DataInputStream input) throws IOException {
-    byte[] bytes = readBytes(input);
+    byte[] bytes = readBytes(input, INVALID_BYTES);
     if (input.available() != 0) {
       throw new IOException("trailing record message bytes");
     }
@@ -213,60 +218,11 @@ public final class RecordMessage {
     if (code >= ErrorCode.values().length) {
       throw new IOException("unknown error");
     }
-    String text = readText(input);
+    String text = readText(input, MAX_ERROR_TEXT_BYTES, INVALID_BYTES);
     if (input.available() != 0) {
       throw new IOException("trailing error bytes");
     }
     return error(ErrorCode.values()[code], text);
-  }
-
-  private static UUID readUuid(DataInputStream input) throws IOException {
-    return new UUID(input.readLong(), input.readLong());
-  }
-
-  private static void writeUuid(DataOutputStream output, UUID value) throws IOException {
-    output.writeLong(value.getMostSignificantBits());
-    output.writeLong(value.getLeastSignificantBits());
-  }
-
-  private static byte[] readBytes(DataInputStream input) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > input.available()) {
-      throw new IOException("invalid message bytes");
-    }
-    return input.readNBytes(length);
-  }
-
-  private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-    if (value == null || value.length == 0 || value.length > 65_535) {
-      throw new IllegalArgumentException("invalid message bytes");
-    }
-    output.writeShort(value.length);
-    output.write(value);
-  }
-
-  private static String readText(DataInputStream input) throws IOException {
-    byte[] bytes = readBytes(input);
-    if (bytes.length > MAX_ERROR_TEXT_BYTES) {
-      throw new IOException("text exceeds bound");
-    }
-    try {
-      return StandardCharsets.UTF_8.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(bytes))
-          .toString();
-    } catch (CharacterCodingException exception) {
-      throw new IOException("invalid UTF-8", exception);
-    }
-  }
-
-  private static void writeText(DataOutputStream output, String value) throws IOException {
-    if (value == null || value.isEmpty()
-        || value.getBytes(StandardCharsets.UTF_8).length > MAX_ERROR_TEXT_BYTES) {
-      throw new IllegalArgumentException("text exceeds bound");
-    }
-    writeBytes(output, value.getBytes(StandardCharsets.UTF_8));
   }
 
   /**
@@ -337,7 +293,6 @@ public final class RecordMessage {
    *
    * @return error code
    */
-  @SuppressWarnings("unused")
   public ErrorCode errorCode() {
     return errorCode;
   }
@@ -391,7 +346,7 @@ public final class RecordMessage {
               output.write(knownDigest);
             }
           }
-          case RECORD -> writeBytes(output, recordBytes);
+          case RECORD -> writeBytes(output, recordBytes, INVALID_BYTES);
           case RESULT -> {
             output.writeByte(resultCode.ordinal());
             writeUuid(output, recordId);
@@ -403,7 +358,7 @@ public final class RecordMessage {
           }
           case ERROR -> {
             output.writeByte(errorCode.ordinal());
-            writeText(output, errorText);
+            writeText(output, errorText, MAX_ERROR_TEXT_BYTES, INVALID_BYTES);
           }
         }
       }

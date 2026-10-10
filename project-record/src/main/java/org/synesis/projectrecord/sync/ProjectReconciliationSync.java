@@ -229,7 +229,7 @@ public final class ProjectReconciliationSync {
 
               ReconciliationMessage resp = ReconciliationMessage.decode(downloadResp);
               if (resp.kind() == ReconciliationMessage.Kind.CLIENT_DOWNLOAD_RESPONSE
-                  && resp.status() == 0) {
+                  && resp.status() == ReconciliationMessage.DOWNLOAD_OK) {
                 DecisionRecord remoteRec = DecisionRecord.decode(resp.recordBytes());
                 store.quarantine(remoteRec);
               }
@@ -327,7 +327,7 @@ public final class ProjectReconciliationSync {
               || !id.equals(resp.recordId()) || resp.revision() != r) {
             return fail("Download response mismatch.");
           }
-          if (resp.status() != 0) {
+          if (resp.status() != ReconciliationMessage.DOWNLOAD_OK) {
             outcomes.add(id + ": REJECTED");
             break; // sync for this record aborted
           }
@@ -417,7 +417,7 @@ public final class ProjectReconciliationSync {
             || finalAck.chunkIndex() != chunkIndex) {
           return fail("Final inventory exchange mismatch.");
         }
-        if (finalAck.status() != 0) {
+        if (finalAck.status() != ReconciliationMessage.FINAL_CONVERGED) {
           hostValidatedSuccess = false;
         }
       }
@@ -614,14 +614,14 @@ public final class ProjectReconciliationSync {
                 result.complete(ReconciliationMessage.clientDownloadResponse(config.projectId(),
                         message.recordId(),
                         message.revision(),
-                        0,
+                        ReconciliationMessage.DOWNLOAD_OK,
                         target.encoded())
                     .encoded());
               } else {
                 result.complete(ReconciliationMessage.clientDownloadResponse(config.projectId(),
                         message.recordId(),
                         message.revision(),
-                        1,
+                        ReconciliationMessage.DOWNLOAD_NOT_FOUND,
                         null)
                     .encoded());
               }
@@ -629,7 +629,7 @@ public final class ProjectReconciliationSync {
               result.complete(ReconciliationMessage.clientDownloadResponse(config.projectId(),
                       message.recordId(),
                       message.revision(),
-                      1,
+                      ReconciliationMessage.DOWNLOAD_NOT_FOUND,
                       null)
                   .encoded());
             }
@@ -637,7 +637,7 @@ public final class ProjectReconciliationSync {
             result.complete(ReconciliationMessage.clientDownloadResponse(config.projectId(),
                     message.recordId(),
                     message.revision(),
-                    2,
+                    ReconciliationMessage.DOWNLOAD_IO_FAILURE,
                     null)
                 .encoded());
           }
@@ -650,7 +650,7 @@ public final class ProjectReconciliationSync {
                     .encoded());
             break;
           }
-          int status = 0; // 0 = converged, 1 = mismatch
+          int status = ReconciliationMessage.FINAL_CONVERGED;
           for (InventoryEntry entry : message.entries()) {
             try {
               Optional<DecisionStore.Head> localHead = store.headState(entry.recordId());
@@ -658,10 +658,10 @@ public final class ProjectReconciliationSync {
                   .revision() != entry.headVersion()
                   || !Arrays.equals(localHead.get()
                   .digest(), entry.headDigest())) {
-                status = 1;
+                status = ReconciliationMessage.FINAL_MISMATCH;
               }
             } catch (IOException e) {
-              status = 1;
+              status = ReconciliationMessage.FINAL_MISMATCH;
             }
           }
           result.complete(ReconciliationMessage.finalInventoryChunkAck(config.projectId(),
