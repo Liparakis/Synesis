@@ -84,6 +84,24 @@ final class LaneCompletionProjection {
         return noChange == null ? null : new AgentResponse(AgentStatus.READY, null, AgentNextAction.FINISH_LANE, noChange);
     }
 
+    /**
+     * Returns whether the caller's lane has changed nothing it could publish.
+     *
+     * @param snapshotService inspects the worktree against the lane and claim fence
+     * @param store           current project projection
+     * @param lane            the caller's lane
+     * @return {@code false} when the caller has no lane, a lane has publishable changes or a
+     *         snapshot already, or a worktree cannot be inspected
+     */
+    static boolean nothingToPublish(TaskSnapshotService snapshotService, PredictionEventStore store, LaneScope lane) {
+        String participantId = lane.participantId();
+        List<WorkIntent> own = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantId)).toList();
+        List<ResourceSelector> participantClaims = own.stream().flatMap(intent -> intent.selectors().stream()).distinct().toList();
+        List<ResourceSelector> foreignClaims = foreignClaims(store, participantId);
+        return !own.isEmpty() && own.stream().allMatch(intent -> store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).isEmpty()
+                && inspectScopedPublishableChanges(snapshotService, lane.worktree(), intent, participantClaims, foreignClaims, lane.baseCommit()) == Publishability.NOT_PUBLISHABLE);
+    }
+
     /** Projects publication only after the owner explicitly declares its implementation complete. */
     private static AgentResponse capabilityPublicationAction(TaskSnapshotService snapshotService, PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
         if (lane.worktree() == null) {

@@ -453,16 +453,7 @@ public final class CapabilityRequestService {
                 if (!record.state().isUnderNegotiation()) {
                     yield new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);
                 }
-                CapabilityRequestPayload payload = new CapabilityRequestPayload(record.handle(),
-                        record.capability(),
-                        requesterNodeId,
-                        record.ownerNodeId(),
-                        record.authorityLineageId(),
-                        record.contract(),
-                        CapabilityLifecycleState.CANCELLED,
-                        "Cancelled by requester",
-                        record.contractRevision());
-                store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CANCELLED, requesterNodeId, payload.encode(), identity);
+                store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CANCELLED, requesterNodeId, record.cancellation("Cancelled by requester").encode(), identity);
 
                 Map<String, Object> result = Map.of("request", record.handle().value());
                 yield new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, result);

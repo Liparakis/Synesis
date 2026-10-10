@@ -318,6 +318,24 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
     public static final String OWNER_FINISHED_WITHOUT_ANSWER = "OWNER_FINISHED_WITHOUT_REQUESTER_ANSWER";
 
     /**
+     * Builds the event payload that cancels this request at its current contract revision.
+     *
+     * @param reason why the request is cancelled
+     * @return payload for a {@code CAPABILITY_REQUEST_CANCELLED} event
+     */
+    public CapabilityRequestPayload cancellation(String reason) {
+        return new CapabilityRequestPayload(handle,
+                capability,
+                requesterNodeId,
+                ownerNodeId,
+                authorityLineageId,
+                contract,
+                CapabilityLifecycleState.CANCELLED,
+                reason,
+                contractRevision);
+    }
+
+    /**
      * Reports whether this request ended because its owner finished without the requester's
      * answer.
      *

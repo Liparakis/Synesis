@@ -1,6 +1,7 @@
 package org.synesis.mcp.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -586,6 +587,99 @@ class SyntheticTwoProcessCollaborationTest {
         assertEquals("ready", extractResponseStatus(next), next);
         assertEquals(List.of("catalog.product-store"), extractInnerResult(next).get("dependenciesIntegrated"), next);
         lateHandler.close();
+    }
+
+    /**
+     * One lane finishes and the other is cancelled because nothing needed to change. The work
+     * group closes with the cancellation and the cancelled lane's session is told its lane is
+     * closed. Before, the group stayed active with no lane left to close it, and the session was
+     * told to establish an intent, which invites announcing the cancelled work again.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancellingTheLastOpenLaneClosesItsWorkGroupAndTellsItsSessionTheLaneIsClosed() throws Exception {
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true))));
+        assertEquals("ACTIVE", replayedStore().workGroupProjection().groups().getFirst().status().name(), "the other lane is still open");
+
+        String cancelled = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI already does what the goal asks."));
+        assertEquals("completed", extractResponseStatus(cancelled), cancelled);
+
+        assertEquals("COMPLETED", replayedStore().workGroupProjection().groups().getFirst().status().name());
+        // The other lane's integration moved the control branch, so the session refreshes first.
+        toolCall(requesterHandler, "ensure_session", Map.of());
+        String next = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertEquals("completed", extractResponseStatus(next), next);
+        assertEquals("CANCELLED", extractInnerResult(next).get("state"), next);
+        assertEquals("CLOSE", ((Map<String, Object>) extractInnerResult(next).get("workflow")).get("type"), next);
+    }
+
+    /**
+     * A lane that asked for a capability nobody has answered yet is cancelled. Its request is
+     * cancelled with it. Before, the request's cancellation was recorded in a form the log could
+     * not read, so every such cancel failed after it had already recorded the task as cancelled.
+     */
+    @Test
+    void cancellingALaneCancelsItsUnansweredCapabilityRequest() throws Exception {
+        String described = toolCall(requesterHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
+        String reqHandle = extractResultField(described);
+        assertNotNull(reqHandle, described);
+
+        String cancelled = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
+
+        assertEquals("completed", extractResponseStatus(cancelled), cancelled);
+        var request = replayedStore().capabilityRequestProjection().records().values().iterator().next();
+        assertEquals("cancelled", request.state().value());
+    }
+
+    /**
+     * Once an owner has accepted a request it is building against it, and it will wait for the
+     * requester's verdict. The requester's lane cannot be cancelled from under it, and a refused
+     * cancel records nothing.
+     */
+    @Test
+    void laneWhoseCapabilityRequestWasAcceptedCannotBeCancelledFromUnderItsOwner() throws Exception {
+        String described = toolCall(requesterHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
+        String reqHandle = extractResultField(described);
+        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
+        toolCall(ownerHandler, "respond_coordination",
+                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
+        long recorded = replayedStore().headSequence();
+
+        String refused = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
+
+        assertEquals("blocked", extractResponseStatus(refused), refused);
+        assertEquals("task_not_ready", extractResponseReason(refused), refused);
+        assertEquals("capability_request_open", extractInnerResult(refused).get("reason"), refused);
+        assertEquals(reqHandle, extractInnerResult(refused).get("capabilityRequestHandle"), refused);
+        assertTrue(replayedStore().events().stream().skip(recorded).noneMatch(event -> event.type() == PredictionEventType.TASK_CANCELLED), "a refused cancel records nothing");
+    }
+
+    /**
+     * A lane that changed nothing asks to finish. It is told there is nothing to publish and that
+     * it may cancel. Before, it was told only that it may implement, and an agent that had found
+     * nothing to change left the lane open.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void laneWithNothingToPublishThatAsksToFinishIsToldItMayCancel() throws Exception {
+        String asked = toolCall(requesterHandler, "get_next_action", Map.of("completionRequested", true));
+
+        assertEquals("ready", extractResponseStatus(asked), asked);
+        assertEquals(Boolean.TRUE, extractInnerResult(asked).get("nothingToPublish"), asked);
+        Map<String, Object> workflow = (Map<String, Object>) extractInnerResult(asked).get("workflow");
+        assertEquals(List.of("nothing_to_publish"), workflow.get("blockers"), asked);
+        assertTrue(((List<String>) workflow.get("permittedOperations")).contains("cancel_lane"), asked);
+
+        String polled = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertFalse(polled.contains("nothingToPublish"), "only a request to finish is answered this way: " + polled);
     }
 
     /**

@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -274,10 +275,43 @@ public final class AgentNextActionService {
         }
 
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
-        if (durable != null) {
-            return durable;
+        AgentResponse resolved = durable != null ? durable : LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
+        return request.completionRequested() ? notingNothingToPublish(resolved, inspection.location(), readiness.binding(), readiness.worktree()) : resolved;
+    }
+
+    /**
+     * Tells a lane that asked to finish and has changed nothing that it has nothing to publish.
+     *
+     * <p>No finish action applies to such a lane, and an answer that only lets it keep
+     * implementing left an agent that had found nothing to change with no way to end the lane: it
+     * stayed open and its work group with it. The answer keeps everything it carried and adds the
+     * two ways forward.</p>
+     *
+     * @param response the resolved answer to a request to finish
+     * @param location project location
+     * @param binding  the verified binding of the calling session
+     * @param worktree the verified assigned worktree
+     * @return the answer, marked when it offered no action and the lane has nothing to publish
+     */
+    private AgentResponse notingNothingToPublish(AgentResponse response, ProjectLocation location, ProviderSessionBindingService.Binding binding, Path worktree) {
+        if (response.status() != AgentStatus.READY || response.nextAction() != null) {
+            return response;
         }
-        return LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
+        try {
+            Optional<PredictionEventStore> store = openEventStore(location);
+            LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
+            if (store.isEmpty() || !LaneCompletionProjection.nothingToPublish(snapshotService, store.get(), lane)) {
+                return response;
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            putResult(result, response.result(), null);
+            result.put(NextActionKeys.NOTHING_TO_PUBLISH, true);
+            result.put("instruction", "This lane has changed none of its claimed files, so there is nothing to publish. Change them, or if nothing needs to change call cancel_lane with the reason.");
+            return new AgentResponse(response.status(), response.reason(), null, result);
+        } catch (Exception failure) {
+            logSuppressed("nothing-to-publish projection", failure);
+            return response;
+        }
     }
 
     /**
@@ -561,6 +595,11 @@ public final class AgentNextActionService {
         Optional<WorkIntent> callerIntent = activeIntentOf(store, lane.participantId());
         boolean coordinationActivated = store.collaborationProjection().activated();
         if (coordinationActivated && callerIntent.isEmpty()) {
+            // A cancelled lane is closed, as a finished one is. Asking its session for a new intent
+            // would invite the agent to announce the work it has just cancelled.
+            if (store.collaborationProjection().participantState(lane.participantId()).filter(Participant.State.CANCELLED::equals).isPresent()) {
+                return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of(NextActionKeys.STATE, NextActionProtocol.STATE_CANCELLED, NextActionKeys.LANE, binding.sessionId()));
+            }
             return claimRequiredResponse(collaboration);
         }
 

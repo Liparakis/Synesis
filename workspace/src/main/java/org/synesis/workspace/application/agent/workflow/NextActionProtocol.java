@@ -64,6 +64,11 @@ final class NextActionProtocol {
     static final String TOOL_RUN_COMMAND = "run_command";
 
     /**
+     * Tool that ends a lane without a result.
+     */
+    static final String TOOL_CANCEL_LANE = "cancel_lane";
+
+    /**
      * Protocol kind of a review decision.
      */
     static final String KIND_REVIEW_VALIDATION = "review_validation";
@@ -97,6 +102,11 @@ final class NextActionProtocol {
      * State of a lane that finished its work.
      */
     static final String STATE_COMPLETED = "COMPLETED";
+
+    /**
+     * State of a lane its own session cancelled.
+     */
+    static final String STATE_CANCELLED = "CANCELLED";
 
     /**
      * State of a producer that must publish a corrected revision.

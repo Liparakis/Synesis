@@ -7,7 +7,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
@@ -35,7 +37,6 @@ public final class AgentTaskCancellationService {
 
     private final ProjectApplicationService projectService;
     private final SessionAuthorityResolver authorityResolver;
-    private final WorkspaceCollaborationService collaborationService;
 
     /**
      * Creates an agent task cancellation service.
@@ -43,7 +44,18 @@ public final class AgentTaskCancellationService {
     public AgentTaskCancellationService() {
         this.projectService = new ProjectApplicationService();
         this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
-        this.collaborationService = new WorkspaceCollaborationService();
+    }
+
+    /**
+     * Cancels the lane of the admitted caller. A session that never announced a lane has none to
+     * close, and a lane that is already cancelled is left as it is.
+     */
+    private static void closeLane(PredictionEventStore store, NodeIdentity identity, ProviderSessionBindingService.Binding binding) throws Exception {
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        var state = store.collaborationProjection().participantState(participant);
+        if (state.isPresent() && state.get() != Participant.State.CANCELLED) {
+            new WorkIntentService(store, identity).cancel(participant);
+        }
     }
 
     private static boolean isTaskCancelled(PredictionEventStore store, UUID taskId) {
@@ -91,10 +103,24 @@ public final class AgentTaskCancellationService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.WAIT, Map.of("reason", "task_not_cancellable"));
             }
 
-            // Check if task is currently cancelled (Idempotent success)
+            // A repeated cancel succeeds. It still closes the lane, because an earlier attempt may
+            // have recorded the task as cancelled and then failed before it got that far.
             if (isTaskCancelled(store, taskId)) {
+                closeLane(store, identity, binding);
                 Map<String, Object> result = Map.of("task", "cancelled");
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
+            }
+
+            List<CapabilityRequestRecord> ownRequests = store.capabilityRequestProjection().findAllForRequester(callerNodeId).stream()
+                    .filter(req -> req.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)).toList();
+            // An owner that accepted a request is building against it, or has built and waits for
+            // this lane's verdict. Ending the lane now would leave that verdict with nobody to give it.
+            for (CapabilityRequestRecord req : ownRequests) {
+                if (req.state().hasOpenObligation() && !req.state().isUnderNegotiation()) {
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.WAIT,
+                            Map.of("reason", "capability_request_open", "capabilityRequestHandle", req.handle().value(), "state", req.state().value(),
+                                    "instruction", "The owner accepted this capability request. Validate its implementation when get_next_action projects it, then cancel."));
+                }
             }
 
             byte[] payload = request.reason().trim().getBytes(StandardCharsets.UTF_8);
@@ -105,11 +131,11 @@ public final class AgentTaskCancellationService {
             // 2. Append TASK_CANCELLED
             store.append(taskId, PredictionEventType.TASK_CANCELLED, callerNodeId, payload, identity);
 
-            // 3. Cancel pending capability requests created by this caller
-            List<CapabilityRequestRecord> createdReqs = store.capabilityRequestProjection().findAllForRequester(callerNodeId);
-            for (CapabilityRequestRecord req : createdReqs) {
-                if (req.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId)) {
-                    store.append(taskId, PredictionEventType.CAPABILITY_REQUEST_CANCELLED, callerNodeId, req.handle().value().getBytes(StandardCharsets.UTF_8), identity);
+            // 3. Cancel the capability requests of this caller that no owner has accepted yet.
+            //    Requests that reached an outcome are history and stay as they are.
+            for (CapabilityRequestRecord req : ownRequests) {
+                if (req.state().isUnderNegotiation()) {
+                    store.append(taskId, PredictionEventType.CAPABILITY_REQUEST_CANCELLED, callerNodeId, req.cancellation("Cancelled with the requester's lane").encode(), identity);
                 }
             }
 
@@ -135,11 +161,10 @@ public final class AgentTaskCancellationService {
             // 6. Finalize provider session with cancellation outcome
             store.append(taskId, PredictionEventType.SESSION_FINALIZED, callerNodeId, ("session_cancelled:" + binding.sessionId()).getBytes(StandardCharsets.UTF_8), identity);
 
-            try {
-                collaborationService.cancel(request.projectRoot(), request.provider(), request.connectionInstanceId());
-            } catch (Exception ignored) {
-                // Reconciliation may retry a release if the event append was interrupted.
-            }
+            // 7. Close the lane and, when nothing else can add work to it, its work group. A
+            //    failure here fails the call: reporting success with the lane still open left the
+            //    agent with a lane it had been told was cancelled.
+            closeLane(store, identity, binding);
 
             Map<String, Object> result = Map.of("task", "cancelled");
             return new AgentResponse(AgentStatus.COMPLETED, null, null, result);

@@ -335,21 +335,6 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
-     * Cancels and permanently fences the exact session lane.
-     *
-     * @param projectRoot          project root
-     * @param provider             provider ID
-     * @param connectionInstanceId exact connection ID
-     * @throws Exception when resolution or append fails
-     */
-    public void cancel(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
-            new WorkIntentService(store, identity).cancel(participantHandle(binding.sessionId()));
-            return null;
-        });
-    }
-
-    /**
      * Opens a request against a conflicting intent owned by another participant.
      *
      * @param projectRoot          project root
