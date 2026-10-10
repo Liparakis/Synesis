@@ -83,8 +83,7 @@ final class NettyTraversalRealSocketTest {
           new byte[TraversalOffer.DIGEST_BYTES], issued, expires,
           new byte[TraversalOffer.NONCE_BYTES],
           initiatorDescriptor);
-      // The exchange is over loopback and normally takes milliseconds. The timeout only bounds a
-      // failure, and two seconds was not enough on a starved CI runner.
+      // The exchange is over loopback and takes milliseconds. The timeout only bounds a failure.
       initiatorExchange = new NettyTraversalExchange(initiatorChannel, Duration.ofSeconds(15), null);
       responderExchange = new NettyTraversalExchange(responderChannel, Duration.ofSeconds(15),
           received -> {

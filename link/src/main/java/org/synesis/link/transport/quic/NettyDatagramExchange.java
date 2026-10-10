@@ -53,9 +53,18 @@ abstract class NettyDatagramExchange<S, R> extends SimpleChannelInboundHandler<D
   /**
    * Installs this handler at the front of the pipeline. Subclasses call it last, once their own
    * fields are set, because the handler can receive a datagram as soon as it is installed.
+   *
+   * <p>The handler is added on the event loop and this method waits for it. Added from another
+   * thread, Netty only queues the activation, and it reads sockets before it runs queued tasks:
+   * a datagram already waiting would skip the handler, reach the QUIC codec, and be dropped.
    */
   final void install(String handlerName) {
-    channel.pipeline().addFirst(handlerName, this);
+    Runnable add = () -> channel.pipeline().addFirst(handlerName, this);
+    if (channel.eventLoop().inEventLoop()) {
+      add.run();
+    } else {
+      channel.eventLoop().submit(add).syncUninterruptibly();
+    }
   }
 
   /**
