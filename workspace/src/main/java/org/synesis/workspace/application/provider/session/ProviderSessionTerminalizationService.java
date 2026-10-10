@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -183,7 +182,7 @@ public final class ProviderSessionTerminalizationService {
     private static boolean hasPendingCapabilityRequest(PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
         return store.capabilityRequestProjection().records().values().stream()
                 .anyMatch(request -> (request.matchesRequester(binding.nodeId(), binding.supervisorId(), binding.workerId()) || request.matchesOwner(binding.nodeId(), binding.supervisorId(), binding.workerId()))
-                        && isPending(request.state()));
+                        && request.state().hasOpenObligation());
     }
 
     private static boolean hasBlockingCommand(ProviderSessionBindingService.Binding binding) {
@@ -204,11 +203,6 @@ public final class ProviderSessionTerminalizationService {
         var participantState = store.collaborationProjection().participantState(participant).orElse(null);
         return participantState != null && participantState != Participant.State.COMPLETED && participantState != Participant.State.CANCELLED && participantState != Participant.State.REVOKED
                 && participantState != Participant.State.DETACHED;
-    }
-
-    private static boolean isPending(CapabilityLifecycleState state) {
-        return state == CapabilityLifecycleState.AWAITING_OWNER || state == CapabilityLifecycleState.REVISION_REQUESTED || state == CapabilityLifecycleState.ACCEPTED || state == CapabilityLifecycleState.IMPLEMENTING
-                || state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || state == CapabilityLifecycleState.VALIDATING;
     }
 
     /**
