@@ -3,7 +3,7 @@ package org.synesis.link.candidate;
 /**
  * Bounded categories for provider diagnostics.
  */
-public enum CandidateProviderFailureCategory {
+enum CandidateProviderFailureCategory {
   /**
    * Provider completed with usable candidates.
    */

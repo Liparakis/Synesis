@@ -36,7 +36,7 @@ public final class PeerDependencyPolicy {
      * @param intent        the dependent lane's intent
      * @return other participants' active producer intents
      */
-    public static List<WorkIntent> openPeers(CollaborationProjection collaboration, WorkIntent intent) {
+    static List<WorkIntent> openPeers(CollaborationProjection collaboration, WorkIntent intent) {
         Objects.requireNonNull(collaboration, "collaboration");
         Objects.requireNonNull(intent, "intent");
         return collaboration.activeIntents().stream()

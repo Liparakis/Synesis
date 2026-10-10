@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * Validates, canonicalizes, and deduplicates runtime candidates.
  */
-public final class CandidateNormalizer {
+final class CandidateNormalizer {
 
   private CandidateNormalizer() {
   }

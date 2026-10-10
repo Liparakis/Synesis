@@ -42,7 +42,7 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   /**
    * Maximum graceful-close wait before the control stream is forced closed.
    */
-  public static final int MAX_CLOSE_MILLIS = 2_000;
+  static final int MAX_CLOSE_MILLIS = 2_000;
   private final PeerSession session;
   private final CompletableFuture<PeerSession> established;
   private final Runnable claim;

@@ -17,7 +17,7 @@ public final class ReplayGuard {
   /**
    * Default maximum number of accepted transcript fingerprints retained.
    */
-  public static final int DEFAULT_MAX_ENTRIES = 1_024;
+  static final int DEFAULT_MAX_ENTRIES = 1_024;
 
   private final int maxEntries;
   private final Set<String> fingerprints = new HashSet<>();

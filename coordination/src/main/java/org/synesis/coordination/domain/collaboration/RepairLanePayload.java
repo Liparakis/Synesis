@@ -68,7 +68,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      * @return decoded payload
      * @throws IOException malformed payload
      */
-    public static RepairLanePayload decode(byte[] encoded) throws IOException {
+    static RepairLanePayload decode(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
@@ -95,7 +95,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      *
      * @return the typed source lane identity.
      */
-    public WorkIntentId sourceIntentIdentity() {
+    WorkIntentId sourceIntentIdentity() {
         return new WorkIntentId(sourceIntentId);
     }
 
@@ -104,7 +104,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      *
      * @return the conflicting snapshot identity for a versioned repair payload.
      */
-    public Optional<SnapshotId> snapshotIdentity() {
+    Optional<SnapshotId> snapshotIdentity() {
         return snapshotId.isBlank() ? Optional.empty() : Optional.of(new SnapshotId(snapshotId));
     }
 
@@ -113,7 +113,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      *
      * @return the materialization control commit for a versioned repair payload.
      */
-    public Optional<CommitId> expectedControlHeadIdentity() {
+    Optional<CommitId> expectedControlHeadIdentity() {
         return expectedControlHead.isBlank() ? Optional.empty() : Optional.of(new CommitId(expectedControlHead));
     }
 
@@ -122,7 +122,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      *
      * @return the source epoch when this payload contains versioned transfer metadata.
      */
-    public Optional<ClaimEpoch> sourceClaimEpochIdentity() {
+    Optional<ClaimEpoch> sourceClaimEpochIdentity() {
         return sourceClaimEpoch == 0L ? Optional.empty() : Optional.of(new ClaimEpoch(sourceClaimEpoch));
     }
 
@@ -131,7 +131,7 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
      *
      * @return the target epoch when this payload contains versioned transfer metadata.
      */
-    public Optional<ClaimEpoch> targetClaimEpochIdentity() {
+    Optional<ClaimEpoch> targetClaimEpochIdentity() {
         return targetClaimEpoch == 0L ? Optional.empty() : Optional.of(new ClaimEpoch(targetClaimEpoch));
     }
 

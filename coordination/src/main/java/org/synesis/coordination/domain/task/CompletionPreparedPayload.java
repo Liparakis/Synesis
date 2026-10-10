@@ -68,7 +68,7 @@ public record CompletionPreparedPayload(UUID taskId, String completionId, UUID l
      * @return decoded payload
      * @throws IOException malformed payload
      */
-    public static CompletionPreparedPayload decode(byte[] encoded) throws IOException {
+    static CompletionPreparedPayload decode(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC || in.readInt() != VERSION) {

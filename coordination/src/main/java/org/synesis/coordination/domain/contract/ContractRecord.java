@@ -114,7 +114,7 @@ public record ContractRecord(UUID contractId, UUID projectId, long revision, Str
      *
      * @return contract revision
      */
-    public ContractRevision contractRevision() {
+    ContractRevision contractRevision() {
         return new ContractRevision(revision);
     }
 

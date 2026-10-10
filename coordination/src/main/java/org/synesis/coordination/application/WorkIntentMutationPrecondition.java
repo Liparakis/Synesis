@@ -81,7 +81,7 @@ public record WorkIntentMutationPrecondition(UUID intentId, String participant, 
      *
      * @return the typed work-intent identity fenced by this precondition.
      */
-    public WorkIntentId intentIdentity() {
+    WorkIntentId intentIdentity() {
         return new WorkIntentId(intentId);
     }
 
@@ -90,7 +90,7 @@ public record WorkIntentMutationPrecondition(UUID intentId, String participant, 
      *
      * @return the typed participant incarnation expected to own the intent.
      */
-    public ParticipantId participantIdentity() {
+    ParticipantId participantIdentity() {
         return new ParticipantId(participant);
     }
 
@@ -118,7 +118,7 @@ public record WorkIntentMutationPrecondition(UUID intentId, String participant, 
      * @param intent candidate current intent
      * @return true when all mutation identity fields match
      */
-    public boolean matches(WorkIntent intent) {
+    boolean matches(WorkIntent intent) {
         return intent != null && intentIdentity().equals(intent.identity())
                 && participantIdentity().equals(intent.participantIdentity())
                 && claimEpoch().equals(intent.claimEpoch()) && lineageIdentity().equals(intent.lineage())
@@ -131,7 +131,7 @@ public record WorkIntentMutationPrecondition(UUID intentId, String participant, 
      * @param intent current intent projection
      * @throws IOException when the precondition is stale
      */
-    public void requireMatches(WorkIntent intent) throws IOException {
+    void requireMatches(WorkIntent intent) throws IOException {
         if (!matches(intent)) {
             throw new CoordinationException("WORK_INTENT_MUTATION_PRECONDITION_STALE");
         }

@@ -36,7 +36,7 @@ public final class TraversalCoordinator implements AutoCloseable {
   /**
    * Maximum number of candidate attempts retained in one plan.
    */
-  public static final int MAX_ATTEMPTS = 32;
+  static final int MAX_ATTEMPTS = 32;
   private final NodeIdentity localIdentity;
   private final String expectedRemoteNodeId;
   private final UUID sessionId;
@@ -158,7 +158,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    * @param authenticatedRemoteNodeId identity returned by the Link handshake
    * @return {@code true} if this was a new valid authenticated attempt
    */
-  public synchronized boolean recordAuthenticated(String attemptIdentifier,
+  synchronized boolean recordAuthenticated(String attemptIdentifier,
       String authenticatedRemoteNodeId) {
     Objects.requireNonNull(attemptIdentifier, "attempt identifier");
     Objects.requireNonNull(authenticatedRemoteNodeId, "authenticated remote node ID");
@@ -178,7 +178,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    *
    * @return selected attempt identifier, or empty when none is ready
    */
-  public synchronized Optional<String> selectWinner() {
+  synchronized Optional<String> selectWinner() {
     if (state == State.ESTABLISHED) {
       return Optional.of(winner);
     }
@@ -196,7 +196,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    * @param category truthful failure category
    * @return {@code true} if the state changed
    */
-  public synchronized boolean fail(ConnectionFailureCategory category) {
+  synchronized boolean fail(ConnectionFailureCategory category) {
     Objects.requireNonNull(category, "failure category");
     if (state == State.ESTABLISHED || state == State.FAILED || state == State.CLOSED) {
       return false;
@@ -211,7 +211,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    *
    * @return current coordinator state
    */
-  public synchronized State state() {
+  synchronized State state() {
     return state;
   }
 
@@ -220,7 +220,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    *
    * @return whether a winner was selected
    */
-  public synchronized boolean isEstablished() {
+  synchronized boolean isEstablished() {
     return state == State.ESTABLISHED;
   }
 
@@ -229,7 +229,7 @@ public final class TraversalCoordinator implements AutoCloseable {
    *
    * @return selected attempt identifier
    */
-  public synchronized String winner() {
+  synchronized String winner() {
     return winner;
   }
 
@@ -262,7 +262,7 @@ public final class TraversalCoordinator implements AutoCloseable {
   /**
    * Lifecycle states for one direct-traversal exchange.
    */
-  public enum State {
+  enum State {
     /**
      * No verified offer/answer has been accepted.
      */

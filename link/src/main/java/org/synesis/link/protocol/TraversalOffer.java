@@ -33,7 +33,7 @@ public final class TraversalOffer {
   /**
    * Maximum encoded offer size.
    */
-  public static final int MAX_BYTES = 24_576;
+  static final int MAX_BYTES = 24_576;
   /**
    * Required attempt nonce size.
    */
@@ -49,9 +49,9 @@ public final class TraversalOffer {
 
   private static final int MAGIC = 0x534C4F31;
   /** The legacy signed offer format. */
-  public static final int FORMAT_VERSION_V1 = 1;
+  static final int FORMAT_VERSION_V1 = 1;
   /** The signed offer format carrying a mandatory return target. */
-  public static final int FORMAT_VERSION_V2 = 2;
+  static final int FORMAT_VERSION_V2 = 2;
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
@@ -303,7 +303,7 @@ public final class TraversalOffer {
    *
    * @return signed-offer format
    */
-  public int formatVersion() {
+  int formatVersion() {
     return formatVersion;
   }
 
@@ -312,7 +312,7 @@ public final class TraversalOffer {
    *
    * @return optional signed return target
    */
-  public Optional<ReturnTarget> returnTarget() {
+  Optional<ReturnTarget> returnTarget() {
     return Optional.ofNullable(returnTarget);
   }
 
@@ -339,7 +339,7 @@ public final class TraversalOffer {
    *
    * @return initiator public key copy
    */
-  public byte[] initiatorPublicKeyEncoded() {
+  byte[] initiatorPublicKeyEncoded() {
     return initiatorPublicKey.clone();
   }
 
@@ -348,7 +348,7 @@ public final class TraversalOffer {
    *
    * @return expected durable responder node ID
    */
-  public String expectedResponderNodeId() {
+  String expectedResponderNodeId() {
     return expectedResponderNodeId;
   }
 
@@ -384,7 +384,7 @@ public final class TraversalOffer {
    *
    * @return attempt nonce copy
    */
-  public byte[] attemptNonce() {
+  byte[] attemptNonce() {
     return attemptNonce.clone();
   }
 

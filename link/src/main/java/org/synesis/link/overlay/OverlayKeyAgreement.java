@@ -27,11 +27,11 @@ public final class OverlayKeyAgreement {
   /**
    * Maximum encoded key-agreement record size.
    */
-  public static final int MAX_BYTES = 1_024;
+  static final int MAX_BYTES = 1_024;
   /**
    * Maximum E2E replay-window width.
    */
-  public static final int REPLAY_WINDOW = 64;
+  static final int REPLAY_WINDOW = 64;
 
   private static final int MAGIC = 0x534C4B31;
   private static final int VERSION = 1;

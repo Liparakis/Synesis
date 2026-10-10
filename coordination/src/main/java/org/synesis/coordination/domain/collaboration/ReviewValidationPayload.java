@@ -121,7 +121,7 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
      *
      * @return the consumed grant identity.
      */
-    public LaneGrantId grantIdentity() {
+    LaneGrantId grantIdentity() {
         return new LaneGrantId(grantId);
     }
 
@@ -148,7 +148,7 @@ public record ReviewValidationPayload(UUID grantId, UUID workGroupId, UUID targe
      *
      * @return the authorized reviewer participant identity.
      */
-    public ParticipantId targetParticipantIdentity() {
+    ParticipantId targetParticipantIdentity() {
         return new ParticipantId(targetParticipant);
     }
 

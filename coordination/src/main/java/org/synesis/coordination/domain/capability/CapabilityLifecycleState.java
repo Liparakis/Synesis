@@ -91,7 +91,7 @@ public enum CapabilityLifecycleState {
      * @return matching lifecycle state
      * @throws IllegalArgumentException if null or unknown
      */
-    public static CapabilityLifecycleState fromValue(String input) {
+    static CapabilityLifecycleState fromValue(String input) {
         CoordinationNullException.requireNonNull(input, "input state value cannot be null");
         String normalized = input.trim().toLowerCase(Locale.ROOT);
         for (CapabilityLifecycleState state : values()) {
@@ -186,7 +186,7 @@ public enum CapabilityLifecycleState {
      *
      * @return true for the open-obligation states and {@link #REJECTED}
      */
-    public boolean isActionableForRequester() {
+    boolean isActionableForRequester() {
         return hasOpenObligation() || this == REJECTED;
     }
 }

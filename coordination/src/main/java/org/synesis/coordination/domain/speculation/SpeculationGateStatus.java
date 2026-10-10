@@ -3,7 +3,7 @@ package org.synesis.coordination.domain.speculation;
 /**
  * Typed outcome of the Git speculation gate.
  */
-public enum SpeculationGateStatus {
+enum SpeculationGateStatus {
     /**
      * The Git speculation check passed.
      */

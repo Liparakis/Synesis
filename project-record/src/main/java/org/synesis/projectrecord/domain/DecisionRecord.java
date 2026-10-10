@@ -199,7 +199,7 @@ public final class DecisionRecord {
    * @return a canonical signed project constraint record
    * @throws GeneralSecurityException if signing fails
    */
-  public static DecisionRecord createConstraint(UUID projectId, UUID recordId, long revision,
+  static DecisionRecord createConstraint(UUID projectId, UUID recordId, long revision,
       byte[] previousDigest,
       String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
       Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
@@ -507,7 +507,7 @@ public final class DecisionRecord {
    *
    * @return record type
    */
-  public RecordType recordType() {
+  RecordType recordType() {
     return recordType;
   }
 
@@ -561,7 +561,7 @@ public final class DecisionRecord {
    *
    * @return created instant
    */
-  public Instant createdAt() {
+  Instant createdAt() {
     return createdAt;
   }
 
@@ -570,7 +570,7 @@ public final class DecisionRecord {
    *
    * @return updated instant
    */
-  public Instant updatedAt() {
+  Instant updatedAt() {
     return updatedAt;
   }
 
@@ -597,7 +597,7 @@ public final class DecisionRecord {
    *
    * @return evidence
    */
-  public List<DecisionEvidence> evidence() {
+  List<DecisionEvidence> evidence() {
     return evidence;
   }
 
@@ -606,7 +606,7 @@ public final class DecisionRecord {
    *
    * @return constraint payload or null
    */
-  public ConstraintPayload constraintPayload() {
+  ConstraintPayload constraintPayload() {
     return constraintPayload;
   }
 
@@ -678,7 +678,7 @@ public final class DecisionRecord {
   /**
    * Record classification.
    */
-  public enum RecordType {
+  enum RecordType {
     /**
      * General architectural or project decision.
      */
@@ -697,7 +697,7 @@ public final class DecisionRecord {
    * @param scopes     target path scopes
    * @param supersedes list of superseded record UUIDs
    */
-  public record ConstraintPayload(
+  record ConstraintPayload(
       ProjectConstraint.Effect effect,
       ProjectConstraint.ConstraintStatus status,
       List<String> scopes,

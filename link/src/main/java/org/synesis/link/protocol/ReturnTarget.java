@@ -18,9 +18,7 @@ import java.util.UUID;
 public final class ReturnTarget {
 
   /** The only currently supported return-target encoding. */
-  public static final int FORMAT_VERSION = 1;
-  /** The canonical encoded size: one format byte and two UUID words. */
-  public static final int ENCODED_BYTES = 17;
+  static final int FORMAT_VERSION = 1;
 
   private final int formatVersion;
   private final UUID returnProjectId;
@@ -66,7 +64,7 @@ public final class ReturnTarget {
    *
    * @return target format version
    */
-  public int formatVersion() {
+  int formatVersion() {
     return formatVersion;
   }
 

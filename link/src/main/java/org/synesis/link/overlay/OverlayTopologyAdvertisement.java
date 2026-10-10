@@ -26,11 +26,11 @@ public final class OverlayTopologyAdvertisement {
   /**
    * Maximum encoded topology advertisement size.
    */
-  public static final int MAX_BYTES = 1_024;
+  static final int MAX_BYTES = 1_024;
   /**
    * Maximum advertised direct neighbors.
    */
-  public static final int MAX_ADJACENCIES = OverlayTopologyPolicy.MAX_DEGREE;
+  static final int MAX_ADJACENCIES = OverlayTopologyPolicy.MAX_DEGREE;
 
   private static final int MAGIC = 0x534C5431;
   private static final int VERSION = 1;
@@ -202,7 +202,7 @@ public final class OverlayTopologyAdvertisement {
    * @param now        current time
    * @throws GeneralSecurityException if this advertisement is not accepted
    */
-  public void verifyAgainst(OverlayMembershipSnapshot membership, Instant now)
+  void verifyAgainst(OverlayMembershipSnapshot membership, Instant now)
       throws GeneralSecurityException {
     Objects.requireNonNull(membership, "membership");
     Objects.requireNonNull(now, "now");
@@ -227,7 +227,7 @@ public final class OverlayTopologyAdvertisement {
    * @param now current time
    * @return true when expired
    */
-  public boolean isExpiredAt(Instant now) {
+  boolean isExpiredAt(Instant now) {
     return !Objects.requireNonNull(now, "now").isBefore(expiresAt);
   }
 
@@ -254,7 +254,7 @@ public final class OverlayTopologyAdvertisement {
    *
    * @return membership revision
    */
-  public long membershipRevision() {
+  long membershipRevision() {
     return membershipRevision;
   }
 
@@ -263,7 +263,7 @@ public final class OverlayTopologyAdvertisement {
    *
    * @return sequence
    */
-  public long sequence() {
+  long sequence() {
     return sequence;
   }
 
@@ -290,7 +290,7 @@ public final class OverlayTopologyAdvertisement {
    *
    * @return unsigned canonical bytes
    */
-  public byte[] unsignedEncoded() {
+  byte[] unsignedEncoded() {
     return unsignedBytes.clone();
   }
 

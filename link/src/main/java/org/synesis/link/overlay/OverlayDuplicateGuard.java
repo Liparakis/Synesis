@@ -51,7 +51,7 @@ public final class OverlayDuplicateGuard {
    * @param now   current time
    * @return true for a first observation, false for a duplicate
    */
-  public synchronized boolean firstSeen(OverlayForwardingFrame frame, Instant now) {
+  synchronized boolean firstSeen(OverlayForwardingFrame frame, Instant now) {
     Objects.requireNonNull(frame, "frame");
     Objects.requireNonNull(now, "now");
     prune(now);
@@ -76,7 +76,7 @@ public final class OverlayDuplicateGuard {
    * @param now current time
    * @return number removed
    */
-  public synchronized int prune(Instant now) {
+  synchronized int prune(Instant now) {
     Objects.requireNonNull(now, "now");
     int before = entries.size();
     entries.entrySet().removeIf(entry -> !entry.getValue().isAfter(now));

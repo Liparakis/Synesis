@@ -17,15 +17,15 @@ public final class OverlayEnvelope {
   /**
    * Maximum encoded envelope size accepted by the v1 Link stream bound.
    */
-  public static final int MAX_BYTES = 4_096;
+  static final int MAX_BYTES = 4_096;
   /**
    * Maximum plaintext size before the AEAD tag and envelope framing.
    */
-  public static final int MAX_PLAINTEXT_BYTES = OverlayCodecSupport.MAX_PLAINTEXT_BYTES;
+  static final int MAX_PLAINTEXT_BYTES = OverlayCodecSupport.MAX_PLAINTEXT_BYTES;
   /**
    * Maximum ciphertext size including the AEAD tag.
    */
-  public static final int MAX_CIPHERTEXT_BYTES = OverlayCodecSupport.MAX_CIPHERTEXT_BYTES;
+  static final int MAX_CIPHERTEXT_BYTES = OverlayCodecSupport.MAX_CIPHERTEXT_BYTES;
 
   private static final int MAGIC = 0x534C4531;
   private static final int VERSION = 1;
@@ -198,7 +198,7 @@ public final class OverlayEnvelope {
    *
    * @return sequence number
    */
-  public long sequence() {
+  long sequence() {
     return sequence;
   }
 
@@ -216,7 +216,7 @@ public final class OverlayEnvelope {
    *
    * @return associated-data bytes
    */
-  public byte[] associatedData() {
+  byte[] associatedData() {
     return associatedData(projectId, messageId, originNodeId, destinationNodeId, sessionId,
         sequence,
         ciphertext.length);

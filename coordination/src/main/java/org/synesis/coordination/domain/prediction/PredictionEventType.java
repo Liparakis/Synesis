@@ -343,7 +343,7 @@ public enum PredictionEventType {
      *
      * @return true for the prediction lifecycle events
      */
-    public boolean isPredictionLifecycle() {
+    boolean isPredictionLifecycle() {
         return switch (this) {
             case PREDICTION_CREATED, PREDICTION_ROUTED, REQUEST_RECEIVED, ACCEPTED_EXACT, ACCEPTED_EQUIVALENT,
                  CONTRACT_REVISED, IMPLEMENTATION_STARTED, PATCH_READY, CAPABILITY_AVAILABLE, VALIDATION_STARTED,

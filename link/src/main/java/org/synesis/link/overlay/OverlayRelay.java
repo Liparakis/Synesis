@@ -47,7 +47,7 @@ public final class OverlayRelay {
    * @return registration that closes the live connection
    * @throws GeneralSecurityException if the node is not authorized
    */
-  public Registration register(NodeIdentity identity, Connection connection)
+  Registration register(NodeIdentity identity, Connection connection)
       throws GeneralSecurityException {
     Objects.requireNonNull(identity, "identity");
     return registerAuthenticated(identity.nodeId(), connection);
@@ -87,7 +87,7 @@ public final class OverlayRelay {
    *
    * @return connection count
    */
-  public int connectionCount() {
+  int connectionCount() {
     return connections.size();
   }
 

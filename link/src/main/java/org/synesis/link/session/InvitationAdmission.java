@@ -22,7 +22,7 @@ public final class InvitationAdmission implements AutoCloseable {
   /**
    * Maximum time one invitation reservation may remain unconsumed.
    */
-  public static final Duration RESERVATION_TIMEOUT = Duration.ofSeconds(15);
+  static final Duration RESERVATION_TIMEOUT = Duration.ofSeconds(15);
   private final UUID sessionId;
   private final byte[] capability;
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(

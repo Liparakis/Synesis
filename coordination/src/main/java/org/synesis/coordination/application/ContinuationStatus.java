@@ -3,7 +3,7 @@ package org.synesis.coordination.application;
 /**
  * Terminal outcome of a recovery-continuation attempt.
  */
-public enum ContinuationStatus {
+enum ContinuationStatus {
     /**
      * The caller committed or owns the resulting successor.
      */

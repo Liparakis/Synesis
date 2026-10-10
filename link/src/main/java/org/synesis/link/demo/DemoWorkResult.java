@@ -16,7 +16,7 @@ public record DemoWorkResult(UUID requestId, DemoWorkStatus status, String messa
   /**
    * Maximum encoded result-message length.
    */
-  public static final int MAX_MESSAGE_BYTES = 1_024;
+  static final int MAX_MESSAGE_BYTES = 1_024;
 
   /**
    * Validates status and bounded UTF-8 message data.

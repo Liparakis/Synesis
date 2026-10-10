@@ -182,7 +182,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return requester supervisor identity when present
      */
-    public Optional<SupervisorId> requesterSupervisorIdentity() {
+    Optional<SupervisorId> requesterSupervisorIdentity() {
         return optionalIdentity(requesterSupervisorId, SupervisorId::new);
     }
 
@@ -191,7 +191,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return requester worker identity when present
      */
-    public Optional<WorkerId> requesterWorkerIdentity() {
+    Optional<WorkerId> requesterWorkerIdentity() {
         return optionalIdentity(requesterWorkerId, WorkerId::new);
     }
 
@@ -200,7 +200,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return owner node identity
      */
-    public NodeId ownerNodeIdentity() {
+    NodeId ownerNodeIdentity() {
         return new NodeId(ownerNodeId);
     }
 
@@ -209,7 +209,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return owner supervisor identity when present
      */
-    public Optional<SupervisorId> ownerSupervisorIdentity() {
+    Optional<SupervisorId> ownerSupervisorIdentity() {
         return optionalIdentity(ownerSupervisorId, SupervisorId::new);
     }
 
@@ -218,7 +218,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return owner worker identity when present
      */
-    public Optional<WorkerId> ownerWorkerIdentity() {
+    Optional<WorkerId> ownerWorkerIdentity() {
         return optionalIdentity(ownerWorkerId, WorkerId::new);
     }
 
@@ -227,7 +227,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      *
      * @return authority lineage identity
      */
-    public AuthorityLineageId authorityLineageIdentity() {
+    AuthorityLineageId authorityLineageIdentity() {
         return new AuthorityLineageId(authorityLineageId);
     }
 
@@ -267,7 +267,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      * @param successor verified successor actor scope
      * @return a copy retaining contract, state, and revision history
      */
-    public CapabilityRequestRecord withRequesterActor(CapabilityActorScope successor) {
+    CapabilityRequestRecord withRequesterActor(CapabilityActorScope successor) {
         CoordinationNullException.requireNonNull(successor, "successor");
         return new CapabilityRequestRecord(handle,
                 capability,
@@ -292,7 +292,7 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      * @param successor verified successor actor scope
      * @return a copy retaining contract, state, and revision history
      */
-    public CapabilityRequestRecord withOwnerActor(CapabilityActorScope successor) {
+    CapabilityRequestRecord withOwnerActor(CapabilityActorScope successor) {
         CoordinationNullException.requireNonNull(successor, "successor");
         return new CapabilityRequestRecord(handle,
                 capability,

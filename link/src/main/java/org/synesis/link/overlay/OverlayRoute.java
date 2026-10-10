@@ -58,7 +58,7 @@ public final class OverlayRoute {
    * @param path next-hop through final destination, excluding the local node
    * @return peer-transit route
    */
-  public static OverlayRoute peerTransit(List<String> path) {
+  static OverlayRoute peerTransit(List<String> path) {
     Objects.requireNonNull(path, "route path");
     if (path.isEmpty()) {
       throw new IllegalArgumentException("peer-transit route requires a path");
@@ -73,7 +73,7 @@ public final class OverlayRoute {
    * @param relayNodeId       configured relay identity or endpoint label
    * @return relay route
    */
-  public static OverlayRoute organizationRelay(String destinationNodeId, String relayNodeId) {
+  static OverlayRoute organizationRelay(String destinationNodeId, String relayNodeId) {
     return new OverlayRoute(Kind.ORGANIZATION_RELAY, destinationNodeId, List.of(),
         Objects.requireNonNull(relayNodeId, "relay node ID"));
   }

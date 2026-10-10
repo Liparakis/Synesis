@@ -11,7 +11,7 @@ public final class ApplicationStreamCodec {
   /**
    * Maximum opaque application payload accepted by the frame codec.
    */
-  public static final int MAX_PAYLOAD_BYTES = ControlFrame.MAX_PAYLOAD;
+  static final int MAX_PAYLOAD_BYTES = ControlFrame.MAX_PAYLOAD;
   /**
    * Maximum total encoded frame size, including magic and version bytes.
    */
@@ -28,7 +28,7 @@ public final class ApplicationStreamCodec {
    * @param payload application payload bytes
    * @return framed bytes
    */
-  public static byte[] encode(byte[] payload) {
+  static byte[] encode(byte[] payload) {
     Objects.requireNonNull(payload, "payload");
     if (payload.length > MAX_PAYLOAD_BYTES) {
       throw new IllegalArgumentException("application payload exceeds supported bound");

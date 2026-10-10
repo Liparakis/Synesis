@@ -220,7 +220,7 @@ public final class CollaborationCodec {
      * @param encoded release payload
      * @return {@code true} for the no-change completion format
      */
-    public static boolean isNoChangeCompletion(byte[] encoded) {
+    static boolean isNoChangeCompletion(byte[] encoded) {
         return encoded != null && encoded.length >= 4 &&
                 ((encoded[0] & 0xff) << 24 | (encoded[1] & 0xff) << 16 | (encoded[2] & 0xff) << 8 | (encoded[3] & 0xff))
                         == MAGIC_NO_CHANGE_COMPLETION;

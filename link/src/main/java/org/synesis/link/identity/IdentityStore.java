@@ -12,7 +12,7 @@ import java.security.GeneralSecurityException;
  *
  * @since 1.0
  */
-public interface IdentityStore {
+interface IdentityStore {
 
   /**
    * Loads the identity from this store.

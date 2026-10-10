@@ -143,7 +143,7 @@ public final class OverlayTopologyView {
   /**
    * Result when a newer advertisement replaces the stored one.
    */
-  public enum Acceptance {
+  enum Acceptance {
     /**
      * A newer valid advertisement was stored.
      */

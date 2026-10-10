@@ -72,7 +72,7 @@ public final class ProjectRecordSync {
    * @param record  local signed decision
    * @return completion with a deterministic result or {@link Code#UNKNOWN}
    */
-  public SyncOutcome publish(PeerSession session, DecisionRecord record) {
+  SyncOutcome publish(PeerSession session, DecisionRecord record) {
     Objects.requireNonNull(session, "session");
     Objects.requireNonNull(record, "record");
     if (!config.projectId()

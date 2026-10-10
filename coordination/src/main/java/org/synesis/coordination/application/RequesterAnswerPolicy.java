@@ -36,7 +36,7 @@ public final class RequesterAnswerPolicy {
     /**
      * Environment variable that overrides the wait, in whole seconds, when the property is unset.
      */
-    public static final String GRACE_VARIABLE = "SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS";
+    static final String GRACE_VARIABLE = "SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS";
 
     private static final Duration DEFAULT_GRACE = Duration.ofSeconds(120);
 
@@ -51,7 +51,7 @@ public final class RequesterAnswerPolicy {
      * @return the configured wait, or two minutes when none is configured or the value is not a
      *         whole number of seconds between zero and one day
      */
-    public static Duration grace() {
+    static Duration grace() {
         String configured = System.getProperty(GRACE_PROPERTY);
         if (configured == null || configured.isBlank()) {
             configured = System.getenv(GRACE_VARIABLE);

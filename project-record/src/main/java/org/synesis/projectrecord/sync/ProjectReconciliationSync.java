@@ -15,19 +15,19 @@ public final class ProjectReconciliationSync {
   /**
    * Maximum inventory entries limit (safety bound).
    */
-  public static final int MAX_INVENTORY_ENTRIES = 1_000;
+  static final int MAX_INVENTORY_ENTRIES = 1_000;
   /**
    * Maximum revisions per record (safety bound).
    */
-  public static final int MAX_REVISIONS = DecisionStore.MAX_REVISIONS_PER_RECORD;
+  static final int MAX_REVISIONS = DecisionStore.MAX_REVISIONS_PER_RECORD;
   /**
    * Maximum session bytes transferred (safety bound).
    */
-  public static final int MAX_SESSION_BYTES = 10 * 1024 * 1024;
+  static final int MAX_SESSION_BYTES = 10 * 1024 * 1024;
   /**
    * Entries per chunk.
    */
-  public static final int CHUNK_SIZE = 50;
+  static final int CHUNK_SIZE = 50;
   private final String localNodeId;
   private final ProjectConfig config;
   private final DecisionStore store;
@@ -68,7 +68,7 @@ public final class ProjectReconciliationSync {
   /**
    * Reconciled per-record action/outcome.
    */
-  public enum RecordStatus {
+  enum RecordStatus {
     /**
      * Revision was duplicated.
      */

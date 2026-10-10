@@ -11,7 +11,7 @@ import org.synesis.coordination.domain.identity.ContractRevision;
  * @param previousRevision    currently published revision
  * @param replacementRevision revision replacing the current one
  */
-public record ContractSupersede(ContractId contract, ContractRevision previousRevision,
+record ContractSupersede(ContractId contract, ContractRevision previousRevision,
                                 ContractRevision replacementRevision) {
 
     /**

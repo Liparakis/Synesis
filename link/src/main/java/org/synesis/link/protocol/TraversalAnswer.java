@@ -32,7 +32,7 @@ public final class TraversalAnswer {
   /**
    * Maximum encoded answer size.
    */
-  public static final int MAX_BYTES = 24_576;
+  static final int MAX_BYTES = 24_576;
   /**
    * Required answer nonce size.
    */
@@ -44,11 +44,11 @@ public final class TraversalAnswer {
   /**
    * Maximum answer URI length accepted by the parser.
    */
-  public static final int MAX_LINK_CHARS = 49_152;
+  static final int MAX_LINK_CHARS = 49_152;
 
   private static final int MAGIC = 0x534C4132;
   /** Legacy SLA2 answer format. */
-  public static final int FORMAT_VERSION_V1 = 1;
+  static final int FORMAT_VERSION_V1 = 1;
   /** SLA2 answer format carrying the copied signed return target. */
   public static final int FORMAT_VERSION_V2 = 2;
   private static final int MAX_NODE_ID_BYTES = 128;
@@ -346,7 +346,7 @@ public final class TraversalAnswer {
    *
    * @return answer nonce copy
    */
-  public byte[] answerNonce() {
+  byte[] answerNonce() {
     return answerNonce.clone();
   }
 

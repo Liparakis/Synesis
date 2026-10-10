@@ -27,7 +27,7 @@ public final class StunBindingMessage {
   /**
    * Maximum response bytes inspected by this bounded codec.
    */
-  public static final int MAX_RESPONSE_BYTES = 2_048;
+  static final int MAX_RESPONSE_BYTES = 2_048;
 
   private static final int HEADER_BYTES = 20;
   private static final int BINDING_REQUEST = 0x0001;
@@ -62,7 +62,7 @@ public final class StunBindingMessage {
    * @return mapped public endpoint
    * @throws IOException if the response is malformed, mismatched, or has no address
    */
-  public static InetSocketAddress xorMappedAddress(byte[] response, byte[] transactionId)
+  static InetSocketAddress xorMappedAddress(byte[] response, byte[] transactionId)
       throws IOException {
     Objects.requireNonNull(response, "response");
     requireTransactionId(transactionId);

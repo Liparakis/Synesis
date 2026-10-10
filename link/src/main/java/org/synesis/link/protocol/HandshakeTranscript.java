@@ -29,11 +29,11 @@ public final class HandshakeTranscript {
   /**
    * Maximum nonce size.
    */
-  public static final int MAX_NONCE_BYTES = 64;
+  static final int MAX_NONCE_BYTES = 64;
   /**
    * Maximum invitation-capability size carried by a transcript.
    */
-  public static final int MAX_INVITATION_CAPABILITY_BYTES = 64;
+  static final int MAX_INVITATION_CAPABILITY_BYTES = 64;
   /**
    * Maximum encoded transcript size.
    */

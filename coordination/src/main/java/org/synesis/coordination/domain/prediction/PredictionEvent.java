@@ -373,15 +373,6 @@ public final class PredictionEvent {
     }
 
     /**
-     * Returns the event's typed position in the append-only project log.
-     *
-     * @return the event's typed position in the append-only project log.
-     */
-    public EventSequence sequenceIdentity() {
-        return new EventSequence(sequence);
-    }
-
-    /**
      * Returns the event kind.
      *
      * @return event type

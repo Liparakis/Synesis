@@ -34,7 +34,7 @@ public record CapabilityActorScope(String nodeId, String supervisorId, String wo
      * @param expectedWorkerId     recorded worker identity, or {@code null} when absent
      * @return true when node, supervisor, and worker all equal this scope exactly
      */
-    public boolean matches(String expectedNodeId, String expectedSupervisorId, String expectedWorkerId) {
+    boolean matches(String expectedNodeId, String expectedSupervisorId, String expectedWorkerId) {
         return nodeId.equals(expectedNodeId)
                 && supervisorId.equals(expectedSupervisorId == null ? "" : expectedSupervisorId)
                 && workerId.equals(expectedWorkerId == null ? "" : expectedWorkerId);

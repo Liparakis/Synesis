@@ -465,7 +465,7 @@ public record WorkIntent(UUID intentId, UUID projectId, String participant, Stri
      * @param newParticipant opaque participant handle of the copy
      * @return the copy
      */
-    public WorkIntent withParticipant(String newParticipant) {
+    WorkIntent withParticipant(String newParticipant) {
         return new WorkIntent(intentId, projectId, newParticipant, provider, taskId, goal, acceptance, baseCommit,
                 selectors, version, workGroupId, authorityLineageId, status, role, reviewTargetSelectors,
                 knownDependencies);

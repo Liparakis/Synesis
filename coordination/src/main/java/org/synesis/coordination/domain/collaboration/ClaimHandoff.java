@@ -27,7 +27,7 @@ public record ClaimHandoff(WorkIntentId intent, ParticipantId targetParticipant,
      *
      * @return numeric value of {@link #expectedEpoch()}
      */
-    public long expectedVersion() {
+    long expectedVersion() {
         return expectedEpoch.value();
     }
 }

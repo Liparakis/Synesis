@@ -31,7 +31,7 @@ public final class CandidateGatheringOperation {
    *
    * @return true only for the call that selected cancellation
    */
-  public boolean cancel() {
+  boolean cancel() {
     if (!cancelled.compareAndSet(false, true)) {
       return false;
     }

@@ -33,15 +33,15 @@ public final class SessionInvitation {
   /**
    * Invitation format version.
    */
-  public static final int FORMAT_VERSION = 1;
+  static final int FORMAT_VERSION = 1;
   /**
    * Maximum raw invitation bytes accepted before parsing.
    */
-  public static final int MAX_BYTES = 12_288;
+  static final int MAX_BYTES = 12_288;
   /**
    * Maximum share-link characters accepted by the parser.
    */
-  public static final int MAX_LINK_CHARS = 16_384;
+  static final int MAX_LINK_CHARS = 16_384;
   /**
    * Default invitation validity.
    */

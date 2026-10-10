@@ -21,15 +21,15 @@ public final class OverlayTopologyPolicy {
   /**
    * Maximum desired direct degree in the default policy.
    */
-  public static final int MAX_DEGREE = 4;
+  static final int MAX_DEGREE = 4;
   /**
    * Default full-mesh threshold.
    */
-  public static final int DEFAULT_FULL_MESH_THRESHOLD = 3;
+  static final int DEFAULT_FULL_MESH_THRESHOLD = 3;
   /**
    * Default circular shortcut distance.
    */
-  public static final int DEFAULT_SHORTCUT_DISTANCE = 2;
+  static final int DEFAULT_SHORTCUT_DISTANCE = 2;
 
   private final int fullMeshThreshold;
   private final int shortcutDistance;

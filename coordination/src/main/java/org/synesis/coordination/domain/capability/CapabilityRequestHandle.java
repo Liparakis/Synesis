@@ -43,7 +43,7 @@ public record CapabilityRequestHandle(String value) {
      * @param input handle string candidate
      * @return {@code true} if structurally valid
      */
-    public static boolean isValid(String input) {
+    static boolean isValid(String input) {
         if (input == null || input.isBlank()) {
             return false;
         }

@@ -26,7 +26,7 @@ public final class ReconciliationMessage {
   /**
    * Maximum application payload allowed.
    */
-  public static final int MAX_BYTES = 4_096;
+  static final int MAX_BYTES = 4_096;
   /**
    * Download response status: the requested revision follows.
    */

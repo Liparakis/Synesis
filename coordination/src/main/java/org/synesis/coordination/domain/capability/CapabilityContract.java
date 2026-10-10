@@ -36,7 +36,7 @@ public record CapabilityContract(String purpose,
                                  String concurrency,
                                  List<String> acceptanceTests) {
 
-    public static final int MAX_ENCODED_BYTES = 32 * 1024;
+    static final int MAX_ENCODED_BYTES = 32 * 1024;
     private static final int MAX_FIELD_LENGTH = 2000;
     private static final int MAX_FIELD_BYTES = 8 * 1024;
     private static final int MAX_LIST_ITEMS = 16;

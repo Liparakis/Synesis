@@ -27,7 +27,7 @@ import org.synesis.link.overlay.OverlayForwardingFrame;
 /**
  * Client binding for one authenticated live relay connection.
  */
-public final class OverlayRelayClient implements AutoCloseable {
+final class OverlayRelayClient implements AutoCloseable {
 
     private final NodeIdentity identity;
     private final InetSocketAddress serverAddress;

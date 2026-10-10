@@ -42,7 +42,7 @@ public record ContractDependency(UUID intentId, String participant, UUID contrac
      *
      * @return consumer intent identity
      */
-    public WorkIntentId intentIdentity() {
+    WorkIntentId intentIdentity() {
         return new WorkIntentId(intentId);
     }
 
@@ -51,7 +51,7 @@ public record ContractDependency(UUID intentId, String participant, UUID contrac
      *
      * @return contract identity
      */
-    public ContractId contractIdentity() {
+    ContractId contractIdentity() {
         return new ContractId(contractId);
     }
 
@@ -60,7 +60,7 @@ public record ContractDependency(UUID intentId, String participant, UUID contrac
      *
      * @return contract revision
      */
-    public ContractRevision contractRevision() {
+    ContractRevision contractRevision() {
         return new ContractRevision(revision);
     }
 

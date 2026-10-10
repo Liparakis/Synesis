@@ -5,7 +5,7 @@ import java.security.GeneralSecurityException;
 /**
  * Diagnosable fail-closed error from the bounded project forwarder.
  */
-public final class OverlayForwardingException extends GeneralSecurityException {
+final class OverlayForwardingException extends GeneralSecurityException {
 
   private static final long serialVersionUID = 1L;
   /**

@@ -32,7 +32,7 @@ public final class HandshakeProof {
   /**
    * Maximum challenge size.
    */
-  public static final int MAX_CHALLENGE_BYTES = 64;
+  static final int MAX_CHALLENGE_BYTES = 64;
 
   private static final int MAGIC = 0x534C4850;
   private static final int MAX_PUBLIC_KEY_BYTES = 256;
@@ -207,7 +207,7 @@ public final class HandshakeProof {
    * @return challenge copy
    */
   @SuppressWarnings("unused")
-  public byte[] challenge() {
+  byte[] challenge() {
     return challenge.clone();
   }
 

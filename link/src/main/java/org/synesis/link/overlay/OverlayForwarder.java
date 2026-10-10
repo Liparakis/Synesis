@@ -248,7 +248,7 @@ public final class OverlayForwarder {
    * Transport binding for one configured live organization relay.
    */
   @FunctionalInterface
-  public interface RelayTransport {
+  interface RelayTransport {
 
     /**
      * Sends one hop-local frame to the authenticated relay.

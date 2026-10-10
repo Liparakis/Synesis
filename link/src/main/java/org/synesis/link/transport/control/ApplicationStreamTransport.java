@@ -26,7 +26,7 @@ public final class ApplicationStreamTransport {
    * @param active         active-stream counter enforcing the stream limit
    * @return completion for the opaque response payload
    */
-  public static CompletionStage<byte[]> open(ChannelHandlerContext controlContext, byte[] payload,
+  static CompletionStage<byte[]> open(ChannelHandlerContext controlContext, byte[] payload,
       AtomicInteger active) {
     if (payload.length > ApplicationStreamCodec.MAX_PAYLOAD_BYTES) {
       return CompletableFuture.failedFuture(new IllegalArgumentException(

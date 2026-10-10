@@ -330,7 +330,7 @@ public final class CoordinationService {
      * @param handleValue public request handle string
      * @return active validation context when found
      */
-    public Optional<ValidationContextRecord> validationContext(String handleValue) {
+    Optional<ValidationContextRecord> validationContext(String handleValue) {
         if (handleValue == null || handleValue.isBlank()) {
             return Optional.empty();
         }
@@ -347,7 +347,7 @@ public final class CoordinationService {
      * @param handle validated capability-request identity
      * @return active validation context when found
      */
-    public Optional<ValidationContextRecord> validationContext(CapabilityRequestHandle handle) {
+    Optional<ValidationContextRecord> validationContext(CapabilityRequestHandle handle) {
         return fresh().capabilityRequestProjection()
                 .findValidationContext(CoordinationNullException.requireNonNull(handle, "handle"));
     }

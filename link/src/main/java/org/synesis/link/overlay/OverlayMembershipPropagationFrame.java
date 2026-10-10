@@ -18,11 +18,11 @@ public final class OverlayMembershipPropagationFrame {
   /**
    * Maximum number of direct peers through which a snapshot travels.
    */
-  public static final int MAX_HOPS = 8;
+  static final int MAX_HOPS = 8;
   /**
    * Maximum encoded propagation frame size.
    */
-  public static final int MAX_BYTES = OverlayForwardingFrame.MAX_BYTES;
+  static final int MAX_BYTES = OverlayForwardingFrame.MAX_BYTES;
 
   private static final int MAGIC = 0x534C5032;
   private static final int VERSION = 1;
@@ -56,7 +56,7 @@ public final class OverlayMembershipPropagationFrame {
    * @param remainingHops propagation budget
    * @return new propagation frame
    */
-  public static OverlayMembershipPropagationFrame create(OverlayMembershipSnapshot membership,
+  static OverlayMembershipPropagationFrame create(OverlayMembershipSnapshot membership,
       int remainingHops) {
     if (remainingHops <= 0) {
       throw new IllegalArgumentException(
@@ -72,7 +72,7 @@ public final class OverlayMembershipPropagationFrame {
    * @return decoded frame
    * @throws IOException if framing, bounds, or field binding is invalid
    */
-  public static OverlayMembershipPropagationFrame decode(byte[] bytes) throws IOException {
+  static OverlayMembershipPropagationFrame decode(byte[] bytes) throws IOException {
     Objects.requireNonNull(bytes, "bytes");
     if (bytes.length == 0 || bytes.length > MAX_BYTES) {
       throw new IOException("membership propagation frame exceeds supported bound");
@@ -114,7 +114,7 @@ public final class OverlayMembershipPropagationFrame {
    * @param bytes candidate wire bytes
    * @return true when the candidate is intended for this decoder
    */
-  public static boolean hasMagic(byte[] bytes) {
+  static boolean hasMagic(byte[] bytes) {
     return bytes != null && bytes.length >= Integer.BYTES
         && bytes[0] == (byte) (MAGIC >>> 24)
         && bytes[1] == (byte) (MAGIC >>> 16)
@@ -128,7 +128,7 @@ public final class OverlayMembershipPropagationFrame {
    * @return decremented propagation frame
    * @throws IllegalStateException when no propagation budget remains
    */
-  public OverlayMembershipPropagationFrame forwardOneHop() {
+  OverlayMembershipPropagationFrame forwardOneHop() {
     if (remainingHops <= 0) {
       throw new IllegalStateException("membership propagation hop budget exhausted");
     }
@@ -140,7 +140,7 @@ public final class OverlayMembershipPropagationFrame {
    *
    * @return membership snapshot
    */
-  public OverlayMembershipSnapshot membership() {
+  OverlayMembershipSnapshot membership() {
     return membership;
   }
 
@@ -149,7 +149,7 @@ public final class OverlayMembershipPropagationFrame {
    *
    * @return remaining hops
    */
-  public int remainingHops() {
+  int remainingHops() {
     return remainingHops;
   }
 

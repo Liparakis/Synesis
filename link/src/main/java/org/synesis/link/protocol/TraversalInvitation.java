@@ -31,15 +31,15 @@ public final class TraversalInvitation {
   /**
    * Maximum encoded SLO1 link payload.
    */
-  public static final int MAX_BYTES = SessionInvitation.MAX_BYTES + TraversalOffer.MAX_BYTES + 64;
+  static final int MAX_BYTES = SessionInvitation.MAX_BYTES + TraversalOffer.MAX_BYTES + 64;
   /**
    * Maximum SLO1 URI length accepted by the parser.
    */
-  public static final int MAX_LINK_CHARS = 65_536;
+  static final int MAX_LINK_CHARS = 65_536;
 
   private static final int MAGIC = 0x534C4F31;
   /** Legacy SLO1 wrapper format. */
-  public static final int FORMAT_VERSION_V1 = 1;
+  static final int FORMAT_VERSION_V1 = 1;
   /** SLO1 wrapper format carrying a v2 signed offer. */
   public static final int FORMAT_VERSION_V2 = 2;
 

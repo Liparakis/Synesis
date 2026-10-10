@@ -58,7 +58,7 @@ public record WorkIntentScopeExtension(WorkIntent intent, long expectedClaimEpoc
      * @return decoded extension
      * @throws IOException when the payload is malformed
      */
-    public static WorkIntentScopeExtension decode(byte[] encoded) throws IOException {
+    static WorkIntentScopeExtension decode(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC) {

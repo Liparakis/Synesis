@@ -3,7 +3,7 @@ package org.synesis.coordination.domain.prediction;
 /**
  * Machine-readable reasons returned by the prediction integration gate.
  */
-public enum IntegrationGateReason {
+enum IntegrationGateReason {
     /**
      * The prediction remains unresolved.
      */

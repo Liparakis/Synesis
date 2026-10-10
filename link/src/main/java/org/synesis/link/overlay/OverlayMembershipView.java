@@ -79,7 +79,7 @@ public final class OverlayMembershipView {
   /**
    * Result of attempting to advance the local membership snapshot.
    */
-  public enum Acceptance {
+  enum Acceptance {
     /**
      * A newer verified snapshot replaced the current view.
      */

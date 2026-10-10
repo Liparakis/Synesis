@@ -17,11 +17,11 @@ public final class OverlayTopologyPropagationFrame {
   /**
    * Maximum number of direct peers through which an advertisement travels.
    */
-  public static final int MAX_HOPS = 8;
+  static final int MAX_HOPS = 8;
   /**
    * Maximum encoded propagation frame size.
    */
-  public static final int MAX_BYTES = 2_048;
+  static final int MAX_BYTES = 2_048;
 
   private static final int MAGIC = 0x534C5031;
   private static final int VERSION = 1;
@@ -122,7 +122,7 @@ public final class OverlayTopologyPropagationFrame {
    * @return decremented propagation frame
    * @throws IllegalStateException when no propagation budget remains
    */
-  public OverlayTopologyPropagationFrame forwardOneHop() {
+  OverlayTopologyPropagationFrame forwardOneHop() {
     if (remainingHops <= 0) {
       throw new IllegalStateException("topology propagation hop budget exhausted");
     }
@@ -143,7 +143,7 @@ public final class OverlayTopologyPropagationFrame {
    *
    * @return remaining hops
    */
-  public int remainingHops() {
+  int remainingHops() {
     return remainingHops;
   }
 

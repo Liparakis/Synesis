@@ -82,7 +82,7 @@ public final class OverlayMembershipPropagation {
    * @return completion of all attempted peer sends
    * @throws GeneralSecurityException if sender or membership authentication is invalid
    */
-  public CompletionStage<Void> receive(String immediateSenderNodeId,
+  CompletionStage<Void> receive(String immediateSenderNodeId,
       OverlayMembershipPropagationFrame frame,
       Instant now) throws GeneralSecurityException {
     Objects.requireNonNull(immediateSenderNodeId, "immediate sender node ID");

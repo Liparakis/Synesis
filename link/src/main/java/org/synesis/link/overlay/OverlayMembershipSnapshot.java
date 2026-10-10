@@ -25,11 +25,11 @@ public final class OverlayMembershipSnapshot {
   /**
    * Maximum encoded membership snapshot size.
    */
-  public static final int MAX_BYTES = 16_384;
+  static final int MAX_BYTES = 16_384;
   /**
    * Maximum number of members in one snapshot.
    */
-  public static final int MAX_MEMBERS = 32;
+  static final int MAX_MEMBERS = 32;
   /**
    * Active member status.
    */
@@ -37,7 +37,7 @@ public final class OverlayMembershipSnapshot {
   /**
    * Revoked member status.
    */
-  public static final int STATUS_REVOKED = 1;
+  static final int STATUS_REVOKED = 1;
 
   private static final int MAGIC = 0x534C4D31;
   private static final int VERSION = 1;

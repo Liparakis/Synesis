@@ -204,7 +204,7 @@ public final class ProjectConstraint {
    *
    * @return supersedes
    */
-  public List<UUID> supersedes() {
+  List<UUID> supersedes() {
     return supersedes;
   }
 

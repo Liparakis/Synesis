@@ -64,7 +64,7 @@ public final class ContractCodec {
      * @return decoded record
      * @throws IOException if malformed
      */
-    public static ContractRecord decodePublish(byte[] encoded) throws IOException {
+    static ContractRecord decodePublish(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC_PUBLISH) {
@@ -121,7 +121,7 @@ public final class ContractCodec {
      * @return decoded dependency
      * @throws IOException if malformed
      */
-    public static ContractDependency decodeDependency(byte[] encoded) throws IOException {
+    static ContractDependency decodeDependency(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC_DEPEND) {
@@ -163,7 +163,7 @@ public final class ContractCodec {
      * @return decoded supersession
      * @throws IOException if malformed
      */
-    public static ContractSupersede decodeSupersede(byte[] encoded) throws IOException {
+    static ContractSupersede decodeSupersede(byte[] encoded) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != MAGIC_SUPERSEDE) {

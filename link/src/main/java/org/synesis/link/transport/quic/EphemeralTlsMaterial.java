@@ -16,7 +16,7 @@ public final class EphemeralTlsMaterial implements AutoCloseable {
   /**
    * Temporary directory containing the generated transport keystore.
    */
-  public final Path directory;
+  final Path directory;
   /**
    * Generated private key for transport-only TLS.
    */

@@ -40,7 +40,7 @@ public final class CandidateDescriptor {
   /**
    * Maximum candidate count accepted in one descriptor.
    */
-  public static final int MAX_CANDIDATES = 32;
+  static final int MAX_CANDIDATES = 32;
   /**
    * Maximum allowed clock skew for validity checks.
    */

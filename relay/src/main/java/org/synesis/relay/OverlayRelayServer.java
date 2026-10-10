@@ -33,7 +33,7 @@ import org.synesis.link.overlay.OverlayRelay;
  * hello records and then forwards only `SLF1` frames. It does not expose a generic socket proxy,
  * durable queue, project authority, or plaintext API.
  */
-public final class OverlayRelayServer implements AutoCloseable {
+final class OverlayRelayServer implements AutoCloseable {
 
     private static final int IDLE_TIMEOUT_SECONDS = 60;
     private final InetSocketAddress bindAddress;

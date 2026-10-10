@@ -19,7 +19,7 @@ public record DemoWorkRequest(UUID requestId, String operation) {
   /**
    * Maximum encoded operation length.
    */
-  public static final int MAX_OPERATION_BYTES = 64;
+  static final int MAX_OPERATION_BYTES = 64;
 
   /**
    * Validates the fixed operation and bounded UTF-8 representation.

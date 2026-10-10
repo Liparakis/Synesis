@@ -19,15 +19,15 @@ public final class OverlayRelayPolicy {
   /**
    * Default maximum live node connections.
    */
-  public static final int DEFAULT_MAX_CONNECTIONS = 128;
+  static final int DEFAULT_MAX_CONNECTIONS = 128;
   /**
    * Default maximum in-flight frames per destination.
    */
-  public static final int DEFAULT_MAX_QUEUED_FRAMES = 256;
+  static final int DEFAULT_MAX_QUEUED_FRAMES = 256;
   /**
    * Default per-node frame rate limit.
    */
-  public static final int DEFAULT_MAX_FRAMES_PER_SECOND = 256;
+  static final int DEFAULT_MAX_FRAMES_PER_SECOND = 256;
 
   private final Map<UUID, Set<String>> allowedNodesByProject;
   private final int maxConnections;
@@ -85,7 +85,7 @@ public final class OverlayRelayPolicy {
    * @param nodeId    node ID
    * @return true when allowed
    */
-  public boolean allows(UUID projectId, String nodeId) {
+  boolean allows(UUID projectId, String nodeId) {
     Objects.requireNonNull(projectId, "project ID");
     Objects.requireNonNull(nodeId, "node ID");
     return allowedNodesByProject.getOrDefault(projectId, Set.of()).contains(nodeId);
@@ -100,7 +100,7 @@ public final class OverlayRelayPolicy {
    *
    * @return connection bound
    */
-  public int maxConnections() {
+  int maxConnections() {
     return maxConnections;
   }
 
@@ -109,7 +109,7 @@ public final class OverlayRelayPolicy {
    *
    * @return queue bound
    */
-  public int maxQueuedFrames() {
+  int maxQueuedFrames() {
     return maxQueuedFrames;
   }
 
@@ -118,7 +118,7 @@ public final class OverlayRelayPolicy {
    *
    * @return frames per second
    */
-  public int maxFramesPerSecond() {
+  int maxFramesPerSecond() {
     return maxFramesPerSecond;
   }
 }

@@ -9,6 +9,6 @@ import org.synesis.coordination.domain.identity.RequestId;
  * @param status   resulting request status
  * @param proposal response text retained with the decision
  */
-public record CoordinationResponsePayload(RequestId request, CoordinationRequest.Status status, String proposal) {
+record CoordinationResponsePayload(RequestId request, CoordinationRequest.Status status, String proposal) {
 
 }

@@ -86,7 +86,7 @@ public record ProviderSessionTerminalPayload(String sessionId, String provider, 
      *
      * @return the typed identity of the provider session fenced by this payload.
      */
-    public ProviderSessionId sessionIdentity() {
+    ProviderSessionId sessionIdentity() {
         return new ProviderSessionId(sessionId);
     }
 
@@ -95,7 +95,7 @@ public record ProviderSessionTerminalPayload(String sessionId, String provider, 
      *
      * @return the typed participant incarnation fenced by this payload.
      */
-    public ParticipantId participantIdentity() {
+    ParticipantId participantIdentity() {
         return new ParticipantId(participant);
     }
 

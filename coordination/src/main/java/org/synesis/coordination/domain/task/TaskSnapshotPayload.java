@@ -298,7 +298,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
      *
      * @return the typed immutable snapshot identity carried by this event.
      */
-    public SnapshotId snapshotIdentity() {
+    SnapshotId snapshotIdentity() {
         return new SnapshotId(snapshotId);
     }
 

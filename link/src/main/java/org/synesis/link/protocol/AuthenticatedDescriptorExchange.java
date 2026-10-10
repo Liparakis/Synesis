@@ -22,7 +22,7 @@ import org.synesis.link.candidate.CandidateDescriptor;
 public final class AuthenticatedDescriptorExchange {
 
   /** Maximum encoded exchange payload accepted by the existing application stream. */
-  public static final int MAX_BYTES = 4_096;
+  static final int MAX_BYTES = 4_096;
   private static final int ENVELOPE_BYTES = 8;
 
   private static final int MAGIC = 0x534C5831;

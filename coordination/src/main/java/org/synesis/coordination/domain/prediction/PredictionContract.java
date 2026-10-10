@@ -72,7 +72,7 @@ public record PredictionContract(UUID predictionId, UUID projectId, String reque
     /**
      * Maximum encoded contract size.
      */
-    public static final int MAX_ENCODED_BYTES = 64 * 1024;
+    static final int MAX_ENCODED_BYTES = 64 * 1024;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
     private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, false, "text bound", "truncated text");
     private static final int MAX_LIST_ENTRIES = 128;

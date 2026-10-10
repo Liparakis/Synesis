@@ -15,7 +15,7 @@ public final class CoordinationNullException extends NullPointerException {
      *
      * @param valueName name of the missing value
      */
-    public CoordinationNullException(String valueName) {
+    CoordinationNullException(String valueName) {
         super(valueName);
     }
 

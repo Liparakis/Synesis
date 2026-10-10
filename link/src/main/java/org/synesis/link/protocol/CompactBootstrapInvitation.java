@@ -45,7 +45,7 @@ import org.synesis.link.identity.NodeIdentity;
 public final class CompactBootstrapInvitation {
 
   /** Maximum compact invitation payload in bytes. */
-  public static final int MAX_BYTES = 256;
+  static final int MAX_BYTES = 256;
   /** Maximum compact invitation URI length accepted by the parser. */
   public static final int MAX_LINK_CHARS = 512;
   /** Size of the minimized single-use admission capability. */
@@ -149,7 +149,7 @@ public final class CompactBootstrapInvitation {
    * @return decoded invitation requiring {@link #verifyAt(Instant, Duration)} before use
    * @throws IOException if framing, bounds, or canonical values are invalid
    */
-  public static CompactBootstrapInvitation decodeMinimized(byte[] encoded) throws IOException {
+  static CompactBootstrapInvitation decodeMinimized(byte[] encoded) throws IOException {
     Objects.requireNonNull(encoded, "minimized compact invitation");
     if (encoded.length != minimizedEncodedLength(4)
         && encoded.length != minimizedEncodedLength(MAX_ADDRESS_BYTES)) {

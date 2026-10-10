@@ -52,7 +52,7 @@ public record OverlayReconciliationPolicy(Duration initialRetryDelay,
    * @param consecutiveFailures positive failure count
    * @return bounded retry delay
    */
-  public Duration delayFor(int consecutiveFailures) {
+  Duration delayFor(int consecutiveFailures) {
     if (consecutiveFailures < 1) {
       throw new IllegalArgumentException("failure count must be positive");
     }

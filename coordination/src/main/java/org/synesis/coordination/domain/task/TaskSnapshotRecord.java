@@ -106,7 +106,7 @@ public record TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, 
      *
      * @return the snapshot's authenticated worker node identity.
      */
-    public NodeId nodeIdentity() {
+    NodeId nodeIdentity() {
         return new NodeId(nodeId);
     }
 
@@ -115,7 +115,7 @@ public record TaskSnapshotRecord(UUID taskId, String snapshotId, String nodeId, 
      *
      * @return the snapshot's authenticated worker identity.
      */
-    public WorkerId workerIdentity() {
+    WorkerId workerIdentity() {
         return new WorkerId(workerId);
     }
 

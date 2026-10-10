@@ -14,7 +14,7 @@ public final class OverlayForwardingFrame {
   /**
    * Maximum hop count permitted by the v1 contract.
    */
-  public static final int MAX_HOPS = 32;
+  static final int MAX_HOPS = 32;
   /**
    * Maximum encoded forwarding frame size.
    */

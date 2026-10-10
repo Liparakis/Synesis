@@ -12,7 +12,7 @@ import java.util.Objects;
  * @param rejectedCandidates rejected or bounded-away candidate count
  * @param duration           local provider duration
  */
-public record CandidateProviderDiagnostic(String providerId,
+record CandidateProviderDiagnostic(String providerId,
                                           CandidateProviderFailureCategory category,
                                           int acceptedCandidates, int rejectedCandidates,
                                           Duration duration) {

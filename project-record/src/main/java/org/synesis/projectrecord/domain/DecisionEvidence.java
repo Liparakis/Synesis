@@ -59,7 +59,7 @@ public final class DecisionEvidence {
    *
    * @return evidence reference
    */
-  public String reference() {
+  String reference() {
     return reference;
   }
 

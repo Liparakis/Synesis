@@ -31,7 +31,7 @@ public final class DemoWorkTransport {
    * @param active         active-stream counter enforcing the stream limit
    * @return completion for the demo result
    */
-  public static CompletionStage<DemoWorkResult> open(ChannelHandlerContext controlContext,
+  static CompletionStage<DemoWorkResult> open(ChannelHandlerContext controlContext,
       DemoWorkRequest request, AtomicInteger active) {
     return StreamExchange.open(controlContext, active, LABEL, DemoWorkCodec.MAX_FRAME_BYTES,
         () -> DemoWorkCodec.encodeRequest(request), frame -> {

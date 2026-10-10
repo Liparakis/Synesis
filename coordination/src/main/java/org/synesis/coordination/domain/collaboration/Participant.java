@@ -52,7 +52,7 @@ public record Participant(String id, String provider, String goal, State state, 
      *
      * @return recovery snapshot reference, or empty when no snapshot is recorded
      */
-    public Optional<SnapshotReference> recoverySnapshotIdentity() {
+    Optional<SnapshotReference> recoverySnapshotIdentity() {
         return Optional.ofNullable(recoverySnapshotReference).map(SnapshotReference::new);
     }
 
@@ -62,7 +62,7 @@ public record Participant(String id, String provider, String goal, State state, 
      * @param newState lifecycle state of the copy
      * @return the copy
      */
-    public Participant withState(State newState) {
+    Participant withState(State newState) {
         return new Participant(id, provider, goal, newState, lastVerifiedActivity, claims, recoverySnapshotReference);
     }
 
@@ -72,7 +72,7 @@ public record Participant(String id, String provider, String goal, State state, 
      * @param newClaims active claims of the copy
      * @return the copy
      */
-    public Participant withClaims(List<ResourceSelector> newClaims) {
+    Participant withClaims(List<ResourceSelector> newClaims) {
         return new Participant(id, provider, goal, state, lastVerifiedActivity, newClaims, recoverySnapshotReference);
     }
 
@@ -82,7 +82,7 @@ public record Participant(String id, String provider, String goal, State state, 
      * @param newGoal announced goal of the copy
      * @return the copy
      */
-    public Participant withGoal(String newGoal) {
+    Participant withGoal(String newGoal) {
         return new Participant(id, provider, newGoal, state, lastVerifiedActivity, claims, recoverySnapshotReference);
     }
 
@@ -92,7 +92,7 @@ public record Participant(String id, String provider, String goal, State state, 
      * @param timestamp last verified activity timestamp of the copy
      * @return the copy
      */
-    public Participant withLastVerifiedActivity(long timestamp) {
+    Participant withLastVerifiedActivity(long timestamp) {
         return new Participant(id, provider, goal, state, timestamp, claims, recoverySnapshotReference);
     }
 
@@ -102,7 +102,7 @@ public record Participant(String id, String provider, String goal, State state, 
      * @param reference opaque internal recovery snapshot reference of the copy
      * @return the copy
      */
-    public Participant withRecoverySnapshotReference(String reference) {
+    Participant withRecoverySnapshotReference(String reference) {
         return new Participant(id, provider, goal, state, lastVerifiedActivity, claims, reference);
     }
 
@@ -111,7 +111,7 @@ public record Participant(String id, String provider, String goal, State state, 
      *
      * @return the copy
      */
-    public Participant withoutRecoveryReference() {
+    Participant withoutRecoveryReference() {
         return withRecoverySnapshotReference(null);
     }
 

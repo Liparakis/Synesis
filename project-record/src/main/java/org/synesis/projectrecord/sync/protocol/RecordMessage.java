@@ -24,11 +24,11 @@ public final class RecordMessage {
   /**
    * Maximum application payload accepted by the message codec.
    */
-  public static final int MAX_BYTES = 4_096;
+  static final int MAX_BYTES = 4_096;
   /**
    * Maximum safe error text size.
    */
-  public static final int MAX_ERROR_TEXT_BYTES = 256;
+  static final int MAX_ERROR_TEXT_BYTES = 256;
   private static final int MAGIC = 0x53525031;
   private static final int VERSION = 1;
   private static final String INVALID_BYTES = "invalid message bytes";
@@ -293,7 +293,7 @@ public final class RecordMessage {
    *
    * @return error code
    */
-  public ErrorCode errorCode() {
+  ErrorCode errorCode() {
     return errorCode;
   }
 
@@ -302,7 +302,7 @@ public final class RecordMessage {
    *
    * @return error text
    */
-  public String errorText() {
+  String errorText() {
     return errorText;
   }
 
