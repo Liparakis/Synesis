@@ -139,6 +139,16 @@ final class LaneCompletionRules {
     }
 
     /**
+     * Returns whether any lane of the group ended with a result: a snapshot or a recorded no-change completion.
+     */
+    static boolean hasFinishedWork(PredictionEventStore current, WorkGroupId workGroupId) {
+        return current.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.provenance().workGroupIdentity().equals(workGroupId))
+                || current.collaborationProjection().noChangeCompletions().stream()
+                .anyMatch(completion -> completion.workGroupIdentity().equals(workGroupId));
+    }
+
+    /**
      * Returns whether a live or unreviewed grant can still add work to the group.
      */
     static boolean hasUnresolvedGroupGrants(PredictionEventStore current, WorkGroupId workGroupId) {

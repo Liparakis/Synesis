@@ -128,6 +128,57 @@ final class NoChangeCompletionTest {
     }
 
     @Test
+    void cancellingTheOnlyLaneOfAGroupCancelsTheGroup(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        WorkIntent only = intent(project, "agt-only", "docs/usage.md", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+                NodeIdentity.generate());
+        assertTrue(service.announce(only).acquired());
+
+        service.cancel("agt-only");
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(WorkGroup.Status.CANCELLED, replayed.workGroupProjection().group(group).orElseThrow().status());
+    }
+
+    @Test
+    void cancellingOneLaneLeavesTheGroupOpenForItsSibling(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        WorkIntent first = intent(project, "agt-first", "verification-a.py", group);
+        WorkIntent second = intent(project, "agt-second", "verification-b.py", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+                NodeIdentity.generate());
+        assertTrue(service.announce(first).acquired());
+        assertTrue(service.announce(second).acquired());
+
+        service.cancel("agt-first");
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(WorkGroup.Status.ACTIVE, replayed.workGroupProjection().group(group).orElseThrow().status());
+        assertTrue(replayed.collaborationProjection().intent(second.intentId()).isPresent());
+    }
+
+    @Test
+    void cancellingTheLastOpenLaneCompletesAGroupWhoseOtherLaneFinished(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        WorkIntent finished = intent(project, "agt-finished", "verification-a.py", group);
+        WorkIntent cancelled = intent(project, "agt-cancelled", "verification-b.py", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project),
+                NodeIdentity.generate());
+        assertTrue(service.announce(finished).acquired());
+        assertTrue(service.announce(cancelled).acquired());
+        service.completeNoChange(completion(temp, project, finished));
+
+        service.cancel("agt-cancelled");
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(WorkGroup.Status.COMPLETED, replayed.workGroupProjection().group(group).orElseThrow().status());
+    }
+
+    @Test
     void siblingIntentKeepsGroupActiveUntilItAlsoCompletes(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         UUID group = UUID.randomUUID();

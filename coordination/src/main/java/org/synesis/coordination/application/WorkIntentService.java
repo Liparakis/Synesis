@@ -641,7 +641,7 @@ public final class WorkIntentService {
      * @throws GeneralSecurityException when event signing or verification fails
      */
     public void cancel(ParticipantId participant) throws IOException, GeneralSecurityException {
-        participantRecovery.cancel(participant);
+        laneCompletion.cancel(participant);
     }
 
     /**

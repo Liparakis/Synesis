@@ -2,10 +2,12 @@ package org.synesis.coordination.application;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.List;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskCompletionState;
@@ -17,8 +19,8 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
- * Owns the transitions that end a lane: no-change completion, release after integration, and the work-group
- * completion that can follow either.
+ * Owns the transitions that end a lane: no-change completion, release after integration, cancellation, and the
+ * work-group closure that can follow any of them.
  *
  * <p>Kept apart from {@link WorkIntentService} so the terminal-lane events and the group-completion reevaluation that
  * must follow them in the same append-lock critical section live in one place, next to the
@@ -86,7 +88,7 @@ final class LaneCompletionService {
                 signer.nodeId(),
                 CollaborationCodec.encodeRelease(intent.intentId()),
                 signer);
-        reevaluateNoChangeWorkGroup(current, intent.group());
+        closeSettledWorkGroup(current, intent.group());
         return true;
     }
 
@@ -114,7 +116,7 @@ final class LaneCompletionService {
                 if (!previous.equals(completion)) {
                     throw new CoordinationException("NO_CHANGE_COMPLETION_CONFLICT");
                 }
-                reevaluateNoChangeWorkGroup(current, completion.workGroupIdentity());
+                closeSettledWorkGroup(current, completion.workGroupIdentity());
                 return previous;
             }
             if (!current.unchangedSince(completion.expectedRevision())) {
@@ -127,19 +129,51 @@ final class LaneCompletionService {
                     signer.nodeId(),
                     CollaborationCodec.encodeNoChangeCompletion(completion),
                     signer);
-            reevaluateNoChangeWorkGroup(current, intent.group());
+            closeSettledWorkGroup(current, intent.group());
             return completion;
         });
     }
 
     /**
-     * Completes the group only after active intents and all lifecycle obligations are resolved.
+     * Cancels a participant's lane and closes its work group when nothing else can add work to it.
+     *
+     * <p>Cancellation ends a lane for good, as a completion does, so the same closure has to follow it under the
+     * same append lock. Without it a group whose last open lane was cancelled stayed active with no lane left to
+     * close it.</p>
+     *
+     * @param participant participant handle
+     * @throws IOException              unknown or revoked participant, or durable I/O failure
+     * @throws GeneralSecurityException signing failure
+     */
+    void cancel(ParticipantId participant) throws IOException, GeneralSecurityException {
+        CoordinationNullException.requireNonNull(participant, "participant");
+        appends.run(current -> {
+            ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
+                    .orElseThrow(() -> new CoordinationException("PARTICIPANT_NOT_FOUND"));
+            List<WorkGroupId> groups = current.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participantIdentity().equals(durableParticipant))
+                    .map(WorkIntent::group).distinct().toList();
+            current.append(ParticipantRecoveryService.participantStreamId(durableParticipant),
+                    PredictionEventType.PARTICIPANT_CANCELLED,
+                    signer.nodeId(),
+                    CollaborationCodec.encodeHeartbeat(durableParticipant),
+                    signer);
+            for (WorkGroupId group : groups) {
+                closeSettledWorkGroup(current, group);
+            }
+        });
+    }
+
+    /**
+     * Closes the group only after active intents and all lifecycle obligations are resolved. A group that
+     * integrated a snapshot or recorded a no-change completion is completed; one whose lanes were all cancelled
+     * is cancelled.
      *
      * @param current fresh authoritative project projection
      * @throws IOException              when payload validation or durable I/O fails
      * @throws GeneralSecurityException when signing or signature verification fails
      */
-    private void reevaluateNoChangeWorkGroup(PredictionEventStore current, WorkGroupId workGroupId)
+    private void closeSettledWorkGroup(PredictionEventStore current, WorkGroupId workGroupId)
             throws IOException, GeneralSecurityException {
         WorkGroup group = current.workGroupProjection().group(workGroupId).orElse(null);
         if (group == null || group.status() != WorkGroup.Status.ACTIVE) {
@@ -157,7 +191,8 @@ final class LaneCompletionService {
                 group.goal(),
                 group.acceptance(),
                 group.version() + 1L,
-                WorkGroup.Status.COMPLETED,
+                LaneCompletionRules.hasFinishedWork(current, workGroupId) ? WorkGroup.Status.COMPLETED
+                        : WorkGroup.Status.CANCELLED,
                 group.reviewPolicy());
         current.append(group.identity().value(),
                 PredictionEventType.WORK_GROUP_STATUS_CHANGED,

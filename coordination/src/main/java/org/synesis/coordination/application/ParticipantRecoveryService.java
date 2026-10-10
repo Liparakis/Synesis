@@ -241,17 +241,6 @@ final class ParticipantRecoveryService {
     }
 
     /**
-     * Explicitly cancels a participant lane and releases its claims.
-     *
-     * @param participant participant handle
-     * @throws IOException              if persistence or validation fails
-     * @throws GeneralSecurityException if signing fails
-     */
-    void cancel(ParticipantId participant) throws IOException, GeneralSecurityException {
-        appendParticipantEvent(participant, PredictionEventType.PARTICIPANT_CANCELLED);
-    }
-
-    /**
      * Records a clean connection shutdown and releases the lane without completing its task.
      *
      * @param participant participant handle
@@ -332,7 +321,7 @@ final class ParticipantRecoveryService {
     /**
      * Derives the stream every lifecycle event of one participant is appended to.
      */
-    private static UUID participantStreamId(ParticipantId durableParticipant) {
+    static UUID participantStreamId(ParticipantId durableParticipant) {
         return UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8));
     }
 
