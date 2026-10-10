@@ -2,6 +2,7 @@ package org.synesis.workspace.transport.control;
 
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.failure;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.newResponse;
+import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.requiredText;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.sendJson;
 
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
@@ -130,17 +132,17 @@ final class ControlPlaneOnboardingEndpoints {
                     continue;
                 }
                 boolean compact = CompactBootstrapInvitation.isShareLink(host.getValue().invitationLink());
-                pendingHosts.add(Map.of("operationId", host.getKey(), "state", hostState(compact), "expiresAt", expiresAt.toString()));
+                pendingHosts.add(ordered("operationId", host.getKey(), "state", hostState(compact), "expiresAt", expiresAt.toString()));
             }
             for (String operationId : joins.keySet()) {
                 Instant expiresAt = operationExpiry.get(operationId);
                 if (expiresAt == null) {
                     continue;
                 }
-                pendingJoins.add(Map.of("operationId", operationId, "state", "WAITING_FOR_CONNECT", "expiresAt", expiresAt.toString()));
+                pendingJoins.add(ordered("operationId", operationId, "state", "WAITING_FOR_CONNECT", "expiresAt", expiresAt.toString()));
             }
         }
-        return Map.of("pendingHosts", pendingHosts, "pendingJoins", pendingJoins);
+        return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins);
     }
 
     /**
@@ -253,7 +255,9 @@ final class ControlPlaneOnboardingEndpoints {
             operationExpiry.put(operationId, parsed.expiresAt());
         }
         if (parsed.compact()) {
-            connectCompactJoin(exchange, operationId, prepared, parsed.peerIdentity());
+            Map<String, Object> connected = operationResult(operationId, "CONNECTED");
+            connected.put("peerIdentity", parsed.peerIdentity());
+            complete(exchange, 201, connected, joins, operationId, prepared, prepared::connect, prepared::retainsSession);
             return;
         }
         Map<String, Object> response = newResponse();
@@ -263,31 +267,6 @@ final class ControlPlaneOnboardingEndpoints {
         response.put("expiresAt", parsed.expiresAt().toString());
         response.put("state", "WAITING_FOR_CONNECT");
         sendJson(exchange, 201, response);
-    }
-
-    /**
-     * Connects a freshly imported compact join in the same request and always retires its operation.
-     *
-     * @param exchange     HTTP exchange
-     * @param operationId  id of the registered join
-     * @param prepared     the join handle
-     * @param peerIdentity host node id to echo to the client
-     * @throws IOException when the response cannot be written
-     * @throws ApiFailure  when the Link layer fails
-     */
-    private void connectCompactJoin(HttpExchange exchange, String operationId, PendingJoin prepared, String peerIdentity) throws IOException, ApiFailure {
-        boolean retain = false;
-        try {
-            prepared.connect();
-            retain = prepared.retainsSession();
-            Map<String, Object> connected = operationResult(operationId, "CONNECTED");
-            connected.put("peerIdentity", peerIdentity);
-            sendJson(exchange, 201, connected);
-        } catch (OnboardingFailure failure) {
-            throw onboardingFailure(failure);
-        } finally {
-            finish(joins, operationId, prepared, retain);
-        }
     }
 
     /**
@@ -302,19 +281,10 @@ final class ControlPlaneOnboardingEndpoints {
         String operationId = requiredText(body, "operationId", MAX_OPERATION_ID_LENGTH);
         String answer = requiredText(body, "answerUri", MAX_LINK_LENGTH);
         PendingHost prepared = begin(hosts, operationId, "host");
-        boolean retain = false;
-        try {
-            // The retained host handle owns its bounded wait. Do not serialize it
-            // with a join handle: the Link handshake requires both sides to run at
-            // the same time when they are hosted by this runtime.
-            prepared.importAnswer(answer);
-            retain = prepared.retainsSession();
-            sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
-        } catch (OnboardingFailure failure) {
-            throw onboardingFailure(failure);
-        } finally {
-            finish(hosts, operationId, prepared, retain);
-        }
+        // The retained host handle owns its bounded wait. Do not serialize it
+        // with a join handle: the Link handshake requires both sides to run at
+        // the same time when they are hosted by this runtime.
+        complete(exchange, 200, operationResult(operationId, "CONNECTED"), hosts, operationId, prepared, () -> prepared.importAnswer(answer), prepared::retainsSession);
     }
 
     /**
@@ -328,18 +298,9 @@ final class ControlPlaneOnboardingEndpoints {
     void connect(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String operationId = requiredText(body, "operationId", MAX_OPERATION_ID_LENGTH);
         PendingJoin prepared = begin(joins, operationId, "join");
-        boolean retain = false;
-        try {
-            // The retained join handle owns its bounded candidate race. It must be
-            // able to overlap a host answer operation in the same runtime.
-            prepared.connect();
-            retain = prepared.retainsSession();
-            sendJson(exchange, 200, operationResult(operationId, "CONNECTED"));
-        } catch (OnboardingFailure failure) {
-            throw onboardingFailure(failure);
-        } finally {
-            finish(joins, operationId, prepared, retain);
-        }
+        // The retained join handle owns its bounded candidate race. It must be
+        // able to overlap a host answer operation in the same runtime.
+        complete(exchange, 200, operationResult(operationId, "CONNECTED"), joins, operationId, prepared, prepared::connect, prepared::retainsSession);
     }
 
     /**
@@ -483,6 +444,35 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
+     * Runs the Link step of a registered operation, sends the result, and always retires the operation.
+     *
+     * @param exchange        HTTP exchange
+     * @param status          HTTP status of the success response
+     * @param result          success response body
+     * @param registry        {@link #hosts} or {@link #joins}
+     * @param operationId     operation id
+     * @param prepared        the operation handle
+     * @param step            the Link call that completes the operation
+     * @param retainsSession  whether the handle now owns a live session; read once the step succeeded
+     * @param <T>             handle type
+     * @throws IOException when the response cannot be written
+     * @throws ApiFailure  400 when the Link layer fails
+     */
+    private <T extends AutoCloseable> void complete(HttpExchange exchange, int status, Map<String, Object> result, Map<String, T> registry, String operationId, T prepared, LinkStep step, BooleanSupplier retainsSession)
+            throws IOException, ApiFailure {
+        boolean retain = false;
+        try {
+            step.run();
+            retain = retainsSession.getAsBoolean();
+            sendJson(exchange, status, result);
+        } catch (OnboardingFailure failure) {
+            throw onboardingFailure(failure);
+        } finally {
+            finish(registry, operationId, prepared, retain);
+        }
+    }
+
+    /**
      * Retires a finished operation and closes its handle unless the established session must outlive it.
      *
      * @param registry    {@link #hosts} or {@link #joins}
@@ -562,6 +552,20 @@ final class ControlPlaneOnboardingEndpoints {
         } catch (Exception ignored) {
             // Best-effort teardown: nothing useful can be done about a failed close.
         }
+    }
+
+    /**
+     * The Link call that completes a pending operation.
+     */
+    @FunctionalInterface
+    private interface LinkStep {
+
+        /**
+         * Performs the call.
+         *
+         * @throws OnboardingFailure when the Link layer rejects it
+         */
+        void run() throws OnboardingFailure;
     }
 
     /**

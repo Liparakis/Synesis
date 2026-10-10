@@ -2,6 +2,7 @@ package org.synesis.workspace.transport.control;
 
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.API_VERSION;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.failure;
+import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.requiredText;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.sendJson;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.uuid;
@@ -17,9 +18,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.transport.control.ControlPlaneHttpHandler.SelectionGateway;
 
@@ -28,7 +31,8 @@ import org.synesis.workspace.transport.control.ControlPlaneHttpHandler.Selection
  * and removal, and the daemon-backed pending project selection.
  *
  * <p>Separate from the handler because these commands share no state with sessions or Link
- * onboarding; they depend only on the read model's registry and the daemon selection bridge.
+ * onboarding; they depend only on the known-project registry and the daemon selection bridge. The
+ * registry mutations live here, not in the read model, so that the read model only reads.
  */
 final class ControlPlaneProjectEndpoints {
 
@@ -58,9 +62,14 @@ final class ControlPlaneProjectEndpoints {
     private static final String PICKER_UNAVAILABLE_MESSAGE = "the Windows Explorer folder picker is unavailable";
 
     /**
-     * Public-safe read model backing snapshots, diagnostics, and project registry access.
+     * Public-safe read model; supplies the current project identity and the registry listing.
      */
     private final ControlPlaneReadModel readModel;
+
+    /**
+     * Installation-local discovery index, or {@code null} when none is configured.
+     */
+    private final KnownProjectRegistry projectRegistry;
 
     /**
      * Bridge to the installation daemon's project-selection state.
@@ -70,11 +79,13 @@ final class ControlPlaneProjectEndpoints {
     /**
      * Creates the project endpoints.
      *
-     * @param readModel        public-safe read model backing the project registry
+     * @param readModel        public-safe read model of the current project and the registry listing
+     * @param projectRegistry  installation-local discovery index, or {@code null} when none is configured
      * @param selectionGateway authenticated local daemon selection bridge
      */
-    ControlPlaneProjectEndpoints(ControlPlaneReadModel readModel, SelectionGateway selectionGateway) {
+    ControlPlaneProjectEndpoints(ControlPlaneReadModel readModel, KnownProjectRegistry projectRegistry, SelectionGateway selectionGateway) {
         this.readModel = readModel;
+        this.projectRegistry = projectRegistry;
         this.selectionGateway = selectionGateway;
     }
 
@@ -100,7 +111,7 @@ final class ControlPlaneProjectEndpoints {
         String output = removeTerminalLineBreak(new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
         int exitCode = process.exitValue();
         if (exitCode == 2 && output.isEmpty()) {
-            sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, "state", "CANCELLED", "path", "", "name", ""));
+            sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "CANCELLED", "path", "", "name", ""));
             return;
         }
         if (exitCode != 0 || output.isEmpty()) {
@@ -113,7 +124,7 @@ final class ControlPlaneProjectEndpoints {
             throw pickerUnavailable("the Windows Explorer folder picker returned an invalid folder");
         }
         Path fileName = selected.getFileName();
-        sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, "state", "SELECTED", "path", selected.toString(), "name", fileName == null ? selected.toString() : fileName.toString()));
+        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "SELECTED", "path", selected.toString(), "name", fileName == null ? selected.toString() : fileName.toString()));
     }
 
     /**
@@ -221,11 +232,11 @@ final class ControlPlaneProjectEndpoints {
             throw failure(400, "PROJECT_PATH_INVALID", "project path is invalid");
         }
         try {
-            readModel.registerKnownProject(path);
+            registerKnownProject(path);
         } catch (KnownProjectRegistry.RegistryException rejected) {
             throw registryFailure(rejected);
         }
-        sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, "state", "REGISTERED", "projects", readModel.knownProjects()));
+        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "REGISTERED", "projects", readModel.knownProjects()));
     }
 
     /**
@@ -239,11 +250,67 @@ final class ControlPlaneProjectEndpoints {
     void removeProject(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         UUID projectId = uuid(requiredText(body, "projectId", MAX_UUID_LENGTH), "projectId");
         try {
-            readModel.removeKnownProject(projectId);
+            removeKnownProject(projectId);
         } catch (KnownProjectRegistry.RegistryException rejected) {
             throw registryFailure(rejected);
         }
-        sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, "state", "REMOVED", "projectId", projectId.toString(), "projects", readModel.knownProjects()));
+        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "REMOVED", "projectId", projectId.toString(), "projects", readModel.knownProjects()));
+    }
+
+    /**
+     * Registers a selected project directory in the installation-local discovery index,
+     * initializing it through the normal application path when it has not been initialized yet.
+     *
+     * @param root project directory to validate and remember
+     * @throws KnownProjectRegistry.RegistryException when no registry is configured, or validation,
+     *                                                initialization, or persistence fails
+     */
+    void registerKnownProject(Path root) throws KnownProjectRegistry.RegistryException {
+        KnownProjectRegistry registry = requireRegistry();
+        try {
+            registry.register(root);
+            return;
+        } catch (KnownProjectRegistry.RegistryException notInitialized) {
+            if (!"NOT_FOUND".equals(notInitialized.code())) {
+                throw notInitialized;
+            }
+        }
+        try {
+            new ProjectApplicationService().initForRegistration(root);
+            registry.register(root);
+        } catch (ProjectApplicationService.ProjectApplicationException failure) {
+            throw new KnownProjectRegistry.RegistryException("PROJECT_INITIALIZATION_FAILED", failure.getMessage());
+        }
+    }
+
+    /**
+     * Removes a non-current project from the installation-local discovery index.
+     *
+     * @param projectId stable project identity to remove
+     * @throws KnownProjectRegistry.RegistryException when removal is not allowed, no registry is
+     *                                                configured, or the project is not present
+     */
+    private void removeKnownProject(UUID projectId) throws KnownProjectRegistry.RegistryException {
+        Objects.requireNonNull(projectId, "project ID");
+        if (projectId.equals(readModel.projectId())) {
+            throw new KnownProjectRegistry.RegistryException("CURRENT_PROJECT_PROTECTED", "the current runtime project cannot be removed");
+        }
+        if (!requireRegistry().remove(projectId)) {
+            throw new KnownProjectRegistry.RegistryException("PROJECT_NOT_FOUND", "project is not present in the registry");
+        }
+    }
+
+    /**
+     * Returns the configured registry.
+     *
+     * @return the project registry
+     * @throws KnownProjectRegistry.RegistryException {@code PROJECT_REGISTRY_UNAVAILABLE} when none is configured
+     */
+    private KnownProjectRegistry requireRegistry() throws KnownProjectRegistry.RegistryException {
+        if (projectRegistry == null) {
+            throw new KnownProjectRegistry.RegistryException("PROJECT_REGISTRY_UNAVAILABLE", "project registry is unavailable");
+        }
+        return projectRegistry;
     }
 
     /**

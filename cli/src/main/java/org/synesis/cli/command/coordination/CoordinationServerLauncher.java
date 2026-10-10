@@ -102,7 +102,7 @@ final class CoordinationServerLauncher {
                 public java.util.Map<String, Object> select(java.util.UUID selectionId, java.util.UUID projectId) throws java.io.IOException {
                     return DaemonClient.selectProject(selectionId, projectId);
                 }
-            });
+            }, projectRegistry);
             try (control;
                     linkOwner;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);

@@ -3,6 +3,7 @@ package org.synesis.workspace.transport.control;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.API_VERSION;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.failure;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.newResponse;
+import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.readObject;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.requireJson;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.sendEmpty;
@@ -18,8 +19,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.synesis.coordination.application.CoordinationService;
-import org.synesis.link.onboarding.Onboarding;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 /**
  * Authenticated, versioned local-control HTTP and SSE adapter.
@@ -102,43 +104,6 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
-     * Creates a local control-plane handler.
-     *
-     * @param readModel    explicit public-safe read model
-     * @param coordination durable coordination service
-     * @param onboarding   Link-owned onboarding facade
-     * @param eventHub     bounded onboarding event hub
-     */
-    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination, Onboarding onboarding, ControlPlaneEventHub eventHub) {
-        this(readModel, coordination, new OnboardingControlPlaneOperations(onboarding), eventHub);
-    }
-
-    /**
-     * Creates a local control-plane handler with Link onboarding and daemon selection.
-     *
-     * @param readModel        explicit public-safe read model
-     * @param coordination     durable coordination service
-     * @param onboarding       Link-owned onboarding facade
-     * @param eventHub         bounded onboarding event hub
-     * @param selectionGateway authenticated local daemon selection bridge
-     */
-    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination, Onboarding onboarding, ControlPlaneEventHub eventHub, SelectionGateway selectionGateway) {
-        this(readModel, coordination, new OnboardingControlPlaneOperations(onboarding), eventHub, selectionGateway);
-    }
-
-    /**
-     * Creates a local control-plane handler with an explicit Link operation owner.
-     *
-     * @param readModel      explicit public-safe read model
-     * @param coordination   durable coordination service
-     * @param linkOperations supported Link operation owner
-     * @param eventHub       bounded onboarding event hub
-     */
-    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination, ControlPlaneLinkOperations linkOperations, ControlPlaneEventHub eventHub) {
-        this(readModel, coordination, linkOperations, eventHub, SelectionGateway.UNAVAILABLE);
-    }
-
-    /**
      * Creates a control-plane handler with the optional authenticated daemon-selection bridge.
      *
      * @param readModel        explicit public-safe read model
@@ -146,13 +111,19 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
      * @param linkOperations   supported Link operation owner
      * @param eventHub         bounded onboarding event hub
      * @param selectionGateway authenticated local daemon selection bridge
+     * @param projectRegistry  installation-local discovery index the project commands mutate, or {@code null} when none is configured
      */
-    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel, CoordinationService coordination, ControlPlaneLinkOperations linkOperations, ControlPlaneEventHub eventHub, SelectionGateway selectionGateway) {
+    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel,
+            CoordinationService coordination,
+            ControlPlaneLinkOperations linkOperations,
+            ControlPlaneEventHub eventHub,
+            SelectionGateway selectionGateway,
+            KnownProjectRegistry projectRegistry) {
         this.readModel = Objects.requireNonNull(readModel, "read model");
         this.coordination = Objects.requireNonNull(coordination, "coordination");
         this.onboarding = new ControlPlaneOnboardingEndpoints(Objects.requireNonNull(linkOperations, "link operations"));
         this.eventStream = new ControlPlaneEventStream(this.coordination, Objects.requireNonNull(eventHub, "event hub"));
-        this.projects = new ControlPlaneProjectEndpoints(this.readModel, Objects.requireNonNull(selectionGateway, "selection gateway"));
+        this.projects = new ControlPlaneProjectEndpoints(this.readModel, projectRegistry, Objects.requireNonNull(selectionGateway, "selection gateway"));
     }
 
     /**
@@ -330,14 +301,27 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                 return;
             }
             case API_PREFIX + "/projects" -> {
-                requireMethod(exchange, "GET");
-                sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, "projects", readModel.knownProjects()));
+                sendSection(exchange, "projects", readModel::knownProjects);
                 return;
             }
-            case API_PREFIX + "/agents", API_PREFIX + "/workgroups", API_PREFIX + "/claims", API_PREFIX + "/capabilities", API_PREFIX + "/network" -> {
-                requireMethod(exchange, "GET");
-                String key = path.substring((API_PREFIX + "/").length());
-                sendJson(exchange, 200, Map.of("apiVersion", API_VERSION, key, readModel.snapshot().get(key)));
+            case API_PREFIX + "/agents" -> {
+                sendSection(exchange, "agents", readModel::agents);
+                return;
+            }
+            case API_PREFIX + "/workgroups" -> {
+                sendSection(exchange, "workgroups", readModel::workgroups);
+                return;
+            }
+            case API_PREFIX + "/claims" -> {
+                sendSection(exchange, "claims", readModel::claims);
+                return;
+            }
+            case API_PREFIX + "/capabilities" -> {
+                sendSection(exchange, "capabilities", readModel::capabilities);
+                return;
+            }
+            case API_PREFIX + "/network" -> {
+                sendSection(exchange, "network", readModel::network);
                 return;
             }
             default -> {
@@ -345,6 +329,20 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             }
         }
         throw failure(404, "NOT_FOUND", "control-plane route not found");
+    }
+
+    /**
+     * Answers a {@code GET} with one read-model section under the {@code apiVersion} envelope.
+     *
+     * @param exchange HTTP exchange
+     * @param key      body key, also the route's last path segment
+     * @param section  builds only that section of the read model
+     * @throws IOException when the response cannot be written
+     * @throws ApiFailure  405 when the method is not {@code GET}
+     */
+    private static void sendSection(HttpExchange exchange, String key, Supplier<Object> section) throws IOException, ApiFailure {
+        requireMethod(exchange, "GET");
+        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, key, section.get()));
     }
 
     /**

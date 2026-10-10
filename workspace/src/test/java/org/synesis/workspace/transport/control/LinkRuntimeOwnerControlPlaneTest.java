@@ -183,8 +183,8 @@ class LinkRuntimeOwnerControlPlaneTest {
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
             Onboarding onboarding = new Onboarding(profile.resolve("link"), eventHub::publish);
             owner = new LinkRuntimeOwner(onboarding, identity, membership, eventHub::publish, new ProjectIdentity(projectId, createdAt));
-            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner));
-            handler = new ControlPlaneHttpHandler(readModel, coordination, owner, eventHub);
+            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), null);
+            handler = new ControlPlaneHttpHandler(readModel, coordination, owner, eventHub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, null);
             server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null, handler);
             server.start();
             baseUri = URI.create("http://127.0.0.1:" + server.address().getPort());

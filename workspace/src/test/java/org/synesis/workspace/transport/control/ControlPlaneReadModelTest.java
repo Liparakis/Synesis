@@ -29,13 +29,14 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.transport.control.network.NetworkPeer;
 import org.synesis.workspace.transport.control.network.NetworkRoute;
 import org.synesis.workspace.transport.control.network.NetworkSnapshot;
 import org.synesis.workspace.transport.control.network.OverlayEdge;
 import org.synesis.workspace.transport.control.network.OverlayMember;
 import org.synesis.workspace.transport.control.network.OverlaySummary;
-import org.synesis.workspace.transport.control.network.RelaySummary;
+import org.synesis.workspace.transport.control.network.RelayState;
 
 class ControlPlaneReadModelTest {
 
@@ -85,8 +86,9 @@ class ControlPlaneReadModelTest {
                         List.of(new OverlayMember("node-a", "CURRENT"), new OverlayMember("node-b", "CURRENT")),
                         List.of(new OverlayEdge("node-a", "node-b", "DIRECT")),
                         List.of(new OverlayEdge("node-a", "node-c", "DESIRED"))),
-                new RelaySummary("CONNECTED", "127.0.0.1:48124", 2, true, true, "relay-node", true, 1));
-        Map<String, Object> snapshot = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), () -> network).snapshot();
+                new RelayState("CONNECTED", "127.0.0.1:48124", 2, true, true, "relay-node", true, 1));
+        ControlPlaneReadModel model = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), () -> network, null);
+        Map<String, Object> snapshot = model.snapshot();
 
         @SuppressWarnings("unchecked") List<Map<String, Object>> groups = (List<Map<String, Object>>) snapshot.get("workgroups");
         assertEquals(1, groups.size());
@@ -106,6 +108,41 @@ class ControlPlaneReadModelTest {
         assertTrue(networkMap.get("overlay").toString().contains("memberCount=3"));
         assertTrue(networkMap.get("overlay").toString().contains("directEdges"));
         assertTrue(networkMap.get("relay").toString().contains("CONNECTED"));
+
+        assertSerializedKeyOrder(model, groupId);
+        assertEquals(snapshot.get("network"), model.network());
+        assertEquals(snapshot.get("agents"), model.agents());
+        assertEquals(snapshot.get("workgroups"), model.workgroups());
+        assertEquals(snapshot.get("claims"), model.claims());
+        assertEquals(snapshot.get("capabilities"), model.capabilities());
+    }
+
+    private static void assertSerializedKeyOrder(ControlPlaneReadModel model, UUID groupId) {
+        String first = ProviderJson.write(model.snapshot());
+        // The diagnostics section carries a fresh report id and timestamp, so only the other sections repeat byte for byte.
+        assertEquals(ProviderJson.write(model.network()), ProviderJson.write(model.network()));
+        assertEquals(ProviderJson.write(model.claims()), ProviderJson.write(model.claims()));
+        assertEquals(ProviderJson.write(model.capabilities()), ProviderJson.write(model.capabilities()));
+
+        Map<String, Object> parsed = object(ProviderJson.parse(first));
+        assertEquals(List.of("apiVersion", "runtime", "project", "knownProjects", "providers", "agents", "workgroups", "claims", "capabilities", "tasks", "ownerships", "network", "diagnostics"), List.copyOf(parsed.keySet()));
+        Map<String, Object> network = object(parsed.get("network"));
+        assertEquals(List.of("status", "peers", "routes", "overlay", "relay"), List.copyOf(network.keySet()));
+        assertEquals(List.of("nodeId", "sessionId", "liveness", "usable", "establishedAt", "authenticated", "health"), List.copyOf(object(((List<?>) network.get("peers")).getFirst()).keySet()));
+        assertEquals(List.of("kind", "destinationNodeId", "path", "nextHop", "relayNodeId"), List.copyOf(object(((List<?>) network.get("routes")).getFirst()).keySet()));
+        Map<String, Object> overlay = object(network.get("overlay"));
+        assertEquals(List.of("status", "authorityNodeId", "revision", "memberCount", "expiresAt", "members", "directEdges", "desiredEdges"), List.copyOf(overlay.keySet()));
+        assertEquals(List.of("nodeId", "status"), List.copyOf(object(((List<?>) overlay.get("members")).getFirst()).keySet()));
+        assertEquals(List.of("from", "to", "status"), List.copyOf(object(((List<?>) overlay.get("directEdges")).getFirst()).keySet()));
+        assertEquals(List.of("status", "localAddress", "activeConnections", "configured", "connected", "relayIdentity", "authorized", "activeRouteUsage"), List.copyOf(object(network.get("relay")).keySet()));
+        Map<String, Object> claim = object(((List<?>) parsed.get("claims")).getFirst());
+        assertEquals(List.of("kind", "value"), List.copyOf(object(((List<?>) claim.get("selectors")).getFirst()).keySet()));
+        assertEquals(groupId.toString(), object(((List<?>) parsed.get("workgroups")).getFirst()).get("id"));
+    }
+
+    private static Map<String, Object> object(Object parsed) {
+        @SuppressWarnings("unchecked") Map<String, Object> result = (Map<String, Object>) parsed;
+        return result;
     }
 
     @Test
@@ -120,7 +157,7 @@ class ControlPlaneReadModelTest {
         CoordinationService coordination = new CoordinationService(new PredictionEventStore(current.location().root().resolve(".synesis/coordination"), current.location().projectId()), current.identity());
         ControlPlaneReadModel model = new ControlPlaneReadModel(current.location(), coordination, new ProviderApplicationService(), new DoctorService(), NetworkSnapshot::empty, registry);
 
-        model.registerKnownProject(selected);
+        new ControlPlaneProjectEndpoints(model, registry, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE).registerKnownProject(selected);
 
         assertTrue(Files.isDirectory(selected.resolve(".git")));
         assertTrue(Files.exists(selected.resolve(".synesis/project.json")));

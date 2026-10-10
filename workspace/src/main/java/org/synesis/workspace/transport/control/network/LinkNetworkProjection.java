@@ -91,7 +91,7 @@ public final class LinkNetworkProjection implements Supplier<NetworkSnapshot> {
         LinkState state = Objects.requireNonNull(source.get(), "Link state source returned null");
         Instant now = clock.instant();
         List<NetworkPeer> peers = peers(state.sessions());
-        RelaySummary relay = relaySummary(state.relay());
+        RelayState relay = state.relay();
         Optional<OverlayMembershipSnapshot> membership = state.membership().map(OverlayMembershipView::current);
         if (membership.isEmpty()) {
             return new NetworkSnapshot(peers.isEmpty() ? "UNCONFIGURED" : "DEGRADED", peers, List.of(), new OverlaySummary("UNCONFIGURED", "", 0, 0, ""), relay);
@@ -135,16 +135,6 @@ public final class LinkNetworkProjection implements Supplier<NetworkSnapshot> {
             default -> "UNAVAILABLE";
         };
         return new NetworkPeer(session.remoteNodeId(), session.sessionId().toString(), liveness.name(), session.isUsable(), session.establishedAt().toString(), true, health);
-    }
-
-    /**
-     * Copies the safe relay fields.
-     *
-     * @param relay relay state from the runtime
-     * @return public relay summary
-     */
-    private static RelaySummary relaySummary(RelayState relay) {
-        return new RelaySummary(relay.status(), relay.localAddress(), relay.activeConnections(), relay.configured(), relay.connected(), relay.relayIdentity(), relay.authorized(), relay.activeRouteUsage());
     }
 
     /**
@@ -200,7 +190,7 @@ public final class LinkNetworkProjection implements Supplier<NetworkSnapshot> {
      * @param relay      relay summary
      * @return one route per destination
      */
-    private static List<NetworkRoute> routes(LinkState state, OverlayMembershipSnapshot membership, OverlayTopologyView topology, Instant now, RelaySummary relay) {
+    private static List<NetworkRoute> routes(LinkState state, OverlayMembershipSnapshot membership, OverlayTopologyView topology, Instant now, RelayState relay) {
         String relayNodeId = relay.connected() && relay.authorized() && !relay.relayIdentity().isBlank() ? relay.relayIdentity() : null;
         return membership.members().stream().filter(member -> member.status() == OverlayMembershipSnapshot.STATUS_ACTIVE).map(OverlayMembershipSnapshot.Member::nodeId)
                 .filter(nodeId -> !nodeId.equals(state.localNodeId())).sorted().limit(MAX_ITEMS).map(destination -> {

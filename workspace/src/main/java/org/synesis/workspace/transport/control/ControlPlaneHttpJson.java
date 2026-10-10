@@ -150,6 +150,21 @@ final class ControlPlaneHttpJson {
     }
 
     /**
+     * Builds a JSON object whose keys keep the order they are named in. {@link Map#of} iterates in a
+     * per-JVM order, which would make the serialized key order differ between runs.
+     *
+     * @param keysAndValues alternating {@code String} keys and values
+     * @return mutable, insertion-ordered object
+     */
+    static Map<String, Object> ordered(Object... keysAndValues) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (int i = 0; i < keysAndValues.length; i += 2) {
+            result.put((String) keysAndValues[i], keysAndValues[i + 1]);
+        }
+        return result;
+    }
+
+    /**
      * Sends a JSON response and closes the exchange.
      *
      * @param exchange HTTP exchange
@@ -189,10 +204,7 @@ final class ControlPlaneHttpJson {
      * @throws IOException when the response cannot be written
      */
     static void sendError(HttpExchange exchange, int status, String code, String message) throws IOException {
-        Map<String, Object> error = new LinkedHashMap<>();
-        error.put("code", code);
-        error.put("message", message);
-        sendJson(exchange, status, Map.of("apiVersion", API_VERSION, "error", error));
+        sendJson(exchange, status, ordered("apiVersion", API_VERSION, "error", ordered("code", code, "message", message)));
     }
 
     /**

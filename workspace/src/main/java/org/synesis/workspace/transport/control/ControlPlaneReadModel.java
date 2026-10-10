@@ -1,5 +1,7 @@
 package org.synesis.workspace.transport.control;
 
+import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,6 +16,7 @@ import java.util.UUID;
 
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
@@ -23,19 +26,13 @@ import org.synesis.coordination.domain.task.CoordinationTask;
 
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorRenderer;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
-import org.synesis.workspace.transport.control.network.NetworkPeer;
-import org.synesis.workspace.transport.control.network.NetworkRoute;
 import org.synesis.workspace.transport.control.network.NetworkSnapshot;
-import org.synesis.workspace.transport.control.network.OverlayEdge;
-import org.synesis.workspace.transport.control.network.OverlaySummary;
-import org.synesis.workspace.transport.control.network.RelaySummary;
 
 /**
  * Explicit, public-safe read model for the local Synesis control plane.
@@ -87,32 +84,7 @@ public final class ControlPlaneReadModel {
     private final KnownProjectRegistry projectRegistry;
 
     /**
-     * Creates a read model with an unconfigured network view.
-     *
-     * @param location        project location
-     * @param coordination    durable coordination service
-     * @param providerService provider lifecycle service
-     * @param doctorService   read-only diagnostic service
-     */
-    public ControlPlaneReadModel(ProjectLocation location, CoordinationService coordination, ProviderApplicationService providerService, DoctorService doctorService) {
-        this(location, coordination, providerService, doctorService, NetworkSnapshot::empty);
-    }
-
-    /**
-     * Creates a read model with an injected Link/overlay/relay view.
-     *
-     * @param location        project location
-     * @param coordination    durable coordination service
-     * @param providerService provider lifecycle service
-     * @param doctorService   read-only diagnostic service
-     * @param network         network state source
-     */
-    public ControlPlaneReadModel(ProjectLocation location, CoordinationService coordination, ProviderApplicationService providerService, DoctorService doctorService, Supplier<NetworkSnapshot> network) {
-        this(location, coordination, providerService, doctorService, network, null);
-    }
-
-    /**
-     * Creates a read model with the installation-local known-project index.
+     * Creates a read model over the current project's durable services and network view.
      *
      * @param location        current project location
      * @param coordination    durable coordination service for the current project
@@ -154,9 +126,18 @@ public final class ControlPlaneReadModel {
         result.put("capabilities", capabilities());
         result.put("tasks", tasks());
         result.put("ownerships", ownerships());
-        result.put("network", networkMap(networkSnapshot));
+        result.put("network", networkSnapshot.toMap());
         result.put("diagnostics", diagnostics());
         return result;
+    }
+
+    /**
+     * Builds the Link, overlay, and relay view from the injected network source.
+     *
+     * @return JSON-compatible network map
+     */
+    public Map<String, Object> network() {
+        return network.get().toMap();
     }
 
     /**
@@ -190,49 +171,6 @@ public final class ControlPlaneReadModel {
      */
     public UUID projectId() {
         return location.projectId();
-    }
-
-    /**
-     * Registers a selected project directory in the installation-local discovery index,
-     * initializing it through the normal application path when it has not been initialized yet.
-     *
-     * @param root project directory to validate and remember
-     * @throws KnownProjectRegistry.RegistryException when no registry is configured, or validation,
-     *                                                initialization, or persistence fails
-     */
-    public void registerKnownProject(Path root) throws KnownProjectRegistry.RegistryException {
-        KnownProjectRegistry registry = requireRegistry();
-        try {
-            registry.register(root);
-            return;
-        } catch (KnownProjectRegistry.RegistryException notInitialized) {
-            if (!"NOT_FOUND".equals(notInitialized.code())) {
-                throw notInitialized;
-            }
-        }
-        try {
-            new ProjectApplicationService().initForRegistration(root);
-            registry.register(root);
-        } catch (ProjectApplicationService.ProjectApplicationException failure) {
-            throw new KnownProjectRegistry.RegistryException("PROJECT_INITIALIZATION_FAILED", failure.getMessage());
-        }
-    }
-
-    /**
-     * Removes a non-current project from the installation-local discovery index.
-     *
-     * @param projectId stable project identity to remove
-     * @throws KnownProjectRegistry.RegistryException when removal is not allowed, no registry is
-     *                                                configured, or the project is not present
-     */
-    public void removeKnownProject(UUID projectId) throws KnownProjectRegistry.RegistryException {
-        Objects.requireNonNull(projectId, "project ID");
-        if (projectId.equals(location.projectId())) {
-            throw new KnownProjectRegistry.RegistryException("CURRENT_PROJECT_PROTECTED", "the current runtime project cannot be removed");
-        }
-        if (!requireRegistry().remove(projectId)) {
-            throw new KnownProjectRegistry.RegistryException("PROJECT_NOT_FOUND", "project is not present in the registry");
-        }
     }
 
     /**
@@ -270,19 +208,6 @@ public final class ControlPlaneReadModel {
     }
 
     /**
-     * Returns the configured registry.
-     *
-     * @return the project registry
-     * @throws KnownProjectRegistry.RegistryException {@code PROJECT_REGISTRY_UNAVAILABLE} when none is configured
-     */
-    private KnownProjectRegistry requireRegistry() throws KnownProjectRegistry.RegistryException {
-        if (projectRegistry == null) {
-            throw new KnownProjectRegistry.RegistryException("PROJECT_REGISTRY_UNAVAILABLE", "project registry is unavailable");
-        }
-        return projectRegistry;
-    }
-
-    /**
      * Names a project directory by its last path segment, falling back to the whole path for a root.
      *
      * @param path project directory
@@ -311,13 +236,14 @@ public final class ControlPlaneReadModel {
      * @return runtime map
      */
     private Map<String, Object> runtime(NetworkSnapshot networkSnapshot) {
+        CollaborationProjection collaboration = coordination.collaborationProjection();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", "RUNNING");
         result.put("apiVersion", API_VERSION);
         result.put("version", Optional.ofNullable(ControlPlaneReadModel.class.getPackage().getImplementationVersion()).orElse("development"));
         result.put("activeProjectCount", 1);
         result.put("headSequence", coordination.headSequence());
-        result.put("activeAgentCount", coordination.collaborationProjection().participants().size());
+        result.put("activeAgentCount", collaboration.participants().size());
         result.put("connectedPeerCount", networkSnapshot.peers().size());
         result.put("networkStatus", networkSnapshot.status());
         result.put("relayStatus", networkSnapshot.relay().status());
@@ -359,9 +285,10 @@ public final class ControlPlaneReadModel {
      *
      * @return agents, capped at {@link #MAX_COLLECTION_ITEMS}
      */
-    private List<Map<String, Object>> agents() {
-        List<Participant> participants = coordination.collaborationProjection().participants();
-        List<WorkIntent> intents = coordination.collaborationProjection().activeIntents();
+    public List<Map<String, Object>> agents() {
+        CollaborationProjection collaboration = coordination.collaborationProjection();
+        List<Participant> participants = collaboration.participants();
+        List<WorkIntent> intents = collaboration.activeIntents();
         Map<String, List<WorkIntent>> byParticipant = new LinkedHashMap<>();
         intents.forEach(intent -> byParticipant.computeIfAbsent(intent.participant(), ignored -> new ArrayList<>()).add(intent));
         List<Map<String, Object>> result = new ArrayList<>();
@@ -416,7 +343,7 @@ public final class ControlPlaneReadModel {
      *
      * @return work groups with the distinct participants of their active intents
      */
-    private List<Map<String, Object>> workgroups() {
+    public List<Map<String, Object>> workgroups() {
         List<WorkIntent> intents = coordination.collaborationProjection().activeIntents();
         return coordination.workGroupProjection().groups().stream().sorted(Comparator.comparing(WorkGroup::workGroupId)).limit(MAX_COLLECTION_ITEMS).map(group -> {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -435,9 +362,9 @@ public final class ControlPlaneReadModel {
      *
      * @return claims with their conflicting selectors
      */
-    private List<Map<String, Object>> claims() {
-        List<WorkIntent> intents = coordination.collaborationProjection().activeIntents();
-        return intents.stream().sorted(Comparator.comparing(WorkIntent::intentId)).limit(MAX_COLLECTION_ITEMS).map(intent -> {
+    public List<Map<String, Object>> claims() {
+        CollaborationProjection collaboration = coordination.collaborationProjection();
+        return collaboration.activeIntents().stream().sorted(Comparator.comparing(WorkIntent::intentId)).limit(MAX_COLLECTION_ITEMS).map(intent -> {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("intentId", intent.intentId().toString());
             result.put("participant", intent.participant());
@@ -445,7 +372,7 @@ public final class ControlPlaneReadModel {
             result.put("role", intent.role().wireValue());
             result.put("state", intent.status().name());
             result.put("selectors", selectors(intent.selectors()));
-            result.put("conflicts", conflicts(intent));
+            result.put("conflicts", conflicts(collaboration, intent));
             return result;
         }).toList();
     }
@@ -453,11 +380,12 @@ public final class ControlPlaneReadModel {
     /**
      * Finds the other intents whose selectors overlap the given intent's.
      *
-     * @param intent intent to check
+     * @param collaboration the claims view the section is built from
+     * @param intent        intent to check
      * @return conflicts, excluding the intent itself
      */
-    private List<Map<String, Object>> conflicts(WorkIntent intent) {
-        return coordination.collaborationProjection().conflicts(intent.selectors()).stream().filter(conflict -> !conflict.intentId().equals(intent.intentId().toString())).limit(MAX_COLLECTION_ITEMS).map(conflict -> {
+    private static List<Map<String, Object>> conflicts(CollaborationProjection collaboration, WorkIntent intent) {
+        return collaboration.conflicts(intent.selectors()).stream().filter(conflict -> !conflict.intentId().equals(intent.intentId().toString())).limit(MAX_COLLECTION_ITEMS).map(conflict -> {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("participant", conflict.participant());
             result.put("intentId", conflict.intentId());
@@ -471,7 +399,7 @@ public final class ControlPlaneReadModel {
      *
      * @return capability requests
      */
-    private List<Map<String, Object>> capabilities() {
+    public List<Map<String, Object>> capabilities() {
         return coordination.capabilityRequestProjection().records().values().stream().sorted(Comparator.comparing(record -> record.handle().value())).limit(MAX_COLLECTION_ITEMS).map(ControlPlaneReadModel::capability)
                 .toList();
     }
@@ -493,7 +421,7 @@ public final class ControlPlaneReadModel {
         result.put("createdAtEpochMillis", record.createdAtEpochMillis());
         result.put("updatedAtEpochMillis", record.updatedAtEpochMillis());
         result.put("contract",
-                Map.of("inputs", record.contract().inputs(), "output", record.contract().output(), "requiredBehavior", record.contract().requiredBehavior(), "acceptanceTests", record.contract().acceptanceTests()));
+                ordered("inputs", record.contract().inputs(), "output", record.contract().output(), "requiredBehavior", record.contract().requiredBehavior(), "acceptanceTests", record.contract().acceptanceTests()));
         return result;
     }
 
@@ -532,115 +460,6 @@ public final class ControlPlaneReadModel {
     }
 
     /**
-     * Converts the network view into its JSON-compatible form. The projection has already bounded its lists.
-     *
-     * @param snapshot network view
-     * @return network map
-     */
-    private static Map<String, Object> networkMap(NetworkSnapshot snapshot) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", snapshot.status());
-        result.put("peers", snapshot.peers().stream().map(ControlPlaneReadModel::peerMap).toList());
-        result.put("routes", snapshot.routes().stream().map(ControlPlaneReadModel::routeMap).toList());
-        result.put("overlay", overlayMap(snapshot.overlay()));
-        result.put("relay", relayMap(snapshot.relay()));
-        return result;
-    }
-
-    /**
-     * Converts a peer.
-     *
-     * @param peer network peer
-     * @return peer map
-     */
-    private static Map<String, Object> peerMap(NetworkPeer peer) {
-        return Map.of("nodeId",
-                peer.nodeId(),
-                "sessionId",
-                peer.sessionId(),
-                "liveness",
-                peer.liveness(),
-                "usable",
-                peer.usable(),
-                "establishedAt",
-                peer.establishedAt(),
-                "authenticated",
-                peer.authenticated(),
-                "health",
-                peer.health());
-    }
-
-    /**
-     * Converts a route.
-     *
-     * @param route network route
-     * @return route map
-     */
-    private static Map<String, Object> routeMap(NetworkRoute route) {
-        return Map.of("kind", route.kind(), "destinationNodeId", route.destinationNodeId(), "path", route.path(), "nextHop", route.nextHop(), "relayNodeId", route.relayNodeId());
-    }
-
-    /**
-     * Converts the overlay summary.
-     *
-     * @param overlay overlay summary
-     * @return overlay map
-     */
-    private static Map<String, Object> overlayMap(OverlaySummary overlay) {
-        return Map.of("status",
-                overlay.status(),
-                "authorityNodeId",
-                overlay.authorityNodeId(),
-                "revision",
-                overlay.revision(),
-                "memberCount",
-                overlay.memberCount(),
-                "expiresAt",
-                overlay.expiresAt(),
-                "members",
-                overlay.members().stream().map(member -> Map.of("nodeId", member.nodeId(), "status", member.status())).toList(),
-                "directEdges",
-                overlay.directEdges().stream().map(ControlPlaneReadModel::edgeMap).toList(),
-                "desiredEdges",
-                overlay.desiredEdges().stream().map(ControlPlaneReadModel::edgeMap).toList());
-    }
-
-    /**
-     * Converts an overlay edge.
-     *
-     * @param edge overlay edge
-     * @return edge map
-     */
-    private static Map<String, Object> edgeMap(OverlayEdge edge) {
-        return Map.of("from", edge.fromNodeId(), "to", edge.toNodeId(), "status", edge.status());
-    }
-
-    /**
-     * Converts the relay summary.
-     *
-     * @param relay relay summary
-     * @return relay map
-     */
-    private static Map<String, Object> relayMap(RelaySummary relay) {
-        return Map.of("status",
-                relay.status(),
-                "localAddress",
-                relay.localAddress(),
-                "activeConnections",
-                relay.activeConnections(),
-                "configured",
-                relay.configured(),
-                "connected",
-                relay.connected(),
-                "relayIdentity",
-                relay.relayIdentity(),
-                "authorized",
-                relay.authorized(),
-                "activeRouteUsage",
-                relay.activeRouteUsage());
-    }
-
-    /**
      * Converts selectors.
      *
      * @param selectors resource selectors
@@ -657,7 +476,7 @@ public final class ControlPlaneReadModel {
      * @return selector map
      */
     private static Map<String, Object> selector(ResourceSelector selector) {
-        return Map.of("kind", selector.kind().name(), "value", selector.value());
+        return ordered("kind", selector.kind().name(), "value", selector.value());
     }
 
     /**

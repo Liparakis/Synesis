@@ -1,5 +1,7 @@
 package org.synesis.workspace.transport.control.network;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -35,5 +37,18 @@ public record RelayState(String status, String localAddress, int activeConnectio
      */
     public static RelayState disabled() {
         return new RelayState("DISABLED", "", 0, false, false, "", false, 0);
+    }
+
+    Map<String, Object> toMap() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("status", status);
+        result.put("localAddress", localAddress);
+        result.put("activeConnections", activeConnections);
+        result.put("configured", configured);
+        result.put("connected", connected);
+        result.put("relayIdentity", relayIdentity);
+        result.put("authorized", authorized);
+        result.put("activeRouteUsage", activeRouteUsage);
+        return result;
     }
 }

@@ -1,6 +1,8 @@
 package org.synesis.workspace.transport.control.network;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -23,5 +25,15 @@ public record NetworkRoute(String kind, String destinationNodeId, List<String> p
         path = Objects.requireNonNull(path, "path").stream().limit(32).toList();
         nextHop = nextHop == null ? "" : nextHop;
         relayNodeId = relayNodeId == null ? "" : relayNodeId;
+    }
+
+    Map<String, Object> toMap() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("kind", kind);
+        result.put("destinationNodeId", destinationNodeId);
+        result.put("path", path);
+        result.put("nextHop", nextHop);
+        result.put("relayNodeId", relayNodeId);
+        return result;
     }
 }

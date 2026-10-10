@@ -43,7 +43,7 @@ public final class ControlPlaneEventHub {
      */
     public void publish(OnboardingEvent event) {
         String value = safeValue(event);
-        Event safe = new Event(sequence.incrementAndGet(), event.type().name(), value);
+        Event safe = new Event(sequence.incrementAndGet(), event.type(), value);
         subscribers.forEach(subscription -> subscription.offer(safe));
     }
 
@@ -52,7 +52,7 @@ public final class ControlPlaneEventHub {
      *
      * @return event subscription
      */
-    public Subscription subscribe() {
+    Subscription subscribe() {
         Subscription subscription = new Subscription(new ArrayBlockingQueue<>(QUEUE_CAPACITY), subscribers);
         subscribers.add(subscription);
         return subscription;
@@ -61,7 +61,7 @@ public final class ControlPlaneEventHub {
     /**
      * Closeable bounded event subscription.
      */
-    public static final class Subscription implements AutoCloseable {
+    static final class Subscription implements AutoCloseable {
 
         private final ArrayBlockingQueue<Event> queue;
         private final CopyOnWriteArrayList<Subscription> owners;
@@ -83,7 +83,7 @@ public final class ControlPlaneEventHub {
          *
          * @return event, or {@code null} when no event is queued
          */
-        public Event poll() {
+        Event poll() {
             return queue.poll();
         }
 
@@ -92,7 +92,7 @@ public final class ControlPlaneEventHub {
          *
          * @return true when an event was dropped due to backpressure
          */
-        public boolean overflowed() {
+        boolean overflowed() {
             return overflowed;
         }
 

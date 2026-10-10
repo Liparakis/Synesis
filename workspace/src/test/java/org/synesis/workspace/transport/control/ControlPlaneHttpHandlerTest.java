@@ -50,6 +50,7 @@ import org.synesis.link.overlay.OverlayMembershipSnapshot;
 import org.synesis.link.overlay.OverlayMembershipView;
 import org.synesis.link.overlay.OverlayTopologyView;
 
+import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
@@ -64,6 +65,13 @@ class ControlPlaneHttpHandlerTest {
 
     @TempDir
     Path temp;
+
+    /**
+     * Link peers exchange their project context after authentication, so fixtures that connect to
+     * each other must describe the same project.
+     */
+    private final UUID sharedProjectId = UUID.randomUUID();
+    private final Instant sharedCreatedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
     @Test
     void healthIsPublicButSnapshotRequiresOneTimeSession() throws Exception {
@@ -481,8 +489,8 @@ class ControlPlaneHttpHandlerTest {
             Path synesis = root.resolve(".synesis");
             Path profile = synesis.resolve("local/profile");
             Files.createDirectories(profile);
-            projectId = UUID.randomUUID();
-            ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
+            projectId = sharedProjectId;
+            ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
             Path coordinationRoot = synesis.resolve("coordination");
             NodeIdentity signer = NodeIdentity.generate();
             if (seedProject) {
@@ -491,9 +499,10 @@ class ControlPlaneHttpHandlerTest {
             coordination = new CoordinationService(new PredictionEventStore(coordinationRoot, projectId), signer);
             eventHub = new ControlPlaneEventHub();
             Onboarding onboarding = new Onboarding(profile, eventHub::publish);
-            ControlPlaneReadModel readModel = network == null ? new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService())
-                    : new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), network);
-            handler = selectionGateway == null ? new ControlPlaneHttpHandler(readModel, coordination, onboarding, eventHub) : new ControlPlaneHttpHandler(readModel, coordination, onboarding, eventHub, selectionGateway);
+            LinkRuntimeOwner linkOwner = new LinkRuntimeOwner(onboarding, signer, null, eventHub::publish, new ProjectIdentity(projectId, sharedCreatedAt));
+            java.util.function.Supplier<NetworkSnapshot> networkSource = network == null ? NetworkSnapshot::empty : network;
+            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), networkSource, null);
+            handler = new ControlPlaneHttpHandler(readModel, coordination, linkOwner, eventHub, selectionGateway == null ? ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE : selectionGateway, null);
             server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null, handler);
             server.start();
             baseUri = URI.create("http://127.0.0.1:" + server.address().getPort());

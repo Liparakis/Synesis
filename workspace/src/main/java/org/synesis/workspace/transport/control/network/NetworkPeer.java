@@ -1,5 +1,7 @@
 package org.synesis.workspace.transport.control.network;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -37,5 +39,17 @@ public record NetworkPeer(String nodeId, String sessionId, String liveness, bool
         Objects.requireNonNull(liveness, "liveness");
         Objects.requireNonNull(establishedAt, "established at");
         Objects.requireNonNull(health, "health");
+    }
+
+    Map<String, Object> toMap() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("nodeId", nodeId);
+        result.put("sessionId", sessionId);
+        result.put("liveness", liveness);
+        result.put("usable", usable);
+        result.put("establishedAt", establishedAt);
+        result.put("authenticated", authenticated);
+        result.put("health", health);
+        return result;
     }
 }

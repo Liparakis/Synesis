@@ -2,6 +2,7 @@ package org.synesis.workspace.transport.control;
 
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.API_VERSION;
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.newResponse;
+import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -87,13 +88,13 @@ final class ControlPlaneEventStream {
             long keepaliveAt = nextKeepalive();
             while (!Thread.currentThread().isInterrupted() && !closed.get()) {
                 if (coordinationSubscription.overflowed() || onboardingSubscription.overflowed()) {
-                    writeEvent(output, "refresh_required", "refresh", Map.of("apiVersion", API_VERSION, "reason", "subscriber_queue_overflow"));
+                    writeEvent(output, "refresh_required", "refresh", ordered("apiVersion", API_VERSION, "reason", "subscriber_queue_overflow"));
                     break;
                 }
                 PredictionEvent event = coordinationSubscription.poll();
                 if (event != null) {
                     String eventType = uiEventType(event.type());
-                    writeEvent(output, eventType, Long.toString(event.sequence()), Map.of("apiVersion", API_VERSION, "sequence", event.sequence(), "type", eventType));
+                    writeEvent(output, eventType, Long.toString(event.sequence()), ordered("apiVersion", API_VERSION, "sequence", event.sequence(), "type", eventType));
                     keepaliveAt = nextKeepalive();
                     continue;
                 }
@@ -193,19 +194,15 @@ final class ControlPlaneEventStream {
     /**
      * Collapses an onboarding event type into the coarse event name the UI subscribes to.
      *
-     * @param type {@link OnboardingEventType} name; unknown names are tolerated
+     * @param type onboarding event type
      * @return UI event name; {@code link.updated} for anything not specifically grouped
      */
-    private static String uiLinkEventType(String type) {
-        try {
-            return switch (OnboardingEventType.valueOf(type)) {
-                case PEER_CONNECTED -> "peer.connected";
-                case SESSION_CLOSED -> "peer.disconnected";
-                case LIVENESS -> "peer.updated";
-                default -> "link.updated";
-            };
-        } catch (IllegalArgumentException invalid) {
-            return "link.updated";
-        }
+    private static String uiLinkEventType(OnboardingEventType type) {
+        return switch (type) {
+            case PEER_CONNECTED -> "peer.connected";
+            case SESSION_CLOSED -> "peer.disconnected";
+            case LIVENESS -> "peer.updated";
+            default -> "link.updated";
+        };
     }
 }
