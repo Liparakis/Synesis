@@ -58,7 +58,10 @@ it has nothing left to do in one turn, including when it has polled its inbox
 unchanged as often as the protocol allows. When such an agent has stopped, a
 lane of its provider is still open, and other work has progressed since, the
 command starts that agent's own provider session again with one sentence telling
-it to continue. It reads only the durable coordination log: it never reads or
+it to continue. A provider writes its closing message after its last call, so an
+agent is taken to have last looked at the project 30 seconds before its process
+ended: work recorded in that interval also resumes it, at the cost of one extra
+turn when the agent had in fact seen it. The command reads only the durable coordination log: it never reads or
 relays an agent's conversation, never assigns work or picks a continuation, and
 never writes to the coordination log. Heartbeats and lane takeovers do not count
 as progress, so two idle agents cannot wake each other. A resumed agent is a new

@@ -139,8 +139,9 @@ final class AgentRunControllerTest {
     @Test
     void resumeLimitIsNamedWhenProgressIsLeftUnseen() throws Exception {
         Script script = new Script();
-        // The peer progresses twice; the first agent may only be resumed for the first.
-        script.lifetimes(1, 5, 1);
+        // The peer progresses twice; the first agent may only be resumed for the first. The peer
+        // stops long after its own last progress, so it is taken to have seen it.
+        script.lifetimes(1, 40, 1);
         script.at(0).head(1).announced();
         script.at(2).head(4).progressAfter(1);
         script.at(4).head(8).progressAfter(4);
@@ -154,7 +155,7 @@ final class AgentRunControllerTest {
     @Test
     void agentWhoseProviderNeverAnnouncedASessionCannotBeResumed() throws Exception {
         Script script = new Script();
-        script.lifetimes(1, 4);
+        script.lifetimes(1, 40);
         script.withoutSessionId.add("claude#1");
         script.at(0).head(1).announced();
         script.at(3).head(6).progressAfter(1);
@@ -168,8 +169,9 @@ final class AgentRunControllerTest {
     @Test
     void agentWhoseProviderHasNoOpenLaneIsNotResumedForAnotherProvidersProgress() throws Exception {
         Script script = new Script();
-        // claude finished its own lane and stopped; codex then makes progress on its lane alone.
-        script.lifetimes(1, 4);
+        // claude finished its own lane and stopped; codex then makes progress on its lane alone
+        // and stops long after it.
+        script.lifetimes(1, 40);
         script.closedLaneProviders.add("claude");
         script.at(0).head(1).announced();
         script.at(3).head(6).progressAfter(1);
@@ -178,6 +180,37 @@ final class AgentRunControllerTest {
 
         assertEquals(0, result.resumes());
         assertEquals(AgentRunController.Outcome.STALLED, result.outcome(), "codex stopped with its lane still open and nothing further changed");
+    }
+
+    @Test
+    void agentIsResumedForWorkRecordedShortlyBeforeItsProcessEnded() throws Exception {
+        Script script = new Script();
+        // codex records work at tick 2. claude's process is still running then and ends at tick
+        // 3: a provider writes its closing message after its last look at the project, so the
+        // work is in the log before the process exits and claude has not seen it.
+        script.lifetimes(3, 2);
+        script.closedLaneProviders.add("codex");
+        script.at(0).head(1).announced();
+        script.at(2).head(5).progressAfter(1);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(1, result.resumes(), "the resumed agent has seen that work and is not resumed for it again");
+    }
+
+    @Test
+    void workRecordedLongBeforeAnAgentStoppedIsTakenAsSeen() throws Exception {
+        Script script = new Script();
+        script.lifetimes(40, 2);
+        script.closedLaneProviders.add("codex");
+        script.at(0).head(1).announced();
+        script.at(2).head(5).progressAfter(1);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(0, result.resumes());
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
     }
 
     @Test

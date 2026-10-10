@@ -3,7 +3,9 @@ package org.synesis.workspace.application.agent.run;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,6 +62,14 @@ public final class AgentRunController {
             PredictionEventType.RECOVERY_SNAPSHOT_HELD,
             PredictionEventType.LANE_CONTINUATION_ACCEPTED);
 
+    /**
+     * How long before its process ended an agent is taken to have last looked at the project. A
+     * provider ends its process some seconds after its last call, once its closing message is
+     * written. Work recorded in that gap is in the log before the process exits although the
+     * agent never saw it, and an agent taken to have seen it would never be resumed for it.
+     */
+    private static final long UNSEEN_BEFORE_EXIT_MILLIS = 30_000L;
+
     private final AgentProcesses processes;
     private final ProjectObserver observer;
     private final Connections connections;
@@ -108,27 +118,37 @@ public final class AgentRunController {
         Objects.requireNonNull(listener, "listener");
         long deadline = clockMillis.getAsLong() + request.timeout().toMillis();
         List<Agent> agents = new ArrayList<>();
+        // The log head at each observation younger than UNSEEN_BEFORE_EXIT_MILLIS, oldest first,
+        // and the head at the newest observation that is older.
+        Deque<HeadAt> heads = new ArrayDeque<>();
+        OptionalLong seenBeforeExit = OptionalLong.empty();
         try {
             int index = 0;
+            long headAtStart = observer.observe().headSequence();
             for (AgentSpec spec : request.agents()) {
                 Agent agent = new Agent(++index, spec);
+                agent.startedAtSequence = headAtStart;
                 HeadlessOptions options = agent.connect(connections.open());
                 agent.process = processes.start(spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), spec.session().environment(options), request.prompt(), agent.label(),
                         spec.session()::sessionId);
                 agents.add(agent);
                 listener.accept("AGENT_STARTED=" + agent.label());
             }
-            long seenWhileRunning = observer.observe().headSequence();
             while (true) {
                 Observation observation = observer.observe();
+                long now = clockMillis.getAsLong();
+                long unseenFrom = now - UNSEEN_BEFORE_EXIT_MILLIS;
+                while (!heads.isEmpty() && heads.getFirst().millis() <= unseenFrom) {
+                    seenBeforeExit = OptionalLong.of(heads.removeFirst().sequence());
+                }
+                heads.addLast(new HeadAt(now, observation.headSequence()));
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
                         connections.ended(agent.connectionId);
-                        agent.exited(seenWhileRunning);
+                        agent.exited(seenBeforeExit);
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
                 }
-                long now = clockMillis.getAsLong();
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
@@ -142,6 +162,7 @@ public final class AgentRunController {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
                             agent.resumes++;
+                            agent.startedAtSequence = observation.headSequence();
                             HeadlessOptions options = agent.connect(connections.open());
                             agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
                                     agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
@@ -159,7 +180,6 @@ public final class AgentRunController {
                 if (clockMillis.getAsLong() >= deadline) {
                     return new Result(observation.complete() ? Outcome.COMPLETED : Outcome.TIMED_OUT, resumes(agents));
                 }
-                seenWhileRunning = observation.headSequence();
                 pause.forMillis(request.pollInterval().toMillis());
             }
         } finally {
@@ -178,6 +198,10 @@ public final class AgentRunController {
         }
         boolean limitReached = agents.stream().anyMatch(agent -> agent.resumes >= maxResumes && observation.hasOpenLane(agent.spec.provider()) && observation.progressedSince(agent.stoppedAtSequence));
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
+    }
+
+    /** The log head the controller observed at one moment. */
+    private record HeadAt(long millis, long sequence) {
     }
 
     private static int resumes(List<Agent> agents) {
@@ -457,6 +481,7 @@ public final class AgentRunController {
         private RunningAgent process;
         private String connectionId;
         private String providerSessionId;
+        private long startedAtSequence;
         private long stoppedAtSequence;
         private long resumedForDeadline = Long.MIN_VALUE;
         private int exitCode;
@@ -478,14 +503,18 @@ public final class AgentRunController {
         }
 
         /**
-         * Records that the process ended. The agent is taken to have seen the log only as far as
-         * the controller had while the process was still running: assuming more could hide the
-         * very event it needs to be resumed for, and assuming less costs one extra resume at most.
+         * Records that the process ended. The agent is taken to have seen the log as it stood
+         * shortly before the process ended, and never less than what was there when the process
+         * started: assuming more could hide the very event it needs to be resumed for, and
+         * assuming less costs one extra resume at most.
+         *
+         * @param seenBeforeExit log head shortly before the process ended, when the controller
+         *                       has been observing that long
          */
-        private void exited(long seenWhileRunning) {
+        private void exited(OptionalLong seenBeforeExit) {
             exitCode = process.exitCode();
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
-            stoppedAtSequence = seenWhileRunning;
+            stoppedAtSequence = Math.max(startedAtSequence, seenBeforeExit.orElse(startedAtSequence));
             process = null;
         }
 
