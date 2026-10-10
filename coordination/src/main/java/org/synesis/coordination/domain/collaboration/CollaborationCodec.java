@@ -211,15 +211,7 @@ public final class CollaborationCodec {
      * @throws IOException malformed bytes
      */
     static UUID decodeRelease(byte[] encoded) throws IOException {
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-        if (in.readInt() != MAGIC_RELEASE) {
-            throw new CoordinationException("unsupported release format");
-        }
-        UUID id = readUuid(in);
-        if (in.available() != 0) {
-            throw new CoordinationException("trailing release bytes");
-        }
-        return id;
+        return decode(encoded, MAGIC_RELEASE, "release", WireFormat::readUuid);
     }
 
     /**
@@ -496,15 +488,7 @@ public final class CollaborationCodec {
      * @throws IOException malformed heartbeat
      */
     static String decodeHeartbeat(byte[] encoded) throws IOException {
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-        if (in.readInt() != MAGIC_HEARTBEAT) {
-            throw new CoordinationException("unsupported heartbeat format");
-        }
-        String participant = TEXT.readText(in);
-        if (in.available() != 0) {
-            throw new CoordinationException("trailing heartbeat bytes");
-        }
-        return participant;
+        return decode(encoded, MAGIC_HEARTBEAT, "heartbeat", TEXT::readText);
     }
 
     /**
@@ -587,7 +571,7 @@ public final class CollaborationCodec {
      * @throws IOException if the payload is malformed
      */
     public static WorkGroup decodeWorkGroup(byte[] encoded) throws IOException {
-        return decode(encoded, MAGIC_GROUP_V2, "group", "malformed group", in -> {
+        return decode(encoded, MAGIC_GROUP_V2, "group", in -> {
             UUID id = readUuid(in), project = readUuid(in);
             String goal = TEXT.readText(in), acceptance = TEXT.readText(in);
             long version = in.readLong();
@@ -635,7 +619,7 @@ public final class CollaborationCodec {
      * @throws IOException if the payload is malformed
      */
     public static LaneGrant decodeLaneGrant(byte[] encoded) throws IOException {
-        return decode(encoded, MAGIC_GRANT_V2, "grant", "malformed grant", in -> {
+        return decode(encoded, MAGIC_GRANT_V2, "grant", in -> {
             UUID id = readUuid(in), group = readUuid(in), intent = readUuid(in);
             String target = TEXT.readText(in);
             long epoch = in.readLong();
@@ -656,14 +640,6 @@ public final class CollaborationCodec {
      * @throws IOException when the bytes are not exactly one well-formed instance of the form
      */
     private static <T> T decode(byte[] encoded, int magic, String noun, Fields<T> fields) throws IOException {
-        return decode(encoded, magic, noun, "trailing " + noun + " bytes", fields);
-    }
-
-    private static <T> T decode(byte[] encoded,
-            int magic,
-            String noun,
-            String trailingMessage,
-            Fields<T> fields) throws IOException {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             if (in.readInt() != magic) {
@@ -671,7 +647,7 @@ public final class CollaborationCodec {
             }
             T value = fields.read(in);
             if (in.available() != 0) {
-                throw new CoordinationException(trailingMessage);
+                throw new CoordinationException("trailing " + noun + " bytes");
             }
             return value;
         } catch (RuntimeException | EOFException failure) {

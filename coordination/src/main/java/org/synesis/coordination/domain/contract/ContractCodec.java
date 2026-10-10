@@ -24,8 +24,10 @@ public final class ContractCodec {
     private static final int MAGIC_DEPEND = 0x53434431;
     private static final int MAGIC_SUPERSEDE = 0x53435331;
 
-    private static final WireFormat TEXT = WireFormat.bounded(32768, false, "text bound", "truncated text")
-            .checkingWrites(32768, "text bound");
+    private static final WireFormat TEXT = WireFormat.bounded(ContractRecord.MAX_TEXT_BYTES,
+            false,
+            "text bound",
+            "truncated text").checkingWrites(ContractRecord.MAX_TEXT_BYTES, "text bound");
 
     /**
      * Validates and initializes this contract codec.
@@ -162,16 +164,20 @@ public final class ContractCodec {
      * @throws IOException if malformed
      */
     public static ContractSupersede decodeSupersede(byte[] encoded) throws IOException {
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-        if (in.readInt() != MAGIC_SUPERSEDE) {
-            throw new CoordinationException("supersession format");
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != MAGIC_SUPERSEDE) {
+                throw new CoordinationException("supersession format");
+            }
+            UUID id = readUuid(in);
+            long oldRevision = in.readLong(), newRevision = in.readLong();
+            if (in.available() != 0) {
+                throw new CoordinationException("trailing supersession bytes");
+            }
+            return new ContractSupersede(id, oldRevision, newRevision);
+        } catch (RuntimeException | EOFException failure) {
+            throw new CoordinationException("malformed supersession", failure);
         }
-        UUID id = readUuid(in);
-        long oldRevision = in.readLong(), newRevision = in.readLong();
-        if (in.available() != 0) {
-            throw new CoordinationException("trailing supersession bytes");
-        }
-        return new ContractSupersede(id, oldRevision, newRevision);
     }
 
     /**

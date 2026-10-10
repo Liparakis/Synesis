@@ -6,6 +6,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationInvariantError;
 
@@ -78,6 +79,33 @@ public final class WireFormat {
      */
     public WireFormat checkingWrites(int maxBytes, String boundMessage) {
         return new WireFormat(readMaxBytes, allowEmpty, readBoundMessage, truncatedMessage, maxBytes, boundMessage);
+    }
+
+    /**
+     * Rejects text the checking writer would refuse, so a bad value fails where it is supplied instead of inside
+     * {@link #encode}.
+     *
+     * @param value text to check
+     * @param name  name of the value in the failure message
+     * @throws CoordinationArgumentException when the text exceeds the write bound in UTF-8 bytes
+     */
+    public void requireWritable(String value, String name) {
+        if (value.getBytes(StandardCharsets.UTF_8).length > writeMaxBytes) {
+            throw new CoordinationArgumentException(name + " exceeds payload bound");
+        }
+    }
+
+    /**
+     * Rejects any text of a list that the checking writer would refuse.
+     *
+     * @param values texts to check
+     * @param name   name of each value in the failure message
+     * @throws CoordinationArgumentException when a text exceeds the write bound in UTF-8 bytes
+     */
+    public void requireWritable(Iterable<String> values, String name) {
+        for (String value : values) {
+            requireWritable(value, name);
+        }
     }
 
     /**

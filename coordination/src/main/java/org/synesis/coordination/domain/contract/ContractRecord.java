@@ -29,6 +29,11 @@ public record ContractRecord(UUID contractId, UUID projectId, long revision, Str
                              String body, Status status, UUID supersedes, List<String> selectorRefs) {
 
     /**
+     * Longest UTF-8 text the contract wire format carries, which the codec enforces on every text it writes.
+     */
+    static final int MAX_TEXT_BYTES = 32768;
+
+    /**
      * Validates and canonicalizes a contract record.
      *
      * @param contractId   contract identifier
@@ -49,12 +54,17 @@ public record ContractRecord(UUID contractId, UUID projectId, long revision, Str
         CoordinationNullException.requireNonNull(body, "body");
         CoordinationNullException.requireNonNull(status, "status");
         selectorRefs = List.copyOf(selectorRefs == null ? List.of() : selectorRefs);
-        if (revision < 1 || owner.isBlank() || body.isBlank() || body.getBytes(StandardCharsets.UTF_8).length > 32768) {
+        if (revision < 1 || owner.isBlank() || body.isBlank() || tooLong(owner) || tooLong(body)
+                || selectorRefs.stream().anyMatch(ContractRecord::tooLong)) {
             throw new CoordinationArgumentException("invalid contract");
         }
         if (!contentHash.equals(hash(body))) {
             throw new CoordinationArgumentException("content hash mismatch");
         }
+    }
+
+    static boolean tooLong(String text) {
+        return text.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_BYTES;
     }
 
     /**

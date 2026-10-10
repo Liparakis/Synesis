@@ -5,6 +5,7 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +51,8 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
         CoordinationNullException.requireNonNull(targetIntent, "target intent");
         CoordinationNullException.requireNonNull(snapshotId, "snapshot ID");
         CoordinationNullException.requireNonNull(expectedControlHead, "expected control HEAD");
+        TEXT.requireWritable(snapshotId, "snapshot ID");
+        TEXT.requireWritable(expectedControlHead, "expected control HEAD");
         if (sourceClaimEpoch < 0 || targetClaimEpoch < 0) {
             throw new CoordinationArgumentException("repair claim epochs cannot be negative");
         }
@@ -78,8 +81,11 @@ public record RepairLanePayload(UUID sourceIntentId, WorkIntent targetIntent, St
             String head = TEXT.readText(in);
             long sourceEpoch = in.readLong();
             long targetEpoch = in.readLong();
+            if (in.available() != 0) {
+                throw new CoordinationException("trailing repair payload bytes");
+            }
             return new RepairLanePayload(source, target, snapshot, head, sourceEpoch, targetEpoch);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("malformed repair payload", failure);
         }
     }

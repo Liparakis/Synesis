@@ -62,7 +62,7 @@ class CollaborationWireFormatTest {
 
     @Test
     void release() throws Exception {
-        pin("release", "53524c31123456789abcdef00fedcba987654301", "trailing=CoordinationException: trailing release bytes | truncated=EOFException: null", id(1), CollaborationCodec::encodeRelease, CollaborationCodec::decodeRelease);
+        pin("release", "53524c31123456789abcdef00fedcba987654301", "trailing=CoordinationException: trailing release bytes | truncated=CoordinationException: malformed release <- EOFException", id(1), CollaborationCodec::encodeRelease, CollaborationCodec::decodeRelease);
     }
 
     @Test
@@ -226,13 +226,13 @@ class CollaborationWireFormatTest {
                 4,
                 WorkGroup.Status.ACTIVE,
                 new ReviewPolicy(true, true));
-        pin("workGroup", "53474732123456789abcdef00fedcba987654301123456789abcdef00fedcba9876543020000000b7368697020697420e29c930000000c616c6c20677265656e20c3a90000000000000004000101", "trailing=CoordinationException: malformed group | truncated=CoordinationException: malformed group <- EOFException", group, CollaborationCodec::encodeWorkGroup, CollaborationCodec::decodeWorkGroup);
+        pin("workGroup", "53474732123456789abcdef00fedcba987654301123456789abcdef00fedcba9876543020000000b7368697020697420e29c930000000c616c6c20677265656e20c3a90000000000000004000101", "trailing=CoordinationException: trailing group bytes | truncated=CoordinationException: malformed group <- EOFException", group, CollaborationCodec::encodeWorkGroup, CollaborationCodec::decodeWorkGroup);
     }
 
     @Test
     void laneGrant() throws Exception {
         LaneGrant grant = new LaneGrant(id(1), id(2), id(3), "agt-Δοκιμή", 5, true, "snap-é");
-        pin("laneGrant", "53475232123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba987654303000000106167742dce94cebfcebaceb9cebcceae0000000000000005010100000007736e61702dc3a9", "trailing=CoordinationException: malformed grant | truncated=CoordinationException: truncated text", grant, CollaborationCodec::encodeLaneGrant, CollaborationCodec::decodeLaneGrant);
+        pin("laneGrant", "53475232123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba987654303000000106167742dce94cebfcebaceb9cebcceae0000000000000005010100000007736e61702dc3a9", "trailing=CoordinationException: trailing grant bytes | truncated=CoordinationException: truncated text", grant, CollaborationCodec::encodeLaneGrant, CollaborationCodec::decodeLaneGrant);
     }
 
     @Test
@@ -240,7 +240,7 @@ class CollaborationWireFormatTest {
         LaneGrant grant = new LaneGrant(id(1), id(2), id(3), "agt-target", 5, false);
         pin("laneGrantNoSnapshot",
                 "53475232123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba9876543030000000a6167742d74617267657400000000000000050000",
-                "trailing=CoordinationException: malformed grant | truncated=CoordinationException: malformed grant <- EOFException",
+                "trailing=CoordinationException: trailing grant bytes | truncated=CoordinationException: malformed grant <- EOFException",
                 grant,
                 CollaborationCodec::encodeLaneGrant,
                 CollaborationCodec::decodeLaneGrant);
@@ -249,7 +249,7 @@ class CollaborationWireFormatTest {
     @Test
     void repairLane() throws Exception {
         RepairLanePayload payload = new RepairLanePayload(id(1), intent(), "snap-é", "head0123", 3, 4);
-        pin("repairLane", "52505232123456789abcdef00fedcba987654301000000fd53494e37123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba987654304123456789abcdef00fedcba987654305000000106167742dce94cebfcebaceb9cebcceae00000005636f646578123456789abcdef00fedcba98765430300000015696d706c656d656e7420e29c9320666561747572650000000d7465737473207061737320c3a900000008626173653031323300000000000000070000000200000000087372632f612e707901000000077372632f6c69620200000001000000000d7372632f7461726765742e70790000000100000012646f6d61696e2e70657273697374656e636500000007736e61702dc3a900000008686561643031323300000000000000030000000000000004", "trailing=accepted | truncated=EOFException: null", payload, RepairLanePayload::encode, RepairLanePayload::decode);
+        pin("repairLane", "52505232123456789abcdef00fedcba987654301000000fd53494e37123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba987654304123456789abcdef00fedcba987654305000000106167742dce94cebfcebaceb9cebcceae00000005636f646578123456789abcdef00fedcba98765430300000015696d706c656d656e7420e29c9320666561747572650000000d7465737473207061737320c3a900000008626173653031323300000000000000070000000200000000087372632f612e707901000000077372632f6c69620200000001000000000d7372632f7461726765742e70790000000100000012646f6d61696e2e70657273697374656e636500000007736e61702dc3a900000008686561643031323300000000000000030000000000000004", "trailing=CoordinationException: trailing repair payload bytes | truncated=CoordinationException: malformed repair payload <- EOFException", payload, RepairLanePayload::encode, RepairLanePayload::decode);
     }
 
     @Test

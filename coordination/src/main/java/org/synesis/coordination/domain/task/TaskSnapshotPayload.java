@@ -6,6 +6,7 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
 import org.synesis.coordination.domain.identity.WireFormat;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
@@ -43,6 +45,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
     private static final int MAGIC = 0x534E4150; // "SNAP"
     private static final int VERSION = 5;
     private static final int MAX_TEXT = 64 * 1024;
+    private static final int MAX_LIST_ENTRIES = 128;
     private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
             true,
             "Invalid text length in payload",
@@ -79,6 +82,18 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
                 "capabilityDependencies"));
         CoordinationNullException.requireNonNull(summary, "summary");
         CoordinationNullException.requireNonNull(provenance, "provenance");
+        for (String text : List.of(snapshotId, nodeId, supervisorId, workerId, providerSessionId, baseCommit, commitSha,
+                summary, provenance.participant(), provenance.bindingIdentity(), provenance.snapshotRef(),
+                provenance.integrityEvidence(), provenance.artifactManifestDigest())) {
+            TEXT.requireWritable(text, "text");
+        }
+        for (List<String> list : List.of(changedPaths, capabilityDependencies, provenance.contractRevisions(),
+                provenance.handoffLineage(), provenance.claimSelectors())) {
+            if (list.size() > MAX_LIST_ENTRIES) {
+                throw new CoordinationArgumentException("list exceeds " + MAX_LIST_ENTRIES + " entries");
+            }
+            TEXT.requireWritable(list, "list entry");
+        }
     }
 
     /**
@@ -143,8 +158,12 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             readHeader(in);
-            return readPayload(in);
-        } catch (RuntimeException failure) {
+            TaskSnapshotPayload payload = readPayload(in);
+            if (in.available() != 0) {
+                throw new CoordinationException("Trailing task snapshot payload bytes");
+            }
+            return payload;
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("Malformed task snapshot payload", failure);
         }
     }
@@ -181,8 +200,8 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
         String baseCommit = TEXT.readText(in);
         String commitSha = TEXT.readText(in);
 
-        List<String> changedPaths = readTextList(in);
-        List<String> dependencies = readTextList(in);
+        List<String> changedPaths = readList(in);
+        List<String> dependencies = readList(in);
 
         String summary = TEXT.readText(in);
         SnapshotProvenance provenance = readProvenance(in);
@@ -200,22 +219,6 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
                 summary,
                 provenance,
                 reviewRequired);
-    }
-
-    /**
-     * Reads a bounded-count list of text values from the payload.
-     *
-     * @param in input positioned at the list count
-     * @return values in their encoded order
-     * @throws IOException when a value is truncated or malformed
-     */
-    private static List<String> readTextList(DataInputStream in) throws IOException {
-        int count = in.readInt();
-        List<String> values = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-            values.add(TEXT.readText(in));
-        }
-        return values;
     }
 
     /**
@@ -271,7 +274,7 @@ public record TaskSnapshotPayload(UUID taskId, String snapshotId, String nodeId,
      */
     private static List<String> readList(DataInputStream in) throws IOException {
         int count = in.readInt();
-        if (count < 0 || count > 128) {
+        if (count < 0 || count > MAX_LIST_ENTRIES) {
             throw new CoordinationException("list bound");
         }
         List<String> values = new ArrayList<>(count);

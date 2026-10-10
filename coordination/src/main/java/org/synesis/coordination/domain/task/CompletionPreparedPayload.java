@@ -5,6 +5,7 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +54,11 @@ public record CompletionPreparedPayload(UUID taskId, String completionId, UUID l
         CoordinationNullException.requireNonNull(preparedRef, "preparedRef");
         CoordinationNullException.requireNonNull(treeHash, "treeHash");
         changedPaths = List.copyOf(CoordinationNullException.requireNonNull(changedPaths, "changedPaths"));
+        TEXT.requireWritable(completionId, "completionId");
+        TEXT.requireWritable(baseCommit, "baseCommit");
+        TEXT.requireWritable(preparedRef, "preparedRef");
+        TEXT.requireWritable(treeHash, "treeHash");
+        TEXT.requireWritable(changedPaths, "changedPaths entry");
     }
 
     /**
@@ -83,8 +89,11 @@ public record CompletionPreparedPayload(UUID taskId, String completionId, UUID l
             for (int i = 0; i < count; i++) {
                 paths.add(TEXT.readText(in));
             }
+            if (in.available() != 0) {
+                throw new CoordinationException("trailing prepared payload bytes");
+            }
             return new CompletionPreparedPayload(task, completion, lane, epoch, base, ref, tree, paths);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("malformed prepared payload", failure);
         }
     }

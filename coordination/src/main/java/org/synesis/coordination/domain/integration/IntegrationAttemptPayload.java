@@ -5,12 +5,14 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.IntegrationAttemptId;
 import org.synesis.coordination.domain.identity.WireFormat;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
@@ -34,6 +36,9 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
     private static final int MAGIC = 0x494E5447; // "INTG"
     private static final int VERSION = 1;
     private static final int MAX_TEXT = 64 * 1024;
+    // Every producer appends this payload as an event, whose payload is capped at 64 KiB, and each snapshot ID costs at
+    // least its 4-byte length prefix, so no payload that was ever appended lists more IDs than this.
+    private static final int MAX_SNAPSHOT_IDS = MAX_TEXT / 4;
     private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT,
             true,
             "Invalid text length in payload",
@@ -58,6 +63,13 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
         CoordinationNullException.requireNonNull(integrationCommitSha, "integrationCommitSha");
         CoordinationNullException.requireNonNull(status, "status");
         CoordinationNullException.requireNonNull(failureReason, "failureReason");
+        if (taskSnapshotIds.size() > MAX_SNAPSHOT_IDS) {
+            throw new CoordinationArgumentException("taskSnapshotIds exceeds " + MAX_SNAPSHOT_IDS + " entries");
+        }
+        for (String text : List.of(attemptId, expectedControlHead, integrationCommitSha, status, failureReason)) {
+            TEXT.requireWritable(text, "text");
+        }
+        TEXT.requireWritable(taskSnapshotIds, "task snapshot ID");
     }
 
     /**
@@ -77,6 +89,9 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
             String attemptId = TEXT.readText(in);
             UUID projectId = readUuid(in);
             int snapCount = in.readInt();
+            if (snapCount < 0 || snapCount > MAX_SNAPSHOT_IDS) {
+                throw new CoordinationException("Invalid snapshot count: " + snapCount);
+            }
             List<String> snaps = new ArrayList<>(snapCount);
             for (int i = 0; i < snapCount; i++) {
                 snaps.add(TEXT.readText(in));
@@ -85,6 +100,9 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
             String integrationCommit = TEXT.readText(in);
             String status = TEXT.readText(in);
             String failureReason = TEXT.readText(in);
+            if (in.available() != 0) {
+                throw new CoordinationException("Trailing integration attempt payload bytes");
+            }
 
             return new IntegrationAttemptPayload(attemptId,
                     projectId,
@@ -93,7 +111,7 @@ public record IntegrationAttemptPayload(String attemptId, UUID projectId, List<S
                     integrationCommit,
                     status,
                     failureReason);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("Malformed integration attempt payload", failure);
         }
     }

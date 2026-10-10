@@ -73,6 +73,13 @@ public final class CoordinationCommand {
         if (payload.length > MAX_BYTES || signerPublicKey.length == 0 || signature.length == 0) {
             throw new CoordinationArgumentException("command exceeds bounds");
         }
+        TEXT.requireWritable(actorNodeId, "actor node ID");
+        if (actorSupervisorId != null) {
+            TEXT.requireWritable(actorSupervisorId, "actor supervisor ID");
+        }
+        if (actorWorkerId != null) {
+            TEXT.requireWritable(actorWorkerId, "actor worker ID");
+        }
     }
 
     /**

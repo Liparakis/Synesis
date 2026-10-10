@@ -84,6 +84,7 @@ public final class PredictionEvent {
                 || signature.length == 0) {
             throw new CoordinationArgumentException("invalid event bounds");
         }
+        TEXT.requireWritable(actorNodeId, "actor node ID");
     }
 
     /**

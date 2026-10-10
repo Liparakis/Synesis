@@ -32,7 +32,7 @@ public record ContractDependency(UUID intentId, String participant, UUID contrac
         CoordinationNullException.requireNonNull(participant, "participant");
         CoordinationNullException.requireNonNull(contractId, "contract ID");
         CoordinationNullException.requireNonNull(state, "state");
-        if (revision < 1 || participant.isBlank()) {
+        if (revision < 1 || participant.isBlank() || ContractRecord.tooLong(participant)) {
             throw new CoordinationArgumentException("invalid dependency");
         }
     }

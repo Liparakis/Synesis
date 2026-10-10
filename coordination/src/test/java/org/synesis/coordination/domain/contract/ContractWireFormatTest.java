@@ -47,7 +47,7 @@ class ContractWireFormatTest {
         ContractSupersede supersede = new ContractSupersede(id(1), 2, 3);
         pin("supersede",
                 "53435331123456789abcdef00fedcba98765430100000000000000020000000000000003",
-                "trailing=CoordinationException: trailing supersession bytes | truncated=EOFException: null",
+                "trailing=CoordinationException: trailing supersession bytes | truncated=CoordinationException: malformed supersession <- EOFException",
                 supersede,
                 value -> ContractCodec.encodeSupersede(value.contract().value(),
                         value.previousRevision().value(),

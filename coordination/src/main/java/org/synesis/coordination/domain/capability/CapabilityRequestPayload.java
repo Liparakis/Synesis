@@ -5,6 +5,7 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -196,7 +197,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
                     state,
                     reason,
                     expectedContractRevision);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("Malformed capability request payload", failure);
         }
     }

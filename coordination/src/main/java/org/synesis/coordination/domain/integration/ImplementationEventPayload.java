@@ -5,6 +5,7 @@ import static org.synesis.coordination.domain.identity.WireFormat.writeUuid;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,12 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
         if (revisionNumber < 1) {
             throw new CoordinationArgumentException("revisionNumber must be >= 1");
         }
+        for (String text : List.of(handle.value(), baseCommit, commitSha, summary, validationResult, validationReason,
+                worktreePath, requesterSessionId)) {
+            TEXT.requireWritable(text, "text");
+        }
+        TEXT.requireWritable(changedPaths, "changed path");
+        TEXT.requireWritable(failedAcceptanceTests, "failed acceptance test");
     }
 
     /**
@@ -158,6 +165,9 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
             }
             String worktreePath = TEXT.readText(in);
             String requesterSessionId = TEXT.readText(in);
+            if (in.available() != 0) {
+                throw new CoordinationException("Trailing implementation event payload bytes");
+            }
             return new ImplementationEventPayload(handle,
                     authorityLineageId,
                     revisionNumber,
@@ -170,7 +180,7 @@ public record ImplementationEventPayload(CapabilityRequestHandle handle, UUID au
                     failedTests,
                     worktreePath,
                     requesterSessionId);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("Malformed implementation event payload", failure);
         }
     }
