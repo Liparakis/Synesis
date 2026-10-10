@@ -84,7 +84,7 @@ public final class WorkIntentService {
      * @throws IOException              when persistence or validation fails
      * @throws GeneralSecurityException when event signing fails
      */
-    public synchronized ClaimResult announce(WorkIntent intent) throws IOException, GeneralSecurityException {
+    public ClaimResult announce(WorkIntent intent) throws IOException, GeneralSecurityException {
         return laneClaims.announce(intent);
     }
 
@@ -103,7 +103,7 @@ public final class WorkIntentService {
      * @throws IOException persistence or stale-authority failure
      * @throws GeneralSecurityException event signing failure
      */
-    public synchronized ClaimResult extendScope(WorkIntentId intentId,
+    public ClaimResult extendScope(WorkIntentId intentId,
             ParticipantId participant,
             ClaimEpoch expectedEpoch,
             List<ResourceSelector> requestedSelectors,
@@ -127,7 +127,7 @@ public final class WorkIntentService {
      * @throws IOException              when the intent is missing or persistence fails
      * @throws GeneralSecurityException when signing fails
      */
-    public synchronized void release(UUID intentId, String participant) throws IOException, GeneralSecurityException {
+    public void release(UUID intentId, String participant) throws IOException, GeneralSecurityException {
         release(new WorkIntentId(intentId), new ParticipantId(participant));
     }
 
@@ -140,7 +140,7 @@ public final class WorkIntentService {
      * @throws IOException              when the intent is missing, stale, or persistence fails
      * @throws GeneralSecurityException when signing fails
      */
-    public synchronized void release(UUID intentId, String participant, WorkIntentMutationPrecondition precondition)
+    public void release(UUID intentId, String participant, WorkIntentMutationPrecondition precondition)
             throws IOException, GeneralSecurityException {
         release(new WorkIntentId(intentId), new ParticipantId(participant), precondition);
     }
@@ -153,7 +153,7 @@ public final class WorkIntentService {
      * @throws IOException              when the intent is missing, stale, or persistence fails
      * @throws GeneralSecurityException when signing fails
      */
-    public synchronized void release(WorkIntentId intentId, ParticipantId participant)
+    public void release(WorkIntentId intentId, ParticipantId participant)
             throws IOException, GeneralSecurityException {
         release(intentId, participant, null);
     }
@@ -167,7 +167,7 @@ public final class WorkIntentService {
      * @throws IOException              when the intent is missing, stale, or persistence fails
      * @throws GeneralSecurityException when signing fails
      */
-    public synchronized void release(WorkIntentId intentId,
+    public void release(WorkIntentId intentId,
             ParticipantId participant,
             WorkIntentMutationPrecondition precondition) throws IOException, GeneralSecurityException {
         laneClaims.release(intentId, participant, precondition);
@@ -187,7 +187,7 @@ public final class WorkIntentService {
      * @throws IOException              stale or unauthorized snapshot/lane
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized boolean releaseAfterIntegration(ProjectAppendLock lock, TaskSnapshotRecord snapshot)
+    public boolean releaseAfterIntegration(ProjectAppendLock lock, TaskSnapshotRecord snapshot)
             throws IOException, GeneralSecurityException {
         return laneCompletion.releaseAfterIntegration(lock, snapshot);
     }
@@ -207,7 +207,7 @@ public final class WorkIntentService {
      * @throws IOException              stale, unauthorized, or pending lifecycle state
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized NoChangeCompletion completeNoChange(NoChangeCompletion completion)
+    public NoChangeCompletion completeNoChange(NoChangeCompletion completion)
             throws IOException, GeneralSecurityException {
         return laneCompletion.completeNoChange(completion);
     }
@@ -227,7 +227,7 @@ public final class WorkIntentService {
      * @throws IOException              invalid source, stale epoch, lineage, scope, or target
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized void createRepairLane(UUID sourceIntentId,
+    public void createRepairLane(UUID sourceIntentId,
             String snapshotId,
             String expectedControlHead,
             WorkIntent targetIntent) throws IOException, GeneralSecurityException {
@@ -247,7 +247,7 @@ public final class WorkIntentService {
      * @throws IOException              invalid source, stale epoch, lineage, scope, or target
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized void createRepairLane(WorkIntentId sourceIntentId,
+    public void createRepairLane(WorkIntentId sourceIntentId,
             SnapshotId snapshotId,
             CommitId expectedControlHead,
             WorkIntent targetIntent) throws IOException, GeneralSecurityException {
@@ -271,7 +271,7 @@ public final class WorkIntentService {
      * @throws IOException              invalid lock, source, epoch, lineage, scope, or target
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized void createRepairLane(ProjectAppendLock lock,
+    public void createRepairLane(ProjectAppendLock lock,
             UUID sourceIntentId,
             String snapshotId,
             String expectedControlHead,
@@ -294,7 +294,7 @@ public final class WorkIntentService {
      * @throws IOException              invalid lock, source, epoch, lineage, scope, or target
      * @throws GeneralSecurityException signing failure
      */
-    public synchronized void createRepairLane(ProjectAppendLock lock,
+    public void createRepairLane(ProjectAppendLock lock,
             WorkIntentId sourceIntentId,
             SnapshotId snapshotId,
             CommitId expectedControlHead,

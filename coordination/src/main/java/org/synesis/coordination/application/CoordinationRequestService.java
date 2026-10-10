@@ -150,11 +150,7 @@ final class CoordinationRequestService {
                     requestProposal,
                     CoordinationRequest.Status.PENDING,
                     snapshotIdentity == null ? null : snapshotIdentity.value());
-            current.append(request.requestId(),
-                    PredictionEventType.COORDINATION_REQUESTED,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeRequest(request),
-                    signer);
+            appendRequested(current, request);
             return request;
         });
     }
@@ -202,11 +198,7 @@ final class CoordinationRequestService {
                     CoordinationRequest.Kind.HANDOFF,
                     handoffProposal,
                     CoordinationRequest.Status.PENDING);
-            current.append(request.requestId(),
-                    PredictionEventType.COORDINATION_REQUESTED,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeRequest(request),
-                    signer);
+            appendRequested(current, request);
             return request;
         });
     }
@@ -357,13 +349,7 @@ final class CoordinationRequestService {
         RequestId item = CoordinationNullException.requireNonNull(itemIdentity, "inbox item ID");
         appends.run(current -> {
             requireInboxItem(current, participant, item);
-            if (!current.collaborationProjection().inboxAcknowledged(item)) {
-                current.append(item.value(),
-                        PredictionEventType.INBOX_ITEM_ACKNOWLEDGED,
-                        signer.nodeId(),
-                        CollaborationCodec.encodeUuidText(item),
-                        signer);
-            }
+            acknowledgeOnce(current, item);
         });
     }
 
@@ -397,14 +383,28 @@ final class CoordinationRequestService {
             } else if (request.status() != status) {
                 throw new CoordinationException("REQUEST_ALREADY_RESOLVED");
             }
-            if (!current.collaborationProjection().inboxAcknowledged(item)) {
-                current.append(item.value(),
-                        PredictionEventType.INBOX_ITEM_ACKNOWLEDGED,
-                        signer.nodeId(),
-                        CollaborationCodec.encodeUuidText(item),
-                        signer);
-            }
+            acknowledgeOnce(current, item);
         });
+    }
+
+    private void appendRequested(PredictionEventStore current, CoordinationRequest request)
+            throws IOException, GeneralSecurityException {
+        current.append(request.requestId(),
+                PredictionEventType.COORDINATION_REQUESTED,
+                signer.nodeId(),
+                CollaborationCodec.encodeRequest(request),
+                signer);
+    }
+
+    private void acknowledgeOnce(PredictionEventStore current, RequestId item)
+            throws IOException, GeneralSecurityException {
+        if (!current.collaborationProjection().inboxAcknowledged(item)) {
+            current.append(item.value(),
+                    PredictionEventType.INBOX_ITEM_ACKNOWLEDGED,
+                    signer.nodeId(),
+                    CollaborationCodec.encodeUuidText(item),
+                    signer);
+        }
     }
 
     /**

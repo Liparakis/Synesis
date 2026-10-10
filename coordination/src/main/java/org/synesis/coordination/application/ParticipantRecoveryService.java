@@ -186,7 +186,7 @@ final class ParticipantRecoveryService {
             }
             ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
                     .orElseThrow(CoordinationMissingElementException::new);
-            current.append(UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8)),
+            current.append(participantStreamId(durableParticipant),
                     PredictionEventType.PARTICIPANT_HEARTBEAT,
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant),
@@ -203,13 +203,12 @@ final class ParticipantRecoveryService {
      */
     void suspend(ParticipantId participant) throws IOException, GeneralSecurityException {
         appends.run(current -> {
-            boolean known = current.collaborationProjection().participantKey(participant).isPresent();
-            if (!known) {
+            ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
+                    .orElse(null);
+            if (durableParticipant == null) {
                 return;
             }
-            ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
-                    .orElseThrow(CoordinationMissingElementException::new);
-            current.append(UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8)),
+            current.append(participantStreamId(durableParticipant),
                     PredictionEventType.PARTICIPANT_SUSPENDED,
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(participant),
@@ -233,7 +232,7 @@ final class ParticipantRecoveryService {
             if (snapshotReference.value().isBlank()) {
                 throw new CoordinationException("RECOVERY_SNAPSHOT_REQUIRED");
             }
-            current.append(UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8)),
+            current.append(participantStreamId(durableParticipant),
                     PredictionEventType.RECOVERY_SNAPSHOT_HELD,
                     signer.nodeId(),
                     CollaborationCodec.encodeRecovery(new RecoveryEvidence(durableParticipant, snapshotReference)),
@@ -331,6 +330,13 @@ final class ParticipantRecoveryService {
     }
 
     /**
+     * Derives the stream every lifecycle event of one participant is appended to.
+     */
+    private static UUID participantStreamId(ParticipantId durableParticipant) {
+        return UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
      * Appends a participant lifecycle event under the project append lock.
      *
      * @throws IOException              when payload validation or durable I/O fails
@@ -341,7 +347,7 @@ final class ParticipantRecoveryService {
         appends.run(current -> {
             ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
                     .orElseThrow(() -> new CoordinationException("PARTICIPANT_NOT_FOUND"));
-            current.append(UUID.nameUUIDFromBytes(durableParticipant.value().getBytes(StandardCharsets.UTF_8)),
+            current.append(participantStreamId(durableParticipant),
                     type,
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(durableParticipant),

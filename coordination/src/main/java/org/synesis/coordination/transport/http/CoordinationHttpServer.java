@@ -12,7 +12,6 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.util.Base64;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.synesis.coordination.application.CoordinationService;
@@ -117,41 +116,42 @@ public final class CoordinationHttpServer implements AutoCloseable {
     }
 
     /**
-     * Parses the optional boolean query parameter.
+     * Returns the decoded value of the first {@code key=value} pair of the query, or {@code null} when absent.
      */
-    private static boolean queryBoolean(URI uri) {
+    private static String queryParam(URI uri, String key) {
         String query = uri.getRawQuery();
         if (query == null) {
-            return false;
+            return null;
         }
         for (String part : query.split("&")) {
             String[] pair = part.split("=", 2);
-            if (pair.length == 2 && URLDecoder.decode(pair[0], StandardCharsets.UTF_8).equals("once")) {
-                return Boolean.parseBoolean(URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
+            if (pair.length == 2 && URLDecoder.decode(pair[0], StandardCharsets.UTF_8).equals(key)) {
+                return URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
             }
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * Parses the optional boolean query parameter.
+     */
+    private static boolean queryBoolean(URI uri) {
+        return Boolean.parseBoolean(queryParam(uri, "once"));
     }
 
     /**
      * Parses the optional event-sequence cursor.
      */
     private static long queryLong(URI uri) {
-        String query = uri.getRawQuery();
-        if (query == null) {
+        String after = queryParam(uri, "after");
+        if (after == null) {
             return 0;
         }
-        for (String part : query.split("&")) {
-            String[] pair = part.split("=", 2);
-            if (pair.length == 2 && URLDecoder.decode(pair[0], StandardCharsets.UTF_8).equals("after")) {
-                try {
-                    return Long.parseLong(URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
-                } catch (NumberFormatException bad) {
-                    throw new CoordinationArgumentException("invalid cursor");
-                }
-            }
+        try {
+            return Long.parseLong(after);
+        } catch (NumberFormatException bad) {
+            throw new CoordinationArgumentException("invalid cursor");
         }
-        return 0;
     }
 
     /**
@@ -286,10 +286,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
                     output.flush();
                     break;
                 }
-                String data =
-                        "id: " + event.sequence() + "\ndata: " + Base64.getEncoder().encodeToString(event.encoded())
-                                + " " + event.type().name() + "\n\n";
-                output.write(data.getBytes(StandardCharsets.UTF_8));
+                output.write(EventFrames.encode(event));
                 output.flush();
             }
         } catch (InterruptedException interrupted) {

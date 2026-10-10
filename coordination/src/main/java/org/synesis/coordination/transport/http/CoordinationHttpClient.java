@@ -10,7 +10,6 @@ import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -97,11 +96,10 @@ public final class CoordinationHttpClient {
 
         List<PredictionEvent> result = new ArrayList<>();
         for (String line : response.body().split("\\R")) {
-            if (!line.startsWith("data: ")) {
-                continue;
+            PredictionEvent event = EventFrames.decode(line);
+            if (event != null) {
+                result.add(event);
             }
-            String encoded = line.substring(6).split(" ", 2)[0];
-            result.add(PredictionEvent.decode(Base64.getDecoder().decode(encoded)));
         }
         return result;
     }
@@ -134,10 +132,12 @@ public final class CoordinationHttpClient {
             throw new CoordinationException("event stream failed: " + response.statusCode());
         }
         try (var lines = response.body()) {
-            lines.filter(line -> line.startsWith("data: ")).forEach(line -> {
+            lines.forEach(line -> {
                 try {
-                    String encoded = line.substring(6).split(" ", 2)[0];
-                    consumer.accept(PredictionEvent.decode(Base64.getDecoder().decode(encoded)));
+                    PredictionEvent event = EventFrames.decode(line);
+                    if (event != null) {
+                        consumer.accept(event);
+                    }
                 } catch (IOException failure) {
                     throw new EventStreamFailure(failure);
                 }

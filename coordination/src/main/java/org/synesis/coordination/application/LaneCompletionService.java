@@ -22,8 +22,7 @@ import org.synesis.link.identity.NodeIdentity;
  *
  * <p>Kept apart from {@link WorkIntentService} so the terminal-lane events and the group-completion reevaluation that
  * must follow them in the same append-lock critical section live in one place, next to the
- * {@link LaneCompletionRules} they consult. {@link WorkIntentService} keeps the public entry points and their
- * {@code synchronized} monitor.</p>
+ * {@link LaneCompletionRules} they consult. {@link WorkIntentService} keeps the public entry points.</p>
  */
 final class LaneCompletionService {
 

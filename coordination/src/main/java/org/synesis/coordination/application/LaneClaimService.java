@@ -28,7 +28,7 @@ import org.synesis.link.identity.NodeIdentity;
  *
  * <p>Kept apart from {@link WorkIntentService} because each transition is one read/validate/append sequence under the
  * project append lock, taken here at the start of the sequence exactly as before. {@link WorkIntentService} keeps the
- * public entry points and their {@code synchronized} monitor.</p>
+ * public entry points.</p>
  */
 final class LaneClaimService {
 
