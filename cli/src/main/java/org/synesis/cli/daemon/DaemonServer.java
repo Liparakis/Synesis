@@ -1,20 +1,14 @@
 package org.synesis.cli.daemon;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -30,9 +24,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -54,7 +45,6 @@ final class DaemonServer implements AutoCloseable {
     private static final int MAX_QUEUED_CONNECTIONS = 32;
     private static final int MAX_LINE_BYTES = DaemonProtocol.MAX_REQUEST_BYTES + 1;
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
-    private static final Duration RUNTIME_START_TIMEOUT = Duration.ofSeconds(20);
     private final DaemonLock lock;
     private final ServerSocket server;
     private final String token;
@@ -130,28 +120,6 @@ final class DaemonServer implements AutoCloseable {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 
-    static URI normalizeRuntimeEndpoint(URI endpoint) {
-        return ProcessRuntimeHandle.normalizeEndpoint(endpoint);
-    }
-
-    static boolean runtimeReachable(URI endpoint) {
-        HttpURLConnection connection = null;
-        try {
-            connection = (HttpURLConnection) endpoint.resolve("/api/v1/health").toURL().openConnection();
-            connection.setConnectTimeout(500);
-            connection.setReadTimeout(1_000);
-            connection.setInstanceFollowRedirects(false);
-            connection.setRequestMethod("GET");
-            return connection.getResponseCode() == HttpURLConnection.HTTP_OK;
-        } catch (IOException failure) {
-            return false;
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-    }
-
     /**
      * Serves authenticated requests until shutdown.
      *
@@ -224,7 +192,7 @@ final class DaemonServer implements AutoCloseable {
 
     private synchronized Map<String, Object> status() {
         closeUnreachableRuntimes();
-        selections.size();
+        selections.expireStale();
         return response("RUNNING", Map.of("runtimeCount", runtimes.size()));
     }
 
@@ -241,14 +209,7 @@ final class DaemonServer implements AutoCloseable {
 
     private synchronized Map<String, Object> openProject(DaemonProtocol.Request request) throws IOException {
         Path project = Path.of(Objects.requireNonNull(request.project(), "project")).toAbsolutePath().normalize();
-        RuntimeHandle runtime = runtimes.get(project);
-        if (runtime == null || !runtime.reachable()) {
-            if (runtime != null) {
-                runtime.close();
-            }
-            runtime = runtimeStarter.start(project);
-            runtimes.put(project, runtime);
-        }
+        RuntimeHandle runtime = reachableOrStarted(project);
         boolean browserOpened = request.openBrowser() && BrowserLauncher.open(runtime.uiUri());
         boolean ready = !request.openBrowser() || browserOpened;
         return response(ready ? "READY" : "BROWSER_OPEN_FAILED", Map.of("endpoint", runtime.endpoint().toString(), "browserOpened", browserOpened));
@@ -443,8 +404,7 @@ final class DaemonServer implements AutoCloseable {
         }
     }
 
-    private RuntimeHandle runtimeFor(KnownProjectRegistry.ProjectView project) throws IOException {
-        Path path = project.path();
+    private RuntimeHandle reachableOrStarted(Path path) throws IOException {
         RuntimeHandle runtime = runtimes.get(path);
         if (runtime == null || !runtime.reachable()) {
             if (runtime != null) {
@@ -453,6 +413,12 @@ final class DaemonServer implements AutoCloseable {
             runtime = runtimeStarter.start(path);
             runtimes.put(path, runtime);
         }
+        return runtime;
+    }
+
+    private RuntimeHandle runtimeFor(KnownProjectRegistry.ProjectView project) throws IOException {
+        Path path = project.path();
+        RuntimeHandle runtime = reachableOrStarted(path);
         if (!runtime.reachable()) {
             runtime.close();
             runtimes.remove(path);
@@ -652,205 +618,5 @@ final class DaemonServer implements AutoCloseable {
          */
         @Override
         void close();
-    }
-
-    /**
-     * Process-local handle for one existing project runtime.
-     */
-    private static final class ProcessRuntimeHandle implements RuntimeHandle {
-
-        private final Process process;
-        private final URI endpoint;
-        private final String bootstrap;
-        private final String commandToken;
-
-        private ProcessRuntimeHandle(Process process, URI endpoint, String bootstrap, String commandToken) {
-            this.process = process;
-            this.endpoint = normalizeEndpoint(endpoint);
-            this.bootstrap = bootstrap;
-            this.commandToken = commandToken;
-        }
-
-        private static URI normalizeEndpoint(URI endpoint) {
-            Objects.requireNonNull(endpoint, "endpoint");
-            String value = endpoint.toString();
-            while (value.endsWith("/")) {
-                value = value.substring(0, value.length() - 1);
-            }
-            return URI.create(value);
-        }
-
-        private static RuntimeHandle start(Path project) throws IOException {
-            String java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java").toString();
-            List<String> command = new ArrayList<>();
-            command.add(java);
-            String loopbackSocketDirectory = System.getProperty("jdk.net.unixdomain.tmpdir", "");
-            if (!loopbackSocketDirectory.isBlank()) {
-                command.add("-Djdk.net.unixdomain.tmpdir=" + loopbackSocketDirectory);
-            }
-            command.add("-cp");
-            command.add(System.getProperty("java.class.path"));
-            command.add("org.synesis.cli.SynesisCli");
-            command.add("coordination");
-            command.add("serve");
-            command.add("--project");
-            command.add(project.toString());
-            command.add("--port");
-            command.add("0");
-            command.add("--parent-pid");
-            command.add(Long.toString(ProcessHandle.current().pid()));
-            ProcessBuilder builder = new ProcessBuilder(command);
-            builder.redirectInput(ProcessBuilder.Redirect.from(Path.of(System.getProperty("os.name", "").toLowerCase().contains("win") ? "NUL" : "/dev/null").toFile()));
-            Process process = builder.start();
-            try {
-                Ready ready = waitForReady(process);
-                Thread drain = new Thread(() -> drain(process.getInputStream()), "synesis-project-runtime-output");
-                drain.setDaemon(true);
-                drain.start();
-                return new ProcessRuntimeHandle(process, ready.endpoint(), ready.bootstrap(), ready.commandToken());
-            } catch (IOException failure) {
-                process.destroyForcibly();
-                try {
-                    process.waitFor(2, TimeUnit.SECONDS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    failure.addSuppressed(interrupted);
-                }
-                throw failure;
-            }
-        }
-
-        private static Ready waitForReady(Process process) throws IOException {
-            ExecutorService readerExecutor = Executors.newSingleThreadExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "synesis-project-runtime-ready");
-                thread.setDaemon(true);
-                return thread;
-            });
-            try {
-                Future<Ready> ready = readerExecutor.submit(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            if (line.startsWith("COORDINATION_SERVE_READY ")) {
-                                String endpoint = field(line, "endpoint");
-                                String bootstrap = field(line, "controlBootstrap");
-                                String commandToken = field(line, "controlCommand");
-                                return new Ready(URI.create(endpoint), bootstrap, commandToken);
-                            }
-                        }
-                    }
-                    throw new IOException("project_runtime_exited_before_ready");
-                });
-                return ready.get(RUNTIME_START_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
-            } catch (java.util.concurrent.TimeoutException failure) {
-                throw new IOException("project_runtime_start_timeout", failure);
-            } catch (java.util.concurrent.ExecutionException failure) {
-                Throwable cause = failure.getCause();
-                if (cause instanceof IOException io) {
-                    throw io;
-                }
-                throw new IOException("project_runtime_start_failed", cause);
-            } catch (InterruptedException failure) {
-                Thread.currentThread().interrupt();
-                throw new IOException("project_runtime_start_interrupted", failure);
-            } finally {
-                readerExecutor.shutdownNow();
-            }
-        }
-
-        private static String field(String line, String name) throws IOException {
-            String prefix = name + "=";
-            for (String token : line.split(" ")) {
-                if (token.startsWith(prefix)) {
-                    return token.substring(prefix.length());
-                }
-            }
-            throw new IOException("project_runtime_ready_missing_" + name);
-        }
-
-        private static void drain(InputStream input) {
-            try {
-                input.transferTo(java.io.OutputStream.nullOutputStream());
-            } catch (IOException ignored) {
-                // Runtime termination closes the stream.
-            } finally {
-                try {
-                    input.close();
-                } catch (IOException ignored) {
-                    // Runtime termination is already complete.
-                }
-            }
-        }
-
-        @Override
-        public boolean reachable() {
-            if (!process.isAlive()) {
-                return false;
-            }
-            return runtimeReachable(endpoint);
-        }
-
-        @Override
-        public URI uiUri() {
-            return URI.create(endpoint + "/#bootstrap=" + java.net.URLEncoder.encode(bootstrap, StandardCharsets.UTF_8));
-        }
-
-        @Override
-        public Map<String, Object> dispatchUri(String uri) throws IOException {
-            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(750)).build();
-            HttpRequest request = HttpRequest.newBuilder(endpoint.resolve("/api/v1/commands/deep-link")).timeout(Duration.ofSeconds(15)).header("Content-Type", "application/json; charset=utf-8")
-                    .header(org.synesis.workspace.transport.control.ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, commandToken).POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of("uri", uri)))).build();
-            try {
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                Object parsed = ProviderJson.parse(response.body());
-                if (!(parsed instanceof Map<?, ?> raw)) {
-                    throw new IOException("runtime deep-link response is malformed");
-                }
-                @SuppressWarnings("unchecked") Map<String, Object> body = new LinkedHashMap<>((Map<String, Object>) raw);
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    return Map.of("ok", false, "error", "URI_REJECTED", "authorityCode", errorCode(body));
-                }
-                body.put("ok", true);
-                return body;
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new IOException("runtime deep-link dispatch interrupted", interrupted);
-            } catch (RuntimeException malformed) {
-                throw new IOException("runtime deep-link response is malformed", malformed);
-            }
-        }
-
-        private static String errorCode(Map<String, Object> body) {
-            Object error = body.get("error");
-            if (error instanceof Map<?, ?> value && value.get("code") instanceof String code) {
-                return code;
-            }
-            return "RUNTIME_COMMAND_REJECTED";
-        }
-
-        @Override
-        public URI endpoint() {
-            return endpoint;
-        }
-
-        @Override
-        public void close() {
-            if (process.isAlive()) {
-                process.destroy();
-                try {
-                    if (!process.waitFor(2, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                        process.waitFor(2, TimeUnit.SECONDS);
-                    }
-                } catch (InterruptedException interrupted) {
-                    process.destroyForcibly();
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
-
-        private record Ready(URI endpoint, String bootstrap, String commandToken) {
-
-        }
     }
 }

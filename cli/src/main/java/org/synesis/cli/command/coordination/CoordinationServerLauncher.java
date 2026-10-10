@@ -10,6 +10,7 @@ import java.util.concurrent.locks.LockSupport;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.daemon.DaemonClient;
+import org.synesis.cli.daemon.RuntimeReadyLine;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.ui.StaticResourceHandler;
 
@@ -111,9 +112,8 @@ final class CoordinationServerLauncher {
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();
                 try {
                     String uiUrl = endpoint + "/#bootstrap=" + URLEncoder.encode(control.bootstrapToken(), StandardCharsets.UTF_8);
-                    runtime.terminal().stdout("COORDINATION_SERVE_READY endpoint=" + endpoint + "/ project=" + location.projectId() + " nodeId=" + node.nodeId() + " hostInstanceId=" + lifecycleHost.hostInstanceId()
-                            + " codexLifecycleRoute=" + lifecycleHost.route() + " controlPlaneRoute=/api/v1 controlBootstrap=" + control.bootstrapToken() + " controlCommand=" + control.runtimeCommandToken()
-                            + " uiRoute=/");
+                    runtime.terminal().stdout(RuntimeReadyLine.format(endpoint, String.valueOf(location.projectId()), String.valueOf(node.nodeId()), String.valueOf(lifecycleHost.hostInstanceId()),
+                            String.valueOf(lifecycleHost.route()), control.bootstrapToken(), control.runtimeCommandToken()));
                     if (openBrowser && browserOpen) {
                         if (!BrowserLauncher.open(URI.create(uiUrl))) {
                             runtime.terminal().stdout("SYNESIS_UI_OPEN_FAILED url=" + uiUrl);

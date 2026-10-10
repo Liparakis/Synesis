@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -157,9 +158,7 @@ public final class DaemonClient {
     }
 
     private static void startDaemonProcess() throws IOException {
-        String java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java").toString();
-        ProcessBuilder builder = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "org.synesis.cli.SynesisCli", "daemon", "--foreground");
-        builder.redirectInput(ProcessBuilder.Redirect.from(Path.of(System.getProperty("os.name", "").toLowerCase().contains("win") ? "NUL" : "/dev/null").toFile()));
+        ProcessBuilder builder = CliChildJvm.builder(false, List.of("daemon", "--foreground"));
         builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         builder.redirectError(ProcessBuilder.Redirect.DISCARD);
         builder.start();

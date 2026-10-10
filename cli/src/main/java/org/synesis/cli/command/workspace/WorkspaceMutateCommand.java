@@ -1,22 +1,13 @@
 package org.synesis.cli.command.workspace;
 
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.time.Duration;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
@@ -30,6 +21,7 @@ import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBro
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.Decision;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationRequest;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker.MutationResult;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.filesystem.BoundedFileLock;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import picocli.CommandLine.Command;
@@ -40,9 +32,6 @@ import picocli.CommandLine.Option;
  */
 @Command(name = "mutate", description = "Applies an evaluated workspace mutation through Synesis broker.", mixinStandardHelpOptions = true)
 public final class WorkspaceMutateCommand implements Callable<Integer> {
-
-    private static final Duration IDEMPOTENCY_LOCK_TIMEOUT = Duration.ofSeconds(30);
-    private static final long MAX_CACHE_BYTES = 128 * 1024;
 
     private final CliRuntime runtime;
 
@@ -112,65 +101,6 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
         return normalized.matches("(?i)[0-9a-f]{64}") ? normalized : null;
     }
 
-    private static Path idempotencyPath(Path evidenceDirectory, String key) throws Exception {
-        String keyHash = sha256(key.getBytes(StandardCharsets.UTF_8));
-        return evidenceDirectory.resolve("idempotency-" + keyHash + ".json");
-    }
-
-    private static String sha256(byte[] bytes) throws Exception {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-    }
-
-    private static CachedResponse readCache(Path file) throws IOException {
-        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("idempotency cache is invalid");
-        }
-        String serialized;
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
-            long size = channel.size();
-            if (size > MAX_CACHE_BYTES) {
-                throw new IOException("idempotency cache is oversized");
-            }
-            ByteBuffer bytes = ByteBuffer.allocate(Math.toIntExact(size));
-            while (bytes.hasRemaining() && channel.read(bytes) >= 0) {
-                // Read only the bounded size observed while the file was open.
-            }
-            serialized = new String(bytes.array(), 0, bytes.position(), StandardCharsets.UTF_8);
-        }
-        Object parsed;
-        try {
-            parsed = ProviderJson.parse(serialized);
-        } catch (RuntimeException malformed) {
-            throw new IOException("idempotency cache is malformed", malformed);
-        }
-        if (!(parsed instanceof Map<?, ?> cache) || !(cache.get("requestFingerprint") instanceof String fingerprint) || !(cache.get("response") instanceof String response)) {
-            throw new IOException("idempotency cache is malformed");
-        }
-        Object version = cache.get("formatVersion");
-        if (!(version instanceof Number number) || number.intValue() != 1) {
-            throw new IOException("idempotency cache version is unsupported");
-        }
-        return new CachedResponse(fingerprint, response);
-    }
-
-    private static void writeCache(Path file, String fingerprint, String response) throws IOException {
-        Map<String, Object> cache = new LinkedHashMap<>();
-        cache.put("formatVersion", 1);
-        cache.put("requestFingerprint", fingerprint);
-        cache.put("response", response);
-        Path temporary = Files.createTempFile(file.getParent(), "idempotency-", ".tmp");
-        try {
-            Files.writeString(temporary, ProviderJson.write(cache) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
     @Override
     public Integer call() {
         ProjectLocation location = null;
@@ -216,13 +146,10 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
 
             Path evidenceDirectory = location.synesisDirectory().resolve("local").resolve("evidence").resolve(provider);
             Files.createDirectories(evidenceDirectory);
-            Path cacheFile = idempotencyPath(evidenceDirectory, idempotencyKey);
-            Path lockFile = cacheFile.resolveSibling(cacheFile.getFileName() + ".lock");
-            try (BoundedFileLock lock = BoundedFileLock.acquire(lockFile, IDEMPOTENCY_LOCK_TIMEOUT)) {
-                if (!lock.isHeld()) {
-                    throw new IOException("IDEMPOTENCY_LOCK_INVALID");
-                }
-                return applyMutation(location, binding, expectedHash, effectiveContent, fingerprint, cacheFile);
+            IdempotencyCache cache = IdempotencyCache.of(evidenceDirectory, idempotencyKey);
+            BoundedFileLock lock = cache.lock();
+            try (lock) {
+                return applyMutation(location, binding, expectedHash, effectiveContent, fingerprint, cache);
             }
         } catch (java.nio.file.InvalidPathException invalidPath) {
             return usageError("INVALID_PATH", "Project or target path is invalid", location == null ? null : location.projectId().toString(), session);
@@ -233,27 +160,27 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
         } catch (IOException localStorageFailure) {
             return configurationError("LOCAL_STORAGE_FAILED", location);
         } catch (Exception failure) {
-            emitError("FAILED", "INTERNAL_ERROR", "Unexpected mutation failure", location == null ? null : location.projectId().toString(), session, null);
+            emitError("INTERNAL_ERROR", "Unexpected mutation failure", location == null ? null : location.projectId().toString(), session);
             return ExitCodes.INTERNAL;
         }
     }
 
-    private int applyMutation(ProjectLocation location, Binding binding, String expectedHash, String effectiveContent, String fingerprint, Path cacheFile) throws IOException {
-        if (cacheFile != null && Files.exists(cacheFile, LinkOption.NOFOLLOW_LINKS)) {
-            CachedResponse cached = readCache(cacheFile);
-            if (!fingerprint.equals(cached.requestFingerprint())) {
+    private int applyMutation(ProjectLocation location, Binding binding, String expectedHash, String effectiveContent, String fingerprint, IdempotencyCache cache) throws IOException {
+        Optional<IdempotencyCache.Cached> cached = cache == null ? Optional.empty() : cache.read();
+        if (cached.isPresent()) {
+            if (!fingerprint.equals(cached.get().requestFingerprint())) {
                 return usageError("IDEMPOTENCY_KEY_REUSED", "Idempotency key was already used for a different request", location.projectId().toString(), binding.sessionId());
             }
-            runtime.terminal().stdout(cached.response());
+            runtime.terminal().stdout(cached.get().response());
             return ExitCodes.OK;
         }
 
         MutationRequest request = new MutationRequest(location, provider, binding.sessionId(), target, kind, effectiveContent, true, false, expectedHash, createOnly);
         MutationResult result = new WorkspaceMutationBroker().applyMutation(request);
         String response = formatResult(result, location, binding);
-        if (result.success() && cacheFile != null) {
+        if (result.success() && cache != null) {
             try {
-                writeCache(cacheFile, fingerprint, response);
+                cache.write(fingerprint, response);
             } catch (IOException cacheFailure) {
                 runtime.terminal().stderr("IDEMPOTENCY_CACHE=WRITE_FAILED MUTATION_APPLIED=true");
                 runtime.terminal().stdout(response);
@@ -315,30 +242,30 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
         request.put("previousHash", expectedHash);
         request.put("createOnly", createOnly);
         request.put("outputMode", outputMode);
-        return sha256(ProviderJson.write(request).getBytes(StandardCharsets.UTF_8));
+        return Sha256.hex(ProviderJson.write(request));
     }
 
     private int usageError(String reasonCode, String message, String projectId, String sessionId) {
-        emitError("FAILED", reasonCode, message, projectId, sessionId, null);
+        emitError(reasonCode, message, projectId, sessionId);
         return ExitCodes.USAGE;
     }
 
     private int configurationError(String reasonCode, ProjectLocation location) {
-        emitError("FAILED", reasonCode, "Local project or session state could not be read", location == null ? null : location.projectId().toString(), session, null);
+        emitError(reasonCode, "Local project or session state could not be read", location == null ? null : location.projectId().toString(), session);
         return ExitCodes.LOCAL_CONFIGURATION;
     }
 
-    private void emitError(String result, String reasonCode, String message, String projectId, String sessionId, String worktree) {
+    private void emitError(String reasonCode, String message, String projectId, String sessionId) {
         if ("agent".equalsIgnoreCase(outputMode)) {
             TranslatedOutcome translated = new AgentOutcomeTranslator().translateException(new IllegalArgumentException(message != null ? message : reasonCode));
             runtime.terminal().stdout(translated.publicResponse().toJson().trim());
             return;
         }
         Map<String, Object> output = new LinkedHashMap<>();
-        output.put("RESULT", result);
+        output.put("RESULT", "FAILED");
         output.put("PROJECT_ID", projectId);
         output.put("SESSION_ID", sessionId);
-        output.put("ASSIGNED_WORKTREE", worktree);
+        output.put("ASSIGNED_WORKTREE", null);
         output.put("WORKSPACE_TRUST", "UNKNOWN");
         output.put("TARGET", target);
         output.put("HOOK_INTERCEPTED", false);
@@ -350,9 +277,5 @@ public final class WorkspaceMutateCommand implements Callable<Integer> {
         output.put("RESULTING_FILE_SHA256", null);
         output.put("MUTATION_APPLIED", false);
         runtime.terminal().stdout(ProviderJson.write(output));
-    }
-
-    private record CachedResponse(String requestFingerprint, String response) {
-
     }
 }

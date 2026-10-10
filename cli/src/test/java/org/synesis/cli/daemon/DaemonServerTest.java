@@ -102,7 +102,7 @@ final class DaemonServerTest {
 
     @Test
     void normalizesRuntimeReadyEndpointBeforeAppendingRoutes() {
-        assertEquals(URI.create("http://127.0.0.1:12345"), DaemonServer.normalizeRuntimeEndpoint(URI.create("http://127.0.0.1:12345/")));
+        assertEquals(URI.create("http://127.0.0.1:12345"), ProcessRuntimeHandle.normalizeEndpoint(URI.create("http://127.0.0.1:12345/")));
     }
 
     @Test
@@ -115,7 +115,7 @@ final class DaemonServerTest {
         });
         runtime.start();
         try {
-            assertTrue(DaemonServer.runtimeReachable(URI.create("http://127.0.0.1:" + runtime.getAddress().getPort())));
+            assertTrue(ProcessRuntimeHandle.runtimeReachable(URI.create("http://127.0.0.1:" + runtime.getAddress().getPort())));
         } finally {
             runtime.stop(0);
         }

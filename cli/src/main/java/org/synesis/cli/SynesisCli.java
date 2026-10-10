@@ -83,6 +83,7 @@ import org.synesis.cli.command.workspace.CheckActionCommand;
 import org.synesis.cli.command.workspace.WorkspaceCommand;
 import org.synesis.cli.command.workspace.WorkspaceMutateCommand;
 import org.synesis.cli.command.workspace.WorkspaceVerifyCommand;
+import org.synesis.cli.daemon.CliChildJvm;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.exit.FailureMapper;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -266,7 +267,7 @@ public final class SynesisCli {
      * Configures the Windows JDK loopback socket directory when the launcher did not provide one.
      */
     static void configureWindowsLoopbackSocketDirectory() {
-        if (!System.getProperty("os.name", "").toLowerCase().contains("win") || !System.getProperty("jdk.net.unixdomain.tmpdir", "").isBlank()) {
+        if (!CliChildJvm.onWindows() || !System.getProperty("jdk.net.unixdomain.tmpdir", "").isBlank()) {
             return;
         }
         String publicDirectory = System.getenv("PUBLIC");

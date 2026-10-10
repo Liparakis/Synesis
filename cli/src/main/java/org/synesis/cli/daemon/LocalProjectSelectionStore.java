@@ -125,9 +125,8 @@ final class LocalProjectSelectionStore {
         return Description.success(context.eligibleProjectIds(), context.expiresAt());
     }
 
-    synchronized int size() {
+    synchronized void expireStale() {
         expire(clock.instant());
-        return contexts.size();
     }
 
     private void expire(Instant now) {
