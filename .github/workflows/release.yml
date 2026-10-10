@@ -30,10 +30,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           add-job-summary: never
-      - run: ./gradlew.bat check --dependency-verification=strict
+      # gradle.properties sizes the worker pool for a 16-core workstation. On a hosted runner that
+      # starts three times more test tasks than there are cores, and tests that wait on a child JVM
+      # or a liveness window then miss their deadlines. Run as many workers as the runner has cores.
+      - run: ./gradlew.bat check --dependency-verification=strict "--max-workers=$env:NUMBER_OF_PROCESSORS"
         if: runner.os == 'Windows'
-      - run: ./gradlew check --dependency-verification=strict
+      - run: ./gradlew check --dependency-verification=strict --max-workers="$(getconf _NPROCESSORS_ONLN)"
         if: runner.os != 'Windows'
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   prepare-release:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
