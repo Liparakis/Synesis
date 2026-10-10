@@ -6,8 +6,7 @@ import picocli.CommandLine.Command;
 /**
  * Parent command for shared contract operations.
  */
-@Command(name = "contract", description = "Publish, bind, and inspect shared contracts.", mixinStandardHelpOptions = true, subcommands = {CollaborationContractPublishCommand.class, CollaborationContractBindCommand.class,
-        CollaborationContractStatusCommand.class})
+@Command(name = "contract", description = "Publish, bind, and inspect shared contracts.", mixinStandardHelpOptions = true)
 public final class CollaborationContractCommand implements Runnable {
 
     private final CliRuntime runtime;

@@ -17,7 +17,10 @@ import org.synesis.cli.command.VersionCommand;
 import org.synesis.cli.command.collaboration.CollaborationAcknowledgeCommand;
 import org.synesis.cli.command.collaboration.CollaborationAnnounceCommand;
 import org.synesis.cli.command.collaboration.CollaborationCommand;
+import org.synesis.cli.command.collaboration.CollaborationContractBindCommand;
 import org.synesis.cli.command.collaboration.CollaborationContractCommand;
+import org.synesis.cli.command.collaboration.CollaborationContractPublishCommand;
+import org.synesis.cli.command.collaboration.CollaborationContractStatusCommand;
 import org.synesis.cli.command.collaboration.CollaborationHandoffCommand;
 import org.synesis.cli.command.collaboration.CollaborationReadinessCommand;
 import org.synesis.cli.command.collaboration.CollaborationReleaseCommand;
@@ -150,7 +153,9 @@ public final class SynesisCli {
         CommandLine collaboration = new CommandLine(new CollaborationCommand()).addSubcommand("announce", new CollaborationAnnounceCommand(runtime))
                 .addSubcommand("acknowledge", new CollaborationAcknowledgeCommand(runtime)).addSubcommand("status", new CollaborationStatusCommand(runtime))
                 .addSubcommand("release", new CollaborationReleaseCommand(runtime)).addSubcommand("request", new CollaborationRequestCommand(runtime)).addSubcommand("respond", new CollaborationRespondCommand(runtime))
-                .addSubcommand("handoff", new CollaborationHandoffCommand(runtime)).addSubcommand("contract", new CollaborationContractCommand(runtime))
+                .addSubcommand("handoff", new CollaborationHandoffCommand(runtime))
+                .addSubcommand("contract", new CommandLine(new CollaborationContractCommand(runtime)).addSubcommand("publish", new CollaborationContractPublishCommand(runtime))
+                        .addSubcommand("bind", new CollaborationContractBindCommand(runtime)).addSubcommand("status", new CollaborationContractStatusCommand(runtime)))
                 .addSubcommand("readiness", new CollaborationReadinessCommand(runtime));
         command.addSubcommand("collaboration", collaboration);
         command.addSubcommand("sync", new SyncCommand());

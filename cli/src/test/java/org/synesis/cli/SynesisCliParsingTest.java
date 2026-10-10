@@ -65,6 +65,15 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void contractSubcommandsAreInstantiable() throws Exception {
+        for (String subcommand : new String[]{"publish", "bind", "status"}) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(new String[]{"collaboration", "contract", subcommand, "--help"}, invocation.runtime()), subcommand);
+            assertTrue(invocation.stdout().contains("synesis collaboration contract " + subcommand), subcommand);
+        }
+    }
+
+    @Test
     void malformedAndUnknownSyntaxReturnsUsageExit() throws Exception {
         assertEquals(2, SynesisCli.execute(new String[]{"unknown"}, invocation().runtime()));
         assertEquals(2, SynesisCli.execute(new String[]{"join"}, invocation().runtime()));
