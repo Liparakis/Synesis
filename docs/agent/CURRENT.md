@@ -1,3 +1,71 @@
+# 2026-10-10 — Remaster branch run by real agents: one regression fixed, one controller race closed
+
+Branch `remaster/2026-10-10`. Builds `0.1.0-dev.remaster-20261010`, `remaster2` (command record
+fix), and `remaster3` (controller change), each installed with the reorganised bootstrap installer.
+Every run used a new disposable project under `Documents\SynesisRemasterAcceptance`, started by
+`synesis agents run` with the prompt and goals of the entries below. The bootstrapper created the
+repository and goal, ran `synesis init` and `synesis provider install`, started the controller, and
+validated; it assigned nothing and relayed nothing. Claude Code `claude-opus-5-5` high and Codex
+`gpt-6-luna` medium unless stated.
+
+Regression found by run 1 and fixed: the remaster changed the canonical encoding of durable command
+records and left `canonicalizationVersion` at 1. Records live in the user's Synesis directory and
+the namespace reads all of them before running a command, so the 94 process anchors of the earlier
+build blocked `run_command` for every agent with `COMMAND_INTEGRITY_MISMATCH`. The encoding is now
+version 2 and version 1 records are verified by the version 1 rule.
+
+Controller race found by runs 5 and 8 and closed: an agent that stopped was taken to have seen the
+log up to the moment its process ended. Codex's last poll came 7 and 13 seconds before its process
+ended, the owner's progress landed in between, and Codex was never resumed. An agent is now taken to
+have last looked 30 seconds before its process ended, and never earlier than when that process
+started. An agent that stops within 30 seconds of any progress, its own included, gets one extra
+turn. The earlier build was not run in this start order, so whether it stalls there is not known;
+the controller's rule was the same.
+
+| Run | Build | Agents | Goal | Result | Control branch |
+| --- | --- | --- | --- | --- | --- |
+| 1 | remaster | Claude Code, Claude Code | negotiated | `COMPLETED`, 390 s, 2 resumes | 16 tests pass; no command ran |
+| 2 | remaster2 | Claude Code, Claude Code | negotiated | `COMPLETED`, 209 s | 21 tests pass |
+| 3 | remaster2 | Codex, Codex | negotiated | `COMPLETED`, 199 s | 6 tests pass |
+| 4 | remaster2 | Codex, Claude Code | negotiated | `COMPLETED`, 236 s, 2 resumes | 13 tests pass |
+| 5 | remaster2 | Claude Code, Codex | negotiated | `STALLED` | owner's lane only, 7 tests pass |
+| 6 | remaster2 | Claude Code, Claude Code (`sonnet`, low) | cancel | `COMPLETED`, 42 s, 1 resume | 4 tests pass |
+| 7 | remaster2 | Codex, Codex | cancel | `STALLED` | 5 tests pass |
+| 8 | remaster2 | Claude Code, Codex | negotiated | `STALLED` | nothing integrated |
+| 9 | remaster3 | Claude Code, Codex | negotiated | `COMPLETED`, 203 s | 11 tests pass |
+| 10 | remaster3 | Claude Code, Codex | negotiated | `COMPLETED`, 305 s | 18 tests pass |
+| 11 | remaster3 | Claude Code, Codex | negotiated | `COMPLETED`, 210 s | 12 tests pass |
+
+Reached through the MCP surface by both providers on these builds: `ensure_session`, an
+`overlapping_claim` refusal, `needs_capability` / `owner_required`, a capability request, the
+owner's answer, a revision, `publish_capability_implementation`, validation through
+`respond_coordination`, stale-workspace refresh, `finish_lane`, integration, and work group
+completion. Also reached: controller resumes and lane continuation by each provider (runs 1 and 4),
+and `cancel_lane` by each provider (runs 6 and 7).
+
+NOT REACHED: the controller change in a real run. Runs 9 to 11 completed without any agent stopping
+early, so the new rule never applied; it rests on `AgentRunControllerTest`. Also not reached:
+participant loss by a killed process, review, the owner's bounded wait, and a join over Link.
+
+Observed and not changed:
+
+- Run 7: after `cancel_lane` the Codex agent announced the same lane again and left it open, which
+  ended the run `STALLED` with the work itself integrated. `get_next_action` answers a cancelled lane
+  with `coordination_intent_required`, as recorded below.
+- Run 5, continued by one new Codex agent: the pending snapshot was integrated when that agent
+  connected and the work group completed, but the control branch then had 1 failing test of 11, a
+  defect in the Codex agent's own code. Nothing gates integration on tests. The new agent then
+  announced a lane of its own to repair it, sent `scope_revision` with fields that kind does not
+  take, was refused `COORDINATION_FIELD_NOT_ALLOWED` without being told which fields are allowed,
+  and stopped with that lane open.
+- `synesis provider install codex` reports `DEGRADED` for `TRUST_STATUS=REVIEW_REQUIRED`.
+- `SynesisCliParsingTest.rootAndVersionHelpSucceed` and
+  `DistributionLauncherTest.generatedLauncherSupportsHelpVersionAndIdentity` fail when Gradle is
+  started from Git Bash, where the help output carries colour codes; they pass from PowerShell.
+
+Verification: `:workspace:check :mcp:check :cli:check`, workspace 592 (1 skipped), MCP 148, CLI 113,
+0 failures.
+
 # 2026-10-10 — Owner timeout, same-provider agents, and cancel_lane proven by real runs
 
 Uncommitted. Build `0.1.0-dev.owner-went-ahead-20261010`: the builds below plus one fix found here.
