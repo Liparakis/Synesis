@@ -265,10 +265,7 @@ public final class NettySessionHandshake {
           }
         } else {
           state = stateFactory.get();
-          var attribute = channel.parent().attr(CLIENT_STATE);
-          if (attribute.get() == null) {
-            attribute.set(state);
-          }
+          channel.parent().attr(CLIENT_STATE).setIfAbsent(state);
         }
         LengthPrefixedFrames.install(channel.pipeline(), HandshakeEnvelope.MAX_BYTES);
         channel.pipeline()
@@ -291,16 +288,33 @@ public final class NettySessionHandshake {
     protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
       byte[] bytes = new byte[message.readableBytes()];
       message.readBytes(bytes);
-      if (!ApplicationStreamCodec.looksLike(bytes)) {
+      routeInboundStream(context, this, state, bytes, false);
+    }
+  }
+
+  /**
+   * Hands an inbound post-handshake stream to its owner. Closes the stream when no session is
+   * established, when the first frame is not an application frame and demo work is not accepted,
+   * or when the owner rejects it. Only the responder accepts demo-work streams.
+   */
+  private static void routeInboundStream(ChannelHandlerContext context, ChannelHandler handler,
+      StreamState state, byte[] bytes, boolean acceptDemoWork) {
+    if (state.session == null) {
+      context.close();
+      return;
+    }
+    try {
+      if (ApplicationStreamCodec.looksLike(bytes)) {
+        ApplicationStreamTransport.accept(context, handler, state.session,
+            state.applicationHandler, state.applicationStreams, bytes);
+      } else if (acceptDemoWork) {
+        DemoWorkTransport.accept(context, handler, state.session, state.demoRequests,
+            state.demoStreams, bytes);
+      } else {
         context.close();
-        return;
       }
-      try {
-        ApplicationStreamTransport.accept(context, this, state.session, state.applicationHandler,
-            state.applicationStreams, bytes);
-      } catch (RuntimeException failure) {
-        context.close();
-      }
+    } catch (RuntimeException exception) {
+      context.close();
     }
   }
 
@@ -318,15 +332,17 @@ public final class NettySessionHandshake {
     private final HandshakeRole localRole;
     private final LivenessConfiguration livenessConfiguration;
     private final PeerSession.ApplicationStreamHandler applicationHandler;
+    private final InvitationAdmission admission;
+    // Lives for the whole connection: shared by every stream until the connection closes.
     private final AtomicBoolean controlClaimed = new AtomicBoolean();
     private final Set<UUID> demoRequests = ConcurrentHashMap.newKeySet();
     private final AtomicInteger demoStreams = new AtomicInteger();
     private final AtomicInteger applicationStreams = new AtomicInteger();
-    private final InvitationAdmission admission;
-    private HandshakeTranscript transcript;
     private volatile PeerSession session;
-    private boolean admissionReserved;
-    private boolean identityAuthenticated;
+    // Lives for one handshake attempt: set by the control stream, settled when it completes or
+    // fails.
+    private HandshakeTranscript transcript;
+    private InvitationAdmission.Reservation reservation;
 
     private StreamState(NodeIdentity localIdentity, String expectedRemoteNodeId,
         List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
@@ -378,70 +394,15 @@ public final class NettySessionHandshake {
     protected void channelRead0(ChannelHandlerContext context, ByteBuf message) {
       try {
         byte[] bytes = readBytes(message);
-        if (state.localRole == HandshakeRole.RESPONDER && state.controlClaimed.get()
-            && !HandshakeEnvelope.looksLike(bytes)) {
-          if (state.session == null) {
-            context.close();
-            return;
-          }
-          try {
-            if (ApplicationStreamCodec.looksLike(bytes)) {
-              ApplicationStreamTransport.accept(context, this, state.session,
-                  state.applicationHandler, state.applicationStreams, bytes);
-            } else {
-              DemoWorkTransport.accept(context, this, state.session, state.demoRequests,
-                  state.demoStreams, bytes);
-            }
-          } catch (RuntimeException exception) {
-            context.close();
-          }
+        if (isPostHandshakeStream(bytes)) {
+          routeInboundStream(context, this, state, bytes, true);
           return;
         }
-        if (state.localRole == HandshakeRole.RESPONDER
-            && !state.controlClaimed.compareAndSet(false, true)) {
-          throw new HandshakeException(HandshakeFailureCode.DUPLICATE_CONTROL_STREAM);
-        }
-        if (HandshakeFailure.looksLike(bytes)) {
-          throw HandshakeFailure.decode(bytes)
-              .exception();
-        }
-        HandshakeEnvelope envelope = HandshakeEnvelope.decode(bytes);
-        if (envelope.role() != state.localRole.opposite()) {
-          throw new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
-        }
-        ProtocolVersion selected;
-        try {
-          selected = ProtocolVersion.negotiate(state.supportedVersions,
-              envelope.supportedVersions());
-        } catch (IllegalArgumentException exception) {
-          throw new HandshakeException(HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
-        }
-        if (!envelope.transcript()
-            .version()
-            .equals(selected)
-            || (state.transcript != null
-            && !Arrays.equals(envelope.transcript()
-            .encoded(), state.transcript.encoded()))) {
-          throw new HandshakeException(HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
-        }
-        state.transcript = envelope.transcript();
-        if (state.admission != null) {
-          if (!state.admission.reserve(state.transcript)) {
-            throw new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED);
-          }
-          state.admissionReserved = true;
-        }
-        HandshakeRole remoteRole = state.localRole.opposite();
-        if (state.expectedRemoteNodeId != null
-            && !state.expectedRemoteNodeId.equals(state.transcript.nodeId(remoteRole))) {
-          throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
-        }
-        if (!state.localIdentity.nodeId()
-            .equals(state.transcript.nodeId(state.localRole))
-            || !Arrays.equals(state.localIdentity.publicKeyEncoded(),
-            state.transcript.publicKeyEncoded(state.localRole))) {
-          throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
-        }
+        claimControlStream();
+        HandshakeEnvelope envelope = decodePeerEnvelope(bytes);
+        state.transcript = negotiateTranscript(envelope);
+        reserveAdmission();
+        checkIdentities();
         if (state.localRole == HandshakeRole.RESPONDER) {
           HandshakeProof proof = SessionAuthenticator.createProof(state.localIdentity,
               state.transcript, state.localRole);
@@ -452,6 +413,73 @@ public final class NettySessionHandshake {
         }
       } catch (Exception exception) {
         fail(context, exception);
+      }
+    }
+
+    /** A responder stream that is not a handshake frame once the control stream is claimed. */
+    private boolean isPostHandshakeStream(byte[] bytes) {
+      return state.localRole == HandshakeRole.RESPONDER && state.controlClaimed.get()
+          && !HandshakeEnvelope.looksLike(bytes);
+    }
+
+    private void claimControlStream() throws HandshakeException {
+      if (state.localRole == HandshakeRole.RESPONDER
+          && !state.controlClaimed.compareAndSet(false, true)) {
+        throw new HandshakeException(HandshakeFailureCode.DUPLICATE_CONTROL_STREAM);
+      }
+    }
+
+    private HandshakeEnvelope decodePeerEnvelope(byte[] bytes) throws Exception {
+      if (HandshakeFailure.looksLike(bytes)) {
+        throw HandshakeFailure.decode(bytes)
+            .exception();
+      }
+      HandshakeEnvelope envelope = HandshakeEnvelope.decode(bytes);
+      if (envelope.role() != state.localRole.opposite()) {
+        throw new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
+      }
+      return envelope;
+    }
+
+    private HandshakeTranscript negotiateTranscript(HandshakeEnvelope envelope)
+        throws HandshakeException {
+      ProtocolVersion selected;
+      try {
+        selected = ProtocolVersion.negotiate(state.supportedVersions,
+            envelope.supportedVersions());
+      } catch (IllegalArgumentException exception) {
+        throw new HandshakeException(HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
+      }
+      if (!envelope.transcript()
+          .version()
+          .equals(selected)
+          || (state.transcript != null
+          && !Arrays.equals(envelope.transcript()
+          .encoded(), state.transcript.encoded()))) {
+        throw new HandshakeException(HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
+      }
+      return envelope.transcript();
+    }
+
+    private void reserveAdmission() throws HandshakeException {
+      if (state.admission != null) {
+        state.reservation = state.admission.reserve(state.transcript)
+            .orElseThrow(
+                () -> new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED));
+      }
+    }
+
+    private void checkIdentities() throws HandshakeException {
+      HandshakeRole remoteRole = state.localRole.opposite();
+      if (state.expectedRemoteNodeId != null
+          && !state.expectedRemoteNodeId.equals(state.transcript.nodeId(remoteRole))) {
+        throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
+      }
+      if (!state.localIdentity.nodeId()
+          .equals(state.transcript.nodeId(state.localRole))
+          || !Arrays.equals(state.localIdentity.publicKeyEncoded(),
+          state.transcript.publicKeyEncoded(state.localRole))) {
+        throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
       }
     }
 
@@ -480,9 +508,8 @@ public final class NettySessionHandshake {
         PeerSession session = SessionAuthenticator.establish(state.localIdentity,
             state.expectedRemoteNodeId,
             state.transcript, localProof, remoteProof, state.replayGuard, Instant.now());
-        state.identityAuthenticated = true;
         if (state.admission != null) {
-          state.admission.authenticated();
+          state.admission.authenticated(state.reservation);
         }
         state.session = session;
         NettyControlStream control = NettyControlStream.create(session, state.result,
@@ -498,8 +525,12 @@ public final class NettySessionHandshake {
     }
 
     private void fail(ChannelHandlerContext context, Throwable failure) {
-      if (state.admissionReserved && !state.identityAuthenticated) {
-        state.admission.releaseBeforeAuthentication();
+      // At most once, and only the reservation this connection holds: the admission is shared, so a
+      // repeated failure here must not free a later connection's reservation.
+      InvitationAdmission.Reservation held = state.reservation;
+      if (held != null) {
+        state.reservation = null;
+        state.admission.releaseBeforeAuthentication(held);
       }
       HandshakeException exception = failure instanceof HandshakeException value
           ? value : new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);

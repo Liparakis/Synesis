@@ -2,6 +2,7 @@ package org.synesis.link.onboarding;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,8 +31,10 @@ public final class InvitationAdmission implements AutoCloseable {
         thread.setDaemon(true);
         return thread;
       });
-  private final AtomicReference<State> state = new AtomicReference<>(State.AVAILABLE);
-  private volatile ScheduledFuture<?> expiry;
+  private static final Object AVAILABLE = new Object();
+  private static final Object CONSUMED = new Object();
+  /** {@link #AVAILABLE}, {@link #CONSUMED}, or the {@link Reservation} that currently holds it. */
+  private final AtomicReference<Object> state = new AtomicReference<>(AVAILABLE);
 
   /**
    * Creates one single-use admission state for a signed invitation capability.
@@ -53,55 +56,72 @@ public final class InvitationAdmission implements AutoCloseable {
    * Attempts to reserve the invitation for the supplied authenticated transcript.
    *
    * @param transcript handshake transcript under evaluation
-   * @return true when the invitation was reserved
+   * @return the reservation token, or empty when the invitation was not reserved
    */
-  public boolean reserve(HandshakeTranscript transcript) {
+  public Optional<Reservation> reserve(HandshakeTranscript transcript) {
     if (!sessionId.equals(transcript.sessionId()) || !Arrays.equals(capability,
         transcript.invitationCapability())) {
-      return false;
+      return Optional.empty();
     }
-    if (!state.compareAndSet(State.AVAILABLE, State.RESERVED)) {
-      return false;
+    Reservation reservation = new Reservation();
+    if (!state.compareAndSet(AVAILABLE, reservation)) {
+      return Optional.empty();
     }
-    expiry = scheduler.schedule(() -> state.compareAndSet(State.RESERVED, State.AVAILABLE),
+    reservation.expiry = scheduler.schedule(() -> state.compareAndSet(reservation, AVAILABLE),
         RESERVATION_TIMEOUT.toNanos(), TimeUnit.NANOSECONDS);
-    return true;
+    return Optional.of(reservation);
   }
 
   /**
-   * Marks the reserved invitation as consumed after peer authentication succeeds.
+   * Marks the invitation as consumed after peer authentication succeeds.
+   *
+   * @param reservation the reservation returned to the authenticating attempt
+   * @throws IllegalStateException when that reservation no longer holds the invitation
    */
-  public void authenticated() {
-    if (!state.compareAndSet(State.RESERVED, State.CONSUMED)) {
+  public void authenticated(Reservation reservation) {
+    if (!state.compareAndSet(reservation, CONSUMED)) {
       throw new IllegalStateException("invitation admission is no longer reserved");
     }
-    cancelExpiry();
+    reservation.cancelExpiry();
   }
 
   /**
-   * Releases a reservation that failed before peer authentication completed.
+   * Releases a reservation that failed before peer authentication completed. A reservation that
+   * expired, was already released, or was consumed leaves the invitation untouched, so a stale
+   * release can never free a later attempt's reservation.
+   *
+   * @param reservation the reservation returned to the failing attempt
    */
-  public void releaseBeforeAuthentication() {
-    if (state.compareAndSet(State.RESERVED, State.AVAILABLE)) {
-      cancelExpiry();
+  public void releaseBeforeAuthentication(Reservation reservation) {
+    if (state.compareAndSet(reservation, AVAILABLE)) {
+      reservation.cancelExpiry();
     }
   }
 
   @Override
   public void close() {
-    cancelExpiry();
+    if (state.get() instanceof Reservation held) {
+      held.cancelExpiry();
+    }
     scheduler.shutdownNow();
   }
 
-  private void cancelExpiry() {
-    ScheduledFuture<?> value = expiry;
-    if (value != null) {
-      value.cancel(false);
+  /**
+   * Identity of one attempt's hold on the invitation; only the attempt that received it can
+   * consume or release it.
+   */
+  public static final class Reservation {
+
+    private volatile ScheduledFuture<?> expiry;
+
+    private Reservation() {
+    }
+
+    private void cancelExpiry() {
+      ScheduledFuture<?> value = expiry;
+      if (value != null) {
+        value.cancel(false);
+      }
     }
   }
-
-  /**
-   * Monotonic local admission states for a one-time invitation.
-   */
-  private enum State {AVAILABLE, RESERVED, CONSUMED}
 }
