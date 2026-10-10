@@ -112,7 +112,7 @@ final class ProviderWorkspaceRefresh {
                     .filter(intent -> intent.projectId().equals(location.projectId()) && intent.provider().equals(current.provider()) && intent.participant().equals(participant)
                             && intent.status() == WorkIntent.Status.ANNOUNCED).flatMap(intent -> intent.selectors().stream()).toList();
             String controlHead = currentCommit(location.root());
-            if (GitProcessRunner.runResult(location.root(), "merge-base", "--is-ancestor", current.baseCommit(), controlHead).exitCode() != 0) {
+            if (!GitProcessRunner.isAncestor(location.root(), current.baseCommit(), controlHead)) {
                 throw staleDirty();
             }
             List<String> peerChanges = gitPaths(location.root(), "diff", "--name-only", "--no-renames", "-z", current.baseCommit(), controlHead, "--");

@@ -1,8 +1,8 @@
 package org.synesis.workspace.application.task;
 
-import static org.synesis.workspace.application.task.SnapshotGitCommands.commitIsAncestor;
 import static org.synesis.workspace.application.task.SnapshotGitCommands.gitRevParse;
 import static org.synesis.workspace.application.task.SnapshotGitCommands.runGitOutput;
+import static org.synesis.workspace.lifecycle.process.GitProcessRunner.isAncestor;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -81,7 +81,7 @@ final class WorktreeChangeInspection {
             return intentBaseCommit;
         }
         String worktreeHead = gitRevParse(workerWorktreePath);
-        if (commitIsAncestor(workerWorktreePath, intentBaseCommit, bindingBaseCommit) && commitIsAncestor(workerWorktreePath, bindingBaseCommit, worktreeHead)) {
+        if (isAncestor(workerWorktreePath, intentBaseCommit, bindingBaseCommit) && isAncestor(workerWorktreePath, bindingBaseCommit, worktreeHead)) {
             return bindingBaseCommit;
         }
         return intentBaseCommit;

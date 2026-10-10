@@ -230,7 +230,7 @@ public final class IntegrationOrchestrationService {
 
     private static boolean isAncestor(Path workdir, String base, String head) {
         try {
-            return GitProcessRunner.runResult(workdir, "merge-base", "--is-ancestor", base, head).exitCode() == 0;
+            return GitProcessRunner.isAncestor(workdir, base, head);
         } catch (Exception failure) {
             return false;
         }

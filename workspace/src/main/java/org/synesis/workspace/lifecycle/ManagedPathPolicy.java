@@ -55,11 +55,11 @@ public final class ManagedPathPolicy {
     }
 
     private static boolean isTracked(Path root, String path) throws IOException {
-        return run(root, "ls-files", "--error-unmatch", "--", path).exitCode() == 0;
+        return GitProcessRunner.runResult(root, "ls-files", "--error-unmatch", "--", path).exitCode() == 0;
     }
 
     private static boolean isIgnored(Path root, String path) throws IOException {
-        return run(root, "check-ignore", "--no-index", "--quiet", "--", path).exitCode() == 0;
+        return GitProcessRunner.runResult(root, "check-ignore", "--no-index", "--quiet", "--", path).exitCode() == 0;
     }
 
     /**
@@ -91,7 +91,7 @@ public final class ManagedPathPolicy {
     private static List<String> reportedPaths(Path root, String separator, String command, String option, String terminator, List<String> paths) throws IOException {
         List<String> arguments = new ArrayList<>(List.of(command, option, terminator));
         arguments.addAll(paths);
-        Result result = run(root, arguments.toArray(String[]::new));
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, arguments.toArray(String[]::new));
         // check-ignore exits 1 when nothing matches; both commands report real failure above that.
         if (result.exitCode() > 1) {
             throw new IOException("git inspection failed: " + result.output());
@@ -100,16 +100,11 @@ public final class ManagedPathPolicy {
     }
 
     private static String git(Path root) throws IOException {
-        Result result = run(root, "status", "--porcelain=v2", "--untracked-files=all");
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, "status", "--porcelain=v2", "--untracked-files=all");
         if (result.exitCode() != 0) {
             throw new IOException("git inspection failed: " + result.output());
         }
         return result.output();
-    }
-
-    private static Result run(Path root, String... args) throws IOException {
-        GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
-        return new Result(result.exitCode(), result.output());
     }
 
     private static Path normalize(Path root) {
@@ -328,10 +323,4 @@ public final class ManagedPathPolicy {
         }
     }
 
-    /**
-     * Captures bounded command output used by managed-path decisions.
-     */
-    private record Result(int exitCode, String output) {
-
-    }
 }

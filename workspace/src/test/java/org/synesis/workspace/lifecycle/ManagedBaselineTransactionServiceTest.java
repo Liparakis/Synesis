@@ -7,12 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -212,6 +218,71 @@ class ManagedBaselineTransactionServiceTest {
         () -> service(temp).prepare(root, files("AGENTS.md", "second\n")));
     assertEquals("BASELINE_TRANSACTION_CONFLICT", failure.code());
     assertFalse(Files.exists(root.resolve("AGENTS.md")));
+  }
+
+  @Test
+  void persistsOneJournalFilePerTransactionWithItsPhaseDurableBeforeTheHookRuns(
+      @TempDir Path temp) throws Exception {
+    Path root = init(temp.resolve("repo"));
+    AdministrativeStateLocator locator = new AdministrativeStateLocator(temp.resolve("admin-state"));
+    Path baselineRoot = locator.resolve(root)
+        .baselineRoot();
+    List<String> hookPhases = new ArrayList<>();
+    List<String> journalPhasesAtHook = new ArrayList<>();
+    ManagedBaselineTransactionService service = new ManagedBaselineTransactionService(locator,
+        new ManagedPathPolicy(), phase -> {
+      hookPhases.add(phase.name());
+      try (var files = Files.list(baselineRoot)) {
+        Path only = files.findFirst()
+            .orElseThrow();
+        Map<?, ?> persisted = (Map<?, ?>) ProviderJson.parse(Files.readString(only));
+        journalPhasesAtHook.add(String.valueOf(persisted.get("phase")));
+      } catch (IOException failure) {
+        throw new UncheckedIOException(failure);
+      }
+    });
+
+    ManagedBaselineTransactionService.Result result = service.prepare(root,
+        files("AGENTS.md", "managed\n"));
+
+    List<String> expectedPhases = List.of("PREPARED", "FILES_WRITTEN", "COMMIT_CREATED",
+        "REF_ADVANCED", "CONTROL_INDEX_SYNCHRONIZED", "LOCAL_STATE_INITIALIZED",
+        "PROVIDERS_REFRESHED", "COMPLETE");
+    assertEquals(expectedPhases, hookPhases);
+    assertEquals(expectedPhases, journalPhasesAtHook);
+    assertEquals(
+        List.of("PREPARED", "FILES_WRITTEN", "COMMIT_CREATED", "REF_ADVANCED",
+            "CONTROL_INDEX_SYNCHRONIZED", "LOCAL_STATE_INITIALIZED", "PROVIDERS_REFRESHED",
+            "COMPLETE", "CONTROL_INDEX_RECOVERY_REQUIRED", "ROLLED_BACK"),
+        Arrays.stream(ManagedBaselineTransactionService.Phase.values())
+            .map(Enum::name)
+            .toList());
+
+    List<Path> persisted;
+    try (var files = Files.list(baselineRoot)) {
+      persisted = files.toList();
+    }
+    assertEquals(List.of(baselineRoot.resolve(result.transactionId() + ".json")), persisted);
+    String text = Files.readString(persisted.get(0));
+    assertTrue(text.endsWith(System.lineSeparator()));
+    Map<?, ?> journal = (Map<?, ?>) ProviderJson.parse(text);
+    assertEquals(
+        Set.of("transactionId", "repositoryIdentity", "originalHead", "refName", "phase",
+            "originalRealIndexDigest", "expectedRealIndexDigest", "realIndexSyncStatus",
+            "realIndexSyncFailure", "commit", "originalIndex", "managedPathStates",
+            "expectedManagedDigests", "createdAt"),
+        journal.keySet());
+    assertEquals(result.transactionId(), journal.get("transactionId"));
+    assertEquals(result.commit(), journal.get("commit"));
+    assertEquals(result.originalHead(), journal.get("originalHead"));
+    assertEquals("COMPLETE", journal.get("phase"));
+    assertEquals(Map.of("AGENTS.md", "ABSENT"), journal.get("managedPathStates"));
+    assertEquals(Set.of("AGENTS.md"), ((Map<?, ?>) journal.get("expectedManagedDigests")).keySet());
+    assertEquals(
+        Set.of("rawIndexDigest", "indexTreeId", "stagedEntryPaths", "stagedBlobIds", "entryModes",
+            "entryStages", "unmergedEntries", "intentToAddFlags", "skipWorktreeFlags",
+            "assumeUnchangedFlags", "sparseIndexMode", "splitIndexMode", "relevantExtensions"),
+        ((Map<?, ?>) journal.get("originalIndex")).keySet());
   }
 
   @Test

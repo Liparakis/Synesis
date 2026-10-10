@@ -52,19 +52,6 @@ public final class GitProcessRunner {
     }
 
     /**
-     * Runs a required Git command with an explicit timeout.
-     *
-     * @param workdir   Git working directory
-     * @param timeout   command timeout
-     * @param arguments Git arguments after {@code git}
-     * @return bounded UTF-8 output
-     * @throws IOException if Git fails to start, times out, or exits nonzero
-     */
-    public static String run(Path workdir, Duration timeout, String... arguments) throws IOException {
-        return runInternal(workdir, null, timeout, true, arguments).output();
-    }
-
-    /**
      * Runs a required Git command against an explicit temporary index.
      *
      * @param workdir   Git working directory
@@ -100,6 +87,21 @@ public final class GitProcessRunner {
      */
     public static Result runResult(Path workdir, String... arguments) throws IOException {
         return runInternal(workdir, null, DEFAULT_TIMEOUT, false, arguments);
+    }
+
+    /**
+     * Asks whether one commit is an ancestor of another ({@code merge-base --is-ancestor}). Every
+     * nonzero exit, not only Git's "not an ancestor" exit 1, answers {@code false}, so a missing or
+     * unreadable commit is "not an ancestor" rather than a failure.
+     *
+     * @param workdir    Git working directory
+     * @param ancestor   commit expected to be the ancestor
+     * @param descendant commit expected to descend from {@code ancestor}
+     * @return {@code true} when Git exits zero
+     * @throws IOException if Git fails to start or times out
+     */
+    public static boolean isAncestor(Path workdir, String ancestor, String descendant) throws IOException {
+        return runResult(workdir, "merge-base", "--is-ancestor", ancestor, descendant).exitCode() == 0;
     }
 
     /**

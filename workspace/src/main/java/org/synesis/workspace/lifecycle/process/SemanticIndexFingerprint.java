@@ -163,7 +163,7 @@ public final class SemanticIndexFingerprint {
      * and exits nonzero when neither is set, which means both modes are off.
      */
     private static Map<String, String> indexModeConfig(Path root) throws IOException {
-        Result result = runResult(root, "config", "--bool", "--get-regexp", "^(index\\.sparse|core\\.splitindex)$");
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, "config", "--bool", "--get-regexp", "^(index\\.sparse|core\\.splitindex)$");
         Map<String, String> values = new LinkedHashMap<>();
         if (result.exitCode() != 0) {
             return values;
@@ -179,7 +179,7 @@ public final class SemanticIndexFingerprint {
     }
 
     private static String rawIndexDigest(Path root) throws IOException {
-        Result result = runResult(root, "rev-parse", "--git-path", "index");
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, "rev-parse", "--git-path", "index");
         if (result.exitCode() != 0) {
             throw new IOException("INDEX_UNAVAILABLE");
         }
@@ -200,7 +200,7 @@ public final class SemanticIndexFingerprint {
     }
 
     private static String run(Path root) throws IOException {
-        Result result = runResult(root, "write-tree");
+        GitProcessRunner.Result result = GitProcessRunner.runResult(root, "write-tree");
         if (result.exitCode() != 0) {
             throw new IOException(result.output().isBlank() ? "GIT_COMMAND_FAILED" : result.output());
         }
@@ -213,11 +213,6 @@ public final class SemanticIndexFingerprint {
             throw new IOException(result.output().isBlank() ? "GIT_COMMAND_FAILED" : result.output());
         }
         return result.output().trim();
-    }
-
-    private static Result runResult(Path root, String... args) throws IOException {
-        GitProcessRunner.Result result = GitProcessRunner.runResult(root, args);
-        return new Result(result.exitCode(), result.output());
     }
 
     /**
@@ -338,13 +333,6 @@ public final class SemanticIndexFingerprint {
      * Represents one normalized index entry in a semantic fingerprint.
      */
     private record Entry(String path, String mode, String blob, int stage, boolean intentToAdd, char tag) {
-
-    }
-
-    /**
-     * Captures the bounded Git result used during fingerprint collection.
-     */
-    private record Result(int exitCode, String output) {
 
     }
 }

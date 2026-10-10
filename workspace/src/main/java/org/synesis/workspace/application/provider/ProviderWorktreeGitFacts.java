@@ -95,7 +95,7 @@ final class ProviderWorktreeGitFacts {
         if (!validCommit(baseCommit)) {
             return false;
         }
-        return GitProcessRunner.runResult(assigned, "merge-base", "--is-ancestor", baseCommit, "HEAD").exitCode() == 0;
+        return GitProcessRunner.isAncestor(assigned, baseCommit, "HEAD");
     }
 
     static boolean validCommit(String value) {

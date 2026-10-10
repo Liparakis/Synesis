@@ -4,12 +4,10 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +16,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.digest.Sha256;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.process.SemanticIndexFingerprint;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
@@ -77,6 +74,17 @@ public final class ManagedBaselineTransactionService {
         if (phaseHook != null) {
             phaseHook.after(phase);
         }
+    }
+
+    /**
+     * Makes {@code phase} durable in the journal and only then lets the hook observe it, so a
+     * simulated process loss in the hook always finds the phase on disk.
+     */
+    private Journal advance(AdministrativeStateLocator.Resolution resolution, Journal journal, Phase phase) throws IOException {
+        Journal next = journal.withPhase(phase);
+        BaselineJournalStore.write(resolution, next);
+        notifyPhase(phase);
+        return next;
     }
 
     private static boolean differsDigest(Path path, String expected) throws IOException {
@@ -252,43 +260,27 @@ public final class ManagedBaselineTransactionService {
                 throw failure("BASELINE_TRANSACTION_CONFLICT", conflict);
             }
             Journal journal = new Journal(transactionId, resolution.repositoryIdentity(), originalHead, branchRef(root), Phase.PREPARED, originalIndex, originalIndex.rawIndexDigest(), "", "", "");
-            journal = journal.withManagedPaths(states, expected);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.PREPARED);
+            journal = advance(resolution, journal.withManagedPaths(states, expected), Phase.PREPARED);
             writeManagedFiles(root, normalizedFiles);
-            journal = journal.withPhase(Phase.FILES_WRITTEN);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.FILES_WRITTEN);
+            journal = advance(resolution, journal, Phase.FILES_WRITTEN);
             ManagedPathPolicy.TransactionOwnership ownership = new ManagedPathPolicy.TransactionOwnership(resolution.repositoryIdentity(), transactionId, absent, expected, states);
             ManagedPathPolicy.Report beforeCommit = pathPolicy.inspect(root, Optional.of(ownership));
             if (beforeCommit.blocked()) {
                 throw failure("MANAGED_PATH_PROVENANCE_MISMATCH", blockingPaths(beforeCommit));
             }
             String commit = createAdministrativeCommit(root, originalHead, normalizedFiles.keySet(), transactionId);
-            journal = journal.withPhase(Phase.COMMIT_CREATED).withCommit(commit);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.COMMIT_CREATED);
+            journal = advance(resolution, journal.withCommit(commit), Phase.COMMIT_CREATED);
             ManagedPathPolicy.Report beforeRef = pathPolicy.inspect(root, Optional.of(ownership));
             if (beforeRef.blocked()) {
                 throw failure("MANAGED_PATH_PROVENANCE_MISMATCH", blockingPaths(beforeRef));
             }
             advanceRef(root, journal.refName(), commit, originalHead);
-            journal = journal.withPhase(Phase.REF_ADVANCED);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.REF_ADVANCED);
+            journal = advance(resolution, journal, Phase.REF_ADVANCED);
             synchronizeRealIndex(root, resolution, journal, originalIndex, commit);
-            journal = journal.withPhase(Phase.CONTROL_INDEX_SYNCHRONIZED);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.CONTROL_INDEX_SYNCHRONIZED);
-            journal = journal.withPhase(Phase.LOCAL_STATE_INITIALIZED);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.LOCAL_STATE_INITIALIZED);
-            journal = journal.withPhase(Phase.PROVIDERS_REFRESHED);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.PROVIDERS_REFRESHED);
-            journal = journal.withPhase(Phase.COMPLETE);
-            writeJournal(resolution, journal);
-            notifyPhase(Phase.COMPLETE);
+            journal = advance(resolution, journal, Phase.CONTROL_INDEX_SYNCHRONIZED);
+            journal = advance(resolution, journal, Phase.LOCAL_STATE_INITIALIZED);
+            journal = advance(resolution, journal, Phase.PROVIDERS_REFRESHED);
+            journal = advance(resolution, journal, Phase.COMPLETE);
             return new Result(transactionId, journal.phase(), originalHead, commit, resolution.administrativeRoot(), List.of());
         } catch (BaselineFailure failure) {
             throw failure;
@@ -318,7 +310,7 @@ public final class ManagedBaselineTransactionService {
             Path root = normalize(repositoryRoot);
             AdministrativeStateLocator.Resolution resolution = locator.resolve(root);
             transactionLock = ProjectLock.acquire(resolution.administrativeRoot());
-            Journal journal = readJournal(resolution, transactionId);
+            Journal journal = BaselineJournalStore.read(resolution, transactionId);
             if (journal.phase() == Phase.COMPLETE || journal.phase() == Phase.ROLLED_BACK) {
                 return new Result(journal.transactionId(), journal.phase(), journal.originalHead(), journal.commit(), resolution.administrativeRoot(), List.of());
             }
@@ -348,7 +340,7 @@ public final class ManagedBaselineTransactionService {
             SemanticIndexFingerprint.Comparison comparison = SemanticIndexFingerprint.compare(journal.originalIndex(), current);
             if (comparison == SemanticIndexFingerprint.Comparison.SEMANTIC_STATE_CHANGED || comparison == SemanticIndexFingerprint.Comparison.INDEX_EXTENSION_UNSUPPORTED) {
                 Journal failed = journal.withPhase(Phase.CONTROL_INDEX_RECOVERY_REQUIRED).withIndexFailure(comparison.name());
-                writeJournal(resolution, failed);
+                BaselineJournalStore.write(resolution, failed);
                 throw failure("CONTROL_INDEX_RECOVERY_REQUIRED", comparison.name());
             }
             synchronizeRealIndex(root, resolution, journal, journal.originalIndex(), journal.commit());
@@ -378,7 +370,7 @@ public final class ManagedBaselineTransactionService {
      */
     public Journal journal(Path repositoryRoot, String transactionId) throws BaselineFailure {
         try {
-            return readJournal(locator.resolve(normalize(repositoryRoot)), transactionId);
+            return BaselineJournalStore.read(locator.resolve(normalize(repositoryRoot)), transactionId);
         } catch (BaselineFailure failure) {
             throw failure;
         } catch (Exception failure) {
@@ -418,7 +410,7 @@ public final class ManagedBaselineTransactionService {
             throw failure("CONTROL_CHECKOUT_NOT_CLEAN", "rollback left unrelated control content");
         }
         Journal rolledBack = journal.withPhase(Phase.ROLLED_BACK);
-        writeJournal(resolution, rolledBack);
+        BaselineJournalStore.write(resolution, rolledBack);
         return rolledBack;
     }
 
@@ -426,19 +418,19 @@ public final class ManagedBaselineTransactionService {
         Journal complete = journal;
         if (complete.phase().ordinal() < Phase.CONTROL_INDEX_SYNCHRONIZED.ordinal()) {
             complete = complete.withPhase(Phase.CONTROL_INDEX_SYNCHRONIZED);
-            writeJournal(resolution, complete);
+            BaselineJournalStore.write(resolution, complete);
         }
         if (complete.phase().ordinal() < Phase.LOCAL_STATE_INITIALIZED.ordinal()) {
             complete = complete.withPhase(Phase.LOCAL_STATE_INITIALIZED);
-            writeJournal(resolution, complete);
+            BaselineJournalStore.write(resolution, complete);
         }
         if (complete.phase().ordinal() < Phase.PROVIDERS_REFRESHED.ordinal()) {
             complete = complete.withPhase(Phase.PROVIDERS_REFRESHED);
-            writeJournal(resolution, complete);
+            BaselineJournalStore.write(resolution, complete);
         }
         if (complete.phase() != Phase.COMPLETE) {
             complete = complete.withPhase(Phase.COMPLETE);
-            writeJournal(resolution, complete);
+            BaselineJournalStore.write(resolution, complete);
         }
         return complete;
     }
@@ -460,14 +452,14 @@ public final class ManagedBaselineTransactionService {
         SemanticIndexFingerprint.Comparison comparison = SemanticIndexFingerprint.compare(original, current);
         if (comparison == SemanticIndexFingerprint.Comparison.SEMANTIC_STATE_CHANGED || comparison == SemanticIndexFingerprint.Comparison.INDEX_EXTENSION_UNSUPPORTED) {
             Journal failed = journal.withPhase(Phase.CONTROL_INDEX_RECOVERY_REQUIRED).withIndexFailure(comparison.name());
-            writeJournal(resolution, failed);
+            BaselineJournalStore.write(resolution, failed);
             throw failure("CONTROL_INDEX_RECOVERY_REQUIRED", comparison.name());
         }
         git(root, "reset", "--mixed", commit);
         String expectedTree = git(root, "rev-parse", commit + "^{tree}");
         if (!expectedTree.equals(SemanticIndexFingerprint.indexTreeId(root))) {
             Journal failed = journal.withPhase(Phase.CONTROL_INDEX_RECOVERY_REQUIRED).withIndexFailure("INDEX_TREE_MISMATCH");
-            writeJournal(resolution, failed);
+            BaselineJournalStore.write(resolution, failed);
             throw failure("CONTROL_INDEX_RECOVERY_REQUIRED", "INDEX_TREE_MISMATCH");
         }
         requireManagedWorktreeBlobs(root, commit);
@@ -509,48 +501,18 @@ public final class ManagedBaselineTransactionService {
     }
 
     private String conflictingJournal(AdministrativeStateLocator.Resolution resolution, java.util.Set<String> paths) throws IOException, BaselineFailure {
-        if (!Files.isDirectory(resolution.baselineRoot())) {
-            return null;
-        }
-        try (var journals = Files.list(resolution.baselineRoot())) {
-            for (Path path : journals.filter(candidate -> candidate.getFileName().toString().endsWith(".json")).toList()) {
-                Journal journal = readJournal(resolution, path.getFileName().toString().replaceFirst("\\.json$", ""));
-                if (journal.phase() == Phase.COMPLETE || journal.phase() == Phase.ROLLED_BACK) {
-                    continue;
-                }
-                for (String managed : journal.managedPathStates().keySet()) {
-                    if (paths.contains(managed)) {
-                        return managed;
-                    }
+        for (String id : BaselineJournalStore.transactionIds(resolution)) {
+            Journal journal = BaselineJournalStore.read(resolution, id);
+            if (journal.phase() == Phase.COMPLETE || journal.phase() == Phase.ROLLED_BACK) {
+                continue;
+            }
+            for (String managed : journal.managedPathStates().keySet()) {
+                if (paths.contains(managed)) {
+                    return managed;
                 }
             }
         }
         return null;
-    }
-
-    private void writeJournal(AdministrativeStateLocator.Resolution resolution, Journal journal) throws IOException {
-        Files.createDirectories(resolution.baselineRoot());
-        Path target = resolution.baselineRoot().resolve(journal.transactionId() + ".json");
-        Path temp = target.resolveSibling(target.getFileName() + ".tmp");
-        Files.writeString(temp, ProviderJson.write(journal.toMap()) + System.lineSeparator(), StandardCharsets.UTF_8);
-        try {
-            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Journal readJournal(AdministrativeStateLocator.Resolution resolution, String id) throws IOException, BaselineFailure {
-        Path path = resolution.baselineRoot().resolve(id + ".json");
-        if (!Files.isRegularFile(path)) {
-            throw failure("BASELINE_JOURNAL_NOT_FOUND", id);
-        }
-        Object parsed = ProviderJson.parse(Files.readString(path));
-        if (!(parsed instanceof Map<?, ?> map)) {
-            throw failure("BASELINE_JOURNAL_INVALID", id);
-        }
-        return Journal.fromMap((Map<String, Object>) map);
     }
 
     /**
@@ -765,41 +727,6 @@ public final class ManagedBaselineTransactionService {
             expectedManagedDigests = Map.copyOf(Objects.requireNonNull(expectedManagedDigests, "expectedManagedDigests"));
         }
 
-        @SuppressWarnings("unchecked")
-        private static Journal fromMap(Map<String, Object> map) throws BaselineFailure {
-            try {
-                String id = String.valueOf(map.get("transactionId"));
-                Map<String, String> states = stringMap(map.get("managedPathStates"));
-                Map<String, String> expected = stringMap(map.get("expectedManagedDigests"));
-                return new Journal(id,
-                        String.valueOf(map.get("repositoryIdentity")),
-                        String.valueOf(map.get("originalHead")),
-                        String.valueOf(map.get("refName")),
-                        Phase.valueOf(String.valueOf(map.get("phase"))),
-                        SemanticIndexFingerprint.Fingerprint.fromMap((Map<String, Object>) map.get("originalIndex")),
-                        String.valueOf(map.get("originalRealIndexDigest")),
-                        String.valueOf(map.get("expectedRealIndexDigest")),
-                        String.valueOf(map.get("realIndexSyncStatus")),
-                        String.valueOf(map.get("realIndexSyncFailure")),
-                        String.valueOf(map.get("commit")),
-                        states,
-                        expected);
-            } catch (Exception failure) {
-                throw failure("BASELINE_JOURNAL_INVALID", failure.getMessage());
-            }
-        }
-
-        private static Map<String, String> stringMap(Object value) {
-            if (!(value instanceof Map<?, ?> map)) {
-                return Map.of();
-            }
-            Map<String, String> result = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                result.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
-            }
-            return result;
-        }
-
         private Journal withPhase(Phase next) {
             return new Journal(transactionId,
                     repositoryIdentity,
@@ -867,25 +794,6 @@ public final class ManagedBaselineTransactionService {
         private ManagedPathPolicy.TransactionOwnership ownership() {
             List<String> absent = managedPathStates.entrySet().stream().filter(entry -> ManagedPathPolicy.StartState.ABSENT.name().equals(entry.getValue())).map(Map.Entry::getKey).toList();
             return new ManagedPathPolicy.TransactionOwnership(repositoryIdentity, transactionId, absent, expectedManagedDigests, managedPathStates);
-        }
-
-        private Map<String, Object> toMap() {
-            Map<String, Object> values = new LinkedHashMap<>();
-            values.put("transactionId", transactionId);
-            values.put("repositoryIdentity", repositoryIdentity);
-            values.put("originalHead", originalHead);
-            values.put("refName", refName);
-            values.put("phase", phase.name());
-            values.put("originalRealIndexDigest", originalRealIndexDigest);
-            values.put("expectedRealIndexDigest", expectedRealIndexDigest);
-            values.put("realIndexSyncStatus", realIndexSyncStatus);
-            values.put("realIndexSyncFailure", realIndexSyncFailure);
-            values.put("commit", commit);
-            values.put("originalIndex", originalIndex.toMap());
-            values.put("managedPathStates", managedPathStates);
-            values.put("expectedManagedDigests", expectedManagedDigests);
-            values.put("createdAt", Instant.now().toString());
-            return Map.copyOf(values);
         }
 
     }

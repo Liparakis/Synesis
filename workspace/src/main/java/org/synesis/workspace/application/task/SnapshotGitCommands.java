@@ -19,10 +19,6 @@ final class SnapshotGitCommands {
         return runGitOutput(workdir, "rev-parse", "HEAD");
     }
 
-    static boolean commitIsAncestor(Path worktree, String ancestor, String descendant) throws IOException {
-        return GitProcessRunner.runResult(worktree, "merge-base", "--is-ancestor", ancestor, descendant).exitCode() == 0;
-    }
-
     static String runGitWithIndexOutput(Path workdir, Path index, String... args) throws IOException {
         return GitProcessRunner.runWithIndex(workdir, index, args).trim();
     }
