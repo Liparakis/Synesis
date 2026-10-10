@@ -10,6 +10,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
@@ -20,6 +22,8 @@ import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
  * @since 1.0
  */
 final class RepairExecutionLock implements AutoCloseable {
+
+    private static final Set<Path> HELD_IN_THIS_JVM = ConcurrentHashMap.newKeySet();
 
     private final Path lockFilePath;
     private final FileChannel channel;
@@ -46,31 +50,54 @@ final class RepairExecutionLock implements AutoCloseable {
         Path lockPath = ProjectAdministrativeLayout.repairExecutionLock(controlRoot);
         Files.createDirectories(lockPath.getParent());
 
-        FileChannel fc = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
-
-        FileLock fl = fc.tryLock();
-        if (fl == null) {
-            fc.close();
+        // A second channel on a file this JVM already locks must never be opened: on some platforms
+        // closing it would release the first holder's lock.
+        Path heldKey = lockPath.toAbsolutePath().normalize();
+        if (!HELD_IN_THIS_JVM.add(heldKey)) {
             throw new IOException("Repair execution lock already held for project: " + lockPath);
         }
 
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("acquiredAtEpochMillis", System.currentTimeMillis());
-        metadata.put("pid", ProcessHandle.current().pid());
-        metadata.put("planId", planId);
-        metadata.put("controlRepositoryPath", controlRoot.toAbsolutePath().normalize().toString());
-
-        byte[] payload = ProviderJson.write(metadata).getBytes(StandardCharsets.UTF_8);
-        fc.truncate(0);
-        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(payload);
-        while (buffer.hasRemaining()) {
-            if (fc.write(buffer) == 0) {
-                throw new IOException("repair lock metadata write made no progress");
-            }
+        FileChannel fc;
+        try {
+            fc = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+        } catch (IOException | RuntimeException failure) {
+            HELD_IN_THIS_JVM.remove(heldKey);
+            throw failure;
         }
-        fc.force(true);
 
-        return new RepairExecutionLock(lockPath, fc, fl);
+        try {
+            FileLock fl = fc.tryLock();
+            if (fl == null) {
+                throw new IOException("Repair execution lock already held for project: " + lockPath);
+            }
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("acquiredAtEpochMillis", System.currentTimeMillis());
+            metadata.put("pid", ProcessHandle.current().pid());
+            metadata.put("planId", planId);
+            metadata.put("controlRepositoryPath", controlRoot.toAbsolutePath().normalize().toString());
+
+            byte[] payload = ProviderJson.write(metadata).getBytes(StandardCharsets.UTF_8);
+            fc.truncate(0);
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(payload);
+            while (buffer.hasRemaining()) {
+                if (fc.write(buffer) == 0) {
+                    throw new IOException("repair lock metadata write made no progress");
+                }
+            }
+            fc.force(true);
+
+            return new RepairExecutionLock(lockPath, fc, fl);
+        } catch (IOException | RuntimeException failure) {
+            try {
+                fc.close();
+            } catch (IOException closeFailure) {
+                failure.addSuppressed(closeFailure);
+            } finally {
+                HELD_IN_THIS_JVM.remove(heldKey);
+            }
+            throw failure;
+        }
     }
 
     @Override
@@ -86,6 +113,8 @@ final class RepairExecutionLock implements AutoCloseable {
             try {
                 Files.deleteIfExists(lockFilePath);
             } catch (IOException ignored) {
+            } finally {
+                HELD_IN_THIS_JVM.remove(lockFilePath.toAbsolutePath().normalize());
             }
         }
     }

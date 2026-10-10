@@ -112,11 +112,40 @@ public final class RepairService {
             }
 
             List<String> reasons = executable ? List.of("repair_supported") : List.of("repair_unsupported");
-            entries.add(new RepairPlanEntry(1, entryId, finding.code(), action, targetPath, finding.evidenceFingerprint(), executable, reasons, finding.summary(), backupReq));
+            entries.add(new RepairPlanEntry(1, entryId, finding.code(), action, targetPath, targetFingerprint(Path.of(targetPath)), executable, reasons, finding.summary(), backupReq));
         }
 
         String doctorReportFingerprint = Sha256.hex(report.reportId() + report.timestampEpochMillis());
         return planStore.createAndSave(root, report.projectId(), doctorReportFingerprint, entries);
+    }
+
+    /**
+     * Fingerprints the current state of a repair target: the content of a file, the names and
+     * content of the files in a directory, or a fixed value for an absent path. Plan preparation and
+     * execution use the same function, so an entry is stale exactly when its target changed.
+     */
+    private static String targetFingerprint(Path target) throws IOException {
+        if (Files.isRegularFile(target)) {
+            return Sha256.hex(target);
+        }
+        if (Files.isDirectory(target)) {
+            StringBuilder listing = new StringBuilder("dir");
+            try (var children = Files.list(target)) {
+                for (Path child : children.sorted().toList()) {
+                    listing.append('\n').append(child.getFileName()).append(':').append(Files.isRegularFile(child) ? Sha256.hex(child) : "-");
+                }
+            }
+            return Sha256.hex(listing.toString());
+        }
+        return Sha256.hex("absent");
+    }
+
+    private static void appendRecord(RepairExecutionJournal journal, List<RepairExecutionJournal.RepairExecutionRecord> records, String executionId, String planId, RepairPlanEntry entry, String status,
+            long timestamp, String details) throws IOException {
+        RepairExecutionJournal.RepairExecutionRecord record = new RepairExecutionJournal.RepairExecutionRecord(executionId, planId, entry.entryId(), entry.action().name(), entry.targetPath(), status,
+                timestamp, details);
+        journal.append(record);
+        records.add(record);
     }
 
     /**
@@ -178,6 +207,14 @@ public final class RepairService {
                     continue;
                 }
 
+                // This executor holds the repair lock and acquiring it rewrote the file, so whatever is
+                // on disk now is the executor's own lock and never another holder's stale one.
+                if (entry.action() == RepairAction.REMOVE_VERIFIED_STALE_REPAIR_LOCK) {
+                    skippedUnsupported++;
+                    appendRecord(journal, records, executionId, planId, entry, RepairExecutionJournal.RepairExecutionRecord.SKIPPED_UNSUPPORTED, now, "Repair lock is held by this executor and cannot be removed");
+                    continue;
+                }
+
                 Path targetFile = Path.of(entry.targetPath());
 
                 // Re-verify target fingerprint / presence
@@ -197,6 +234,12 @@ public final class RepairService {
                 }
 
                 try {
+                    if (!targetFingerprint(targetFile).equals(entry.targetFingerprint())) {
+                        skippedStale++;
+                        appendRecord(journal, records, executionId, planId, entry, RepairExecutionJournal.RepairExecutionRecord.SKIPPED_STALE, now, "Target changed since the plan was prepared");
+                        continue;
+                    }
+
                     if (entry.backupRequired() && Files.exists(targetFile)) {
                         backupService.createBackup(root, executionId, targetFile);
                     }
@@ -231,11 +274,13 @@ public final class RepairService {
                             records.add(rec);
                         }
                         case ARCHIVE_CORRUPT_ADMIN_PLAN, ARCHIVE_CORRUPT_ADMIN_JOURNAL -> {
+                            // A plan records the directory holding a corrupt plan, not which file is corrupt.
+                            if (!Files.isRegularFile(targetFile)) {
+                                throw new IOException("Nothing archived: target is not a single file");
+                            }
                             Path backupDir = ProjectAdministrativeLayout.repairBackups(root, executionId).resolve("corrupt");
                             Files.createDirectories(backupDir);
-                            if (Files.exists(targetFile) && Files.isRegularFile(targetFile)) {
-                                Files.move(targetFile, backupDir.resolve(targetFile.getFileName()), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                            }
+                            Files.move(targetFile, backupDir.resolve(targetFile.getFileName()), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                             completed++;
                             RepairExecutionJournal.RepairExecutionRecord rec = new RepairExecutionJournal.RepairExecutionRecord(executionId,
                                     planId,
@@ -249,17 +294,8 @@ public final class RepairService {
                             records.add(rec);
                         }
                         default -> {
-                            completed++;
-                            RepairExecutionJournal.RepairExecutionRecord rec = new RepairExecutionJournal.RepairExecutionRecord(executionId,
-                                    planId,
-                                    entry.entryId(),
-                                    entry.action().name(),
-                                    entry.targetPath(),
-                                    RepairExecutionJournal.RepairExecutionRecord.COMPLETED,
-                                    now,
-                                    "Action completed");
-                            journal.append(rec);
-                            records.add(rec);
+                            skippedUnsupported++;
+                            appendRecord(journal, records, executionId, planId, entry, RepairExecutionJournal.RepairExecutionRecord.SKIPPED_UNSUPPORTED, now, "Action unsupported for automatic repair");
                         }
                     }
                 } catch (Exception ex) {
