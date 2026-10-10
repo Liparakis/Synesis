@@ -212,7 +212,10 @@ class McpToolMalformedArgumentsTest {
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", help), call(bound, "request_coordination", "{'payload':{}}"));
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", help), call(bound, "request_coordination", "{'kind':'collaboration_status'}"));
         assertText(denied("error", "UNKNOWN_COORDINATION_KIND", help), call(bound, "request_coordination", "{'kind':'nope','payload':{}}"));
-        assertText(denied("error", "COORDINATION_FIELD_NOT_ALLOWED:x", help), call(bound, "request_coordination", "{'kind':'collaboration_status','payload':{'x':1}}"));
+        assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:x','allowedFields':[]}}",
+                call(bound, "request_coordination", "{'kind':'collaboration_status','payload':{'x':1}}"));
+        assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:goal','allowedFields':['intentId','selectors','proposal']}}",
+                call(bound, "request_coordination", "{'kind':'scope_revision','payload':{'goal':'g'}}"));
         assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'proposal':'p'}}"));
         assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':null,'proposal':'p'}}"));
         assertText(denied("error", "COORDINATION_FIELD_INVALID:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':5,'proposal':'p'}}"));

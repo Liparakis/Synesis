@@ -57,7 +57,7 @@ final class McpCoordinationPayload {
         };
         for (String key : payload.keySet()) {
             if (!allowed.contains(key)) {
-                throw new IllegalArgumentException("COORDINATION_FIELD_NOT_ALLOWED:" + key);
+                throw new FieldNotAllowedException(key, allowed);
             }
         }
         List<String> required = switch (kind) {
@@ -498,6 +498,26 @@ final class McpCoordinationPayload {
                     acceptanceTests);
         } catch (Exception ex) {
             return null;
+        }
+    }
+
+    /**
+     * A payload field its request kind does not take. It carries the fields the kind does take, so
+     * the refusal can name them: an agent told only which field was wrong had to guess the rest.
+     */
+    static final class FieldNotAllowedException extends IllegalArgumentException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final transient List<String> allowedFields;
+
+        FieldNotAllowedException(String field, List<String> allowedFields) {
+            super("COORDINATION_FIELD_NOT_ALLOWED:" + field);
+            this.allowedFields = List.copyOf(allowedFields);
+        }
+
+        List<String> allowedFields() {
+            return allowedFields;
         }
     }
 }

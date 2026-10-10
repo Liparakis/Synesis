@@ -192,6 +192,9 @@ final class McpCoordinationTools {
         McpCoordinationRequest request;
         try {
             request = normalizeStrictCoordination(arguments);
+        } catch (McpCoordinationPayload.FieldNotAllowedException failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                    object("error", failure.getMessage(), "allowedFields", failure.allowedFields()));
         } catch (IllegalArgumentException failure) {
             return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
         }
