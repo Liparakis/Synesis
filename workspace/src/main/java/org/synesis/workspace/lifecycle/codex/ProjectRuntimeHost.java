@@ -26,10 +26,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
@@ -47,6 +45,7 @@ import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import com.sun.net.httpserver.HttpHandler;
@@ -589,11 +588,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         value.put("updatedAtEpochMillis", System.currentTimeMillis());
         Path temporary = ownerRecord.resolveSibling(ownerRecord.getFileName() + ".tmp");
         Files.writeString(temporary, ProviderJson.write(value) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        try {
-            Files.move(temporary, ownerRecord, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(temporary, ownerRecord, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.replaceFromTemporary(temporary, ownerRecord);
     }
 
     /**
@@ -640,11 +635,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             Files.createDirectories(ownerPath.getParent());
             Path temporary = ownerPath.resolveSibling(ownerPath.getFileName() + ".tmp");
             Files.writeString(temporary, ProviderJson.write(value) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-            try {
-                Files.move(temporary, ownerPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, ownerPath, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.replaceFromTemporary(temporary, ownerPath);
         }
 
         private synchronized void claimHostCheckpoint() throws IOException {

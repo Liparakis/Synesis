@@ -75,8 +75,8 @@ public final class ReviewSnapshotAccessService {
         if (!expectedRef.equals(snapshot.provenance().snapshotRef())) {
             throw new IOException("REVIEW_SNAPSHOT_REF_MISMATCH");
         }
-        String resolved = runGit(controlRoot, "rev-parse", expectedRef + "^{commit}");
-        if (!snapshot.commitSha().equals(resolved.trim())) {
+        String resolved = GitProcessRunner.run(controlRoot, "rev-parse", expectedRef + "^{commit}");
+        if (!snapshot.commitSha().equals(resolved)) {
             throw new IOException("REVIEW_SNAPSHOT_COMMIT_MISMATCH");
         }
     }
@@ -95,18 +95,18 @@ public final class ReviewSnapshotAccessService {
             if (!Files.isDirectory(worktree)) {
                 throw new IOException("REVIEW_WORKSPACE_INVALID");
             }
-            String head = runGit(worktree, "rev-parse", "HEAD").trim();
+            String head = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
             if (!snapshot.commitSha().equals(head)) {
                 throw new IOException("REVIEW_WORKSPACE_COMMIT_MISMATCH");
             }
-            String dirty = runGit(worktree, "status", "--porcelain", "--untracked-files=all");
+            String dirty = GitProcessRunner.run(worktree, "status", "--porcelain", "--untracked-files=all");
             if (dirty.isBlank()) {
                 return worktree;
             }
-            runGit(controlRoot, "worktree", "remove", "--force", worktree.toString());
+            GitProcessRunner.run(controlRoot, "worktree", "remove", "--force", worktree.toString());
         }
-        runGit(controlRoot, "worktree", "add", "--detach", worktree.toString(), snapshot.commitSha());
-        String head = runGit(worktree, "rev-parse", "HEAD").trim();
+        GitProcessRunner.run(controlRoot, "worktree", "add", "--detach", worktree.toString(), snapshot.commitSha());
+        String head = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
         if (!snapshot.commitSha().equals(head)) {
             throw new IOException("REVIEW_WORKSPACE_COMMIT_MISMATCH");
         }
@@ -127,10 +127,6 @@ public final class ReviewSnapshotAccessService {
         } catch (Exception failure) {
             return "unknown-project";
         }
-    }
-
-    private static String runGit(Path workdir, String... args) throws IOException {
-        return GitProcessRunner.run(workdir, args);
     }
 
     private static AgentResponse blocked(String error) {
@@ -240,7 +236,7 @@ public final class ReviewSnapshotAccessService {
             return;
         }
         try {
-            runGit(root, "worktree", "remove", "--force", worktree.toString());
+            GitProcessRunner.run(root, "worktree", "remove", "--force", worktree.toString());
         } catch (Exception ignored) {
             // The immutable decision remains authoritative; Doctor can report
             // an abandoned disposable review workspace for later reconciliation.

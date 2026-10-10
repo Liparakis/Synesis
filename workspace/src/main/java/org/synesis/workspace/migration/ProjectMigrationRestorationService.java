@@ -2,10 +2,8 @@ package org.synesis.workspace.migration;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,6 +17,7 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -59,15 +58,7 @@ final class ProjectMigrationRestorationService {
             Files.deleteIfExists(temporary);
             throw new IOException("project_restore_hash_mismatch");
         }
-        try {
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+        AtomicFiles.replaceFromTemporary(temporary, target);
         if (!Files.isRegularFile(target) || !Sha256.hex(Files.readAllBytes(target)).equals(file.backupHash())) {
             throw new IOException("project_restore_hash_mismatch");
         }

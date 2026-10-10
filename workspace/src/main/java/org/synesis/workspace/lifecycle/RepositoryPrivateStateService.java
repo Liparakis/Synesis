@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.UUID;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 
 /**
  * Maintains the narrow repository-private Git exclusion contract used by Synesis runtime state.
@@ -65,15 +65,7 @@ public final class RepositoryPrivateStateService {
             Files.createDirectories(exclude.getParent());
             Path temporary = exclude.resolveSibling(exclude.getFileName() + ".tmp-" + UUID.randomUUID());
             Files.writeString(temporary, updated, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try {
-                try {
-                    Files.move(temporary, exclude, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                    Files.move(temporary, exclude, StandardCopyOption.REPLACE_EXISTING);
-                }
-            } finally {
-                Files.deleteIfExists(temporary);
-            }
+            AtomicFiles.replaceFromTemporary(temporary, exclude);
         }
     }
 

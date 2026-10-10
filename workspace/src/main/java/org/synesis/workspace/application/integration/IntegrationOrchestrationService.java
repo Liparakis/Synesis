@@ -189,8 +189,8 @@ public final class IntegrationOrchestrationService {
                     failures.add("MISSING_PREPARED_OBJECT:" + snapshot.snapshotId());
                 } else {
                     try {
-                        String preparedCommit = runGitOutput(controlRoot, "rev-parse", prepared.get().preparedRef());
-                        String preparedTree = runGitOutput(controlRoot, "rev-parse", preparedCommit + "^{tree}");
+                        String preparedCommit = GitProcessRunner.run(controlRoot, "rev-parse", prepared.get().preparedRef());
+                        String preparedTree = GitProcessRunner.run(controlRoot, "rev-parse", preparedCommit + "^{tree}");
                         if (!prepared.get().treeHash().equals(preparedTree) || !preparedCommit.equals(snapshot.commitSha())) {
                             failures.add("PREPARED_TREE_MISMATCH:" + snapshot.snapshotId());
                         }
@@ -199,7 +199,7 @@ public final class IntegrationOrchestrationService {
                     }
                 }
                 try {
-                    String referenced = runGitOutput(controlRoot, "rev-parse", snapshot.provenance().snapshotRef());
+                    String referenced = GitProcessRunner.run(controlRoot, "rev-parse", snapshot.provenance().snapshotRef());
                     if (!referenced.equals(snapshot.commitSha())) {
                         failures.add("INVALID_PROVENANCE:" + snapshot.snapshotId());
                     }
@@ -234,10 +234,6 @@ public final class IntegrationOrchestrationService {
         } catch (Exception failure) {
             return false;
         }
-    }
-
-    private static String runGitOutput(Path workdir, String... args) throws IOException {
-        return GitProcessRunner.run(workdir, args);
     }
 
     /**
@@ -296,7 +292,7 @@ public final class IntegrationOrchestrationService {
                 var attempt = activeAttempt.get();
                 if (!attempt.integrationCommitSha().isBlank()) {
                     try {
-                        String head = runGitOutput(controlRoot, "rev-parse", "HEAD");
+                        String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
                         if (head.equals(attempt.integrationCommitSha())) {
                             List<TaskSnapshotRecord> recovered = attempt.taskSnapshotIds().stream().map(id -> store.taskCompletionProjection().findSnapshotById(id).orElse(null)).filter(Objects::nonNull).toList();
                             if (recovered.size() == attempt.taskSnapshotIds().size()) {
@@ -348,7 +344,7 @@ public final class IntegrationOrchestrationService {
             // later pump.
             String expectedControlHead;
             try {
-                expectedControlHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
+                expectedControlHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
             } catch (Exception ex) {
                 return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
             }

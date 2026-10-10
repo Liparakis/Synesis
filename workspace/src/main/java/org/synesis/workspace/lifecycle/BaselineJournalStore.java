@@ -4,11 +4,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService.BaselineFailure;
 import org.synesis.workspace.lifecycle.ManagedBaselineTransactionService.Journal;
@@ -30,11 +30,7 @@ final class BaselineJournalStore {
         Path target = resolution.baselineRoot().resolve(journal.transactionId() + ".json");
         Path temp = target.resolveSibling(target.getFileName() + ".tmp");
         Files.writeString(temp, ProviderJson.write(toMap(journal)) + System.lineSeparator(), StandardCharsets.UTF_8);
-        try {
-            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.replaceFromTemporary(temp, target);
     }
 
     @SuppressWarnings("unchecked")

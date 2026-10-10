@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Arrays;
@@ -19,6 +18,7 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
 import org.synesis.workspace.infrastructure.digest.Sha256;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.filesystem.BoundedFileLock;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.project.ActionGuardrail;
@@ -86,15 +86,7 @@ public final class WorkspaceMutationBroker {
         Files.createDirectories(path.getParent());
         Path temporary = path.resolveSibling(path.getFileName() + ".tmp-" + UUID.randomUUID());
         Files.write(temporary, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try {
-            try {
-                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+        AtomicFiles.replaceFromTemporary(temporary, path);
     }
 
     /**

@@ -14,6 +14,7 @@ import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Service for comparing, verifying, and fast-forwarding the control branch after integration gate
@@ -37,14 +38,6 @@ public final class ControlBranchAdvancementService {
      * Creates a control branch advancement service.
      */
     public ControlBranchAdvancementService() {
-    }
-
-    private static String runGitOutput(Path workdir, String... args) throws IOException {
-        return org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, args).trim();
-    }
-
-    private static void runGit(Path workdir, String... args) throws IOException {
-        runGitOutput(workdir, args);
     }
 
     /**
@@ -98,19 +91,19 @@ public final class ControlBranchAdvancementService {
 
         try {
             // 1. Verify control checkout is clean
-            String status = runGitOutput(controlRoot, "status", "--porcelain");
+            String status = GitProcessRunner.run(controlRoot, "status", "--porcelain");
             if (hasBlockingControlChanges(status)) {
                 return new AdvancementResult(false, false, true, "Control checkout working tree is dirty: " + status);
             }
 
             // 2. Verify current control HEAD equals expectedControlHead
-            String currentHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
+            String currentHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
             if (!currentHead.equals(expectedControlHead)) {
                 return new AdvancementResult(false, true, false, "Control branch HEAD moved (expected " + expectedControlHead + " but was " + currentHead + ")");
             }
 
             // 3. Fast-forward merge or update control branch
-            runGit(controlRoot, "merge", "--ff-only", integrationCommitSha);
+            GitProcessRunner.run(controlRoot, "merge", "--ff-only", integrationCommitSha);
 
             // 4. Append CONTROL_BRANCH_ADVANCED, then TASK_INTEGRATED, OWNERSHIP_RELEASED, and SESSION_FINALIZED per lane
             appendControlBranchAdvanced(attemptId, expectedControlHead, integrationCommitSha, integratedSnapshots, store, identity);
@@ -147,7 +140,7 @@ public final class ControlBranchAdvancementService {
             PredictionEventStore store,
             NodeIdentity identity) {
         try {
-            String currentHead = runGitOutput(controlRoot, "rev-parse", "HEAD");
+            String currentHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
             if (!currentHead.equals(integrationCommitSha)) {
                 return new AdvancementResult(false, false, false, "CONTROL_HEAD_DOES_NOT_MATCH_INTEGRATION_COMMIT");
             }

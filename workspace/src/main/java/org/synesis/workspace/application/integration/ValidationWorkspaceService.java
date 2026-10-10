@@ -41,32 +41,7 @@ public final class ValidationWorkspaceService {
      */
     public static Path resolveValidationRoot(Path projectRoot) {
         Objects.requireNonNull(projectRoot, "projectRoot");
-        String projectId = resolveProjectId(projectRoot);
-        String base = System.getenv("LOCALAPPDATA");
-        if (base == null || base.isBlank()) {
-            base = Path.of(System.getProperty("user.home"), ".synesis").toString();
-        }
-        return Path.of(base, "Synesis", "workspaces", projectId, "validation").toAbsolutePath().normalize();
-    }
-
-    private static String resolveProjectId(Path projectRoot) {
-        Path projFile = projectRoot.resolve(".synesis/project.json");
-        if (Files.exists(projFile)) {
-            try {
-                String content = Files.readString(projFile);
-                int idx = content.indexOf("\"projectId\"");
-                if (idx != -1) {
-                    int colon = content.indexOf(':', idx);
-                    int q1 = content.indexOf('"', colon + 1);
-                    int q2 = content.indexOf('"', q1 + 1);
-                    if (colon != -1 && q1 != -1 && q2 != -1) {
-                        return content.substring(q1 + 1, q2);
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "default-project";
+        return ExternalWorktrees.root(projectRoot, "validation");
     }
 
     private static String extractToken(CapabilityRequestHandle handle) {
@@ -77,18 +52,6 @@ public final class ValidationWorkspaceService {
 
     private static Path expectedWorktreePath(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber) {
         return resolveValidationRoot(projectRoot).resolve(extractToken(handle) + "-r" + revisionNumber).toAbsolutePath().normalize();
-    }
-
-    private static void runGit(Path workdir, String... args) throws IOException {
-        GitProcessRunner.run(workdir, args);
-    }
-
-    private static Path resolveGitTopLevel(Path path) {
-        try {
-            return Path.of(GitProcessRunner.run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
-        } catch (IOException failure) {
-            return path;
-        }
     }
 
     /**
@@ -130,7 +93,7 @@ public final class ValidationWorkspaceService {
         }
 
         try {
-            runGit(projectRoot, "worktree", "add", "--detach", worktreePath.toString(), impl.commitSha());
+            GitProcessRunner.run(projectRoot, "worktree", "add", "--detach", worktreePath.toString(), impl.commitSha());
             verifyValidationWorktree(projectRoot, handle, revisionNumber, impl.commitSha(), worktreePath.toString());
             return worktreePath;
         } catch (IOException | RuntimeException failure) {
@@ -176,14 +139,14 @@ public final class ValidationWorkspaceService {
         }
         Path gitRoot;
         try {
-            gitRoot = Path.of(GitProcessRunner.run(recorded, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
+            gitRoot = Path.of(GitProcessRunner.run(recorded, "rev-parse", "--show-toplevel")).toAbsolutePath().normalize();
         } catch (IOException failure) {
             throw new IOException("VALIDATION_WORKSPACE_NOT_A_WORKTREE", failure);
         }
         if (!gitRoot.equals(recorded)) {
             throw new IOException("VALIDATION_WORKSPACE_ROOT_MISMATCH");
         }
-        String head = GitProcessRunner.run(recorded, "rev-parse", "HEAD").trim();
+        String head = GitProcessRunner.run(recorded, "rev-parse", "HEAD");
         if (!expectedCommit.equals(head)) {
             throw new IOException("VALIDATION_WORKSPACE_COMMIT_MISMATCH");
         }
@@ -198,14 +161,6 @@ public final class ValidationWorkspaceService {
      * @param worktreePath absolute path to the validation worktree
      */
     public void removeValidationWorktree(Path worktreePath) {
-        if (worktreePath == null || !Files.exists(worktreePath)) {
-            return;
-        }
-        try {
-            Path topLevel = resolveGitTopLevel(worktreePath);
-            runGit(topLevel, "worktree", "remove", "--force", worktreePath.toAbsolutePath().toString());
-        } catch (IOException ignored) {
-            // Best-effort cleanup; diagnostics will surface abandoned worktrees
-        }
+        ExternalWorktrees.removeBestEffort(worktreePath == null ? null : worktreePath.toAbsolutePath());
     }
 }

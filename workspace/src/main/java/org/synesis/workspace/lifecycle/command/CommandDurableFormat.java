@@ -2,10 +2,8 @@ package org.synesis.workspace.lifecycle.command;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,6 +13,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.digest.Sha256;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -180,15 +179,7 @@ final class CommandDurableFormat {
         Files.createDirectories(target.getParent());
         Path temporary = target.resolveSibling(target.getFileName() + ".tmp-" + UUID.randomUUID());
         Files.writeString(temporary, json, StandardCharsets.UTF_8);
-        try {
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+        AtomicFiles.replaceFromTemporary(temporary, target);
     }
 
     private static Map<String, Object> load(Path path, int maxBytes, ReadCodes codes, boolean verify) throws IOException {

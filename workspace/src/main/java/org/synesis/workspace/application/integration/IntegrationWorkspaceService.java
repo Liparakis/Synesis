@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.task.SnapshotRefs;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Manages dedicated Git integration worktrees for task integration.
@@ -36,46 +37,13 @@ public final class IntegrationWorkspaceService {
      */
     public static Path resolveIntegrationRoot(Path projectRoot) {
         Objects.requireNonNull(projectRoot, "projectRoot");
-        String projectId = resolveProjectId(projectRoot);
-        String base = System.getenv("LOCALAPPDATA");
-        if (base == null || base.isBlank()) {
-            base = Path.of(System.getProperty("user.home"), ".synesis").toString();
-        }
-        return Path.of(base, "Synesis", "workspaces", projectId, "integration").toAbsolutePath().normalize();
-    }
-
-    private static String resolveProjectId(Path projectRoot) {
-        Path projFile = projectRoot.resolve(".synesis/project.json");
-        if (Files.exists(projFile)) {
-            try {
-                String content = Files.readString(projFile);
-                int idx = content.indexOf("\"projectId\"");
-                if (idx != -1) {
-                    int colon = content.indexOf(':', idx);
-                    int q1 = content.indexOf('"', colon + 1);
-                    int q2 = content.indexOf('"', q1 + 1);
-                    if (colon != -1 && q1 != -1 && q2 != -1) {
-                        return content.substring(q1 + 1, q2);
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "default-project";
-    }
-
-    private static String gitRevParse(Path workdir, String ref) throws IOException {
-        return org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, "rev-parse", ref).trim();
+        return ExternalWorktrees.root(projectRoot, "integration");
     }
 
     private static Path gitPath(Path workdir) throws IOException {
-        String raw = runGitOutput(workdir, "rev-parse", "--git-path", "CHERRY_PICK_HEAD");
+        String raw = GitProcessRunner.run(workdir, "rev-parse", "--git-path", "CHERRY_PICK_HEAD");
         Path path = Path.of(raw);
         return (path.isAbsolute() ? path : workdir.resolve(path)).toAbsolutePath().normalize();
-    }
-
-    private static String runGitOutput(Path workdir, String... args) throws IOException {
-        return org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, args).trim();
     }
 
     private static boolean managedWorkspaceMetadata(String statusLine) {
@@ -88,8 +56,8 @@ public final class IntegrationWorkspaceService {
     }
 
     private static boolean materializedCommitHasExpectedParent(Path worktree, String expectedParent) throws IOException {
-        String[] fields = runGitOutput(worktree, "rev-list", "--parents", "-n", "1", "HEAD").split("\\s+");
-        String subject = runGitOutput(worktree, "show", "-s", "--format=%s", "HEAD");
+        String[] fields = GitProcessRunner.run(worktree, "rev-list", "--parents", "-n", "1", "HEAD").split("\\s+");
+        String subject = GitProcessRunner.run(worktree, "show", "-s", "--format=%s", "HEAD");
         return fields.length >= 2 && expectedParent.equals(fields[1]) && "Synesis immutable lane snapshot".equals(subject);
     }
 
@@ -108,18 +76,6 @@ public final class IntegrationWorkspaceService {
         }
     }
 
-    private static void runGit(Path workdir, String... args) throws IOException {
-        org.synesis.workspace.lifecycle.process.GitProcessRunner.run(workdir, args);
-    }
-
-    private static Path resolveGitTopLevel(Path path) {
-        try {
-            return Path.of(org.synesis.workspace.lifecycle.process.GitProcessRunner.run(path, "rev-parse", "--show-toplevel").trim()).toAbsolutePath().normalize();
-        } catch (IOException failure) {
-            return path;
-        }
-    }
-
     /**
      * Reads the verified control checkout HEAD used to seed an integration or repair lane.
      *
@@ -129,7 +85,7 @@ public final class IntegrationWorkspaceService {
      */
     public String currentHead(Path repository) throws IOException {
         Objects.requireNonNull(repository, "repository");
-        return gitRevParse(repository.toAbsolutePath().normalize(), "HEAD");
+        return GitProcessRunner.run(repository.toAbsolutePath().normalize(), "rev-parse", "HEAD");
     }
 
     /**
@@ -157,7 +113,7 @@ public final class IntegrationWorkspaceService {
                 // Reuse only a verified attempt workspace. A conflicted or
                 // mismatched workspace must remain visible for repair rather
                 // than being mistaken for a successful integration.
-                String currentHead = gitRevParse(worktreePath, "HEAD");
+                String currentHead = GitProcessRunner.run(worktreePath, "rev-parse", "HEAD");
                 if (Files.exists(gitPath(worktreePath))) {
                     return new IntegrationWorktreeResult(worktreePath, false, "", "Integration worktree has an unresolved cherry-pick conflict");
                 }
@@ -168,10 +124,10 @@ public final class IntegrationWorkspaceService {
             }
 
             // 1. Create Git worktree at expectedControlHead
-            runGit(projectRoot, "worktree", "add", "--detach", worktreePath.toString(), expectedControlHead);
+            GitProcessRunner.run(projectRoot, "worktree", "add", "--detach", worktreePath.toString(), expectedControlHead);
             try {
-                runGit(worktreePath, "config", "user.name", "Synesis Integrator");
-                runGit(worktreePath, "config", "user.email", "integrator@synesis.org");
+                GitProcessRunner.run(worktreePath, "config", "user.name", "Synesis Integrator");
+                GitProcessRunner.run(worktreePath, "config", "user.email", "integrator@synesis.org");
             } catch (IOException ignored) {
             }
 
@@ -183,7 +139,7 @@ public final class IntegrationWorkspaceService {
                 }
                 try {
                     // Try cherry-pick first
-                    runGit(worktreePath, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snap.commitSha());
+                    GitProcessRunner.run(worktreePath, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snap.commitSha());
                 } catch (IOException cherryPickFailure) {
                     // Preserve the conflicted index and worktree.  The repair
                     // lane consumes this exact representation; resetting or
@@ -192,7 +148,7 @@ public final class IntegrationWorkspaceService {
                 }
             }
 
-            String finalCommit = gitRevParse(worktreePath, "HEAD");
+            String finalCommit = GitProcessRunner.run(worktreePath, "rev-parse", "HEAD");
             return new IntegrationWorktreeResult(worktreePath, true, finalCommit, "");
 
         } catch (Exception ex) {
@@ -206,14 +162,7 @@ public final class IntegrationWorkspaceService {
      * @param worktreePath path to integration worktree
      */
     public void removeIntegrationWorktree(Path worktreePath) {
-        if (worktreePath == null || !Files.exists(worktreePath)) {
-            return;
-        }
-        try {
-            Path topLevel = resolveGitTopLevel(worktreePath);
-            runGit(topLevel, "worktree", "remove", "--force", worktreePath.toString());
-        } catch (IOException ignored) {
-        }
+        ExternalWorktrees.removeBestEffort(worktreePath);
     }
 
     /**
@@ -246,24 +195,24 @@ public final class IntegrationWorkspaceService {
         if (control.equals(target)) {
             throw new IOException("REPAIR_WORKTREE_IS_CONTROL_CHECKOUT");
         }
-        if (!expectedControlHead.equals(gitRevParse(control, "HEAD"))) {
+        if (!expectedControlHead.equals(GitProcessRunner.run(control, "rev-parse", "HEAD"))) {
             throw new IOException("STALE_CONTROL_HEAD");
         }
-        if (!expectedControlHead.equals(gitRevParse(target, "HEAD"))) {
+        if (!expectedControlHead.equals(GitProcessRunner.run(target, "rev-parse", "HEAD"))) {
             throw new IOException("REPAIR_TARGET_NOT_AT_CONTROL_HEAD");
         }
         String snapshotRef = snapshot.provenance().snapshotRef();
         if (!SnapshotRefs.isSnapshotRef(snapshotRef)) {
             throw new IOException("REPAIR_SNAPSHOT_REF_INVALID");
         }
-        String resolvedSnapshot = gitRevParse(target, snapshotRef + "^{commit}");
+        String resolvedSnapshot = GitProcessRunner.run(target, "rev-parse", snapshotRef + "^{commit}");
         if (!snapshot.commitSha().equals(resolvedSnapshot)) {
             throw new IOException("REPAIR_SNAPSHOT_OBJECT_MISMATCH");
         }
 
         Path cherryPickHead = gitPath(target);
         if (Files.exists(cherryPickHead)) {
-            String inProgress = gitRevParse(target, "CHERRY_PICK_HEAD");
+            String inProgress = GitProcessRunner.run(target, "rev-parse", "CHERRY_PICK_HEAD");
             if (!snapshot.commitSha().equals(inProgress)) {
                 throw new IOException("REPAIR_DIFFERENT_CHERRY_PICK_IN_PROGRESS");
             }
@@ -276,11 +225,11 @@ public final class IntegrationWorkspaceService {
             if (!expectedMarker.equals(actualMarker)) {
                 throw new IOException("REPAIR_MATERIALIZATION_MARKER_MISMATCH");
             }
-            if (!expectedControlHead.equals(gitRevParse(target, "HEAD")) && materializedCommitHasExpectedParent(target, expectedControlHead)) {
+            if (!expectedControlHead.equals(GitProcessRunner.run(target, "rev-parse", "HEAD")) && materializedCommitHasExpectedParent(target, expectedControlHead)) {
                 return;
             }
         }
-        String status = runGitOutput(target, "status", "--porcelain", "--untracked-files=all");
+        String status = GitProcessRunner.run(target, "status", "--porcelain", "--untracked-files=all");
         List<String> unmanagedChanges = status.lines().filter(line -> !line.isBlank()).filter(line -> !managedWorkspaceMetadata(line)).toList();
         if (!unmanagedChanges.isEmpty()) {
             throw new IOException("REPAIR_TARGET_DIRTY:" + unmanagedChanges.getFirst());
@@ -289,9 +238,9 @@ public final class IntegrationWorkspaceService {
             writeRepairMarker(marker, expectedMarker);
         }
         try {
-            runGit(target, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snapshot.commitSha());
+            GitProcessRunner.run(target, "cherry-pick", "--allow-empty", "--keep-redundant-commits", snapshot.commitSha());
         } catch (IOException conflict) {
-            if (!Files.exists(gitPath(target)) || !snapshot.commitSha().equals(gitRevParse(target, "CHERRY_PICK_HEAD"))) {
+            if (!Files.exists(gitPath(target)) || !snapshot.commitSha().equals(GitProcessRunner.run(target, "rev-parse", "CHERRY_PICK_HEAD"))) {
                 throw new IOException("REPAIR_SNAPSHOT_MATERIALIZATION_FAILED", conflict);
             }
             // Preserve conflict markers and the unresolved index as the

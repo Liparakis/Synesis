@@ -6,11 +6,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -162,11 +162,7 @@ public final class CodexLifecycleStateStore {
         value.put("updatedAtEpochMillis", checkpoint.updatedAtEpochMillis());
         Path temporary = root.resolve(checkpoint.bindingSessionId() + ".json.tmp");
         Files.writeString(temporary, ProviderJson.write(value) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        try {
-            Files.move(temporary, file(checkpoint.bindingSessionId()), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-            Files.move(temporary, file(checkpoint.bindingSessionId()), StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.replaceFromTemporary(temporary, file(checkpoint.bindingSessionId()));
     }
 
     /**
