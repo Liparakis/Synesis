@@ -2,21 +2,14 @@ package org.synesis.link.transport.quic;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.link.candidate.CandidateCancellation;
 import org.synesis.link.candidate.StunBindingMessage;
@@ -30,14 +23,11 @@ import org.synesis.link.candidate.StunBindingTransport;
  * allowing the existing QUIC dispatcher to retain ownership of QUIC traffic. The adapter owns no
  * socket and does not close the parent channel.
  */
-public final class NettyStunBindingTransport extends SimpleChannelInboundHandler<DatagramPacket>
+public final class NettyStunBindingTransport
+    extends NettyDatagramExchange<NettyStunBindingTransport.Target, byte[]>
     implements StunBindingTransport, AutoCloseable {
 
   private static final String HANDLER_NAME = "synesis-stun-binding";
-  private final Channel channel;
-  private final Duration timeout;
-  private final AtomicReference<Pending> pending = new AtomicReference<>();
-  private final AtomicBoolean closed = new AtomicBoolean();
 
   /**
    * Installs a same-socket STUN adapter at the front of a Netty channel pipeline.
@@ -46,18 +36,8 @@ public final class NettyStunBindingTransport extends SimpleChannelInboundHandler
    * @param timeout per-request timeout
    */
   public NettyStunBindingTransport(Channel channel, Duration timeout) {
-    this.channel = Objects.requireNonNull(channel, "channel");
-    this.timeout = Objects.requireNonNull(timeout, "timeout");
-    if (timeout.isZero() || timeout.isNegative()) {
-      throw new IllegalArgumentException("STUN timeout must be positive");
-    }
-    channel.pipeline().addFirst(HANDLER_NAME, this);
-  }
-
-  private static boolean looksLikeStun(ByteBuf content) {
-    return content.readableBytes() >= 20
-        && (content.getUnsignedShort(content.readerIndex()) & 0xC000) == 0
-        && content.getInt(content.readerIndex() + 4) == StunBindingMessage.MAGIC_COOKIE;
+    super(channel, timeout, "STUN", "STUN transport closed");
+    install(HANDLER_NAME);
   }
 
   private static boolean matchesTransaction(ByteBuf content, byte[] transactionId) {
@@ -85,120 +65,51 @@ public final class NettyStunBindingTransport extends SimpleChannelInboundHandler
       return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException(
           "STUN request is cancelled or malformed"));
     }
-    if (closed.get() || !channel.isOpen()) {
+    if (unavailable()) {
       return CompletableFuture.failedFuture(
           new IllegalStateException("parent UDP channel is closed"));
     }
     byte[] transactionId = Arrays.copyOfRange(request, 8, 20);
-    Pending value = new Pending(server, transactionId);
-    if (!pending.compareAndSet(null, value)) {
-      return CompletableFuture.failedFuture(
-          new IllegalStateException("one STUN request is already active"));
-    }
-    try {
-      channel.eventLoop().execute(() -> send(value, request.clone(), cancellation));
-    } catch (RuntimeException exception) {
-      fail(value, exception);
-    }
-    value.result.whenComplete((ignored, ignoredFailure) -> {
-      ScheduledFuture<?> timer = value.timer;
-      if (timer != null) {
-        timer.cancel(false);
-      }
-      pending.compareAndSet(value, null);
-    });
-    return value.result;
+    byte[] datagram = request.clone();
+    return begin(new Target(server, transactionId), "one STUN request is already active",
+        value -> send(value, datagram, cancellation));
   }
 
-  private void send(Pending value, byte[] request, CandidateCancellation cancellation) {
-    if (pending.get() != value || cancellation.isCancelled()) {
+  private void send(Pending<Target, byte[]> value, byte[] request,
+      CandidateCancellation cancellation) {
+    if (current() != value || cancellation.isCancelled()) {
       fail(value, new java.util.concurrent.CancellationException("STUN request cancelled"));
       return;
     }
-    value.timer = channel.eventLoop().schedule(
-        () -> fail(value, new TimeoutException("STUN Binding response timed out")),
-        timeout.toNanos(), TimeUnit.NANOSECONDS);
-    channel.writeAndFlush(new DatagramPacket(Unpooled.wrappedBuffer(request), value.server))
-        .addListener(future -> {
-          if (!future.isSuccess()) {
-            fail(value, future.cause());
-          }
-        });
+    dispatch(value, "STUN Binding response timed out", request, List.of(value.state.server()));
   }
 
   @Override
-  protected void channelRead0(ChannelHandlerContext context, DatagramPacket packet) {
+  boolean recognizes(ByteBuf content) {
+    return content.readableBytes() >= 20
+        && (content.getUnsignedShort(content.readerIndex()) & 0xC000) == 0
+        && content.getInt(content.readerIndex() + 4) == StunBindingMessage.MAGIC_COOKIE;
+  }
+
+  @Override
+  void onRecognized(DatagramPacket packet) {
     ByteBuf content = packet.content();
-    if (!looksLikeStun(content)) {
-      context.fireChannelRead(packet.retain());
+    Pending<Target, byte[]> value = current();
+    if (value == null || !value.state.server().equals(packet.sender())
+        || !matchesTransaction(content, value.state.transactionId())) {
       return;
     }
-    Pending value = pending.get();
-    if (value == null || !value.server.equals(packet.sender())
-        || !matchesTransaction(content, value.transactionId)) {
-      return;
-    }
-    fail(value, ByteBufUtil.getBytes(content, content.readerIndex(), content.readableBytes()),
-        null);
-  }
-
-  private void fail(Pending value, Throwable failure) {
-    if (pending.compareAndSet(value, null)) {
-      value.result.completeExceptionally(failure);
-    }
-  }
-
-  private void fail(Pending value, byte[] response, Void ignored) {
-    if (pending.compareAndSet(value, null)) {
-      value.result.complete(response);
-    }
+    complete(value,
+        ByteBufUtil.getBytes(content, content.readerIndex(), content.readableBytes()));
   }
 
   /**
-   * Removes the handler and fails any pending request without closing the parent channel.
+   * The server a Binding request went to and the transaction id its response must echo.
+   *
+   * @param server        configured STUN server endpoint
+   * @param transactionId 12-byte transaction id of the request
    */
-  @Override
-  public void close() {
-    if (!closed.compareAndSet(false, true)) {
-      return;
-    }
-    Pending value = pending.getAndSet(null);
-    if (value != null) {
-      value.result.completeExceptionally(new java.util.concurrent.CancellationException(
-          "STUN transport closed"));
-    }
-    Runnable remove = () -> {
-      if (channel.pipeline().context(this) != null) {
-        channel.pipeline().remove(this);
-      }
-    };
-    if (channel.eventLoop().inEventLoop()) {
-      remove.run();
-    } else {
-      channel.eventLoop().execute(remove);
-    }
-  }
+  record Target(InetSocketAddress server, byte[] transactionId) {
 
-  @Override
-  public void channelInactive(ChannelHandlerContext context) throws Exception {
-    Pending value = pending.getAndSet(null);
-    if (value != null) {
-      value.result.completeExceptionally(
-          new IllegalStateException("parent UDP channel is inactive"));
-    }
-    super.channelInactive(context);
-  }
-
-  private static final class Pending {
-
-    private final InetSocketAddress server;
-    private final byte[] transactionId;
-    private final CompletableFuture<byte[]> result = new CompletableFuture<>();
-    private volatile ScheduledFuture<?> timer;
-
-    private Pending(InetSocketAddress server, byte[] transactionId) {
-      this.server = server;
-      this.transactionId = transactionId;
-    }
   }
 }
