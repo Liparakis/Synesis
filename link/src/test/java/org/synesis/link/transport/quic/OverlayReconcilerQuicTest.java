@@ -110,15 +110,16 @@ final class OverlayReconcilerQuicTest {
       assertEquals(Set.of(peerB.nodeId(), peerC.nodeId()), activeReconciler.liveNeighbors());
 
       secondEndpoint.stopAbruptly();
-      await("lost adjacency withdrawal", () -> !activeReconciler.liveNeighbors()
-          .contains(peerB.nodeId()));
+      // The session stops being usable before the reconciler unbinds it, so wait for the
+      // withdrawal itself: the route inputs asserted below change only then.
+      await("lost adjacency withdrawal", () -> events.stream().anyMatch(event -> event.type()
+          == OverlayReconciliationEvent.Type.ROUTE_WITHDRAWN));
+      assertFalse(activeReconciler.liveNeighbors().contains(peerB.nodeId()));
       assertTrue(firstSecondSession.terminalCompletion().toCompletableFuture().isDone());
       assertTrue(activeReconciler.liveNeighbors().contains(peerC.nodeId()));
       assertEquals(OverlayRoute.Kind.UNREACHABLE,
           OverlayRouteSelector.select(local.nodeId(), peerB.nodeId(), membership,
               peers.nodeIds(), new OverlayTopologyView(), Instant.now(), null).kind());
-      assertTrue(events.stream().anyMatch(event -> event.type()
-          == OverlayReconciliationEvent.Type.ROUTE_WITHDRAWN));
       assertTrue(publishedAdjacencies.stream().anyMatch(value -> !value.contains(peerB.nodeId())));
 
       secondEndpoint.start(secondEndpoint.port());
