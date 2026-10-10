@@ -49,7 +49,7 @@ public record ContractRecord(UUID contractId, UUID projectId, long revision, Str
         CoordinationNullException.requireNonNull(body, "body");
         CoordinationNullException.requireNonNull(status, "status");
         selectorRefs = List.copyOf(selectorRefs == null ? List.of() : selectorRefs);
-        if (revision < 1 || owner.isBlank() || body.isBlank() || body.length() > 32768) {
+        if (revision < 1 || owner.isBlank() || body.isBlank() || body.getBytes(StandardCharsets.UTF_8).length > 32768) {
             throw new CoordinationArgumentException("invalid contract");
         }
         if (!contentHash.equals(hash(body))) {

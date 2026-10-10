@@ -88,6 +88,8 @@ public final class ContractService {
                     ContractRecord.Status.ACTIVE,
                     prior.contractId(),
                     selectors);
+            // Encoded before the first append: a record the codec rejects must not leave the prior revision superseded.
+            byte[] published = ContractCodec.encodePublish(record);
             if (prior != null) {
                 current.append(rawContractId,
                         PredictionEventType.CONTRACT_SUPERSEDED,
@@ -98,7 +100,7 @@ public final class ContractService {
             current.append(rawContractId,
                     PredictionEventType.CONTRACT_PUBLISHED,
                     signer.nodeId(),
-                    ContractCodec.encodePublish(record),
+                    published,
                     signer);
             return record;
         }

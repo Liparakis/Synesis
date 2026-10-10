@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.domain.contract.ContractDependency;
 import org.synesis.coordination.domain.contract.ContractRecord;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -41,5 +42,21 @@ final class ContractServiceTest {
         assertEquals(2, replay.contractProjection().contract(contractId).revision());
         assertEquals(ContractDependency.State.REPLAN_REQUIRED,
                 replay.contractProjection().dependencies().getFirst().state());
+    }
+
+    @Test
+    void revisionWhoseBodyExceedsTheEncodedBoundLeavesThePriorRevisionActive(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID(), contractId = UUID.randomUUID();
+        ContractService service = new ContractService(new PredictionEventStore(temp, project), NodeIdentity.generate());
+        service.publish(contractId, "agt-owner", "TaskTracker API v1", List.of("src/task_tracker.py"));
+        // 20,000 characters, 40,000 UTF-8 bytes: inside a character count of 32,768, outside the encoded bound.
+        String oversized = "\u00e9".repeat(20_000);
+
+        assertThrows(CoordinationArgumentException.class,
+                () -> service.publish(contractId, "agt-owner", oversized, List.of("src/task_tracker.py")));
+
+        ContractRecord current = new PredictionEventStore(temp, project).contractProjection().contract(contractId);
+        assertEquals(1, current.revision());
+        assertEquals(ContractRecord.Status.ACTIVE, current.status());
     }
 }
