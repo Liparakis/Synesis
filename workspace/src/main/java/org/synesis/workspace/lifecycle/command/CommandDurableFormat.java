@@ -30,9 +30,15 @@ final class CommandDurableFormat {
      */
     static final long MINIMUM_READER_SCHEMA_VERSION = 1L;
     /**
-     * Version of the canonical durable-object encoding.
+     * Version of the canonical durable-object encoding: every object's keys are sorted.
      */
-    static final long CANONICALIZATION_VERSION = 1L;
+    static final long CANONICALIZATION_VERSION = 2L;
+    /**
+     * Earlier encoding, which sorted only the top-level keys and kept nested objects in file order.
+     * Command records live outside any one project and outlive the build that wrote them, and the
+     * namespace reads all of them before it runs a command, so this version is still verified.
+     */
+    private static final long TOP_LEVEL_SORTED_CANONICALIZATION = 1L;
     /**
      * Integrity algorithm used for durable objects.
      */
@@ -61,7 +67,8 @@ final class CommandDurableFormat {
         value.putIfAbsent("schemaVersion", SCHEMA_VERSION);
         value.putIfAbsent("minimumReaderSchemaVersion", MINIMUM_READER_SCHEMA_VERSION);
         value.putIfAbsent("writerVersion", WRITER_VERSION);
-        value.putIfAbsent("canonicalizationVersion", CANONICALIZATION_VERSION);
+        // Set, not kept: a record read in the earlier encoding is sealed again in this one.
+        value.put("canonicalizationVersion", CANONICALIZATION_VERSION);
         value.putIfAbsent("integrityAlgorithm", INTEGRITY_ALGORITHM);
         value.putIfAbsent("objectRevision", 1L);
         value.remove("integrityDigest");
@@ -85,7 +92,8 @@ final class CommandDurableFormat {
         if (schema < MINIMUM_READER_SCHEMA_VERSION || minimumReader < MINIMUM_READER_SCHEMA_VERSION || string(value, "writerVersion").isBlank()) {
             throw new CommandFormatException("COMMAND_FORMAT_METADATA_INVALID");
         }
-        if (number(value, "canonicalizationVersion") != CANONICALIZATION_VERSION) {
+        long canonicalization = number(value, "canonicalizationVersion");
+        if (canonicalization != CANONICALIZATION_VERSION && canonicalization != TOP_LEVEL_SORTED_CANONICALIZATION) {
             throw new CommandFormatException("COMMAND_CANONICALIZATION_UNSUPPORTED");
         }
         if (!INTEGRITY_ALGORITHM.equals(string(value, "integrityAlgorithm"))) {
@@ -94,7 +102,8 @@ final class CommandDurableFormat {
         String expected = string(value, "integrityDigest");
         Map<String, Object> withoutDigest = new TreeMap<>(value);
         withoutDigest.remove("integrityDigest");
-        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), canonicalDigest(withoutDigest).getBytes(StandardCharsets.UTF_8))) {
+        String actual = canonicalization == CANONICALIZATION_VERSION ? canonicalDigest(withoutDigest) : digest(withoutDigest);
+        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8))) {
             throw new CommandFormatException("COMMAND_INTEGRITY_MISMATCH");
         }
     }
@@ -110,8 +119,12 @@ final class CommandDurableFormat {
      * @return SHA-256 hex digest
      */
     static String canonicalDigest(Object value) {
+        return digest(sortKeys(value));
+    }
+
+    private static String digest(Object value) {
         try {
-            return Sha256.hex(ProviderJson.write(sortKeys(value)));
+            return Sha256.hex(ProviderJson.write(value));
         } catch (Exception failure) {
             throw new IllegalStateException("command integrity unavailable", failure);
         }

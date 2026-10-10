@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
  * A digest over a durable object must not depend on the iteration order of its maps, because
@@ -67,5 +68,24 @@ class CommandCanonicalFormTest {
     reordered.put("processIdentity", ordered("commandLine", "java", "pid", "1"));
 
     CommandDurableFormat.verify(reordered);
+  }
+
+  @Test
+  void recordOfTheEarlierEncodingStillVerifiesAndIsSealedAgainInTheCurrentOne() throws Exception {
+    // Written by a build that sorted only the top-level keys: processIdentity is in file order.
+    Map<String, Object> earlier =
+        CommandDurableFormat.stringKeyed(
+            (Map<?, ?>)
+                ProviderJson.parse(
+                    """
+                    {"anchorId":"anchor-1","canonicalizationVersion":1,"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"992ac6178f0babc3e6eb2980773c4f145331582f972b560d4f21c7ffb16a4ab3","minimumReaderSchemaVersion":1,"objectRevision":1,"processIdentity":{"pid":4242,"commandLine":"java"},"schemaVersion":2,"scopeLocator":"scope-1","writerVersion":"0.1.0-SNAPSHOT"}"""),
+            "KEY_INVALID");
+
+    CommandDurableFormat.verify(earlier);
+
+    Map<String, Object> sealedAgain = CommandDurableFormat.withIntegrity(earlier);
+    assertEquals(
+        CommandDurableFormat.CANONICALIZATION_VERSION, sealedAgain.get("canonicalizationVersion"));
+    CommandDurableFormat.verify(sealedAgain);
   }
 }

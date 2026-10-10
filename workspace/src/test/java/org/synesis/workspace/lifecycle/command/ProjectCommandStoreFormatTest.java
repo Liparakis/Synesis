@@ -68,7 +68,7 @@ class ProjectCommandStoreFormatTest {
         layout(root));
     assertEquals(
         """
-        {"anchorId":"anchor-1","canonicalizationVersion":1,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"eb6c68fa99be663b28892153ee28d84c806f74a25fb4865b27dc53631141b892","minimumReaderSchemaVersion":1,"objectRevision":1,"outcomeKnown":false,"phase":"STARTING","requestDigest":"request-digest","requestId":"n:1","response":{"status":"starting"},"schemaVersion":2,"scopeLocator":"scope-1","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000000,"writerVersion":"0.1.0-SNAPSHOT"}""",
+        {"anchorId":"anchor-1","canonicalizationVersion":2,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"c46d9ae54178d23ae2773732edd3cf2a9b035e7505b29b50301246d4e0e6cdf4","minimumReaderSchemaVersion":1,"objectRevision":1,"outcomeKnown":false,"phase":"STARTING","requestDigest":"request-digest","requestId":"n:1","response":{"status":"starting"},"schemaVersion":2,"scopeLocator":"scope-1","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000000,"writerVersion":"0.1.0-SNAPSHOT"}""",
         Files.readString(file, StandardCharsets.UTF_8));
   }
 
@@ -110,15 +110,15 @@ class ProjectCommandStoreFormatTest {
 
     assertEquals(
         """
-        {"anchorId":"<ANCHOR>","canonicalizationVersion":1,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":1,"outcomeKnown":false,"phase":"STARTING","requestDigest":"request-digest","requestId":"n:1","response":{},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000001,"writerVersion":"0.1.0-SNAPSHOT"}""",
+        {"anchorId":"<ANCHOR>","canonicalizationVersion":2,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":1,"outcomeKnown":false,"phase":"STARTING","requestDigest":"request-digest","requestId":"n:1","response":{},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000001,"writerVersion":"0.1.0-SNAPSHOT"}""",
         starting);
     assertEquals(
         """
-        {"anchorId":"<ANCHOR>","canonicalizationVersion":1,"commandProcessIdentity":{"pid":4242},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":2,"outcomeKnown":false,"phase":"RUNNING","requestDigest":"request-digest","requestId":"n:1","response":{"status":"running"},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000002,"writerVersion":"0.1.0-SNAPSHOT"}""",
+        {"anchorId":"<ANCHOR>","canonicalizationVersion":2,"commandProcessIdentity":{"pid":4242},"createdAtEpochMillis":1700000000000,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":2,"outcomeKnown":false,"phase":"RUNNING","requestDigest":"request-digest","requestId":"n:1","response":{"status":"running"},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":false,"stdoutComplete":false,"updatedAtEpochMillis":1700000000002,"writerVersion":"0.1.0-SNAPSHOT"}""",
         running);
     assertEquals(
         """
-        {"anchorId":"<ANCHOR>","canonicalizationVersion":1,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"exitCode":0,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":3,"outcomeKnown":true,"phase":"TERMINAL","requestDigest":"request-digest","requestId":"n:1","response":{"status":"completed"},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":true,"stdoutComplete":true,"terminalResolution":"OBSERVED_COMMAND_TERMINAL","updatedAtEpochMillis":1700000000003,"writerVersion":"0.1.0-SNAPSHOT"}""",
+        {"anchorId":"<ANCHOR>","canonicalizationVersion":2,"commandProcessIdentity":{},"createdAtEpochMillis":1700000000000,"exitCode":0,"integrityAlgorithm":"SHA-256","integrityDigest":"<DIGEST>","minimumReaderSchemaVersion":1,"objectRevision":3,"outcomeKnown":true,"phase":"TERMINAL","requestDigest":"request-digest","requestId":"n:1","response":{"status":"completed"},"schemaVersion":2,"scopeLocator":"<SCOPE>","semanticDigest":"semantic-digest","stderrComplete":true,"stdoutComplete":true,"terminalResolution":"OBSERVED_COMMAND_TERMINAL","updatedAtEpochMillis":1700000000003,"writerVersion":"0.1.0-SNAPSHOT"}""",
         terminal);
   }
 
