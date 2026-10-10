@@ -14,7 +14,7 @@ import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 
 /**
@@ -42,7 +42,7 @@ public final class RepairService {
      * @param planStore     repair plan store
      * @param backupService backup service
      */
-    public RepairService(DoctorService doctorService, RepairPlanStore planStore, RepairBackupService backupService) {
+    RepairService(DoctorService doctorService, RepairPlanStore planStore, RepairBackupService backupService) {
         this.doctorService = Objects.requireNonNull(doctorService, "doctorService");
         this.planStore = Objects.requireNonNull(planStore, "planStore");
         this.backupService = Objects.requireNonNull(backupService, "backupService");
@@ -73,8 +73,7 @@ public final class RepairService {
         List<RepairPlanEntry> entries = new ArrayList<>();
         int index = 1;
 
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        Path adminDir = workspaceRoot.resolve("admin");
+        Path adminDir = ProjectAdministrativeLayout.adminDirectory(root);
 
         for (DoctorFinding finding : report.findings()) {
             if (finding.code() == DoctorFindingCode.HEALTHY) {
@@ -89,26 +88,26 @@ public final class RepairService {
 
             if (finding.code() == DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK) {
                 action = RepairAction.REMOVE_VERIFIED_STALE_CLEANUP_LOCK;
-                targetPath = adminDir.resolve("cleanup-execution.lock").toString();
+                targetPath = ProjectAdministrativeLayout.cleanupExecutionLock(root).toString();
                 executable = true;
                 backupReq = true;
             } else if (finding.code() == DoctorFindingCode.STALE_RECONCILIATION_EXECUTION_LOCK) {
                 action = RepairAction.REMOVE_VERIFIED_STALE_RECONCILIATION_LOCK;
-                targetPath = adminDir.resolve("reconciliation-execution.lock").toString();
+                targetPath = ProjectAdministrativeLayout.reconciliationExecutionLock(root).toString();
                 executable = true;
                 backupReq = true;
             } else if (finding.code() == DoctorFindingCode.STALE_REPAIR_LOCK) {
                 action = RepairAction.REMOVE_VERIFIED_STALE_REPAIR_LOCK;
-                targetPath = adminDir.resolve("repair-execution.lock").toString();
+                targetPath = ProjectAdministrativeLayout.repairExecutionLock(root).toString();
                 executable = true;
                 backupReq = true;
             } else if (finding.code() == DoctorFindingCode.CORRUPT_CLEANUP_PLAN) {
                 action = RepairAction.ARCHIVE_CORRUPT_ADMIN_PLAN;
-                targetPath = adminDir.resolve("cleanup-plans").toString();
+                targetPath = ProjectAdministrativeLayout.cleanupPlans(root).toString();
                 executable = true;
             } else if (finding.code() == DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN) {
                 action = RepairAction.ARCHIVE_CORRUPT_ADMIN_PLAN;
-                targetPath = adminDir.resolve("reconciliation-plans").toString();
+                targetPath = ProjectAdministrativeLayout.reconciliationPlans(root).toString();
                 executable = true;
             }
 
@@ -171,7 +170,7 @@ public final class RepairService {
                             entry.entryId(),
                             entry.action().name(),
                             entry.targetPath(),
-                            "SKIPPED_UNSUPPORTED",
+                            RepairExecutionJournal.RepairExecutionRecord.SKIPPED_UNSUPPORTED,
                             now,
                             "Action unsupported for automatic repair");
                     journal.append(rec);
@@ -189,7 +188,7 @@ public final class RepairService {
                             entry.entryId(),
                             entry.action().name(),
                             entry.targetPath(),
-                            "SKIPPED_STALE",
+                            RepairExecutionJournal.RepairExecutionRecord.SKIPPED_STALE,
                             now,
                             "Target path no longer present");
                     journal.append(rec);
@@ -211,7 +210,7 @@ public final class RepairService {
                                     entry.entryId(),
                                     entry.action().name(),
                                     entry.targetPath(),
-                                    "COMPLETED",
+                                    RepairExecutionJournal.RepairExecutionRecord.COMPLETED,
                                     now,
                                     "Successfully removed verified stale administrative lock");
                             journal.append(rec);
@@ -225,14 +224,14 @@ public final class RepairService {
                                     entry.entryId(),
                                     entry.action().name(),
                                     entry.targetPath(),
-                                    "COMPLETED",
+                                    RepairExecutionJournal.RepairExecutionRecord.COMPLETED,
                                     now,
                                     "Successfully created administrative directory");
                             journal.append(rec);
                             records.add(rec);
                         }
                         case ARCHIVE_CORRUPT_ADMIN_PLAN, ARCHIVE_CORRUPT_ADMIN_JOURNAL -> {
-                            Path backupDir = RepairBackupService.resolveBackupDirectory(root, executionId).resolve("corrupt");
+                            Path backupDir = ProjectAdministrativeLayout.repairBackups(root, executionId).resolve("corrupt");
                             Files.createDirectories(backupDir);
                             if (Files.exists(targetFile) && Files.isRegularFile(targetFile)) {
                                 Files.move(targetFile, backupDir.resolve(targetFile.getFileName()), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -243,7 +242,7 @@ public final class RepairService {
                                     entry.entryId(),
                                     entry.action().name(),
                                     entry.targetPath(),
-                                    "COMPLETED",
+                                    RepairExecutionJournal.RepairExecutionRecord.COMPLETED,
                                     now,
                                     "Successfully archived corrupt administrative file");
                             journal.append(rec);
@@ -256,7 +255,7 @@ public final class RepairService {
                                     entry.entryId(),
                                     entry.action().name(),
                                     entry.targetPath(),
-                                    "COMPLETED",
+                                    RepairExecutionJournal.RepairExecutionRecord.COMPLETED,
                                     now,
                                     "Action completed");
                             journal.append(rec);
@@ -270,7 +269,7 @@ public final class RepairService {
                             entry.entryId(),
                             entry.action().name(),
                             entry.targetPath(),
-                            "FAILED_REQUIRES_REVIEW",
+                            RepairExecutionJournal.RepairExecutionRecord.FAILED_REQUIRES_REVIEW,
                             now,
                             "Repair execution failed: " + ex.getMessage());
                     journal.append(rec);

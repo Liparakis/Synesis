@@ -11,7 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * File lock ensuring single repair executor per project admin root outside control checkout under
@@ -19,7 +19,7 @@ import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
  *
  * @since 1.0
  */
-public final class RepairExecutionLock implements AutoCloseable {
+final class RepairExecutionLock implements AutoCloseable {
 
     private final Path lockFilePath;
     private final FileChannel channel;
@@ -43,10 +43,8 @@ public final class RepairExecutionLock implements AutoCloseable {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(planId, "planId");
 
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path adminDir = workspaceRoot.resolve("admin");
-        Files.createDirectories(adminDir);
-        Path lockPath = adminDir.resolve("repair-execution.lock");
+        Path lockPath = ProjectAdministrativeLayout.repairExecutionLock(controlRoot);
+        Files.createDirectories(lockPath.getParent());
 
         FileChannel fc = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
 

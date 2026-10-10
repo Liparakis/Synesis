@@ -33,4 +33,8 @@ public record ReconciliationPlan(int schemaVersion, String planId, String projec
         Objects.requireNonNull(contentHash, "contentHash");
         Objects.requireNonNull(entries, "entries");
     }
+
+    ReconciliationPlan withContentHash(String hash) {
+        return new ReconciliationPlan(schemaVersion, planId, projectId, controlRepositoryPath, externalWorkspaceRoot, createdAtEpochMillis, totalInspectedCount, executableCount, hash, entries);
+    }
 }

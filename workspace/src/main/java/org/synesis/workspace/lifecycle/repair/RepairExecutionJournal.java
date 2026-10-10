@@ -1,15 +1,12 @@
 package org.synesis.workspace.lifecycle.repair;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.AdministrativeJournal;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Append-only execution journal logging repair execution events under
@@ -20,10 +17,10 @@ import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
  */
 public final class RepairExecutionJournal {
 
-    private final Path journalFile;
+    private final AdministrativeJournal journal;
 
-    private RepairExecutionJournal(Path journalFile) {
-        this.journalFile = journalFile;
+    private RepairExecutionJournal(AdministrativeJournal journal) {
+        this.journal = journal;
     }
 
     /**
@@ -38,12 +35,7 @@ public final class RepairExecutionJournal {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(executionId, "executionId");
 
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        Path journalDir = workspaceRoot.resolve("admin").resolve("repair-executions");
-        Files.createDirectories(journalDir);
-        Path file = journalDir.resolve(executionId + ".jsonl");
-
-        return new RepairExecutionJournal(file);
+        return new RepairExecutionJournal(new AdministrativeJournal(ProjectAdministrativeLayout.repairExecutions(controlRoot), executionId));
     }
 
     /**
@@ -52,7 +44,7 @@ public final class RepairExecutionJournal {
      * @param record execution record to append
      * @throws IOException if appending fails
      */
-    public synchronized void append(RepairExecutionRecord record) throws IOException {
+    public void append(RepairExecutionRecord record) throws IOException {
         Objects.requireNonNull(record, "record");
 
         Map<String, Object> map = new LinkedHashMap<>();
@@ -65,8 +57,7 @@ public final class RepairExecutionJournal {
         map.put("timestampEpochMillis", record.timestampEpochMillis());
         map.put("details", record.details());
 
-        String jsonLine = ProviderJson.write(map) + "\n";
-        Files.writeString(journalFile, jsonLine, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+        journal.append(map);
     }
 
     /**
@@ -82,6 +73,12 @@ public final class RepairExecutionJournal {
      * @param details              explanation message
      */
     public record RepairExecutionRecord(String executionId, String planId, String entryId, String action, String targetPath, String status, long timestampEpochMillis, String details) {
+
+        static final String COMPLETED = "COMPLETED";
+        static final String SKIPPED_STALE = "SKIPPED_STALE";
+        static final String SKIPPED_UNSUPPORTED = "SKIPPED_UNSUPPORTED";
+        static final String FAILED_REQUIRES_REVIEW = "FAILED_REQUIRES_REVIEW";
+        static final String ROLLED_BACK = "ROLLED_BACK";
 
         /**
          * Validates non-null field invariants.

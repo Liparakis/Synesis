@@ -36,4 +36,8 @@ public record RepairPlan(int schemaVersion, String planId, String projectId, Str
         Objects.requireNonNull(contentHash, "contentHash");
         Objects.requireNonNull(entries, "entries");
     }
+
+    RepairPlan withContentHash(String hash) {
+        return new RepairPlan(schemaVersion, planId, projectId, controlRepositoryPath, externalWorkspaceRoot, createdAtEpochMillis, doctorReportFingerprint, supportedRepairsCount, unsupportedCount, hash, entries);
+    }
 }

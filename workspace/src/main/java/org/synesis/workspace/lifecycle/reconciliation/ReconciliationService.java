@@ -104,28 +104,7 @@ public final class ReconciliationService {
                 case AMBIGUOUS -> ambiguousCount++;
                 case RECOVERY_ELIGIBLE -> {
                     recoveryEligibleCount++;
-                    String actionId = "rec-" + lease.connectionInstanceId();
-                    String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
-                    Participant.State participantState = participantStates.get(participant);
-                    if (participantState == null || isTerminalParticipantState(participantState) || participantState == Participant.State.RECOVERY_HELD) {
-                        continue;
-                    }
-                    if (participantState != Participant.State.SUSPENDED) {
-                        entries.add(new ReconciliationPlanEntry(1,
-                                actionId,
-                                ReconciliationAction.MARK_SESSION_SUSPENDED,
-                                lease.sessionId(),
-                                true,
-                                List.of("session_recovery_eligible"),
-                                "Fence old authority without releasing claims"));
-                    }
-                    entries.add(new ReconciliationPlanEntry(1,
-                            actionId + "-recovery",
-                            ReconciliationAction.HOLD_SUSPENDED_RECOVERY,
-                            lease.sessionId(),
-                            true,
-                            List.of("session_suspended"),
-                            "Materialize and reserve immutable recovery evidence"));
+                    planSuspendAndHold(entries, lease, participantStates, "session_recovery_eligible", "Fence old authority without releasing claims");
                 }
                 case CLOSED_CLEANLY -> {
                     // EOF proves this exact connection has ended, so unfinished
@@ -133,28 +112,7 @@ public final class ReconciliationService {
                     // grace period. Terminal participant states are still filtered
                     // above; clean transport closure never completes a lane.
                     recoveryEligibleCount++;
-                    String actionId = "rec-" + lease.connectionInstanceId();
-                    String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
-                    Participant.State participantState = participantStates.get(participant);
-                    if (participantState == null || isTerminalParticipantState(participantState) || participantState == Participant.State.RECOVERY_HELD) {
-                        continue;
-                    }
-                    if (participantState != Participant.State.SUSPENDED) {
-                        entries.add(new ReconciliationPlanEntry(1,
-                                actionId,
-                                ReconciliationAction.MARK_SESSION_SUSPENDED,
-                                lease.sessionId(),
-                                true,
-                                List.of("transport_closed_cleanly"),
-                                "Fence closed connection authority without releasing claims"));
-                    }
-                    entries.add(new ReconciliationPlanEntry(1,
-                            actionId + "-recovery",
-                            ReconciliationAction.HOLD_SUSPENDED_RECOVERY,
-                            lease.sessionId(),
-                            true,
-                            List.of("session_suspended"),
-                            "Materialize and reserve immutable recovery evidence"));
+                    planSuspendAndHold(entries, lease, participantStates, "transport_closed_cleanly", "Fence closed connection authority without releasing claims");
                 }
             }
         }
@@ -278,7 +236,7 @@ public final class ReconciliationService {
                             entry.actionId(),
                             entry.action(),
                             entry.targetResourceId(),
-                            "COMPLETED",
+                            ReconciliationExecutionRecord.COMPLETED,
                             "already_completed",
                             now,
                             "Action previously completed");
@@ -294,7 +252,7 @@ public final class ReconciliationService {
                             entry.actionId(),
                             entry.action(),
                             entry.targetResourceId(),
-                            "SKIPPED_AMBIGUOUS",
+                            ReconciliationExecutionRecord.SKIPPED_AMBIGUOUS,
                             "action_not_executable",
                             now,
                             "Action not classified as executable");
@@ -313,7 +271,7 @@ public final class ReconciliationService {
                                 entry.actionId(),
                                 entry.action(),
                                 entry.targetResourceId(),
-                                "SKIPPED_STALE",
+                                ReconciliationExecutionRecord.SKIPPED_STALE,
                                 "participant_terminal_or_missing",
                                 now,
                                 "Recovery plan no longer matches the participant lifecycle state");
@@ -328,7 +286,7 @@ public final class ReconciliationService {
                                 entry.actionId(),
                                 entry.action(),
                                 entry.targetResourceId(),
-                                "COMPLETED",
+                                ReconciliationExecutionRecord.COMPLETED,
                                 "already_suspended",
                                 now,
                                 "Participant was already fenced by an earlier recovery execution");
@@ -343,7 +301,7 @@ public final class ReconciliationService {
                                 entry.actionId(),
                                 entry.action(),
                                 entry.targetResourceId(),
-                                "COMPLETED",
+                                ReconciliationExecutionRecord.COMPLETED,
                                 "already_recovery_held",
                                 now,
                                 "Recovery snapshot was already held for this participant");
@@ -370,7 +328,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "session_suspended",
                                     now,
                                     "Old authority fenced; claims retained");
@@ -398,7 +356,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "ownership_released",
                                     now,
                                     "Semantic ownership released");
@@ -417,7 +375,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "recovery_held",
                                     now,
                                     "Recovery evidence reserved for authorized continuation");
@@ -436,7 +394,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "dependency_invalidated",
                                     now,
                                     "Dependencies invalidated");
@@ -451,7 +409,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "session_finalized",
                                     now,
                                     "Suspended session finalized");
@@ -465,7 +423,7 @@ public final class ReconciliationService {
                                     entry.actionId(),
                                     entry.action(),
                                     entry.targetResourceId(),
-                                    "COMPLETED",
+                                    ReconciliationExecutionRecord.COMPLETED,
                                     "action_completed",
                                     now,
                                     "Interrupted lifecycle context reconciled");
@@ -480,7 +438,7 @@ public final class ReconciliationService {
                             entry.actionId(),
                             entry.action(),
                             entry.targetResourceId(),
-                            "FAILED_REQUIRES_REVIEW",
+                            ReconciliationExecutionRecord.FAILED_REQUIRES_REVIEW,
                             "reconciliation_failed",
                             now,
                             "Failure: " + failure.getMessage());
@@ -503,6 +461,29 @@ public final class ReconciliationService {
                     resultStatus,
                     Collections.unmodifiableList(records));
         }
+    }
+
+    private static void planSuspendAndHold(List<ReconciliationPlanEntry> entries,
+            SessionLeaseRecord lease,
+            Map<String, Participant.State> participantStates,
+            String suspendReason,
+            String suspendSummary) {
+        String actionId = "rec-" + lease.connectionInstanceId();
+        String participant = WorkspaceCollaborationService.participantHandle(lease.sessionId());
+        Participant.State participantState = participantStates.get(participant);
+        if (participantState == null || isTerminalParticipantState(participantState) || participantState == Participant.State.RECOVERY_HELD) {
+            return;
+        }
+        if (participantState != Participant.State.SUSPENDED) {
+            entries.add(new ReconciliationPlanEntry(1, actionId, ReconciliationAction.MARK_SESSION_SUSPENDED, lease.sessionId(), true, List.of(suspendReason), suspendSummary));
+        }
+        entries.add(new ReconciliationPlanEntry(1,
+                actionId + "-recovery",
+                ReconciliationAction.HOLD_SUSPENDED_RECOVERY,
+                lease.sessionId(),
+                true,
+                List.of("session_suspended"),
+                "Materialize and reserve immutable recovery evidence"));
     }
 
     private static boolean isTerminalParticipantState(Participant.State state) {

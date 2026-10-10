@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Service for safely quarantining narrowly defined unregistered orphan resources under external
@@ -24,14 +25,14 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  *
  * @since 1.0
  */
-public final class LifecycleQuarantineService {
+final class LifecycleQuarantineService {
 
     private final LifecyclePathVerifier pathVerifier;
 
     /**
      * Creates a quarantine service with default path verifier.
      */
-    public LifecycleQuarantineService() {
+    LifecycleQuarantineService() {
         this(new LifecyclePathVerifier());
     }
 
@@ -40,7 +41,7 @@ public final class LifecycleQuarantineService {
      *
      * @param pathVerifier path safety verifier
      */
-    public LifecycleQuarantineService(LifecyclePathVerifier pathVerifier) {
+    LifecycleQuarantineService(LifecyclePathVerifier pathVerifier) {
         this.pathVerifier = Objects.requireNonNull(pathVerifier, "pathVerifier");
     }
 
@@ -78,9 +79,8 @@ public final class LifecycleQuarantineService {
         }
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
         String quarantineId = "quarantine-" + UUID.randomUUID().toString().replace("-", "");
-        Path quarantineTargetDir = workspaceRoot.resolve("admin").resolve("quarantine").resolve(quarantineId);
+        Path quarantineTargetDir = ProjectAdministrativeLayout.quarantine(root).resolve(quarantineId);
 
         Files.createDirectories(quarantineTargetDir);
         Path destination = quarantineTargetDir.resolve(candidatePath.getFileName().toString());

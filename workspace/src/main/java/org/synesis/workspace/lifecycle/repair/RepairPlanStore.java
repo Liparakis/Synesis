@@ -1,8 +1,6 @@
 package org.synesis.workspace.lifecycle.repair;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -11,9 +9,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.doctor.DoctorFindingCode;
-import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.AdministrativePlanFiles;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Storage service for persisting and loading immutable repair plans outside control checkout under
@@ -28,21 +26,6 @@ public final class RepairPlanStore {
      * Creates a repair plan store.
      */
     public RepairPlanStore() {
-    }
-
-    /**
-     * Resolves the directory path for storing administrative repair plans.
-     *
-     * @param controlRoot control project root path
-     * @return normalized repair plans directory path
-     */
-    public static Path resolvePlansDirectory(Path controlRoot) {
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("repair-plans");
-    }
-
-    private static String serializeCanonical(RepairPlan plan) {
-        return ProviderJson.write(toSerializableMap(plan));
     }
 
     private static Map<String, Object> toSerializableMap(RepairPlan plan) {
@@ -133,7 +116,7 @@ public final class RepairPlanStore {
         Objects.requireNonNull(entries, "entries");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
+        Path workspaceRoot = ProjectAdministrativeLayout.workspaceRoot(root);
         String planId = "repairplan-" + UUID.randomUUID().toString().replace("-", "");
 
         int supported = (int) entries.stream().filter(RepairPlanEntry::executable).count();
@@ -141,25 +124,8 @@ public final class RepairPlanStore {
 
         RepairPlan unsignedPlan = new RepairPlan(1, planId, projectId, root.toString(), workspaceRoot.toString(), System.currentTimeMillis(), doctorReportFingerprint, supported, unsupported, "UNSIGNED", entries);
 
-        String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = Sha256.hex(canonicalContent);
-
-        RepairPlan finalPlan = new RepairPlan(unsignedPlan.schemaVersion(),
-                unsignedPlan.planId(),
-                unsignedPlan.projectId(),
-                unsignedPlan.controlRepositoryPath(),
-                unsignedPlan.externalWorkspaceRoot(),
-                unsignedPlan.createdAtEpochMillis(),
-                unsignedPlan.doctorReportFingerprint(),
-                unsignedPlan.supportedRepairsCount(),
-                unsignedPlan.unsupportedCount(),
-                contentHash,
-                unsignedPlan.entries());
-
-        Path plansDir = resolvePlansDirectory(root);
-        Files.createDirectories(plansDir);
-        Path targetFile = plansDir.resolve(planId + ".json");
-        Files.writeString(targetFile, ProviderJson.write(toSerializableMap(finalPlan)), StandardCharsets.UTF_8);
+        RepairPlan finalPlan = unsignedPlan.withContentHash(AdministrativePlanFiles.contentHash(toSerializableMap(unsignedPlan)));
+        AdministrativePlanFiles.write(ProjectAdministrativeLayout.repairPlans(root), planId, toSerializableMap(finalPlan));
 
         return finalPlan;
     }
@@ -177,42 +143,7 @@ public final class RepairPlanStore {
         Objects.requireNonNull(planId, "planId");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path plansDir = resolvePlansDirectory(root);
-        Path planFile = plansDir.resolve(planId + ".json");
-
-        if (!Files.exists(planFile)) {
-            throw new IOException("Repair plan not found: " + planId);
-        }
-
-        String rawJson = Files.readString(planFile, StandardCharsets.UTF_8);
-        RepairPlan plan = fromSerializableMap(rawJson);
-
-        if (!planId.equals(plan.planId())) {
-            throw new IOException("Plan ID mismatch in store: expected " + planId + " but found " + plan.planId());
-        }
-
-        Path expectedWorkspace = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        if (!expectedWorkspace.toString().equals(plan.externalWorkspaceRoot())) {
-            throw new IOException("External workspace root mismatch in plan: " + plan.externalWorkspaceRoot());
-        }
-
-        RepairPlan unsigned = new RepairPlan(plan.schemaVersion(),
-                plan.planId(),
-                plan.projectId(),
-                plan.controlRepositoryPath(),
-                plan.externalWorkspaceRoot(),
-                plan.createdAtEpochMillis(),
-                plan.doctorReportFingerprint(),
-                plan.supportedRepairsCount(),
-                plan.unsupportedCount(),
-                "UNSIGNED",
-                plan.entries());
-        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
-        if (!expectedHash.equals(plan.contentHash())) {
-            throw new IOException("Repair plan content hash integrity verification failed for " + planId);
-        }
-
-        return plan;
+        return AdministrativePlanFiles.load(root, ProjectAdministrativeLayout.repairPlans(root), "Repair", planId, RepairPlanStore::fromSerializableMap, RepairPlanStore::toSerializableMap);
     }
 
 }

@@ -110,7 +110,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.infrastructure.filesystem`: `AtomicFiles`, `ProjectMetadataStorage`, `TextFileDocument`
 - `org.synesis.workspace.infrastructure.json`: `ProviderJson`
 - `org.synesis.workspace.infrastructure.process`: `ProcessEvidenceState`, `ProcessInspector`
-- `org.synesis.workspace.lifecycle`: `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`
+- `org.synesis.workspace.lifecycle`: `AdministrativeJournal`, `AdministrativePlanFiles`, `AdministrativeStateLocator`, `ManagedBaselineTransactionService`, `ManagedPathPolicy`, `ProjectAdministrativeLayout`, `RepositoryPortabilityService`, `RepositoryPrivateStateService`
 - `org.synesis.workspace.lifecycle.cleanup.execution`: `CleanupEntryExecutionState`, `CleanupExecutionJournal`, `CleanupExecutionLock`, `CleanupExecutionRecord`, `CleanupExecutionService`, `LifecycleQuarantineService`
 - `org.synesis.workspace.lifecycle.cleanup.inventory`: `LifecycleInventoryService`, `LifecyclePathVerifier`, `LifecycleResourceFingerprint`, `LifecycleResourceType`
 - `org.synesis.workspace.lifecycle.cleanup.plan`: `CleanupClassification`, `CleanupEligibilityService`, `CleanupPlan`, `CleanupPlanEntry`, `CleanupPlanService`, `CleanupPlanStore`, `CleanupReason`, `PersistedCleanupPlan`, `PersistedCleanupPlanEntry`, `RetentionPolicy`

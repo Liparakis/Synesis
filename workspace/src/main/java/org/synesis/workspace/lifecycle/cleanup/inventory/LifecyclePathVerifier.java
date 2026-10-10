@@ -1,5 +1,6 @@
 package org.synesis.workspace.lifecycle.cleanup.inventory;
 
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 import org.synesis.workspace.lifecycle.cleanup.plan.CleanupReason;
 
 import java.io.IOException;
@@ -29,15 +30,10 @@ public final class LifecyclePathVerifier {
      *
      * @param controlRoot control project root path
      * @return normalized absolute external workspace root path
+     * @see ProjectAdministrativeLayout#workspaceRoot(Path)
      */
     public static Path resolveWorkspaceRoot(Path controlRoot) {
-        Objects.requireNonNull(controlRoot, "controlRoot");
-        String projectId = resolveProjectId(controlRoot);
-        String base = System.getenv("LOCALAPPDATA");
-        if (base == null || base.isBlank()) {
-            base = Path.of(System.getProperty("user.home"), ".synesis").toString();
-        }
-        return Path.of(base, "Synesis", "workspaces", projectId).toAbsolutePath().normalize();
+        return ProjectAdministrativeLayout.workspaceRoot(controlRoot);
     }
 
     private static boolean verifyGitCommonDirectory(Path controlRoot, Path worktreePath) {
@@ -54,26 +50,6 @@ public final class LifecyclePathVerifier {
         } catch (Exception failure) {
             return false;
         }
-    }
-
-    private static String resolveProjectId(Path controlRoot) {
-        Path projFile = controlRoot.resolve(".synesis/project.json");
-        if (Files.exists(projFile)) {
-            try {
-                String content = Files.readString(projFile);
-                int idx = content.indexOf("\"projectId\"");
-                if (idx != -1) {
-                    int colon = content.indexOf(':', idx);
-                    int q1 = content.indexOf('"', colon + 1);
-                    int q2 = content.indexOf('"', q1 + 1);
-                    if (colon != -1 && q1 != -1 && q2 != -1) {
-                        return content.substring(q1 + 1, q2);
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "default-project";
     }
 
     private static String runGit(Path workdir) throws IOException {
@@ -105,7 +81,7 @@ public final class LifecyclePathVerifier {
         }
 
         // 3. Resolve workspace root for this project
-        Path workspaceRoot = resolveWorkspaceRoot(normControl);
+        Path workspaceRoot = ProjectAdministrativeLayout.workspaceRoot(normControl);
 
         // 4. Verify candidate starts with workspaceRoot
         if (!normCandidate.startsWith(workspaceRoot)) {

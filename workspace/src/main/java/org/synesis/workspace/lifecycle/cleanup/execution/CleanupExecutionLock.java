@@ -1,7 +1,5 @@
 package org.synesis.workspace.lifecycle.cleanup.execution;
 
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
@@ -13,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Project-scoped execution lock ensuring strictly single-executor execution over an external
@@ -21,7 +20,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
-public final class CleanupExecutionLock implements AutoCloseable {
+final class CleanupExecutionLock implements AutoCloseable {
 
     private final Path lockFilePath;
     private final String nonce;
@@ -46,11 +45,8 @@ public final class CleanupExecutionLock implements AutoCloseable {
         Objects.requireNonNull(planId, "planId");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        Path adminDir = workspaceRoot.resolve("admin");
-        Files.createDirectories(adminDir);
-
-        Path lockFile = adminDir.resolve("cleanup-execution.lock");
+        Path lockFile = ProjectAdministrativeLayout.cleanupExecutionLock(root);
+        Files.createDirectories(lockFile.getParent());
 
         if (Files.exists(lockFile)) {
             throw new IOException("Cleanup execution is busy: lock file exists at " + lockFile);

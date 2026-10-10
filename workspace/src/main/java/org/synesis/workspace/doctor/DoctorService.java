@@ -19,9 +19,9 @@ import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 import org.synesis.workspace.lifecycle.cleanup.plan.CleanupEligibilityService;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleInventoryService;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 import org.synesis.workspace.lifecycle.command.ProjectCommandDiagnostics;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
@@ -325,32 +325,31 @@ public final class DoctorService {
 
     private void checkAdministrativeState(Path root, List<DoctorFinding> findings) {
         checkCommandNamespace(findings);
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        Path adminDir = workspaceRoot.resolve("admin");
+        Path adminDir = ProjectAdministrativeLayout.adminDirectory(root);
 
         if (Files.isDirectory(adminDir)) {
             // Cleanup lock check
-            Path cleanupLock = adminDir.resolve("cleanup-execution.lock");
+            Path cleanupLock = ProjectAdministrativeLayout.cleanupExecutionLock(root);
             if (Files.exists(cleanupLock) && isLockStale(cleanupLock)) {
                 findings.add(finding(DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK, "stale_cleanup_lock"));
             }
 
             // Reconciliation lock check
-            Path reconcLock = adminDir.resolve("reconciliation-execution.lock");
+            Path reconcLock = ProjectAdministrativeLayout.reconciliationExecutionLock(root);
             if (Files.exists(reconcLock) && isLockStale(reconcLock)) {
                 findings.add(finding(DoctorFindingCode.STALE_RECONCILIATION_EXECUTION_LOCK, "stale_reconc_lock"));
             }
 
             // Repair lock check
-            Path repairLock = adminDir.resolve("repair-execution.lock");
+            Path repairLock = ProjectAdministrativeLayout.repairExecutionLock(root);
             if (Files.exists(repairLock) && isLockStale(repairLock)) {
                 findings.add(finding(DoctorFindingCode.STALE_REPAIR_LOCK, "stale_repair_lock"));
             }
 
             // Corrupt cleanup plans
-            checkCorruptJsonFiles(adminDir.resolve("cleanup-plans"), DoctorFindingCode.CORRUPT_CLEANUP_PLAN, findings);
+            checkCorruptJsonFiles(ProjectAdministrativeLayout.cleanupPlans(root), DoctorFindingCode.CORRUPT_CLEANUP_PLAN, findings);
             // Corrupt reconciliation plans
-            checkCorruptJsonFiles(adminDir.resolve("reconciliation-plans"), DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN, findings);
+            checkCorruptJsonFiles(ProjectAdministrativeLayout.reconciliationPlans(root), DoctorFindingCode.CORRUPT_RECONCILIATION_PLAN, findings);
         }
     }
 

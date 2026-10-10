@@ -1,15 +1,13 @@
 package org.synesis.workspace.lifecycle.cleanup.plan;
 
-import org.synesis.workspace.infrastructure.digest.Sha256;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.AdministrativePlanFiles;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceFingerprint;
 
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleResourceType;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,21 +32,6 @@ public final class CleanupPlanStore {
      * Creates a cleanup plan store.
      */
     public CleanupPlanStore() {
-    }
-
-    /**
-     * Resolves the directory path for storing administrative cleanup plans.
-     *
-     * @param controlRoot control project root path
-     * @return normalized administrative cleanup plans directory path
-     */
-    public static Path resolvePlansDirectory(Path controlRoot) {
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("cleanup-plans");
-    }
-
-    private static String serializeCanonical(PersistedCleanupPlan plan) {
-        return ProviderJson.write(toSerializableMap(plan));
     }
 
     private static Map<String, Object> toSerializableMap(PersistedCleanupPlan plan) {
@@ -171,7 +154,7 @@ public final class CleanupPlanStore {
         Objects.requireNonNull(plan, "plan");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
+        Path workspaceRoot = ProjectAdministrativeLayout.workspaceRoot(root);
         String planId = "plan-" + UUID.randomUUID().toString().replace("-", "");
 
         List<PersistedCleanupPlanEntry> persistedEntries = new ArrayList<>();
@@ -214,27 +197,8 @@ public final class CleanupPlanStore {
                 "UNSIGNED",
                 persistedEntries);
 
-        String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = Sha256.hex(canonicalContent);
-
-        PersistedCleanupPlan finalPlan = new PersistedCleanupPlan(unsignedPlan.schemaVersion(),
-                unsignedPlan.planId(),
-                unsignedPlan.projectId(),
-                unsignedPlan.controlRepositoryPath(),
-                unsignedPlan.externalWorkspaceRoot(),
-                unsignedPlan.createdAtEpochMillis(),
-                unsignedPlan.retentionPolicySnapshot(),
-                unsignedPlan.durableStateSequence(),
-                unsignedPlan.totalDiscoveredCount(),
-                unsignedPlan.totalExecutableCount(),
-                unsignedPlan.totalEstimatedReclaimableBytes(),
-                contentHash,
-                unsignedPlan.entries());
-
-        Path plansDir = resolvePlansDirectory(root);
-        Files.createDirectories(plansDir);
-        Path targetFile = plansDir.resolve(planId + ".json");
-        Files.writeString(targetFile, ProviderJson.write(toSerializableMap(finalPlan)), StandardCharsets.UTF_8);
+        PersistedCleanupPlan finalPlan = unsignedPlan.withContentHash(AdministrativePlanFiles.contentHash(toSerializableMap(unsignedPlan)));
+        AdministrativePlanFiles.write(ProjectAdministrativeLayout.cleanupPlans(root), planId, toSerializableMap(finalPlan));
 
         return finalPlan;
     }
@@ -252,46 +216,7 @@ public final class CleanupPlanStore {
         Objects.requireNonNull(planId, "planId");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path plansDir = resolvePlansDirectory(root);
-        Path planFile = plansDir.resolve(planId + ".json");
-
-        if (!Files.exists(planFile)) {
-            throw new IOException("Cleanup plan not found: " + planId);
-        }
-
-        String rawJson = Files.readString(planFile, StandardCharsets.UTF_8);
-        PersistedCleanupPlan plan = fromSerializableMap(rawJson);
-
-        // Verification checks
-        if (!planId.equals(plan.planId())) {
-            throw new IOException("Plan ID mismatch in store: expected " + planId + " but found " + plan.planId());
-        }
-
-        Path expectedWorkspace = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        if (!expectedWorkspace.toString().equals(plan.externalWorkspaceRoot())) {
-            throw new IOException("External workspace root mismatch in plan: " + plan.externalWorkspaceRoot());
-        }
-
-        // Verify content hash integrity
-        PersistedCleanupPlan unsigned = new PersistedCleanupPlan(plan.schemaVersion(),
-                plan.planId(),
-                plan.projectId(),
-                plan.controlRepositoryPath(),
-                plan.externalWorkspaceRoot(),
-                plan.createdAtEpochMillis(),
-                plan.retentionPolicySnapshot(),
-                plan.durableStateSequence(),
-                plan.totalDiscoveredCount(),
-                plan.totalExecutableCount(),
-                plan.totalEstimatedReclaimableBytes(),
-                "UNSIGNED",
-                plan.entries());
-        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
-        if (!expectedHash.equals(plan.contentHash())) {
-            throw new IOException("Cleanup plan content hash integrity verification failed for " + planId);
-        }
-
-        return plan;
+        return AdministrativePlanFiles.load(root, ProjectAdministrativeLayout.cleanupPlans(root), "Cleanup", planId, CleanupPlanStore::fromSerializableMap, CleanupPlanStore::toSerializableMap);
     }
 
 }

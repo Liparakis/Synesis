@@ -20,6 +20,12 @@ import java.util.Objects;
 public record ReconciliationExecutionRecord(String executionId, String planId, String actionId, ReconciliationAction action, String targetResourceId, String state, String preconditionReason, long timestampEpochMillis,
                                             String diagnosticDetails) {
 
+    // Persisted values of state; the journal's completed-ids reader matches COMPLETED.
+    static final String COMPLETED = "COMPLETED";
+    static final String SKIPPED_STALE = "SKIPPED_STALE";
+    static final String SKIPPED_AMBIGUOUS = "SKIPPED_AMBIGUOUS";
+    static final String FAILED_REQUIRES_REVIEW = "FAILED_REQUIRES_REVIEW";
+
     /**
      * Requires non-null execution, plan, action, target, state, reason, and diagnostic values.
      */

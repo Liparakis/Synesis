@@ -14,6 +14,7 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -158,7 +159,7 @@ public final class LifecycleInventoryService {
         }
 
         List<DiscoveredResource> results = new ArrayList<>();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
+        Path workspaceRoot = ProjectAdministrativeLayout.workspaceRoot(root);
 
         // 1. Session Bindings & Worker Worktrees
         Path sessionsDir = location.synesisDirectory().resolve("local").resolve("sessions");

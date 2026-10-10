@@ -39,4 +39,8 @@ public record PersistedCleanupPlan(int schemaVersion, String planId, String proj
         Objects.requireNonNull(contentHash, "contentHash");
         Objects.requireNonNull(entries, "entries");
     }
+
+    PersistedCleanupPlan withContentHash(String hash) {
+        return new PersistedCleanupPlan(schemaVersion, planId, projectId, controlRepositoryPath, externalWorkspaceRoot, createdAtEpochMillis, retentionPolicySnapshot, durableStateSequence, totalDiscoveredCount, totalExecutableCount, totalEstimatedReclaimableBytes, hash, entries);
+    }
 }

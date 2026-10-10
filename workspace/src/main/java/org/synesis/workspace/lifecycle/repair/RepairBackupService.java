@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Service managing pre-mutation administrative file backups and exact rollback operations under
@@ -18,24 +18,12 @@ import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
  *
  * @since 1.0
  */
-public final class RepairBackupService {
+final class RepairBackupService {
 
     /**
      * Creates a repair backup service.
      */
     public RepairBackupService() {
-    }
-
-    /**
-     * Resolves the backup directory for a repair execution run.
-     *
-     * @param controlRoot control project root path
-     * @param executionId opaque execution ID
-     * @return backup directory path
-     */
-    public static Path resolveBackupDirectory(Path controlRoot, String executionId) {
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("repair-backups").resolve(executionId);
     }
 
     /**
@@ -57,7 +45,7 @@ public final class RepairBackupService {
             throw new IOException("Target is not a regular file for backup: " + targetFile);
         }
 
-        Path backupDir = resolveBackupDirectory(controlRoot, executionId);
+        Path backupDir = ProjectAdministrativeLayout.repairBackups(controlRoot, executionId);
         Files.createDirectories(backupDir);
 
         String fileName = targetFile.getFileName().toString();
@@ -90,7 +78,7 @@ public final class RepairBackupService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(executionId, "executionId");
 
-        Path backupDir = resolveBackupDirectory(controlRoot, executionId);
+        Path backupDir = ProjectAdministrativeLayout.repairBackups(controlRoot, executionId);
         Path manifestFile = backupDir.resolve("manifest.json");
 
         if (!Files.exists(manifestFile)) {
@@ -122,7 +110,7 @@ public final class RepairBackupService {
                 "rollback",
                 "ROLLBACK",
                 originalPath.toString(),
-                "ROLLED_BACK",
+                RepairExecutionJournal.RepairExecutionRecord.ROLLED_BACK,
                 System.currentTimeMillis(),
                 "Successfully restored administrative file from backup"));
     }

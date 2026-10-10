@@ -124,44 +124,6 @@ public final class SessionLeaseService {
         return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId, processIdentity, createdAt, now);
     }
 
-    /**
-     * Registers a lease against an explicitly supervised provider process.
-     *
-     * <p>This is used only when Synesis itself launches the provider. The
-     * process identity is evidence for liveness; it does not grant mutation authority or imply
-     * intentional abandonment when the process exits.
-     *
-     * @param controlRoot          control project root
-     * @param projectId            project identifier
-     * @param provider             provider identifier
-     * @param connectionInstanceId exact connection identifier
-     * @param workerNodeId         worker node identifier
-     * @param sessionId            session identifier
-     * @param processIdentity      supervised provider process evidence
-     * @param policy               lease policy
-     * @return persisted lease record
-     * @throws IOException when persistence fails
-     */
-    @SuppressWarnings("UnusedReturnValue")
-    public SessionLeaseRecord createOrRenewSupervisedLease(Path controlRoot,
-            String projectId,
-            String provider,
-            String connectionInstanceId,
-            String workerNodeId,
-            String sessionId,
-            SessionProcessIdentity processIdentity,
-            SessionLeasePolicy policy) throws IOException {
-        Objects.requireNonNull(processIdentity, "processIdentity");
-        Objects.requireNonNull(policy, "policy");
-        long now = policy.nowMillis();
-        Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
-        if (existing.isPresent() && (existing.get().leaseState() == SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED || existing.get().leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED)) {
-            return existing.get();
-        }
-        long createdAt = existing.map(SessionLeaseRecord::createdAtEpochMillis).orElse(now);
-        return saveLease(controlRoot, projectId, provider, connectionInstanceId, workerNodeId, sessionId, processIdentity, createdAt, now);
-    }
-
     private SessionLeaseRecord saveLease(Path controlRoot,
             String projectId,
             String provider,
@@ -295,11 +257,15 @@ public final class SessionLeaseService {
         }
     }
 
-    private boolean terminalProcessIsNotLive(SessionLeaseRecord record) {
-        ProcessEvidenceState evidence = processInspector.evaluateEvidence(record.processIdentity().pid(),
+    private ProcessEvidenceState evidence(SessionLeaseRecord record) {
+        return processInspector.evaluateEvidence(record.processIdentity().pid(),
                 record.processIdentity().executableIdentity(),
                 record.processIdentity().commandLine(),
                 record.processIdentity().processStartTime());
+    }
+
+    private boolean terminalProcessIsNotLive(SessionLeaseRecord record) {
+        ProcessEvidenceState evidence = evidence(record);
         return evidence == ProcessEvidenceState.NOT_OBSERVED || evidence == ProcessEvidenceState.PID_REUSED_OR_MISMATCHED || evidence == ProcessEvidenceState.PROCESS_EVIDENCE_UNAVAILABLE;
     }
 
@@ -330,19 +296,8 @@ public final class SessionLeaseService {
         if (previous.leaseState() == SessionLeaseState.CLOSED_CLEANLY) {
             return false;
         }
-        SessionLeaseRecord terminal = new SessionLeaseRecord(previous.schemaVersion(),
-                previous.projectId(),
-                previous.provider(),
-                previous.connectionInstanceId(),
-                previous.workerNodeId(),
-                previous.sessionId(),
-                previous.processIdentity(),
-                previous.synesisVersion(),
-                previous.createdAtEpochMillis(),
-                System.currentTimeMillis(),
-                SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED);
         try {
-            store.save(controlRoot, terminal);
+            store.save(controlRoot, copyWithState(previous, SessionLeaseState.TERMINAL_AUTHORITY_CONFIRMED, true));
             return true;
         } catch (IOException ignored) {
             return false;
@@ -369,10 +324,7 @@ public final class SessionLeaseService {
         long now = policy.nowMillis();
         Duration elapsedSinceHeartbeat = Duration.ofMillis(Math.max(0, now - record.lastHeartbeatEpochMillis()));
 
-        ProcessEvidenceState processEvidence = processInspector.evaluateEvidence(record.processIdentity().pid(),
-                record.processIdentity().executableIdentity(),
-                record.processIdentity().commandLine(),
-                record.processIdentity().processStartTime());
+        ProcessEvidenceState processEvidence = evidence(record);
 
         if (processEvidence == ProcessEvidenceState.LIVE_VERIFIED) {
             if (terminalAuthority) {
@@ -422,11 +374,7 @@ public final class SessionLeaseService {
                 || record.leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED) {
             return OptionalLong.empty();
         }
-        ProcessEvidenceState evidence = processInspector.evaluateEvidence(record.processIdentity().pid(),
-                record.processIdentity().executableIdentity(),
-                record.processIdentity().commandLine(),
-                record.processIdentity().processStartTime());
-        if (evidence != ProcessEvidenceState.NOT_OBSERVED) {
+        if (evidence(record) != ProcessEvidenceState.NOT_OBSERVED) {
             return OptionalLong.empty();
         }
         long deadline;

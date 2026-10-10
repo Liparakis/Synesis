@@ -17,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.LongFunction;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Project-scoped reconciliation execution lock ensuring strictly single-executor execution over an
@@ -26,7 +26,7 @@ import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
-public final class ReconciliationExecutionLock implements AutoCloseable {
+final class ReconciliationExecutionLock implements AutoCloseable {
 
     private final Path lockFilePath;
     private final String nonce;
@@ -51,11 +51,8 @@ public final class ReconciliationExecutionLock implements AutoCloseable {
         Objects.requireNonNull(planId, "planId");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        Path adminDir = workspaceRoot.resolve("admin");
-        Files.createDirectories(adminDir);
-
-        Path lockFile = adminDir.resolve("reconciliation-execution.lock");
+        Path lockFile = ProjectAdministrativeLayout.reconciliationExecutionLock(root);
+        Files.createDirectories(lockFile.getParent());
         String nonce = UUID.randomUUID().toString();
         long pid = ProcessHandle.current().pid();
         long now = System.currentTimeMillis();
@@ -73,7 +70,7 @@ public final class ReconciliationExecutionLock implements AutoCloseable {
         // The decision to reclaim an abandoned lock and the creation of the new one must be one
         // step, or two recoveries could each discard the other's fresh lock. The guard is an
         // operating-system lock, so unlike the lock file it cannot outlive its holder.
-        try (FileChannel guard = FileChannel.open(adminDir.resolve("reconciliation-execution.guard"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (FileChannel guard = FileChannel.open(lockFile.resolveSibling("reconciliation-execution.guard"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 FileLock _ = guard.lock()) {
             if (Files.exists(lockFile)) {
                 if (!abandoned(lockFile, ProcessHandle::of)) {

@@ -1,8 +1,6 @@
 package org.synesis.workspace.lifecycle.reconciliation;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -10,9 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.AdministrativePlanFiles;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Storage service for persisting and loading immutable reconciliation plans outside the control
@@ -31,21 +29,6 @@ public final class ReconciliationPlanStore {
      * Creates a reconciliation plan store.
      */
     public ReconciliationPlanStore() {
-    }
-
-    /**
-     * Resolves the directory path for storing administrative reconciliation plans.
-     *
-     * @param controlRoot control project root path
-     * @return normalized administrative reconciliation plans directory path
-     */
-    public static Path resolvePlansDirectory(Path controlRoot) {
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("reconciliation-plans");
-    }
-
-    private static String serializeCanonical(ReconciliationPlan plan) {
-        return ProviderJson.write(toSerializableMap(plan));
     }
 
     private static Map<String, Object> toSerializableMap(ReconciliationPlan plan) {
@@ -127,31 +110,15 @@ public final class ReconciliationPlanStore {
         Objects.requireNonNull(entries, "entries");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(root);
+        Path workspaceRoot = ProjectAdministrativeLayout.workspaceRoot(root);
         String planId = "recplan-" + UUID.randomUUID().toString().replace("-", "");
 
         int executableCount = (int) entries.stream().filter(ReconciliationPlanEntry::executable).count();
 
         ReconciliationPlan unsignedPlan = new ReconciliationPlan(1, planId, projectId, root.toString(), workspaceRoot.toString(), System.currentTimeMillis(), totalInspectedCount, executableCount, "UNSIGNED", entries);
 
-        String canonicalContent = serializeCanonical(unsignedPlan);
-        String contentHash = Sha256.hex(canonicalContent);
-
-        ReconciliationPlan finalPlan = new ReconciliationPlan(unsignedPlan.schemaVersion(),
-                unsignedPlan.planId(),
-                unsignedPlan.projectId(),
-                unsignedPlan.controlRepositoryPath(),
-                unsignedPlan.externalWorkspaceRoot(),
-                unsignedPlan.createdAtEpochMillis(),
-                unsignedPlan.totalInspectedCount(),
-                unsignedPlan.executableCount(),
-                contentHash,
-                unsignedPlan.entries());
-
-        Path plansDir = resolvePlansDirectory(root);
-        Files.createDirectories(plansDir);
-        Path targetFile = plansDir.resolve(planId + ".json");
-        Files.writeString(targetFile, ProviderJson.write(toSerializableMap(finalPlan)), StandardCharsets.UTF_8);
+        ReconciliationPlan finalPlan = unsignedPlan.withContentHash(AdministrativePlanFiles.contentHash(toSerializableMap(unsignedPlan)));
+        AdministrativePlanFiles.write(ProjectAdministrativeLayout.reconciliationPlans(root), planId, toSerializableMap(finalPlan));
 
         return finalPlan;
     }
@@ -169,41 +136,7 @@ public final class ReconciliationPlanStore {
         Objects.requireNonNull(planId, "planId");
 
         Path root = controlRoot.toAbsolutePath().normalize();
-        Path plansDir = resolvePlansDirectory(root);
-        Path planFile = plansDir.resolve(planId + ".json");
-
-        if (!Files.exists(planFile)) {
-            throw new IOException("Reconciliation plan not found: " + planId);
-        }
-
-        String rawJson = Files.readString(planFile, StandardCharsets.UTF_8);
-        ReconciliationPlan plan = fromSerializableMap(rawJson);
-
-        if (!planId.equals(plan.planId())) {
-            throw new IOException("Plan ID mismatch in store: expected " + planId + " but found " + plan.planId());
-        }
-
-        Path expectedWorkspace = LifecyclePathVerifier.resolveWorkspaceRoot(root);
-        if (!expectedWorkspace.toString().equals(plan.externalWorkspaceRoot())) {
-            throw new IOException("External workspace root mismatch in plan: " + plan.externalWorkspaceRoot());
-        }
-
-        ReconciliationPlan unsigned = new ReconciliationPlan(plan.schemaVersion(),
-                plan.planId(),
-                plan.projectId(),
-                plan.controlRepositoryPath(),
-                plan.externalWorkspaceRoot(),
-                plan.createdAtEpochMillis(),
-                plan.totalInspectedCount(),
-                plan.executableCount(),
-                "UNSIGNED",
-                plan.entries());
-        String expectedHash = Sha256.hex(serializeCanonical(unsigned));
-        if (!expectedHash.equals(plan.contentHash())) {
-            throw new IOException("Reconciliation plan content hash integrity verification failed for " + planId);
-        }
-
-        return plan;
+        return AdministrativePlanFiles.load(root, ProjectAdministrativeLayout.reconciliationPlans(root), "Reconciliation", planId, ReconciliationPlanStore::fromSerializableMap, ReconciliationPlanStore::toSerializableMap);
     }
 
 }

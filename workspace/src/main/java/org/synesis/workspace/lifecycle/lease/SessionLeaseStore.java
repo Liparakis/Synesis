@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
+import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
 
 /**
  * Persists and loads provider session lease records outside the control checkout under the external
@@ -37,8 +37,7 @@ public final class SessionLeaseStore {
      * @return normalized lease directory path
      */
     public static Path resolveLeasesDirectory(Path controlRoot) {
-        Path workspaceRoot = LifecyclePathVerifier.resolveWorkspaceRoot(controlRoot);
-        return workspaceRoot.resolve("admin").resolve("session-leases");
+        return ProjectAdministrativeLayout.sessionLeases(controlRoot);
     }
 
     private static Map<String, Object> toSerializableMap(SessionLeaseRecord r) {
