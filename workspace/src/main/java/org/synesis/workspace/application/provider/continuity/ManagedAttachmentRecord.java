@@ -58,6 +58,40 @@ public record ManagedAttachmentRecord(int schemaVersion, String projectId, Strin
         }
     }
 
+    /**
+     * Returns the next revision with another lifecycle state.
+     *
+     * @param next new lifecycle state
+     * @return updated record
+     */
+    ManagedAttachmentRecord withStatus(Status next) {
+        return new ManagedAttachmentRecord(schemaVersion, projectId, provider, mode, bindingSessionId, threadId, generation, proofHash, runtimeHomeId, next, revision + 1L, System.currentTimeMillis());
+    }
+
+    /**
+     * Returns the next revision bound to the provider thread the managed App Server created.
+     *
+     * @param boundThreadId exact provider thread
+     * @return updated record
+     */
+    ManagedAttachmentRecord withThread(String boundThreadId) {
+        return new ManagedAttachmentRecord(schemaVersion, projectId, provider, mode, bindingSessionId, boundThreadId, generation, proofHash, runtimeHomeId, status, revision + 1L, System.currentTimeMillis());
+    }
+
+    /**
+     * Returns the next generation, which carries a new proof, runtime home, and state.
+     *
+     * @param nextThreadId  provider thread of the new generation
+     * @param nextProofHash hash of the new generation's proof
+     * @param nextHomeId    runtime home of the new generation
+     * @param next          lifecycle state of the new generation
+     * @return updated record
+     */
+    ManagedAttachmentRecord nextGeneration(String nextThreadId, String nextProofHash, String nextHomeId, Status next) {
+        return new ManagedAttachmentRecord(CURRENT_SCHEMA_VERSION, projectId, provider, mode, bindingSessionId, nextThreadId, generation + 1L, nextProofHash, nextHomeId, next, revision + 1L,
+                System.currentTimeMillis());
+    }
+
     private static void requireText(String value, String label) {
         Objects.requireNonNull(value, label);
         if (value.isBlank() || value.length() > 8_192) {

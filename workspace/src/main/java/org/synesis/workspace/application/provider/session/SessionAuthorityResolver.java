@@ -1,8 +1,10 @@
 package org.synesis.workspace.application.provider.session;
 
+import org.synesis.workspace.application.provider.ProviderBindingStatus;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.infrastructure.digest.Sha256;
@@ -33,17 +35,7 @@ public final class SessionAuthorityResolver {
      * @throws Exception when the binding cannot be resolved
      */
     public ProviderSessionBindingService.Binding resolve(ProjectLocation location, String provider, String connectionInstanceId) throws Exception {
-        Objects.requireNonNull(location, "location");
-        Objects.requireNonNull(provider, "provider");
-        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = Sha256.hex(connectionInstanceId);
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
-                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId())).filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()))
-                .findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
-        if (bindingService.isSessionTerminal(location, binding.sessionId())) {
-            throw new IllegalStateException("SESSION_TERMINAL");
-        }
-        return binding;
+        return resolveExact(location, provider, connectionInstanceId, status -> status == ProviderBindingStatus.BOUND);
     }
 
     /**
@@ -58,17 +50,7 @@ public final class SessionAuthorityResolver {
      * @throws Exception when no exact completed binding exists
      */
     public ProviderSessionBindingService.Binding resolveCompleted(ProjectLocation location, String provider, String connectionInstanceId) throws Exception {
-        Objects.requireNonNull(location, "location");
-        Objects.requireNonNull(provider, "provider");
-        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        String fingerprint = Sha256.hex(connectionInstanceId);
-        ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
-                .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId()))
-                .filter(candidate -> "COMPLETED".equalsIgnoreCase(candidate.status())).findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
-        if (bindingService.isSessionTerminal(location, binding.sessionId())) {
-            throw new IllegalStateException("SESSION_TERMINAL");
-        }
-        return binding;
+        return resolveExact(location, provider, connectionInstanceId, status -> status == ProviderBindingStatus.COMPLETED);
     }
 
     /**
@@ -86,13 +68,22 @@ public final class SessionAuthorityResolver {
      * @throws Exception when no exact review authority exists
      */
     public ProviderSessionBindingService.Binding resolveReview(ProjectLocation location, String provider, String connectionInstanceId) throws Exception {
+        return resolveExact(location, provider, connectionInstanceId, ProviderBindingStatus::isBoundOrCompleted);
+    }
+
+    /**
+     * The connection evidence is hashed as given (no trimming and no fallback nonce, unlike
+     * {@code ProviderSessionBindingService.ensure}), and the status is compared ignoring case, as
+     * every resolver here always has.
+     */
+    private ProviderSessionBindingService.Binding resolveExact(ProjectLocation location, String provider, String connectionInstanceId, Predicate<ProviderBindingStatus> acceptedStatus) throws Exception {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(provider, "provider");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         String fingerprint = Sha256.hex(connectionInstanceId);
         ProviderSessionBindingService.Binding binding = bindingService.list(location, provider).stream()
                 .filter(candidate -> fingerprint.equals(candidate.providerInstanceFingerprint()) || connectionInstanceId.equals(candidate.sessionId()))
-                .filter(candidate -> "BOUND".equalsIgnoreCase(candidate.status()) || "COMPLETED".equalsIgnoreCase(candidate.status())).findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
+                .filter(candidate -> acceptedStatus.test(ProviderBindingStatus.parseIgnoreCase(candidate.status()))).findFirst().orElseThrow(() -> new IllegalStateException("SESSION_NOT_FOUND"));
         if (bindingService.isSessionTerminal(location, binding.sessionId())) {
             throw new IllegalStateException("SESSION_TERMINAL");
         }

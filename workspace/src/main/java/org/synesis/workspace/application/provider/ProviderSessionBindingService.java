@@ -16,9 +16,11 @@ import org.synesis.workspace.application.provider.session.ProviderSessionTermina
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.fallbackEvidence;
+import static org.synesis.workspace.application.provider.ProviderBindingFile.bindingPath;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.fingerprint;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.read;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.requireText;
+import static org.synesis.workspace.application.provider.ProviderBindingFile.sessionsDirectory;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.authorizedRecoveryContinuation;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.cleanlyDetached;
@@ -55,40 +57,11 @@ import static org.synesis.workspace.application.provider.ProviderWorktreeGitFact
 public final class ProviderSessionBindingService {
 
     static final int SCHEMA_VERSION = 2;
-    static final String SESSIONS_DIRECTORY = "sessions";
 
     /**
      * Creates a session binding service.
      */
     public ProviderSessionBindingService() {
-    }
-
-    @SuppressWarnings("SameParameterValue")
-    static Binding copy(Binding b, String worktreeId, String control, String path, String base, String branch, String creation, String verification, String lastSeen, String trust) {
-        return new Binding(SCHEMA_VERSION,
-                b.sessionId(),
-                b.projectId(),
-                b.nodeId(),
-                b.provider(),
-                b.providerInstanceFingerprint(),
-                b.supervisorId(),
-                b.workerId(),
-                worktreeId,
-                path,
-                control,
-                branch,
-                base,
-                b.gitCommonDir(),
-                creation,
-                verification,
-                lastSeen,
-                b.status(),
-                b.createdAtEpochMillis(),
-                System.currentTimeMillis(),
-                b.lastVerifiedProjectSequence(),
-                trust,
-                b.bindingVersion(),
-                b.completedAt());
     }
 
     private static Binding newBinding(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint) {
@@ -150,82 +123,90 @@ public final class ProviderSessionBindingService {
             // any provider configuration file.
             RepositoryPrivateStateService.ensure(location.root());
             NodeIdentity identity = location.loadOrCreateIdentity();
-            String evidence = instanceEvidence == null || instanceEvidence.isBlank() ? fallbackEvidence(location, provider) : instanceEvidence.trim();
-            String fingerprint = fingerprint(evidence);
-            Path local = location.synesisDirectory().resolve("local");
-            Path sessions = local.resolve(SESSIONS_DIRECTORY);
-            Path bindingPath = sessions.resolve(provider + "-" + fingerprint + ".json");
+            String fingerprint = evidenceFingerprint(location, provider, instanceEvidence);
+            Path bindingPath = bindingPath(location, provider, fingerprint);
+            boolean fallback = instanceEvidence == null || instanceEvidence.isBlank();
             if (Files.exists(bindingPath)) {
                 Binding binding = read(bindingPath);
-                if (!binding.projectId().equals(location.projectId().toString()) || !binding.nodeId().equals(identity.nodeId()) || !binding.provider().equals(provider) || !binding.providerInstanceFingerprint()
-                        .equals(fingerprint)) {
-                    throw new BindingException("SESSION_IDENTITY_MISMATCH",
-                            "Stored provider binding does not match this project: " + binding.projectId() + "/" + binding.nodeId() + "/" + binding.provider() + "/" + binding.providerInstanceFingerprint() + " expected "
-                                    + location.projectId() + "/" + identity.nodeId() + "/" + provider + "/" + fingerprint);
-                }
-                if ("TERMINAL".equals(binding.status()) || isSessionTerminal(location, binding.sessionId())) {
+                requireStoredIdentity(location, identity, provider, fingerprint, binding);
+                if (binding.state() == ProviderBindingStatus.TERMINAL || isSessionTerminal(location, binding.sessionId())) {
                     throw new BindingException("SESSION_TERMINAL", "The exact provider session has an irreversible terminal fence");
                 }
                 if (cleanlyDetached(location, binding) && !hasActiveManagedAttachment(location, binding)) {
-                    Binding rebound = withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch();
-                    write(bindingPath, rebound);
-                    return new BindingResult(rebound, instanceEvidence == null || instanceEvidence.isBlank());
+                    return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
                 }
-                if (!binding.status().equals("REVOKED") && !binding.status().equals("COMPLETED") && !binding.status().equals("SUSPENDED") && !binding.status().equals("CANCELLED")) {
-                    if (binding.worktreePath() != null && workspaceGenerationFresh(location, binding)) {
-                        Binding refreshed = verifyBinding(location.root(), binding).touch();
-                        write(bindingPath, refreshed);
-                        return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
-                    }
-                    boolean retainExistingWorktree = false;
-                    if (binding.worktreePath() != null && !workspaceGenerationFresh(location, binding)) {
-                        boolean authorizedContinuation = authorizedRecoveryContinuation(location, binding);
-                        boolean worktreeClean = isWorktreeClean(binding);
-                        if (!worktreeClean && !authorizedContinuation) {
-                            Binding refreshed = refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
-                            return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
-                        }
-                        if (!worktreeClean) {
-                            // A session that continued a lane needs what its peers integrate as
-                            // much as any other: a requester cannot read or test against a
-                            // dependency that exists only on the new control head. The refresh
-                            // keeps the session, its claims, and its uncommitted work. Where it
-                            // cannot do so safely, the recovered worktree stays as it is, which is
-                            // what a continuation always got before.
-                            try {
-                                Binding refreshed = refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
-                                return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
-                            } catch (BindingException keepRecoveredWorktree) {
-                                // Falls through to retaining the existing worktree.
-                            }
-                        }
-                        boolean activeManagedAttachment = hasActiveManagedAttachment(location, binding);
-                        boolean activeNoChangeIntent = hasActiveNoChangeIntent(location, binding);
-                        if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding) && !activeManagedAttachment && !activeNoChangeIntent && worktreeClean) {
-                            Binding rebound = reallocatePreservingSession(location, binding).touch();
-                            write(bindingPath, rebound);
-                            return new BindingResult(rebound, instanceEvidence == null || instanceEvidence.isBlank());
-                        }
-                        if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent) {
-                            binding = newBinding(location, identity, provider, fingerprint);
-                        } else {
-                            retainExistingWorktree = true;
-                        }
-                    }
-                    Binding refreshed = (retainExistingWorktree ? binding : withWorktree(location, binding)).touch();
-                    write(bindingPath, refreshed);
-                    return new BindingResult(refreshed, instanceEvidence == null || instanceEvidence.isBlank());
+                if (binding.state().resumesOnEnsure()) {
+                    return new BindingResult(resumeBound(location, identity, provider, fingerprint, bindingPath, binding), fallback);
                 }
             }
-            Binding binding = newBinding(location, identity, provider, fingerprint);
-            binding = withWorktree(location, binding);
-            write(bindingPath, binding);
-            return new BindingResult(binding, instanceEvidence == null || instanceEvidence.isBlank());
+            return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint))), fallback);
         } catch (BindingException failure) {
             throw failure;
         } catch (Exception failure) {
             throw new BindingException("SESSION_BINDING_FAILED", "Could not establish provider session", failure);
         }
+    }
+
+    private static void requireStoredIdentity(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint, Binding binding) throws BindingException {
+        if (!binding.projectId().equals(location.projectId().toString()) || !binding.nodeId().equals(identity.nodeId()) || !binding.provider().equals(provider) || !binding.providerInstanceFingerprint()
+                .equals(fingerprint)) {
+            throw new BindingException("SESSION_IDENTITY_MISMATCH",
+                    "Stored provider binding does not match this project: " + binding.projectId() + "/" + binding.nodeId() + "/" + binding.provider() + "/" + binding.providerInstanceFingerprint() + " expected "
+                            + location.projectId() + "/" + identity.nodeId() + "/" + provider + "/" + fingerprint);
+        }
+    }
+
+    private static Binding persist(Path bindingPath, Binding binding) throws IOException {
+        write(bindingPath, binding);
+        return binding;
+    }
+
+    private Binding resumeBound(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint, Path bindingPath, Binding binding) throws Exception {
+        if (binding.worktreePath() == null) {
+            return persist(bindingPath, withWorktree(location, binding).touch());
+        }
+        if (workspaceGenerationFresh(location, binding)) {
+            return persist(bindingPath, verifyBinding(location.root(), binding).touch());
+        }
+        return resumeStale(location, identity, provider, fingerprint, bindingPath, binding);
+    }
+
+    private Binding resumeStale(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint, Path bindingPath, Binding binding) throws Exception {
+        boolean authorizedContinuation = authorizedRecoveryContinuation(location, binding);
+        boolean worktreeClean = isWorktreeClean(binding);
+        if (!worktreeClean && !authorizedContinuation) {
+            return refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
+        }
+        if (!worktreeClean) {
+            // A session that continued a lane needs what its peers integrate as
+            // much as any other: a requester cannot read or test against a
+            // dependency that exists only on the new control head. The refresh
+            // keeps the session, its claims, and its uncommitted work. Where it
+            // cannot do so safely, the recovered worktree stays as it is, which is
+            // what a continuation always got before.
+            try {
+                return refreshClaimedDirtyWorkspace(this, location, binding, bindingPath);
+            } catch (BindingException keepRecoveredWorktree) {
+                // Falls through to retaining the existing worktree.
+            }
+        }
+        boolean activeManagedAttachment = hasActiveManagedAttachment(location, binding);
+        boolean activeNoChangeIntent = hasActiveNoChangeIntent(location, binding);
+        if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding) && !activeManagedAttachment && !activeNoChangeIntent && worktreeClean) {
+            return persist(bindingPath, reallocatePreservingSession(location, binding).touch());
+        }
+        if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent) {
+            return persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
+        }
+        return persist(bindingPath, binding.touch());
+    }
+
+    /**
+     * Normalizes the caller's connection evidence (trimmed, or the project/provider fallback nonce
+     * when absent) and hashes it into the fingerprint that names the binding file.
+     */
+    private static String evidenceFingerprint(ProjectLocation location, String provider, String instanceEvidence) throws IOException {
+        return fingerprint(instanceEvidence == null || instanceEvidence.isBlank() ? fallbackEvidence(location, provider) : instanceEvidence.trim());
     }
 
     /**
@@ -239,7 +220,7 @@ public final class ProviderSessionBindingService {
      */
     public synchronized java.util.Optional<Binding> findByWorktree(ProjectLocation location, String provider, Path worktree) throws BindingException {
         Path normalized = Objects.requireNonNull(worktree, "worktree").toAbsolutePath().normalize();
-        return list(location, provider).stream().filter(binding -> "BOUND".equals(binding.status()) && binding.worktreePath() != null)
+        return list(location, provider).stream().filter(binding -> binding.state() == ProviderBindingStatus.BOUND && binding.worktreePath() != null)
                 .filter(binding -> sameFilesystemObject(normalized, Path.of(binding.worktreePath()).toAbsolutePath().normalize())).findFirst();
     }
 
@@ -264,7 +245,7 @@ public final class ProviderSessionBindingService {
      */
     public synchronized java.util.List<Binding> list(ProjectLocation location, String provider) throws BindingException {
         try {
-            Path directory = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY);
+            Path directory = sessionsDirectory(location);
             if (!Files.isDirectory(directory)) {
                 return java.util.List.of();
             }
@@ -299,9 +280,8 @@ public final class ProviderSessionBindingService {
         Objects.requireNonNull(location, "location");
         requireText(provider, "provider");
         try {
-            String evidence = instanceEvidence == null || instanceEvidence.isBlank() ? fallbackEvidence(location, provider) : instanceEvidence.trim();
-            String instanceFingerprint = fingerprint(evidence);
-            Path bindingPath = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + instanceFingerprint + ".json");
+            String instanceFingerprint = evidenceFingerprint(location, provider, instanceEvidence);
+            Path bindingPath = bindingPath(location, provider, instanceFingerprint);
             if (!Files.isRegularFile(bindingPath)) {
                 return java.util.Optional.empty();
             }
@@ -359,9 +339,7 @@ public final class ProviderSessionBindingService {
         Objects.requireNonNull(location, "location");
         requireText(provider, "provider");
         try {
-            String evidence = instanceEvidence == null || instanceEvidence.isBlank() ? fallbackEvidence(location, provider) : instanceEvidence.trim();
-            String fingerprint = fingerprint(evidence);
-            Path bindingPath = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + fingerprint + ".json");
+            Path bindingPath = bindingPath(location, provider, evidenceFingerprint(location, provider, instanceEvidence));
             if (!Files.isRegularFile(bindingPath)) {
                 return false;
             }
@@ -412,7 +390,7 @@ public final class ProviderSessionBindingService {
             if (!provider.equals(binding.provider())) {
                 throw new BindingException("SESSION_IDENTITY_MISMATCH", "Stored provider binding does not match the requested provider");
             }
-            Path bindingPath = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            Path bindingPath = bindingPath(location, provider, binding.providerInstanceFingerprint());
             if (!Files.isRegularFile(bindingPath)) {
                 return false;
             }
@@ -454,10 +432,10 @@ public final class ProviderSessionBindingService {
         if (hasActiveIntent(location, current)) {
             return false;
         }
-        if ("COMPLETED".equals(current.status())) {
+        if (current.state() == ProviderBindingStatus.COMPLETED) {
             return true;
         }
-        if (!"BOUND".equals(current.status()) && !"SUSPENDED".equals(current.status())) {
+        if (!current.state().isBoundOrSuspended()) {
             return false;
         }
         write(bindingPath, current.complete());
@@ -483,13 +461,13 @@ public final class ProviderSessionBindingService {
             if (binding == null) {
                 return false;
             }
-            if ("TERMINAL".equals(binding.status())) {
+            if (binding.state() == ProviderBindingStatus.TERMINAL) {
                 return true;
             }
-            if (!"BOUND".equals(binding.status()) && !"COMPLETED".equals(binding.status())) {
+            if (!binding.state().isBoundOrCompleted()) {
                 return false;
             }
-            Path bindingPath = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY).resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
+            Path bindingPath = bindingPath(location, provider, binding.providerInstanceFingerprint());
             if (!Files.isRegularFile(bindingPath)) {
                 return false;
             }
@@ -527,7 +505,7 @@ public final class ProviderSessionBindingService {
      */
     public synchronized void revoke(ProjectLocation location, String provider) throws BindingException {
         try {
-            Path directory = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY);
+            Path directory = sessionsDirectory(location);
             if (!Files.isDirectory(directory)) {
                 return;
             }
@@ -706,35 +684,22 @@ public final class ProviderSessionBindingService {
                           long createdAtEpochMillis, long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState, int bindingVersion, String completedAt) {
 
         /**
+         * Returns the typed lifecycle status; stored text this build does not know reads as
+         * {@link ProviderBindingStatus#UNKNOWN} while {@link #status()} keeps it verbatim.
+         *
+         * @return typed status
+         */
+        public ProviderBindingStatus state() {
+            return ProviderBindingStatus.parse(status);
+        }
+
+        /**
          * Returns a refreshed binding with an updated last-seen timestamp.
          *
          * @return refreshed binding
          */
         public Binding touch() {
-            return new Binding(schemaVersion,
-                    sessionId,
-                    projectId,
-                    nodeId,
-                    provider,
-                    providerInstanceFingerprint,
-                    supervisorId,
-                    workerId,
-                    worktreeId,
-                    worktreePath,
-                    controlCheckoutPath,
-                    branch,
-                    baseCommit,
-                    gitCommonDir,
-                    creationState,
-                    verificationState,
-                    lastSeenState,
-                    status,
-                    createdAtEpochMillis,
-                    System.currentTimeMillis(),
-                    lastVerifiedProjectSequence,
-                    providerTrustState,
-                    bindingVersion,
-                    completedAt);
+            return withState(status, lastSeenState, System.currentTimeMillis(), providerTrustState, completedAt);
         }
 
         /**
@@ -743,30 +708,7 @@ public final class ProviderSessionBindingService {
          * @return revoked binding
          */
         public Binding revoke() {
-            return new Binding(schemaVersion,
-                    sessionId,
-                    projectId,
-                    nodeId,
-                    provider,
-                    providerInstanceFingerprint,
-                    supervisorId,
-                    workerId,
-                    worktreeId,
-                    worktreePath,
-                    controlCheckoutPath,
-                    branch,
-                    baseCommit,
-                    gitCommonDir,
-                    creationState,
-                    verificationState,
-                    "REVOKED",
-                    "REVOKED",
-                    createdAtEpochMillis,
-                    System.currentTimeMillis(),
-                    lastVerifiedProjectSequence,
-                    "REVOKED",
-                    bindingVersion,
-                    Long.toString(System.currentTimeMillis()));
+            return ended(ProviderBindingStatus.REVOKED, "REVOKED");
         }
 
         /**
@@ -775,31 +717,7 @@ public final class ProviderSessionBindingService {
          * @return completed binding
          */
         public Binding complete() {
-            long completed = System.currentTimeMillis();
-            return new Binding(schemaVersion,
-                    sessionId,
-                    projectId,
-                    nodeId,
-                    provider,
-                    providerInstanceFingerprint,
-                    supervisorId,
-                    workerId,
-                    worktreeId,
-                    worktreePath,
-                    controlCheckoutPath,
-                    branch,
-                    baseCommit,
-                    gitCommonDir,
-                    creationState,
-                    verificationState,
-                    "COMPLETED",
-                    "COMPLETED",
-                    createdAtEpochMillis,
-                    completed,
-                    lastVerifiedProjectSequence,
-                    providerTrustState,
-                    bindingVersion,
-                    Long.toString(completed));
+            return ended(ProviderBindingStatus.COMPLETED, providerTrustState);
         }
 
         /**
@@ -808,7 +726,33 @@ public final class ProviderSessionBindingService {
          * @return terminal binding
          */
         public Binding terminalize() {
-            long terminalized = System.currentTimeMillis();
+            return ended(ProviderBindingStatus.TERMINAL, providerTrustState);
+        }
+
+        Binding withoutWorktree(String controlCheckoutPath, String baseCommit, String creationState, String lastSeenState) {
+            return withWorkspace(SCHEMA_VERSION, null, null, controlCheckoutPath, null, baseCommit, gitCommonDir, creationState, "UNVERIFIED", lastSeenState, System.currentTimeMillis(), "WORKSPACE_UNVERIFIED");
+        }
+
+        Binding withAllocatedWorktree(String worktreeId, String controlCheckoutPath, String worktreePath, String branch, String baseCommit) {
+            return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", "UNVERIFIED", "WORKTREE_ALLOCATED", System.currentTimeMillis(),
+                    providerTrustState);
+        }
+
+        Binding withWorktreeVerification(String controlCheckoutPath, String gitCommonDir, boolean verified, String trustState) {
+            return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", verified ? "VERIFIED" : "UNVERIFIED",
+                    verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", System.currentTimeMillis(), trustState);
+        }
+
+        Binding withVerifiedWorkspaceTrust(long verifiedAt) {
+            return withWorkspace(schemaVersion, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, creationState, "VERIFIED", "WORKSPACE_VERIFIED", verifiedAt, "VERIFIED");
+        }
+
+        private Binding ended(ProviderBindingStatus endState, String trustState) {
+            long now = System.currentTimeMillis();
+            return withState(endState.persisted(), endState.persisted(), now, trustState, Long.toString(now));
+        }
+
+        private Binding withState(String newStatus, String newLastSeenState, long newLastSeenEpochMillis, String trustState, String newCompletedAt) {
             return new Binding(schemaVersion,
                     sessionId,
                     projectId,
@@ -825,14 +769,52 @@ public final class ProviderSessionBindingService {
                     gitCommonDir,
                     creationState,
                     verificationState,
-                    "TERMINAL",
-                    "TERMINAL",
+                    newLastSeenState,
+                    newStatus,
                     createdAtEpochMillis,
-                    terminalized,
+                    newLastSeenEpochMillis,
                     lastVerifiedProjectSequence,
-                    providerTrustState,
+                    trustState,
                     bindingVersion,
-                    Long.toString(terminalized));
+                    newCompletedAt);
+        }
+
+        private Binding withWorkspace(int newSchemaVersion,
+                String newWorktreeId,
+                String newWorktreePath,
+                String newControlCheckoutPath,
+                String newBranch,
+                String newBaseCommit,
+                String newGitCommonDir,
+                String newCreationState,
+                String newVerificationState,
+                String newLastSeenState,
+                long newLastSeenEpochMillis,
+                String trustState) {
+            return new Binding(newSchemaVersion,
+                    sessionId,
+                    projectId,
+                    nodeId,
+                    provider,
+                    providerInstanceFingerprint,
+                    supervisorId,
+                    workerId,
+                    newWorktreeId,
+                    newWorktreePath,
+                    newControlCheckoutPath,
+                    newBranch,
+                    newBaseCommit,
+                    newGitCommonDir,
+                    newCreationState,
+                    newVerificationState,
+                    newLastSeenState,
+                    status,
+                    createdAtEpochMillis,
+                    newLastSeenEpochMillis,
+                    lastVerifiedProjectSequence,
+                    trustState,
+                    bindingVersion,
+                    completedAt);
         }
     }
 

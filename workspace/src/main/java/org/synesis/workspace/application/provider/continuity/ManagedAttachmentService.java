@@ -93,21 +93,6 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         }
     }
 
-    private static ManagedAttachmentRecord withStatus(ManagedAttachmentRecord prior, ManagedAttachmentRecord.Status status) {
-        return new ManagedAttachmentRecord(prior.schemaVersion(),
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                prior.threadId(),
-                prior.generation(),
-                prior.proofHash(),
-                prior.runtimeHomeId(),
-                status,
-                prior.revision() + 1L,
-                System.currentTimeMillis());
-    }
-
     private static IllegalStateException failure(String diagnostic) {
         return new IllegalStateException(diagnostic);
     }
@@ -198,7 +183,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             ManagedAttachmentStore store) throws Exception {
         verifyOwnership(ownership, projectId, provider, bindingSessionId);
         IssuedAttachment issued = issue(location, projectId, provider, bindingSessionId, ownership.providerThreadId(), runtimeHomeId, store);
-        ManagedAttachmentRecord pending = withStatus(issued.record(), ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
+        ManagedAttachmentRecord pending = issued.record().withStatus(ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
         store.write(pending);
         return new IssuedAttachment(issued.proof(), pending);
     }
@@ -262,18 +247,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             }
             return prior;
         }
-        ManagedAttachmentRecord next = new ManagedAttachmentRecord(prior.schemaVersion(),
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                threadId,
-                prior.generation(),
-                prior.proofHash(),
-                prior.runtimeHomeId(),
-                prior.status(),
-                prior.revision() + 1L,
-                System.currentTimeMillis());
+        ManagedAttachmentRecord next = prior.withThread(threadId);
         store.write(next);
         return next;
     }
@@ -408,18 +382,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         ManagedAttachmentRecord prior = store.read().orElseThrow(() -> failure("attachment_missing"));
         verifyRecord(prior, request, expectedProjectId, true, false);
         String proof = randomProof();
-        ManagedAttachmentRecord next = new ManagedAttachmentRecord(ManagedAttachmentRecord.CURRENT_SCHEMA_VERSION,
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                newThreadId,
-                prior.generation() + 1L,
-                Sha256.hex(proof),
-                runtimeHomeId,
-                ManagedAttachmentRecord.Status.ACTIVE,
-                prior.revision() + 1L,
-                System.currentTimeMillis());
+        ManagedAttachmentRecord next = prior.nextGeneration(newThreadId, Sha256.hex(proof), runtimeHomeId, ManagedAttachmentRecord.Status.ACTIVE);
         if (!store.compareAndReplace(prior.generation(), prior.proofHash(), next)) {
             throw failure("attachment_replacement_race");
         }
@@ -451,7 +414,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
             throw failure("managed_provider_thread_mismatch");
         }
         IssuedAttachment issued = reattach(location, request, expectedProjectId, ownership.providerThreadId(), runtimeHomeId, store, priorAttachmentProvenStopped);
-        ManagedAttachmentRecord pending = withStatus(issued.record(), ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
+        ManagedAttachmentRecord pending = issued.record().withStatus(ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
         store.write(pending);
         return new IssuedAttachment(issued.proof(), pending);
     }
@@ -501,18 +464,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         ManagedRuntimeDeathReceipt receipt = deathReceipts.read(bindingSessionId, expectedGeneration).orElseThrow(() -> failure("managed_death_evidence_missing"));
         verifyDeathReceipt(receipt, projectId, provider, bindingSessionId, expectedGeneration);
         String proof = randomProof();
-        ManagedAttachmentRecord next = new ManagedAttachmentRecord(ManagedAttachmentRecord.CURRENT_SCHEMA_VERSION,
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                prior.threadId(),
-                prior.generation() + 1L,
-                Sha256.hex(proof),
-                runtimeHomeId,
-                ManagedAttachmentRecord.Status.PENDING_ACTIVATION,
-                prior.revision() + 1L,
-                System.currentTimeMillis());
+        ManagedAttachmentRecord next = prior.nextGeneration(prior.threadId(), Sha256.hex(proof), runtimeHomeId, ManagedAttachmentRecord.Status.PENDING_ACTIVATION);
         if (!store.compareAndReplace(prior.generation(), prior.proofHash(), next)) {
             throw failure("managed_attachment_replacement_race");
         }
@@ -532,7 +484,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         if (prior.generation() != expectedGeneration || prior.status() != ManagedAttachmentRecord.Status.PENDING_ACTIVATION) {
             throw failure("managed_attachment_activation_rejected");
         }
-        store.write(withStatus(prior, ManagedAttachmentRecord.Status.ACTIVE));
+        store.write(prior.withStatus(ManagedAttachmentRecord.Status.ACTIVE));
     }
 
     /**
@@ -546,18 +498,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         if (prior.status() == ManagedAttachmentRecord.Status.TERMINAL) {
             throw failure("attachment_terminal");
         }
-        store.write(new ManagedAttachmentRecord(prior.schemaVersion(),
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                prior.threadId(),
-                prior.generation(),
-                prior.proofHash(),
-                prior.runtimeHomeId(),
-                ManagedAttachmentRecord.Status.DISCONNECTED,
-                prior.revision() + 1L,
-                System.currentTimeMillis()));
+        store.write(prior.withStatus(ManagedAttachmentRecord.Status.DISCONNECTED));
     }
 
     /**
@@ -571,18 +512,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
         if (prior.status() == ManagedAttachmentRecord.Status.TERMINAL) {
             return;
         }
-        store.write(new ManagedAttachmentRecord(prior.schemaVersion(),
-                prior.projectId(),
-                prior.provider(),
-                prior.mode(),
-                prior.bindingSessionId(),
-                prior.threadId(),
-                prior.generation(),
-                prior.proofHash(),
-                prior.runtimeHomeId(),
-                ManagedAttachmentRecord.Status.TERMINAL,
-                prior.revision() + 1L,
-                System.currentTimeMillis()));
+        store.write(prior.withStatus(ManagedAttachmentRecord.Status.TERMINAL));
     }
 
     private String randomProof() {

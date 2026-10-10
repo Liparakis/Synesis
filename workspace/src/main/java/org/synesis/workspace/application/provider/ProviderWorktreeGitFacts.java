@@ -9,8 +9,6 @@ import java.util.List;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
-import static org.synesis.workspace.application.provider.ProviderSessionBindingService.SCHEMA_VERSION;
-import static org.synesis.workspace.application.provider.ProviderSessionBindingService.copy;
 
 /**
  * Reads Git and filesystem facts about a binding's worktree: whether Git registers it on the
@@ -32,41 +30,9 @@ final class ProviderWorktreeGitFacts {
             boolean verified = registeredWorktree(controlRoot, assigned, binding) && sameGitCommonDirectory(controlRoot, assigned, binding) && binding.branch().equals(git(assigned, "symbolic-ref", "--short", "HEAD"))
                     && isBaseAncestor(assigned, binding.baseCommit());
             String trust = verified && "VERIFIED".equals(binding.providerTrustState()) ? "VERIFIED" : "WORKSPACE_UNVERIFIED";
-            return new Binding(SCHEMA_VERSION,
-                    binding.sessionId(),
-                    binding.projectId(),
-                    binding.nodeId(),
-                    binding.provider(),
-                    binding.providerInstanceFingerprint(),
-                    binding.supervisorId(),
-                    binding.workerId(),
-                    binding.worktreeId(),
-                    binding.worktreePath(),
-                    controlRoot.toString(),
-                    binding.branch(),
-                    binding.baseCommit(),
-                    common,
-                    "ALLOCATED",
-                    verified ? "VERIFIED" : "UNVERIFIED",
-                    verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED",
-                    binding.status(),
-                    binding.createdAtEpochMillis(),
-                    System.currentTimeMillis(),
-                    binding.lastVerifiedProjectSequence(),
-                    trust,
-                    binding.bindingVersion(),
-                    binding.completedAt());
+            return binding.withWorktreeVerification(controlRoot.toString(), common, verified, trust);
         } catch (Exception failure) {
-            return copy(binding,
-                    binding.worktreeId(),
-                    controlRoot.toString(),
-                    binding.worktreePath(),
-                    binding.baseCommit(),
-                    binding.branch(),
-                    "ALLOCATED",
-                    "UNVERIFIED",
-                    "WORKTREE_NOT_REGISTERED",
-                    "WORKSPACE_UNVERIFIED");
+            return binding.withWorktreeVerification(controlRoot.toString(), binding.gitCommonDir(), false, "WORKSPACE_UNVERIFIED");
         }
     }
 

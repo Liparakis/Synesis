@@ -20,7 +20,6 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.read;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
-import static org.synesis.workspace.application.provider.ProviderSessionBindingService.copy;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.hasActiveManagedAttachment;
 import static org.synesis.workspace.application.provider.ProviderWorkspaceVerification.verifyWorkspace;
 import static org.synesis.workspace.application.provider.ProviderWorktreeAllocation.withWorktree;
@@ -77,7 +76,7 @@ final class ProviderWorkspaceRefresh {
         // Keep the derived worktree path below Windows' legacy checkout-path
         // limit even when the project contains deep private metadata paths.
         String suffix = "r-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        Binding replacement = copy(binding, null, location.root().toString(), null, currentCommit(location.root()), null, "UNASSIGNED", "UNVERIFIED", "WORKSPACE_REBOUND", "WORKSPACE_UNVERIFIED");
+        Binding replacement = binding.withoutWorktree(location.root().toString(), currentCommit(location.root()), "UNASSIGNED", "WORKSPACE_REBOUND");
         return withWorktree(location, replacement, suffix);
     }
 
@@ -90,7 +89,7 @@ final class ProviderWorkspaceRefresh {
                 throw staleDirty();
             }
             Binding current = read(bindingPath);
-            if (!current.sessionId().equals(binding.sessionId()) || !"BOUND".equals(current.status()) || service.isSessionTerminal(location, current.sessionId())) {
+            if (!current.sessionId().equals(binding.sessionId()) || current.state() != ProviderBindingStatus.BOUND || service.isSessionTerminal(location, current.sessionId())) {
                 throw staleDirty();
             }
             if (!current.worktreePath().equals(binding.worktreePath())) {

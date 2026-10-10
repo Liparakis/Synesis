@@ -15,6 +15,7 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ProviderSessionTerminalPayload;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ProviderSessionId;
@@ -103,25 +104,60 @@ public final class ProviderSessionTerminalizationService {
     private static Set<String> terminalBlockers(PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {
         Set<String> blockers = new LinkedHashSet<>();
         List<WorkIntent> intents = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).toList();
+        Set<java.util.UUID> intentIds = intents.stream().map(WorkIntent::intentId).collect(java.util.stream.Collectors.toSet());
         if (!intents.isEmpty()) {
             blockers.add("ACTIVE_INTENT");
-            if (intents.stream().anyMatch(intent -> !intent.selectors().isEmpty())) {
+            if (hasClaim(intents)) {
                 blockers.add("ACTIVE_CLAIM");
             }
         }
-        Set<java.util.UUID> intentIds = intents.stream().map(WorkIntent::intentId).collect(java.util.stream.Collectors.toSet());
-        for (CoordinationRequest request : store.collaborationProjection().requests()) {
-            if (request.status() == CoordinationRequest.Status.PENDING && (request.requester().equals(participant) || request.target().equals(participant) || intentIds.contains(request.conflictingIntentId()))) {
-                blockers.add("PENDING_DEPENDENCY");
-            }
+        if (hasPendingRequest(store, participant, intentIds)) {
+            blockers.add("PENDING_DEPENDENCY");
         }
+        if (hasOpenGrant(store, participant, intentIds)) {
+            blockers.add("PENDING_REVIEW");
+        }
+        addSnapshotBlockers(blockers, store, binding, participant);
+        if (hasPreparedMutation(store, intentIds)) {
+            blockers.add("ACTIVE_MUTATION_AUTHORITY");
+        }
+        if (hasPendingCapabilityRequest(store, binding)) {
+            blockers.add("PENDING_DEPENDENCY");
+        }
+        if (hasBlockingCommand(binding)) {
+            blockers.add("PENDING_COMMAND");
+        }
+        if (hasRecoverableParticipantAuthority(store, participant)) {
+            blockers.add("RECOVERABLE_PARTICIPANT_AUTHORITY");
+        }
+        return blockers;
+    }
+
+    private static boolean hasClaim(List<WorkIntent> intents) {
+        return intents.stream().anyMatch(intent -> !intent.selectors().isEmpty());
+    }
+
+    private static boolean hasPendingRequest(PredictionEventStore store, String participant, Set<java.util.UUID> intentIds) {
+        return store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.status() == CoordinationRequest.Status.PENDING && (request.requester().equals(participant) || request.target().equals(participant) || intentIds.contains(request.conflictingIntentId())));
+    }
+
+    private static boolean hasOpenGrant(PredictionEventStore store, String participant, Set<java.util.UUID> intentIds) {
         for (LaneGrant grant : store.workGroupProjection().grants()) {
             boolean exact = grant.targetParticipant().equals(participant) || intentIds.contains(grant.targetIntentId());
             if (exact && !store.workGroupProjection().grantSuperseded(grant.grantId()) && (store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId())
                     && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
-                blockers.add("PENDING_REVIEW");
+                return true;
             }
         }
+        return false;
+    }
+
+    /**
+     * Adds one code per unresolved snapshot of this session in snapshot order. It adds rather than
+     * answers because the set's insertion order is the order blockers are reported in.
+     */
+    private static void addSnapshotBlockers(Set<String> blockers, PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {
         for (var snapshot : store.taskCompletionProjection().allSnapshots()) {
             boolean exact =
                     snapshot.providerSessionId().equals(binding.sessionId()) || snapshot.provenance().bindingSessionIdentity().equals(new ProviderSessionId(binding.sessionId())) || snapshot.provenance().participant()
@@ -138,36 +174,36 @@ public final class ProviderSessionTerminalizationService {
                 blockers.add("UNRESOLVED_SNAPSHOT");
             }
         }
-        for (var prepared : store.taskCompletionProjection().allPrepared()) {
-            if (intentIds.contains(prepared.laneId())) {
-                blockers.add("ACTIVE_MUTATION_AUTHORITY");
-            }
-        }
-        for (CapabilityRequestRecord request : store.capabilityRequestProjection().records().values()) {
-            boolean exactActor = request.matchesRequester(binding.nodeId(), binding.supervisorId(), binding.workerId()) || request.matchesOwner(binding.nodeId(), binding.supervisorId(), binding.workerId());
-            if (exactActor && isPending(request.state())) {
-                blockers.add("PENDING_DEPENDENCY");
-            }
-        }
+    }
+
+    private static boolean hasPreparedMutation(PredictionEventStore store, Set<java.util.UUID> intentIds) {
+        return store.taskCompletionProjection().allPrepared().stream().anyMatch(prepared -> intentIds.contains(prepared.laneId()));
+    }
+
+    private static boolean hasPendingCapabilityRequest(PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
+        return store.capabilityRequestProjection().records().values().stream()
+                .anyMatch(request -> (request.matchesRequester(binding.nodeId(), binding.supervisorId(), binding.workerId()) || request.matchesOwner(binding.nodeId(), binding.supervisorId(), binding.workerId()))
+                        && isPending(request.state()));
+    }
+
+    private static boolean hasBlockingCommand(ProviderSessionBindingService.Binding binding) {
         Path assignedWorktree = binding.worktreePath() == null ? null : Path.of(binding.worktreePath());
-        if (assignedWorktree != null && Files.isDirectory(assignedWorktree)) {
-            try {
-                PhysicalWorktreeIdentity worktree = PhysicalWorktreeIdentity.capture(assignedWorktree);
-                ProjectCommandStore commands = new ProjectCommandStore(AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
-                if (commands.hasBlockingRecords(worktree)) {
-                    blockers.add("PENDING_COMMAND");
-                }
-            } catch (IOException commandStateUnavailable) {
-                blockers.add("PENDING_COMMAND");
-            }
+        if (assignedWorktree == null || !Files.isDirectory(assignedWorktree)) {
+            return false;
         }
+        try {
+            PhysicalWorktreeIdentity worktree = PhysicalWorktreeIdentity.capture(assignedWorktree);
+            ProjectCommandStore commands = new ProjectCommandStore(AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
+            return commands.hasBlockingRecords(worktree);
+        } catch (IOException commandStateUnavailable) {
+            return true;
+        }
+    }
+
+    private static boolean hasRecoverableParticipantAuthority(PredictionEventStore store, String participant) {
         var participantState = store.collaborationProjection().participantState(participant).orElse(null);
-        if (participantState != null && participantState != org.synesis.coordination.domain.collaboration.Participant.State.COMPLETED
-                && participantState != org.synesis.coordination.domain.collaboration.Participant.State.CANCELLED && participantState != org.synesis.coordination.domain.collaboration.Participant.State.REVOKED
-                && participantState != org.synesis.coordination.domain.collaboration.Participant.State.DETACHED) {
-            blockers.add("RECOVERABLE_PARTICIPANT_AUTHORITY");
-        }
-        return blockers;
+        return participantState != null && participantState != Participant.State.COMPLETED && participantState != Participant.State.CANCELLED && participantState != Participant.State.REVOKED
+                && participantState != Participant.State.DETACHED;
     }
 
     private static boolean isPending(CapabilityLifecycleState state) {
@@ -205,7 +241,7 @@ public final class ProviderSessionTerminalizationService {
             ProviderSessionBindingService.Binding durableBinding = bindingService.list(location, binding.provider()).stream().filter(candidate -> candidate.sessionId().equals(requestedSessionId)).findFirst()
                     .orElseThrow(() -> new IOException("SESSION_BINDING_NOT_FOUND"));
             if (!location.projectId().toString().equals(durableBinding.projectId()) || !binding.provider().equals(durableBinding.provider()) || !binding.providerInstanceFingerprint()
-                    .equals(durableBinding.providerInstanceFingerprint()) || (!"BOUND".equals(durableBinding.status()) && !"COMPLETED".equals(durableBinding.status()) && !"TERMINAL".equals(durableBinding.status()))) {
+                    .equals(durableBinding.providerInstanceFingerprint()) || !durableBinding.state().acceptsTerminalSeal()) {
                 throw new IOException("SESSION_BINDING_IDENTITY_MISMATCH");
             }
             binding = durableBinding;

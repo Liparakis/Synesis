@@ -256,15 +256,6 @@ public final class ProviderThreadOwnershipStore {
         return result[0];
     }
 
-    /**
-     * Returns the ownership record directory.
-     *
-     * @return ownership record directory
-     */
-    public Path directory() {
-        return directory;
-    }
-
     private Path pathFor(String provider, String providerThreadId) {
         requireProvider(provider);
         requireText(providerThreadId, "providerThreadId");

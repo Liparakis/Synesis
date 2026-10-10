@@ -29,6 +29,7 @@ import static org.synesis.workspace.application.provider.ProviderSessionBindingS
 final class ProviderBindingFile {
 
     private static final String PROVIDERS_DIRECTORY = "providers";
+    private static final String SESSIONS_DIRECTORY = "sessions";
 
     private ProviderBindingFile() {
     }
@@ -42,6 +43,14 @@ final class ProviderBindingFile {
         String value = UUID.randomUUID().toString();
         writeText(path, value + System.lineSeparator());
         return value;
+    }
+
+    static Path sessionsDirectory(ProjectLocation location) {
+        return location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY);
+    }
+
+    static Path bindingPath(ProjectLocation location, String provider, String fingerprint) {
+        return sessionsDirectory(location).resolve(provider + "-" + fingerprint + ".json");
     }
 
     static String fingerprint(String value) {

@@ -13,11 +13,12 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService.
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.WorkspaceVerificationResult;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
+import static org.synesis.workspace.application.provider.ProviderBindingFile.bindingPath;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.fingerprint;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.requireText;
+import static org.synesis.workspace.application.provider.ProviderBindingFile.sessionsDirectory;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.writeText;
-import static org.synesis.workspace.application.provider.ProviderSessionBindingService.SESSIONS_DIRECTORY;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.hasActiveManagedAttachment;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.git;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.isBaseAncestor;
@@ -57,7 +58,7 @@ final class ProviderWorkspaceVerification {
     }
 
     static WorkspaceCheck verifyClaimedMutationContinuationWorkspace(ProjectLocation location, Binding binding, Path cwd, String relativePath) {
-        if (binding == null || !"BOUND".equals(binding.status())) {
+        if (binding == null || binding.state() != ProviderBindingStatus.BOUND) {
             return new WorkspaceCheck(false, "SESSION_NOT_ACTIVE");
         }
         if (!new WorkspaceCollaborationService().hasActiveMutationClaim(location, binding, relativePath)) {
@@ -127,7 +128,7 @@ final class ProviderWorkspaceVerification {
                 return new WorkspaceVerificationResult(false, "SESSION_ID_REQUIRED", null, null);
             }
             Binding binding = bindings.stream().filter(b -> sessionId.equals(b.sessionId())).findFirst().orElse(null);
-            if (binding == null || !"BOUND".equals(binding.status())) {
+            if (binding == null || binding.state() != ProviderBindingStatus.BOUND) {
                 return new WorkspaceVerificationResult(false, "SESSION_UNBOUND", null, null);
             }
 
@@ -157,7 +158,7 @@ final class ProviderWorkspaceVerification {
 
             // 4. No other active session owns it
             for (Binding other : bindings) {
-                if (!other.sessionId().equals(binding.sessionId()) && !"REVOKED".equals(other.status()) && !"COMPLETED".equals(other.status()) && other.worktreePath() != null) {
+                if (!other.sessionId().equals(binding.sessionId()) && !other.state().releasesWorktree() && other.worktreePath() != null) {
                     if (sameFilesystemObject(Path.of(other.worktreePath()).toAbsolutePath().normalize(), assigned)) {
                         return new WorkspaceVerificationResult(false, "DUPLICATE_ACTIVE_WORKTREE", null, binding);
                     }
@@ -191,35 +192,11 @@ final class ProviderWorkspaceVerification {
             String evidenceRaw = location.projectId().toString() + "|" + canonicalAssigned + "|" + binding.branch() + "|" + headCommit + "|" + now;
             String evidenceDigest = fingerprint(evidenceRaw);
 
-            Binding verifiedBinding = new Binding(binding.schemaVersion(),
-                    binding.sessionId(),
-                    binding.projectId(),
-                    binding.nodeId(),
-                    binding.provider(),
-                    binding.providerInstanceFingerprint(),
-                    binding.supervisorId(),
-                    binding.workerId(),
-                    binding.worktreeId(),
-                    binding.worktreePath(),
-                    binding.controlCheckoutPath(),
-                    binding.branch(),
-                    binding.baseCommit(),
-                    binding.gitCommonDir(),
-                    binding.creationState(),
-                    "VERIFIED",
-                    "WORKSPACE_VERIFIED",
-                    binding.status(),
-                    binding.createdAtEpochMillis(),
-                    now,
-                    binding.lastVerifiedProjectSequence(),
-                    "VERIFIED",
-                    binding.bindingVersion(),
-                    binding.completedAt());
+            Binding verifiedBinding = binding.withVerifiedWorkspaceTrust(now);
 
             // Persist updated binding
-            Path sessionDir = location.synesisDirectory().resolve("local").resolve(SESSIONS_DIRECTORY);
-            Path bindingPath = sessionDir.resolve(provider + "-" + binding.providerInstanceFingerprint() + ".json");
-            write(bindingPath, verifiedBinding);
+            Path sessionDir = sessionsDirectory(location);
+            write(bindingPath(location, provider, binding.providerInstanceFingerprint()), verifiedBinding);
 
             // Persist verification record
             Map<String, Object> verRecord = new LinkedHashMap<>();

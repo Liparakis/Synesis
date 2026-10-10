@@ -14,7 +14,6 @@ import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderRegistry;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.writeText;
-import static org.synesis.workspace.application.provider.ProviderSessionBindingService.copy;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.runGit;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.validCommit;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.verifyBinding;
@@ -42,10 +41,10 @@ final class ProviderWorktreeAllocation {
         String branch = "synesis/" + binding.provider() + "/" + suffix;
         Path control = location.root().toAbsolutePath().normalize();
         if (path.startsWith(control) || control.startsWith(path)) {
-            return copy(binding, null, control.toString(), null, baseCommit, null, "FAILED", "UNVERIFIED", "CONTROL_CHECKOUT_MUTATION_DENIED", "WORKSPACE_UNVERIFIED");
+            return binding.withoutWorktree(control.toString(), baseCommit, "FAILED", "CONTROL_CHECKOUT_MUTATION_DENIED");
         }
         if ("GIT_HEAD_UNAVAILABLE".equals(baseCommit)) {
-            return copy(binding, null, location.root().toString(), null, baseCommit, null, "UNASSIGNED", "UNVERIFIED", "GIT_HEAD_UNAVAILABLE", "WORKSPACE_UNVERIFIED");
+            return binding.withoutWorktree(location.root().toString(), baseCommit, "UNASSIGNED", "GIT_HEAD_UNAVAILABLE");
         }
         try {
             Files.createDirectories(path.getParent());
@@ -62,11 +61,11 @@ final class ProviderWorktreeAllocation {
             if (provider != null) {
                 ProviderHookConfiguration.materializeHook(path, provider, new ProviderApplicationService().launcherPath(), location.profile());
             }
-            Binding allocated = copy(binding, worktreeId, location.root().toString(), path.toString(), baseCommit, branch, "ALLOCATED", "UNVERIFIED", "WORKTREE_ALLOCATED", binding.providerTrustState());
+            Binding allocated = binding.withAllocatedWorktree(worktreeId, location.root().toString(), path.toString(), branch, baseCommit);
             return verifyBinding(location.root(), allocated);
         } catch (Exception failure) {
             String diagnostic = String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT") ? "PROVIDER_CONFIGURATION_CONFLICT" : "WORKSPACE_ALLOCATION_FAILED";
-            return copy(binding, null, location.root().toString(), null, baseCommit, null, "FAILED", "UNVERIFIED", diagnostic, "WORKSPACE_UNVERIFIED");
+            return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", diagnostic);
         }
     }
 
