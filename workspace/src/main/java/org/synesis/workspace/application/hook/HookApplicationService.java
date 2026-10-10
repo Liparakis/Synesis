@@ -6,7 +6,9 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
@@ -47,17 +49,12 @@ public final class HookApplicationService {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> object(Object value) {
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+        return value instanceof Map<?, ?> map ? ProviderJson.stringKeyedObject(map) : null;
     }
 
     private static String text(Map<?, ?> value, String key) {
-        Object result = value == null ? null : value.get(key);
-        if (!(result instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("missing " + key);
-        }
-        return text;
+        return JsonFields.requiredText(value, key, IllegalArgumentException::new);
     }
 
     private static String evidence(String json) {
@@ -111,48 +108,59 @@ public final class HookApplicationService {
     public HookExecutionResult codex(InputStream input) {
         try {
             String json = read(input);
-            Map<?, ?> event = object(ProviderJson.parse(json));
-            String cwd = text(event, "cwd");
-            Path eventCwd = Path.of(cwd);
-            var location = new ProjectApplicationService().require(controlRoot(eventCwd));
-            String eventName = text(event, "hook_event_name");
-            if ("SessionStart".equals(eventName)) {
-                ProviderSessionBindingService.BindingResult session = bindings.ensure(location, "codex", evidence(json));
-                if (session.binding().worktreePath() == null || session.binding().worktreePath().isBlank()) {
-                    return denied("WORKSPACE_UNASSIGNED");
-                }
-                ProviderSessionBindingService.WorkspaceVerificationResult trust = bindings.verifyWorkspaceTrust(location, "codex", session.binding().sessionId(), Path.of(session.binding().worktreePath()));
-                if (!trust.verified()) {
-                    return denied(trust.code());
-                }
-                String response = "{\"systemMessage\":\"Synesis bound this Codex session to its assigned worktree. Native mutations will be routed through Synesis.\"}";
-                return withBinding(new HookExecutionResult("SESSION_BOUND", response, "Synesis session bound"), new ProviderSessionBindingService.BindingResult(trust.binding(), false));
+            Map<String, Object> event = object(ProviderJson.parse(json));
+            Path eventCwd = Path.of(text(event, "cwd"));
+            ProjectLocation location = new ProjectApplicationService().require(controlRoot(eventCwd));
+            if ("SessionStart".equals(text(event, "hook_event_name"))) {
+                return sessionStart(location, json);
             }
-            ProviderSessionBindingService.BindingResult binding = bindings.findByWorktree(location, "codex", eventCwd).map(existing -> new ProviderSessionBindingService.BindingResult(existing, false)).orElseGet(() -> {
-                try {
-                    return bindings.ensure(location, "codex", evidence(json));
-                } catch (ProviderSessionBindingService.BindingException failure) {
-                    throw new IllegalStateException(failure);
-                }
-            });
-            ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location, binding.binding(), eventCwd);
-            if (!workspace.verified() && !eventCwd.toAbsolutePath().normalize().equals(location.root())) {
-                return denied(workspace.code());
-            }
-            if (eventCwd.toAbsolutePath().normalize().equals(location.root())) {
-                if (binding.binding().worktreePath() == null || binding.binding().worktreePath().isBlank()) {
-                    return denied("GIT_HEAD_UNAVAILABLE");
-                }
-                Map<String, Object> toolInput = object(event.get("tool_input"));
-                String command = text(toolInput, "command");
-                CodexNativePatchRouter.RouteResult routed = new CodexNativePatchRouter().route(location, binding.binding(), command);
-                return denied(routed.message());
-            }
-            CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json, location);
-            return withBinding(new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason()), binding);
+            return toolEvent(location, event, eventCwd, json);
         } catch (Exception failure) {
             return denied("Synesis could not establish a trusted project session.");
         }
+    }
+
+    private HookExecutionResult sessionStart(ProjectLocation location, String json) throws Exception {
+        ProviderSessionBindingService.BindingResult session = bindings.ensure(location, "codex", evidence(json));
+        if (session.binding().worktreePath() == null || session.binding().worktreePath().isBlank()) {
+            return denied("WORKSPACE_UNASSIGNED");
+        }
+        ProviderSessionBindingService.WorkspaceVerificationResult trust = bindings.verifyWorkspaceTrust(location, "codex", session.binding().sessionId(), Path.of(session.binding().worktreePath()));
+        if (!trust.verified()) {
+            return denied(trust.code());
+        }
+        String response = "{\"systemMessage\":\"Synesis bound this Codex session to its assigned worktree. Native mutations will be routed through Synesis.\"}";
+        return withBinding(new HookExecutionResult("SESSION_BOUND", response, "Synesis session bound"), new ProviderSessionBindingService.BindingResult(trust.binding(), false));
+    }
+
+    private HookExecutionResult toolEvent(ProjectLocation location, Map<String, Object> event, Path eventCwd, String json) throws Exception {
+        ProviderSessionBindingService.BindingResult binding = bindings.findByWorktree(location, "codex", eventCwd).map(existing -> new ProviderSessionBindingService.BindingResult(existing, false)).orElseGet(() -> {
+            try {
+                return bindings.ensure(location, "codex", evidence(json));
+            } catch (ProviderSessionBindingService.BindingException failure) {
+                throw new IllegalStateException(failure);
+            }
+        });
+        ProviderSessionBindingService.WorkspaceCheck workspace = bindings.verifyWorkspace(location, binding.binding(), eventCwd);
+        boolean inControlCheckout = eventCwd.toAbsolutePath().normalize().equals(location.root());
+        if (!workspace.verified() && !inControlCheckout) {
+            return denied(workspace.code());
+        }
+        if (inControlCheckout) {
+            return routeNativeMutation(location, binding, event);
+        }
+        CodexHookAdapter.Result result = new CodexHookAdapter().processJson(json, location);
+        return withBinding(new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason()), binding);
+    }
+
+    private static HookExecutionResult routeNativeMutation(ProjectLocation location, ProviderSessionBindingService.BindingResult binding, Map<String, Object> event) {
+        if (binding.binding().worktreePath() == null || binding.binding().worktreePath().isBlank()) {
+            return denied("GIT_HEAD_UNAVAILABLE");
+        }
+        Map<String, Object> toolInput = object(event.get("tool_input"));
+        String command = text(toolInput, "command");
+        CodexNativePatchRouter.RouteResult routed = new CodexNativePatchRouter().route(location, binding.binding(), command);
+        return denied(routed.message());
     }
 
     /**

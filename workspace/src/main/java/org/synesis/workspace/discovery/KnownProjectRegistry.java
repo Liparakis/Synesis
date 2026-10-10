@@ -7,7 +7,6 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,6 +22,8 @@ import java.util.UUID;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
+import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 
@@ -280,7 +281,7 @@ public final class KnownProjectRegistry {
             if (!(parsed instanceof Map<?, ?> raw)) {
                 throw new IOException("registry root must be an object");
             }
-            Map<String, Object> document = stringMap(raw);
+            Map<String, Object> document = ProviderJson.stringKeyedObject(raw);
             if (integer(document.get("schemaVersion")) != SCHEMA_VERSION) {
                 throw new IOException("unsupported registry schema");
             }
@@ -296,7 +297,7 @@ public final class KnownProjectRegistry {
                 if (!(rawEntry instanceof Map<?, ?> map)) {
                     throw new IOException("project entry must be an object");
                 }
-                Map<String, Object> value = stringMap(map);
+                Map<String, Object> value = ProviderJson.stringKeyedObject(map);
                 if (!value.keySet().equals(Set.of("projectId", "path", "createdAt", "firstObservedAt", "lastObservedAt"))) {
                     throw new IOException("unsupported project registry field");
                 }
@@ -346,11 +347,7 @@ public final class KnownProjectRegistry {
             Path temporary = registryFile.resolveSibling(REGISTRY_FILE + ".tmp-" + UUID.randomUUID());
             try {
                 Files.write(temporary, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-                try {
-                    Files.move(temporary, registryFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                    Files.move(temporary, registryFile, StandardCopyOption.REPLACE_EXISTING);
-                }
+                AtomicFiles.replaceFromTemporary(temporary, registryFile);
             } finally {
                 Files.deleteIfExists(temporary);
             }
@@ -377,17 +374,6 @@ public final class KnownProjectRegistry {
         }
     }
 
-    private static Map<String, Object> stringMap(Map<?, ?> raw) throws IOException {
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : raw.entrySet()) {
-            if (!(entry.getKey() instanceof String key)) {
-                throw new IOException("registry field name must be text");
-            }
-            result.put(key, entry.getValue());
-        }
-        return result;
-    }
-
     private static int integer(Object value) throws IOException {
         if (!(value instanceof Number number) || number.doubleValue() != SCHEMA_VERSION) {
             throw new IOException("invalid schemaVersion");
@@ -396,11 +382,7 @@ public final class KnownProjectRegistry {
     }
 
     private static String text(Map<String, Object> value, String name) throws IOException {
-        Object result = value.get(name);
-        if (!(result instanceof String text) || text.isBlank()) {
-            throw new IOException("missing " + name);
-        }
-        return text;
+        return JsonFields.requiredText(value, name, IOException::new);
     }
 
     private static Path normalize(Path path) {

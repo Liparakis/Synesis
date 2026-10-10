@@ -60,37 +60,19 @@ public final class ProjectProcessExecutor {
     public ProjectProcessExecutor() {
     }
 
-    private static List<String> validateArgv(List<String> input) {
-        if (input.isEmpty() || input.size() > ProjectCommandSpec.MAX_ARGUMENTS) {
-            throw new IllegalArgumentException("invalid argv size");
-        }
-        for (String argument : input) {
-            if (argument == null || argument.length() > ProjectCommandSpec.MAX_ARGUMENT_LENGTH) {
-                throw new IllegalArgumentException("invalid argv entry");
-            }
-        }
-        if (input.getFirst().isBlank()) {
-            throw new IllegalArgumentException("blank executable");
-        }
-        return List.copyOf(input);
-    }
-
     private static Path resolveWorkingDirectory(Path root, String configured) {
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("worktree root is not a directory");
         }
         Path relative;
         try {
-            String requested = configured == null || configured.isBlank() ? "." : configured;
-            if (looksLikeAbsolutePath(requested)) {
-                throw new IllegalArgumentException("working directory is absolute");
+            String requested = ProjectCommandSpec.workingDirectoryOrDefault(configured);
+            if (ProjectCommandSpec.escapesRoot(requested)) {
+                throw new IllegalArgumentException("working directory escapes worktree");
             }
             relative = Path.of(requested);
         } catch (InvalidPathException failure) {
             throw new IllegalArgumentException("working directory path is invalid", failure);
-        }
-        if (relative.isAbsolute() || relative.normalize().startsWith(Path.of(".."))) {
-            throw new IllegalArgumentException("working directory escapes worktree");
         }
         Path candidate = root.resolve(relative).normalize();
         if (!candidate.startsWith(root) || !Files.isDirectory(candidate)) {
@@ -106,10 +88,6 @@ public final class ProjectProcessExecutor {
             throw new IllegalArgumentException("working directory cannot be verified", failure);
         }
         return candidate;
-    }
-
-    private static boolean looksLikeAbsolutePath(String value) {
-        return value.startsWith("/") || value.startsWith("\\\\") || value.matches("^[A-Za-z]:[\\\\/].*");
     }
 
     static void filterEnvironment(Map<String, String> environment) {
@@ -230,7 +208,7 @@ public final class ProjectProcessExecutor {
         }
         List<String> argv;
         try {
-            argv = validateArgv(request.argv());
+            argv = ProjectCommandSpec.validatedArgv(request.argv());
         } catch (RuntimeException failure) {
             return empty(Outcome.COMMAND_START_FAILED);
         }

@@ -78,10 +78,12 @@ public final class SyncApplicationService {
 
     private static void validateExistingConfig(Path profile, UUID project, String host) throws Exception {
         Path path = profile.resolve(PROJECT_CONFIG);
-        if (!Files.exists(path)) {
-            return;
+        if (Files.exists(path)) {
+            requireMatchesInvitation(ProjectConfig.load(path), project, host);
         }
-        ProjectConfig config = ProjectConfig.load(path);
+    }
+
+    private static void requireMatchesInvitation(ProjectConfig config, UUID project, String host) {
         if (!project.equals(config.projectId()) || !config.peerNodeIds().equals(Set.of(host))) {
             throw failure("PROJECT_MISMATCH");
         }
@@ -216,30 +218,9 @@ public final class SyncApplicationService {
     public SyncResult join(Path profile, String project, String record, String expectedHost, String invitation) {
         Objects.requireNonNull(profile, "profile");
         try {
-            URI uri;
-            Map<String, String> query;
-            String clean;
-            String host;
-            try {
-                uri = URI.create(invitation);
-                query = query(uri.getQuery());
-                clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
-                if (CompactBootstrapInvitation.isShareLink(clean)) {
-                    host = CompactBootstrapInvitation.fromShareLink(clean).hostNodeId();
-                } else {
-                    var decoded = SessionInvitation.fromShareLink(clean);
-                    host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded()).nodeId();
-                }
-            } catch (Exception invalidInvitation) {
-                throw failure("INVITE_INVALID");
-            }
-            if (query.containsKey("host") && !host.equals(query.get("host"))) {
-                throw failure("AUTH_FAILED");
-            }
-            if (expectedHost != null && !expectedHost.equals(host)) {
-                throw failure("AUTH_FAILED");
-            }
-            UUID projectId = parseUuid(project != null ? project : query.get("project"), "PROJECT_INVALID");
+            ParsedInvitation parsed = parseInvitation(invitation);
+            requireInvitedHost(parsed, expectedHost);
+            UUID projectId = parseUuid(project != null ? project : parsed.query().get("project"), "PROJECT_INVALID");
             if (projectId == null) {
                 throw failure("USAGE");
             }
@@ -247,69 +228,13 @@ public final class SyncApplicationService {
             if (!localIdentity.projectId().equals(projectId)) {
                 throw failure("PROJECT_MISMATCH");
             }
-            UUID recordId = parseUuid(record != null ? record : query.get("record"), "RECORD_INVALID");
-            validateExistingConfig(profile, projectId, host);
+            UUID recordId = parseUuid(record != null ? record : parsed.query().get("record"), "RECORD_INVALID");
+            validateExistingConfig(profile, projectId, parsed.host());
             if (expectedHost == null && !Files.exists(profile.resolve(PROJECT_CONFIG))) {
                 throw failure("PROJECT_NOT_CONFIGURED");
             }
-            AtomicReference<SyncFailure> callbackFailure = new AtomicReference<>();
-            Map<String, String> values = new LinkedHashMap<>();
-            Onboarding onboarding = new Onboarding(profile.resolve("link"), ignored -> {
-            });
-            try {
-                onboarding.join(clean, null, session -> {
-                    try {
-                        if (!session.isUsable() || !host.equals(session.remoteNodeId())) {
-                            throw failure("AUTH_FAILED");
-                        }
-                        try {
-                            ProjectContextExchange.require(session, localIdentity);
-                        } catch (ProjectContextExchange.ProjectContextException contextFailure) {
-                            throw failure(contextFailure.code());
-                        }
-                        ProjectConfig config = existingOrCreate(profile, projectId, host, expectedHost != null);
-                        values.put("AUTHENTICATED_REMOTE", session.remoteNodeId());
-                        DecisionStore store = new DecisionStore(profile.resolve("records"), projectId);
-                        String local = identity(profile).nodeId();
-                        if (recordId != null) {
-                            var outcome = new ProjectRecordSync(config, store).sync(session, recordId);
-                            if (outcome.code() != ProjectRecordSync.Code.APPLIED && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
-                                throw failure(outcome.code().name());
-                            }
-                            values.put("PROJECT_ID", projectId.toString());
-                            values.put("RECORD_ID", recordId.toString());
-                            values.put("SYNC_RESULT", outcome.code().name());
-                        } else {
-                            var result = new ProjectReconciliationSync(local, config, store).syncProject(session);
-                            values.put("PROJECT_ID", projectId.toString());
-                            values.put("RECONCILED_COUNT", Integer.toString(result.reconciledCount()));
-                            values.put("ADDED_LOCAL", Integer.toString(result.addedLocal()));
-                            values.put("ADDED_REMOTE", Integer.toString(result.addedRemote()));
-                            values.put("DUPLICATE_COUNT", Integer.toString(result.duplicateCount()));
-                            values.put("SYNC_RESULT", result.success() ? "SUCCESS" : "PARTIAL_SUCCESS");
-                            if (!result.success()) {
-                                throw failure("RECONCILIATION_FAILED");
-                            }
-                        }
-                    } catch (SyncFailure failure) {
-                        callbackFailure.set(failure);
-                        close(session);
-                        throw failure;
-                    } catch (Exception failure) {
-                        SyncFailure safe = failure("SYNC_FAILED");
-                        callbackFailure.set(safe);
-                        close(session);
-                        throw safe;
-                    }
-                });
-            } catch (OnboardingFailure failure) {
-                SyncFailure callback = callbackFailure.get();
-                if (callback != null) {
-                    throw callback;
-                }
-                throw failure(mapOnboarding(failure.code()));
-            }
-            return new SyncResult(0, values);
+            JoinPlan plan = new JoinPlan(profile, projectId, recordId, parsed.host(), expectedHost != null, localIdentity);
+            return new SyncResult(0, joinSession(plan, parsed.link()));
         } catch (SyncFailure failure) {
             return failed(failure.code);
         } catch (Exception failure) {
@@ -317,13 +242,103 @@ public final class SyncApplicationService {
         }
     }
 
+    private static ParsedInvitation parseInvitation(String invitation) {
+        try {
+            URI uri = URI.create(invitation);
+            Map<String, String> query = query(uri.getQuery());
+            String clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
+            String host;
+            if (CompactBootstrapInvitation.isShareLink(clean)) {
+                host = CompactBootstrapInvitation.fromShareLink(clean).hostNodeId();
+            } else {
+                var decoded = SessionInvitation.fromShareLink(clean);
+                host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded()).nodeId();
+            }
+            return new ParsedInvitation(clean, query, host);
+        } catch (Exception invalidInvitation) {
+            throw failure("INVITE_INVALID");
+        }
+    }
+
+    private static void requireInvitedHost(ParsedInvitation parsed, String expectedHost) {
+        if (parsed.query().containsKey("host") && !parsed.host().equals(parsed.query().get("host"))) {
+            throw failure("AUTH_FAILED");
+        }
+        if (expectedHost != null && !expectedHost.equals(parsed.host())) {
+            throw failure("AUTH_FAILED");
+        }
+    }
+
+    private Map<String, String> joinSession(JoinPlan plan, String link) {
+        AtomicReference<SyncFailure> callbackFailure = new AtomicReference<>();
+        Map<String, String> values = new LinkedHashMap<>();
+        Onboarding onboarding = new Onboarding(plan.profile().resolve("link"), ignored -> {
+        });
+        try {
+            onboarding.join(link, null, session -> {
+                try {
+                    exchange(plan, session, values);
+                } catch (SyncFailure failure) {
+                    callbackFailure.set(failure);
+                    close(session);
+                    throw failure;
+                } catch (Exception failure) {
+                    SyncFailure safe = failure("SYNC_FAILED");
+                    callbackFailure.set(safe);
+                    close(session);
+                    throw safe;
+                }
+            });
+        } catch (OnboardingFailure failure) {
+            SyncFailure callback = callbackFailure.get();
+            if (callback != null) {
+                throw callback;
+            }
+            throw failure(mapOnboarding(failure.code()));
+        }
+        return values;
+    }
+
+    private void exchange(JoinPlan plan, PeerSession session, Map<String, String> values) throws Exception {
+        if (!session.isUsable() || !plan.host().equals(session.remoteNodeId())) {
+            throw failure("AUTH_FAILED");
+        }
+        try {
+            ProjectContextExchange.require(session, plan.localIdentity());
+        } catch (ProjectContextExchange.ProjectContextException contextFailure) {
+            throw failure(contextFailure.code());
+        }
+        ProjectConfig config = existingOrCreate(plan.profile(), plan.projectId(), plan.host(), plan.hostConfirmed());
+        values.put("AUTHENTICATED_REMOTE", session.remoteNodeId());
+        DecisionStore store = new DecisionStore(plan.profile().resolve("records"), plan.projectId());
+        String local = identity(plan.profile()).nodeId();
+        if (plan.recordId() != null) {
+            var outcome = new ProjectRecordSync(config, store).sync(session, plan.recordId());
+            if (outcome.code() != ProjectRecordSync.Code.APPLIED && outcome.code() != ProjectRecordSync.Code.DUPLICATE) {
+                throw failure(outcome.code().name());
+            }
+            values.put("PROJECT_ID", plan.projectId().toString());
+            values.put("RECORD_ID", plan.recordId().toString());
+            values.put("SYNC_RESULT", outcome.code().name());
+        } else {
+            var result = new ProjectReconciliationSync(local, config, store).syncProject(session);
+            values.put("PROJECT_ID", plan.projectId().toString());
+            values.put("RECONCILED_COUNT", Integer.toString(result.reconciledCount()));
+            values.put("ADDED_LOCAL", Integer.toString(result.addedLocal()));
+            values.put("ADDED_REMOTE", Integer.toString(result.addedRemote()));
+            values.put("DUPLICATE_COUNT", Integer.toString(result.duplicateCount()));
+            values.put("SYNC_RESULT", result.success() ? "SUCCESS" : "PARTIAL_SUCCESS");
+            if (!result.success()) {
+                throw failure("RECONCILIATION_FAILED");
+            }
+        }
+    }
+
     private ProjectConfig existingOrCreate(Path profile, UUID project, String host, boolean confirmed) throws Exception {
         Path path = profile.resolve(PROJECT_CONFIG);
         if (Files.exists(path)) {
             ProjectConfig config = ProjectConfig.load(path);
-            if (!project.equals(config.projectId()) || !config.peerNodeIds().equals(Set.of(host))) {
-                throw failure("PROJECT_MISMATCH");
-            }
+            requireMatchesInvitation(config, project, host);
             return config;
         }
         if (!confirmed) {
@@ -332,6 +347,16 @@ public final class SyncApplicationService {
         ProjectConfig config = new ProjectConfig(project, Set.of(host));
         config.save(path);
         return config;
+    }
+
+    private record ParsedInvitation(String link, Map<String, String> query, String host) {
+    }
+
+    /**
+     * Everything the session callback needs once the preconditions have passed. {@code hostConfirmed}
+     * is whether the caller named the expected host, which allows creating the project configuration.
+     */
+    private record JoinPlan(Path profile, UUID projectId, UUID recordId, String host, boolean hostConfirmed, ProjectIdentity localIdentity) {
     }
 
     /**

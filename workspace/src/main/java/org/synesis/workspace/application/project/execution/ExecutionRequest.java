@@ -39,15 +39,11 @@ public record ExecutionRequest(List<String> argv, Path worktreeRoot, String work
         Objects.requireNonNull(worktreeRoot, "worktreeRoot");
         argv = List.copyOf(argv);
         worktreeRoot = worktreeRoot.toAbsolutePath().normalize();
-        if (workingDirectory == null || workingDirectory.isBlank()) {
-            workingDirectory = ".";
-        }
+        workingDirectory = ProjectCommandSpec.workingDirectoryOrDefault(workingDirectory);
         if (timeoutSeconds == null) {
             timeoutSeconds = ProjectProcessExecutor.DEFAULT_TIMEOUT_SECONDS;
         }
-        if (timeoutSeconds < 1 || timeoutSeconds > ProjectProcessExecutor.MAX_TIMEOUT_SECONDS) {
-            throw new IllegalArgumentException("timeoutSeconds must be between 1 and " + ProjectProcessExecutor.MAX_TIMEOUT_SECONDS);
-        }
+        ProjectCommandSpec.requireValidTimeout(timeoutSeconds);
     }
 
     /**
