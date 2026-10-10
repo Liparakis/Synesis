@@ -618,6 +618,126 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
+     * The requester's work can only be integrated with exactly the content it validated. An owner
+     * that changed a validated file and finished left the requester waiting for good, with the
+     * owner's lane already closed; two real agents stalled that way. The finish is refused while a
+     * validated file differs, and goes through once it is restored.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void ownerCannotFinishWithAValidatedFileChangedAndCanOnceItIsRestored() throws Exception {
+        String reqHandle = extractResultField(toolCall(requesterHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found")))));
+        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
+        toolCall(ownerHandler, "respond_coordination",
+                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
+        Path ownerWt = Path.of(b2.worktreePath());
+        String validatedContent = "public class ProductQuery {}\n";
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), validatedContent);
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        Map<String, Object> publication = extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true)));
+        publication.put("summary", "Implemented product query");
+        String published = toolCall(ownerHandler, "publish_capability_implementation", publication);
+        assertEquals("waiting", extractResponseStatus(published), published);
+        String validationNext = toolCall(requesterHandler, "get_next_action", Map.of());
+        Map<String, Object> inspect = extractWorkflowArguments(validationNext);
+        assertNotNull(inspect, validationNext);
+        Map<String, Object> inspectPayload = (Map<String, Object>) inspect.get("payload");
+        toolCall(requesterHandler, "respond_coordination", inspect);
+        String validated = toolCall(requesterHandler,
+                "respond_coordination",
+                Map.of("kind", "implementation_validation",
+                        "payload", Map.of("inboxItemId", inspectPayload.get("inboxItemId"), "capabilityRequestHandle", reqHandle, "implementationRevision", 1, "result", "accepted")));
+        assertEquals("completed", extractResponseStatus(validated), validated);
+
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery { int addedAfterValidation; }\n");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Change the validated file");
+        String refused = toolCall(ownerHandler, "finish_lane", Map.of("summary", "Product query service complete"));
+
+        assertEquals("blocked", extractResponseStatus(refused), refused);
+        assertEquals("VALIDATED_IMPLEMENTATION_CHANGED", extractInnerResult(refused).get("reason"), refused);
+        assertEquals(List.of("ProductQuery.java"), extractInnerResult(refused).get("changedValidatedPaths"), refused);
+        assertTrue(replayedStore().taskCompletionProjection().allSnapshots().isEmpty(), "a refused finish publishes nothing");
+
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), validatedContent);
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Restore the validated file");
+        String finished = toolCall(ownerHandler, "finish_lane", Map.of("summary", "Product query service complete"));
+        assertFalse("blocked".equals(extractResponseStatus(finished)) || "failed".equals(extractResponseStatus(finished)), finished);
+
+        String refreshed = toolCall(requesterHandler, "ensure_session", Map.of());
+        Path reqWt = Path.of(String.valueOf(extractInnerResult(refreshed).get("worktree")));
+        Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
+        git(reqWt, "add", ".");
+        git(reqWt, "commit", "-m", "Implement ProductCli");
+        String requesterFinished = toolCall(requesterHandler, "finish_lane", Map.of("summary", "Product CLI complete"));
+        assertEquals("completed", extractResponseStatus(requesterFinished), requesterFinished);
+        assertEquals("COMPLETED", replayedStore().workGroupProjection().groups().getFirst().status().name());
+    }
+
+    /**
+     * An owner that has accepted a request is told who is held up by it. Two real agents stalled
+     * when the owner waited for the requester's tests before publishing while the requester waited
+     * for the publication.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void ownerThatAcceptedARequestIsToldItsRequesterIsWaitingForTheImplementation() throws Exception {
+        String described = toolCall(requesterHandler,
+                "request_coordination",
+                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
+        String reqHandle = extractResultField(described);
+        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
+        toolCall(ownerHandler, "respond_coordination",
+                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
+
+        String ownerPoll = toolCall(ownerHandler, "get_next_action", Map.of());
+
+        Map<String, Object> result = extractInnerResult(ownerPoll);
+        assertEquals(Boolean.TRUE, result.get("implementationPending"), ownerPoll);
+        assertTrue(String.valueOf(result.get("instruction")).contains("waiting for your implementation"), ownerPoll);
+        assertEquals(List.of("requester_waiting_for_implementation"), ((Map<String, Object>) result.get("workflow")).get("blockers"), ownerPoll);
+    }
+
+    /**
+     * A session that holds no lane, in a project whose lanes are all finished, is told nothing is
+     * open. Before, it was told to establish an intent, and a resumed agent whose own lane was done
+     * went looking for work to announce.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void sessionWithoutALaneIsToldWhenNothingIsOpen() throws Exception {
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true))));
+        toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
+
+        AgentSessionService lateSessions = new AgentSessionService();
+        lateSessions.ensureSession(new SessionResolutionRequest(projectRoot, "claude", "inst-late-2", null, false));
+        var bindingService = new ProviderSessionBindingService();
+        var projectLocation = new ProjectApplicationService().locate(projectRoot);
+        var lateBinding = bindingService.find(projectLocation, "claude", "inst-late-2").orElseThrow();
+        bindingService.verifyWorkspaceTrust(projectLocation, "claude", lateBinding.sessionId(), Path.of(lateBinding.worktreePath()));
+        McpProtocolHandler lateHandler = new McpProtocolHandler(lateSessions, projectRoot, "claude", "inst-late-2");
+        lateHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri().toString().replace("\\", "/") + "\"}}");
+        toolCall(lateHandler, "ensure_session", Map.of());
+
+        String next = toolCall(lateHandler, "get_next_action", Map.of());
+
+        assertEquals("completed", extractResponseStatus(next), next);
+        assertEquals("NO_OPEN_WORK", extractInnerResult(next).get("state"), next);
+        Map<String, Object> workflow = (Map<String, Object>) extractInnerResult(next).get("workflow");
+        assertEquals("CLOSE", workflow.get("type"), next);
+        assertTrue(((List<String>) workflow.get("permittedOperations")).contains("ensure_session"), "a new intent can still be announced: " + next);
+        lateHandler.close();
+    }
+
+    /**
      * A lane that asked for a capability nobody has answered yet is cancelled. Its request is
      * cancelled with it. Before, the request's cancellation was recorded in a form the log could
      * not read, so every such cancel failed after it had already recorded the task as cancelled.

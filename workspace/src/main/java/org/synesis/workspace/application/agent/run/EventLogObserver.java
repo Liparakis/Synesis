@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.OptionalLong;
 
 import org.synesis.coordination.application.RequesterAnswerPolicy;
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
@@ -79,7 +80,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         }
         List<PredictionEvent> events = store.events();
         List<WorkGroup> groups = store.workGroupProjection().groups();
-        boolean complete = !groups.isEmpty() && groups.stream().noneMatch(group -> group.status() == WorkGroup.Status.ACTIVE) && store.collaborationProjection().activeIntents().isEmpty();
+        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store);
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
         // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
         // is the one whose agent has to come back when the answer period ends.

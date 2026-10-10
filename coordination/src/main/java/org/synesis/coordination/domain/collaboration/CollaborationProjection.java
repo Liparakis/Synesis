@@ -3,14 +3,17 @@ package org.synesis.coordination.domain.collaboration;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.ProviderSessionId;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotReference;
+import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -29,6 +32,7 @@ public final class CollaborationProjection {
     private final ProviderSessionFences sessionFences;
     private final Map<ParticipantId, Participant> participantHistory = new LinkedHashMap<>();
     private final Map<WorkIntentId, WorkIntentId> successorIntents = new LinkedHashMap<>();
+    private final Set<WorkGroupId> groupsWithLanes = new LinkedHashSet<>();
     private boolean activated;
     /**
      * Sequence of the newest applied event other than a heartbeat. A completion envelope stays
@@ -51,6 +55,7 @@ public final class CollaborationProjection {
         sessionFences = new ProviderSessionFences(source.sessionFences);
         participantHistory.putAll(source.participantHistory);
         successorIntents.putAll(source.successorIntents);
+        groupsWithLanes.addAll(source.groupsWithLanes);
         activated = source.activated;
         lastStateChangeSequence = source.lastStateChangeSequence;
     }
@@ -221,6 +226,17 @@ public final class CollaborationProjection {
         WorkIntentId successor = CoordinationNullException.requireNonNull(successorIntentId, "successor intent ID");
         return successorIntents.entrySet().stream().filter(entry -> entry.getValue().equals(successor))
                 .map(Map.Entry::getKey).findFirst();
+    }
+
+    /**
+     * Returns whether any lane was ever announced into a work group. A group can be created ahead
+     * of its lanes, and one that never receives a lane holds no work.
+     *
+     * @param group work-group identity
+     * @return whether a lane was announced into the group
+     */
+    public synchronized boolean groupHasHadLane(WorkGroupId group) {
+        return groupsWithLanes.contains(CoordinationNullException.requireNonNull(group, "work group ID"));
     }
 
     /**
@@ -493,6 +509,7 @@ public final class CollaborationProjection {
             throw new CoordinationException("OVERLAPPING_CLAIM");
         }
         intents.put(intent.identity(), intent);
+        groupsWithLanes.add(intent.group());
         refreshParticipant(intent.participantIdentity(), Participant.State.ACTIVE, intent);
     }
 

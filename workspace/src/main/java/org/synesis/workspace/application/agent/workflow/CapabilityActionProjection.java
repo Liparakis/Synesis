@@ -495,11 +495,15 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.CONTRACT_REVISION, request.contractRevision());
         result.put(NextActionKeys.CONTRACT, capabilityContractMap(request));
         if (request.state().acceptsImplementation()) {
-            result.put("implementationPending", true);
+            result.put(NextActionKeys.IMPLEMENTATION_PENDING, true);
             result.put(NextActionKeys.COMPLETION_REQUEST, COMPLETION_REQUEST);
+            // An owner that waits for the requester's files before publishing, while the requester
+            // waits for the publication, holds both lanes for good.
+            result.put("instruction", "The requester of this capability is waiting for your implementation and cannot build or test against it until it is published. Publish it as soon as your own claimed files meet the accepted contract: call get_next_action with completionRequested true. Do not wait for the requester's files.");
         } else if (request.state() == CapabilityLifecycleState.VALIDATED) {
             result.put(NextActionKeys.IMPLEMENTATION_VALIDATED, true);
             result.put(NextActionKeys.COMPLETION_REQUEST, COMPLETION_REQUEST);
+            result.put("instruction", "The requester validated your implementation exactly as you published it. Finish this lane without changing the published files: a finish that changes one of them is refused.");
         }
         result.put(NextActionKeys.PENDING, requests.size());
         return new AgentResponse(status, reason, action, result);

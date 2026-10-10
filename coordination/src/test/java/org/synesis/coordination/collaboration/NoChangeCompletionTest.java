@@ -128,6 +128,26 @@ final class NoChangeCompletionTest {
     }
 
     @Test
+    void workGroupThatNeverReceivedALaneIsNotOpenWork(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntent only = intent(project, "agt-only", "verification-a.py", group);
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        assertTrue(service.announce(only).acquired());
+        new WorkGroupService(new PredictionEventStore(temp, project), identity)
+                .create(new WorkGroup(UUID.randomUUID(), project, "Created ahead of its lanes", "Never used", 1, WorkGroup.Status.ACTIVE));
+        assertTrue(WorkIntentService.hasOpenWork(new PredictionEventStore(temp, project)), "the announced lane is open");
+
+        service.completeNoChange(completion(temp, project, only));
+
+        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        assertEquals(2, replayed.workGroupProjection().groups().size());
+        assertTrue(WorkIntentService.hasHadWork(replayed));
+        assertFalse(WorkIntentService.hasOpenWork(replayed), "the group nobody joined holds no work");
+    }
+
+    @Test
     void cancellingTheOnlyLaneOfAGroupCancelsTheGroup(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         UUID group = UUID.randomUUID();

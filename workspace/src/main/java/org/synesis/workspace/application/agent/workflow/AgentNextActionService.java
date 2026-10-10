@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -599,6 +600,15 @@ public final class AgentNextActionService {
             // would invite the agent to announce the work it has just cancelled.
             if (store.collaborationProjection().participantState(lane.participantId()).filter(Participant.State.CANCELLED::equals).isPresent()) {
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of(NextActionKeys.STATE, NextActionProtocol.STATE_CANCELLED, NextActionKeys.LANE, binding.sessionId()));
+            }
+            // With every announced lane finished or cancelled there is nothing to join. A session
+            // told to establish an intent here, typically a resumed agent whose own lane is done,
+            // goes looking for work to announce.
+            if (WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store)) {
+                Map<String, Object> noOpenWork = new LinkedHashMap<>(collaboration);
+                noOpenWork.put(NextActionKeys.STATE, NextActionProtocol.STATE_NO_OPEN_WORK);
+                noOpenWork.put("instruction", "Every lane announced in this project is finished or cancelled. Announce a new intent with ensure_session only if part of the goal is still not done.");
+                return new AgentResponse(AgentStatus.COMPLETED, null, null, noOpenWork);
             }
             return claimRequiredResponse(collaboration);
         }

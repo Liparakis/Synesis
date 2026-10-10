@@ -338,6 +338,11 @@ final class NextActionKeys {
     static final String ACKNOWLEDGEMENT_REQUIRED = "acknowledgementRequired";
 
     /**
+     * Whether a capability owner has accepted a request and not yet published its implementation.
+     */
+    static final String IMPLEMENTATION_PENDING = "implementationPending";
+
+    /**
      * Whether a lane that asked to finish has changed nothing it could publish.
      */
     static final String NOTHING_TO_PUBLISH = "nothingToPublish";

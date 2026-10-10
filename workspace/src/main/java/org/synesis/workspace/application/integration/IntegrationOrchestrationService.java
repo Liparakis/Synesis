@@ -85,16 +85,27 @@ public final class IntegrationOrchestrationService {
      * @return {@code true} only when every path is provably identical in both commits
      */
     static boolean carriesValidatedContent(Path repository, String validatedCommit, List<String> validatedPaths, String candidateCommit) {
-        if (validatedPaths.isEmpty()) {
-            return false;
-        }
+        return !validatedPaths.isEmpty() && validatedPathsChanged(repository, validatedCommit, validatedPaths, candidateCommit).isEmpty();
+    }
+
+    /**
+     * Lists the validated paths whose content in a commit is not provably what was validated.
+     *
+     * @param repository      repository holding both commits
+     * @param validatedCommit commit the requester validated
+     * @param validatedPaths  paths that implementation changed
+     * @param candidateCommit commit being compared
+     * @return the paths that differ or cannot be compared, in the given order
+     */
+    public static List<String> validatedPathsChanged(Path repository, String validatedCommit, List<String> validatedPaths, String candidateCommit) {
+        List<String> changed = new ArrayList<>();
         for (String path : validatedPaths) {
             String validated = contentIdentity(repository, validatedCommit, path);
             if (validated == null || !validated.equals(contentIdentity(repository, candidateCommit, path))) {
-                return false;
+                changed.add(path);
             }
         }
-        return true;
+        return changed;
     }
 
     /** Returns the blob identity of a path in a commit, a marker when the path is absent, or {@code null} when unknown. */

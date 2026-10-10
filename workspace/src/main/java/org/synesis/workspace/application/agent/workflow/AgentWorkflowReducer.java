@@ -100,10 +100,14 @@ public final class AgentWorkflowReducer {
         }
         String laneState = laneState(result);
         if (response.status() == AgentStatus.COMPLETED && response.nextAction() == null
-                && (NextActionProtocol.STATE_COMPLETED.equals(result.get(NextActionKeys.STATE)) || NextActionProtocol.STATE_CANCELLED.equals(result.get(NextActionKeys.STATE)))) {
+                && (NextActionProtocol.STATE_COMPLETED.equals(result.get(NextActionKeys.STATE)) || NextActionProtocol.STATE_CANCELLED.equals(result.get(NextActionKeys.STATE))
+                        || NextActionProtocol.STATE_NO_OPEN_WORK.equals(result.get(NextActionKeys.STATE)))) {
             // A closed lane's answer carries no intent or participant to read a state from.
             // Without this it would be described as open implementation work with write operations.
             laneState = (String) result.get(NextActionKeys.STATE);
+        }
+        if (NextActionProtocol.STATE_NO_OPEN_WORK.equals(laneState)) {
+            return new LaneAction("CLOSE", List.of("no_open_work"), List.of(NextActionProtocol.TOOL_GET_NEXT_ACTION, NextActionProtocol.TOOL_ENSURE_SESSION), true);
         }
         if (response.nextAction() == null && (NextActionProtocol.STATE_COMPLETED.equals(laneState) || NextActionProtocol.STATE_CANCELLED.equals(laneState) || "DETACHED".equals(laneState) || "REVOKED".equals(laneState))) {
             return new LaneAction("CLOSE", List.of("lane_" + laneState.toLowerCase(java.util.Locale.ROOT)), List.of(NextActionProtocol.TOOL_GET_NEXT_ACTION, NextActionProtocol.TOOL_ENSURE_SESSION), true);
@@ -121,6 +125,11 @@ public final class AgentWorkflowReducer {
                 // The lane stays writable; the owner may still need to tidy its claimed files
                 // before asking for the finish projection.
                 return new LaneAction(LANE_PUBLISH, List.of("owner_completion_required"), List.of(NextActionProtocol.TOOL_GET_NEXT_ACTION, NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_APPLY_PATCH, NextActionProtocol.TOOL_RUN_COMMAND), true);
+            }
+            if (Boolean.TRUE.equals(result.get(NextActionKeys.IMPLEMENTATION_PENDING))) {
+                // The lane stays writable, and the envelope says who is held up by it.
+                return new LaneAction(LANE_IMPLEMENT, List.of("requester_waiting_for_implementation"),
+                        List.of(NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_APPLY_PATCH, NextActionProtocol.TOOL_RUN_COMMAND, NextActionProtocol.TOOL_GET_NEXT_ACTION), true);
             }
             if (Boolean.TRUE.equals(result.get(NextActionKeys.NOTHING_TO_PUBLISH))) {
                 return new LaneAction(LANE_IMPLEMENT, List.of("nothing_to_publish"),

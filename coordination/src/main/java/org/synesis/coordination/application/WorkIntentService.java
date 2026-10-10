@@ -9,6 +9,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
@@ -620,6 +621,31 @@ public final class WorkIntentService {
     public void holdRecovery(ParticipantId participant, SnapshotReference snapshotReference)
             throws IOException, GeneralSecurityException {
         participantRecovery.holdRecovery(participant, snapshotReference);
+    }
+
+    /**
+     * Returns whether any lane is open or any work group that had a lane is still active. A group
+     * that was created and never received a lane holds no work: nothing can finish it, and no
+     * agent has a way to close it.
+     *
+     * @param store current project projection
+     * @return whether work remains that a lane has to finish
+     */
+    public static boolean hasOpenWork(PredictionEventStore store) {
+        CoordinationNullException.requireNonNull(store, "store");
+        return !store.collaborationProjection().activeIntents().isEmpty() || store.workGroupProjection().groups().stream()
+                .anyMatch(group -> group.status() == WorkGroup.Status.ACTIVE && store.collaborationProjection().groupHasHadLane(group.identity()));
+    }
+
+    /**
+     * Returns whether any lane was ever announced in the project.
+     *
+     * @param store current project projection
+     * @return whether a work group of the project has had a lane
+     */
+    public static boolean hasHadWork(PredictionEventStore store) {
+        CoordinationNullException.requireNonNull(store, "store");
+        return store.workGroupProjection().groups().stream().anyMatch(group -> store.collaborationProjection().groupHasHadLane(group.identity()));
     }
 
     /**

@@ -461,6 +461,32 @@ public final class AgentTaskCompletionService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of(NextActionKeys.REASON, "NO_CHANGES_TO_PUBLISH"));
         }
 
+        // A requester validated an exact implementation of this lane, and its own work can only be
+        // integrated once that content is. A snapshot that changed a validated file would leave the
+        // requester waiting for content that can no longer arrive, with this lane already closed.
+        for (CapabilityRequestRecord validated : store.capabilityRequestProjection().records().values()) {
+            if (validated.state() != CapabilityLifecycleState.VALIDATED || !validated.authorityLineageId().equals(snapshot.provenance().authorityLineageId())) {
+                continue;
+            }
+            var implementation = store.capabilityRequestProjection().findLatestImplementation(validated.handle()).orElse(null);
+            if (implementation == null) {
+                continue;
+            }
+            List<String> changed = IntegrationOrchestrationService.validatedPathsChanged(location.root(), implementation.commitSha(), implementation.changedPaths(), snapshot.commitSha());
+            if (!changed.isEmpty()) {
+                if (!snapshotAlreadyExists) {
+                    snapshotService.removeSnapshotRef(worktree, snapshot);
+                }
+                Map<String, Object> refused = new LinkedHashMap<>();
+                refused.put(NextActionKeys.REASON, "VALIDATED_IMPLEMENTATION_CHANGED");
+                refused.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, validated.handle().value());
+                refused.put("changedValidatedPaths", changed);
+                refused.put("validatedCommit", implementation.commitSha());
+                refused.put("instruction", "The requester validated these files as you published them, and its work can only be integrated with exactly that content. Restore them to the validated commit, then finish.");
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, refused);
+            }
+        }
+
         // A stable identity collision is not a second publication. Fail closed instead of
         // advertising another task record over the immutable snapshot ID.
         var sameIdentity = store.taskCompletionProjection().findSnapshotById(snapshot.snapshotId());

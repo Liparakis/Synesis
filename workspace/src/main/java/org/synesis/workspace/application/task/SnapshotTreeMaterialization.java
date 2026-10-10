@@ -105,8 +105,11 @@ final class SnapshotTreeMaterialization {
             existing = null;
         }
         if (existing != null) {
-            if (!tree.equals(runGitOutput(workdir, "rev-parse", existing + "^{tree}"))
-                    || !parent.equals(runGitOutput(workdir, "rev-parse", existing + "^"))) {
+            // The identifier binds lane, epoch, base and tree, so a ref holding this tree is this
+            // snapshot whatever commit the lane has reached since. Comparing parents as well made
+            // a lane that committed after publishing, and came back to the published content,
+            // unable to finish.
+            if (!tree.equals(runGitOutput(workdir, "rev-parse", existing + "^{tree}"))) {
                 throw new IOException("SNAPSHOT_REF_CONTENT_MISMATCH");
             }
             return existing;

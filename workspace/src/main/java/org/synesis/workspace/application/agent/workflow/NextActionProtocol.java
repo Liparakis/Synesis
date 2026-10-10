@@ -104,6 +104,12 @@ final class NextActionProtocol {
     static final String STATE_COMPLETED = "COMPLETED";
 
     /**
+     * State of a project in which every announced lane is finished or cancelled, as told to a
+     * session that holds no lane.
+     */
+    static final String STATE_NO_OPEN_WORK = "NO_OPEN_WORK";
+
+    /**
      * State of a lane its own session cancelled.
      */
     static final String STATE_CANCELLED = "CANCELLED";
