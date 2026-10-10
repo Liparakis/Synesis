@@ -48,7 +48,7 @@ public final class AgentRunController {
     /**
      * The only thing a resumed agent is told. It names no lane, peer, file, or action.
      */
-    public static final String RESUME_PROMPT = "Continue following this project's coordination rules from where you stopped.";
+    static final String RESUME_PROMPT = "Continue following this project's coordination rules from where you stopped.";
 
     /**
      * Events that record liveness or the takeover of an abandoned lane rather than work. Resuming
@@ -89,7 +89,7 @@ public final class AgentRunController {
      * @param type durable event type
      * @return {@code false} for liveness and lane-takeover bookkeeping
      */
-    public static boolean isProgress(PredictionEventType type) {
+    static boolean isProgress(PredictionEventType type) {
         return !BOOKKEEPING.contains(Objects.requireNonNull(type, "type"));
     }
 

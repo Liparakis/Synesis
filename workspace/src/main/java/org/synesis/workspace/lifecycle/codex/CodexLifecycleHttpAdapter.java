@@ -1,8 +1,7 @@
-package org.synesis.workspace.lifecycle.codex.http;
-
-import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
+package org.synesis.workspace.lifecycle.codex;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -26,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @since 1.0
  */
-public final class CodexLifecycleHttpAdapter implements HttpHandler {
+final class CodexLifecycleHttpAdapter implements HttpHandler {
 
     /**
      * Maximum raw lifecycle-control body bytes.
@@ -40,7 +39,7 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
      *
      * @param host retained production lifecycle owner
      */
-    public CodexLifecycleHttpAdapter(ProjectRuntimeHost host) {
+    CodexLifecycleHttpAdapter(ProjectRuntimeHost host) {
         this.host = Objects.requireNonNull(host, "host");
     }
 
@@ -59,10 +58,10 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
         }
     }
 
-    private static void writeResponse(java.io.OutputStream output, CodexLifecycleHttpClient.Response response) throws IOException {
+    private static void writeResponse(java.io.OutputStream output, LifecycleControlResponse response) throws IOException {
         byte[] encoded = response.encoded();
-        if (encoded.length > CodexLifecycleHttpClient.MAX_RESPONSE_BYTES) {
-            encoded = new CodexLifecycleHttpClient.Response(false, "lifecycle_response_overflow", "FAILED", 0L, null, null, Map.of()).encoded();
+        if (encoded.length > LifecycleControlResponse.MAX_RESPONSE_BYTES) {
+            encoded = new LifecycleControlResponse(false, "lifecycle_response_overflow", "FAILED", 0L, null, null, Map.of()).encoded();
         }
         output.write(encoded);
         output.flush();
@@ -106,12 +105,12 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
             } catch (IOException failure) {
                 if (String.valueOf(failure.getMessage()).contains("oversized")) {
                     oversizedRequests.incrementAndGet();
-                    send(exchange, 413, new CodexLifecycleHttpClient.Response(false, "lifecycle_control_request_oversized", "FAILED", 0L, null, null, Map.of("maxBytes", MAX_REQUEST_BYTES)).encoded());
+                    send(exchange, 413, new LifecycleControlResponse(false, "lifecycle_control_request_oversized", "FAILED", 0L, null, null, Map.of("maxBytes", MAX_REQUEST_BYTES)).encoded());
                     return;
                 }
                 throw failure;
             }
-            CodexLifecycleHttpClient.Response response;
+            LifecycleControlResponse response;
             int status = 200;
             try {
                 LifecycleControlRequestEnvelope.SignedEnvelope signed = LifecycleControlRequestEnvelope.SignedEnvelope.decode(body);
@@ -125,12 +124,12 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
                 }
             } catch (Exception failure) {
                 status = diagnosticStatus(failure);
-                response = new CodexLifecycleHttpClient.Response(false, diagnostic(failure), "FAILED", 0L, null, null, java.util.Map.of());
+                response = new LifecycleControlResponse(false, diagnostic(failure), "FAILED", 0L, null, null, java.util.Map.of());
             }
             byte[] encoded = response.encoded();
-            if (encoded.length > CodexLifecycleHttpClient.MAX_RESPONSE_BYTES) {
+            if (encoded.length > LifecycleControlResponse.MAX_RESPONSE_BYTES) {
                 status = 500;
-                encoded = new CodexLifecycleHttpClient.Response(false, "lifecycle_response_overflow", "FAILED", 0L, null, null, java.util.Map.of()).encoded();
+                encoded = new LifecycleControlResponse(false, "lifecycle_response_overflow", "FAILED", 0L, null, null, java.util.Map.of()).encoded();
             }
             send(exchange, status, encoded);
         }
@@ -141,7 +140,7 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
      *
      * @return bounded oversized-body count
      */
-    public long oversizedRequestCount() {
+    long oversizedRequestCount() {
         return oversizedRequests.get();
     }
 
@@ -150,7 +149,7 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(200, 0);
         try (var output = exchange.getResponseBody()) {
-            FutureTask<CodexLifecycleHttpClient.Response> result = new FutureTask<>(() -> host.handle(signed));
+            FutureTask<LifecycleControlResponse> result = new FutureTask<>(() -> host.handle(signed));
             Thread waitThread = new Thread(result, "synesis-codex-http-wait-bridge");
             waitThread.setDaemon(true);
             waitThread.start();
@@ -179,10 +178,10 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
                 if (!result.isDone()) {
                     result.cancel(true);
                     waitThread.interrupt();
-                    writeResponse(output, new CodexLifecycleHttpClient.Response(false, "lifecycle_wait_deadline_expired", "FAILED", 0L, null, null, Map.of()));
+                    writeResponse(output, new LifecycleControlResponse(false, "lifecycle_wait_deadline_expired", "FAILED", 0L, null, null, Map.of()));
                     return;
                 }
-                CodexLifecycleHttpClient.Response response;
+                LifecycleControlResponse response;
                 try {
                     response = result.get();
                 } catch (InterruptedException interrupted) {
@@ -191,9 +190,9 @@ public final class CodexLifecycleHttpAdapter implements HttpHandler {
                     Thread.currentThread().interrupt();
                     return;
                 } catch (ExecutionException failure) {
-                    response = new CodexLifecycleHttpClient.Response(false, diagnostic(failure), "FAILED", 0L, null, null, Map.of());
+                    response = new LifecycleControlResponse(false, diagnostic(failure), "FAILED", 0L, null, null, Map.of());
                 } catch (CancellationException cancelled) {
-                    response = new CodexLifecycleHttpClient.Response(false, "lifecycle_wait_cancelled", "FAILED", 0L, null, null, Map.of());
+                    response = new LifecycleControlResponse(false, "lifecycle_wait_cancelled", "FAILED", 0L, null, null, Map.of());
                 }
                 writeResponse(output, response);
             } catch (IOException disconnected) {

@@ -1,6 +1,5 @@
 package org.synesis.workspace.application.project.execution;
 
-import org.synesis.workspace.application.project.ProjectCommandSpec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -32,15 +31,15 @@ public final class ProjectProcessExecutor {
     /**
      * Maximum raw bytes retained per output stream.
      */
-    public static final int MAX_RETAINED_BYTES = 65_536;
+    static final int MAX_RETAINED_BYTES = 65_536;
     /**
      * Raw bytes retained at the beginning of an overflowing stream.
      */
-    public static final int HEAD_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
+    static final int HEAD_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
     /**
      * Raw bytes retained at the end of an overflowing stream.
      */
-    public static final int TAIL_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
+    static final int TAIL_RETAINED_BYTES = MAX_RETAINED_BYTES / 2;
     /**
      * Default process timeout in seconds.
      */
@@ -48,11 +47,11 @@ public final class ProjectProcessExecutor {
     /**
      * Maximum process timeout in seconds.
      */
-    public static final int MAX_TIMEOUT_SECONDS = ProjectCommandSpec.MAX_TIMEOUT_SECONDS;
+    static final int MAX_TIMEOUT_SECONDS = ProjectCommandSpec.MAX_TIMEOUT_SECONDS;
     /**
      * Stable marker inserted between retained head and tail text.
      */
-    public static final String TRUNCATION_MARKER = "\n...[output truncated; retained head and tail]...\n";
+    static final String TRUNCATION_MARKER = "\n...[output truncated; retained head and tail]...\n";
 
     /**
      * Creates a stateless generic executor.

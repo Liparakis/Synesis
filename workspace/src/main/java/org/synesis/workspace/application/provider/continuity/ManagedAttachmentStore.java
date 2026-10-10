@@ -141,7 +141,7 @@ public record ManagedAttachmentStore(Path file) {
      * @throws IOException when persistence fails
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-    public synchronized boolean compareAndReplace(long expectedGeneration, String expectedProofHash, ManagedAttachmentRecord replacement) throws IOException {
+    synchronized boolean compareAndReplace(long expectedGeneration, String expectedProofHash, ManagedAttachmentRecord replacement) throws IOException {
         Objects.requireNonNull(expectedProofHash, "expectedProofHash");
         Objects.requireNonNull(replacement, "replacement");
         final boolean[] replaced = {false};

@@ -6,7 +6,7 @@ import org.synesis.workspace.lifecycle.cleanup.plan.PersistedCleanupPlan;
 
 import org.synesis.workspace.lifecycle.cleanup.plan.PersistedCleanupPlanEntry;
 
-import org.synesis.workspace.lifecycle.cleanup.plan.CleanupReason;
+import org.synesis.workspace.lifecycle.cleanup.inventory.CleanupReason;
 
 import org.synesis.workspace.lifecycle.cleanup.plan.CleanupPlanStore;
 

@@ -22,7 +22,7 @@ import java.util.Objects;
  *
  * @since 1.0
  */
-public final class BoundedProtocolFrameReader {
+final class BoundedProtocolFrameReader {
 
     /**
      * Maximum raw payload bytes before the newline terminator.
@@ -31,7 +31,7 @@ public final class BoundedProtocolFrameReader {
     /**
      * Maximum diagnostic prefix retained for an oversized frame.
      */
-    public static final int MAX_DIAGNOSTIC_PREFIX_BYTES = 64 * 1024;
+    static final int MAX_DIAGNOSTIC_PREFIX_BYTES = 64 * 1024;
 
     private final InputStream input;
     private final byte[] one = new byte[1];
@@ -41,7 +41,7 @@ public final class BoundedProtocolFrameReader {
      *
      * @param input App Server stdout stream
      */
-    public BoundedProtocolFrameReader(InputStream input) {
+    BoundedProtocolFrameReader(InputStream input) {
         this.input = Objects.requireNonNull(input, "input");
     }
 

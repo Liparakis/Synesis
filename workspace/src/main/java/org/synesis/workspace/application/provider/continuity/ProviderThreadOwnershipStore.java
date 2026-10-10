@@ -36,7 +36,7 @@ public final class ProviderThreadOwnershipStore {
      *
      * @param directory ownership record directory
      */
-    public ProviderThreadOwnershipStore(Path directory) {
+    ProviderThreadOwnershipStore(Path directory) {
         this.directory = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
         this.lockFile = this.directory.resolve("ownership.lock");
     }

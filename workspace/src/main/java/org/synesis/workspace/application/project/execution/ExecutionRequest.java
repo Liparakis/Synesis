@@ -1,6 +1,5 @@
 package org.synesis.workspace.application.project.execution;
 
-import org.synesis.workspace.application.project.ProjectCommandSpec;
 
 import java.nio.file.Path;
 import java.util.List;

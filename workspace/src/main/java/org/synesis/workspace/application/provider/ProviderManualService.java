@@ -28,7 +28,7 @@ public final class ProviderManualService {
     /**
      * Stable directory name used to install the managed provider manual.
      */
-    public static final String MANUAL_NAME = "synesis-provider-manual";
+    static final String MANUAL_NAME = "synesis-provider-manual";
     private static final String MANUAL_DIRECTORY = MANUAL_NAME;
     private static final String MANUAL_FILE = "SKILL.md";
     private static final String MANIFEST_FILE = "manifest.json";
@@ -74,7 +74,7 @@ public final class ProviderManualService {
      * @param provider provider identifier
      * @return global skill directory
      */
-    public Path skillDirectory(String provider) {
+    Path skillDirectory(String provider) {
         Objects.requireNonNull(provider, "provider");
         Path home = Path.of(System.getProperty("user.home"));
         return switch (provider) {

@@ -21,7 +21,6 @@ import java.util.Objects;
 
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
-import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
 /**
@@ -40,19 +39,19 @@ public final class CodexAppServerProtocolClient implements AutoCloseable {
     /**
      * Maximum pending requests for one connection generation.
      */
-    public static final int MAX_PENDING_REQUESTS = 128;
+    static final int MAX_PENDING_REQUESTS = 128;
     /**
      * Maximum late-response tombstones for one connection generation.
      */
-    public static final int MAX_TOMBSTONES = 256;
+    static final int MAX_TOMBSTONES = 256;
     /**
      * Maximum issued request IDs retained for duplicate detection.
      */
-    public static final int MAX_TERMINAL_IDS = 65_536;
+    static final int MAX_TERMINAL_IDS = 65_536;
     /**
      * Tombstone retention bound.
      */
-    public static final Duration TOMBSTONE_RETENTION = Duration.ofMinutes(15);
+    static final Duration TOMBSTONE_RETENTION = Duration.ofMinutes(15);
     private final long connectionGeneration;
     private final InputStream stdout;
     private final OutputStream stdin;

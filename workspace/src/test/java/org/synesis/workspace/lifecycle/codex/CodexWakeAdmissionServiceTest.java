@@ -4,7 +4,7 @@ import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -296,9 +296,9 @@ class CodexWakeAdmissionServiceTest {
         }
 
         @Override
-        public CodexLifecycleHttpClient.Response dispatch(LifecycleControlRequestEnvelope request) {
+        public LifecycleControlResponse dispatch(LifecycleControlRequestEnvelope request) {
             requests.add(request);
-            return new CodexLifecycleHttpClient.Response(true, "continued", "RUNNING", 8L, request.expectedThreadId(), "turn-2", java.util.Map.of());
+            return new LifecycleControlResponse(true, "continued", "RUNNING", 8L, request.expectedThreadId(), "turn-2", java.util.Map.of());
         }
     }
 

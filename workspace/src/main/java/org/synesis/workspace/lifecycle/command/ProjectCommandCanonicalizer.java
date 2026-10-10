@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.synesis.workspace.application.project.ProjectCommandSpec;
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 
 /**
  * Canonicalizes bounded typed JSON-RPC request IDs for durable lookup.

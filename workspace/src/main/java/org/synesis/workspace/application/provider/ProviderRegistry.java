@@ -1,10 +1,11 @@
-package org.synesis.workspace.provider;
+package org.synesis.workspace.application.provider;
 
 import java.util.List;
 import java.util.Locale;
 
 import org.synesis.workspace.provider.claude.ClaudeCodeProviderIntegration;
 import org.synesis.workspace.provider.codex.CodexProviderIntegration;
+import org.synesis.workspace.provider.ProviderIntegration;
 
 /**
  * Static registry for the currently implemented provider integrations.

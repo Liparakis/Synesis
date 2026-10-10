@@ -27,7 +27,7 @@ final class ProcessTreeTerminator {
     /**
      * Creates a terminator using the JDK process-handle inspector.
      */
-    public ProcessTreeTerminator() {
+    ProcessTreeTerminator() {
         this(new JdkInspector());
     }
 
@@ -36,7 +36,7 @@ final class ProcessTreeTerminator {
      *
      * @param inspector deterministic or operating-system process inspector
      */
-    public ProcessTreeTerminator(Inspector inspector) {
+    ProcessTreeTerminator(Inspector inspector) {
         this.inspector = Objects.requireNonNull(inspector, "inspector");
     }
 
@@ -74,7 +74,7 @@ final class ProcessTreeTerminator {
      * @param deadline           absolute termination deadline
      * @return structured result with all observable survivors
      */
-    public Result terminate(AttachmentIdentity identity, long expectedGeneration, Duration grace, Instant deadline) {
+    Result terminate(AttachmentIdentity identity, long expectedGeneration, Duration grace, Instant deadline) {
         Objects.requireNonNull(identity, "identity");
         Objects.requireNonNull(grace, "grace");
         Objects.requireNonNull(deadline, "deadline");

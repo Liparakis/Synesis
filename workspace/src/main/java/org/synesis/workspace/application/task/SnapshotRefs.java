@@ -9,10 +9,10 @@ package org.synesis.workspace.application.task;
 public final class SnapshotRefs {
 
     /** Namespace prefix of final immutable snapshot refs. */
-    public static final String SNAPSHOT_PREFIX = "refs/synesis/snapshots/";
+    static final String SNAPSHOT_PREFIX = "refs/synesis/snapshots/";
 
     /** Namespace prefix of refs that pin a snapshot commit during a completion transaction. */
-    public static final String PREPARED_PREFIX = "refs/synesis/prepared/";
+    static final String PREPARED_PREFIX = "refs/synesis/prepared/";
 
     private SnapshotRefs() {
     }

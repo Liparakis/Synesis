@@ -2,7 +2,7 @@ package org.synesis.workspace.lifecycle.cleanup.execution;
 
 import org.synesis.workspace.lifecycle.cleanup.plan.PersistedCleanupPlanEntry;
 
-import org.synesis.workspace.lifecycle.cleanup.plan.CleanupReason;
+import org.synesis.workspace.lifecycle.cleanup.inventory.CleanupReason;
 
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
@@ -53,7 +53,7 @@ final class LifecycleQuarantineService {
      * @return generated quarantine ID
      * @throws IOException if quarantine is unavailable or atomic move fails
      */
-    public String quarantineResource(Path controlRoot, PersistedCleanupPlanEntry entry) throws IOException {
+    String quarantineResource(Path controlRoot, PersistedCleanupPlanEntry entry) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(entry, "entry");
 

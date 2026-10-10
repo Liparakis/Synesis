@@ -12,12 +12,12 @@ import java.util.Objects;
  * @param changedFiles number of modified files
  * @since 1.0
  */
-public record AgentMutationResult(String path, String revision, int changedFiles) {
+record AgentMutationResult(String path, String revision, int changedFiles) {
 
     /**
      * Validates and normalizes relative path.
      */
-    public AgentMutationResult {
+    AgentMutationResult {
         Objects.requireNonNull(path, "path");
         if (path.startsWith("/") || path.startsWith("\\") || path.contains(":\\")) {
             throw new IllegalArgumentException("Agent mutation result path must be relative: " + path);

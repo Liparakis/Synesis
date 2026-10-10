@@ -43,7 +43,7 @@ public final class LifecycleIdempotencyLedger {
     /**
      * Minimum reconciliation window for state-changing entries.
      */
-    public static final Duration RECONCILIATION_WINDOW = Duration.ofMinutes(15);
+    static final Duration RECONCILIATION_WINDOW = Duration.ofMinutes(15);
     private final Path file;
     private final DurableStore durableStore;
     private final Map<UUID, Entry> entries = new LinkedHashMap<>();

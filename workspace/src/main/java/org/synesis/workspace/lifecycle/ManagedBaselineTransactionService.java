@@ -304,7 +304,7 @@ public final class ManagedBaselineTransactionService {
      * @return recovered result
      * @throws BaselineFailure when recovery cannot prove safe synchronization
      */
-    public Result recover(Path repositoryRoot, String transactionId) throws BaselineFailure {
+    Result recover(Path repositoryRoot, String transactionId) throws BaselineFailure {
         ProjectLock transactionLock = null;
         try {
             Path root = normalize(repositoryRoot);

@@ -28,7 +28,7 @@ public final class ManagedPathPolicy {
     /**
      * Creates a policy using the canonical managed contract paths.
      */
-    public ManagedPathPolicy() {
+    ManagedPathPolicy() {
     }
 
     private static Map<String, String> absentStates(List<String> paths) {
@@ -162,7 +162,7 @@ public final class ManagedPathPolicy {
      *
      * @return immutable managed paths
      */
-    public List<String> managedPaths() {
+    List<String> managedPaths() {
         return DEFAULT_MANAGED_PATHS;
     }
 

@@ -369,7 +369,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
      * @return new raw proof and durable record
      * @throws Exception when the current state is stale, terminal, or invalid
      */
-    public synchronized IssuedAttachment reattach(ProjectLocation location,
+    synchronized IssuedAttachment reattach(ProjectLocation location,
             AttachmentRequest request,
             String expectedProjectId,
             String newThreadId,
@@ -402,7 +402,7 @@ public final class ManagedAttachmentService implements RuntimeAuthenticator {
      * @return fresh proof and generation record
      * @throws Exception when ownership, liveness, or fencing validation fails
      */
-    public synchronized IssuedAttachment reattachFromOwnership(ProjectLocation location,
+    synchronized IssuedAttachment reattachFromOwnership(ProjectLocation location,
             AttachmentRequest request,
             String expectedProjectId,
             ProviderThreadOwnershipRecord ownership,

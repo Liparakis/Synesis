@@ -73,7 +73,7 @@ public enum ProviderBindingStatus {
      * @return persisted spelling
      * @throws IllegalStateException for {@link #UNKNOWN}, which has no spelling of its own
      */
-    public String persisted() {
+    String persisted() {
         if (this == UNKNOWN) {
             throw new IllegalStateException("UNKNOWN has no persisted spelling");
         }
@@ -85,7 +85,7 @@ public enum ProviderBindingStatus {
      *
      * @return {@code false} for {@link #UNKNOWN}
      */
-    public boolean isBoundOrSuspended() {
+    boolean isBoundOrSuspended() {
         return this == BOUND || this == SUSPENDED;
     }
 
@@ -116,7 +116,7 @@ public enum ProviderBindingStatus {
      *
      * @return {@code false} for {@link #UNKNOWN}, so an unrecognised binding still counts as an owner
      */
-    public boolean releasesWorktree() {
+    boolean releasesWorktree() {
         return this == REVOKED || this == COMPLETED;
     }
 
@@ -128,7 +128,7 @@ public enum ProviderBindingStatus {
      * @return {@code true} for {@link #UNKNOWN}, so a binding with an unrecognised status is resumed
      *         and not overwritten by a fresh one
      */
-    public boolean resumesOnEnsure() {
+    boolean resumesOnEnsure() {
         return this != REVOKED && this != COMPLETED && this != SUSPENDED && this != CANCELLED;
     }
 }

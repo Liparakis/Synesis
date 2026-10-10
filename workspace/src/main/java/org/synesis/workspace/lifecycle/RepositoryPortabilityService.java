@@ -196,7 +196,7 @@ public final class RepositoryPortabilityService {
      * @param entries complete Git tree entries
      * @return portability report
      */
-    public Report validateEntries(String treeish, List<TreeEntry> entries) {
+    Report validateEntries(String treeish, List<TreeEntry> entries) {
         Objects.requireNonNull(treeish, "treeish");
         List<TreeEntry> immutable = List.copyOf(Objects.requireNonNull(entries, "entries"));
         List<Finding> findings = new ArrayList<>();

@@ -35,7 +35,7 @@ public final class IntegrationWorkspaceService {
      * @param projectRoot control project root path
      * @return absolute path to external integration directory
      */
-    public static Path resolveIntegrationRoot(Path projectRoot) {
+    static Path resolveIntegrationRoot(Path projectRoot) {
         Objects.requireNonNull(projectRoot, "projectRoot");
         return ExternalWorktrees.root(projectRoot, "integration");
     }

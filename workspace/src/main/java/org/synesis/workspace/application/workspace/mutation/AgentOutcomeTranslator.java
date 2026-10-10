@@ -109,7 +109,7 @@ public final class AgentOutcomeTranslator {
      *
      * @return translated waiting outcome
      */
-    public TranslatedOutcome translatePendingOwner() {
+    TranslatedOutcome translatePendingOwner() {
         AgentResponse response = new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, null);
         return new TranslatedOutcome(response, null, "OWNER_RESPONSE_PENDING", null, null, false, true, false);
     }

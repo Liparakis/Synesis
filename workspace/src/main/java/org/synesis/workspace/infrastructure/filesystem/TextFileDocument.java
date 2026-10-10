@@ -104,7 +104,7 @@ public final class TextFileDocument {
      * @return defensive copy of the raw bytes
      */
     @SuppressWarnings("unused")
-    public byte[] rawBytes() {
+    byte[] rawBytes() {
         return rawBytes.clone();
     }
 
@@ -132,7 +132,7 @@ public final class TextFileDocument {
      * @return {@code true} when a BOM was present
      */
     @SuppressWarnings("unused")
-    public boolean utf8Bom() {
+    boolean utf8Bom() {
         return utf8Bom;
     }
 

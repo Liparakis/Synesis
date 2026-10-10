@@ -99,7 +99,7 @@ public final class RetentionPolicy {
      *
      * @return duration
      */
-    public Duration workerWorktreeRetention() {
+    Duration workerWorktreeRetention() {
         return workerWorktreeRetention;
     }
 
@@ -108,7 +108,7 @@ public final class RetentionPolicy {
      *
      * @return duration
      */
-    public Duration validationWorktreeRetention() {
+    Duration validationWorktreeRetention() {
         return validationWorktreeRetention;
     }
 
@@ -117,7 +117,7 @@ public final class RetentionPolicy {
      *
      * @return duration
      */
-    public Duration integrationWorktreeRetention() {
+    Duration integrationWorktreeRetention() {
         return integrationWorktreeRetention;
     }
 
@@ -127,7 +127,7 @@ public final class RetentionPolicy {
      * @return duration
      */
     @SuppressWarnings("unused")
-    public Duration diagnosticEvidenceRetention() {
+    Duration diagnosticEvidenceRetention() {
         return diagnosticEvidenceRetention;
     }
 
@@ -136,7 +136,7 @@ public final class RetentionPolicy {
      *
      * @return duration
      */
-    public Duration temporaryFileRetention() {
+    Duration temporaryFileRetention() {
         return temporaryFileRetention;
     }
 
@@ -146,7 +146,7 @@ public final class RetentionPolicy {
      * @return count
      */
     @SuppressWarnings("unused")
-    public int maxDiagnosticAttempts() {
+    int maxDiagnosticAttempts() {
         return maxDiagnosticAttempts;
     }
 
@@ -155,7 +155,7 @@ public final class RetentionPolicy {
      *
      * @return threshold bytes
      */
-    public long storageWarningThresholdBytes() {
+    long storageWarningThresholdBytes() {
         return storageWarningThresholdBytes;
     }
 }

@@ -40,7 +40,7 @@ public record ManagedCodexThreadBroker(ProviderThreadOwnershipRecord ownership) 
      *
      * @return pinned provider thread identifier
      */
-    public String pinnedThreadId() {
+    String pinnedThreadId() {
         return ownership.providerThreadId();
     }
 
@@ -72,7 +72,7 @@ public record ManagedCodexThreadBroker(ProviderThreadOwnershipRecord ownership) 
      * @param requestedThreadId untrusted requested selector
      * @throws IllegalStateException when it is not the immutable pin
      */
-    public void requirePinnedThread(String requestedThreadId) {
+    void requirePinnedThread(String requestedThreadId) {
         verifyReturnedThread(requestedThreadId);
     }
 }

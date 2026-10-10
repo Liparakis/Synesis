@@ -4,7 +4,7 @@ import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -176,7 +176,7 @@ class ProjectRuntimeHostWakeTest {
                     Instant.now().plusSeconds(20).toEpochMilli(),
                     Map.of());
 
-            CodexLifecycleHttpClient.Response response = host.dispatch(request);
+            LifecycleControlResponse response = host.dispatch(request);
 
             assertTrue(response.success());
             assertEquals("thread-dormant", response.threadId());
@@ -199,7 +199,7 @@ class ProjectRuntimeHostWakeTest {
                     Instant.now().plusSeconds(20).toEpochMilli(),
                     Map.of());
 
-            CodexLifecycleHttpClient.Response notified = host.dispatch(notify);
+            LifecycleControlResponse notified = host.dispatch(notify);
 
             assertTrue(notified.success());
             assertEquals("thread-dormant", notified.threadId());

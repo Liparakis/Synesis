@@ -2,11 +2,11 @@ package org.synesis.workspace.lifecycle.codex;
 
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
-import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
+import org.synesis.workspace.lifecycle.codex.protocol.CodexEvidenceJournal;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import java.io.InputStream;
 import java.io.IOException;
@@ -50,7 +50,7 @@ import static org.synesis.workspace.lifecycle.codex.CodexAppServerProcessTermina
  * @since 1.0
  */
 @SuppressWarnings({"resource", "DuplicatedCode"})
-public final class CodexAppServerLifecycleService implements AutoCloseable {
+final class CodexAppServerLifecycleService implements AutoCloseable {
 
     private static final int MAX_WAITERS = 4;
 
@@ -75,7 +75,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @param terminator        ownership-verified process terminator
      * @param evidenceDirectory generation journal directory
      */
-    public CodexAppServerLifecycleService(LifecycleControlRequestEnvelope.AuthorityContext authority,
+    CodexAppServerLifecycleService(LifecycleControlRequestEnvelope.AuthorityContext authority,
             CodexLifecycleStateStore stateStore,
             ProcessLauncher launcher,
             ProcessTreeTerminator terminator,
@@ -97,7 +97,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      *
      * @return direct process launcher
      */
-    public static ProcessLauncher defaultLauncher() {
+    static ProcessLauncher defaultLauncher() {
         return (authority, _) -> CodexAppServerDirectLaunch.launch(authority);
     }
 
@@ -121,16 +121,16 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private static CodexLifecycleHttpClient.Response alreadyStartedResponse(CodexLifecycleStateStore.State state, long revision) {
+    private static LifecycleControlResponse alreadyStartedResponse(CodexLifecycleStateStore.State state, long revision) {
         return response(true, "already_started", state, revision, null, null);
     }
 
-    private static CodexLifecycleHttpClient.Response response(boolean success, String diagnostic, CodexLifecycleStateStore.State state, long revision, String threadId, String turnId) {
+    private static LifecycleControlResponse response(boolean success, String diagnostic, CodexLifecycleStateStore.State state, long revision, String threadId, String turnId) {
         return response(success, diagnostic, state, revision, threadId, turnId, Map.of());
     }
 
-    private static CodexLifecycleHttpClient.Response response(boolean success, String diagnostic, CodexLifecycleStateStore.State state, long revision, String threadId, String turnId, Map<String, Object> result) {
-        return new CodexLifecycleHttpClient.Response(success, diagnostic, state.name(), revision, threadId, turnId, result);
+    private static LifecycleControlResponse response(boolean success, String diagnostic, CodexLifecycleStateStore.State state, long revision, String threadId, String turnId, Map<String, Object> result) {
+        return new LifecycleControlResponse(success, diagnostic, state.name(), revision, threadId, turnId, result);
     }
 
     /**
@@ -141,7 +141,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return bounded lifecycle response
      * @throws Exception when App Server startup or protocol validation fails
      */
-    public CodexLifecycleHttpClient.Response start(LifecycleControlRequestEnvelope request) throws Exception {
+    public LifecycleControlResponse start(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.START);
         synchronized (stateLock) {
             if (active != null && active.process().process().isAlive()) {
@@ -226,7 +226,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return bounded lifecycle response
      * @throws Exception when the exact attachment or protocol fails
      */
-    public CodexLifecycleHttpClient.Response notify(LifecycleControlRequestEnvelope request) throws Exception {
+    public LifecycleControlResponse notify(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.NOTIFY);
         return startTurn(request);
     }
@@ -238,7 +238,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return bounded lifecycle response
      * @throws Exception when the exact attachment or protocol fails
      */
-    public CodexLifecycleHttpClient.Response steer(LifecycleControlRequestEnvelope request) throws Exception {
+    LifecycleControlResponse steer(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.STEER);
         Attachment attachment = requireActive();
         requireExact(request, attachment);
@@ -260,13 +260,13 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return terminal or deadline response
      * @throws Exception when registration, cancellation, or waiting fails
      */
-    public CodexLifecycleHttpClient.Response waitForTurn(LifecycleControlRequestEnvelope request) throws Exception {
+    LifecycleControlResponse waitForTurn(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.WAIT);
         long remaining = remaining(request).toMillis();
         if (remaining <= 0) {
             throw new TimeoutException("lifecycle wait deadline expired");
         }
-        CompletableFuture<CodexLifecycleHttpClient.Response> future = new CompletableFuture<>();
+        CompletableFuture<LifecycleControlResponse> future = new CompletableFuture<>();
         String waiterId = request.requestId().toString();
         synchronized (stateLock) {
             if (waiters.size() >= MAX_WAITERS) {
@@ -299,7 +299,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return response after the exact interrupted terminal event
      * @throws Exception when acknowledgement or terminal completion fails
      */
-    public CodexLifecycleHttpClient.Response interrupt(LifecycleControlRequestEnvelope request) throws Exception {
+    public LifecycleControlResponse interrupt(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.INTERRUPT);
         Attachment attachment = requireActive();
         requireExact(request, attachment);
@@ -323,7 +323,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return structured termination response
      * @throws IOException if ownership, termination evidence, or lifecycle state cannot be verified
      */
-    public CodexLifecycleHttpClient.Response hardStop(LifecycleControlRequestEnvelope request) throws IOException {
+    LifecycleControlResponse hardStop(LifecycleControlRequestEnvelope request) throws IOException {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.HARD_STOP);
         synchronized (stateLock) {
             CodexLifecycleStateStore.Checkpoint current = checkpoint();
@@ -366,7 +366,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @return bounded resume response
      * @throws Exception when exact-thread verification fails
      */
-    public CodexLifecycleHttpClient.Response resume(LifecycleControlRequestEnvelope request) throws Exception {
+    LifecycleControlResponse resume(LifecycleControlRequestEnvelope request) throws Exception {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.RESUME);
         CodexLifecycleStateStore.Checkpoint current = checkpoint();
         if (active == null || !active.process().process().isAlive()) {
@@ -497,7 +497,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      * @param request immutable STATUS request
      * @return bounded status response
      */
-    public CodexLifecycleHttpClient.Response status(LifecycleControlRequestEnvelope request) {
+    public LifecycleControlResponse status(LifecycleControlRequestEnvelope request) {
         requireOperation(request, LifecycleControlRequestEnvelope.Operation.STATUS);
         return statusUnchecked();
     }
@@ -507,7 +507,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
      *
      * @return bounded authoritative response
      */
-    public CodexLifecycleHttpClient.Response statusUnchecked() {
+    LifecycleControlResponse statusUnchecked() {
         CodexLifecycleStateStore.Checkpoint current = checkpointUnchecked();
         return response(true, "status", current.state(), current.revision(), current.threadId(), current.turnId());
     }
@@ -641,7 +641,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         }
     }
 
-    private CodexLifecycleHttpClient.Response startTurn(LifecycleControlRequestEnvelope request) throws Exception {
+    private LifecycleControlResponse startTurn(LifecycleControlRequestEnvelope request) throws Exception {
         Attachment attachment = requireActive();
         CodexLifecycleStateStore.Checkpoint current = checkpoint();
         if (current.state() == CodexLifecycleStateStore.State.RUNNING || current.state() == CodexLifecycleStateStore.State.INTERRUPTING || current.state() == CodexLifecycleStateStore.State.STARTING) {
@@ -680,7 +680,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
         throw new TimeoutException("turn/started event deadline expired");
     }
 
-    private CodexLifecycleHttpClient.Response waitForTerminal(LifecycleControlRequestEnvelope request) throws Exception {
+    private LifecycleControlResponse waitForTerminal(LifecycleControlRequestEnvelope request) throws Exception {
         long remaining = remaining(request).toMillis();
         while (remaining > 0) {
             CodexLifecycleStateStore.Checkpoint current = checkpoint();
@@ -1137,7 +1137,7 @@ public final class CodexAppServerLifecycleService implements AutoCloseable {
     /**
      * Tracks one bounded caller wait for an exact Codex lifecycle turn.
      */
-    private record Waiter(String expectedThreadId, String expectedTurnId, CompletableFuture<CodexLifecycleHttpClient.Response> future) {
+    private record Waiter(String expectedThreadId, String expectedTurnId, CompletableFuture<LifecycleControlResponse> future) {
 
     }
 }

@@ -18,7 +18,7 @@ public final class GitProcessRunner {
     /**
      * Maximum lifetime of one local Git command.
      */
-    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
+    static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
     /**
      * Maximum merged output retained for one local Git command.
      */

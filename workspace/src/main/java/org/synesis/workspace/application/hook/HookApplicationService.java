@@ -12,7 +12,6 @@ import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
-import org.synesis.workspace.provider.codex.CodexNativePatchRouter;
 
 /**
  * Adapts provider hook streams to structured provider results.

@@ -36,7 +36,7 @@ import org.synesis.workspace.infrastructure.process.ProcessInspector;
  * Successor preparation uses the exact durable owner. Raw proof remains in trusted process memory
  * until the child owns it, while the durable attachment record stores only the proof hash.</p>
  */
-public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycleService.ProcessLauncher {
+final class ManagedCodexProcessLauncher implements CodexAppServerLifecycleService.ProcessLauncher {
 
     private final ProjectLocation location;
     private final Path synesisLauncher;
@@ -54,7 +54,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param location        initialized project location
      * @param synesisLauncher Synesis MCP executable
      */
-    public ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher) {
+    ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher) {
         this(location, synesisLauncher, new ManagedAttachmentService());
     }
 
@@ -65,7 +65,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param synesisLauncher   Synesis MCP executable
      * @param attachmentService managed attachment service
      */
-    public ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher, ManagedAttachmentService attachmentService) {
+    ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher, ManagedAttachmentService attachmentService) {
         this(location, synesisLauncher, attachmentService, ManagedCodexRuntimeMode.NORMAL_PROVIDER_HOME_MANAGED);
     }
 
@@ -77,7 +77,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param attachmentService managed attachment service
      * @param runtimeMode       managed runtime mode
      */
-    public ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher, ManagedAttachmentService attachmentService, ManagedCodexRuntimeMode runtimeMode) {
+    ManagedCodexProcessLauncher(ProjectLocation location, Path synesisLauncher, ManagedAttachmentService attachmentService, ManagedCodexRuntimeMode runtimeMode) {
         this(location, synesisLauncher, attachmentService, runtimeMode, ManagedProcessTreeSupervisor.platformDefault());
     }
 
@@ -90,7 +90,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param runtimeMode           managed runtime mode
      * @param processTreeSupervisor verified process-tree supervisor
      */
-    public ManagedCodexProcessLauncher(ProjectLocation location,
+    ManagedCodexProcessLauncher(ProjectLocation location,
             Path synesisLauncher,
             ManagedAttachmentService attachmentService,
             ManagedCodexRuntimeMode runtimeMode,
@@ -152,7 +152,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @return durable attachment metadata
      * @throws Exception when authentication or durable setup is unavailable
      */
-    public ManagedAttachmentRecord prepareFirst(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
+    ManagedAttachmentRecord prepareFirst(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
         requireAuthority(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
         CodexManagedRuntimeHome home = runtimeHome(authority.projectId());
@@ -176,7 +176,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @throws Exception when trusted death evidence is missing or the old attachment is live,
      *                   ambiguous, terminal, or stale
      */
-    public ManagedAttachmentRecord prepareReplacement(LifecycleControlRequestEnvelope.AuthorityContext authority, long expectedGeneration) throws Exception {
+    ManagedAttachmentRecord prepareReplacement(LifecycleControlRequestEnvelope.AuthorityContext authority, long expectedGeneration) throws Exception {
         requireAuthority(authority);
         ManagedAttachmentStore store = ManagedAttachmentService.storeFor(location, authority.bindingSessionId());
         ManagedCodexThreadBroker broker = brokerFor(authority);
@@ -456,7 +456,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param authority exact binding authority
      * @throws Exception when terminalization or exact ownership release fails
      */
-    public void terminalizeAndRelease(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
+    void terminalizeAndRelease(LifecycleControlRequestEnvelope.AuthorityContext authority) throws Exception {
         requireAuthority(authority);
         attachmentService.terminalize(ManagedAttachmentService.storeFor(location, authority.bindingSessionId()));
         ProviderThreadOwnershipRecord ownership = brokerFor(authority).ownership();
@@ -469,7 +469,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @param bindingSessionId exact existing binding session
      * @return prepared metadata, or {@code null} when absent
      */
-    public ManagedAttachmentRecord preparedRecord(String bindingSessionId) {
+    ManagedAttachmentRecord preparedRecord(String bindingSessionId) {
         PreparedLaunch launch = prepared.get(bindingSessionId);
         return launch == null ? null : launch.record();
     }
@@ -482,7 +482,7 @@ public final class ManagedCodexProcessLauncher implements CodexAppServerLifecycl
      * @return active ownership record
      * @throws IOException when another binding already owns the thread
      */
-    public ProviderThreadOwnershipRecord observeAndClaimProviderThread(LifecycleControlRequestEnvelope.AuthorityContext authority, String providerReturnedThreadId) throws IOException {
+    ProviderThreadOwnershipRecord observeAndClaimProviderThread(LifecycleControlRequestEnvelope.AuthorityContext authority, String providerReturnedThreadId) throws IOException {
         requireAuthority(authority);
         return ownershipStore.acquire(authority.projectId(), authority.provider(), providerReturnedThreadId, authority.bindingSessionId());
     }

@@ -16,7 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessOptions;
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessSession;
-import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.application.provider.ProviderRegistry;
 
 /**
  * Verifies how each provider is started, identified, and resumed without a person, and how its

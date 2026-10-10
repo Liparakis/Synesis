@@ -503,7 +503,7 @@ public final class ProviderSessionBindingService {
      * @param provider provider identifier
      * @throws BindingException when a binding cannot be read or persisted
      */
-    public synchronized void revoke(ProjectLocation location, String provider) throws BindingException {
+    synchronized void revoke(ProjectLocation location, String provider) throws BindingException {
         try {
             Path directory = sessionsDirectory(location);
             if (!Files.isDirectory(directory)) {
@@ -529,7 +529,7 @@ public final class ProviderSessionBindingService {
      * @return {@code true} when the binding fingerprint matches the fallback nonce
      * @throws BindingException when the fallback record cannot be read
      */
-    public synchronized boolean isFallbackEvidence(ProjectLocation location, String provider, Binding binding) throws BindingException {
+    synchronized boolean isFallbackEvidence(ProjectLocation location, String provider, Binding binding) throws BindingException {
         return ProviderBindingFile.isFallbackEvidence(location, provider, binding);
     }
 

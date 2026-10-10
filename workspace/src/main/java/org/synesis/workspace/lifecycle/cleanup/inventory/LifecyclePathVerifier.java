@@ -1,7 +1,6 @@
 package org.synesis.workspace.lifecycle.cleanup.inventory;
 
 import org.synesis.workspace.lifecycle.ProjectAdministrativeLayout;
-import org.synesis.workspace.lifecycle.cleanup.plan.CleanupReason;
 
 import java.io.IOException;
 import java.nio.file.Files;

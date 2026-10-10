@@ -4,7 +4,7 @@ import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -51,12 +51,12 @@ final class CodexWakeAdmissionService {
     /**
      * Prefix used when a wake request carries the stored binding fingerprint.
      */
-    public static final String FINGERPRINT_CONNECTION_PREFIX = "synesis-binding-fingerprint:";
+    static final String FINGERPRINT_CONNECTION_PREFIX = "synesis-binding-fingerprint:";
 
     /**
      * Continuation prompt that reconnects the participant to durable coordination.
      */
-    public static final String GET_NEXT_ACTION_INPUT = "A durable Synesis coordination item is now actionable for this participant. " + "Call get_next_action with no arguments, preserve the current project and "
+    static final String GET_NEXT_ACTION_INPUT = "A durable Synesis coordination item is now actionable for this participant. " + "Call get_next_action with no arguments, preserve the current project and "
             + "session authority, and continue the associated collaboration.";
 
     private static final int MAX_ADMISSION_ENTRIES = 2_048;
@@ -70,7 +70,7 @@ final class CodexWakeAdmissionService {
      * @param dispatcher exact Codex lifecycle owner
      * @param admissions durable admission ledger
      */
-    public CodexWakeAdmissionService(LifecycleDispatcher dispatcher, AdmissionStore admissions) {
+    CodexWakeAdmissionService(LifecycleDispatcher dispatcher, AdmissionStore admissions) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
         this.admissions = Objects.requireNonNull(admissions, "admissions");
     }
@@ -81,7 +81,7 @@ final class CodexWakeAdmissionService {
      * @param dispatcher    exact Codex lifecycle owner
      * @param admissionFile durable ledger path
      */
-    public CodexWakeAdmissionService(LifecycleDispatcher dispatcher, Path admissionFile) {
+    CodexWakeAdmissionService(LifecycleDispatcher dispatcher, Path admissionFile) {
         this(dispatcher, new FileAdmissionStore(admissionFile));
     }
 
@@ -91,7 +91,7 @@ final class CodexWakeAdmissionService {
      * @param location initialized project location
      * @return lifecycle runtime root
      */
-    public static Path runtimeRoot(ProjectLocation location) {
+    static Path runtimeRoot(ProjectLocation location) {
         Objects.requireNonNull(location, "location");
         return location.synesisDirectory().resolve("local").resolve("runtime").resolve("codex-lifecycle").toAbsolutePath().normalize();
     }
@@ -197,7 +197,7 @@ final class CodexWakeAdmissionService {
                 deadline,
                 Map.of());
         try {
-            CodexLifecycleHttpClient.Response response = dispatcher.dispatch(request);
+            LifecycleControlResponse response = dispatcher.dispatch(request);
             if (!response.success()) {
                 return result(Outcome.REJECTED, operation, candidate, admissionKey, response.diagnostic());
             }
@@ -218,7 +218,7 @@ final class CodexWakeAdmissionService {
      * @return one result for each targeted dormant candidate observed
      * @throws Exception when project or durable state cannot be read
      */
-    public List<WakeResult> scan(Path projectRoot) throws Exception {
+    List<WakeResult> scan(Path projectRoot) throws Exception {
         ProjectLocation location = new ProjectApplicationService().locate(projectRoot.toAbsolutePath().normalize());
         PredictionEventStore store = location.openCoordinationStore();
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
@@ -310,7 +310,7 @@ final class CodexWakeAdmissionService {
          * @return bounded lifecycle response
          * @throws Exception when owner validation or lifecycle execution fails
          */
-        CodexLifecycleHttpClient.Response dispatch(LifecycleControlRequestEnvelope request) throws Exception;
+        LifecycleControlResponse dispatch(LifecycleControlRequestEnvelope request) throws Exception;
     }
 
     /**

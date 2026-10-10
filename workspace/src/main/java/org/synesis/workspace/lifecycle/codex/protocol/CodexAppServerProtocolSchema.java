@@ -23,7 +23,7 @@ public final class CodexAppServerProtocolSchema {
     /**
      * Maximum method-name UTF-8 bytes accepted by the local schema.
      */
-    public static final int MAX_METHOD_BYTES = 256;
+    static final int MAX_METHOD_BYTES = 256;
 
     private static final Set<String> REQUEST_METHODS = Set.of("initialize", "thread/start", "thread/resume", "thread/read", "turn/start", "turn/steer", "turn/interrupt");
     private static final Set<String> CLIENT_NOTIFICATIONS = Set.of("initialized");
@@ -60,7 +60,7 @@ public final class CodexAppServerProtocolSchema {
      * @param method Codex App Server method
      * @return whether the method is a supported request
      */
-    public static boolean isRequestMethod(String method) {
+    static boolean isRequestMethod(String method) {
         return method != null && REQUEST_METHODS.contains(method);
     }
 
@@ -70,7 +70,7 @@ public final class CodexAppServerProtocolSchema {
      * @param method event method
      * @return whether the event is lifecycle-authoritative
      */
-    public static boolean isLifecycleEvent(String method) {
+    static boolean isLifecycleEvent(String method) {
         return method != null && LIFECYCLE_EVENTS.contains(method);
     }
 
@@ -80,7 +80,7 @@ public final class CodexAppServerProtocolSchema {
      * @param method notification method
      * @return whether the notification is supported
      */
-    public static boolean isClientNotification(String method) {
+    static boolean isClientNotification(String method) {
         return method != null && CLIENT_NOTIFICATIONS.contains(method);
     }
 
@@ -92,7 +92,7 @@ public final class CodexAppServerProtocolSchema {
      * @param method server request method
      * @return whether the method is a generated-schema server request
      */
-    public static boolean isServerRequest(String method) {
+    static boolean isServerRequest(String method) {
         return method != null && SERVER_REQUEST_METHODS.contains(method);
     }
 
@@ -103,7 +103,7 @@ public final class CodexAppServerProtocolSchema {
      * @param params bounded parameter object
      * @throws IOException when the method or shape is outside the local schema
      */
-    public static void validateRequest(String method, Map<String, ?> params) throws IOException {
+    static void validateRequest(String method, Map<String, ?> params) throws IOException {
         if (!isRequestMethod(method) || method.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_METHOD_BYTES) {
             throw new IOException("codex_protocol_method_unknown");
         }
@@ -119,7 +119,7 @@ public final class CodexAppServerProtocolSchema {
      * @param params bounded parameter object
      * @throws IOException when the notification is outside the local schema
      */
-    public static void validateNotification(String method, Map<String, ?> params) throws IOException {
+    static void validateNotification(String method, Map<String, ?> params) throws IOException {
         if (!isClientNotification(method) || params == null || params.size() > 128) {
             throw new IOException("codex_protocol_notification_unknown");
         }
@@ -131,7 +131,7 @@ public final class CodexAppServerProtocolSchema {
      * @param frame parsed frame object
      * @throws IOException when the frame is not a response or event
      */
-    public static void validateFrame(Map<String, Object> frame) throws IOException {
+    static void validateFrame(Map<String, Object> frame) throws IOException {
         Object rawMethod = frame.get("method");
         Object rawId = frame.get("id");
         if (rawMethod != null) {

@@ -156,7 +156,7 @@ public final class ReconciliationService {
      * @throws ProjectApplicationService.ProjectApplicationException if project discovery fails
      * @throws IOException                                           if planning or execution fails
      */
-    public Optional<ReconciliationExecutionSummary> reconcileOnAdmission(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
+    Optional<ReconciliationExecutionSummary> reconcileOnAdmission(Path controlRoot) throws ProjectApplicationService.ProjectApplicationException, IOException {
         return reconcileEligible(controlRoot);
     }
 

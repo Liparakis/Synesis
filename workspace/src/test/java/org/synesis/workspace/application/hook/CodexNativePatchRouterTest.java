@@ -1,4 +1,4 @@
-package org.synesis.workspace.provider.codex;
+package org.synesis.workspace.application.hook;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

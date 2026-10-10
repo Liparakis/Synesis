@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 1.0
  */
 @SuppressWarnings("restricted")
-public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProcessTreeSupervisor, AutoCloseable {
+final class WindowsJobObjectProcessTreeSupervisor implements ManagedProcessTreeSupervisor, AutoCloseable {
 
     /**
      * CREATE_SUSPENDED.
@@ -103,7 +103,7 @@ public final class WindowsJobObjectProcessTreeSupervisor implements ManagedProce
      * @throws IOException when the current platform is not Windows or the native kernel API cannot be
      *                     loaded
      */
-    public WindowsJobObjectProcessTreeSupervisor() throws IOException {
+    WindowsJobObjectProcessTreeSupervisor() throws IOException {
         if (!isWindows()) {
             throw new IOException("managed_windows_job_objects_unsupported");
         }

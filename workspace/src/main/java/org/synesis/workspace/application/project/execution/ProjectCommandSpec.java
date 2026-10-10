@@ -1,4 +1,4 @@
-package org.synesis.workspace.application.project;
+package org.synesis.workspace.application.project.execution;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -25,15 +25,15 @@ public record ProjectCommandSpec(List<String> argv, String workingDirectory, int
     /**
      * Maximum project validation timeout in seconds.
      */
-    public static final int MAX_TIMEOUT_SECONDS = 3600;
+    static final int MAX_TIMEOUT_SECONDS = 3600;
     /**
      * Maximum number of argv entries accepted from project metadata.
      */
-    public static final int MAX_ARGUMENTS = 256;
+    static final int MAX_ARGUMENTS = 256;
     /**
      * Maximum UTF-16 length of one argv entry.
      */
-    public static final int MAX_ARGUMENT_LENGTH = 32_768;
+    static final int MAX_ARGUMENT_LENGTH = 32_768;
 
     /**
      * Validates and defensively copies the immutable command specification.
@@ -55,7 +55,7 @@ public record ProjectCommandSpec(List<String> argv, String workingDirectory, int
      * @throws IllegalArgumentException if the vector is empty, too large, has an oversized or
      *                                  null entry, or starts with a blank executable
      */
-    public static List<String> validatedArgv(List<String> argv) {
+    static List<String> validatedArgv(List<String> argv) {
         Objects.requireNonNull(argv, "argv");
         if (argv.isEmpty() || argv.size() > MAX_ARGUMENTS) {
             throw new IllegalArgumentException("argv must contain between 1 and " + MAX_ARGUMENTS + " entries");
@@ -78,7 +78,7 @@ public record ProjectCommandSpec(List<String> argv, String workingDirectory, int
      * @param workingDirectory configured value, possibly {@code null} or blank
      * @return the value, or {@code "."}
      */
-    public static String workingDirectoryOrDefault(String workingDirectory) {
+    static String workingDirectoryOrDefault(String workingDirectory) {
         return workingDirectory == null || workingDirectory.isBlank() ? "." : workingDirectory;
     }
 
@@ -101,7 +101,7 @@ public record ProjectCommandSpec(List<String> argv, String workingDirectory, int
      * @param timeoutSeconds timeout in seconds
      * @throws IllegalArgumentException if the timeout is outside {@code 1..MAX_TIMEOUT_SECONDS}
      */
-    public static void requireValidTimeout(int timeoutSeconds) {
+    static void requireValidTimeout(int timeoutSeconds) {
         if (timeoutSeconds < 1 || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
             throw new IllegalArgumentException("timeoutSeconds must be between 1 and " + MAX_TIMEOUT_SECONDS);
         }

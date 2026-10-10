@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 
 
 /**

@@ -34,7 +34,7 @@ public final class ProjectMigrationService {
     /**
      * Current writable project metadata schema.
      */
-    public static final int CURRENT_SCHEMA = ProjectApplicationService.PROJECT_SCHEMA_VERSION;
+    static final int CURRENT_SCHEMA = ProjectApplicationService.PROJECT_SCHEMA_VERSION;
     private final Path adminRoot;
 
     /**

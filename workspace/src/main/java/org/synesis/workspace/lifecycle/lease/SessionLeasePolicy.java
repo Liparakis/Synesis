@@ -60,7 +60,7 @@ public final class SessionLeasePolicy {
      *
      * @return current instant
      */
-    public long nowMillis() {
+    long nowMillis() {
         return clock.millis();
     }
 
@@ -70,7 +70,7 @@ public final class SessionLeasePolicy {
      * @return duration
      */
     @SuppressWarnings("unused")
-    public Duration heartbeatInterval() {
+    Duration heartbeatInterval() {
         return heartbeatInterval;
     }
 
@@ -79,7 +79,7 @@ public final class SessionLeasePolicy {
      *
      * @return duration
      */
-    public Duration suspectedStaleThreshold() {
+    Duration suspectedStaleThreshold() {
         return suspectedStaleThreshold;
     }
 
@@ -88,7 +88,7 @@ public final class SessionLeasePolicy {
      *
      * @return duration
      */
-    public Duration abandonmentGracePeriod() {
+    Duration abandonmentGracePeriod() {
         return abandonmentGracePeriod;
     }
 }

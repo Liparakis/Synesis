@@ -127,7 +127,7 @@ public final class ProjectMetadataStorage {
      * @param projectRoot project directory
      * @return normalized {@code .synesis/project.json} path
      */
-    public Path projectMetadata(Path projectRoot) {
+    Path projectMetadata(Path projectRoot) {
         return root(projectRoot).resolve(PROJECT_METADATA_FILE);
     }
 

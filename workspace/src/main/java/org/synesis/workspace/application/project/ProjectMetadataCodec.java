@@ -16,6 +16,7 @@ import java.util.UUID;
 import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 
 /**
  * Reads, validates, and writes the shareable {@code .synesis/project.json} document.

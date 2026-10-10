@@ -25,7 +25,7 @@ import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.application.provider.ProviderRegistry;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**
@@ -172,7 +172,7 @@ final class ProviderApplicationServiceTest {
         System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
         try {
             var location = new ProjectApplicationService().init(root).location();
-            var provider = org.synesis.workspace.provider.ProviderRegistry.find("codex");
+            var provider = org.synesis.workspace.application.provider.ProviderRegistry.find("codex");
             Path userMcp = provider.mcpConfigurationPath(root);
             if (userMcp != null) {
                 Files.createDirectories(userMcp.getParent());

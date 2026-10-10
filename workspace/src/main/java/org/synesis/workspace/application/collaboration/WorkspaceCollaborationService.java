@@ -107,7 +107,7 @@ public final class WorkspaceCollaborationService {
      * @param claimEpoch        source claim epoch
      * @return successor intent identity
      */
-    public static UUID recoveryContinuationIntentId(UUID sourceIntentId, String targetParticipant, long claimEpoch) {
+    static UUID recoveryContinuationIntentId(UUID sourceIntentId, String targetParticipant, long claimEpoch) {
         Objects.requireNonNull(sourceIntentId, "sourceIntentId");
         Objects.requireNonNull(targetParticipant, "targetParticipant");
         return UUID.nameUUIDFromBytes(("synesis-recovery-intent:" + sourceIntentId + ":" + targetParticipant + ":" + claimEpoch).getBytes(StandardCharsets.UTF_8));
@@ -121,7 +121,7 @@ public final class WorkspaceCollaborationService {
      * @param claimEpoch        source claim epoch
      * @return successor grant identity
      */
-    public static UUID recoveryContinuationGrantId(UUID sourceIntentId, String targetParticipant, long claimEpoch) {
+    static UUID recoveryContinuationGrantId(UUID sourceIntentId, String targetParticipant, long claimEpoch) {
         Objects.requireNonNull(sourceIntentId, "sourceIntentId");
         Objects.requireNonNull(targetParticipant, "targetParticipant");
         return UUID.nameUUIDFromBytes(("synesis-recovery-grant:" + sourceIntentId + ":" + targetParticipant + ":" + claimEpoch).getBytes(StandardCharsets.UTF_8));

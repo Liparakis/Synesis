@@ -11,7 +11,6 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService.
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.writeText;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.runGit;

@@ -3,7 +3,6 @@ package org.synesis.workspace.lifecycle.codex;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.codex.CodexAppServerLifecycleService.ProcessLauncher;
 import org.synesis.workspace.lifecycle.codex.CodexWakeAdmissionService.LifecycleDispatcher;
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient.Response;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.AuthorityContext;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.Classification;
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope.Operation;
@@ -13,13 +12,12 @@ import org.synesis.workspace.lifecycle.codex.state.LifecycleIdempotencyLedger;
 
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
-import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceRetention;
+import org.synesis.workspace.lifecycle.codex.protocol.CodexEvidenceRetention;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpAdapter;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -71,7 +69,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
     /**
      * Codex-only loopback route mounted by the existing coordination listener.
      */
-    public static final String CODEX_ROUTE = "/codex-lifecycle/v1";
+    static final String CODEX_ROUTE = "/codex-lifecycle/v1";
 
     private final ProjectLocation location;
     private final LifecycleAuthorityVerifier verifier;
@@ -85,7 +83,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
     private final ProcessTreeTerminator terminator;
     private final CodexAppServerLifecycleService.ProcessLauncher launcher;
     private final Map<String, BindingRuntime> bindings = new ConcurrentHashMap<>();
-    private final Map<UUID, CompletableFuture<CodexLifecycleHttpClient.Response>> inFlight = new ConcurrentHashMap<>();
+    private final Map<UUID, CompletableFuture<LifecycleControlResponse>> inFlight = new ConcurrentHashMap<>();
     private final Map<UUID, Future<?>> executionTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Object> requestLocks = new ConcurrentHashMap<>();
     private final ExecutorService controlExecutor;
@@ -154,7 +152,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         this.wakeCoordinator.start();
     }
 
-    private static String durableResult(Response response) {
+    private static String durableResult(LifecycleControlResponse response) {
         byte[] encoded = response.encoded();
         if (encoded.length <= 15_000) {
             return new String(encoded, StandardCharsets.UTF_8);
@@ -236,7 +234,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
      * @throws Exception when signing, authority validation, or lifecycle execution fails
      */
     @Override
-    public CodexLifecycleHttpClient.Response dispatch(LifecycleControlRequestEnvelope request) throws Exception {
+    public LifecycleControlResponse dispatch(LifecycleControlRequestEnvelope request) throws Exception {
         Objects.requireNonNull(request, "request");
         if (!hostInstanceId.equals(request.hostInstanceId())) {
             throw new IOException("lifecycle_owner_mismatch");
@@ -319,7 +317,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
      * @return bounded lifecycle response
      * @throws Exception when validation, persistence, or lifecycle execution fails
      */
-    public CodexLifecycleHttpClient.Response handle(SignedEnvelope signed) throws Exception {
+    public LifecycleControlResponse handle(SignedEnvelope signed) throws Exception {
         Objects.requireNonNull(signed, "signed");
         verifyEnvelope(signed);
         if (closed) {
@@ -327,7 +325,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         }
         LifecycleControlRequestEnvelope request = signed.request();
         Object requestLock = requestLocks.computeIfAbsent(request.requestId(), ignored -> new Object());
-        CompletableFuture<Response> execution;
+        CompletableFuture<LifecycleControlResponse> execution;
         BindingRuntime runtime;
         ExecutorService executor;
         synchronized (requestLock) {
@@ -338,7 +336,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             if (existing != null && (existing.state() == State.COMPLETED || existing.state() == State.FAILED)) {
                 return replay(existing);
             }
-            CompletableFuture<Response> prior = inFlight.get(request.requestId());
+            CompletableFuture<LifecycleControlResponse> prior = inFlight.get(request.requestId());
             if (prior != null) {
                 return prior.get();
             }
@@ -355,7 +353,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             }
             PrepareResult prepared = ledger.prepare(request, before.revision());
             if (prepared.disposition() == Disposition.IN_PROGRESS) {
-                CompletableFuture<Response> concurrent = inFlight.get(request.requestId());
+                CompletableFuture<LifecycleControlResponse> concurrent = inFlight.get(request.requestId());
                 if (concurrent != null) {
                     return concurrent.get();
                 }
@@ -435,7 +433,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         }
     }
 
-    private void execute(LifecycleControlRequestEnvelope request, BindingRuntime runtime, CompletableFuture<Response> result) {
+    private void execute(LifecycleControlRequestEnvelope request, BindingRuntime runtime, CompletableFuture<LifecycleControlResponse> result) {
         boolean mutationStarted = false;
         try {
             if (closed) {
@@ -448,7 +446,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 runtime.recordOwner();
             }
             mutationStarted = request.classification() == Classification.STATE_CHANGING;
-            Response response = switch (request.operation()) {
+            LifecycleControlResponse response = switch (request.operation()) {
                 case START -> runtime.service().start(request);
                 case NOTIFY -> runtime.service().notify(request);
                 case STEER -> runtime.service().steer(request);
@@ -467,17 +465,17 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             result.complete(response);
         } catch (Exception failure) {
             String diagnostic = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-            Response failureResponse;
+            LifecycleControlResponse failureResponse;
             try {
                 Checkpoint current = runtime.stateStore().read(request.authority().bindingSessionId(), request.authority().projectId());
                 State state =
                         mutationStarted && current.state() != CodexLifecycleStateStore.State.FAILED && current.state() != CodexLifecycleStateStore.State.STOPPED ? LifecycleIdempotencyLedger.State.AMBIGUOUS
                                 : LifecycleIdempotencyLedger.State.FAILED;
-                failureResponse = new Response(false, diagnostic, current.state().name(), current.revision(), current.threadId(), current.turnId(), Map.of());
+                failureResponse = new LifecycleControlResponse(false, diagnostic, current.state().name(), current.revision(), current.threadId(), current.turnId(), Map.of());
                 ledger.complete(request.requestId(), state, current.revision(), durableResult(failureResponse));
             } catch (IOException ignored) {
                 diagnostic = diagnostic + ":lifecycle_idempotency_result_persistence_failed";
-                failureResponse = new Response(false, diagnostic, safeState(runtime), safeRevision(runtime), null, null, Map.of());
+                failureResponse = new LifecycleControlResponse(false, diagnostic, safeState(runtime), safeRevision(runtime), null, null, Map.of());
             }
             result.complete(failureResponse);
         } finally {
@@ -491,7 +489,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         }
     }
 
-    private Response withStatusDiagnostics(BindingRuntime runtime, Response response) {
+    private LifecycleControlResponse withStatusDiagnostics(BindingRuntime runtime, LifecycleControlResponse response) {
         Map<String, Object> diagnostics = new LinkedHashMap<>(response.result());
         diagnostics.put("hostInstanceId", hostInstanceId);
         diagnostics.put("bindingSessionId", runtime.bindingSessionId());
@@ -513,7 +511,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         diagnostics.putAll(runtime.service().diagnostics());
         diagnostics.put("wakeRelayScanCount", wakeCoordinator.scanCount());
         diagnostics.put("wakeRelayDiagnostic", wakeCoordinator.lastDiagnostic());
-        return new Response(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
+        return new LifecycleControlResponse(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
     }
 
     private void pruneRequestLocks() {
@@ -555,10 +553,10 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         }
     }
 
-    private Response replay(LifecycleIdempotencyLedger.Entry entry) {
+    private LifecycleControlResponse replay(LifecycleIdempotencyLedger.Entry entry) {
         if (entry.result() != null && entry.result().startsWith("{")) {
             try {
-                return Response.decode(entry.result().getBytes(StandardCharsets.UTF_8));
+                return LifecycleControlResponse.decode(entry.result().getBytes(StandardCharsets.UTF_8));
             } catch (IOException ignored) {
                 // Older or truncated entries fall through to the bounded
                 // replay reference below; they remain non-replayable as a
@@ -567,7 +565,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             }
         }
         Map<String, Object> result = entry.result() == null ? Map.of() : Map.of("resultReference", entry.result());
-        return new Response(entry.state() == LifecycleIdempotencyLedger.State.COMPLETED,
+        return new LifecycleControlResponse(entry.state() == LifecycleIdempotencyLedger.State.COMPLETED,
                 "idempotency_replay",
                 entry.state().name(),
                 entry.revisionAfter(),

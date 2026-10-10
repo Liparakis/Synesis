@@ -16,7 +16,7 @@ public final class IntegrationCompatibilityService {
     /**
      * Creates a compatibility checker.
      */
-    public IntegrationCompatibilityService() {
+    IntegrationCompatibilityService() {
     }
 
     private static String normalize(String path) {

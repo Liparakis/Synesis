@@ -11,7 +11,6 @@ import org.synesis.workspace.application.provider.ProviderApplicationService.Pro
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Builds the {@link ProviderResult} values that install, status, and uninstall report, and adds the

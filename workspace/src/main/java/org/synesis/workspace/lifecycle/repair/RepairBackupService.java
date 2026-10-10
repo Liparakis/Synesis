@@ -23,7 +23,7 @@ final class RepairBackupService {
     /**
      * Creates a repair backup service.
      */
-    public RepairBackupService() {
+    RepairBackupService() {
     }
 
     /**
@@ -36,7 +36,7 @@ final class RepairBackupService {
      * @throws IOException if backup fails
      */
     @SuppressWarnings("UnusedReturnValue")
-    public Path createBackup(Path controlRoot, String executionId, Path targetFile) throws IOException {
+    Path createBackup(Path controlRoot, String executionId, Path targetFile) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(executionId, "executionId");
         Objects.requireNonNull(targetFile, "targetFile");
@@ -74,7 +74,7 @@ final class RepairBackupService {
      * @param executionId execution ID
      * @throws IOException if rollback fails or manifest is invalid
      */
-    public void rollbackExecution(Path controlRoot, String executionId) throws IOException {
+    void rollbackExecution(Path controlRoot, String executionId) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(executionId, "executionId");
 

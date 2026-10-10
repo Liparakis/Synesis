@@ -1,6 +1,5 @@
 package org.synesis.workspace.lifecycle.cleanup.inventory;
 
-import org.synesis.workspace.lifecycle.cleanup.plan.CleanupReason;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

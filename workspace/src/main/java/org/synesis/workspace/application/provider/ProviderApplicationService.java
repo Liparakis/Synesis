@@ -15,7 +15,6 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderHookConfiguration.EmptySessionStart;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -58,7 +57,7 @@ public final class ProviderApplicationService {
      *
      * @return resolved launcher path
      */
-    public Path launcherPath() {
+    Path launcherPath() {
         return ProviderLauncherResolution.launcher();
     }
 

@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.codex.state;
+package org.synesis.workspace.lifecycle.codex.protocol;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -23,7 +23,7 @@ import org.synesis.workspace.infrastructure.digest.Sha256;
  * <p>Protocol readers call {@link #offer(String, Map, boolean)} only after
  * authoritative state has already been applied and waiters completed. The bounded in-memory queue
  * never blocks the reader. Terminal and correlation evidence displaces low-value deltas when
- * possible; authoritative lifecycle state remains in {@link CodexLifecycleStateStore} even when the
+ * possible; authoritative lifecycle state remains in {@code CodexLifecycleStateStore} even when the
  * journal is incomplete. One journal is capped at 8 MiB and closes with a bounded manifest
  * describing omissions.
  *
@@ -34,23 +34,23 @@ public final class CodexEvidenceJournal implements AutoCloseable {
     /**
      * Maximum queued evidence events.
      */
-    public static final int MAX_QUEUE_ENTRIES = 512;
+    static final int MAX_QUEUE_ENTRIES = 512;
     /**
      * Maximum persisted bytes for one connection-generation journal.
      */
-    public static final int MAX_JOURNAL_BYTES = 8 * 1024 * 1024;
+    static final int MAX_JOURNAL_BYTES = 8 * 1024 * 1024;
     /**
      * Maximum retained bytes for one serialized evidence entry.
      */
-    public static final int MAX_ENTRY_BYTES = 64 * 1024;
+    static final int MAX_ENTRY_BYTES = 64 * 1024;
     /**
      * Maximum closing summary bytes.
      */
-    public static final int MAX_CLOSING_SUMMARY_BYTES = 32 * 1024;
+    static final int MAX_CLOSING_SUMMARY_BYTES = 32 * 1024;
     /**
      * Reserved in-memory slots for terminal and correlation evidence.
      */
-    public static final int MAX_CRITICAL_QUEUE_ENTRIES = 64;
+    static final int MAX_CRITICAL_QUEUE_ENTRIES = 64;
 
     private final Path journal;
     private final Deque<Entry> queue = new ArrayDeque<>();

@@ -46,7 +46,7 @@ public final class ProjectContextExchange {
      * @param payload candidate application payload
      * @return whether the payload is addressed to this exchange
      */
-    public static boolean looksLike(byte[] payload) {
+    static boolean looksLike(byte[] payload) {
         return payload != null && payload.length >= Integer.BYTES && ((payload[0] & 0xff) << 24 | (payload[1] & 0xff) << 16 | (payload[2] & 0xff) << 8 | (payload[3] & 0xff)) == MAGIC;
     }
 
@@ -66,7 +66,7 @@ public final class ProjectContextExchange {
      * @param identity local canonical project identity
      * @return bounded acknowledgement bytes
      */
-    public static byte[] acknowledge(ProjectIdentity identity) {
+    static byte[] acknowledge(ProjectIdentity identity) {
         return encode(KIND_ACKNOWLEDGE, Objects.requireNonNull(identity, "project identity"));
     }
 

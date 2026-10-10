@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.synesis.workspace.lifecycle.codex.CodexAppServerLifecycleService.AppServerProcess;
-import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
+import org.synesis.workspace.lifecycle.codex.protocol.CodexEvidenceJournal;
 
 import static org.synesis.workspace.lifecycle.codex.CodexAppServerPayloadReader.diagnostic;
 

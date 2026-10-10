@@ -16,7 +16,7 @@ import java.util.UUID;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.application.provider.ProviderRegistry;
 import org.synesis.workspace.provider.codex.CodexTomlConfiguration;
 
 /**

@@ -37,11 +37,11 @@ public final class LifecycleControlRequestEnvelope {
     /**
      * Maximum UTF-8 bytes retained for the entire lifecycle envelope.
      */
-    public static final int MAX_ENVELOPE_BYTES = 64 * 1024;
+    static final int MAX_ENVELOPE_BYTES = 64 * 1024;
     /**
      * Maximum caller deadline horizon accepted for one lifecycle request.
      */
-    public static final long MAX_CALLER_DEADLINE_MILLIS = 30L * 60L * 1_000L;
+    static final long MAX_CALLER_DEADLINE_MILLIS = 30L * 60L * 1_000L;
     private final UUID requestId;
     private final String hostInstanceId;
     private final AuthorityContext authority;
@@ -294,7 +294,7 @@ public final class LifecycleControlRequestEnvelope {
      *
      * @return deterministic UTF-8 JSON bytes
      */
-    public byte[] canonicalBytes() {
+    byte[] canonicalBytes() {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("requestId", requestId.toString());
         value.put("hostInstanceId", hostInstanceId);

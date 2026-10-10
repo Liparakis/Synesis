@@ -20,6 +20,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import org.synesis.workspace.lifecycle.cleanup.inventory.CleanupReason;
 
 /**
  * Exercises cleanup eligibility decisions and safety evidence.

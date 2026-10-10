@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.provider.ProviderRegistry;
 
 /**
  * Pins the exact bytes of every write path of a provider hook file: install into the control

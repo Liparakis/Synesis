@@ -61,7 +61,7 @@ public final class ClaudeCodeHookAdapter {
    * @return normalized repository-relative path string
    * @throws IllegalArgumentException if path lies outside project root
    */
-  public static String resolveRelativePath(Path projectRoot, String rawPath) {
+  static String resolveRelativePath(Path projectRoot, String rawPath) {
     return ProjectPathResolver.resolve(projectRoot, rawPath);
   }
 

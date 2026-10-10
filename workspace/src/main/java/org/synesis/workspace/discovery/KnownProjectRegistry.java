@@ -49,7 +49,7 @@ public final class KnownProjectRegistry {
     /**
      * Maximum number of remembered local project records.
      */
-    public static final int MAX_PROJECTS = 256;
+    static final int MAX_PROJECTS = 256;
     /**
      * Maximum registry document size in UTF-8 bytes.
      */
@@ -95,7 +95,7 @@ public final class KnownProjectRegistry {
      *
      * @return registry file below the existing Synesis application state root
      */
-    public static Path defaultFile() {
+    static Path defaultFile() {
         return AdministrativeStateLocator.applicationStateRoot().resolve(PROJECTS_DIRECTORY).resolve(REGISTRY_FILE).toAbsolutePath().normalize();
     }
 
@@ -233,7 +233,7 @@ public final class KnownProjectRegistry {
      *
      * @return normalized registry file
      */
-    public Path registryFile() {
+    Path registryFile() {
         return registryFile;
     }
 

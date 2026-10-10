@@ -87,7 +87,7 @@ public record ProjectCommandRecord(String anchorId, String scopeLocator, String 
      *
      * @return true for STARTING, RUNNING, and AMBIGUOUS phases
      */
-    public boolean blocking() {
+    boolean blocking() {
         return phase != ProjectCommandPhase.TERMINAL;
     }
 }

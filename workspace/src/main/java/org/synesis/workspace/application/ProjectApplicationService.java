@@ -206,7 +206,7 @@ public final class ProjectApplicationService {
      */
     private static void registerCodexMcpServer(ProjectLocation location) {
         ProviderApplicationService providerService = new ProviderApplicationService();
-        providerService.ensureMcpConfig(location, org.synesis.workspace.provider.ProviderRegistry.find("codex"), providerService.mcpLauncherPath());
+        providerService.ensureMcpConfig(location, org.synesis.workspace.application.provider.ProviderRegistry.find("codex"), providerService.mcpLauncherPath());
     }
 
     /**
@@ -384,7 +384,7 @@ public final class ProjectApplicationService {
      * @return initialization result for the new logical project
      * @throws ProjectApplicationException if the target is not a safe fork input
      */
-    public ProjectInitResult fork(Path projectRoot, boolean configureProviderMcp) throws ProjectApplicationException {
+    ProjectInitResult fork(Path projectRoot, boolean configureProviderMcp) throws ProjectApplicationException {
         Path root = directory(projectRoot, "project directory");
         Path synesis = root.resolve(SYNESIS_DIRECTORY);
         Path metadata = synesis.resolve(PROJECT_FILE);

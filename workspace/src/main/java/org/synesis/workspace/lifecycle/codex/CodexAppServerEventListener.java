@@ -1,7 +1,7 @@
 package org.synesis.workspace.lifecycle.codex;
 
 import org.synesis.workspace.lifecycle.codex.protocol.CodexAppServerProtocolClient;
-import org.synesis.workspace.lifecycle.codex.state.CodexEvidenceJournal;
+import org.synesis.workspace.lifecycle.codex.protocol.CodexEvidenceJournal;
 import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import java.io.IOException;

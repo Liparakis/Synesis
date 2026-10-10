@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.cleanup.plan;
+package org.synesis.workspace.lifecycle.cleanup.inventory;
 
 import java.util.Objects;
 

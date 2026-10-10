@@ -136,7 +136,7 @@ public final class ControlPlaneReadModel {
      *
      * @return JSON-compatible network map
      */
-    public Map<String, Object> network() {
+    Map<String, Object> network() {
         return network.get().toMap();
     }
 
@@ -343,7 +343,7 @@ public final class ControlPlaneReadModel {
      *
      * @return work groups with the distinct participants of their active intents
      */
-    public List<Map<String, Object>> workgroups() {
+    List<Map<String, Object>> workgroups() {
         List<WorkIntent> intents = coordination.collaborationProjection().activeIntents();
         return coordination.workGroupProjection().groups().stream().sorted(Comparator.comparing(WorkGroup::workGroupId)).limit(MAX_COLLECTION_ITEMS).map(group -> {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -399,7 +399,7 @@ public final class ControlPlaneReadModel {
      *
      * @return capability requests
      */
-    public List<Map<String, Object>> capabilities() {
+    List<Map<String, Object>> capabilities() {
         return coordination.capabilityRequestProjection().records().values().stream().sorted(Comparator.comparing(record -> record.handle().value())).limit(MAX_COLLECTION_ITEMS).map(ControlPlaneReadModel::capability)
                 .toList();
     }

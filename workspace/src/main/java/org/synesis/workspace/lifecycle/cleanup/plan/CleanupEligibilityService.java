@@ -20,6 +20,7 @@ import java.util.Objects;
 import org.synesis.workspace.infrastructure.process.ProcessEvidenceState;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
+import org.synesis.workspace.lifecycle.cleanup.inventory.CleanupReason;
 
 /**
  * Evaluates raw discovered lifecycle resources against path verifiers, process inspectors,

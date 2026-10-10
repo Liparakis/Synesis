@@ -1,4 +1,4 @@
-package org.synesis.workspace.lifecycle.codex.state;
+package org.synesis.workspace.lifecycle.codex.protocol;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +25,7 @@ public final class CodexEvidenceRetention {
     /**
      * Maximum unreferenced closed generations retained for one binding.
      */
-    public static final int MAX_UNREFERENCED_GENERATIONS = 8;
+    static final int MAX_UNREFERENCED_GENERATIONS = 8;
     private static final Pattern GENERATION = Pattern.compile("generation-(\\d+)\\.jsonl");
 
     private CodexEvidenceRetention() {

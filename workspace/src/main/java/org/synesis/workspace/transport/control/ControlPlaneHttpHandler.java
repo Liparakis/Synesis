@@ -41,17 +41,17 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     /**
      * Current control-plane API prefix.
      */
-    public static final String API_PREFIX = "/api/v1";
+    static final String API_PREFIX = "/api/v1";
 
     /**
      * Session header used instead of cookies.
      */
-    public static final String SESSION_HEADER = "X-Synesis-Control-Session";
+    static final String SESSION_HEADER = "X-Synesis-Control-Session";
 
     /**
      * CSRF header required for mutations.
      */
-    public static final String CSRF_HEADER = "X-Synesis-Control-CSRF";
+    static final String CSRF_HEADER = "X-Synesis-Control-CSRF";
 
     /**
      * Header used by the owning local runtime for non-browser transport commands.

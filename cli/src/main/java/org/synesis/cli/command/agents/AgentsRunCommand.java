@@ -21,7 +21,7 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessOptions;
-import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.application.provider.ProviderRegistry;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

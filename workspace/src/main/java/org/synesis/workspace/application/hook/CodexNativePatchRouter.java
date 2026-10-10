@@ -1,4 +1,4 @@
-package org.synesis.workspace.provider.codex;
+package org.synesis.workspace.application.hook;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,11 +15,12 @@ import org.synesis.workspace.application.workspace.WorkspacePathPolicy;
 import org.synesis.workspace.application.workspace.mutation.WorkspaceMutationBroker;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.project.ProjectPathResolver;
+import org.synesis.workspace.provider.codex.CodexApplyPatchParser;
 
 /**
  * Routes supported Codex native patches through the Synesis mutation broker.
  */
-public final class CodexNativePatchRouter {
+final class CodexNativePatchRouter {
 
     private final CodexApplyPatchParser parser = new CodexApplyPatchParser();
     private final WorkspaceMutationBroker broker = new WorkspaceMutationBroker();
@@ -27,7 +28,7 @@ public final class CodexNativePatchRouter {
     /**
      * Creates a native patch router.
      */
-    public CodexNativePatchRouter() {
+    CodexNativePatchRouter() {
     }
 
     private static String section(List<String> lines, String path) {

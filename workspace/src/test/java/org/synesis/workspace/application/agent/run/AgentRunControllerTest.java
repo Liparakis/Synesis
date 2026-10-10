@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessOptions;
-import org.synesis.workspace.provider.ProviderRegistry;
+import org.synesis.workspace.application.provider.ProviderRegistry;
 
 /**
  * Verifies when the controller resumes an agent, and that it stops instead of resuming forever.

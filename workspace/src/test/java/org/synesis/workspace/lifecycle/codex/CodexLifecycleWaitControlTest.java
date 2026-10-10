@@ -5,7 +5,7 @@ import org.synesis.workspace.lifecycle.codex.state.CodexLifecycleStateStore;
 
 import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlRequestEnvelope;
 
-import org.synesis.workspace.lifecycle.codex.http.CodexLifecycleHttpClient;
+import org.synesis.workspace.lifecycle.codex.protocol.LifecycleControlResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,7 +43,7 @@ class CodexLifecycleWaitControlTest {
   @TempDir
   Path temp;
 
-  private static CodexLifecycleHttpClient.Response callWait(CodexAppServerLifecycleService service,
+  private static LifecycleControlResponse callWait(CodexAppServerLifecycleService service,
       LifecycleControlRequestEnvelope request) {
     try {
       return service.waitForTurn(request);
@@ -59,10 +59,10 @@ class CodexLifecycleWaitControlTest {
       LifecycleControlRequestEnvelope start = request(
           LifecycleControlRequestEnvelope.Operation.START, null, null,
           true, "initial");
-      CodexLifecycleHttpClient.Response started = service.start(start);
+      LifecycleControlResponse started = service.start(start);
       LifecycleControlRequestEnvelope wait = request(LifecycleControlRequestEnvelope.Operation.WAIT,
           started.threadId(), started.turnId(), false, null);
-      CompletableFuture<CodexLifecycleHttpClient.Response> waiting = CompletableFuture.supplyAsync(
+      CompletableFuture<LifecycleControlResponse> waiting = CompletableFuture.supplyAsync(
           () -> callWait(
               service,
               wait));
@@ -82,11 +82,11 @@ class CodexLifecycleWaitControlTest {
   void waitDoesNotStarveInterrupt() throws Exception {
     try (FakeServer server = new FakeServer();
         CodexAppServerLifecycleService service = service(server)) {
-      CodexLifecycleHttpClient.Response started = service.start(
+      LifecycleControlResponse started = service.start(
           request(LifecycleControlRequestEnvelope.Operation.START, null, null, true, "initial"));
       LifecycleControlRequestEnvelope wait = request(LifecycleControlRequestEnvelope.Operation.WAIT,
           started.threadId(), started.turnId(), false, null);
-      CompletableFuture<CodexLifecycleHttpClient.Response> waiting = CompletableFuture.supplyAsync(
+      CompletableFuture<LifecycleControlResponse> waiting = CompletableFuture.supplyAsync(
           () -> callWait(
               service,
               wait));
@@ -107,7 +107,7 @@ class CodexLifecycleWaitControlTest {
     try (FakeServer server = new FakeServer()) {
       RecordingLauncher launcher = new RecordingLauncher(server);
       try (CodexAppServerLifecycleService service = service(server, launcher)) {
-        CodexLifecycleHttpClient.Response started = service.start(
+        LifecycleControlResponse started = service.start(
             request(LifecycleControlRequestEnvelope.Operation.START, null, null, true, "initial"));
 
         assertEquals(List.of("verify:thread-1", "finalize:thread-1", "activate"), launcher.calls);
@@ -129,10 +129,10 @@ class CodexLifecycleWaitControlTest {
       CodexAppServerLifecycleService.ProcessLauncher launcher = (_, _) -> server.process(
           supervisor);
       try (CodexAppServerLifecycleService service = service(server, launcher)) {
-        CodexLifecycleHttpClient.Response started = service.start(
+        LifecycleControlResponse started = service.start(
             request(LifecycleControlRequestEnvelope.Operation.START, null, null, true, "initial"));
 
-        CompletableFuture<CodexLifecycleHttpClient.Response> first = CompletableFuture.supplyAsync(
+        CompletableFuture<LifecycleControlResponse> first = CompletableFuture.supplyAsync(
             () -> {
               try {
                 return service.hardStop(request(LifecycleControlRequestEnvelope.Operation.HARD_STOP,
@@ -142,7 +142,7 @@ class CodexLifecycleWaitControlTest {
               }
             });
         assertTrue(supervisor.teardownEntered.await(2L, TimeUnit.SECONDS));
-        CompletableFuture<CodexLifecycleHttpClient.Response> second = CompletableFuture.supplyAsync(
+        CompletableFuture<LifecycleControlResponse> second = CompletableFuture.supplyAsync(
             () -> {
               try {
                 return service.hardStop(request(LifecycleControlRequestEnvelope.Operation.HARD_STOP,

@@ -25,12 +25,12 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
-public final class ValidationWorkspaceService {
+final class ValidationWorkspaceService {
 
     /**
      * Creates a validation workspace service.
      */
-    public ValidationWorkspaceService() {
+    ValidationWorkspaceService() {
     }
 
     /**
@@ -39,7 +39,7 @@ public final class ValidationWorkspaceService {
      * @param projectRoot control project root path
      * @return absolute path to external validation directory
      */
-    public static Path resolveValidationRoot(Path projectRoot) {
+    static Path resolveValidationRoot(Path projectRoot) {
         Objects.requireNonNull(projectRoot, "projectRoot");
         return ExternalWorktrees.root(projectRoot, "validation");
     }
@@ -67,7 +67,7 @@ public final class ValidationWorkspaceService {
      * @return absolute path to the created validation worktree
      * @throws IOException if worktree creation fails
      */
-    public Path createValidationWorktree(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber, ImplementationRevisionRecord impl) throws IOException {
+    Path createValidationWorktree(Path projectRoot, CapabilityRequestHandle handle, int revisionNumber, ImplementationRevisionRecord impl) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(handle, "handle");
         Objects.requireNonNull(impl, "impl");
@@ -113,7 +113,7 @@ public final class ValidationWorkspaceService {
      * @return verified validation worktree path
      * @throws IOException if the context path, registered worktree, or commit is stale
      */
-    public Path verifyValidationWorktree(Path projectRoot,
+    Path verifyValidationWorktree(Path projectRoot,
             CapabilityRequestHandle handle,
             int revisionNumber,
             String expectedCommit,
@@ -160,7 +160,7 @@ public final class ValidationWorkspaceService {
      *
      * @param worktreePath absolute path to the validation worktree
      */
-    public void removeValidationWorktree(Path worktreePath) {
+    void removeValidationWorktree(Path worktreePath) {
         ExternalWorktrees.removeBestEffort(worktreePath == null ? null : worktreePath.toAbsolutePath());
     }
 }

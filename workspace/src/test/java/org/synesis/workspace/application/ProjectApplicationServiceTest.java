@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import org.synesis.projectrecord.domain.ProjectConfig;
 
-import org.synesis.workspace.application.project.ProjectCommandSpec;
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectInitResult;
 import org.synesis.workspace.application.project.ProjectInitStatus;
