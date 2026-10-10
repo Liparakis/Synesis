@@ -1,7 +1,6 @@
 package org.synesis.workspace.application.capability;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.Locale;
@@ -25,8 +24,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
@@ -66,49 +65,12 @@ public final class CapabilityResponseService {
     public AgentResponse respondToOwnerRequest(OwnerResponseRequest request) {
         Objects.requireNonNull(request, "request");
 
-        Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
-
-        ProjectLocation location;
-        NodeIdentity identity;
-        try {
-            location = projectService.locate(root);
-            identity = location.loadOrCreateIdentity();
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
-
-        Path coordDir = location.coordinationDirectory();
-        ProjectAppendLock appendLock;
-        try {
-            appendLock = ProjectAppendLock.acquire(coordDir);
-        } catch (IOException unavailable) {
-            return appendLockUnavailable();
-        }
-        try (appendLock) {
-            if (!appendLock.isHeld()) {
-                return appendLockUnavailable();
-            }
-            ProviderSessionBindingService.Binding binding;
-            try {
-                binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
-            } catch (Exception ex) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            if (binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            PredictionEventStore store = location.openCoordinationStore();
-            return respondLocked(request, store, binding, identity);
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-        }
-    }
-
-    private static AgentResponse appendLockUnavailable() {
-        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
+        return CallerAdmission.underAppendLock(request.projectRoot(),
+                projectService,
+                authorityResolver,
+                request.provider(),
+                request.connectionInstanceId(),
+                admitted -> respondLocked(request, admitted.location().openCoordinationStore(), admitted.binding(), admitted.identity()));
     }
 
     /** Authorizes and appends one owner reply against the projection loaded under the append lock. */
@@ -225,27 +187,6 @@ public final class CapabilityResponseService {
                                        CapabilityContract revision,
                                        String reason,
                                        long contractRevision) {
-
-        /**
-         * Retains the previous constructor for internal callers; MCP responses must provide a revision.
-         *
-         * @param projectRoot control project root
-         * @param provider provider identifier
-         * @param connectionInstanceId exact provider connection
-         * @param requestHandle public capability request handle
-         * @param response owner's decision
-         * @param revision replacement contract when requesting a revision
-         * @param reason optional rejection or revision explanation
-         */
-        public OwnerResponseRequest(Path projectRoot,
-                String provider,
-                String connectionInstanceId,
-                String requestHandle,
-                String response,
-                CapabilityContract revision,
-                String reason) {
-            this(projectRoot, provider, connectionInstanceId, requestHandle, response, revision, reason, -1);
-        }
 
         /**
          * Validates non-null request parameters.

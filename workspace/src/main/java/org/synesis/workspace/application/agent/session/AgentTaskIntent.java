@@ -73,25 +73,4 @@ public record AgentTaskIntent(String goal,
     public AgentTaskIntent(String goal, String acceptance, List<String> likelyScopes, List<String> knownDependencies) {
         this(goal, acceptance, likelyScopes, knownDependencies, null, WorkIntent.Role.PRODUCER, List.of(), null, null);
     }
-
-    /**
-     * Preserves the original task-declaration constructor for provider-side callers.
-     *
-     * @param goal concise task goal
-     * @param acceptance conditions that define completion
-     * @param likelyScopes advisory scopes that do not acquire claims
-     * @param knownDependencies explicitly declared capability dependencies
-     * @param workGroupId work group to join, or {@code null} to start one
-     * @param role lane role, defaulting to producer when {@code null}
-     * @param reviewTargetSelectors selectors a reviewer lane intends to review
-     */
-    public AgentTaskIntent(String goal,
-            String acceptance,
-            List<String> likelyScopes,
-            List<String> knownDependencies,
-            UUID workGroupId,
-            WorkIntent.Role role,
-            List<ResourceSelector> reviewTargetSelectors) {
-        this(goal, acceptance, likelyScopes, knownDependencies, workGroupId, role, reviewTargetSelectors, null, null);
-    }
 }

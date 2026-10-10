@@ -342,7 +342,7 @@ class CapabilityNegotiationTest {
                 "JSON-serializable task records",
                 List.of("preserve the accepted task-tracker contract"),
                 List.of("the dependent test lane can import the published implementation"));
-        AgentResponse response = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "task-tracker", contract, null, null, ownerLineage));
+        AgentResponse response = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "task-tracker", contract, null, null, ownerLineage, -1));
 
         assertEquals(AgentStatus.WAITING, response.status());
         assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason());

@@ -1,7 +1,6 @@
 package org.synesis.workspace.application.agent.completion;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +17,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -55,17 +55,6 @@ public final class AgentTaskCancellationService {
         return false;
     }
 
-    private static UUID deriveTaskId(ProviderSessionBindingService.Binding binding) {
-        String sessionId = Objects.requireNonNull(binding.sessionId(), "sessionId");
-        if (sessionId.length() >= 36) {
-            try {
-                return UUID.fromString(sessionId.substring(sessionId.length() - 36));
-            } catch (Exception ignored) {
-            }
-        }
-        return UUID.nameUUIDFromBytes(sessionId.getBytes(StandardCharsets.UTF_8));
-    }
-
     /**
      * Executes ambient task cancellation authorization, event appends, dependency invalidation,
      * ownership release, and session finalization.
@@ -80,24 +69,13 @@ public final class AgentTaskCancellationService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, null);
         }
 
-        Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        CallerAdmission admission = CallerAdmission.admit(request.projectRoot(), projectService, authorityResolver, request.provider(), request.connectionInstanceId(), false);
+        if (admission.refused()) {
+            return admission.refusal();
         }
-
-        ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
-        NodeIdentity identity;
-        try {
-            location = projectService.locate(root);
-            binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
-            if (binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            identity = location.loadOrCreateIdentity();
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
+        ProjectLocation location = admission.location();
+        ProviderSessionBindingService.Binding binding = admission.binding();
+        NodeIdentity identity = admission.identity();
 
         String callerNodeId = identity.nodeId();
         String callerSupervisorId = binding.supervisorId();
@@ -106,7 +84,7 @@ public final class AgentTaskCancellationService {
         try {
             PredictionEventStore store = location.openCoordinationStore();
 
-            UUID taskId = deriveTaskId(binding);
+            UUID taskId = binding.taskId();
 
             // Check if task is already integrated or integrating
             if (store.taskCompletionProjection().taskState(taskId) == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED) {

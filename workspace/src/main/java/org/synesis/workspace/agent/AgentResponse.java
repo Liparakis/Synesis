@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -27,6 +28,11 @@ public record AgentResponse(AgentStatus status, AgentReason reason, AgentNextAct
      * bounded 64 KiB raw output streams plus JSON escaping and structured evidence metadata.
      */
     public static final int MAX_RESPONSE_BYTES = 1_048_576;
+
+    /**
+     * Reason reported when a provider session's terminal state could not be read.
+     */
+    public static final String SESSION_TERMINAL_STATE_UNAVAILABLE = "SESSION_TERMINAL_STATE_UNAVAILABLE";
 
     /**
      * Validates required response fields.
@@ -85,6 +91,22 @@ public record AgentResponse(AgentStatus status, AgentReason reason, AgentNextAct
      */
     public static AgentResponse blocked(AgentReason reason) {
         return new AgentResponse(AgentStatus.BLOCKED, Objects.requireNonNull(reason, "reason"), null, null);
+    }
+
+    /**
+     * Creates the fail-closed response used when the terminal state of a provider session could not
+     * be determined.
+     *
+     * @param failure the failure raised while reading the terminal state; its cause, when present,
+     *                is the one classified
+     * @return failed response asking for human help, tagged with bounded failure details
+     */
+    public static AgentResponse sessionTerminalStateUnavailable(Throwable failure) {
+        Throwable cause = Objects.requireNonNullElse(failure.getCause(), failure);
+        return new AgentResponse(AgentStatus.FAILED,
+                AgentReason.INTERNAL_FAILURE,
+                AgentNextAction.REQUEST_HUMAN_HELP,
+                Map.of("reason", SESSION_TERMINAL_STATE_UNAVAILABLE, "causeType", cause.getClass().getSimpleName(), "causeCode", DoctorFindingCode.classifyDurableStateFailure(cause).value()));
     }
 
     /**

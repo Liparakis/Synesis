@@ -14,7 +14,6 @@ import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRe
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.lifecycle.RepositoryPortabilityService;
@@ -87,12 +86,12 @@ public final class AgentSessionService {
 
         RepositoryPortabilityService.Report portability = portabilityService.preflight(root);
         if (!portability.portable()) {
-            throw new IllegalStateException("REPOSITORY_NOT_PORTABLE");
+            throw AgentSessionFailure.of(AgentSessionFailure.Code.REPOSITORY_NOT_PORTABLE);
         }
 
         ProviderApplicationService.ProviderWorkAdmission providerAdmission = providerService.assessWorkAdmission(location, request.provider());
         if (!providerAdmission.admitted()) {
-            throw new IllegalStateException("PROVIDER_INTEGRATION_REQUIRED");
+            throw AgentSessionFailure.of(AgentSessionFailure.Code.PROVIDER_INTEGRATION_REQUIRED);
         }
 
         if (request.managedAdmission()) {
@@ -112,9 +111,9 @@ public final class AgentSessionService {
                 : readinessService.assess(location, request.provider(), request.connectionInstanceId());
         if (!readiness.ready()) {
             if ("PROVIDER_CONFIGURATION_CONFLICT".equals(readiness.internalReason())) {
-                throw new IllegalStateException("PROVIDER_CONFIGURATION_CONFLICT");
+                throw AgentSessionFailure.of(AgentSessionFailure.Code.PROVIDER_CONFIGURATION_CONFLICT);
             }
-            throw new IllegalStateException("Workspace readiness failed: " + readiness.internalReason());
+            throw AgentSessionFailure.workspaceNotReady(readiness.internalReason());
         }
         binding = readiness.binding();
 
@@ -158,28 +157,16 @@ public final class AgentSessionService {
             return worktree == null ? AgentResponse.ready(workspaceState, context.pendingCount()) : AgentResponse.ready(workspaceState, context.pendingCount(), worktree);
         } catch (IllegalArgumentException ex) {
             return AgentResponse.blocked(AgentReason.INVALID_PATH);
+        } catch (AgentSessionFailure ex) {
+            return failureResponse(ex);
         } catch (IllegalStateException ex) {
-            if ("REPOSITORY_NOT_PORTABLE".equals(ex.getMessage())) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.REPOSITORY_NOT_PORTABLE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-            }
-            if ("PROVIDER_INTEGRATION_REQUIRED".equals(ex.getMessage())) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_INTEGRATION_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, null);
-            }
-            if (String.valueOf(ex.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT")) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_CONFIGURATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
-            }
-            String diagnostic = readinessDiagnostic(ex.getMessage());
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, diagnostic == null ? null : java.util.Map.of("diagnostic", diagnostic));
+            return workspaceNotReady(null);
         } catch (ProviderSessionBindingService.BindingException ex) {
             if ("SESSION_TERMINAL".equals(ex.code())) {
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, java.util.Map.of("state", "SESSION_TERMINAL"));
             }
-            if ("SESSION_TERMINAL_STATE_UNAVAILABLE".equals(ex.code())) {
-                Throwable cause = ex.getCause() == null ? ex : ex.getCause();
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of(
-                        "reason", ex.code(),
-                        "causeType", cause.getClass().getSimpleName(),
-                        "causeCode", DoctorFindingCode.classifyDurableStateFailure(cause).value()));
+            if (AgentResponse.SESSION_TERMINAL_STATE_UNAVAILABLE.equals(ex.code())) {
+                return AgentResponse.sessionTerminalStateUnavailable(ex);
             }
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {
@@ -187,14 +174,17 @@ public final class AgentSessionService {
         }
     }
 
-    private static String readinessDiagnostic(String message) {
-        String prefix = "Workspace readiness failed: ";
-        if (message == null || !message.startsWith(prefix)) {
-            return null;
-        }
-        String diagnostic = message.substring(prefix.length());
-        return diagnostic.matches("[A-Z][A-Z0-9_]{2,63}") ? diagnostic : "WORKSPACE_UNVERIFIED";
+    private static AgentResponse failureResponse(AgentSessionFailure failure) {
+        return switch (failure.code()) {
+            case REPOSITORY_NOT_PORTABLE -> new AgentResponse(AgentStatus.BLOCKED, AgentReason.REPOSITORY_NOT_PORTABLE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            case PROVIDER_INTEGRATION_REQUIRED -> new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_INTEGRATION_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            case PROVIDER_CONFIGURATION_CONFLICT ->
+                    new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_CONFIGURATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
+            case WORKSPACE_NOT_READY -> workspaceNotReady(failure.diagnostic());
+        };
     }
 
-
+    private static AgentResponse workspaceNotReady(String diagnostic) {
+        return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, diagnostic == null ? null : java.util.Map.of("diagnostic", diagnostic));
+    }
 }

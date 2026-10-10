@@ -34,6 +34,31 @@ public record CompleteTaskRequest(Path projectRoot, String provider, String conn
         outcome = outcome == null ? CompletionOutcome.SNAPSHOT : outcome;
     }
 
+    private static final long UNSUPPLIED_CLAIM_EPOCH = 1L;
+    private static final long UNSUPPLIED_WORK_GROUP_VERSION = 1L;
+    private static final long UNSUPPLIED_REVISION = 0L;
+
+    /**
+     * Returns whether the caller supplied every server-issued evidence field.
+     *
+     * @return {@code true} when all six {@code expected*} fields are present
+     */
+    public boolean hasCompleteEvidence() {
+        return expectedIntentId != null && expectedWorkGroupId != null && expectedClaimEpoch != null && expectedWorkGroupVersion != null && expectedRevision != null && expectedParticipant != null;
+    }
+
+    /**
+     * Returns whether the caller supplied any evidence beyond the values a client that omits the
+     * field reports.
+     *
+     * @return {@code true} when an identity or participant is present or a counter differs from
+     *         its unsupplied default
+     */
+    public boolean hasAnyEvidence() {
+        return expectedIntentId != null || expectedWorkGroupId != null || expectedParticipant != null || (expectedClaimEpoch != null && expectedClaimEpoch != UNSUPPLIED_CLAIM_EPOCH)
+                || (expectedWorkGroupVersion != null && expectedWorkGroupVersion != UNSUPPLIED_WORK_GROUP_VERSION) || (expectedRevision != null && expectedRevision != UNSUPPLIED_REVISION);
+    }
+
     /**
      * Constructs the existing snapshot completion request shape.
      *

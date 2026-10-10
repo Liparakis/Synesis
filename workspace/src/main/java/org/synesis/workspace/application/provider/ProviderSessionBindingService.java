@@ -694,6 +694,24 @@ public final class ProviderSessionBindingService {
         }
 
         /**
+         * Returns the task identity of this session: the trailing 36 characters of the session ID
+         * when they are a UUID, otherwise a name-based UUID of the whole session ID.
+         *
+         * @return task identity derived from the session ID
+         */
+        public UUID taskId() {
+            Objects.requireNonNull(sessionId, "sessionId");
+            if (sessionId.length() >= 36) {
+                try {
+                    return UUID.fromString(sessionId.substring(sessionId.length() - 36));
+                } catch (IllegalArgumentException notUuid) {
+                    // fall through to the name-based identity
+                }
+            }
+            return UUID.nameUUIDFromBytes(sessionId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+
+        /**
          * Returns a refreshed binding with an updated last-seen timestamp.
          *
          * @return refreshed binding

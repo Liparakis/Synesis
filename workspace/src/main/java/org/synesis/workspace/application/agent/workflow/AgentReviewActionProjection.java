@@ -239,14 +239,14 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
         if (store.workGroupProjection().group(intent.workGroupId()).map(group -> group.reviewPolicy().mandatory()).orElse(false)) {
             return true;
         }
-        boolean exactGrant = store.workGroupProjection().grants().stream().filter(grant -> grantAppliesToIntent(store, grant, intent)).filter(grant -> !grant.targetParticipant().equals(participantHandle))
+        boolean exactGrant = store.workGroupProjection().grants().stream().filter(grant -> grantAppliesToIntent(grant, intent)).filter(grant -> !grant.targetParticipant().equals(participantHandle))
                 .filter(grant -> !store.workGroupProjection().grantSuperseded(grant.grantId()))
                 .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId()) || store.workGroupProjection().grantConsumed(grant.grantId()));
         if (exactGrant) {
             return true;
         }
         boolean requested = store.collaborationProjection().requests().stream()
-                .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(store, request.conflictingIntentId(), intent) && (
+                .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(request.conflictingIntentId(), intent) && (
                         request.status() == CoordinationRequest.Status.PENDING
                                 || request.status() == CoordinationRequest.Status.ACCEPTED));
         if (requested) {
@@ -257,51 +257,16 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
                         && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
     }
 
-    private static boolean grantAppliesToIntent(PredictionEventStore store, LaneGrant grant, WorkIntent intent) {
-        if (!grant.workGroupId().equals(intent.workGroupId())) {
-            return false;
-        }
-        boolean targetsCurrentIntent = grant.targetIntentId().equals(intent.intentId());
-        if (!targetsCurrentIntent && store.collaborationProjection().successorIntent(grant.targetIntentId()).isPresent()) {
-            // A late historical grant must not become review authority for the successor.  The
-            // continuation projection creates a current-epoch grant for the successor when needed.
-            return false;
-        }
-        if (targetsCurrentIntent) {
-            return grant.claimEpoch() == intent.version();
-        }
-        if (grant.claimEpoch() >= intent.version()) {
-            return false;
-        }
-        return succeededBy(store, grant.targetIntentId(), intent.intentId());
+    private static boolean grantAppliesToIntent(LaneGrant grant, WorkIntent intent) {
+        // A late historical grant must not become review authority for the successor.  The
+        // continuation projection creates a current-epoch grant for the successor when needed.
+        return grant.workGroupId().equals(intent.workGroupId()) && grant.targetIntentId().equals(intent.intentId()) && grant.claimEpoch() == intent.version();
     }
 
-    private static boolean requestAppliesToIntent(PredictionEventStore store, UUID historicalIntentId, WorkIntent intent) {
-        if (historicalIntentId.equals(intent.intentId())) {
-            return true;
-        }
-        if (store.collaborationProjection().successorIntent(historicalIntentId).isPresent()) {
-            // Requests created after a continuation against the predecessor are stale; only the
-            // explicitly retargeted successor request remains actionable.
-            return false;
-        }
-        return succeededBy(store, historicalIntentId, intent.intentId());
-    }
-
-    /** Walks the successor chain from an earlier intent, bounded so a corrupt chain cannot loop. */
-    private static boolean succeededBy(PredictionEventStore store, UUID from, UUID successorId) {
-        UUID cursor = from;
-        for (int depth = 0; depth < 128; depth++) {
-            UUID successor = store.collaborationProjection().successorIntent(cursor).orElse(null);
-            if (successor == null) {
-                return false;
-            }
-            if (successor.equals(successorId)) {
-                return true;
-            }
-            cursor = successor;
-        }
-        return false;
+    private static boolean requestAppliesToIntent(UUID historicalIntentId, WorkIntent intent) {
+        // Requests created after a continuation against the predecessor are stale; only the
+        // explicitly retargeted successor request remains actionable.
+        return historicalIntentId.equals(intent.intentId());
     }
 
 /**

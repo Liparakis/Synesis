@@ -3,7 +3,6 @@ package org.synesis.workspace.application.agent.workflow;
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.putResult;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +37,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.completion.CompletionOutcome;
+import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
@@ -126,8 +126,7 @@ public final class AgentTaskCompletionService {
     }
 
     private static boolean noChangeEvidenceMatches(CompleteTaskRequest request, ProviderSessionBindingService.Binding binding, NoChangeCompletion completion) {
-        return request.outcome() == CompletionOutcome.NO_CHANGE && request.expectedIntentId() != null && request.expectedWorkGroupId() != null && request.expectedClaimEpoch() != null
-                && request.expectedWorkGroupVersion() != null && request.expectedRevision() != null && request.expectedParticipant() != null && request.expectedIntentId().equals(completion.intentId())
+        return request.outcome() == CompletionOutcome.NO_CHANGE && request.hasCompleteEvidence() && request.expectedIntentId().equals(completion.intentId())
                 && request.expectedWorkGroupId().equals(completion.workGroupId()) && request.expectedClaimEpoch() == completion.claimEpoch() && request.expectedWorkGroupVersion() == completion.workGroupVersion()
                 && request.expectedRevision() == completion.expectedRevision() && request.expectedParticipant().equals(completion.participant()) && request.provider().equals(completion.provider())
                 && new ProviderSessionId(binding.sessionId()).equals(completion.bindingSessionIdentity()) && binding.baseCommit().equals(completion.workspaceCommit()) && normalizedSummary(request.summary()).equals(
@@ -172,17 +171,13 @@ public final class AgentTaskCompletionService {
      * Validates optional server-issued finish evidence for the current lane revision.
      */
     private static AgentResponse validateSnapshotEvidence(CompleteTaskRequest request, WorkIntent intent, PredictionEventStore store, String participantHandle) {
-        boolean evidencePresent =
-                request.expectedIntentId() != null || request.expectedWorkGroupId() != null || request.expectedParticipant() != null || (request.expectedClaimEpoch() != null && request.expectedClaimEpoch() != 1L) || (
-                        request.expectedWorkGroupVersion() != null && request.expectedWorkGroupVersion() != 1L) || (request.expectedRevision() != null && request.expectedRevision() != 0L);
         boolean correctionRequired = store.taskCompletionProjection().allSnapshots().stream()
                 .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version()
                         && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
-        if (!evidencePresent && !correctionRequired) {
+        if (!request.hasAnyEvidence() && !correctionRequired) {
             return null;
         }
-        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null || request.expectedRevision() == null
-                || request.expectedParticipant() == null) {
+        if (!request.hasCompleteEvidence()) {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED);
         }
         WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
@@ -241,18 +236,7 @@ public final class AgentTaskCompletionService {
                 return entry.getKey();
             }
         }
-        return deriveTaskId(binding);
-    }
-
-    private static UUID deriveTaskId(ProviderSessionBindingService.Binding binding) {
-        if (binding.sessionId() != null && binding.sessionId().length() >= 36) {
-            try {
-                return UUID.fromString(binding.sessionId().substring(binding.sessionId().length() - 36));
-            } catch (Exception ignored) {
-            }
-        }
-        String sessionId = Objects.requireNonNull(binding.sessionId(), "session id");
-        return UUID.nameUUIDFromBytes(sessionId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return binding.taskId();
     }
 
     private static UUID deriveIntentId(ProviderSessionBindingService.Binding binding, String provider) {
@@ -268,35 +252,19 @@ public final class AgentTaskCompletionService {
     public AgentResponse completeTask(CompleteTaskRequest request) {
         Objects.requireNonNull(request, "request");
 
-        Path root = request.projectRoot().toAbsolutePath().normalize();
         try {
             manualService.requireAttested(request.provider());
         } catch (Exception failure) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of(NextActionKeys.REASON, "MANUAL_ATTESTATION_REQUIRED"));
         }
-        if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
+        CallerAdmission admission = CallerAdmission.admit(request.projectRoot(), projectService, authorityResolver, request.provider(), request.connectionInstanceId(), true);
+        if (admission.refused()) {
+            return admission.refusal();
         }
-
-        ProjectLocation location;
-        ProviderSessionBindingService.Binding binding;
-        boolean terminalRetry = false;
-        NodeIdentity identity;
-        try {
-            location = projectService.locate(root);
-            try {
-                binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
-            } catch (Exception activeResolutionFailure) {
-                binding = authorityResolver.resolveCompleted(location, request.provider(), request.connectionInstanceId());
-                terminalRetry = true;
-            }
-            if (binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            identity = location.loadOrCreateIdentity();
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
+        ProjectLocation location = admission.location();
+        ProviderSessionBindingService.Binding binding = admission.binding();
+        boolean terminalRetry = admission.completedBinding();
+        NodeIdentity identity = admission.identity();
 
         String callerNodeId = identity.nodeId();
         String callerSupervisorId = binding.supervisorId();
@@ -374,20 +342,7 @@ public final class AgentTaskCompletionService {
             if (existingOpt.isPresent() && store.taskCompletionProjection().snapshotState(existingOpt.get().snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.INTEGRATED) {
                 AgentResponse result = completionResult(store, existingOpt.get(), participantHandle, new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "already_integrated")), null);
                 bindingService.complete(location, request.provider(), request.connectionInstanceId());
-                AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
-                if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap && NextActionProtocol.SESSION_TERMINATED.equals(String.valueOf(terminalMap.get(NextActionKeys.SESSION_TERMINATION)))) {
-                    return terminalResult;
-                }
-                try {
-                    AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
-                    if (continuation.nextAction() != null) {
-                        return continuationWithCompletion(terminalResult, continuation);
-                    }
-                } catch (Exception ignored) {
-                    // The durable integrated result is authoritative; a later
-                    // inbox read can recover any review continuation.
-                }
-                return terminalResult;
+                return sealAndContinue(result, request, location, binding, identity);
             }
 
             boolean reviewRequired = laneIntent.map(intent -> AgentReviewActionProjection.reviewRequired(store, intent, participantHandle)).orElse(false);
@@ -567,15 +522,7 @@ public final class AgentTaskCompletionService {
         // Complete only the exact calling connection. Retaining its worktree prevents the next
         // inbox read from reusing stale write authority.
         bindingService.complete(location, request.provider(), request.connectionInstanceId());
-        AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
-        if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap && NextActionProtocol.SESSION_TERMINATED.equals(String.valueOf(terminalMap.get(NextActionKeys.SESSION_TERMINATION)))) {
-            return terminalResult;
-        }
-
-        // A completed lane may still review an active sibling, so preserve that read-only follow-up
-        // in the returned projection.
-        AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
-        return continuation.nextAction() == null ? terminalResult : continuationWithCompletion(terminalResult, continuation);
+        return sealAndContinue(result, request, location, binding, identity);
     }
 
     /**
@@ -602,7 +549,7 @@ public final class AgentTaskCompletionService {
                     AgentNextAction.REQUEST_HUMAN_HELP,
                     Map.of(NextActionKeys.REASON, "COMPLETED_BINDING_WITHOUT_NO_CHANGE_COMPLETION"));
         }
-        UUID completedTaskId = deriveTaskId(binding);
+        UUID completedTaskId = binding.taskId();
         Optional<TaskSnapshotRecord> completedSnapshot = store.taskCompletionProjection().findSnapshotForTask(completedTaskId);
         if (completedSnapshot.isEmpty()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP, Map.of(NextActionKeys.REASON, "COMPLETED_BINDING_WITHOUT_SNAPSHOT"));
@@ -717,8 +664,7 @@ public final class AgentTaskCompletionService {
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     private AgentResponse completeNoChangeTask(CompleteTaskRequest request, ProjectLocation location, NodeIdentity identity, String participantHandle, Optional<WorkIntent> laneIntent) {
-        if (request.expectedIntentId() == null || request.expectedWorkGroupId() == null || request.expectedClaimEpoch() == null || request.expectedWorkGroupVersion() == null || request.expectedRevision() == null
-                || request.expectedParticipant() == null) {
+        if (!request.hasCompleteEvidence()) {
             return noChangeDenied("NO_CHANGE_COMPLETION_EVIDENCE_REQUIRED", null);
         }
         if (laneIntent.isEmpty()) {
@@ -827,22 +773,31 @@ public final class AgentTaskCompletionService {
             ExecutionResult validation,
             ProviderSessionBindingService.Binding binding,
             NodeIdentity identity) {
-        AgentResponse result = noChangeCompletionResult(store, completion, validation);
-        AgentResponse terminalResult = terminalSessionResult(result, request, location, binding, identity);
-        if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap && NextActionProtocol.SESSION_TERMINATED.equals(String.valueOf(terminalMap.get(NextActionKeys.SESSION_TERMINATION)))) {
+        return sealAndContinue(noChangeCompletionResult(store, completion, validation), request, location, binding, identity);
+    }
+
+    /**
+     * Seals the terminal session when requested, then attaches the caller's next action.
+     *
+     * <p>The completion is already durable, so a failed continuation lookup never fails it; a
+     * later inbox read recovers any review continuation, such as a completed lane that may still
+     * review an active sibling.</p>
+     */
+    private AgentResponse sealAndContinue(AgentResponse completion, CompleteTaskRequest request, ProjectLocation location, ProviderSessionBindingService.Binding binding, NodeIdentity identity) {
+        AgentResponse terminalResult = terminalSessionResult(completion, request, location, binding, identity);
+        if (request.terminalSession() && terminalResult.result() instanceof Map<?, ?> terminalMap
+                && ProviderSessionTerminalizationService.Outcome.SESSION_TERMINATED.name().equals(String.valueOf(terminalMap.get(NextActionKeys.SESSION_TERMINATION)))) {
             return terminalResult;
         }
-        result = terminalResult;
         try {
             AgentResponse continuation = nextActionService.getNextAction(new NextActionRequest(location.root(), request.provider(), request.connectionInstanceId()));
             if (continuation.nextAction() != null) {
-                return continuationWithCompletion(result, continuation);
+                return continuationWithCompletion(terminalResult, continuation);
             }
         } catch (Exception ignored) {
-            // The durable completion is authoritative; a subsequent inbox read
-            // can recover any continuation projection.
+            // The durable completion is authoritative.
         }
-        return result;
+        return terminalResult;
     }
 
     private AgentResponse terminalSessionResult(AgentResponse completion, CompleteTaskRequest request, ProjectLocation location, ProviderSessionBindingService.Binding binding, NodeIdentity identity) {
@@ -887,7 +842,7 @@ public final class AgentTaskCompletionService {
             }
             NodeIdentity identity = location.loadOrCreateIdentity();
             PredictionEventStore store = location.openCoordinationStore();
-            UUID taskId = deriveTaskId(binding);
+            UUID taskId = binding.taskId();
             var preparedOpt = store.taskCompletionProjection().findPrepared(taskId);
             if (preparedOpt.isEmpty()) {
                 if (store.taskCompletionProjection().findSnapshotForTask(taskId).isPresent()) {

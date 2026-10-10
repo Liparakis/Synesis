@@ -1,7 +1,6 @@
 package org.synesis.workspace.application.capability;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.LinkedHashMap;
@@ -33,6 +32,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -197,49 +197,12 @@ public final class CapabilityRequestService {
     public AgentResponse describeRequiredCapability(DescribeCapabilityRequest request) {
         Objects.requireNonNull(request, "request");
 
-        Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (!Files.exists(root.resolve(".synesis/project.json"))) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
-
-        ProjectLocation location;
-        NodeIdentity identity;
-        try {
-            location = projectService.locate(root);
-            identity = location.loadOrCreateIdentity();
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-        }
-
-        Path coordDir = location.coordinationDirectory();
-        ProjectAppendLock appendLock;
-        try {
-            appendLock = ProjectAppendLock.acquire(coordDir);
-        } catch (IOException unavailable) {
-            return appendLockUnavailable();
-        }
-        try (appendLock) {
-            if (!appendLock.isHeld()) {
-                return appendLockUnavailable();
-            }
-            ProviderSessionBindingService.Binding binding;
-            try {
-                binding = authorityResolver.resolve(location, request.provider(), request.connectionInstanceId());
-            } catch (Exception ex) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            if (binding.worktreePath() == null) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.SESSION_NOT_READY, AgentNextAction.ENSURE_SESSION, null);
-            }
-            PredictionEventStore store = location.openCoordinationStore();
-            return describeLocked(request, location, store, binding, identity);
-        } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
-        }
-    }
-
-    private static AgentResponse appendLockUnavailable() {
-        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
+        return CallerAdmission.underAppendLock(request.projectRoot(),
+                projectService,
+                authorityResolver,
+                request.provider(),
+                request.connectionInstanceId(),
+                admitted -> describeLocked(request, admitted.location(), admitted.location().openCoordinationStore(), admitted.binding(), admitted.identity()));
     }
 
     /** Records or revises a request against the projection loaded under the append lock. */
@@ -544,29 +507,6 @@ public final class CapabilityRequestService {
          */
         public DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse) {
             this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, null, -1);
-        }
-
-        /**
-         * Retains the prior owner-lineage-aware constructor for internal callers.
-         *
-         * @param projectRoot project root
-         * @param provider provider identifier
-         * @param connectionInstanceId exact provider connection
-         * @param capability requested capability identifier
-         * @param contract complete API contract
-         * @param requestHandle existing request handle when revising
-         * @param revisionResponse response to the owner revision, if any
-         * @param ownerAuthorityLineageId intended owner authority lineage
-         */
-        public DescribeCapabilityRequest(Path projectRoot,
-                String provider,
-                String connectionInstanceId,
-                String capability,
-                CapabilityContract contract,
-                String requestHandle,
-                String revisionResponse,
-                UUID ownerAuthorityLineageId) {
-            this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, ownerAuthorityLineageId, -1);
         }
     }
 }

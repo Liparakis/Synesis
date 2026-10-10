@@ -32,7 +32,6 @@ import org.synesis.workspace.application.provider.session.ProviderSessionTermina
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.application.workspace.ReadinessResult;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
-import org.synesis.workspace.doctor.DoctorFindingCode;
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
@@ -366,7 +365,7 @@ public final class AgentNextActionService {
                 return terminalSessionResponse(binding.sessionId());
             }
         } catch (Exception failure) {
-            return terminalStateUnavailableResponse(failure);
+            return AgentResponse.sessionTerminalStateUnavailable(failure);
         }
         if (!STATUS_COMPLETED.equals(binding.status())) {
             return null;
@@ -395,22 +394,6 @@ public final class AgentNextActionService {
      */
     private static AgentResponse terminalSessionResponse(String sessionId) {
         return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of(NextActionKeys.STATE, NextActionProtocol.STATE_SESSION_TERMINAL, NextActionKeys.LANE, sessionId));
-    }
-
-    /**
-     * Builds the fail-closed response used when the terminal state could not be determined.
-     *
-     * @param failure the failure raised while reading the terminal state
-     * @return a {@code FAILED} response asking for human help, tagged with bounded failure details
-     */
-    private static AgentResponse terminalStateUnavailableResponse(Exception failure) {
-        Throwable cause = Objects.requireNonNullElse(failure.getCause(), failure);
-        return new AgentResponse(AgentStatus.FAILED,
-                AgentReason.INTERNAL_FAILURE,
-                AgentNextAction.REQUEST_HUMAN_HELP,
-                Map.of(NextActionKeys.REASON, NextActionProtocol.REASON_SESSION_TERMINAL_STATE_UNAVAILABLE,
-                        "causeType", cause.getClass().getSimpleName(),
-                        "causeCode", DoctorFindingCode.classifyDurableStateFailure(cause).value()));
     }
 
     /**

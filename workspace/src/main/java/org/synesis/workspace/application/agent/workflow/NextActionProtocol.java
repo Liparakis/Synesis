@@ -1,5 +1,7 @@
 package org.synesis.workspace.application.agent.workflow;
 
+import org.synesis.workspace.agent.AgentResponse;
+
 /**
  * Protocol vocabulary of the next-action wire format: action names, kinds and state values.
  * Shared so the projections and the review helpers agree on one spelling.
@@ -75,11 +77,6 @@ final class NextActionProtocol {
      * Protocol kind of a review request awaiting its owner's answer.
      */
     static final String KIND_REVIEW_ADMISSION = "review_admission";
-
-    /**
-     * Outcome reported when a session was sealed.
-     */
-    static final String SESSION_TERMINATED = "SESSION_TERMINATED";
 
     /**
      * Phase reported for a failure of the validation run before publication.
@@ -159,7 +156,7 @@ final class NextActionProtocol {
     /**
      * The session's terminal state could not be read.
      */
-    static final String REASON_SESSION_TERMINAL_STATE_UNAVAILABLE = "SESSION_TERMINAL_STATE_UNAVAILABLE";
+    static final String REASON_SESSION_TERMINAL_STATE_UNAVAILABLE = AgentResponse.SESSION_TERMINAL_STATE_UNAVAILABLE;
 
     /**
      * The caller has no active intent.
