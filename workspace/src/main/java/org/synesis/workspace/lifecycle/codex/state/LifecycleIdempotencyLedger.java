@@ -75,29 +75,6 @@ public final class LifecycleIdempotencyLedger {
         load();
     }
 
-    private static Entry decode(Map<String, Object> value) {
-        return new Entry(text(value, "hostInstanceId"),
-                text(value, "projectId"),
-                UUID.fromString(text(value, "requestId")),
-                text(value, "operation"),
-                LifecycleControlRequestEnvelope.Classification.valueOf(text(value, "classification")),
-                text(value, "digest"),
-                text(value, "bindingSessionId"),
-                number(value, "expectedRevision"),
-                text(value, "laneId"),
-                number(value, "laneEpoch"),
-                optional(value, "threadId"),
-                optional(value, "turnId"),
-                number(value, "startedAtEpochMillis"),
-                number(value, "deadlineEpochMillis"),
-                State.valueOf(text(value, "state")),
-                number(value, "revisionBefore"),
-                number(value, "revisionAfter"),
-                optional(value, "result"),
-                number(value, "completedAtEpochMillis"),
-                number(value, "expiryEpochMillis"));
-    }
-
     private static Map<String, Object> map(Object item) {
         if (!(item instanceof Map<?, ?> raw)) {
             throw new IllegalArgumentException("ledger entry must be object");
@@ -220,7 +197,7 @@ public final class LifecycleIdempotencyLedger {
             throw new IOException("lifecycle idempotency ledger is not an array");
         }
         for (Object item : raw) {
-            Entry durable = decode(map(item));
+            Entry durable = Entry.fromMap(map(item));
             if (durable.requestId().equals(requestId)) {
                 return durable.state() == State.ACCEPTED && durable.digest().equals(digest) && durable.revisionBefore() == revisionBefore;
             }
@@ -248,26 +225,7 @@ public final class LifecycleIdempotencyLedger {
             throw new IllegalArgumentException("revisionAfter must not be negative");
         }
         long now = System.currentTimeMillis();
-        Entry updated = new Entry(prior.hostInstanceId(),
-                prior.projectId(),
-                prior.requestId(),
-                prior.operation(),
-                prior.classification(),
-                prior.digest(),
-                prior.bindingSessionId(),
-                prior.expectedRevision(),
-                prior.laneId(),
-                prior.laneEpoch(),
-                prior.threadId(),
-                prior.turnId(),
-                prior.startedAtEpochMillis(),
-                prior.deadlineEpochMillis(),
-                state,
-                prior.revisionBefore(),
-                revisionAfter,
-                result,
-                state == State.COMPLETED || state == State.FAILED || state == State.AMBIGUOUS ? now : 0L,
-                prior.expiryEpochMillis());
+        Entry updated = prior.withState(state, revisionAfter, result, state == State.COMPLETED || state == State.FAILED || state == State.AMBIGUOUS ? now : 0L);
         entries.put(requestId, updated);
         try {
             persist();
@@ -400,30 +358,11 @@ public final class LifecycleIdempotencyLedger {
             }
             for (Object item : raw) {
                 Map<String, Object> value = map(item);
-                Entry entry = decode(value);
+                Entry entry = Entry.fromMap(value);
                 State state = entry.state();
                 if (state == State.ACCEPTED || state == State.IN_PROGRESS) {
                     state = entry.classification() == LifecycleControlRequestEnvelope.Classification.STATE_CHANGING ? State.AMBIGUOUS : State.FAILED;
-                    entry = new Entry(entry.hostInstanceId(),
-                            entry.projectId(),
-                            entry.requestId(),
-                            entry.operation(),
-                            entry.classification(),
-                            entry.digest(),
-                            entry.bindingSessionId(),
-                            entry.expectedRevision(),
-                            entry.laneId(),
-                            entry.laneEpoch(),
-                            entry.threadId(),
-                            entry.turnId(),
-                            entry.startedAtEpochMillis(),
-                            entry.deadlineEpochMillis(),
-                            state,
-                            entry.revisionBefore(),
-                            entry.revisionAfter(),
-                            "owner_restart_ambiguity",
-                            entry.completedAtEpochMillis(),
-                            entry.expiryEpochMillis());
+                    entry = entry.withState(state, entry.revisionAfter(), "owner_restart_ambiguity", entry.completedAtEpochMillis());
                 }
                 if (entry.expiryEpochMillis() >= System.currentTimeMillis() || entry.activeOrAmbiguous()) {
                     entries.put(entry.requestId(), entry);
@@ -555,6 +494,77 @@ public final class LifecycleIdempotencyLedger {
             }
         }
 
+        static Entry fromMap(Map<String, Object> value) {
+            return new Entry(text(value, "hostInstanceId"),
+                    text(value, "projectId"),
+                    UUID.fromString(text(value, "requestId")),
+                    text(value, "operation"),
+                    LifecycleControlRequestEnvelope.Classification.valueOf(text(value, "classification")),
+                    text(value, "digest"),
+                    text(value, "bindingSessionId"),
+                    number(value, "expectedRevision"),
+                    text(value, "laneId"),
+                    number(value, "laneEpoch"),
+                    optional(value, "threadId"),
+                    optional(value, "turnId"),
+                    number(value, "startedAtEpochMillis"),
+                    number(value, "deadlineEpochMillis"),
+                    State.valueOf(text(value, "state")),
+                    number(value, "revisionBefore"),
+                    number(value, "revisionAfter"),
+                    optional(value, "result"),
+                    number(value, "completedAtEpochMillis"),
+                    number(value, "expiryEpochMillis"));
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("hostInstanceId", hostInstanceId);
+            value.put("projectId", projectId);
+            value.put("requestId", requestId.toString());
+            value.put("operation", operation);
+            value.put("classification", classification.name());
+            value.put("digest", digest);
+            value.put("bindingSessionId", bindingSessionId);
+            value.put("expectedRevision", expectedRevision);
+            value.put("laneId", laneId);
+            value.put("laneEpoch", laneEpoch);
+            value.put("threadId", threadId);
+            value.put("turnId", turnId);
+            value.put("startedAtEpochMillis", startedAtEpochMillis);
+            value.put("deadlineEpochMillis", deadlineEpochMillis);
+            value.put("state", state.name());
+            value.put("revisionBefore", revisionBefore);
+            value.put("revisionAfter", revisionAfter);
+            value.put("result", result);
+            value.put("completedAtEpochMillis", completedAtEpochMillis);
+            value.put("expiryEpochMillis", expiryEpochMillis);
+            return value;
+        }
+
+        Entry withState(State newState, long newRevisionAfter, String newResult, long newCompletedAtEpochMillis) {
+            return new Entry(hostInstanceId,
+                    projectId,
+                    requestId,
+                    operation,
+                    classification,
+                    digest,
+                    bindingSessionId,
+                    expectedRevision,
+                    laneId,
+                    laneEpoch,
+                    threadId,
+                    turnId,
+                    startedAtEpochMillis,
+                    deadlineEpochMillis,
+                    newState,
+                    revisionBefore,
+                    newRevisionAfter,
+                    newResult,
+                    newCompletedAtEpochMillis,
+                    expiryEpochMillis);
+        }
+
         private static void require(String value, String label) {
             if (value == null || value.isBlank() || value.length() > LifecycleControlRequestEnvelope.MAX_TEXT_BYTES) {
                 throw new IllegalArgumentException(label + " invalid");
@@ -624,28 +634,7 @@ public final class LifecycleIdempotencyLedger {
             Files.createDirectories(file.getParent());
             List<Map<String, Object>> encoded = new ArrayList<>();
             for (Entry entry : entries) {
-                Map<String, Object> value = new LinkedHashMap<>();
-                value.put("hostInstanceId", entry.hostInstanceId());
-                value.put("projectId", entry.projectId());
-                value.put("requestId", entry.requestId().toString());
-                value.put("operation", entry.operation());
-                value.put("classification", entry.classification().name());
-                value.put("digest", entry.digest());
-                value.put("bindingSessionId", entry.bindingSessionId());
-                value.put("expectedRevision", entry.expectedRevision());
-                value.put("laneId", entry.laneId());
-                value.put("laneEpoch", entry.laneEpoch());
-                value.put("threadId", entry.threadId());
-                value.put("turnId", entry.turnId());
-                value.put("startedAtEpochMillis", entry.startedAtEpochMillis());
-                value.put("deadlineEpochMillis", entry.deadlineEpochMillis());
-                value.put("state", entry.state().name());
-                value.put("revisionBefore", entry.revisionBefore());
-                value.put("revisionAfter", entry.revisionAfter());
-                value.put("result", entry.result());
-                value.put("completedAtEpochMillis", entry.completedAtEpochMillis());
-                value.put("expiryEpochMillis", entry.expiryEpochMillis());
-                encoded.add(value);
+                encoded.add(entry.toMap());
             }
             Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
             Files.writeString(temporary, ProviderJson.write(encoded) + System.lineSeparator(), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);

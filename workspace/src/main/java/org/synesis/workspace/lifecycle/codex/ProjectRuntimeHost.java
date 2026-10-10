@@ -1,7 +1,5 @@
 package org.synesis.workspace.lifecycle.codex;
 
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.codex.CodexAppServerLifecycleService.ProcessLauncher;
 import org.synesis.workspace.lifecycle.codex.CodexWakeAdmissionService.LifecycleDispatcher;
@@ -36,7 +34,6 @@ import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -47,18 +44,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.synesis.coordination.domain.collaboration.Participant;
-import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.persistence.PredictionEventStore;
-
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService.BindingException;
-import org.synesis.workspace.application.provider.ProviderManualService;
-import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import com.sun.net.httpserver.HttpHandler;
@@ -87,6 +75,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
     public static final String CODEX_ROUTE = "/codex-lifecycle/v1";
 
     private final ProjectLocation location;
+    private final LifecycleAuthorityVerifier verifier;
     private final NodeIdentity ownerIdentity;
     private final String hostInstanceId;
     private final Path runtimeRoot;
@@ -126,8 +115,9 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
      * @param terminator    process-tree terminator
      * @throws IOException when ownership or durable state cannot be established
      */
-    public ProjectRuntimeHost(ProjectLocation location, NodeIdentity ownerIdentity, ProcessLauncher launcher, ProcessTreeTerminator terminator) throws IOException {
+    ProjectRuntimeHost(ProjectLocation location, NodeIdentity ownerIdentity, ProcessLauncher launcher, ProcessTreeTerminator terminator) throws IOException {
         this.location = Objects.requireNonNull(location, "location");
+        this.verifier = new LifecycleAuthorityVerifier(location);
         this.ownerIdentity = Objects.requireNonNull(ownerIdentity, "ownerIdentity");
         this.launcher = Objects.requireNonNull(launcher, "launcher");
         this.terminator = Objects.requireNonNull(terminator, "terminator");
@@ -282,7 +272,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
      * be proven is left untouched and recorded as an untrusted orphan. Exact-thread continuation
      * remains an explicit RESUME request.
      */
-    public void reconcileOnStartup() {
+    private void reconcileOnStartup() {
         Path bindingsRoot = runtimeRoot.resolve("bindings");
         if (!Files.isDirectory(bindingsRoot)) {
             return;
@@ -354,7 +344,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 return prior.get();
             }
             if (existing == null || existing.state() == State.AMBIGUOUS) {
-                verifyAuthority(request);
+                verifier.verify(request);
             }
             runtime = runtime(request.authority().bindingSessionId(), request.authority());
             if (!sameRuntimeAuthority(runtime.authority(), request.authority())) {
@@ -454,7 +444,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
             }
             if (request.classification() == Classification.STATE_CHANGING) {
                 runtime.acquireAttachmentLock();
-                verifyAuthority(request);
+                verifier.verify(request);
                 runtime.claimHostCheckpoint();
                 runtime.recordOwner();
             }
@@ -470,28 +460,7 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 case STATUS -> runtime.service().status(request);
             };
             if (request.operation() == Operation.STATUS) {
-                Map<String, Object> diagnostics = new LinkedHashMap<>(response.result());
-                diagnostics.put("hostInstanceId", hostInstanceId);
-                diagnostics.put("bindingSessionId", runtime.bindingSessionId());
-                diagnostics.put("ledgerEntries", ledger.entries().size());
-                diagnostics.put("ledgerAmbiguousEntries", ledger.entries().stream().filter(entry -> entry.state() == LifecycleIdempotencyLedger.State.AMBIGUOUS).count());
-                ledger.entries().stream().filter(LifecycleIdempotencyLedger.Entry::activeOrAmbiguous).min(java.util.Comparator.comparingLong(LifecycleIdempotencyLedger.Entry::startedAtEpochMillis)).ifPresent(oldest -> {
-                    diagnostics.put("ledgerOldestActiveRequestId", oldest.requestId().toString());
-                    diagnostics.put("ledgerOldestActiveStartedAt", oldest.startedAtEpochMillis());
-                });
-                diagnostics.put("ledgerEvictions", ledger.evictionCount());
-                diagnostics.put("ledgerConflicts", ledger.conflictCount());
-                long bindingEntries = ledger.entries().stream().filter(entry -> entry.bindingSessionId().equals(runtime.bindingSessionId())).count();
-                diagnostics.put("bindingLedgerEntries", bindingEntries);
-                diagnostics.put("ledgerUtilization", ledger.entries().size() + "/" + LifecycleIdempotencyLedger.MAX_HOST_ENTRIES);
-                diagnostics.put("bindingLedgerUtilization", bindingEntries + "/" + LifecycleIdempotencyLedger.MAX_BINDING_ENTRIES);
-                diagnostics.put("idempotencyInitialPersistenceFailures", ledger.initialPersistenceFailureCount());
-                diagnostics.put("idempotencyResultStorageFailures", ledger.resultStorageFailureCount());
-                diagnostics.put("oversizedLifecycleControlRequestFailures", adapter.oversizedRequestCount());
-                diagnostics.putAll(runtime.service().diagnostics());
-                diagnostics.put("wakeRelayScanCount", wakeCoordinator.scanCount());
-                diagnostics.put("wakeRelayDiagnostic", wakeCoordinator.lastDiagnostic());
-                response = new Response(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
+                response = withStatusDiagnostics(runtime, response);
             }
             long revision = runtime.service().statusUnchecked().lifecycleRevision();
             runtime.recordOwner();
@@ -521,6 +490,31 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
                 runtime.releaseLock();
             }
         }
+    }
+
+    private Response withStatusDiagnostics(BindingRuntime runtime, Response response) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>(response.result());
+        diagnostics.put("hostInstanceId", hostInstanceId);
+        diagnostics.put("bindingSessionId", runtime.bindingSessionId());
+        diagnostics.put("ledgerEntries", ledger.entries().size());
+        diagnostics.put("ledgerAmbiguousEntries", ledger.entries().stream().filter(entry -> entry.state() == LifecycleIdempotencyLedger.State.AMBIGUOUS).count());
+        ledger.entries().stream().filter(LifecycleIdempotencyLedger.Entry::activeOrAmbiguous).min(java.util.Comparator.comparingLong(LifecycleIdempotencyLedger.Entry::startedAtEpochMillis)).ifPresent(oldest -> {
+            diagnostics.put("ledgerOldestActiveRequestId", oldest.requestId().toString());
+            diagnostics.put("ledgerOldestActiveStartedAt", oldest.startedAtEpochMillis());
+        });
+        diagnostics.put("ledgerEvictions", ledger.evictionCount());
+        diagnostics.put("ledgerConflicts", ledger.conflictCount());
+        long bindingEntries = ledger.entries().stream().filter(entry -> entry.bindingSessionId().equals(runtime.bindingSessionId())).count();
+        diagnostics.put("bindingLedgerEntries", bindingEntries);
+        diagnostics.put("ledgerUtilization", ledger.entries().size() + "/" + LifecycleIdempotencyLedger.MAX_HOST_ENTRIES);
+        diagnostics.put("bindingLedgerUtilization", bindingEntries + "/" + LifecycleIdempotencyLedger.MAX_BINDING_ENTRIES);
+        diagnostics.put("idempotencyInitialPersistenceFailures", ledger.initialPersistenceFailureCount());
+        diagnostics.put("idempotencyResultStorageFailures", ledger.resultStorageFailureCount());
+        diagnostics.put("oversizedLifecycleControlRequestFailures", adapter.oversizedRequestCount());
+        diagnostics.putAll(runtime.service().diagnostics());
+        diagnostics.put("wakeRelayScanCount", wakeCoordinator.scanCount());
+        diagnostics.put("wakeRelayDiagnostic", wakeCoordinator.lastDiagnostic());
+        return new Response(response.success(), response.diagnostic(), response.state(), response.lifecycleRevision(), response.threadId(), response.turnId(), diagnostics);
     }
 
     private void pruneRequestLocks() {
@@ -559,87 +553,6 @@ public final class ProjectRuntimeHost implements AutoCloseable, LifecycleDispatc
         }
         if (!location.projectId().toString().equals(request.authority().projectId()) || !"codex".equals(request.authority().provider())) {
             throw new IOException("lifecycle_project_or_provider_mismatch");
-        }
-    }
-
-    private void verifyAuthority(LifecycleControlRequestEnvelope request) throws IOException, GeneralSecurityException, ProjectApplicationException, BindingException {
-        ProjectLocation current = new ProjectApplicationService().locate(location.root());
-        ProviderSessionBindingService.Binding binding = resolveBinding(current, request);
-        verifyParticipantAndWorktreeAuthority(binding, request.authority());
-    }
-
-    /**
-     * Checks that the verified binding still owns the exact participant, worktree, and intent.
-     */
-    private void verifyParticipantAndWorktreeAuthority(Binding binding, AuthorityContext expected) throws IOException, GeneralSecurityException {
-        if (!expected.participant().equals(WorkspaceCollaborationService.participantHandle(binding.sessionId()))) {
-            throw new IOException("lifecycle_participant_mismatch");
-        }
-        Path assigned;
-        try {
-            assigned = Path.of(binding.worktreePath()).toAbsolutePath().normalize();
-            if (!assigned.toString().equals(expected.canonicalWorktree()) || !assigned.toRealPath().toString().equals(expected.realWorktree())) {
-                throw new IOException("lifecycle_worktree_mismatch");
-            }
-        } catch (IOException | RuntimeException failure) {
-            if (failure instanceof IOException io && "lifecycle_worktree_mismatch".equals(io.getMessage())) {
-                throw io;
-            }
-            throw new IOException("lifecycle_worktree_mismatch", failure);
-        }
-        if (binding.gitCommonDir() == null || binding.branch() == null || binding.baseCommit() == null || !binding.gitCommonDir().equals(expected.gitCommonDirectory()) || !binding.branch().equals(expected.branch())
-                || !binding.baseCommit().equals(expected.baseCommit())) {
-            throw new IOException("lifecycle_worktree_identity_mismatch");
-        }
-        PredictionEventStore store = location.openCoordinationStore();
-        Participant participant = store.collaborationProjection().participants().stream().filter(item -> item.id().equals(expected.participant())).findFirst().orElse(null);
-        if (participant == null || participant.state() != Participant.State.ACTIVE) {
-            throw new IOException("lifecycle_participant_inactive");
-        }
-        WorkIntent intent;
-        try {
-            intent = store.collaborationProjection().intent(UUID.fromString(expected.workIntentId())).orElse(null);
-        } catch (IllegalArgumentException malformed) {
-            throw new IOException("lifecycle_claim_not_acquired", malformed);
-        }
-        if (intent == null || intent.status() != WorkIntent.Status.ANNOUNCED || !intent.projectId().toString().equals(expected.projectId()) || !"codex".equals(intent.provider()) || !intent.participant()
-                .equals(expected.participant()) || !intent.baseCommit().equals(expected.baseCommit()) || intent.version() != expected.laneEpoch()) {
-            throw new IOException("lifecycle_claim_not_acquired");
-        }
-        new ProviderManualService().requireAttested("codex");
-    }
-
-    /**
-     * Resolves and validates the provider binding named by a signed lifecycle request.
-     */
-    private Binding resolveBinding(ProjectLocation current, LifecycleControlRequestEnvelope request) throws IOException, BindingException {
-        ProviderSessionBindingService bindingService = new ProviderSessionBindingService();
-        String connectionIdentity = request.authority().connectionInstanceId();
-        Optional<Binding> resolved = connectionIdentity.startsWith(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX) ? bindingService.findByFingerprint(current,
-                "codex",
-                connectionIdentity.substring(CodexWakeAdmissionService.FINGERPRINT_CONNECTION_PREFIX.length())) : bindingService.find(current, "codex", connectionIdentity);
-        Binding binding = resolved.orElseThrow(() -> new IOException("lifecycle_binding_missing"));
-        validateResolvedBinding(current, request, binding);
-        return binding;
-    }
-
-    /**
-     * Verifies that a resolved binding still matches the signed request's project and trust state.
-     */
-    private void validateResolvedBinding(ProjectLocation current, LifecycleControlRequestEnvelope request, Binding binding) throws IOException {
-        AuthorityContext expected = request.authority();
-        if (!current.root().toAbsolutePath().normalize().toString().equals(expected.controlProjectRoot())) {
-            throw new IOException("lifecycle_project_root_mismatch");
-        }
-        boolean completedStatusRead = request.operation() == Operation.STATUS && "COMPLETED".equals(binding.status());
-        boolean admissibleBindingState = "BOUND".equals(binding.status()) || completedStatusRead;
-        if (!binding.projectId().equals(expected.projectId()) || !"codex".equals(binding.provider()) || !binding.sessionId().equals(expected.bindingSessionId()) || !binding.providerInstanceFingerprint()
-                .equals(expected.bindingFingerprint()) || binding.bindingVersion() != expected.bindingVersion() || !admissibleBindingState || !"VERIFIED".equals(binding.verificationState())
-                || !"VERIFIED".equals(binding.providerTrustState()) || binding.worktreePath() == null) {
-            throw new IOException("lifecycle_binding_stale");
-        }
-        if (binding.controlCheckoutPath() == null || !Path.of(binding.controlCheckoutPath()).toAbsolutePath().normalize().equals(current.root().toAbsolutePath().normalize())) {
-            throw new IOException("lifecycle_project_root_mismatch");
         }
     }
 

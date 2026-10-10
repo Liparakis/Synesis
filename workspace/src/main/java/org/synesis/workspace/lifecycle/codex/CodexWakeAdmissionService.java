@@ -46,7 +46,7 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  *
  * @since 1.0
  */
-public final class CodexWakeAdmissionService {
+final class CodexWakeAdmissionService {
 
     /**
      * Prefix used when a wake request carries the stored binding fingerprint.

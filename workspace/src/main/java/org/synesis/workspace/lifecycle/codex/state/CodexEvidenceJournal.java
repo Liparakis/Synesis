@@ -212,18 +212,6 @@ public final class CodexEvidenceJournal implements AutoCloseable {
     }
 
     /**
-     * Returns omitted event counts grouped by category.
-     *
-     * @return immutable counts
-     */
-    @SuppressWarnings("unused")
-    public Map<String, Long> droppedCategories() {
-        synchronized (accountingLock) {
-            return Map.copyOf(dropped);
-        }
-    }
-
-    /**
      * Returns bytes durably written to this generation journal.
      *
      * @return persisted journal bytes

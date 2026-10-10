@@ -126,23 +126,7 @@ public final class LifecycleControlRequestEnvelope {
         rawOptions.forEach((key, item) -> options.put(key, String.valueOf(item)));
         return new LifecycleControlRequestEnvelope(UUID.fromString(string(value, "requestId")),
                 string(value, "hostInstanceId"),
-                new AuthorityContext(string(authority, "projectId"),
-                        string(authority, "controlProjectRoot"),
-                        string(authority, "provider"),
-                        string(authority, "connectionInstanceId"),
-                        string(authority, "bindingSessionId"),
-                        string(authority, "bindingFingerprint"),
-                        integer(authority),
-                        string(authority, "participant"),
-                        string(authority, "workIntentId"),
-                        number(authority, "laneEpoch"),
-                        string(authority, "canonicalWorktree"),
-                        string(authority, "realWorktree"),
-                        string(authority, "gitCommonDirectory"),
-                        string(authority, "branch"),
-                        string(authority, "baseCommit"),
-                        string(authority, "supervisorId"),
-                        string(authority, "workerId")),
+                AuthorityContext.fromMap(authority),
                 Operation.valueOf(string(value, "operation")),
                 number(value, "expectedLifecycleRevision"),
                 nullableString(value.get("expectedThreadId")),
@@ -180,10 +164,6 @@ public final class LifecycleControlRequestEnvelope {
             throw new IllegalArgumentException("missing " + key);
         }
         return number.longValue();
-    }
-
-    private static int integer(Map<String, Object> value) {
-        return Math.toIntExact(number(value, "bindingVersion"));
     }
 
     private static String requireText(String value, String label) {
@@ -326,25 +306,7 @@ public final class LifecycleControlRequestEnvelope {
         value.put("input", input);
         value.put("callerDeadlineEpochMillis", callerDeadlineEpochMillis);
         value.put("options", new LinkedHashMap<>(options));
-        Map<String, Object> authorityValue = new LinkedHashMap<>();
-        authorityValue.put("projectId", authority.projectId());
-        authorityValue.put("controlProjectRoot", authority.controlProjectRoot());
-        authorityValue.put("provider", authority.provider());
-        authorityValue.put("connectionInstanceId", authority.connectionInstanceId());
-        authorityValue.put("bindingSessionId", authority.bindingSessionId());
-        authorityValue.put("bindingFingerprint", authority.bindingFingerprint());
-        authorityValue.put("bindingVersion", authority.bindingVersion());
-        authorityValue.put("participant", authority.participant());
-        authorityValue.put("workIntentId", authority.workIntentId());
-        authorityValue.put("laneEpoch", authority.laneEpoch());
-        authorityValue.put("canonicalWorktree", authority.canonicalWorktree());
-        authorityValue.put("realWorktree", authority.realWorktree());
-        authorityValue.put("gitCommonDirectory", authority.gitCommonDirectory());
-        authorityValue.put("branch", authority.branch());
-        authorityValue.put("baseCommit", authority.baseCommit());
-        authorityValue.put("supervisorId", authority.supervisorId());
-        authorityValue.put("workerId", authority.workerId());
-        value.put("authority", authorityValue);
+        value.put("authority", authority.toMap());
         return ProviderJson.write(value).getBytes(StandardCharsets.UTF_8);
     }
 
@@ -470,6 +432,48 @@ public final class LifecycleControlRequestEnvelope {
             if (bindingVersion < 1 || laneEpoch < 1) {
                 throw new IllegalArgumentException("authority revision must be positive");
             }
+        }
+
+        private static AuthorityContext fromMap(Map<String, Object> authority) {
+            return new AuthorityContext(string(authority, "projectId"),
+                    string(authority, "controlProjectRoot"),
+                    string(authority, "provider"),
+                    string(authority, "connectionInstanceId"),
+                    string(authority, "bindingSessionId"),
+                    string(authority, "bindingFingerprint"),
+                    Math.toIntExact(number(authority, "bindingVersion")),
+                    string(authority, "participant"),
+                    string(authority, "workIntentId"),
+                    number(authority, "laneEpoch"),
+                    string(authority, "canonicalWorktree"),
+                    string(authority, "realWorktree"),
+                    string(authority, "gitCommonDirectory"),
+                    string(authority, "branch"),
+                    string(authority, "baseCommit"),
+                    string(authority, "supervisorId"),
+                    string(authority, "workerId"));
+        }
+
+        private Map<String, Object> toMap() {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("projectId", projectId);
+            value.put("controlProjectRoot", controlProjectRoot);
+            value.put("provider", provider);
+            value.put("connectionInstanceId", connectionInstanceId);
+            value.put("bindingSessionId", bindingSessionId);
+            value.put("bindingFingerprint", bindingFingerprint);
+            value.put("bindingVersion", bindingVersion);
+            value.put("participant", participant);
+            value.put("workIntentId", workIntentId);
+            value.put("laneEpoch", laneEpoch);
+            value.put("canonicalWorktree", canonicalWorktree);
+            value.put("realWorktree", realWorktree);
+            value.put("gitCommonDirectory", gitCommonDirectory);
+            value.put("branch", branch);
+            value.put("baseCommit", baseCommit);
+            value.put("supervisorId", supervisorId);
+            value.put("workerId", workerId);
+            return value;
         }
 
         /**

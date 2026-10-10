@@ -20,7 +20,7 @@ import java.util.Optional;
  * @since 1.0
  */
 @SuppressWarnings("DuplicatedCode")
-public final class ProcessTreeTerminator {
+final class ProcessTreeTerminator {
 
     private final Inspector inspector;
 
@@ -86,7 +86,7 @@ public final class ProcessTreeTerminator {
         }
         ObservedProcess root = inspector.process(identity.pid()).orElse(null);
         if (root != null && mismatches(identity, root)) {
-            return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), false, "process_ownership_unproven");
+            return ownershipUnproven(identity, false);
         }
         // If the root cannot be observed at the initial ownership check, its
         // descendants cannot be proven to belong to this attachment.  Do not
@@ -103,7 +103,7 @@ public final class ProcessTreeTerminator {
         while (System.currentTimeMillis() < graceDeadline) {
             Optional<ObservedProcess> refreshed = inspector.process(identity.pid());
             if (refreshed.isPresent() && mismatches(identity, refreshed.get())) {
-                return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), false, "process_ownership_unproven");
+                return ownershipUnproven(identity, false);
             }
             rootPresent = refreshed.isPresent();
             if (rootPresent) {
@@ -119,7 +119,7 @@ public final class ProcessTreeTerminator {
             waitUntil(graceDeadline);
             Optional<ObservedProcess> afterGrace = inspector.process(identity.pid());
             if (afterGrace.isPresent() && mismatches(identity, afterGrace.get())) {
-                return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), false, "process_ownership_unproven");
+                return ownershipUnproven(identity, false);
             }
             if (afterGrace.isPresent()) {
                 root = afterGrace.get();
@@ -128,12 +128,7 @@ public final class ProcessTreeTerminator {
             List<ObservedProcess> afterGraceDescendants = ownedDescendants(root);
             if ((!rootPresent || !inspector.alive(root)) && afterGraceDescendants.isEmpty()) {
                 if (hasLiveUnobservableDescendant(lastObservedDescendants)) {
-                    return result(Outcome.DETACHED_OR_REPARENTED_UNOBSERVABLE,
-                            identity,
-                            lastObservedDescendants.stream().filter(inspector::alive).map(ObservedProcess::pid).toList(),
-                            lastObservedDescendants.stream().map(ObservedProcess::pid).toList(),
-                            false,
-                            "detached_or_reparented_unobservable");
+                    return detached(identity, lastObservedDescendants, false);
                 }
                 return result(rootPresent ? Outcome.CLEAN_GRACEFUL : Outcome.ROOT_ALREADY_EXITED, identity, List.of(), false, rootPresent ? "clean_graceful" : "root_already_exited");
             }
@@ -141,7 +136,7 @@ public final class ProcessTreeTerminator {
         while (System.currentTimeMillis() < deadline.toEpochMilli()) {
             Optional<ObservedProcess> refreshed = inspector.process(identity.pid());
             if (refreshed.isPresent() && mismatches(identity, refreshed.get())) {
-                return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), forced, "process_ownership_unproven");
+                return ownershipUnproven(identity, forced);
             }
             rootPresent = refreshed.isPresent();
             if (rootPresent) {
@@ -162,7 +157,7 @@ public final class ProcessTreeTerminator {
             waitUntil(deadline.toEpochMilli());
             Optional<ObservedProcess> afterForce = inspector.process(identity.pid());
             if (afterForce.isPresent() && mismatches(identity, afterForce.get())) {
-                return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), forced, "process_ownership_unproven");
+                return ownershipUnproven(identity, forced);
             }
             if (afterForce.isPresent()) {
                 root = afterForce.get();
@@ -171,12 +166,7 @@ public final class ProcessTreeTerminator {
             List<ObservedProcess> remaining = ownedDescendants(root);
             if ((!rootPresent || !inspector.alive(root)) && remaining.isEmpty()) {
                 if (hasLiveUnobservableDescendant(lastObservedDescendants)) {
-                    return result(Outcome.DETACHED_OR_REPARENTED_UNOBSERVABLE,
-                            identity,
-                            lastObservedDescendants.stream().filter(inspector::alive).map(ObservedProcess::pid).toList(),
-                            lastObservedDescendants.stream().map(ObservedProcess::pid).toList(),
-                            forced,
-                            "detached_or_reparented_unobservable");
+                    return detached(identity, lastObservedDescendants, forced);
                 }
                 Outcome outcome = !rootPresent && !forced ? Outcome.ROOT_ALREADY_EXITED : forced ? Outcome.FORCED : Outcome.CLEAN_GRACEFUL;
                 return result(outcome, identity, List.of(), forced, outcome == Outcome.ROOT_ALREADY_EXITED ? "root_already_exited" : outcome == Outcome.FORCED ? "forced" : "clean_graceful");
@@ -184,7 +174,7 @@ public final class ProcessTreeTerminator {
         }
         Optional<ObservedProcess> finalRoot = inspector.process(identity.pid());
         if (finalRoot.isPresent() && mismatches(identity, finalRoot.get())) {
-            return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), forced, "process_ownership_unproven");
+            return ownershipUnproven(identity, forced);
         }
         if (finalRoot.isPresent()) {
             root = finalRoot.get();
@@ -197,15 +187,23 @@ public final class ProcessTreeTerminator {
             survivors.add(root.pid());
         }
         if (!rootPresent && remaining.isEmpty() && hasLiveUnobservableDescendant(lastObservedDescendants)) {
-            return result(Outcome.DETACHED_OR_REPARENTED_UNOBSERVABLE,
-                    identity,
-                    lastObservedDescendants.stream().filter(inspector::alive).map(ObservedProcess::pid).toList(),
-                    lastObservedDescendants.stream().map(ObservedProcess::pid).toList(),
-                    forced,
-                    "detached_or_reparented_unobservable");
+            return detached(identity, lastObservedDescendants, forced);
         }
         Outcome outcome = rootPresent && inspector.alive(root) ? Outcome.ROOT_SURVIVED : survivors.isEmpty() ? forced ? Outcome.FORCED : Outcome.CLEAN_GRACEFUL : Outcome.DESCENDANTS_SURVIVED;
         return result(outcome, identity, survivors, remaining.stream().map(ObservedProcess::pid).toList(), forced, outcome.name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private Result detached(AttachmentIdentity identity, List<ObservedProcess> lastObserved, boolean forced) {
+        return result(Outcome.DETACHED_OR_REPARENTED_UNOBSERVABLE,
+                identity,
+                lastObserved.stream().filter(inspector::alive).map(ObservedProcess::pid).toList(),
+                lastObserved.stream().map(ObservedProcess::pid).toList(),
+                forced,
+                "detached_or_reparented_unobservable");
+    }
+
+    private static Result ownershipUnproven(AttachmentIdentity identity, boolean forced) {
+        return result(Outcome.PROCESS_OWNERSHIP_UNPROVEN, identity, List.of(), forced, "process_ownership_unproven");
     }
 
     private List<ObservedProcess> ownedDescendants(ObservedProcess root) {
