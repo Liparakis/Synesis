@@ -14,7 +14,6 @@ import org.synesis.coordination.application.WorkIntentMutationPrecondition;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
-import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
@@ -599,19 +598,6 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
-     * Issues a targeted lane grant.
-     *
-     * @param projectRoot project root
-     * @param grant       grant
-     * @throws Exception persistence failure
-     */
-    public void issueLaneGrant(Path projectRoot, LaneGrant grant) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).issue(grant);
-    }
-
-    /**
      * Consumes a targeted grant.
      *
      * @param projectRoot root
@@ -628,19 +614,6 @@ public final class WorkspaceCollaborationService {
                 new ParticipantId(participant),
                 new WorkIntentId(intentId),
                 new ClaimEpoch(epoch));
-    }
-
-    /**
-     * Revokes a targeted grant.
-     *
-     * @param projectRoot root
-     * @param grantId     grant
-     * @throws Exception persistence failure
-     */
-    public void revokeLaneGrant(Path projectRoot, UUID grantId) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        new WorkGroupService(store, new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity()).revoke(new LaneGrantId(grantId));
     }
 
     /**

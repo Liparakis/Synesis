@@ -25,9 +25,7 @@ import java.util.UUID;
 import org.synesis.coordination.application.ContinuationResult;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
-import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
-import org.synesis.coordination.domain.collaboration.WorkGroup;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -261,14 +259,7 @@ final class McpCoordinationTools {
                         var contract = collaborationService.publishContract(activeProjectRoot, provider, connectionInstanceId, contractId, body, selectors);
                         yield Map.of("contract", contractMap(contract));
                     }
-                    case "bind" -> {
-                        UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
-                        UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
-                        long revision = ((Number) arguments.get("collaborationRevision")).longValue();
-                        collaborationService.bindContract(activeProjectRoot, provider, connectionInstanceId, intentId, contractId, revision);
-                        yield Map.of("intent", intentId.toString(), "contract", contractId.toString(), "revision", revision);
-                    }
-                    case "request", "request_coordination" -> {
+                    case "request_coordination" -> {
                         UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
                         CoordinationRequest.Kind kind = CoordinationRequest.Kind.valueOf(String.valueOf(arguments.getOrDefault("collaborationRequestKind", "CONTRACT")).toUpperCase(Locale.ROOT));
                         String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
@@ -297,19 +288,6 @@ final class McpCoordinationTools {
                                 parseReviewPolicy(arguments.get("reviewPolicy")));
                         yield Map.of("workGroupId", groupId.toString(), "status", "ACTIVE");
                     }
-                    case "lane_grant_issue" -> {
-                        UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
-                        UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
-                        UUID intentId = UUID.fromString(String.valueOf(arguments.get("intentId")));
-                        LaneGrant grant = new LaneGrant(grantId,
-                                groupId,
-                                intentId,
-                                String.valueOf(arguments.get("targetParticipant")),
-                                ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue(),
-                                !Boolean.FALSE.equals(arguments.get("singleUse")));
-                        collaborationService.issueLaneGrant(activeProjectRoot, grant);
-                        yield Map.of("grantId", grantId.toString(), "status", "ISSUED");
-                    }
                     case "lane_grant_consume" -> {
                         UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
                         var callerBinding = authorityResolver.resolveReview(new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
@@ -320,11 +298,6 @@ final class McpCoordinationTools {
                                 UUID.fromString(String.valueOf(arguments.get("intentId"))),
                                 ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue());
                         yield Map.of("grantId", grantId.toString(), "status", "CONSUMED");
-                    }
-                    case "lane_grant_revoke" -> {
-                        UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
-                        collaborationService.revokeLaneGrant(activeProjectRoot, grantId);
-                        yield Map.of("grantId", grantId.toString(), "status", "REVOKED");
                     }
                     case "continuation" -> {
                         Object rawGrantId = arguments.get("grantId");
@@ -343,13 +316,6 @@ final class McpCoordinationTools {
                         continuationResult.put("successorParticipant", continuationOutcome.successorParticipant());
                         continuationResult.put("callerOwnsSuccessor", continuationOutcome.callerOwnsSuccessor());
                         yield continuationResult;
-                    }
-                    case "work_group_close" -> {
-                        UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
-                        WorkGroup.Status status = WorkGroup.Status.valueOf(String.valueOf(arguments.getOrDefault("groupStatus", "COMPLETED")).toUpperCase(Locale.ROOT));
-                        long version = ((Number) arguments.getOrDefault("groupVersion", 1)).longValue();
-                        collaborationService.closeWorkGroup(activeProjectRoot, groupId, status, version);
-                        yield Map.of("workGroupId", groupId.toString(), "status", status.name());
                     }
                     default -> throw new IllegalArgumentException("unknown collaboration operation");
                 };
