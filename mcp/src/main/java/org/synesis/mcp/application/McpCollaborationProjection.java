@@ -1,5 +1,7 @@
 package org.synesis.mcp.application;
 
+import static org.synesis.mcp.application.McpJsonRpcResponses.object;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,7 +59,7 @@ final class McpCollaborationProjection {
      * @return JSON-safe dependency fields
      */
     static Map<String, Object> dependencyMap(ContractDependency dependency) {
-        return Map.of("intentId",
+        return object("intentId",
                 dependency.intentId().toString(),
                 "participant",
                 dependency.participant(),
@@ -93,7 +95,7 @@ final class McpCollaborationProjection {
      * @return JSON-safe work-group fields
      */
     static Map<String, Object> workGroupMap(WorkGroup group) {
-        return Map.of("workGroupId",
+        return object("workGroupId",
                 group.workGroupId().toString(),
                 "projectId",
                 group.projectId().toString(),
@@ -116,7 +118,7 @@ final class McpCollaborationProjection {
      * @return JSON-safe grant fields
      */
     static Map<String, Object> laneGrantMap(LaneGrant grant) {
-        return Map.of("grantId",
+        return object("grantId",
                 grant.grantId().toString(),
                 "workGroupId",
                 grant.workGroupId().toString(),
@@ -212,7 +214,7 @@ final class McpCollaborationProjection {
      * @return JSON-safe selector fields
      */
     static Map<String, Object> selectorMap(ResourceSelector selector) {
-        return Map.of("kind", selector.kind().name(), "path", selector.value());
+        return object("kind", selector.kind().name(), "path", selector.value());
     }
 
     /**

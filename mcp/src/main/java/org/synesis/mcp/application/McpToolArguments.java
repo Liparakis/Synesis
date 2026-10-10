@@ -118,6 +118,34 @@ final class McpToolArguments {
     }
 
     /**
+     * Names a requester validation snapshot: the capability request and the implementation revision
+     * published for it. Both are {@code null} when the caller selected no snapshot.
+     *
+     * @param capabilityRequestHandle handle of the capability request, or {@code null}
+     * @param implementationRevision  published implementation revision, or {@code null}
+     */
+    record ValidationSnapshotSelector(String capabilityRequestHandle, Integer implementationRevision) {
+    }
+
+    /**
+     * Reads the optional validation-snapshot selector shared by {@code read_file} and
+     * {@code run_command}.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @return the selector, with {@code null} members when omitted
+     * @throws IllegalArgumentException when the handle is not a string, or the revision is not a positive
+     *                                  integer that fits an {@code int}
+     */
+    static ValidationSnapshotSelector validationSnapshotSelector(Map<String, Object> arguments) {
+        String handle = optionalStringArgument(arguments, "capabilityRequestHandle");
+        Long revision = optionalLongArgument(arguments, "implementationRevision", 1);
+        if (revision != null && revision > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("invalid implementationRevision");
+        }
+        return new ValidationSnapshotSelector(handle, revision == null ? null : revision.intValue());
+    }
+
+    /**
      * Returns the first non-blank string under the canonical key or a bounded provider-shaped alias.
      * Aliases are input normalization only: the raw ten-tool catalog remains canonical and
      * authorization is unchanged.

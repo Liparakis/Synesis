@@ -31,6 +31,14 @@ final class McpTaskArguments {
      * Maximum length of one {@code knownDependencies} entry.
      */
     private static final int MAX_DEPENDENCY_LENGTH = 128;
+    /**
+     * Wire name of {@link ResourceSelector.Kind#PATH_EXACT} in task arguments and in tool replies.
+     */
+    private static final String PATH_EXACT = "path_exact";
+    /**
+     * Wire name of {@link ResourceSelector.Kind#PATH_SUBTREE} in task arguments and in tool replies.
+     */
+    private static final String PATH_SUBTREE = "path_subtree";
 
     /** Utility class; these rules are exposed through static operations. */
     private McpTaskArguments() {
@@ -183,21 +191,17 @@ final class McpTaskArguments {
             if (!(item instanceof Map<?, ?> selector)) {
                 throw new IllegalArgumentException("review target selector must be an object");
             }
-            Object path = selector.get("path");
-            if (!(path instanceof String)) {
-                path = selector.get("relativePath");
-            }
-            if (!(path instanceof String value) || value.isBlank()) {
+            if (!(selectorPath(selector) instanceof String value) || value.isBlank()) {
                 throw new IllegalArgumentException("review target selector path is required");
             }
             Object rawKind = selector.get("kind");
-            String kind = rawKind == null ? "path_exact" : rawKind instanceof String kindValue ? kindValue.toLowerCase(Locale.ROOT) : null;
+            String kind = rawKind == null ? PATH_EXACT : kindName(rawKind);
             if (kind == null) {
                 throw new IllegalArgumentException("review target selector kind must be a string");
             }
             switch (kind) {
-                case "path_exact" -> selectors.add(ResourceSelector.pathExact(value));
-                case "path_subtree" -> selectors.add(ResourceSelector.pathSubtree(value));
+                case PATH_EXACT -> selectors.add(ResourceSelector.pathExact(value));
+                case PATH_SUBTREE -> selectors.add(ResourceSelector.pathSubtree(value));
                 default -> throw new IllegalArgumentException("unknown review target selector kind: " + rawKind);
             }
         }
@@ -222,17 +226,44 @@ final class McpTaskArguments {
         List<ResourceSelector> selectors = new ArrayList<>();
         for (Object item : claims) {
             if (item instanceof Map<?, ?> claim) {
-                Object path = claim.get("path");
-                if (!(path instanceof String)) {
-                    path = claim.get("relativePath");
-                }
-                String kind = claim.get("kind") instanceof String value ? value.toLowerCase(Locale.ROOT) : "path_exact";
-                if (path instanceof String value) {
-                    selectors.add("path_subtree".equals(kind) ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
+                if (selectorPath(claim) instanceof String value) {
+                    selectors.add(PATH_SUBTREE.equals(kindName(claim.get("kind"))) ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
                 }
             }
         }
         return List.copyOf(selectors);
+    }
+
+    /**
+     * Reads the path of one wire selector entry, accepting the provider-shaped {@code relativePath}
+     * spelling when {@code path} is not a string.
+     *
+     * @param selector one entry of a {@code claims} or {@code reviewTargets} array
+     * @return the path value, or whatever non-string was supplied, or {@code null} when absent
+     */
+    private static Object selectorPath(Map<?, ?> selector) {
+        Object path = selector.get("path");
+        return path instanceof String ? path : selector.get("relativePath");
+    }
+
+    /**
+     * Reads the kind of one wire selector entry.
+     *
+     * @param rawKind the {@code kind} value of the entry
+     * @return the lower-cased kind text, or {@code null} when the value is not a string
+     */
+    private static String kindName(Object rawKind) {
+        return rawKind instanceof String text ? text.toLowerCase(Locale.ROOT) : null;
+    }
+
+    /**
+     * Returns the wire kind name of a selector, the inverse of the kind handling in task parsing.
+     *
+     * @param selector typed resource selector
+     * @return {@code path_exact} or {@code path_subtree}
+     */
+    static String wireKind(ResourceSelector selector) {
+        return selector.kind() == ResourceSelector.Kind.PATH_EXACT ? PATH_EXACT : PATH_SUBTREE;
     }
 
     /**

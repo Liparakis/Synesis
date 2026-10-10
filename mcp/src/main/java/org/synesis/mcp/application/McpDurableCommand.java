@@ -1,8 +1,7 @@
 package org.synesis.mcp.application;
 
 import static org.synesis.mcp.application.McpToolArguments.isStrictInteger;
-import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
-import static org.synesis.mcp.application.McpToolArguments.optionalStringArgument;
+import static org.synesis.mcp.application.McpToolArguments.validationSnapshotSelector;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -147,16 +146,12 @@ final class McpDurableCommand {
             agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
         } else {
             try {
-                String validationHandle = optionalStringArgument(arguments, "capabilityRequestHandle");
-                Long rawRevision = optionalLongArgument(arguments, "implementationRevision", 1);
-                if (rawRevision != null && rawRevision > Integer.MAX_VALUE) {
-                    throw new IllegalArgumentException("invalid implementationRevision");
-                }
+                var snapshot = validationSnapshotSelector(arguments);
                 AgentResponse validationCommand = validationSnapshotAccessService.runCommand(activeProjectRoot,
                         provider,
                         connectionInstanceId,
-                        validationHandle,
-                        rawRevision == null ? null : rawRevision.intValue(),
+                        snapshot.capabilityRequestHandle(),
+                        snapshot.implementationRevision(),
                         argv,
                         workingDirectory,
                         timeoutSeconds);

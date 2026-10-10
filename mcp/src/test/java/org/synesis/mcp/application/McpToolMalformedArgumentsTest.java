@@ -2,7 +2,6 @@ package org.synesis.mcp.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,9 +32,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  * coordination schema and the payload checks the handler enforces. These tests record current
  * behavior, including behavior that looks accidental; they are not a statement that it is right.
  *
- * <p>Arguments and expected bodies are written with {@code '} for {@code "}. The envelope is
- * compared byte for byte except where the production code builds it from {@code Map.of} with more
- * than one key, whose iteration order changes from one JVM run to the next.</p>
+ * <p>Arguments and expected bodies are written with {@code '} for {@code "}. Envelopes are compared
+ * byte for byte.</p>
  */
 class McpToolMalformedArgumentsTest {
 
@@ -88,15 +86,10 @@ class McpToolMalformedArgumentsTest {
         return handler.handleMessage(q("{'jsonrpc':'2.0','id':7,'method':'tools/call','params':{'name':'" + tool + "','arguments':" + arguments + "}}"));
     }
 
-    private static String textFrame(String text, boolean typeFirst) {
-        String item = typeFirst ? "{'type':'text','text':'" + text + "'}" : "{'text':'" + text + "','type':'text'}";
-        return q("{'jsonrpc':'2.0','id':7,'result':{'content':[" + item + "]}}");
-    }
-
-    /** Asserts the frame carries exactly this body text, in either order of the envelope's two item keys. */
+    /** Asserts the frame is exactly the text envelope around this body. */
     private static void assertText(String expectedBody, String frame) {
         String escaped = q(expectedBody).replace("\"", "\\\"");
-        assertTrue(frame.equals(textFrame(escaped, true)) || frame.equals(textFrame(escaped, false)), frame);
+        assertEquals(q("{'jsonrpc':'2.0','id':7,'result':{'content':[{'type':'text','text':'" + escaped + "'}]}}"), frame);
     }
 
     @SuppressWarnings("unchecked")
@@ -119,9 +112,6 @@ class McpToolMalformedArgumentsTest {
         return "{'status':'blocked','reason':'policy_denied','nextAction':'" + nextAction + "','result':{'" + key + "':'" + value + "'}}";
     }
 
-    private static final String LONG_CAST_FRAME = "{\"jsonrpc\":\"2.0\",\"id\":7,\"error\":{\"code\":-32603,\"message\":\"Internal error: class java.lang.Long cannot be cast to class java.lang.String "
-            + "(java.lang.Long and java.lang.String are in module java.base of loader 'bootstrap')\"}}";
-
     @Test
     void readFileIgnoresWrongTypedWindowArguments() {
         String baseline = call(bound, "read_file", "{'path':'README.md'}");
@@ -143,10 +133,10 @@ class McpToolMalformedArgumentsTest {
         assertText("{'status':'retry_required','reason':'patch_precondition_required','nextAction':'retry'}", call(bound, "apply_patch", "{'path':'README.md','edits':['x']}"));
     }
 
-    /** Records current behavior: the cast failure escapes as a JSON-RPC error rather than a tool result. */
     @Test
-    void applyPatchNonStringFindEscapesAsAnInternalError() {
-        assertEquals(LONG_CAST_FRAME, call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':5,'replace':'a','expectedOccurrences':1}]}"));
+    void applyPatchRejectsAnEditWhoseFindOrReplaceIsNotAString() {
+        assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':5,'replace':'a','expectedOccurrences':1}]}"));
+        assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':true,'expectedOccurrences':1}]}"));
     }
 
     @Test
@@ -175,10 +165,9 @@ class McpToolMalformedArgumentsTest {
         }
     }
 
-    /** Records current behavior: the cast failure escapes as a JSON-RPC error; finish_lane answers the same mistake with a tool result. */
     @Test
-    void cancelLaneNonStringReasonEscapesAsAnInternalError() {
-        assertEquals(LONG_CAST_FRAME, call(bound, "cancel_lane", "{'reason':5}"));
+    void cancelLaneReportsANonStringReasonAsInvalidArguments() {
+        assertText(denied("reason", "INVALID_CANCEL_LANE_ARGUMENTS", "request_human_help"), call(bound, "cancel_lane", "{'reason':5}"));
     }
 
     @Test
@@ -215,18 +204,23 @@ class McpToolMalformedArgumentsTest {
         assertText(denied("error", "COORDINATION_FIELD_NOT_ALLOWED:x", help), call(bound, "request_coordination", "{'kind':'collaboration_status','payload':{'x':1}}"));
         assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'proposal':'p'}}"));
         assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':null,'proposal':'p'}}"));
-        // A wrong-typed UUID passes the schema checks and surfaces the Java exception text, with a different next action.
-        assertText(denied("error", "Invalid UUID string: 5", "retry"), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':5,'proposal':'p'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':5,'proposal':'p'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':'x','proposal':'p'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:claimEpoch", help),
+                call(bound, "request_coordination", "{'kind':'continuation','payload':{'intentId':'00000000-0000-0000-0000-000000000001','claimEpoch':'1'}}"));
     }
 
-    /** Records current behavior: a JSON null required key is accepted here, unlike request_coordination, and reaches the service as the text "null". */
     @Test
-    void respondCoordinationRejectsAMissingRequiredKeyButLetsNullThrough() {
+    void respondCoordinationRejectsAMissingOrNullRequiredKeyAndAWrongTypedField() {
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", "request_human_help"), call(bound, "respond_coordination", "{}"));
         assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:capabilityRequestHandle", "request_human_help"),
                 call(bound, "respond_coordination", "{'kind':'capability_response','payload':{'response':'accept','contractRevision':1}}"));
-        assertText("{'status':'blocked','reason':'request_not_found','nextAction':'retry'}",
+        assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:capabilityRequestHandle", "request_human_help"),
                 call(bound, "respond_coordination", "{'kind':'capability_response','payload':{'capabilityRequestHandle':null,'response':'accept','contractRevision':1}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:coordinationRequest", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'coordination_response','payload':{'coordinationRequest':5,'coordinationStatus':'ACCEPTED'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:implementationRevision", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'implementation_validation','payload':{'inboxItemId':'i','capabilityRequestHandle':'" + HANDLE + "','implementationRevision':'1','result':'inspect'}}"));
     }
 
     @Test
@@ -250,11 +244,8 @@ class McpToolMalformedArgumentsTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void anUnknownToolIsAToolErrorNamingTheInternalPrefix() {
-        Map<String, Object> result = (Map<String, Object>) ((Map<String, Object>) ProviderJson.parse(call(bound, "bogus", "{}"))).get("result");
-        assertEquals(Boolean.TRUE, result.get("isError"));
-        assertEquals(List.of(Map.of("type", "text", "text", "Unknown tool: synesis.bogus")), result.get("content"));
+        assertEquals(q("{'jsonrpc':'2.0','id':7,'result':{'content':[{'type':'text','text':'Unknown tool: synesis.bogus'}],'isError':true}}"), call(bound, "bogus", "{}"));
     }
 
     /**

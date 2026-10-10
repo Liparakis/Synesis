@@ -1,6 +1,8 @@
 package org.synesis.mcp.application;
 
 import static org.synesis.mcp.application.McpToolArguments.nullableStringList;
+import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
+import static org.synesis.mcp.application.McpToolArguments.optionalUuidArgument;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,11 +70,7 @@ final class McpCoordinationPayload {
             case "continuation" -> payload.containsKey("grantId") ? List.of("grantId", "intentId", "claimEpoch") : List.of("intentId", "claimEpoch");
             default -> List.of();
         };
-        for (String key : required) {
-            if (!payload.containsKey(key) || payload.get(key) == null) {
-                throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:" + key);
-            }
-        }
+        requireFields(payload, required, "COORDINATION_FIELD_REQUIRED:");
         if ("capability_request".equals(kind)) {
             boolean hasHandle = payload.containsKey("capabilityRequestHandle");
             boolean hasResponse = payload.containsKey("revisionResponse");
@@ -151,6 +149,7 @@ final class McpCoordinationPayload {
             normalized.putIfAbsent("collaborationSourceIntentId", payload.get("intentId"));
             normalized.putIfAbsent("claimEpoch", payload.get("claimEpoch"));
         }
+        requireTypedRequestFields(kind, payload);
         return normalized;
     }
 
@@ -192,11 +191,7 @@ final class McpCoordinationPayload {
             case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result");
             default -> List.of();
         };
-        for (String key : required) {
-            if (!payload.containsKey(key)) {
-                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_REQUIRED:" + key);
-            }
-        }
+        requireFields(payload, required, "COORDINATION_RESPONSE_FIELD_REQUIRED:");
         if ("review_validation".equals(kind)) {
             requireMatchingAlias(payload, "intentId", "reviewedIntentId");
             requireOptionalText(payload, "reviewedParticipantId");
@@ -234,10 +229,98 @@ final class McpCoordinationPayload {
                 throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
             }
         }
+        requireTypedResponseFields(kind, payload);
         Map<String, Object> normalized = new LinkedHashMap<>();
         normalized.put("kind", kind);
         normalized.put("payload", payload);
         return normalized;
+    }
+
+    /**
+     * Requires every named payload key to be present and not JSON {@code null}.
+     *
+     * @param payload     request or response payload
+     * @param required    keys that must carry a value
+     * @param errorPrefix rejection code, completed with the first missing key
+     * @throws IllegalArgumentException when a required key is missing or {@code null}
+     */
+    private static void requireFields(Map<String, Object> payload, List<String> required, String errorPrefix) {
+        for (String key : required) {
+            if (payload.get(key) == null) {
+                throw new IllegalArgumentException(errorPrefix + key);
+            }
+        }
+    }
+
+    /**
+     * Rejects a request field that dispatch reads as an identifier or number but that holds another type.
+     *
+     * @param kind    validated request kind
+     * @param payload request payload whose required fields are present
+     * @throws IllegalArgumentException with {@code COORDINATION_FIELD_INVALID:<key>} for the first bad field
+     */
+    private static void requireTypedRequestFields(String kind, Map<String, Object> payload) {
+        switch (kind) {
+            case "contract_proposal" -> requireUuid(payload, "contractId");
+            case "contract_request" -> requireUuid(payload, "conflictingIntentId");
+            case "scope_revision", "handoff" -> requireUuid(payload, "intentId");
+            case "work_group_create" -> requireUuid(payload, "workGroupId");
+            case "work_group_join" -> {
+                requireUuid(payload, "intentId");
+                if (payload.containsKey("grantId")) {
+                    requireUuid(payload, "grantId");
+                    requireInteger(payload, "claimEpoch");
+                }
+            }
+            case "continuation" -> {
+                // A blank grant is read as no grant.
+                if (!(payload.get("grantId") instanceof String grantId && grantId.isBlank())) {
+                    requireUuid(payload, "grantId");
+                }
+                requireUuid(payload, "intentId");
+                requireInteger(payload, "claimEpoch");
+            }
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Rejects a response field that dispatch reads as an identifier or number but that holds another type.
+     *
+     * @param kind    validated response kind
+     * @param payload response payload whose required fields are present
+     * @throws IllegalArgumentException with {@code COORDINATION_FIELD_INVALID:<key>} for the first bad field
+     */
+    private static void requireTypedResponseFields(String kind, Map<String, Object> payload) {
+        switch (kind) {
+            case "coordination_response" -> requireUuid(payload, "coordinationRequest");
+            case "inbox_acknowledge", "inbox_resolve" -> requireUuid(payload, "inboxItemId");
+            case "implementation_validation" -> requireInteger(payload, "implementationRevision");
+            case "review_validation" -> {
+                requireUuid(payload, "grantId");
+                requireUuid(payload, "intentId");
+                requireInteger(payload, "claimEpoch");
+            }
+            default -> {
+            }
+        }
+    }
+
+    private static void requireUuid(Map<String, Object> payload, String key) {
+        try {
+            optionalUuidArgument(payload, key);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + key, invalid);
+        }
+    }
+
+    private static void requireInteger(Map<String, Object> payload, String key) {
+        try {
+            optionalLongArgument(payload, key, 1);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + key, invalid);
+        }
     }
 
     private static void requirePositiveRevision(Object value, String field) {

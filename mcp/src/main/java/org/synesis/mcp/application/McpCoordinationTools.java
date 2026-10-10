@@ -7,7 +7,8 @@ import static org.synesis.mcp.application.McpCoordinationPayload.normalizeStrict
 import static org.synesis.mcp.application.McpCoordinationPayload.normalizeStrictResponse;
 import static org.synesis.mcp.application.McpCoordinationPayload.parseContract;
 import static org.synesis.mcp.application.McpCoordinationPayload.parseReviewPolicy;
-import static org.synesis.mcp.application.McpIntegrationCheckEvidence.testsPassed;
+import static org.synesis.mcp.application.McpJsonRpcResponses.object;
+import static org.synesis.mcp.application.McpJsonRpcResponses.policyDenied;
 import static org.synesis.mcp.application.McpToolArguments.optionalBooleanArgument;
 import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
 import static org.synesis.mcp.application.McpToolArguments.optionalStringArgument;
@@ -25,7 +26,6 @@ import java.util.UUID;
 import org.synesis.coordination.application.ContinuationResult;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
-import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -44,8 +44,6 @@ import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
 import org.synesis.workspace.application.integration.ImplementationValidationService;
-import org.synesis.workspace.application.integration.IntegrationCompatibilityService;
-import org.synesis.workspace.application.integration.WorkspaceIntegrationReadinessService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 
@@ -173,25 +171,11 @@ final class McpCoordinationTools {
         try {
             completionRequested = optionalBooleanArgument(arguments, "completionRequested");
         } catch (IllegalArgumentException invalidCompletionRequest) {
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "INVALID_COMPLETION_REQUEST"));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_COMPLETION_REQUEST");
             return agentResponse;
         }
         if (arguments != null && arguments.get("integrationCheck") instanceof Map<?, ?> check) {
-            try {
-                String head = String.valueOf(check.get("controlHead"));
-                String base = String.valueOf(check.get("base"));
-                List<String> paths = strings(check.get("paths"));
-                List<String> claims = strings(check.get("claims"));
-                var snapshot = new IntegrationCompatibilityService.SnapshotInput("mcp-candidate", base, paths, claims.stream().map(ResourceSelector::pathExact).toList(), List.of(), List.of());
-                var result = new WorkspaceIntegrationReadinessService().check(new IntegrationCompatibilityService.CheckRequest(head, List.of(snapshot), List.of(), testsPassed(check)));
-                List<String> failureCodes = result.failures().stream().map(Enum::name).toList();
-                agentResponse = new AgentResponse(result.accepted() ? AgentStatus.COMPLETED : AgentStatus.BLOCKED,
-                        result.accepted() ? null : AgentReason.INTEGRATION_CONFLICT,
-                        result.accepted() ? null : AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("accepted", result.accepted(), "failures", failureCodes, "actions", result.actions()));
-            } catch (Exception failure) {
-                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
-            }
+            agentResponse = McpIntegrationCheckEvidence.check(check);
         } else {
             reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
             NextActionRequest nextReq = new NextActionRequest(activeProjectRoot, provider, connectionInstanceId, completionRequested);
@@ -214,13 +198,13 @@ final class McpCoordinationTools {
     AgentResponse requestCoordination(Map<String, Object> arguments, Path activeProjectRoot) {
         AgentResponse agentResponse;
         if (arguments == null || !arguments.containsKey("kind")) {
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD");
             return agentResponse;
         }
         try {
             arguments = normalizeStrictCoordination(arguments);
         } catch (IllegalArgumentException failure) {
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
             return agentResponse;
         }
         String collaborationOperation = (String) arguments.get("collaborationOperation");
@@ -229,8 +213,7 @@ final class McpCoordinationTools {
                 if ("capability_request".equals(collaborationOperation)) {
                     CapabilityContract contract = parseContract(arguments.get("contract"));
                     if (contract == null) {
-                        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                                Map.of("error", "CAPABILITY_CONTRACT_INVALID"));
+                        agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", "CAPABILITY_CONTRACT_INVALID");
                         return agentResponse;
                     }
                     agentResponse = capabilityRequestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(activeProjectRoot,
@@ -253,14 +236,14 @@ final class McpCoordinationTools {
                         yield status;
                     }
                     case "publish" -> {
-                        UUID contractId = UUID.fromString(String.valueOf(arguments.get("collaborationContractId")));
+                        UUID contractId = optionalUuidArgument(arguments, "collaborationContractId");
                         String body = String.valueOf(arguments.getOrDefault("collaborationBody", ""));
-                        List<String> selectors = arguments.get("collaborationSelectors") instanceof List<?> values ? values.stream().filter(String.class::isInstance).map(String.class::cast).toList() : List.of();
+                        List<String> selectors = strings(arguments.get("collaborationSelectors"));
                         var contract = collaborationService.publishContract(activeProjectRoot, provider, connectionInstanceId, contractId, body, selectors);
                         yield Map.of("contract", contractMap(contract));
                     }
                     case "request_coordination" -> {
-                        UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
+                        UUID intentId = optionalUuidArgument(arguments, "collaborationIntentId");
                         CoordinationRequest.Kind kind = CoordinationRequest.Kind.valueOf(String.valueOf(arguments.getOrDefault("collaborationRequestKind", "CONTRACT")).toUpperCase(Locale.ROOT));
                         String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
                         var request = collaborationService.request(activeProjectRoot,
@@ -273,37 +256,36 @@ final class McpCoordinationTools {
                         yield Map.of("request", requestMap(request));
                     }
                     case "handoff" -> {
-                        UUID intentId = UUID.fromString(String.valueOf(arguments.get("collaborationIntentId")));
+                        UUID intentId = optionalUuidArgument(arguments, "collaborationIntentId");
                         String target = String.valueOf(arguments.get("collaborationTarget"));
                         String proposal = String.valueOf(arguments.getOrDefault("collaborationProposal", ""));
                         var request = collaborationService.handoff(activeProjectRoot, provider, connectionInstanceId, intentId, target, proposal);
                         yield Map.of("request", requestMap(request));
                     }
                     case "work_group_create" -> {
-                        UUID groupId = UUID.fromString(String.valueOf(arguments.get("workGroupId")));
+                        UUID groupId = optionalUuidArgument(arguments, "workGroupId");
                         collaborationService.createWorkGroup(activeProjectRoot,
                                 groupId,
                                 String.valueOf(arguments.getOrDefault("collaborationGoal", "")),
                                 String.valueOf(arguments.getOrDefault("collaborationAcceptance", "")),
                                 parseReviewPolicy(arguments.get("reviewPolicy")));
-                        yield Map.of("workGroupId", groupId.toString(), "status", "ACTIVE");
+                        yield object("workGroupId", groupId.toString(), "status", "ACTIVE");
                     }
                     case "lane_grant_consume" -> {
-                        UUID grantId = UUID.fromString(String.valueOf(arguments.get("grantId")));
+                        UUID grantId = optionalUuidArgument(arguments, "grantId");
                         var callerBinding = authorityResolver.resolveReview(new ProjectApplicationService().locate(activeProjectRoot), provider, connectionInstanceId);
                         String callerParticipant = WorkspaceCollaborationService.participantHandle(callerBinding.sessionId());
                         collaborationService.consumeLaneGrant(activeProjectRoot,
                                 grantId,
                                 callerParticipant,
-                                UUID.fromString(String.valueOf(arguments.get("intentId"))),
-                                ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue());
-                        yield Map.of("grantId", grantId.toString(), "status", "CONSUMED");
+                                optionalUuidArgument(arguments, "intentId"),
+                                optionalLongArgument(arguments, "claimEpoch", 1));
+                        yield object("grantId", grantId.toString(), "status", "CONSUMED");
                     }
                     case "continuation" -> {
-                        Object rawGrantId = arguments.get("grantId");
-                        UUID grantId = rawGrantId == null || String.valueOf(rawGrantId).isBlank() ? null : UUID.fromString(String.valueOf(rawGrantId));
-                        UUID sourceIntentId = UUID.fromString(String.valueOf(arguments.get("collaborationSourceIntentId")));
-                        long epoch = ((Number) arguments.getOrDefault("claimEpoch", 1)).longValue();
+                        UUID grantId = arguments.get("grantId") instanceof String blank && blank.isBlank() ? null : optionalUuidArgument(arguments, "grantId");
+                        UUID sourceIntentId = optionalUuidArgument(arguments, "collaborationSourceIntentId");
+                        long epoch = optionalLongArgument(arguments, "claimEpoch", 1);
                         ContinuationResult continuationOutcome = collaborationService.continueLane(activeProjectRoot, provider, connectionInstanceId, grantId, sourceIntentId, epoch);
                         Map<String, Object> continuationResult = new LinkedHashMap<>();
                         if (grantId != null) {
@@ -322,7 +304,7 @@ final class McpCoordinationTools {
                 agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, result);
                 return agentResponse;
             } catch (Exception failure) {
-                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("error", failure.getMessage()));
+                agentResponse = policyDenied(AgentNextAction.RETRY, "error", failure.getMessage());
                 return agentResponse;
             }
         }
@@ -345,30 +327,29 @@ final class McpCoordinationTools {
                 @SuppressWarnings("unchecked") Map<String, Object> payload = (Map<String, Object>) strict.get("payload");
                 switch (kind) {
                     case "implementation_validation" -> {
-                        List<String> failedTests = payload.get("failedAcceptanceTests") instanceof List<?> list ? list.stream().filter(String.class::isInstance).map(String.class::cast).toList() : List.of();
+                        List<String> failedTests = strings(payload.get("failedAcceptanceTests"));
                         agentResponse = validationService.validateImplementation(new ImplementationValidationService.ValidateRequest(activeProjectRoot,
                                 provider,
                                 connectionInstanceId,
                                 String.valueOf(payload.get("capabilityRequestHandle")),
                                 String.valueOf(payload.get("result")),
                                 payload.get("reason") == null ? null : String.valueOf(payload.get("reason")),
-                                ((Number) payload.get("implementationRevision")).intValue(),
+                                optionalLongArgument(payload, "implementationRevision", 1).intValue(),
                                 failedTests));
                     }
                     case "review_validation" -> agentResponse = reviewValidationService.validate(new ReviewValidationService.ValidateRequest(activeProjectRoot,
                             provider,
                             connectionInstanceId,
-                            UUID.fromString(String.valueOf(payload.get("grantId"))),
+                            optionalUuidArgument(payload, "grantId"),
                             String.valueOf(payload.get("snapshotId")),
-                            UUID.fromString(String.valueOf(payload.get("intentId"))),
-                            ((Number) payload.get("claimEpoch")).longValue(),
+                            optionalUuidArgument(payload, "intentId"),
+                            optionalLongArgument(payload, "claimEpoch", 1),
                             String.valueOf(payload.get("result")),
                             payload.get("reason") == null ? null : String.valueOf(payload.get("reason"))));
                     case "capability_response" -> {
                         CapabilityContract revision = parseContract(payload.get("revision"));
                         if ("revise".equals(payload.get("response")) && revision == null) {
-                            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                                    Map.of("error", "CAPABILITY_REVISION_INVALID"));
+                            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", "CAPABILITY_REVISION_INVALID");
                             break;
                         }
                         agentResponse = capabilityResponseService.respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(activeProjectRoot,
@@ -378,20 +359,20 @@ final class McpCoordinationTools {
                                 String.valueOf(payload.get("response")),
                                 revision,
                                 payload.get("reason") == null ? null : String.valueOf(payload.get("reason")),
-                                ((Number) payload.get("contractRevision")).longValue()));
+                                optionalLongArgument(payload, "contractRevision", 1)));
                     }
                     case "coordination_response" -> {
                         CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(String.valueOf(payload.get("coordinationStatus")));
                         collaborationService.respond(activeProjectRoot,
                                 provider,
                                 connectionInstanceId,
-                                UUID.fromString(String.valueOf(payload.get("coordinationRequest"))),
+                                optionalUuidArgument(payload, "coordinationRequest"),
                                 status,
                                 String.valueOf(payload.getOrDefault("proposal", "")));
-                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("coordinationRequest", payload.get("coordinationRequest"), "status", status.name()));
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, object("coordinationRequest", payload.get("coordinationRequest"), "status", status.name()));
                     }
                     case "inbox_acknowledge", "inbox_resolve" -> {
-                        UUID itemId = UUID.fromString(String.valueOf(payload.get("inboxItemId")));
+                        UUID itemId = optionalUuidArgument(payload, "inboxItemId");
                         boolean resolve = "inbox_resolve".equals(kind);
                         if (resolve) {
                             CoordinationRequest.Status status = CoordinationRequest.Status.valueOf(String.valueOf(payload.get("resolution")));
@@ -399,17 +380,17 @@ final class McpCoordinationTools {
                         } else {
                             collaborationService.acknowledgeInbox(activeProjectRoot, provider, connectionInstanceId, itemId);
                         }
-                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("inboxItemId", itemId.toString(), "acknowledged", true, "resolved", resolve));
+                        agentResponse = new AgentResponse(AgentStatus.COMPLETED, null, null, object("inboxItemId", itemId.toString(), "acknowledged", true, "resolved", resolve));
                     }
                     default -> throw new IllegalArgumentException("unknown coordination response kind");
                 }
                 return agentResponse;
             } catch (Exception failure) {
-                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", failure.getMessage()));
+                agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
                 return agentResponse;
             }
         }
-        agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"));
+        agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD");
         return agentResponse;
     }
 
@@ -433,8 +414,7 @@ final class McpCoordinationTools {
             if (reqHandle == null || reqHandle.isBlank()) {
                 agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
             } else if (contractRevision == null || intentId == null || claimEpoch == null || expectedTreeHash == null || expectedTreeHash.isBlank()) {
-                agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("reason", "CAPABILITY_PUBLICATION_EVIDENCE_REQUIRED"));
+                agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "CAPABILITY_PUBLICATION_EVIDENCE_REQUIRED");
             } else {
                 ImplementationPublicationService.PublishRequest pubReq = new ImplementationPublicationService.PublishRequest(activeProjectRoot,
                         provider,
@@ -448,10 +428,7 @@ final class McpCoordinationTools {
                 agentResponse = publicationService.publishImplementation(pubReq);
             }
         } catch (IllegalArgumentException invalidPublication) {
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED,
-                    AgentReason.POLICY_DENIED,
-                    AgentNextAction.REQUEST_HUMAN_HELP,
-                    Map.of("reason", "CAPABILITY_PUBLICATION_EVIDENCE_INVALID"));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "CAPABILITY_PUBLICATION_EVIDENCE_INVALID");
         }
         return agentResponse;
     }
@@ -489,7 +466,7 @@ final class McpCoordinationTools {
                     terminalSession);
             agentResponse = taskCompletionService.completeTask(completeReq);
         } catch (IllegalArgumentException invalidFinish) {
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", "INVALID_FINISH_LANE_ARGUMENTS"));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_FINISH_LANE_ARGUMENTS");
         }
         return agentResponse;
     }
@@ -503,7 +480,12 @@ final class McpCoordinationTools {
      */
     AgentResponse cancelLane(Map<String, Object> arguments, Path activeProjectRoot) {
         AgentResponse agentResponse;
-        String reason = arguments != null ? (String) arguments.get("reason") : null;
+        String reason;
+        try {
+            reason = optionalStringArgument(arguments, "reason");
+        } catch (IllegalArgumentException invalidReason) {
+            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_CANCEL_LANE_ARGUMENTS");
+        }
         CancelTaskRequest cancelReq = new CancelTaskRequest(activeProjectRoot, provider, connectionInstanceId, reason);
         agentResponse = taskCancellationService.cancelTask(cancelReq);
         return agentResponse;

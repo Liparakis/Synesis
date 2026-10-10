@@ -1,8 +1,7 @@
 package org.synesis.mcp.application;
 
-import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
-import static org.synesis.mcp.application.McpToolArguments.optionalStringArgument;
 import static org.synesis.mcp.application.McpToolArguments.stringArgument;
+import static org.synesis.mcp.application.McpToolArguments.validationSnapshotSelector;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -73,11 +72,7 @@ final class McpWorkspaceTools {
         Integer endLine = (arguments != null && arguments.get("endLine") instanceof Number n) ? n.intValue() : null;
         Integer maxBytes = (arguments != null && arguments.get("maxBytes") instanceof Number n) ? n.intValue() : null;
         try {
-            String validationHandle = optionalStringArgument(arguments, "capabilityRequestHandle");
-            Long rawRevision = optionalLongArgument(arguments, "implementationRevision", 1);
-            if (rawRevision != null && rawRevision > Integer.MAX_VALUE) {
-                throw new IllegalArgumentException("invalid implementationRevision");
-            }
+            var snapshot = validationSnapshotSelector(arguments);
             ReadRequest readReq = new ReadRequest(activeProjectRoot,
                     provider,
                     connectionInstanceId,
@@ -85,8 +80,8 @@ final class McpWorkspaceTools {
                     startLine,
                     endLine,
                     maxBytes,
-                    validationHandle,
-                    rawRevision == null ? null : rawRevision.intValue());
+                    snapshot.capabilityRequestHandle(),
+                    snapshot.implementationRevision());
             agentResponse = readService.readFile(readReq);
         } catch (IllegalArgumentException invalidValidationEvidence) {
             agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
@@ -112,11 +107,14 @@ final class McpWorkspaceTools {
         if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
             for (Object item : editsList) {
                 if (item instanceof Map<?, ?> editMap) {
-                    String find = (String) editMap.get("find");
-                    String replace = (String) editMap.get("replace");
+                    Object find = editMap.get("find");
+                    Object replace = editMap.get("replace");
+                    if (find != null && !(find instanceof String) || replace != null && !(replace instanceof String)) {
+                        return AgentResponse.blocked(AgentReason.INVALID_PATH);
+                    }
                     int expectedOccurrences = (editMap.get("expectedOccurrences") instanceof Number n) ? n.intValue() : 0;
                     if (find != null && replace != null && expectedOccurrences >= 1) {
-                        patchEdits.add(new PatchEdit(find, replace, expectedOccurrences));
+                        patchEdits.add(new PatchEdit((String) find, (String) replace, expectedOccurrences));
                     }
                 }
             }

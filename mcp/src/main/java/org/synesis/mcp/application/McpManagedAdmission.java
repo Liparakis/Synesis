@@ -1,10 +1,9 @@
 package org.synesis.mcp.application;
 
-import static org.synesis.mcp.application.McpJsonRpcResponses.createResultResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.errorTextResultResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.object;
 
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -168,8 +167,7 @@ final class McpManagedAdmission {
             case PROOF_REQUIRED -> "managed_attachment_proof_required";
             case ACTIVE, REVIEW_ONLY, REJECTED -> "managed_attachment_rejected";
         };
-        Map<String, Object> text = Map.of("status", "blocked", "reason", reason);
-        return createResultResponse(id, Map.of("content", List.of(Map.of("type", "text", "text", ProviderJson.write(text))), "isError", true));
+        return errorTextResultResponse(id, ProviderJson.write(object("status", "blocked", "reason", reason)));
     }
 
     /**

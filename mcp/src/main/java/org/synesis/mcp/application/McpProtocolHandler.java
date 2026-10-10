@@ -2,6 +2,9 @@ package org.synesis.mcp.application;
 
 import static org.synesis.mcp.application.McpJsonRpcResponses.createErrorResponse;
 import static org.synesis.mcp.application.McpJsonRpcResponses.createResultResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.errorTextResultResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.manualAttestationRequiredResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.policyDenied;
 import static org.synesis.mcp.application.McpJsonRpcResponses.textResultResponse;
 import static org.synesis.mcp.application.McpTaskArguments.taskField;
 
@@ -611,11 +614,7 @@ public final class McpProtocolHandler {
         if (sessionEstablishment.isSessionBound() && !exactCompletedNoChangeReplay) {
             try {
                 if (collaborationService.recoveryFenced(projectRoots.activeProjectRoot(), provider, connectionInstanceId)) {
-                    AgentResponse fenced = new AgentResponse(AgentStatus.BLOCKED,
-                            AgentReason.POLICY_DENIED,
-                            AgentNextAction.REQUEST_HUMAN_HELP,
-                            Map.of("reason", "SESSION_EPOCH_FENCED"));
-                    return textResultResponse(id, fenced.toJson());
+                    return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_EPOCH_FENCED").toJson());
                 }
             } catch (Exception failure) {
                 // A lane that completed has no active binding left to fence, and its agent's
@@ -624,11 +623,7 @@ public final class McpProtocolHandler {
                 boolean closingRead = name.equals(TOOL_PREFIX + McpToolCatalog.GET_NEXT_ACTION) && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
                 if (!closingRead) {
                     System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
-                    AgentResponse unavailable = new AgentResponse(AgentStatus.BLOCKED,
-                            AgentReason.POLICY_DENIED,
-                            AgentNextAction.REQUEST_HUMAN_HELP,
-                            Map.of("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE"));
-                    return textResultResponse(id, unavailable.toJson());
+                    return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_RECOVERY_STATE_UNAVAILABLE").toJson());
                 }
             }
         }
@@ -639,7 +634,7 @@ public final class McpProtocolHandler {
                 Map<String, Object> details = new LinkedHashMap<>();
                 details.put("manual", attestation.reason());
                 details.put("authorityReductionAllowed", true);
-                return textResultResponse(id, "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"details\":" + ProviderJson.write(details) + "}");
+                return manualAttestationRequiredResponse(id, details);
             }
         }
 
@@ -657,9 +652,7 @@ public final class McpProtocolHandler {
             case TOOL_PREFIX + McpToolCatalog.FINISH_LANE -> agentResponse = coordinationTools.finishLane(arguments, projectRoots.activeProjectRoot());
             case TOOL_PREFIX + McpToolCatalog.CANCEL_LANE -> agentResponse = coordinationTools.cancelLane(arguments, projectRoots.activeProjectRoot());
             default -> {
-                Map<String, Object> textContent = Map.of("type", "text", "text", "Unknown tool: " + name);
-                Map<String, Object> result = Map.of("content", List.of(textContent), "isError", true);
-                return createResultResponse(id, result);
+                return errorTextResultResponse(id, "Unknown tool: " + name);
             }
         }
 

@@ -1,10 +1,14 @@
 package org.synesis.mcp.application;
 
+import static org.synesis.mcp.application.McpJsonRpcResponses.claimsRejectedResponse;
+import static org.synesis.mcp.application.McpJsonRpcResponses.object;
+import static org.synesis.mcp.application.McpJsonRpcResponses.policyDenied;
 import static org.synesis.mcp.application.McpJsonRpcResponses.textResultResponse;
 import static org.synesis.mcp.application.McpTaskArguments.claimsFieldSpecified;
 import static org.synesis.mcp.application.McpTaskArguments.parseClaimSelectors;
 import static org.synesis.mcp.application.McpTaskArguments.parseTaskIntent;
 import static org.synesis.mcp.application.McpTaskArguments.taskField;
+import static org.synesis.mcp.application.McpTaskArguments.wireKind;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -159,13 +163,13 @@ final class McpSessionEstablishment {
             taskIntent = parseTaskIntent(arguments);
         } catch (IllegalArgumentException invalidTask) {
             String reason = "TASK_FIELDS_MUST_BE_NESTED".equals(invalidTask.getMessage()) ? "TASK_FIELDS_MUST_BE_NESTED" : "INVALID_TASK_INTENT";
-            agentResponse = new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", reason));
+            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", reason);
             return textResultResponse(id, agentResponse.toJson());
         }
         boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
 
         if (!parseClaimSelectors(arguments).isEmpty() && !manualService.attest(provider).valid()) {
-            return textResultResponse(id, "{\"status\":\"blocked\",\"reason\":\"manual_attestation_required\",\"claims\":\"REJECTED\"}");
+            return claimsRejectedResponse(id);
         }
 
         SessionResolutionRequest resolutionRequest = new SessionResolutionRequest(activeProjectRoot, provider, connectionInstanceId, taskIntent, refresh, managedAdmission);
@@ -198,13 +202,10 @@ final class McpSessionEstablishment {
                         agentResponse = new AgentResponse(AgentStatus.READY,
                                 null,
                                 AgentNextAction.RETRY,
-                                Map.of("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
+                                object("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
                     }
                 } catch (Exception repairFailure) {
-                    agentResponse = new AgentResponse(AgentStatus.BLOCKED,
-                            AgentReason.POLICY_DENIED,
-                            AgentNextAction.REQUEST_HUMAN_HELP,
-                            Map.of("reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage()));
+                    agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
                 }
             }
             List<ResourceSelector> selectors = parseClaimSelectors(arguments);
@@ -243,7 +244,7 @@ final class McpSessionEstablishment {
                     if (!claimResult.acquired()) {
                         Map<String, Object> details = new LinkedHashMap<>();
                         details.put("conflicts",
-                                claimResult.conflicts().stream().map(conflict -> Map.of("participant",
+                                claimResult.conflicts().stream().map(conflict -> object("participant",
                                         conflict.participant(),
                                         "intent",
                                         conflict.intentId(),
@@ -310,7 +311,7 @@ final class McpSessionEstablishment {
         return new AgentResponse(AgentStatus.BLOCKED,
                 AgentReason.POLICY_DENIED,
                 AgentNextAction.ENSURE_SESSION,
-                Map.of("reason", "REVIEW_CLAIM_REQUIRED", "message", "A reviewer must explicitly claim a disjoint report or test path; " + "reviewTargets identify evidence to inspect but do not grant ownership."));
+                object("reason", "REVIEW_CLAIM_REQUIRED", "message", "A reviewer must explicitly claim a disjoint report or test path; " + "reviewTargets identify evidence to inspect but do not grant ownership."));
     }
 
     private static boolean isScopeExtensionFailure(String message) {
@@ -335,24 +336,18 @@ final class McpSessionEstablishment {
                 selectors.add(selector);
             }
         }
-        task.put("claims", selectors.stream().map(selector -> Map.of("kind",
-                selector.kind() == ResourceSelector.Kind.PATH_EXACT ? "path_exact" : "path_subtree",
-                "path",
-                selector.value())).toList());
+        task.put("claims", selectors.stream().map(McpSessionEstablishment::wireSelector).toList());
         java.util.LinkedHashSet<String> dependencies = new java.util.LinkedHashSet<>(current.knownDependencies());
         dependencies.addAll(requested.knownDependencies());
         task.put("knownDependencies", List.copyOf(dependencies));
         if (!current.reviewTargetSelectors().isEmpty()) {
-            task.put("reviewTargets", current.reviewTargetSelectors().stream().map(selector -> Map.of("kind",
-                    selector.kind() == ResourceSelector.Kind.PATH_EXACT ? "path_exact" : "path_subtree",
-                    "path",
-                    selector.value())).toList());
+            task.put("reviewTargets", current.reviewTargetSelectors().stream().map(McpSessionEstablishment::wireSelector).toList());
         }
         Map<String, Object> arguments = Map.of("task", task);
         return new AgentResponse(AgentStatus.BLOCKED,
                 AgentReason.POLICY_DENIED,
                 AgentNextAction.ENSURE_SESSION,
-                Map.of("reason",
+                object("reason",
                         "SCOPE_EXTENSION_PRECONDITION_REQUIRED",
                         "recommendedTool",
                         "ensure_session",
@@ -361,7 +356,11 @@ final class McpSessionEstablishment {
                         "nextProtocolKind",
                         "ensure_session",
                         "nextProtocolPayload",
-                        Map.of("tool", "ensure_session", "arguments", arguments)));
+                        object("tool", "ensure_session", "arguments", arguments)));
+    }
+
+    private static Map<String, Object> wireSelector(ResourceSelector selector) {
+        return object("kind", wireKind(selector), "path", selector.value());
     }
 
     /**
