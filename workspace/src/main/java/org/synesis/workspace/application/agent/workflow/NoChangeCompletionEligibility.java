@@ -42,7 +42,7 @@ final class NoChangeCompletionEligibility {
         Objects.requireNonNull(worktree, "worktree");
         Objects.requireNonNull(snapshotService, "snapshotService");
         if (intent == null) {
-            return denied("NO_ACTIVE_INTENT");
+            return denied(NextActionProtocol.REASON_NO_ACTIVE_INTENT);
         }
         if (!intent.participant().equals(participant)) {
             return denied("NO_CHANGE_PARTICIPANT_MISMATCH");
@@ -55,10 +55,10 @@ final class NoChangeCompletionEligibility {
         }
         WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
         if (group == null) {
-            return denied("WORK_GROUP_NOT_FOUND");
+            return denied(NextActionProtocol.REASON_WORK_GROUP_NOT_FOUND);
         }
         if (group.status() != WorkGroup.Status.ACTIVE) {
-            return denied("WORK_GROUP_NOT_ACTIVE");
+            return denied(NextActionProtocol.REASON_WORK_GROUP_NOT_ACTIVE);
         }
         try {
             if (!snapshotService.isCleanWorktree(worktree)) {
@@ -68,10 +68,10 @@ final class NoChangeCompletionEligibility {
             return denied("NO_CHANGE_WORKSPACE_UNVERIFIED");
         }
         if (store.taskCompletionProjection().allSnapshots().stream().anyMatch(snapshot -> snapshot.provenance().laneId().equals(intent.intentId()) && snapshot.provenance().claimEpoch() == intent.version())) {
-            return denied("NO_CHANGE_SNAPSHOT_OBLIGATION");
+            return denied(NextActionProtocol.REASON_NO_CHANGE_SNAPSHOT_OBLIGATION);
         }
         if (store.taskCompletionProjection().allPrepared().stream().anyMatch(prepared -> prepared.laneId().equals(intent.intentId()) && prepared.claimEpoch() == intent.version())) {
-            return denied("NO_CHANGE_SNAPSHOT_OBLIGATION");
+            return denied(NextActionProtocol.REASON_NO_CHANGE_SNAPSHOT_OBLIGATION);
         }
         for (LaneGrant grant : store.workGroupProjection().grants()) {
             if (!grant.workGroupId().equals(intent.workGroupId())) {
@@ -94,7 +94,7 @@ final class NoChangeCompletionEligibility {
             }
         }
         if (hasPendingCapability(store, nodeId, supervisorId, workerId)
-                || AgentReviewActionProjection.ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
+                || CapabilityActionProjection.ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
                 || !store.capabilityRequestProjection().allValidationContexts().isEmpty()) {
             return denied("NO_CHANGE_DEPENDENCY_PENDING");
         }

@@ -206,7 +206,7 @@ final class ReviewLaneProjection {
         result.put("revisionRequired", true);
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         result.put("rejectedSnapshot", CollaborationResponseMapper.snapshotMap(rejected, store));
-        result.put("latestRejectedSnapshotId", rejected.snapshotId());
+        result.put(NextActionKeys.LATEST_REJECTED_SNAPSHOT_ID, rejected.snapshotId());
         result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
         result.put(NextActionKeys.CLAIM_EPOCH, intent.version());
         result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, intent.authorityLineageId().toString());
@@ -261,7 +261,7 @@ final class ReviewLaneProjection {
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
             result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
             result.put(NextActionKeys.CLAIM_EPOCH, intent.version());
-            putNextProtocol(result, NextActionProtocol.ACTION_WAIT, "review_validation", reviewPendingPayload(intent, snapshot, participantId));
+            putNextProtocol(result, NextActionProtocol.ACTION_WAIT, NextActionProtocol.KIND_REVIEW_VALIDATION, reviewPendingPayload(intent, snapshot, participantId));
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
         }
         return null;
@@ -270,7 +270,7 @@ final class ReviewLaneProjection {
     /** Builds the exact wait payload for the lane and immutable snapshot awaiting review. */
     private static Map<String, Object> reviewPendingPayload(WorkIntent intent, TaskSnapshotRecord snapshot, String participantId) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("snapshotId", snapshot.snapshotId());
+        payload.put(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId());
         payload.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
         payload.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
         payload.put(NextActionKeys.CLAIM_EPOCH, intent.version());
@@ -390,13 +390,13 @@ final class ReviewLaneProjection {
     /** Builds the wait payload that admits the reviewer for the exact grant epoch. */
     private static Map<String, Object> reviewGrantPendingPayload(LaneGrant grant, WorkIntent intent) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("grantId", grant.grantId().toString());
+        payload.put(NextActionKeys.GRANT_ID, grant.grantId().toString());
         payload.put(NextActionKeys.WORK_GROUP_ID, grant.workGroupId().toString());
         payload.put(NextActionKeys.INTENT_ID, grant.targetIntentId().toString());
-        payload.put("reviewedIntentId", grant.targetIntentId().toString());
-        payload.put("reviewedParticipantId", intent.participant());
+        payload.put(NextActionKeys.REVIEWED_INTENT_ID, grant.targetIntentId().toString());
+        payload.put(NextActionKeys.REVIEWED_PARTICIPANT_ID, intent.participant());
         payload.put(NextActionKeys.CLAIM_EPOCH, grant.claimEpoch());
-        payload.put("targetParticipant", grant.targetParticipant());
+        payload.put(NextActionKeys.TARGET_PARTICIPANT, grant.targetParticipant());
         payload.put(NextActionKeys.REVIEWER_PARTICIPANT, grant.targetParticipant());
         payload.put("snapshotRequired", true);
         return payload;
@@ -436,7 +436,7 @@ final class ReviewLaneProjection {
     private static Map<String, Object> ownerReviewDecision(List<Map<String, Object>> pending) {
         return Map.of("required",
                 true,
-                "tool",
+                NextActionKeys.TOOL,
                 NextActionProtocol.ACTION_RESPOND_COORDINATION,
                 "field",
                 "coordinationStatus",
@@ -445,7 +445,7 @@ final class ReviewLaneProjection {
                 "optionalFields",
                 List.of("proposal"),
                 "responseTemplates",
-                pending.stream().map(item -> Map.of("kind", "coordination_response", "payload", Map.of("coordinationRequest", item.get("requestId")))).toList(),
+                pending.stream().map(item -> Map.of(NextActionKeys.KIND, NextActionProtocol.KIND_COORDINATION_RESPONSE, NextActionKeys.PAYLOAD, Map.of("coordinationRequest", item.get(NextActionKeys.REQUEST_ID)))).toList(),
                 "instruction",
                 "Choose an owned request template and supply coordinationStatus after judgment; " + "the template is not executable until that decision is filled.");
     }

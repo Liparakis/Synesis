@@ -58,8 +58,6 @@ final class LaneCompletionProjection {
             CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
             CapabilityLifecycleState.VALIDATING);
 
-    private static final String IMPLEMENTATION_AWAITING_VALIDATION = "IMPLEMENTATION_AWAITING_VALIDATION";
-
     /**
      * Reason reported while an owner's proposed contract is inside its answer period.
      */
@@ -118,20 +116,20 @@ final class LaneCompletionProjection {
                     String base = snapshotService.snapshotBaseForBoundWorktree(lane.worktree(), intent.baseCommit(), lane.baseCommit());
                     String tree = snapshotService.capabilityPublicationTreeHash(lane.worktree(), base, intent.selectors(), foreignClaims(store, lane.participantId()));
                     Map<String, Object> payload = new LinkedHashMap<>();
-                    payload.put("capabilityRequestHandle", request.handle().value());
-                    payload.put("contractRevision", request.contractRevision());
-                    payload.put("intentId", intent.intentId().toString());
-                    payload.put("claimEpoch", intent.version());
+                    payload.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, request.handle().value());
+                    payload.put(NextActionKeys.CONTRACT_REVISION, request.contractRevision());
+                    payload.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
+                    payload.put(NextActionKeys.CLAIM_EPOCH, intent.version());
                     payload.put("expectedTreeHash", tree);
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.putAll(payload);
-                    result.put("nextProtocolPayload", payload);
+                    result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
                     return new AgentResponse(AgentStatus.READY, AgentReason.SNAPSHOT_PUBLICATION_REQUIRED,
                             AgentNextAction.PUBLISH_CAPABILITY_IMPLEMENTATION, result);
                 } catch (Exception failure) {
                     logSuppressed("capability publication inspection", failure);
                     return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP,
-                            Map.of("reason", "CAPABILITY_PUBLICATION_NOT_READY", "capabilityRequestHandle", request.handle().value(),
+                            Map.of(NextActionKeys.REASON, "CAPABILITY_PUBLICATION_NOT_READY", NextActionKeys.CAPABILITY_REQUEST_HANDLE, request.handle().value(),
                                     "detail", Objects.toString(failure.getMessage(), failure.getClass().getSimpleName())));
                 }
             }
@@ -160,7 +158,7 @@ final class LaneCompletionProjection {
             return null;
         }
         for (WorkIntent intent : store.collaborationProjection().activeIntents()) {
-            if (!isProducerLane(intent, participantId) || AgentReviewActionProjection.hasUnresolvedCapabilityObligation(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId())) {
+            if (!isProducerLane(intent, participantId) || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId())) {
                 continue;
             }
             TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).orElse(null);
@@ -232,7 +230,7 @@ final class LaneCompletionProjection {
                 continue;
             }
             Publishability publishability = inspectScopedPublishableChanges(snapshotService, lane.worktree(), intent, participantClaims, foreignClaims, lane.baseCommit());
-            if (publishability != Publishability.PUBLISHABLE || !reviewRequirementSatisfied(store, intent, participantId) || AgentReviewActionProjection.hasUnresolvedCapabilityObligation(store,
+            if (publishability != Publishability.PUBLISHABLE || !reviewRequirementSatisfied(store, intent, participantId) || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store,
                     intent,
                     actor.nodeId(),
                     actor.supervisorId(),
@@ -263,7 +261,7 @@ final class LaneCompletionProjection {
                 .anyMatch(grant -> grant.workGroupId().equals(intent.workGroupId()) && grant.targetIntentId().equals(intent.intentId()) && grant.claimEpoch() == intent.version() && !grant.targetParticipant()
                         .equals(participantId) && !workGroups.grantSuperseded(grant.grantId()) && workGroups.grantConsumed(grant.grantId()));
         boolean mandatoryPolicyReview = workGroups.group(intent.workGroupId()).map(group -> group.reviewPolicy().mandatory()).orElse(false);
-        return reviewGrantConsumed || mandatoryPolicyReview || !AgentTaskCompletionService.reviewRequired(store, intent, participantId);
+        return reviewGrantConsumed || mandatoryPolicyReview || !AgentReviewActionProjection.reviewRequired(store, intent, participantId);
     }
 
     /**
@@ -434,13 +432,13 @@ final class LaneCompletionProjection {
         if (intent == null) {
             return null;
         }
-        List<CapabilityRequestRecord> unjudged = AgentReviewActionProjection.ownerImplementationsAwaitingVerdict(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId());
+        List<CapabilityRequestRecord> unjudged = CapabilityActionProjection.ownerImplementationsAwaitingVerdict(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId());
         if (unjudged.isEmpty()) {
             return null;
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, unjudged.getFirst().handle().value());
-        result.put(NextActionKeys.REASON, IMPLEMENTATION_AWAITING_VALIDATION);
+        result.put(NextActionKeys.REASON, NextActionProtocol.REASON_IMPLEMENTATION_AWAITING_VALIDATION);
         result.put(NextActionKeys.PENDING, unjudged.size());
         return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
     }
@@ -527,7 +525,7 @@ final class LaneCompletionProjection {
                 .toList();
         List<CapabilityRequestRecord> validated = owned.stream().filter(candidate -> candidate.state() == CapabilityLifecycleState.VALIDATED).toList();
         if (validated.isEmpty() || owned.stream().anyMatch(candidate -> OWNER_OPEN_STATES.contains(candidate.state()))
-                || AgentReviewActionProjection.hasUnresolvedCapabilityObligation(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId())) {
+                || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId())) {
             return null;
         }
         return CapabilityActionProjection.capabilityOwnerResponse(validated, AgentStatus.READY, null, null);

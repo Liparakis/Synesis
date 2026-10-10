@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -68,7 +69,7 @@ final class CapabilityActionProjection {
     /**
      * The one call that asks Synesis to project the caller's exact publication or finish action.
      */
-    private static final Map<String, Object> COMPLETION_REQUEST = Map.of("tool", "get_next_action", "arguments", Map.of("completionRequested", true));
+    private static final Map<String, Object> COMPLETION_REQUEST = Map.of(NextActionKeys.TOOL, NextActionProtocol.TOOL_GET_NEXT_ACTION, NextActionKeys.ARGUMENTS, Map.of(NextActionKeys.COMPLETION_REQUESTED, true));
 
     private CapabilityActionProjection() {
     }
@@ -177,7 +178,7 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.PENDING, intent.knownDependencies().size());
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         result.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
-        result.put("coordinationKind", "capability_request");
+        result.put("coordinationKind", NextActionProtocol.KIND_CAPABILITY_REQUEST);
         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 
@@ -230,12 +231,12 @@ final class CapabilityActionProjection {
     private static AgentResponse capabilityContractAmbiguity(String capability, List<CapabilityRequestRecord> records) {
         List<Map<String, Object>> candidates = records.stream().map(record -> Map.<String, Object>of(
                 NextActionKeys.CAPABILITY_REQUEST_HANDLE, record.handle().value(),
-                "contractRevision", record.contractRevision(),
+                NextActionKeys.CONTRACT_REVISION, record.contractRevision(),
                 NextActionKeys.CONTRACT, capabilityContractMap(record))).toList();
         return new AgentResponse(AgentStatus.BLOCKED,
                 AgentReason.POLICY_DENIED,
                 AgentNextAction.REQUEST_HUMAN_HELP,
-                Map.of("reason", "CAPABILITY_CONTRACT_AMBIGUOUS", NextActionKeys.CAPABILITY, capability, "acceptedContracts", candidates));
+                Map.of(NextActionKeys.REASON, "CAPABILITY_CONTRACT_AMBIGUOUS", NextActionKeys.CAPABILITY, capability, "acceptedContracts", candidates));
     }
 
     private static AgentResponse withResolvedDependencies(AgentResponse response,
@@ -301,7 +302,7 @@ final class CapabilityActionProjection {
         resolved.forEach((capability, record) -> dependencies.put(capability,
                 Map.of(NextActionKeys.CAPABILITY_REQUEST_HANDLE,
                         record.handle().value(),
-                        "contractRevision",
+                        NextActionKeys.CONTRACT_REVISION,
                         record.contractRevision(),
                         NextActionKeys.CONTRACT,
                         capabilityContractMap(record))));
@@ -332,7 +333,7 @@ final class CapabilityActionProjection {
             CapabilityRequestRecord first = validationRevisions.getFirst();
             Map<String, Object> result = new LinkedHashMap<>();
             result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, first.handle().value());
-            result.put("contractRevision", first.contractRevision());
+            result.put(NextActionKeys.CONTRACT_REVISION, first.contractRevision());
             result.put(NextActionKeys.REASON, Objects.requireNonNullElse(first.reason(), DEFAULT_REVISION_REASON));
             result.put(NextActionKeys.PENDING, validationRevisions.size());
             return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_FAILED, AgentNextAction.RESPOND_TO_VALIDATION_REVISION, result);
@@ -365,7 +366,7 @@ final class CapabilityActionProjection {
         CapabilityLifecycleState state = focus.state();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value());
-        result.put("contractRevision", focus.contractRevision());
+        result.put(NextActionKeys.CONTRACT_REVISION, focus.contractRevision());
 
         if (state == CapabilityLifecycleState.REVISION_REQUESTED) {
             Map<String, Object> contract = capabilityContractMap(focus);
@@ -378,11 +379,11 @@ final class CapabilityActionProjection {
             Map<String, Object> acceptPayload = new LinkedHashMap<>();
             acceptPayload.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value());
             acceptPayload.put(NextActionKeys.CAPABILITY, focus.capability());
-            acceptPayload.put("contractRevision", focus.contractRevision());
+            acceptPayload.put(NextActionKeys.CONTRACT_REVISION, focus.contractRevision());
             acceptPayload.put(NextActionKeys.CONTRACT, contract);
             acceptPayload.put("revisionResponse", "accept");
             result.put("revisionDecision", Map.of("required", true, "field", "revisionResponse", "allowedResults", List.of("accept", "counter", "cancel")));
-            result.put("acceptRevision", Map.of("tool", "request_coordination", "arguments", Map.of("kind", "capability_request", "payload", acceptPayload)));
+            result.put("acceptRevision", Map.of(NextActionKeys.TOOL, NextActionProtocol.ACTION_REQUEST_COORDINATION, NextActionKeys.ARGUMENTS, Map.of(NextActionKeys.KIND, NextActionProtocol.KIND_CAPABILITY_REQUEST, NextActionKeys.PAYLOAD, acceptPayload)));
             return new AgentResponse(AgentStatus.READY, AgentReason.REVISION_REQUIRED, AgentNextAction.REVISE_CAPABILITY_REQUEST, result);
         }
         if (state == CapabilityLifecycleState.ACCEPTED || state == CapabilityLifecycleState.IMPLEMENTING) {
@@ -398,25 +399,25 @@ final class CapabilityActionProjection {
             ImplementationRevisionRecord implementation = capabilities.findLatestImplementation(focus.handle().value()).orElse(null);
             int revision = implementation != null ? implementation.revisionNumber() : 1;
             String inboxItemId = UUID.nameUUIDFromBytes(("capability:" + focus.handle().value()).getBytes(StandardCharsets.UTF_8)).toString();
-            result.put("inboxItemId", inboxItemId);
+            result.put(NextActionKeys.INBOX_ITEM_ID, inboxItemId);
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, focus.authorityLineageId().toString());
             result.put(NextActionKeys.CONTRACT, capabilityContractMap(focus));
             result.put("revision", revision);
             if (implementation != null) {
-                result.put("implementation", Map.of("summary", implementation.summary(),
+                result.put("implementation", Map.of(NextActionKeys.SUMMARY, implementation.summary(),
                         "baseCommit", implementation.baseCommit(),
                         "commitSha", implementation.commitSha(),
                         "changedPaths", implementation.changedPaths()));
             }
             result.put(NextActionKeys.PENDING, pending.size());
             result.put(NextActionKeys.REVIEW_DECISION, Map.of("required", false, "field", "result", "allowedResults", List.of("inspect")));
-            result.put("nextProtocolKind", "implementation_validation");
-            result.put("nextProtocolPayload", Map.of("inboxItemId",
+            result.put(NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_IMPLEMENTATION_VALIDATION);
+            result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, Map.of(NextActionKeys.INBOX_ITEM_ID,
                     inboxItemId,
                     NextActionKeys.CAPABILITY_REQUEST_HANDLE,
                     focus.handle().value(),
-                    "implementationRevision",
+                    NextActionKeys.IMPLEMENTATION_REVISION,
                     revision,
                     "result",
                     "inspect"));
@@ -427,26 +428,26 @@ final class CapabilityActionProjection {
             ValidationContextRecord context = capabilities.findValidationContext(focus.handle()).orElse(null);
             if (implementation == null || context == null || context.revisionNumber() != implementation.revisionNumber() || !context.requesterSessionId().equals(actor.sessionId())) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP,
-                        Map.of("reason", "VALIDATION_CONTEXT_UNAVAILABLE", NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value()));
+                        Map.of(NextActionKeys.REASON, "VALIDATION_CONTEXT_UNAVAILABLE", NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value()));
             }
-            result.put("inboxItemId", UUID.nameUUIDFromBytes(("capability:" + focus.handle().value()).getBytes(StandardCharsets.UTF_8)).toString());
+            result.put(NextActionKeys.INBOX_ITEM_ID, UUID.nameUUIDFromBytes(("capability:" + focus.handle().value()).getBytes(StandardCharsets.UTF_8)).toString());
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, focus.authorityLineageId().toString());
             result.put(NextActionKeys.CONTRACT, capabilityContractMap(focus));
             result.put("revision", implementation.revisionNumber());
-            result.put("implementation", Map.of("summary", implementation.summary(),
+            result.put("implementation", Map.of(NextActionKeys.SUMMARY, implementation.summary(),
                     "baseCommit", implementation.baseCommit(),
                     "commitSha", implementation.commitSha(),
                     "changedPaths", implementation.changedPaths()));
             result.put(NextActionKeys.PENDING, pending.size());
-            result.put("validationWorkspaceAvailable", true);
+            result.put(NextActionKeys.VALIDATION_WORKSPACE_AVAILABLE, true);
             result.put(NextActionKeys.REVIEW_DECISION, Map.of("required", true,
                     "field", "result",
                     "allowedResults", List.of("accepted", "revision_required"),
                     "revisionReasonRequired", true));
-            result.put("validationEvidence", Map.of("toolFields", List.of(NextActionKeys.CAPABILITY_REQUEST_HANDLE, "implementationRevision"),
-                    "capabilityRequestHandle", focus.handle().value(),
-                    "implementationRevision", implementation.revisionNumber()));
+            result.put(NextActionKeys.VALIDATION_EVIDENCE, Map.of("toolFields", List.of(NextActionKeys.CAPABILITY_REQUEST_HANDLE, NextActionKeys.IMPLEMENTATION_REVISION),
+                    NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value(),
+                    NextActionKeys.IMPLEMENTATION_REVISION, implementation.revisionNumber()));
             return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, AgentNextAction.VALIDATE_IMPLEMENTATION, result);
         }
         if (state == CapabilityLifecycleState.REJECTED) {
@@ -494,14 +495,14 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, request.handle().value());
         result.put(NextActionKeys.CAPABILITY, request.capability());
         result.put(NextActionKeys.AUTHORITY_LINEAGE_ID, request.authorityLineageId().toString());
-        result.put("contractRevision", request.contractRevision());
+        result.put(NextActionKeys.CONTRACT_REVISION, request.contractRevision());
         result.put(NextActionKeys.CONTRACT, capabilityContractMap(request));
         if (request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING) {
             result.put("implementationPending", true);
-            result.put("completionRequest", COMPLETION_REQUEST);
+            result.put(NextActionKeys.COMPLETION_REQUEST, COMPLETION_REQUEST);
         } else if (request.state() == CapabilityLifecycleState.VALIDATED) {
-            result.put("implementationValidated", true);
-            result.put("completionRequest", COMPLETION_REQUEST);
+            result.put(NextActionKeys.IMPLEMENTATION_VALIDATED, true);
+            result.put(NextActionKeys.COMPLETION_REQUEST, COMPLETION_REQUEST);
         }
         result.put(NextActionKeys.PENDING, requests.size());
         return new AgentResponse(status, reason, action, result);
@@ -527,6 +528,74 @@ final class CapabilityActionProjection {
         contract.put("concurrency", request.contract().concurrency());
         contract.put("acceptanceTests", request.contract().acceptanceTests());
         return contract;
+    }
+
+    /**
+     * Returns whether the caller's declared capabilities or active capability requests still prevent
+     * completion of the exact intent.
+     *
+     * @param store        current durable projection
+     * @param intent       exact active intent
+     * @param nodeId       caller node identity
+     * @param supervisorId caller supervisor identity
+     * @param workerId     caller worker identity
+     * @return {@code true} when a declared or active capability obligation remains
+     */
+    static boolean hasUnresolvedCapabilityObligation(PredictionEventStore store, WorkIntent intent, String nodeId, String supervisorId, String workerId) {
+        if (intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return true;
+        }
+        var projection = store.capabilityRequestProjection();
+        // A request its owner superseded by finishing is no obligation of the requester: nothing
+        // was agreed, and the dependency is judged like one that was never requested.
+        List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId))
+                .filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
+        Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
+        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
+        if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {
+            return true;
+        }
+        return requesterRequests.stream().anyMatch(request -> request.state() != CapabilityLifecycleState.VALIDATED)
+                || ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
+                || !projection.allValidationContexts().isEmpty();
+    }
+
+    /**
+     * Finds implementations this exact owner lane has published that the requester has not yet
+     * accepted or sent back. While any exists the owner lane must stay open: only it can produce
+     * the revision a requester may still ask for.
+     */
+    static List<CapabilityRequestRecord> ownerImplementationsAwaitingVerdict(PredictionEventStore store,
+            WorkIntent intent,
+            String nodeId,
+            String supervisorId,
+            String workerId) {
+        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return List.of();
+        }
+        return store.capabilityRequestProjection().records().values().stream()
+                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
+                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
+                .filter(request -> request.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || request.state() == CapabilityLifecycleState.VALIDATING)
+                .toList();
+    }
+
+    /**
+     * Finds an accepted capability this exact owner lane still needs to publish.
+     */
+    static Optional<CapabilityRequestRecord> ownerImplementationPending(PredictionEventStore store,
+            WorkIntent intent,
+            String nodeId,
+            String supervisorId,
+            String workerId) {
+        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
+            return Optional.empty();
+        }
+        return store.capabilityRequestProjection().records().values().stream()
+                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
+                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
+                .filter(request -> request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING)
+                .findFirst();
     }
 
     private record LocalDependencyResolution(Map<String, CapabilityRequestRecord> records,

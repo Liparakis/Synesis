@@ -126,8 +126,6 @@ public record AgentResponse(AgentStatus status, AgentReason reason, AgentNextAct
                     mutation.put("path", path);
                     if (revision != null && !revision.isBlank()) {
                         mutation.put("revision", revision);
-                    }
-                    if (revision != null && !revision.isBlank()) {
                         mutation.put("changedFiles", changedFiles);
                     }
                     map.put("result", mutation);

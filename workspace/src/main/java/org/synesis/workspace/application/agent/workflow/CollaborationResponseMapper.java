@@ -22,20 +22,20 @@ public final class CollaborationResponseMapper {
 
     static Map<String, Object> intentMap(WorkIntent intent) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("intentId", intent.intentId().toString());
-        map.put("participant", intent.participant());
+        map.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
+        map.put(NextActionKeys.PARTICIPANT, intent.participant());
         map.put("provider", intent.provider());
         map.put("goal", intent.goal());
         map.put("acceptance", intent.acceptance());
-        map.put("selectors", intent.selectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
+        map.put(NextActionKeys.SELECTORS, intent.selectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
         map.put("version", intent.version());
-        map.put("claimEpoch", intent.version());
-        map.put("workGroupId", intent.workGroupId().toString());
-        map.put("authorityLineageId", intent.authorityLineageId().toString());
-        map.put("status", intent.status().name());
+        map.put(NextActionKeys.CLAIM_EPOCH, intent.version());
+        map.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
+        map.put(NextActionKeys.AUTHORITY_LINEAGE_ID, intent.authorityLineageId().toString());
+        map.put(NextActionKeys.STATUS, intent.status().name());
         map.put("role", intent.role().wireValue());
-        map.put("reviewTargets", intent.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
-        map.put("knownDependencies", intent.knownDependencies());
+        map.put(NextActionKeys.REVIEW_TARGETS, intent.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
+        map.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
         return map;
     }
 
@@ -59,7 +59,7 @@ public final class CollaborationResponseMapper {
         map.put("id", participant.id());
         map.put("provider", participant.provider());
         map.put("goal", participant.goal());
-        map.put("state", participant.state().name());
+        map.put(NextActionKeys.STATE, participant.state().name());
         map.put("lastVerifiedActivity", participant.lastVerifiedActivity());
         return map;
     }
@@ -74,27 +74,27 @@ public final class CollaborationResponseMapper {
         fields.put("requester", request.requester());
         fields.put("target", request.target());
         fields.put("conflictingIntentId", request.conflictingIntentId().toString());
-        fields.put("reviewedIntentId", request.conflictingIntentId().toString());
-        fields.put("reviewedParticipantId", request.target());
-        fields.put("reviewerParticipant", request.requester());
+        fields.put(NextActionKeys.REVIEWED_INTENT_ID, request.conflictingIntentId().toString());
+        fields.put(NextActionKeys.REVIEWED_PARTICIPANT_ID, request.target());
+        fields.put(NextActionKeys.REVIEWER_PARTICIPANT, request.requester());
     }
 
     static Map<String, Object> requestMap(CoordinationRequest request) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("requestId", request.requestId().toString());
-        map.put("inboxItemId", request.requestId().toString());
+        map.put(NextActionKeys.REQUEST_ID, request.requestId().toString());
+        map.put(NextActionKeys.INBOX_ITEM_ID, request.requestId().toString());
         appendRequestIdentityFields(map, request);
-        map.put("kind", request.kind().name());
+        map.put(NextActionKeys.KIND, request.kind().name());
         map.put("proposal", request.proposal());
         if (request.snapshotId() != null) {
-            map.put("snapshotId", request.snapshotId());
+            map.put(NextActionKeys.SNAPSHOT_ID, request.snapshotId());
         }
-        map.put("status", request.status().name());
+        map.put(NextActionKeys.STATUS, request.status().name());
         return map;
     }
 
     static Map<String, Object> workGroupMap(WorkGroup group) {
-        return Map.of("workGroupId",
+        return Map.of(NextActionKeys.WORK_GROUP_ID,
                 group.workGroupId().toString(),
                 "projectId",
                 group.projectId().toString(),
@@ -104,7 +104,7 @@ public final class CollaborationResponseMapper {
                 group.acceptance(),
                 "version",
                 group.version(),
-                "status",
+                NextActionKeys.STATUS,
                 group.status().name(),
                 "reviewPolicy",
                 Map.of("mandatory", group.reviewPolicy().mandatory(), "independenceRequired", group.reviewPolicy().independenceRequired()));
@@ -112,16 +112,16 @@ public final class CollaborationResponseMapper {
 
     static Map<String, Object> laneGrantMap(LaneGrant grant) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("grantId", grant.grantId().toString());
-        map.put("workGroupId", grant.workGroupId().toString());
+        map.put(NextActionKeys.GRANT_ID, grant.grantId().toString());
+        map.put(NextActionKeys.WORK_GROUP_ID, grant.workGroupId().toString());
         map.put("targetIntentId", grant.targetIntentId().toString());
-        map.put("reviewedIntentId", grant.targetIntentId().toString());
-        map.put("targetParticipant", grant.targetParticipant());
-        map.put("reviewerParticipant", grant.targetParticipant());
-        map.put("claimEpoch", grant.claimEpoch());
+        map.put(NextActionKeys.REVIEWED_INTENT_ID, grant.targetIntentId().toString());
+        map.put(NextActionKeys.TARGET_PARTICIPANT, grant.targetParticipant());
+        map.put(NextActionKeys.REVIEWER_PARTICIPANT, grant.targetParticipant());
+        map.put(NextActionKeys.CLAIM_EPOCH, grant.claimEpoch());
         map.put("singleUse", grant.singleUse());
         if (grant.snapshotId() != null) {
-            map.put("snapshotId", grant.snapshotId());
+            map.put(NextActionKeys.SNAPSHOT_ID, grant.snapshotId());
         }
         return map;
     }
@@ -129,12 +129,12 @@ public final class CollaborationResponseMapper {
     static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot, PredictionEventStore store) {
         Map<String, Object> map = new LinkedHashMap<>();
         appendSnapshotIdentityFields(map, snapshot);
-        map.put("workGroupId", snapshot.provenance().workGroupId().toString());
-        map.put("participant", snapshot.provenance().participant());
-        map.put("reviewRequired", snapshot.reviewRequired());
-        store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).ifPresent(state -> map.put("snapshotState", state.name()));
+        map.put(NextActionKeys.WORK_GROUP_ID, snapshot.provenance().workGroupId().toString());
+        map.put(NextActionKeys.PARTICIPANT, snapshot.provenance().participant());
+        map.put(NextActionKeys.REVIEW_REQUIRED, snapshot.reviewRequired());
+        store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).ifPresent(state -> map.put(NextActionKeys.SNAPSHOT_STATE, state.name()));
         store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId())
-                .ifPresent(decision -> map.put("reviewDecision", Map.of("grantId", decision.grantId().toString(), "snapshotId", decision.snapshotId(), "result", decision.result())));
+                .ifPresent(decision -> map.put(NextActionKeys.REVIEW_DECISION, Map.of(NextActionKeys.GRANT_ID, decision.grantId().toString(), NextActionKeys.SNAPSHOT_ID, decision.snapshotId(), "result", decision.result())));
         return map;
     }
 
@@ -146,17 +146,17 @@ public final class CollaborationResponseMapper {
      */
     public static void appendSnapshotIdentityFields(Map<String, Object> fields, TaskSnapshotRecord snapshot) {
         fields.put("taskId", snapshot.taskId().toString());
-        fields.put("snapshotId", snapshot.snapshotId());
+        fields.put(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId());
         fields.put("baseCommit", snapshot.baseCommit());
         fields.put("commitSha", snapshot.commitSha());
         fields.put("changedPaths", snapshot.changedPaths());
-        fields.put("summary", snapshot.summary());
+        fields.put(NextActionKeys.SUMMARY, snapshot.summary());
         fields.put("createdAtMillis", snapshot.createdAtMillis());
-        fields.put("laneId", snapshot.provenance().laneId().toString());
-        fields.put("claimEpoch", snapshot.provenance().claimEpoch());
+        fields.put(NextActionKeys.LANE_ID, snapshot.provenance().laneId().toString());
+        fields.put(NextActionKeys.CLAIM_EPOCH, snapshot.provenance().claimEpoch());
     }
 
     static Map<String, Object> selectorMap(ResourceSelector selector) {
-        return Map.of("kind", selector.kind().name(), "path", selector.value());
+        return Map.of(NextActionKeys.KIND, selector.kind().name(), "path", selector.value());
     }
 }

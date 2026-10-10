@@ -116,14 +116,14 @@ final class CollaborationView {
         result.put("grants", workGroups.grants().stream().map(CollaborationResponseMapper::laneGrantMap).toList());
         result.put("snapshots", store.taskCompletionProjection().allSnapshots().stream().map(snapshot -> CollaborationResponseMapper.snapshotMap(snapshot, store)).toList());
         result.put("currentParticipant", participantId);
-        result.put("currentIntent", currentIntent);
+        result.put(NextActionKeys.CURRENT_INTENT, currentIntent);
         result.put(NextActionKeys.PENDING_COORDINATION, enrichedPending);
         result.put(NextActionKeys.CONTINUATION_CANDIDATES, RecoveryContinuationProjection.continuationCandidates(store, participantId, callerProvider));
 
         List<Map<String, Object>> reviewCandidates = AgentReviewActionProjection.reviewCandidates(store);
         result.put("reviewCandidates", reviewCandidates);
         result.put(NextActionKeys.REVIEW_CANDIDATE_SELECTION_REQUIRED, !reviewCandidates.isEmpty());
-        result.put("actionableReviewCandidates", AgentReviewActionProjection.actionableReviewCandidates(store, participantId, reviewCandidates));
+        result.put(NextActionKeys.ACTIONABLE_REVIEW_CANDIDATES, AgentReviewActionProjection.actionableReviewCandidates(store, participantId, reviewCandidates));
         if (!reviewCandidates.isEmpty()) {
             result.put("reviewCandidateSelectionInstruction", "Choose an exact candidate explicitly; Synesis does not select one for you.");
         }
@@ -144,8 +144,8 @@ final class CollaborationView {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("workspace", ISOLATED);
         result.put(NextActionKeys.PENDING, pending);
-        result.put("participants", participants);
-        result.put("intents", intents);
+        result.put(NextActionKeys.PARTICIPANTS, participants);
+        result.put(NextActionKeys.INTENTS, intents);
         return result;
     }
 }

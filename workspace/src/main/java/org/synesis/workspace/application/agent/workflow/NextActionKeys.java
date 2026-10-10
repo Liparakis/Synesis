@@ -153,6 +153,191 @@ final class NextActionKeys {
     static final String AVAILABLE = "available";
 
     /**
+     * Tool a recommended or completion request names.
+     */
+    static final String TOOL = "tool";
+
+    /**
+     * Arguments passed to {@link #TOOL}.
+     */
+    static final String ARGUMENTS = "arguments";
+
+    /**
+     * Kind of a protocol payload, request, or resource selector.
+     */
+    static final String KIND = "kind";
+
+    /**
+     * Payload that accompanies a {@link #KIND}.
+     */
+    static final String PAYLOAD = "payload";
+
+    /**
+     * Identifier of an immutable snapshot.
+     */
+    static final String SNAPSHOT_ID = "snapshotId";
+
+    /**
+     * Revision of a negotiated capability contract.
+     */
+    static final String CONTRACT_REVISION = "contractRevision";
+
+    /**
+     * Identifier of the lane (intent) a completion refers to.
+     */
+    static final String LANE_ID = "laneId";
+
+    /**
+     * Identifier of an inbox item.
+     */
+    static final String INBOX_ITEM_ID = "inboxItemId";
+
+    /**
+     * Identifier of the intent under review.
+     */
+    static final String REVIEWED_INTENT_ID = "reviewedIntentId";
+
+    /**
+     * Participant whose work is under review.
+     */
+    static final String REVIEWED_PARTICIPANT_ID = "reviewedParticipantId";
+
+    /**
+     * Identifier of a coordination request.
+     */
+    static final String REQUEST_ID = "requestId";
+
+    /**
+     * Identifier of a lane grant.
+     */
+    static final String GRANT_ID = "grantId";
+
+    /**
+     * Participant a grant is addressed to.
+     */
+    static final String TARGET_PARTICIPANT = "targetParticipant";
+
+    /**
+     * Time after which recovery-held work may be taken over.
+     */
+    static final String RECOVERY_DEADLINE_EPOCH_MILLIS = "recoveryDeadlineEpochMillis";
+
+    /**
+     * Review candidates the caller may request admission to.
+     */
+    static final String ACTIONABLE_REVIEW_CANDIDATES = "actionableReviewCandidates";
+
+    /**
+     * Argument that asks for the exact finish projection.
+     */
+    static final String COMPLETION_REQUESTED = "completionRequested";
+
+    /**
+     * Ready-made call that asks for the exact finish projection.
+     */
+    static final String COMPLETION_REQUEST = "completionRequest";
+
+    /**
+     * Access the reviewer has to the reviewed snapshot.
+     */
+    static final String REVIEW_ACCESS = "reviewAccess";
+
+    /**
+     * Lifecycle state of a snapshot.
+     */
+    static final String SNAPSHOT_STATE = "snapshotState";
+
+    /**
+     * Outcome of the owner-defined validation run before publication.
+     */
+    static final String PRE_PUBLICATION_VALIDATION = "prePublicationValidation";
+
+    /**
+     * Outcome of sealing a session after its last completion.
+     */
+    static final String SESSION_TERMINATION = "sessionTermination";
+
+    /**
+     * Whether a validation workspace is available to the requester.
+     */
+    static final String VALIDATION_WORKSPACE_AVAILABLE = "validationWorkspaceAvailable";
+
+    /**
+     * Evidence a requester needs to validate an implementation.
+     */
+    static final String VALIDATION_EVIDENCE = "validationEvidence";
+
+    /**
+     * Snapshot of the latest rejected review.
+     */
+    static final String LATEST_REJECTED_SNAPSHOT_ID = "latestRejectedSnapshotId";
+
+    /**
+     * Whether a capability owner's implementation has been validated.
+     */
+    static final String IMPLEMENTATION_VALIDATED = "implementationValidated";
+
+    /**
+     * Selectors a reviewer declared as its review targets.
+     */
+    static final String REVIEW_TARGETS = "reviewTargets";
+
+    /**
+     * Optimistic version of a work group.
+     */
+    static final String WORK_GROUP_VERSION = "workGroupVersion";
+
+    /**
+     * Event-store head sequence a finish payload is fenced to.
+     */
+    static final String EXPECTED_REVISION = "expectedRevision";
+
+    /**
+     * Whether a snapshot is subject to review.
+     */
+    static final String REVIEW_REQUIRED = "reviewRequired";
+
+    /**
+     * Phase of a validation failure.
+     */
+    static final String PHASE = "phase";
+
+    /**
+     * Status of an intent or coordination request.
+     */
+    static final String STATUS = "status";
+
+    /**
+     * Participants of a collaboration projection.
+     */
+    static final String PARTICIPANTS = "participants";
+
+    /**
+     * Intents of a collaboration projection.
+     */
+    static final String INTENTS = "intents";
+
+    /**
+     * Revision number of a published capability implementation.
+     */
+    static final String IMPLEMENTATION_REVISION = "implementationRevision";
+
+    /**
+     * Stable identity of a workflow action.
+     */
+    static final String ACTION_ID = "actionId";
+
+    /**
+     * Delivery guarantee of a workflow action.
+     */
+    static final String DELIVERY = "delivery";
+
+    /**
+     * Whether the provider must acknowledge a workflow action.
+     */
+    static final String ACKNOWLEDGEMENT_REQUIRED = "acknowledgementRequired";
+
+    /**
      * Not instantiable.
      */
     private NextActionKeys() {

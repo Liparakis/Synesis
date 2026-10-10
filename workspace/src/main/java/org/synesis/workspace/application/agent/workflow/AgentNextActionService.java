@@ -4,6 +4,7 @@ import static org.synesis.workspace.application.agent.workflow.NextActionSupport
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.logSuppressed;
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.newEventStore;
 import static org.synesis.workspace.application.agent.workflow.NextActionSupport.openEventStore;
+import static org.synesis.workspace.application.agent.workflow.NextActionSupport.putResult;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -199,8 +200,8 @@ public final class AgentNextActionService {
                 || !(response.result() instanceof Map<?, ?> current)) {
             return response;
         }
-        Object handleValue = current.get("capabilityRequestHandle");
-        Object revisionValue = current.get("contractRevision");
+        Object handleValue = current.get(NextActionKeys.CAPABILITY_REQUEST_HANDLE);
+        Object revisionValue = current.get(NextActionKeys.CONTRACT_REVISION);
         if (!(handleValue instanceof String handle) || !(revisionValue instanceof Number revision)) {
             return response;
         }
@@ -235,8 +236,8 @@ public final class AgentNextActionService {
                 return response;
             }
             Map<String, Object> result = new LinkedHashMap<>();
-            current.forEach((key, value) -> result.put(String.valueOf(key), value));
-            result.put("recoveryDeadlineEpochMillis", deadline.getAsLong());
+            putResult(result, current, null);
+            result.put(NextActionKeys.RECOVERY_DEADLINE_EPOCH_MILLIS, deadline.getAsLong());
             result.put("intentionalRecoveryWait", true);
             return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
         } catch (Exception failure) {
@@ -407,7 +408,7 @@ public final class AgentNextActionService {
         return new AgentResponse(AgentStatus.FAILED,
                 AgentReason.INTERNAL_FAILURE,
                 AgentNextAction.REQUEST_HUMAN_HELP,
-                Map.of(NextActionKeys.REASON, "SESSION_TERMINAL_STATE_UNAVAILABLE",
+                Map.of(NextActionKeys.REASON, NextActionProtocol.REASON_SESSION_TERMINAL_STATE_UNAVAILABLE,
                         "causeType", cause.getClass().getSimpleName(),
                         "causeCode", DoctorFindingCode.classifyDurableStateFailure(cause).value()));
     }

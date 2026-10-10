@@ -156,7 +156,7 @@ final class LocalCoordinationFallback {
             return Optional.empty();
         }
         String type = (String) fields.get("type");
-        String capability = (String) fields.get("capability");
+        String capability = (String) fields.get(NextActionKeys.CAPABILITY);
         Map<String, Object> details = (Map<String, Object>) fields.get("details");
         if (details == null) {
             details = Map.of();

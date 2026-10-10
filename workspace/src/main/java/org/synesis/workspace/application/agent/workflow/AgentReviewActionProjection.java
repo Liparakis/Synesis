@@ -8,16 +8,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.UUID;
 
-import org.synesis.coordination.application.PeerDependencyPolicy;
-import org.synesis.coordination.application.RequesterAnswerPolicy;
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -99,13 +94,13 @@ final class AgentReviewActionProjection {
     }
 
     static boolean hasAvailableReviewerReviewContinuation(PredictionEventStore store, Map<String, Object> collaboration) {
-        Object projected = collaboration.get("continuationCandidates");
+        Object projected = collaboration.get(NextActionKeys.CONTINUATION_CANDIDATES);
         if (!(projected instanceof List<?> candidates)) {
             return false;
         }
         Set<String> availableReviewerIntents = new LinkedHashSet<>();
         for (Object value : candidates) {
-            if (value instanceof Map<?, ?> candidate && Boolean.TRUE.equals(candidate.get("available")) && "reviewer".equals(candidate.get("role")) && candidate.get("sourceIntentId") instanceof String intentId) {
+            if (value instanceof Map<?, ?> candidate && Boolean.TRUE.equals(candidate.get(NextActionKeys.AVAILABLE)) && "reviewer".equals(candidate.get("role")) && candidate.get(NextActionKeys.SOURCE_INTENT_ID) instanceof String intentId) {
                 availableReviewerIntents.add(intentId);
             }
         }
@@ -132,20 +127,20 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
             return null;
         }
         Map<String, Object> review = reviewActions.getFirst();
-        String protocolAction = String.valueOf(review.get("nextProtocolAction"));
+        String protocolAction = String.valueOf(review.get(NextActionKeys.NEXT_PROTOCOL_ACTION));
         AgentNextAction next = protocolNextAction(protocolAction);
         Map<String, Object> projection = new LinkedHashMap<>(collaboration);
         if (reviewOnly) {
             projection.put("reviewOnly", true);
         }
-        projection.put("nextProtocolAction", review.get("nextProtocolAction"));
-        projection.put("nextProtocolKind", review.get("nextProtocolKind"));
-        projection.put("nextProtocolPayload", review.get("nextProtocolPayload"));
-        if (review.containsKey("reviewDecision")) {
-            projection.put("reviewDecision", review.get("reviewDecision"));
+        projection.put(NextActionKeys.NEXT_PROTOCOL_ACTION, review.get(NextActionKeys.NEXT_PROTOCOL_ACTION));
+        projection.put(NextActionKeys.NEXT_PROTOCOL_KIND, review.get(NextActionKeys.NEXT_PROTOCOL_KIND));
+        projection.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, review.get(NextActionKeys.NEXT_PROTOCOL_PAYLOAD));
+        if (review.containsKey(NextActionKeys.REVIEW_DECISION)) {
+            projection.put(NextActionKeys.REVIEW_DECISION, review.get(NextActionKeys.REVIEW_DECISION));
         }
-        if (review.containsKey("reviewAccess")) {
-            projection.put("reviewAccess", review.get("reviewAccess"));
+        if (review.containsKey(NextActionKeys.REVIEW_ACCESS)) {
+            projection.put(NextActionKeys.REVIEW_ACCESS, review.get(NextActionKeys.REVIEW_ACCESS));
         }
         return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, next, projection);
     }
@@ -164,21 +159,21 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
                 continue;
             }
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("workGroupId", reviewer.workGroupId().toString());
-            payload.put("reviewerParticipant", participantId);
-            payload.put("reviewTargets", reviewer.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
-            payload.put("reason", "WAIT_FOR_ELIGIBLE_PRODUCER");
+            payload.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
+            payload.put(NextActionKeys.REVIEWER_PARTICIPANT, participantId);
+            payload.put(NextActionKeys.REVIEW_TARGETS, reviewer.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
+            payload.put(NextActionKeys.REASON, "WAIT_FOR_ELIGIBLE_PRODUCER");
 
             Map<String, Object> result = new LinkedHashMap<>();
-            result.put("state", "REVIEWER_PENDING");
+            result.put(NextActionKeys.STATE, "REVIEWER_PENDING");
             result.put("reviewerPending", true);
-            result.put("currentIntent", CollaborationResponseMapper.intentMap(reviewer));
-            result.put("workGroupId", reviewer.workGroupId().toString());
-            result.put("reviewerParticipant", participantId);
-            result.put("reviewTargets", reviewer.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
-            result.put("nextProtocolAction", "wait");
-            result.put("nextProtocolKind", "review_admission");
-            result.put("nextProtocolPayload", payload);
+            result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
+            result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
+            result.put(NextActionKeys.REVIEWER_PARTICIPANT, participantId);
+            result.put(NextActionKeys.REVIEW_TARGETS, reviewer.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
+            result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_WAIT);
+            result.put(NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_REVIEW_ADMISSION);
+            result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
         }
         return null;
@@ -189,7 +184,7 @@ static boolean hasMandatoryReviewCandidate(PredictionEventStore store, WorkInten
         if (!mandatory) {
             return false;
         }
-        Set<String> candidateIds = reviewCandidates(store).stream().filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get("workGroupId"))).map(candidate -> (String) candidate.get("snapshotId"))
+        Set<String> candidateIds = reviewCandidates(store).stream().filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get(NextActionKeys.WORK_GROUP_ID))).map(candidate -> (String) candidate.get(NextActionKeys.SNAPSHOT_ID))
                 .collect(Collectors.toSet());
         return store.taskCompletionProjection().allSnapshots().stream().filter(snapshot -> candidateIds.contains(snapshot.snapshotId())).anyMatch(snapshot -> reviewTargetsMatch(reviewer, snapshot));
     }
@@ -234,72 +229,79 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
                 .noneMatch(snapshot -> store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_PENDING);
     }
 
-/**
-     * Returns whether the caller's declared capabilities or active capability requests still prevent
-     * completion of the exact intent.
-     *
-     * @param store        current durable projection
-     * @param intent       exact active intent
-     * @param nodeId       caller node identity
-     * @param supervisorId caller supervisor identity
-     * @param workerId     caller worker identity
-     * @return {@code true} when a declared or active capability obligation remains
+    /**
+     * Determines whether this exact lane revision is subject to review authority.
      */
-    static boolean hasUnresolvedCapabilityObligation(PredictionEventStore store, WorkIntent intent, String nodeId, String supervisorId, String workerId) {
-        if (intent == null || nodeId == null || supervisorId == null || workerId == null) {
+    static boolean reviewRequired(PredictionEventStore store, WorkIntent intent, String participantHandle) {
+        if (intent.role() != WorkIntent.Role.PRODUCER) {
+            return false;
+        }
+        if (store.workGroupProjection().group(intent.workGroupId()).map(group -> group.reviewPolicy().mandatory()).orElse(false)) {
             return true;
         }
-        var projection = store.capabilityRequestProjection();
-        // A request its owner superseded by finishing is no obligation of the requester: nothing
-        // was agreed, and the dependency is judged like one that was never requested.
-        List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId))
-                .filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
-        Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
-        if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {
+        boolean exactGrant = store.workGroupProjection().grants().stream().filter(grant -> grantAppliesToIntent(store, grant, intent)).filter(grant -> !grant.targetParticipant().equals(participantHandle))
+                .filter(grant -> !store.workGroupProjection().grantSuperseded(grant.grantId()))
+                .anyMatch(grant -> store.workGroupProjection().grantAvailable(grant.grantId()) || store.workGroupProjection().grantConsumed(grant.grantId()));
+        if (exactGrant) {
             return true;
         }
-        return requesterRequests.stream().anyMatch(request -> request.state() != CapabilityLifecycleState.VALIDATED)
-                || ownerImplementationPending(store, intent, nodeId, supervisorId, workerId).isPresent()
-                || !projection.allValidationContexts().isEmpty();
+        boolean requested = store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(store, request.conflictingIntentId(), intent) && (
+                        request.status() == CoordinationRequest.Status.PENDING
+                                || request.status() == CoordinationRequest.Status.ACCEPTED));
+        if (requested) {
+            return true;
+        }
+        return store.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version()
+                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
     }
 
-    /**
-     * Finds implementations this exact owner lane has published that the requester has not yet
-     * accepted or sent back. While any exists the owner lane must stay open: only it can produce
-     * the revision a requester may still ask for.
-     */
-    static List<CapabilityRequestRecord> ownerImplementationsAwaitingVerdict(PredictionEventStore store,
-            WorkIntent intent,
-            String nodeId,
-            String supervisorId,
-            String workerId) {
-        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
-            return List.of();
+    private static boolean grantAppliesToIntent(PredictionEventStore store, LaneGrant grant, WorkIntent intent) {
+        if (!grant.workGroupId().equals(intent.workGroupId())) {
+            return false;
         }
-        return store.capabilityRequestProjection().records().values().stream()
-                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
-                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
-                .filter(request -> request.state() == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || request.state() == CapabilityLifecycleState.VALIDATING)
-                .toList();
+        boolean targetsCurrentIntent = grant.targetIntentId().equals(intent.intentId());
+        if (!targetsCurrentIntent && store.collaborationProjection().successorIntent(grant.targetIntentId()).isPresent()) {
+            // A late historical grant must not become review authority for the successor.  The
+            // continuation projection creates a current-epoch grant for the successor when needed.
+            return false;
+        }
+        if (targetsCurrentIntent) {
+            return grant.claimEpoch() == intent.version();
+        }
+        if (grant.claimEpoch() >= intent.version()) {
+            return false;
+        }
+        return succeededBy(store, grant.targetIntentId(), intent.intentId());
     }
 
-    /**
-     * Finds an accepted capability this exact owner lane still needs to publish.
-     */
-    static Optional<CapabilityRequestRecord> ownerImplementationPending(PredictionEventStore store,
-            WorkIntent intent,
-            String nodeId,
-            String supervisorId,
-            String workerId) {
-        if (store == null || intent == null || nodeId == null || supervisorId == null || workerId == null) {
-            return Optional.empty();
+    private static boolean requestAppliesToIntent(PredictionEventStore store, UUID historicalIntentId, WorkIntent intent) {
+        if (historicalIntentId.equals(intent.intentId())) {
+            return true;
         }
-        return store.capabilityRequestProjection().records().values().stream()
-                .filter(request -> request.matchesOwner(nodeId, supervisorId, workerId))
-                .filter(request -> request.authorityLineageId().equals(intent.authorityLineageId()))
-                .filter(request -> request.state() == CapabilityLifecycleState.ACCEPTED || request.state() == CapabilityLifecycleState.IMPLEMENTING)
-                .findFirst();
+        if (store.collaborationProjection().successorIntent(historicalIntentId).isPresent()) {
+            // Requests created after a continuation against the predecessor are stale; only the
+            // explicitly retargeted successor request remains actionable.
+            return false;
+        }
+        return succeededBy(store, historicalIntentId, intent.intentId());
+    }
+
+    /** Walks the successor chain from an earlier intent, bounded so a corrupt chain cannot loop. */
+    private static boolean succeededBy(PredictionEventStore store, UUID from, UUID successorId) {
+        UUID cursor = from;
+        for (int depth = 0; depth < 128; depth++) {
+            UUID successor = store.collaborationProjection().successorIntent(cursor).orElse(null);
+            if (successor == null) {
+                return false;
+            }
+            if (successor.equals(successorId)) {
+                return true;
+            }
+            cursor = successor;
+        }
+        return false;
     }
 
 /**
@@ -321,23 +323,23 @@ static AgentResponse pendingReviewRequestResponse(Map<String, Object> collaborat
             }
             Map<String, Object> requestProjection = enrichPendingRequest(CollaborationResponseMapper.requestMap(request), store);
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("requestId", request.requestId().toString());
-            payload.put("intentId", request.conflictingIntentId().toString());
+            payload.put(NextActionKeys.REQUEST_ID, request.requestId().toString());
+            payload.put(NextActionKeys.INTENT_ID, request.conflictingIntentId().toString());
             payload.put("target", request.target());
-            payload.put("status", request.status().name());
-            if (requestProjection.get("workGroupId") != null) {
-                payload.put("workGroupId", requestProjection.get("workGroupId"));
+            payload.put(NextActionKeys.STATUS, request.status().name());
+            if (requestProjection.get(NextActionKeys.WORK_GROUP_ID) != null) {
+                payload.put(NextActionKeys.WORK_GROUP_ID, requestProjection.get(NextActionKeys.WORK_GROUP_ID));
             }
-            if (requestProjection.get("claimEpoch") != null) {
-                payload.put("claimEpoch", requestProjection.get("claimEpoch"));
+            if (requestProjection.get(NextActionKeys.CLAIM_EPOCH) != null) {
+                payload.put(NextActionKeys.CLAIM_EPOCH, requestProjection.get(NextActionKeys.CLAIM_EPOCH));
             }
 
             Map<String, Object> result = new LinkedHashMap<>(collaboration);
             result.put("reviewRequestPending", true);
             result.put("reviewRequest", requestProjection);
-            result.put("nextProtocolAction", "wait");
-            result.put("nextProtocolKind", "review_admission");
-            result.put("nextProtocolPayload", payload);
+            result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_WAIT);
+            result.put(NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_REVIEW_ADMISSION);
+            result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
             result.put("instruction", "Poll get_next_action for the owner response; do not resubmit this request.");
             return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
         }
@@ -359,9 +361,9 @@ static Map<String, Object> enrichPendingRequest(Map<String, Object> request, Pre
         Object conflictingIntent = request.get("conflictingIntentId");
         if (conflictingIntent instanceof String intentId) {
             store.collaborationProjection().activeIntents().stream().filter(intent -> intent.intentId().toString().equals(intentId)).findFirst().ifPresent(intent -> {
-                enriched.put("intentId", intent.intentId().toString());
-                enriched.put("workGroupId", intent.workGroupId().toString());
-                enriched.put("claimEpoch", intent.version());
+                enriched.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
+                enriched.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
+                enriched.put(NextActionKeys.CLAIM_EPOCH, intent.version());
             });
         }
         return enriched;
@@ -369,13 +371,13 @@ static Map<String, Object> enrichPendingRequest(Map<String, Object> request, Pre
 
 static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pendingCoordination) {
         for (Map<String, Object> request : pendingCoordination) {
-            if (!"REVIEW".equals(request.get("kind"))) {
+            if (!"REVIEW".equals(request.get(NextActionKeys.KIND))) {
                 continue;
             }
-            Object requestId = request.get("requestId");
-            Object intentId = request.get("intentId");
-            Object workGroupId = request.get("workGroupId");
-            Object claimEpoch = request.get("claimEpoch");
+            Object requestId = request.get(NextActionKeys.REQUEST_ID);
+            Object intentId = request.get(NextActionKeys.INTENT_ID);
+            Object workGroupId = request.get(NextActionKeys.WORK_GROUP_ID);
+            Object claimEpoch = request.get(NextActionKeys.CLAIM_EPOCH);
             if (!(requestId instanceof String) || !(intentId instanceof String) || !(workGroupId instanceof String) || !(claimEpoch instanceof Number)) {
                 continue;
             }
@@ -384,14 +386,14 @@ static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pend
             payload.put("coordinationStatus", CoordinationRequest.Status.ACCEPTED.name());
             payload.put("proposal", "admitted");
             Map<String, Object> context = new LinkedHashMap<>();
-            context.put("requestId", requestId);
-            context.put("kind", request.get("kind"));
-            context.put("workGroupId", workGroupId);
-            context.put("intentId", intentId);
-            context.put("claimEpoch", claimEpoch);
+            context.put(NextActionKeys.REQUEST_ID, requestId);
+            context.put(NextActionKeys.KIND, request.get(NextActionKeys.KIND));
+            context.put(NextActionKeys.WORK_GROUP_ID, workGroupId);
+            context.put(NextActionKeys.INTENT_ID, intentId);
+            context.put(NextActionKeys.CLAIM_EPOCH, claimEpoch);
             context.put("requester", request.get("requester"));
             context.put("target", request.get("target"));
-            return Map.of("nextProtocolAction", "respond_coordination", "nextProtocolKind", "coordination_response", "nextProtocolPayload", payload, "nextProtocolContext", context);
+            return Map.of(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_RESPOND_COORDINATION, NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_COORDINATION_RESPONSE, NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload, "nextProtocolContext", context);
         }
         return null;
     }
@@ -438,19 +440,19 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
             }
             if (snapshot == null && !projection.grantAvailable(grant.grantId())) {
                 Map<String, Object> waiting = new LinkedHashMap<>();
-                waiting.put("state", "SNAPSHOT_PENDING");
-                waiting.put("nextProtocolAction", "wait");
-                waiting.put("nextProtocolKind", "review_validation");
-                waiting.put("nextProtocolPayload",
-                        Map.of("grantId",
+                waiting.put(NextActionKeys.STATE, "SNAPSHOT_PENDING");
+                waiting.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_WAIT);
+                waiting.put(NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_REVIEW_VALIDATION);
+                waiting.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD,
+                        Map.of(NextActionKeys.GRANT_ID,
                                 grant.grantId().toString(),
-                                "workGroupId",
+                                NextActionKeys.WORK_GROUP_ID,
                                 grant.workGroupId().toString(),
-                                "reviewedIntentId",
+                                NextActionKeys.REVIEWED_INTENT_ID,
                                 grant.targetIntentId().toString(),
-                                "reviewedParticipantId",
+                                NextActionKeys.REVIEWED_PARTICIPANT_ID,
                                 reviewedParticipant,
-                                "reviewerParticipant",
+                                NextActionKeys.REVIEWER_PARTICIPANT,
                                 grant.targetParticipant(),
                                 "snapshotRequired",
                                 true));
@@ -462,43 +464,43 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
                 continue;
             }
             Map<String, Object> action = new LinkedHashMap<>();
-            action.put("state", projection.grantAvailable(grant.grantId()) ? "GRANT_AVAILABLE" : "VALIDATION_REQUIRED");
-            action.put("nextProtocolAction", projection.grantAvailable(grant.grantId()) ? "request_coordination" : "review_decision");
-            action.put("nextProtocolKind", projection.grantAvailable(grant.grantId()) ? "work_group_join" : "review_validation");
+            action.put(NextActionKeys.STATE, projection.grantAvailable(grant.grantId()) ? "GRANT_AVAILABLE" : "VALIDATION_REQUIRED");
+            action.put(NextActionKeys.NEXT_PROTOCOL_ACTION, projection.grantAvailable(grant.grantId()) ? NextActionProtocol.ACTION_REQUEST_COORDINATION : NextActionProtocol.ACTION_REVIEW_DECISION);
+            action.put(NextActionKeys.NEXT_PROTOCOL_KIND, projection.grantAvailable(grant.grantId()) ? NextActionProtocol.KIND_WORK_GROUP_JOIN : NextActionProtocol.KIND_REVIEW_VALIDATION);
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("grantId", grant.grantId().toString());
-            payload.put("intentId", grant.targetIntentId().toString());
-            payload.put("reviewedIntentId", grant.targetIntentId().toString());
-            payload.put("reviewedParticipantId", reviewedParticipant);
-            payload.put("reviewerParticipant", grant.targetParticipant());
-            payload.put("claimEpoch", grant.claimEpoch());
+            payload.put(NextActionKeys.GRANT_ID, grant.grantId().toString());
+            payload.put(NextActionKeys.INTENT_ID, grant.targetIntentId().toString());
+            payload.put(NextActionKeys.REVIEWED_INTENT_ID, grant.targetIntentId().toString());
+            payload.put(NextActionKeys.REVIEWED_PARTICIPANT_ID, reviewedParticipant);
+            payload.put(NextActionKeys.REVIEWER_PARTICIPANT, grant.targetParticipant());
+            payload.put(NextActionKeys.CLAIM_EPOCH, grant.claimEpoch());
             if (snapshot != null) {
-                payload.put("snapshotId", snapshot.snapshotId());
+                payload.put(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId());
             }
             if (projection.grantAvailable(grant.grantId())) {
-                payload.put("workGroupId", grant.workGroupId().toString());
-                payload.put("targetParticipant", grant.targetParticipant());
+                payload.put(NextActionKeys.WORK_GROUP_ID, grant.workGroupId().toString());
+                payload.put(NextActionKeys.TARGET_PARTICIPANT, grant.targetParticipant());
             } else {
                 TaskSnapshotRecord reviewedSnapshot = Objects.requireNonNull(snapshot, "review snapshot");
-                action.put("reviewDecision", Map.of("required", true, "field", "result", "allowedResults", List.of("accepted", "rejected"), "rejectionReasonRequired", true));
-                action.put("reviewAccess",
+                action.put(NextActionKeys.REVIEW_DECISION, Map.of("required", true, "field", "result", "allowedResults", List.of("accepted", "rejected"), "rejectionReasonRequired", true));
+                action.put(NextActionKeys.REVIEW_ACCESS,
                         Map.of("workspace",
                                 "immutable_review_snapshot",
-                                "snapshotId",
+                                NextActionKeys.SNAPSHOT_ID,
                                 reviewedSnapshot.snapshotId(),
                                 "commitSha",
                                 snapshot.commitSha(),
                                 "readTools",
-                                List.of("read_file", "run_command"),
+                                List.of(NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_RUN_COMMAND),
                                 "writeLaneProtected",
                                 true,
                                 "instruction",
                                 "Inspect the immutable snapshot with read_file and run_command before deciding; do not patch it."));
             }
-            action.put("nextProtocolPayload", payload);
+            action.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
             action.put("grant", CollaborationResponseMapper.laneGrantMap(grant));
             if (snapshot != null) {
-                action.put("snapshot", CollaborationResponseMapper.snapshotMap(snapshot, store));
+                action.put(NextActionKeys.SNAPSHOT, CollaborationResponseMapper.snapshotMap(snapshot, store));
             }
             actions.add(action);
         }
@@ -557,18 +559,18 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
                     WorkIntent producer = source.producer();
                     Map<String, Object> metadata = new LinkedHashMap<>(CollaborationResponseMapper.snapshotMap(snapshot, store));
                     metadata.put("candidateState", "AVAILABLE");
-                    metadata.put("authorityLineageId", snapshot.provenance().authorityLineageId().toString());
+                    metadata.put(NextActionKeys.AUTHORITY_LINEAGE_ID, snapshot.provenance().authorityLineageId().toString());
                     metadata.put("reviewPolicy", Map.of("mandatory", group.reviewPolicy().mandatory(), "independenceRequired", group.reviewPolicy().independenceRequired()));
                     metadata.put("reviewerIntent", reviewerIntentGuidance(group, snapshot));
                     metadata.put("requestCoordination",
-                            Map.of("kind",
-                                    "work_group_join",
-                                    "payload",
-                                    Map.of("workGroupId",
+                            Map.of(NextActionKeys.KIND,
+                                    NextActionProtocol.KIND_WORK_GROUP_JOIN,
+                                    NextActionKeys.PAYLOAD,
+                                    Map.of(NextActionKeys.WORK_GROUP_ID,
                                             snapshot.provenance().workGroupId().toString(),
-                                            "intentId",
+                                            NextActionKeys.INTENT_ID,
                                             producer.intentId().toString(),
-                                            "snapshotId",
+                                            NextActionKeys.SNAPSHOT_ID,
                                             snapshot.snapshotId(),
                                             "proposal",
                                             "Review this exact immutable snapshot")));
@@ -582,8 +584,8 @@ static List<Map<String, Object>> actionableReviewCandidates(PredictionEventStore
         if (reviewer == null) {
             return List.of();
         }
-        return candidates.stream().filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get("workGroupId")))
-                .filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get("snapshotId"))).filter(snapshot -> reviewTargetsMatch(reviewer, snapshot)).isPresent()).toList();
+        return candidates.stream().filter(candidate -> reviewer.workGroupId().toString().equals(candidate.get(NextActionKeys.WORK_GROUP_ID)))
+                .filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> reviewTargetsMatch(reviewer, snapshot)).isPresent()).toList();
     }
 
 static WorkIntent reviewProducerIntent(PredictionEventStore store, TaskSnapshotRecord snapshot) {
@@ -607,9 +609,9 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         Map<String, Object> task = new LinkedHashMap<>();
         task.put("goal", "Independently review this candidate against the WorkGroup acceptance criteria");
         task.put("acceptance", group.acceptance());
-        task.put("workGroupId", group.workGroupId().toString());
+        task.put(NextActionKeys.WORK_GROUP_ID, group.workGroupId().toString());
         task.put("role", WorkIntent.Role.REVIEWER.wireValue());
-        task.put("reviewTargets", snapshotReviewTargets(snapshot));
+        task.put(NextActionKeys.REVIEW_TARGETS, snapshotReviewTargets(snapshot));
 
         Map<String, Object> claimRequirement = new LinkedHashMap<>();
         claimRequirement.put("field", "task.claims");
@@ -619,7 +621,7 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         claimRequirement.put("mustBeDisjointFrom", List.of("producer snapshot paths", "all active claims"));
         claimRequirement.put("guidance", "Choose a report or test path to claim; Synesis will validate that the claim is disjoint.");
 
-        return Map.of("snapshotId", snapshot.snapshotId(), "tool", "ensure_session", "arguments", Map.of("task", task), "claimRequirement", claimRequirement);
+        return Map.of(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId(), NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION, NextActionKeys.ARGUMENTS, Map.of("task", task), "claimRequirement", claimRequirement);
     }
 
 static List<Map<String, Object>> snapshotReviewTargets(TaskSnapshotRecord snapshot) {
@@ -631,7 +633,7 @@ static List<Map<String, Object>> snapshotReviewTargets(TaskSnapshotRecord snapsh
             }
             try {
                 ResourceSelector selector = new ResourceSelector(ResourceSelector.Kind.valueOf(encoded.substring(0, separator)), encoded.substring(separator + 1));
-                targets.add(Map.of("kind", selector.kind().name().toLowerCase(Locale.ROOT), "path", selector.value()));
+                targets.add(Map.of(NextActionKeys.KIND, selector.kind().name().toLowerCase(Locale.ROOT), "path", selector.value()));
             } catch (IllegalArgumentException ignored) {
                 // Invalid historical selectors are omitted from agent guidance; server-side review
                 // admission still validates the immutable snapshot provenance.
@@ -708,23 +710,23 @@ static boolean hasPublishedReviewRequiredSnapshot(PredictionEventStore store, Wo
      */
     static Map<String, Object> reviewAdmissionAction(WorkGroup group, WorkIntent owner, String reviewerParticipant) {
         Map<String, Object> action = new LinkedHashMap<>();
-        action.put("state", "REVIEW_ADMISSION_REQUIRED");
-        action.put("nextProtocolAction", "request_coordination");
-        action.put("nextProtocolKind", "work_group_join");
-        action.put("nextProtocolPayload",
-                Map.of("workGroupId",
+        action.put(NextActionKeys.STATE, "REVIEW_ADMISSION_REQUIRED");
+        action.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_REQUEST_COORDINATION);
+        action.put(NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_WORK_GROUP_JOIN);
+        action.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD,
+                Map.of(NextActionKeys.WORK_GROUP_ID,
                         group.workGroupId().toString(),
-                        "intentId",
+                        NextActionKeys.INTENT_ID,
                         owner.intentId().toString(),
-                        "reviewedIntentId",
+                        NextActionKeys.REVIEWED_INTENT_ID,
                         owner.intentId().toString(),
-                        "reviewedParticipantId",
+                        NextActionKeys.REVIEWED_PARTICIPANT_ID,
                         owner.participant(),
-                        "reviewerParticipant",
+                        NextActionKeys.REVIEWER_PARTICIPANT,
                         reviewerParticipant,
                         "proposal",
                         "Review the immutable snapshot for this work group"));
-        action.put("workGroup", CollaborationResponseMapper.workGroupMap(group));
+        action.put(NextActionKeys.WORK_GROUP, CollaborationResponseMapper.workGroupMap(group));
         return action;
     }
 

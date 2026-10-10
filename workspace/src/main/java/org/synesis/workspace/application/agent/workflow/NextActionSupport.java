@@ -106,8 +106,8 @@ final class NextActionSupport {
         payload.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
         payload.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
         payload.put(NextActionKeys.CLAIM_EPOCH, intent.version());
-        payload.put("workGroupVersion", workGroupVersion);
-        payload.put("expectedRevision", expectedRevision);
+        payload.put(NextActionKeys.WORK_GROUP_VERSION, workGroupVersion);
+        payload.put(NextActionKeys.EXPECTED_REVISION, expectedRevision);
         payload.put(NextActionKeys.PARTICIPANT, participantId);
     }
 
@@ -123,6 +123,22 @@ final class NextActionSupport {
         result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, action);
         result.put(NextActionKeys.NEXT_PROTOCOL_KIND, kind);
         result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
+    }
+
+    /**
+     * Copies a response result into a wire map. The entries of a map result are copied under their
+     * string keys; any other result is stored under {@code fallbackKey}.
+     *
+     * @param target      map being built
+     * @param result      the {@link org.synesis.workspace.agent.AgentResponse#result()} to copy; may be {@code null}
+     * @param fallbackKey key for a result that is not a map, or {@code null} to drop such a result
+     */
+    static void putResult(Map<String, Object> target, Object result, String fallbackKey) {
+        if (result instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> target.put(String.valueOf(key), value));
+        } else if (result != null && fallbackKey != null) {
+            target.put(fallbackKey, result);
+        }
     }
 
     /**

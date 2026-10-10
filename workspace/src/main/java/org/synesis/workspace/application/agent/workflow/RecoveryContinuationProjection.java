@@ -94,7 +94,7 @@ final class RecoveryContinuationProjection {
         candidate.put("durableArtifactsAvailable", true);
         candidate.put("provider", intent.provider());
         candidate.put(NextActionKeys.AVAILABLE, blockedReason == null);
-        candidate.put("continuationRequest", Map.of("kind", NextActionProtocol.KIND_CONTINUATION, "payload", Map.of(NextActionKeys.INTENT_ID, intent.intentId().toString(), NextActionKeys.CLAIM_EPOCH, intent.version())));
+        candidate.put("continuationRequest", Map.of(NextActionKeys.KIND, NextActionProtocol.KIND_CONTINUATION, NextActionKeys.PAYLOAD, Map.of(NextActionKeys.INTENT_ID, intent.intentId().toString(), NextActionKeys.CLAIM_EPOCH, intent.version())));
         if (blockedReason != null) {
             candidate.put("blockedReason", blockedReason);
         }

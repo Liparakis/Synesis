@@ -38,7 +38,7 @@ final class AgentTaskCompletionReviewPolicyTest {
         "CRUD, persistence, tests");
     new WorkIntentService(new PredictionEventStore(temp, projectId), identity).announce(producer);
 
-    assertTrue(AgentTaskCompletionService.reviewRequired(
+    assertTrue(AgentReviewActionProjection.reviewRequired(
         new PredictionEventStore(temp, projectId), producer, producer.participant()));
   }
 
@@ -59,7 +59,7 @@ final class AgentTaskCompletionReviewPolicyTest {
         WorkIntent.defaultAuthorityLineage(intentId), WorkIntent.Status.ANNOUNCED,
         WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathSubtree("src")));
 
-    assertFalse(AgentTaskCompletionService.reviewRequired(
+    assertFalse(AgentReviewActionProjection.reviewRequired(
         new PredictionEventStore(temp, projectId), reviewer, reviewer.participant()));
   }
 
@@ -75,7 +75,7 @@ final class AgentTaskCompletionReviewPolicyTest {
         "Independent review is mandatory");
     new WorkIntentService(new PredictionEventStore(temp, projectId), identity).announce(producer);
 
-    assertFalse(AgentTaskCompletionService.reviewRequired(
+    assertFalse(AgentReviewActionProjection.reviewRequired(
         new PredictionEventStore(temp, projectId), producer, producer.participant()));
   }
 
