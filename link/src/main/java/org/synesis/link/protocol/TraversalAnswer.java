@@ -6,9 +6,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,6 +54,7 @@ public final class TraversalAnswer {
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
+  private static final String FIELD_MESSAGE = "invalid bounded traversal field";
 
   private final ProtocolVersion protocolVersion;
   private final int formatVersion;
@@ -90,21 +88,21 @@ public final class TraversalAnswer {
     this.returnTarget = returnTarget;
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.sessionId = Objects.requireNonNull(sessionId, "session ID");
-    this.offerDigest = exactBytes(offerDigest, TraversalOffer.DIGEST_BYTES, "offer digest");
-    this.initiatorNodeId = boundedText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
-    this.responderNodeId = boundedText(responderNodeId, MAX_NODE_ID_BYTES, "responder node ID");
-    this.responderPublicKey = boundedBytes(responderPublicKey, MAX_KEY_BYTES,
+    this.offerDigest = CodecSupport.exactBytes(offerDigest, TraversalOffer.DIGEST_BYTES, "offer digest");
+    this.initiatorNodeId = CodecSupport.boundedText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
+    this.responderNodeId = CodecSupport.boundedText(responderNodeId, MAX_NODE_ID_BYTES, "responder node ID");
+    this.responderPublicKey = CodecSupport.boundedBytes(responderPublicKey, MAX_KEY_BYTES,
         "responder public key");
     this.issuedAt = Objects.requireNonNull(issuedAt, "issued at");
     this.expiresAt = Objects.requireNonNull(expiresAt, "expires at");
     if (!expiresAt.isAfter(issuedAt)) {
       throw new IllegalArgumentException("answer validity interval is empty");
     }
-    this.answerNonce = exactBytes(answerNonce, NONCE_BYTES, "answer nonce");
-    this.descriptor = boundedBytes(descriptor, CandidateDescriptor.MAX_BYTES,
+    this.answerNonce = CodecSupport.exactBytes(answerNonce, NONCE_BYTES, "answer nonce");
+    this.descriptor = CodecSupport.boundedBytes(descriptor, CandidateDescriptor.MAX_BYTES,
         "candidate descriptor");
     this.unsigned = encodeUnsigned();
-    this.signature = boundedBytes(signature, MAX_SIGNATURE_BYTES, "signature");
+    this.signature = CodecSupport.boundedBytes(signature, MAX_SIGNATURE_BYTES, "signature");
     if (unsigned.length + 2 + signature.length > MAX_BYTES) {
       throw new IllegalArgumentException("answer exceeds supported bound");
     }
@@ -173,22 +171,21 @@ public final class TraversalAnswer {
       ReturnTarget target = format == FORMAT_VERSION_V2 ? ReturnTarget.read(input) : null;
       UUID session = new UUID(input.readLong(), input.readLong());
       byte[] offer = readExactBytes(input, TraversalOffer.DIGEST_BYTES);
-      String initiator = readText(input, MAX_NODE_ID_BYTES);
-      String responder = readText(input, MAX_NODE_ID_BYTES);
-      byte[] publicKey = readBytes(input, MAX_KEY_BYTES);
+      String initiator = CodecSupport.readText(input, MAX_NODE_ID_BYTES, FIELD_MESSAGE);
+      String responder = CodecSupport.readText(input, MAX_NODE_ID_BYTES, FIELD_MESSAGE);
+      byte[] publicKey = CodecSupport.readBytes(input, MAX_KEY_BYTES, FIELD_MESSAGE);
       Instant issued = Instant.ofEpochSecond(input.readLong());
       Instant expires = Instant.ofEpochSecond(input.readLong());
       byte[] nonce = readExactBytes(input, NONCE_BYTES);
-      byte[] descriptor = readBytes(input, CandidateDescriptor.MAX_BYTES);
-      byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
+      byte[] descriptor = CodecSupport.readBytes(input, CandidateDescriptor.MAX_BYTES,
+          FIELD_MESSAGE);
+      byte[] signature = CodecSupport.readBytes(input, MAX_SIGNATURE_BYTES, FIELD_MESSAGE);
       if (input.available() != 0) {
         throw new IOException("trailing answer bytes");
       }
       TraversalAnswer value = new TraversalAnswer(format, version, target, session, offer,
           initiator, responder, publicKey, issued, expires, nonce, descriptor, signature);
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical traversal answer");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical traversal answer");
       return value;
     } catch (EOFException | IllegalArgumentException exception) {
       throw new IOException("malformed traversal answer", exception);
@@ -204,76 +201,12 @@ public final class TraversalAnswer {
    */
   public static TraversalAnswer fromShareLink(String link) throws IOException {
     Objects.requireNonNull(link, "SLA2 link");
-    if (link.length() > MAX_LINK_CHARS) {
-      throw new IOException("SLA2 link is oversized");
-    }
-    try {
-      URI uri = new URI(link);
-      if (!"synesis".equals(uri.getScheme()) || !"answer".equals(uri.getHost())
-          || uri.getQuery() != null || uri.getFragment() != null) {
-        throw new IOException("invalid SLA2 URI");
-      }
-      String path = uri.getPath();
-      if (path == null || path.length() <= 6 || !"/SLA2-".equals(path.substring(0, 6))) {
-        throw new IOException("invalid SLA2 link format");
-      }
-      return decode(Base64.getUrlDecoder().decode(path.substring(6)));
-    } catch (IllegalArgumentException | URISyntaxException exception) {
-      throw new IOException("invalid SLA2 link", exception);
-    }
-  }
-
-  private static String boundedText(String value, int maximum, String label) {
-    Objects.requireNonNull(value, label);
-    if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > maximum) {
-      throw new IllegalArgumentException(label + " exceeds supported bound");
-    }
-    return value;
-  }
-
-  private static byte[] boundedBytes(byte[] value, int maximum, String label) {
-    Objects.requireNonNull(value, label);
-    if (value.length == 0 || value.length > maximum) {
-      throw new IllegalArgumentException(label + " exceeds supported bound");
-    }
-    return value.clone();
-  }
-
-  private static byte[] exactBytes(byte[] value, int expected, String label) {
-    byte[] copy = boundedBytes(value, expected, label);
-    if (copy.length != expected) {
-      throw new IllegalArgumentException(label + " has an invalid size");
-    }
-    return copy;
-  }
-
-  private static void writeText(DataOutputStream output, String value) throws IOException {
-    writeBytes(output, value.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-    output.writeShort(value.length);
-    output.write(value);
-  }
-
-  private static String readText(DataInputStream input, int maximum) throws IOException {
-    return new String(readBytes(input, maximum), StandardCharsets.UTF_8);
+    return ShareLinks.parse(link, "answer", "SLA2-", MAX_LINK_CHARS, "SLA2", TraversalAnswer::decode);
   }
 
   private static byte[] readExactBytes(DataInputStream input, int expected) throws IOException {
-    byte[] value = readBytes(input, expected);
-    if (value.length != expected) {
-      throw new IOException("invalid fixed-size traversal field");
-    }
-    return value;
-  }
-
-  private static byte[] readBytes(DataInputStream input, int maximum) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > maximum || length > input.available()) {
-      throw new IOException("invalid bounded traversal field");
-    }
-    return input.readNBytes(length);
+    return CodecSupport.readExactBytes(input, expected, FIELD_MESSAGE,
+        "invalid fixed-size traversal field");
   }
 
   /**
@@ -314,18 +247,7 @@ public final class TraversalAnswer {
    * @return canonical signed answer bytes
    */
   public byte[] encoded() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream(
-          unsigned.length + 2 + signature.length);
-      bytes.write(unsigned);
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeShort(signature.length);
-        output.write(signature);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return CodecSupport.signed(unsigned, signature);
   }
 
   /**
@@ -450,14 +372,14 @@ public final class TraversalAnswer {
         }
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
-        writeBytes(output, offerDigest);
-        writeText(output, initiatorNodeId);
-        writeText(output, responderNodeId);
-        writeBytes(output, responderPublicKey);
+        CodecSupport.writeBytes(output, offerDigest);
+        CodecSupport.writeText(output, initiatorNodeId);
+        CodecSupport.writeText(output, responderNodeId);
+        CodecSupport.writeBytes(output, responderPublicKey);
         output.writeLong(issuedAt.getEpochSecond());
         output.writeLong(expiresAt.getEpochSecond());
-        writeBytes(output, answerNonce);
-        writeBytes(output, descriptor);
+        CodecSupport.writeBytes(output, answerNonce);
+        CodecSupport.writeBytes(output, descriptor);
       }
       return bytes.toByteArray();
     } catch (IOException impossible) {

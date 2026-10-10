@@ -6,10 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -70,7 +67,7 @@ public final class TraversalInvitation {
       CandidateDescriptor descriptor = CandidateDescriptor.decode(invitation.descriptorEncoded());
       if (!descriptor.nodeId().equals(offer.initiatorNodeId())
           || !Arrays.equals(descriptor.publicKeyEncoded(), offer.initiatorPublicKeyEncoded())
-          || !Arrays.equals(digest(invitation.encoded()), offer.invitationDigest())
+          || !Arrays.equals(invitation.digest(), offer.invitationDigest())
           || offer.issuedAt().isBefore(invitation.issuedAt())
           || offer.expiresAt().isAfter(invitation.expiresAt())) {
         throw new IllegalArgumentException("SLO1 is not bound to its invitation");
@@ -89,11 +86,7 @@ public final class TraversalInvitation {
    * @return immutable link payload
    */
   public static TraversalInvitation create(SessionInvitation invitation, TraversalOffer offer) {
-    TraversalInvitation value = new TraversalInvitation(FORMAT_VERSION_V1, invitation, offer);
-    if (value.encoded().length > MAX_BYTES) {
-      throw new IllegalArgumentException("SLO1 exceeds supported bound");
-    }
-    return value;
+    return bounded(FORMAT_VERSION_V1, invitation, offer);
   }
 
   /**
@@ -104,7 +97,12 @@ public final class TraversalInvitation {
    * @return immutable v2 SLO1 payload
    */
   public static TraversalInvitation createV2(SessionInvitation invitation, TraversalOffer offer) {
-    TraversalInvitation value = new TraversalInvitation(FORMAT_VERSION_V2, invitation, offer);
+    return bounded(FORMAT_VERSION_V2, invitation, offer);
+  }
+
+  private static TraversalInvitation bounded(int formatVersion, SessionInvitation invitation,
+      TraversalOffer offer) {
+    TraversalInvitation value = new TraversalInvitation(formatVersion, invitation, offer);
     if (value.encoded().length > MAX_BYTES) {
       throw new IllegalArgumentException("SLO1 exceeds supported bound");
     }
@@ -138,9 +136,7 @@ public final class TraversalInvitation {
       }
       TraversalInvitation value = new TraversalInvitation(format,
           SessionInvitation.decode(invitationBytes), TraversalOffer.decode(offerBytes));
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical SLO1 payload");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical SLO1 payload");
       return value;
     } catch (EOFException | IllegalArgumentException exception) {
       throw new IOException("malformed SLO1 payload", exception);
@@ -156,31 +152,8 @@ public final class TraversalInvitation {
    */
   public static TraversalInvitation fromShareLink(String link) throws IOException {
     Objects.requireNonNull(link, "SLO1 link");
-    if (link.length() > MAX_LINK_CHARS) {
-      throw new IOException("SLO1 link is oversized");
-    }
-    try {
-      URI uri = new URI(link);
-      if (!"synesis".equals(uri.getScheme()) || !"join".equals(uri.getHost())
-          || uri.getQuery() != null || uri.getFragment() != null) {
-        throw new IOException("invalid SLO1 URI");
-      }
-      String path = uri.getPath();
-      if (path == null || path.length() <= 6 || !"/SLO1-".equals(path.substring(0, 6))) {
-        throw new IOException("invalid SLO1 link format");
-      }
-      return decode(Base64.getUrlDecoder().decode(path.substring(6)));
-    } catch (IllegalArgumentException | URISyntaxException exception) {
-      throw new IOException("invalid SLO1 link", exception);
-    }
-  }
-
-  private static byte[] digest(byte[] value) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(value);
-    } catch (java.security.NoSuchAlgorithmException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return ShareLinks.parse(link, "join", "SLO1-", MAX_LINK_CHARS, "SLO1",
+        TraversalInvitation::decode);
   }
 
   private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {

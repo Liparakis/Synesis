@@ -12,7 +12,6 @@ import io.netty.handler.codec.quic.QuicSslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,14 +129,6 @@ public final class Onboarding {
     return value;
   }
 
-  private static byte[] digest(byte[] value) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(value);
-    } catch (java.security.NoSuchAlgorithmException impossible) {
-      throw new AssertionError(impossible);
-    }
-  }
-
   private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
     return new OnboardingFailure(code, cause);
   }
@@ -221,7 +212,7 @@ public final class Onboarding {
           ProtocolVersion.V1,
           issued, expires, capability, descriptor);
       TraversalOffer offer = TraversalOffer.create(local.identity(), expectedPeer, sessionId,
-          digest(invitation.encoded()), issued, expires, randomTraversalBytes(), descriptor);
+          invitation.digest(), issued, expires, randomTraversalBytes(), descriptor);
       TraversalInvitation link = TraversalInvitation.create(invitation, offer);
       emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.INVITE_CREATED, "");
@@ -615,7 +606,7 @@ public final class Onboarding {
       emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.INVITE_CREATED, "");
       emit(OnboardingEventType.SHARE_LINK, invitation.shareLink());
-      byte[] invitationDigest = digest(invitation.encoded());
+      byte[] invitationDigest = invitation.digest();
       traversal = new NettyTraversalExchange(udp, Duration.ofSeconds(10), offer -> {
         try {
           if (!sessionId.equals(offer.sessionId())
@@ -774,7 +765,7 @@ public final class Onboarding {
       try {
         TraversalOffer offer = TraversalOffer.create(local.identity(), host.nodeId(),
             invitation.sessionId(),
-            digest(invitation.encoded()), localDescriptor.issuedAt(), localDescriptor.expiresAt(),
+            invitation.digest(), localDescriptor.issuedAt(), localDescriptor.expiresAt(),
             randomTraversalBytes(), localDescriptor);
         TraversalAnswer answer = traversal.sendOffer(offer, host.candidates())
             .toCompletableFuture()

@@ -38,6 +38,7 @@ public final class HandshakeProof {
   private static final int MAX_PUBLIC_KEY_BYTES = 256;
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_SIGNATURE_BYTES = 128;
+  private static final String FIELD_MESSAGE = "invalid bounded handshake field";
 
   private final ProtocolVersion version;
   private final UUID sessionId;
@@ -107,11 +108,10 @@ public final class HandshakeProof {
       ProtocolVersion version = new ProtocolVersion(input.readUnsignedByte(),
           input.readUnsignedByte());
       UUID sessionId = new UUID(input.readLong(), input.readLong());
-      byte[] challenge = readBytes(input, MAX_CHALLENGE_BYTES);
-      String nodeId = new String(readBytes(input, MAX_NODE_ID_BYTES),
-          java.nio.charset.StandardCharsets.UTF_8);
-      byte[] publicKey = readBytes(input, MAX_PUBLIC_KEY_BYTES);
-      byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
+      byte[] challenge = CodecSupport.readBytes(input, MAX_CHALLENGE_BYTES, FIELD_MESSAGE);
+      String nodeId = CodecSupport.readText(input, MAX_NODE_ID_BYTES, FIELD_MESSAGE);
+      byte[] publicKey = CodecSupport.readBytes(input, MAX_PUBLIC_KEY_BYTES, FIELD_MESSAGE);
+      byte[] signature = CodecSupport.readBytes(input, MAX_SIGNATURE_BYTES, FIELD_MESSAGE);
       if (input.available() != 0) {
         throw new IOException("trailing handshake proof bytes");
       }
@@ -137,9 +137,9 @@ public final class HandshakeProof {
         output.writeByte(version.minor());
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
-        writeBytes(output, challenge);
-        writeBytes(output, nodeIdBytes);
-        writeBytes(output, publicKey);
+        CodecSupport.writeBytes(output, challenge);
+        CodecSupport.writeBytes(output, nodeIdBytes);
+        CodecSupport.writeBytes(output, publicKey);
       }
       if (bytes.size() > MAX_BYTES) {
         throw new IllegalArgumentException("handshake proof exceeds supported bound");
@@ -154,19 +154,6 @@ public final class HandshakeProof {
     if (challenge == null || challenge.length == 0 || challenge.length > MAX_CHALLENGE_BYTES) {
       throw new IllegalArgumentException("challenge must contain 1 through 64 bytes");
     }
-  }
-
-  private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
-    output.writeShort(bytes.length);
-    output.write(bytes);
-  }
-
-  private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > max || length > input.available()) {
-      throw new IOException("invalid bounded handshake field");
-    }
-    return input.readNBytes(length);
   }
 
   /**
@@ -248,16 +235,6 @@ public final class HandshakeProof {
    * @return encoded proof copy
    */
   public byte[] encoded() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-      bytes.write(unsignedBytes);
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeShort(signature.length);
-        output.write(signature);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError("byte array output cannot fail", impossible);
-    }
+    return CodecSupport.signed(unsignedBytes, signature);
   }
 }

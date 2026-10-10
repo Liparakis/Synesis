@@ -8,7 +8,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -56,6 +55,7 @@ public final class TraversalOffer {
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
+  private static final String FIELD_MESSAGE = "invalid bounded traversal field";
 
   private final ProtocolVersion protocolVersion;
   private final int formatVersion;
@@ -90,22 +90,22 @@ public final class TraversalOffer {
     this.returnTarget = returnTarget;
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.sessionId = Objects.requireNonNull(sessionId, "session ID");
-    this.initiatorNodeId = boundedText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
-    this.initiatorPublicKey = boundedBytes(initiatorPublicKey, MAX_KEY_BYTES,
+    this.initiatorNodeId = CodecSupport.boundedText(initiatorNodeId, MAX_NODE_ID_BYTES, "initiator node ID");
+    this.initiatorPublicKey = CodecSupport.boundedBytes(initiatorPublicKey, MAX_KEY_BYTES,
         "initiator public key");
     this.expectedResponderNodeId = boundedOptionalText(expectedResponderNodeId, MAX_NODE_ID_BYTES,
         "expected responder node ID");
-    this.invitationDigest = exactBytes(invitationDigest, DIGEST_BYTES, "invitation digest");
+    this.invitationDigest = CodecSupport.exactBytes(invitationDigest, DIGEST_BYTES, "invitation digest");
     this.issuedAt = Objects.requireNonNull(issuedAt, "issued at");
     this.expiresAt = Objects.requireNonNull(expiresAt, "expires at");
     if (!expiresAt.isAfter(issuedAt)) {
       throw new IllegalArgumentException("offer validity interval is empty");
     }
-    this.attemptNonce = exactBytes(attemptNonce, NONCE_BYTES, "attempt nonce");
-    this.descriptor = boundedBytes(descriptor, CandidateDescriptor.MAX_BYTES,
+    this.attemptNonce = CodecSupport.exactBytes(attemptNonce, NONCE_BYTES, "attempt nonce");
+    this.descriptor = CodecSupport.boundedBytes(descriptor, CandidateDescriptor.MAX_BYTES,
         "candidate descriptor");
     this.unsigned = encodeUnsigned();
-    this.signature = boundedBytes(signature, MAX_SIGNATURE_BYTES, "signature");
+    this.signature = CodecSupport.boundedBytes(signature, MAX_SIGNATURE_BYTES, "signature");
     if (unsigned.length + 2 + signature.length > MAX_BYTES) {
       throw new IllegalArgumentException("offer exceeds supported bound");
     }
@@ -132,27 +132,8 @@ public final class TraversalOffer {
   public static TraversalOffer create(NodeIdentity initiator, String expectedResponderNodeId,
       UUID sessionId, byte[] invitationDigest, Instant issuedAt, Instant expiresAt,
       byte[] attemptNonce, CandidateDescriptor descriptor) throws GeneralSecurityException {
-    Objects.requireNonNull(initiator, "initiator identity");
-    Objects.requireNonNull(descriptor, "candidate descriptor");
-    if (!initiator.nodeId().equals(descriptor.nodeId())
-        || !Arrays.equals(initiator.publicKeyEncoded(), descriptor.publicKeyEncoded())
-        || !descriptor.verify()) {
-      throw new IllegalArgumentException("descriptor is not bound to initiator identity");
-    }
-    Instant canonicalIssuedAt = Objects.requireNonNull(issuedAt, "issued at")
-        .truncatedTo(ChronoUnit.SECONDS);
-    Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
-        .truncatedTo(ChronoUnit.SECONDS);
-    TraversalOffer unsigned = new TraversalOffer(FORMAT_VERSION_V1, ProtocolVersion.V1, null,
-        sessionId, initiator.nodeId(),
-        initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest, canonicalIssuedAt,
-        canonicalExpiresAt,
-        attemptNonce, descriptor.encoded(), new byte[]{1});
-    return new TraversalOffer(FORMAT_VERSION_V1, unsigned.protocolVersion, null, sessionId,
-        initiator.nodeId(),
-        initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest, canonicalIssuedAt,
-        canonicalExpiresAt,
-        attemptNonce, descriptor.encoded(), initiator.sign(unsigned.unsigned));
+    return sign(FORMAT_VERSION_V1, null, initiator, expectedResponderNodeId, sessionId,
+        invitationDigest, issuedAt, expiresAt, attemptNonce, descriptor);
   }
 
   /**
@@ -174,9 +155,19 @@ public final class TraversalOffer {
       UUID sessionId, byte[] invitationDigest, Instant issuedAt, Instant expiresAt,
       byte[] attemptNonce, CandidateDescriptor descriptor, ReturnTarget returnTarget)
       throws GeneralSecurityException {
+    return sign(FORMAT_VERSION_V2, returnTarget, initiator, expectedResponderNodeId, sessionId,
+        invitationDigest, issuedAt, expiresAt, attemptNonce, descriptor);
+  }
+
+  private static TraversalOffer sign(int formatVersion, ReturnTarget returnTarget,
+      NodeIdentity initiator, String expectedResponderNodeId, UUID sessionId,
+      byte[] invitationDigest, Instant issuedAt, Instant expiresAt, byte[] attemptNonce,
+      CandidateDescriptor descriptor) throws GeneralSecurityException {
     Objects.requireNonNull(initiator, "initiator identity");
     Objects.requireNonNull(descriptor, "candidate descriptor");
-    Objects.requireNonNull(returnTarget, "return target");
+    if (formatVersion == FORMAT_VERSION_V2) {
+      Objects.requireNonNull(returnTarget, "return target");
+    }
     if (!initiator.nodeId().equals(descriptor.nodeId())
         || !Arrays.equals(initiator.publicKeyEncoded(), descriptor.publicKeyEncoded())
         || !descriptor.verify()) {
@@ -186,11 +177,11 @@ public final class TraversalOffer {
         .truncatedTo(ChronoUnit.SECONDS);
     Instant canonicalExpiresAt = Objects.requireNonNull(expiresAt, "expires at")
         .truncatedTo(ChronoUnit.SECONDS);
-    TraversalOffer unsigned = new TraversalOffer(FORMAT_VERSION_V2, ProtocolVersion.V1,
-        returnTarget, sessionId, initiator.nodeId(), initiator.publicKeyEncoded(),
-        expectedResponderNodeId, invitationDigest, canonicalIssuedAt, canonicalExpiresAt,
-        attemptNonce, descriptor.encoded(), new byte[]{1});
-    return new TraversalOffer(FORMAT_VERSION_V2, ProtocolVersion.V1, returnTarget, sessionId,
+    TraversalOffer unsigned = new TraversalOffer(formatVersion, ProtocolVersion.V1, returnTarget,
+        sessionId, initiator.nodeId(), initiator.publicKeyEncoded(), expectedResponderNodeId,
+        invitationDigest, canonicalIssuedAt, canonicalExpiresAt, attemptNonce,
+        descriptor.encoded(), new byte[]{1});
+    return new TraversalOffer(formatVersion, ProtocolVersion.V1, returnTarget, sessionId,
         initiator.nodeId(), initiator.publicKeyEncoded(), expectedResponderNodeId, invitationDigest,
         canonicalIssuedAt, canonicalExpiresAt, attemptNonce, descriptor.encoded(),
         initiator.sign(unsigned.unsigned));
@@ -220,103 +211,46 @@ public final class TraversalOffer {
           input.readUnsignedByte());
       ReturnTarget target = format == FORMAT_VERSION_V2 ? ReturnTarget.read(input) : null;
       UUID session = new UUID(input.readLong(), input.readLong());
-      String initiator = readText(input, MAX_NODE_ID_BYTES);
-      byte[] publicKey = readBytes(input, MAX_KEY_BYTES);
+      String initiator = CodecSupport.readText(input, MAX_NODE_ID_BYTES, FIELD_MESSAGE);
+      byte[] publicKey = CodecSupport.readBytes(input, MAX_KEY_BYTES, FIELD_MESSAGE);
       String responder = readOptionalText(input, MAX_NODE_ID_BYTES);
       byte[] invitation = readExactBytes(input, DIGEST_BYTES);
       Instant issued = Instant.ofEpochSecond(input.readLong());
       Instant expires = Instant.ofEpochSecond(input.readLong());
       byte[] nonce = readExactBytes(input, NONCE_BYTES);
-      byte[] descriptor = readBytes(input, CandidateDescriptor.MAX_BYTES);
-      byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
+      byte[] descriptor = CodecSupport.readBytes(input, CandidateDescriptor.MAX_BYTES,
+          FIELD_MESSAGE);
+      byte[] signature = CodecSupport.readBytes(input, MAX_SIGNATURE_BYTES, FIELD_MESSAGE);
       if (input.available() != 0) {
         throw new IOException("trailing offer bytes");
       }
       TraversalOffer value = new TraversalOffer(format, version, target, session, initiator,
           publicKey, responder, invitation, issued, expires, nonce, descriptor, signature);
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical traversal offer");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical traversal offer");
       return value;
     } catch (EOFException | IllegalArgumentException exception) {
       throw new IOException("malformed traversal offer", exception);
     }
   }
 
-  private static String boundedText(String value, int maximum, String label) {
-    Objects.requireNonNull(value, label);
-    if (value.isBlank() || value.getBytes(StandardCharsets.UTF_8).length > maximum) {
-      throw new IllegalArgumentException(label + " exceeds supported bound");
-    }
-    return value;
-  }
-
   private static String boundedOptionalText(String value, int maximum, String label) {
     if (value == null || value.isEmpty()) {
       return "";
     }
-    return boundedText(value, maximum, label);
-  }
-
-  private static byte[] boundedBytes(byte[] value, int maximum, String label) {
-    Objects.requireNonNull(value, label);
-    if (value.length == 0 || value.length > maximum) {
-      throw new IllegalArgumentException(label + " exceeds supported bound");
-    }
-    return value.clone();
-  }
-
-  private static byte[] exactBytes(byte[] value, int expected, String label) {
-    byte[] copy = boundedBytes(value, expected, label);
-    if (copy.length != expected) {
-      throw new IllegalArgumentException(label + " has an invalid size");
-    }
-    return copy;
-  }
-
-  private static void writeText(DataOutputStream output, String value) throws IOException {
-    writeBytes(output, value.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-    output.writeShort(value.length);
-    output.write(value);
-  }
-
-  private static String readText(DataInputStream input, int maximum) throws IOException {
-    return new String(readBytes(input, maximum), StandardCharsets.UTF_8);
+    return CodecSupport.boundedText(value, maximum, label);
   }
 
   private static String readOptionalText(DataInputStream input, int maximum) throws IOException {
     int length = input.readUnsignedShort();
     if (length > maximum || length > input.available()) {
-      throw new IOException("invalid bounded traversal field");
+      throw new IOException(FIELD_MESSAGE);
     }
     return new String(input.readNBytes(length), StandardCharsets.UTF_8);
   }
 
   private static byte[] readExactBytes(DataInputStream input, int expected) throws IOException {
-    byte[] value = readBytes(input, expected);
-    if (value.length != expected) {
-      throw new IOException("invalid fixed-size traversal field");
-    }
-    return value;
-  }
-
-  private static byte[] readBytes(DataInputStream input, int maximum) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > maximum || length > input.available()) {
-      throw new IOException("invalid bounded traversal field");
-    }
-    return input.readNBytes(length);
-  }
-
-  private static byte[] digestOf(byte[] value) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(value);
-    } catch (java.security.NoSuchAlgorithmException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return CodecSupport.readExactBytes(input, expected, FIELD_MESSAGE,
+        "invalid fixed-size traversal field");
   }
 
   /**
@@ -352,18 +286,7 @@ public final class TraversalOffer {
    * @return canonical signed offer bytes
    */
   public byte[] encoded() {
-    try {
-      ByteArrayOutputStream bytes = new ByteArrayOutputStream(
-          unsigned.length + 2 + signature.length);
-      bytes.write(unsigned);
-      try (DataOutputStream output = new DataOutputStream(bytes)) {
-        output.writeShort(signature.length);
-        output.write(signature);
-      }
-      return bytes.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return CodecSupport.signed(unsigned, signature);
   }
 
   /**
@@ -480,7 +403,7 @@ public final class TraversalOffer {
    * @return offer digest
    */
   public byte[] digest() {
-    return digestOf(encoded());
+    return CodecSupport.sha256(encoded());
   }
 
   private byte[] encodeUnsigned() {
@@ -496,14 +419,14 @@ public final class TraversalOffer {
         }
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
-        writeText(output, initiatorNodeId);
-        writeBytes(output, initiatorPublicKey);
-        writeText(output, expectedResponderNodeId);
-        writeBytes(output, invitationDigest);
+        CodecSupport.writeText(output, initiatorNodeId);
+        CodecSupport.writeBytes(output, initiatorPublicKey);
+        CodecSupport.writeText(output, expectedResponderNodeId);
+        CodecSupport.writeBytes(output, invitationDigest);
         output.writeLong(issuedAt.getEpochSecond());
         output.writeLong(expiresAt.getEpochSecond());
-        writeBytes(output, attemptNonce);
-        writeBytes(output, descriptor);
+        CodecSupport.writeBytes(output, attemptNonce);
+        CodecSupport.writeBytes(output, descriptor);
       }
       return bytes.toByteArray();
     } catch (IOException impossible) {

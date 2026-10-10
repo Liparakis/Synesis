@@ -8,11 +8,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -183,9 +180,8 @@ public final class CompactBootstrapInvitation {
       CompactBootstrapInvitation value = new CompactBootstrapInvitation(
           ProtocolVersion.V1, issued, expires, capability, publicKey,
           endpoint, signature);
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical minimized compact invitation");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(),
+          "non-canonical minimized compact invitation");
       return value;
     } catch (EOFException | IllegalArgumentException | java.time.DateTimeException exception) {
       throw new IOException("malformed minimized compact invitation", exception);
@@ -201,26 +197,8 @@ public final class CompactBootstrapInvitation {
    */
   public static CompactBootstrapInvitation fromShareLink(String link) throws IOException {
     Objects.requireNonNull(link, "compact invitation link");
-    if (link.length() > MAX_LINK_CHARS) {
-      throw new IOException("compact invitation link is oversized");
-    }
-    try {
-      URI uri = new URI(link);
-      if (!"synesis".equals(uri.getScheme()) || !"join".equals(uri.getHost())
-          || uri.getQuery() != null || uri.getFragment() != null) {
-        throw new IOException("invalid compact invitation URI");
-      }
-       String path = uri.getPath();
-       if (path == null || path.length() <= 6) {
-         throw new IOException("invalid compact invitation link format");
-       }
-       if (path.startsWith("/SLB2-")) {
-         return decodeMinimized(Base64.getUrlDecoder().decode(path.substring(6)));
-       }
-       throw new IOException("unsupported compact invitation link format");
-    } catch (IllegalArgumentException | URISyntaxException exception) {
-      throw new IOException("invalid compact invitation link", exception);
-    }
+    return ShareLinks.parse(link, "join", "SLB2-", MAX_LINK_CHARS, "compact invitation",
+        "unsupported compact invitation link format", CompactBootstrapInvitation::decodeMinimized);
   }
 
   /**
@@ -398,7 +376,7 @@ public final class CompactBootstrapInvitation {
 
   private static UUID sessionIdForMinimizedKey(byte[] compactKey, byte[] capability,
       Instant issuedAt, Instant expiresAt) {
-    byte[] digest = sha256(MINIMIZED_SESSION_DOMAIN, compactKey, capability,
+    byte[] digest = CodecSupport.sha256(MINIMIZED_SESSION_DOMAIN, compactKey, capability,
         longBytes(issuedAt.getEpochSecond()), longBytes(expiresAt.getEpochSecond()));
     return uuidFromDigest(digest);
   }
@@ -509,18 +487,6 @@ public final class CompactBootstrapInvitation {
       value >>>= Byte.SIZE;
     }
     return bytes;
-  }
-
-  private static byte[] sha256(byte[]... values) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      for (byte[] value : values) {
-        digest.update(value);
-      }
-      return digest.digest();
-    } catch (java.security.NoSuchAlgorithmException impossible) {
-      throw new AssertionError("SHA-256 is required by the Java platform", impossible);
-    }
   }
 
   private static int endpointRank(CandidateType type) {

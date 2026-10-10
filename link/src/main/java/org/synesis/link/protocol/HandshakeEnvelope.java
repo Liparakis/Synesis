@@ -31,6 +31,7 @@ public final class HandshakeEnvelope {
 
   private static final int MAGIC = 0x534C4831;
   private static final int VERSION = 1;
+  private static final String FIELD_MESSAGE = "invalid bounded envelope field";
   private final HandshakeRole role;
   private final List<ProtocolVersion> supportedVersions;
   private final HandshakeTranscript transcript;
@@ -105,16 +106,15 @@ public final class HandshakeEnvelope {
         supportedVersions.add(
             new ProtocolVersion(input.readUnsignedByte(), input.readUnsignedByte()));
       }
-      byte[] transcriptBytes = readBytes(input, HandshakeTranscript.MAX_BYTES);
-      byte[] proofBytes = readBytes(input, HandshakeProof.MAX_BYTES);
+      byte[] transcriptBytes = CodecSupport.readBytes(input, HandshakeTranscript.MAX_BYTES,
+          FIELD_MESSAGE);
+      byte[] proofBytes = CodecSupport.readBytes(input, HandshakeProof.MAX_BYTES, FIELD_MESSAGE);
       if (input.available() != 0) {
         throw new IOException("trailing handshake envelope bytes");
       }
       HandshakeEnvelope value = create(roles[roleCode], supportedVersions,
           HandshakeTranscript.decode(transcriptBytes), HandshakeProof.decode(proofBytes));
-      if (!java.util.Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical handshake envelope");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical handshake envelope");
       return value;
     } catch (EOFException | IllegalArgumentException exception) {
       throw new IOException("malformed handshake envelope", exception);
@@ -145,19 +145,6 @@ public final class HandshakeEnvelope {
     return normalized;
   }
 
-  private static void writeBytes(DataOutputStream output, byte[] value) throws IOException {
-    output.writeShort(value.length);
-    output.write(value);
-  }
-
-  private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > max || length > input.available()) {
-      throw new IOException("invalid bounded envelope field");
-    }
-    return input.readNBytes(length);
-  }
-
   /**
    * Returns canonical envelope bytes.
    *
@@ -175,8 +162,8 @@ public final class HandshakeEnvelope {
           output.writeByte(version.major());
           output.writeByte(version.minor());
         }
-        writeBytes(output, transcript.encoded());
-        writeBytes(output, proof.encoded());
+        CodecSupport.writeBytes(output, transcript.encoded());
+        CodecSupport.writeBytes(output, proof.encoded());
       }
       return bytes.toByteArray();
     } catch (IOException impossible) {

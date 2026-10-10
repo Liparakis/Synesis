@@ -6,8 +6,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,6 +53,7 @@ public final class SessionInvitation {
 
   private static final int MAGIC = 0x53494E31;
   private static final int MAX_SIGNATURE_BYTES = 128;
+  private static final String FIELD_MESSAGE = "invalid invitation field";
   private final ProtocolVersion protocolVersion;
   private final UUID sessionId;
   private final Instant issuedAt;
@@ -135,25 +134,8 @@ public final class SessionInvitation {
    */
   public static SessionInvitation fromShareLink(String link) throws IOException {
     Objects.requireNonNull(link, "share link");
-    if (link.length() > MAX_LINK_CHARS) {
-      throw new IOException("invitation link is oversized");
-    }
-    try {
-      URI uri = new URI(link);
-      if (!"synesis".equals(uri.getScheme()) || !"join".equals(uri.getHost())
-          || uri.getQuery() != null || uri.getFragment() != null) {
-        throw new IOException("invalid invitation URI");
-      }
-      String path = uri.getPath();
-      if (path == null || path.length() <= 6 || !"/SYN1-".equals(path.substring(0, 6))) {
-        throw new IOException("invalid invitation link format");
-      }
-      byte[] encoded = Base64.getUrlDecoder()
-          .decode(path.substring(6));
-      return decode(encoded);
-    } catch (IllegalArgumentException | URISyntaxException exception) {
-      throw new IOException("invalid invitation link", exception);
-    }
+    return ShareLinks.parse(link, "join", "SYN1-", MAX_LINK_CHARS, "invitation",
+        SessionInvitation::decode);
   }
 
   /**
@@ -177,37 +159,27 @@ public final class SessionInvitation {
       UUID session = new UUID(input.readLong(), input.readLong());
       Instant issued = Instant.ofEpochSecond(input.readLong());
       Instant expires = Instant.ofEpochSecond(input.readLong());
-      byte[] capability = readBytes(input, CAPABILITY_BYTES);
-      byte[] descriptor = readBytes(input, CandidateDescriptor.MAX_BYTES);
-      byte[] signature = readBytes(input, MAX_SIGNATURE_BYTES);
+      byte[] capability = CodecSupport.readBytes(input, CAPABILITY_BYTES, FIELD_MESSAGE);
+      byte[] descriptor = CodecSupport.readBytes(input, CandidateDescriptor.MAX_BYTES,
+          FIELD_MESSAGE);
+      byte[] signature = CodecSupport.readBytes(input, MAX_SIGNATURE_BYTES, FIELD_MESSAGE);
       if (input.available() != 0) {
         throw new IOException("trailing invitation bytes");
       }
       SessionInvitation value = new SessionInvitation(version, session, issued, expires, capability,
           descriptor, signature);
-      if (!Arrays.equals(encoded, value.encoded())) {
-        throw new IOException("non-canonical invitation");
-      }
+      CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical invitation");
       return value;
     } catch (EOFException | IllegalArgumentException exception) {
       throw new IOException("malformed invitation", exception);
     }
   }
 
-  private static byte[] readBytes(DataInputStream input, int max) throws IOException {
-    int length = input.readUnsignedShort();
-    if (length == 0 || length > max || length > input.available()) {
-      throw new IOException("invalid invitation field");
-    }
-    return input.readNBytes(length);
-  }
-
   private static void writeBytes(DataOutputStream output, byte[] bytes) throws IOException {
     if (bytes.length > 65_535) {
       throw new IllegalArgumentException("invitation field is oversized");
     }
-    output.writeShort(bytes.length);
-    output.write(bytes);
+    CodecSupport.writeBytes(output, bytes);
   }
 
   /**
@@ -254,18 +226,16 @@ public final class SessionInvitation {
    * @return canonical signed bytes
    */
   public byte[] encoded() {
-    try {
-      ByteArrayOutputStream output = new ByteArrayOutputStream(
-          unsigned.length + 2 + signature.length);
-      output.write(unsigned);
-      try (DataOutputStream data = new DataOutputStream(output)) {
-        data.writeShort(signature.length);
-        data.write(signature);
-      }
-      return output.toByteArray();
-    } catch (IOException impossible) {
-      throw new AssertionError(impossible);
-    }
+    return CodecSupport.signed(unsigned, signature);
+  }
+
+  /**
+   * Returns the SHA-256 digest that binds a traversal offer to these exact invitation bytes.
+   *
+   * @return invitation digest
+   */
+  public byte[] digest() {
+    return CodecSupport.sha256(encoded());
   }
 
   /**
