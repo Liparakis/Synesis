@@ -12,7 +12,6 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.projectrecord.guardrail.ScopeMatcher;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 
@@ -50,7 +49,7 @@ public final class ConstraintApplicationService {
                     Objects.requireNonNull(scope, "scope"),
                     Objects.requireNonNull(title, "title"),
                     Objects.requireNonNull(rationale, "rationale"),
-                    Ed25519Signer.from(identity));
+                    identity);
             DecisionStore store = new DecisionStore(location.profile().resolve("records"), config.projectId());
             DecisionStore.SaveResult saved = store.save(record, null);
             if (saved != DecisionStore.SaveResult.APPLIED && saved != DecisionStore.SaveResult.DUPLICATE) {

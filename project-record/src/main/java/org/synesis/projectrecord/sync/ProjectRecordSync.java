@@ -32,9 +32,8 @@ public final class ProjectRecordSync {
     this.store = Objects.requireNonNull(store, "decision store");
   }
 
-  private static SyncOutcome rejectedOutcome(DecisionRecord record, String detail) {
-    return new SyncOutcome(Code.REJECTED, record.recordId(), record.revision(), record.digest(),
-        detail);
+  private static SyncOutcome rejectedOutcome(DecisionRecord record) {
+    return new SyncOutcome(Code.REJECTED, record.recordId(), record.revision(), record.digest());
   }
 
   private static Code map(DecisionStore.SaveResult result) {
@@ -81,11 +80,11 @@ public final class ProjectRecordSync {
         .equals(record.ownerNodeId())
         || !session.localNodeId()
         .equals(record.authorNodeId())) {
-      return rejectedOutcome(record, "project mismatch");
+      return rejectedOutcome(record);
     }
     try {
       if (!record.verify()) {
-        return rejectedOutcome(record, "invalid signature");
+        return rejectedOutcome(record);
       }
       DecisionStore.Head base = store.headState(record.recordId())
           .orElse(null);
@@ -95,10 +94,9 @@ public final class ProjectRecordSync {
               .encoded());
       return await(response, record.recordId(), session.remoteNodeId());
     } catch (GeneralSecurityException failure) {
-      return rejectedOutcome(record, "invalid signature");
+      return rejectedOutcome(record);
     } catch (Exception failure) {
-      return new SyncOutcome(Code.UNKNOWN, record.recordId(), 0, null,
-          "connection closed before result");
+      return new SyncOutcome(Code.UNKNOWN, record.recordId(), 0, null);
     }
   }
 
@@ -119,7 +117,7 @@ public final class ProjectRecordSync {
           head == null ? 0 : head.revision(), head == null ? null : head.digest());
       return await(session.requestApplication(request.encoded()), recordId, session.remoteNodeId());
     } catch (Exception failure) {
-      return new SyncOutcome(Code.UNKNOWN, recordId, 0, null, "connection closed before result");
+      return new SyncOutcome(Code.UNKNOWN, recordId, 0, null);
     }
   }
 
@@ -211,7 +209,7 @@ public final class ProjectRecordSync {
       RecordMessage response = RecordMessage.decode(stage.toCompletableFuture()
           .get());
       if (response.kind() == RecordMessage.Kind.ERROR) {
-        return new SyncOutcome(Code.REJECTED, recordId, 0, null, response.errorText());
+        return new SyncOutcome(Code.REJECTED, recordId, 0, null);
       }
       if (response.kind() == RecordMessage.Kind.RECORD) {
         DecisionRecord record = DecisionRecord.decode(response.recordBytes());
@@ -220,25 +218,25 @@ public final class ProjectRecordSync {
             || !remoteNodeId.equals(record.ownerNodeId())
             || !remoteNodeId.equals(record.authorNodeId())
             || !record.verify()) {
-          return new SyncOutcome(Code.REJECTED, recordId, 0, null, "invalid remote record");
+          return new SyncOutcome(Code.REJECTED, recordId, 0, null);
         }
         DecisionStore.SaveResult saved = store.applyRemote(record);
         DecisionStore.Head head = store.headState(record.recordId())
             .orElse(null);
         return new SyncOutcome(map(saved), record.recordId(), head == null ? 0 : head.revision(),
-            head == null ? null : head.digest(), "");
+            head == null ? null : head.digest());
       }
       if (response.kind() != RecordMessage.Kind.RESULT) {
-        return new SyncOutcome(Code.REJECTED, recordId, 0, null, "unexpected response");
+        return new SyncOutcome(Code.REJECTED, recordId, 0, null);
       }
       return new SyncOutcome(
           response.resultCode() == null ? Code.REJECTED : Code.valueOf(response.resultCode()
                                                                        .name()),
-          response.recordId(), response.revision(), response.digest(), "");
+          response.recordId(), response.revision(), response.digest());
     } catch (GeneralSecurityException failure) {
-      return new SyncOutcome(Code.REJECTED, recordId, 0, null, "invalid remote record");
+      return new SyncOutcome(Code.REJECTED, recordId, 0, null);
     } catch (Exception failure) {
-      return new SyncOutcome(Code.UNKNOWN, recordId, 0, null, "connection closed before result");
+      return new SyncOutcome(Code.UNKNOWN, recordId, 0, null);
     }
   }
 
@@ -281,14 +279,12 @@ public final class ProjectRecordSync {
     private final UUID recordId;
     private final long revision;
     private final byte[] digest;
-    private final String detail;
 
-    private SyncOutcome(Code code, UUID recordId, long revision, byte[] digest, String detail) {
+    private SyncOutcome(Code code, UUID recordId, long revision, byte[] digest) {
       this.code = Objects.requireNonNull(code, "outcome code");
       this.recordId = recordId;
       this.revision = revision;
       this.digest = digest == null ? null : digest.clone();
-      this.detail = detail == null ? "" : detail;
     }
 
     /**
@@ -325,16 +321,6 @@ public final class ProjectRecordSync {
      */
     public byte[] digest() {
       return digest == null ? null : digest.clone();
-    }
-
-    /**
-     * Returns bounded human-readable detail.
-     *
-     * @return detail
-     */
-    @SuppressWarnings("unused")
-    public String detail() {
-      return detail;
     }
   }
 }

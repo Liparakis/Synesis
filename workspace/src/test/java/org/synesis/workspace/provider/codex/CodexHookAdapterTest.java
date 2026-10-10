@@ -14,7 +14,6 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 /**
@@ -36,7 +35,7 @@ final class CodexHookAdapterTest {
             .resolve("project.conf"));
     var record = ProjectConstraint.createTypedRecord(location.projectId(), UUID.randomUUID(),
         identity.nodeId(),
-        effect, scope, title, rationale, Ed25519Signer.from(identity));
+        effect, scope, title, rationale, identity);
     assertEquals(DecisionStore.SaveResult.APPLIED,
         new DecisionStore(location.profile()
             .resolve("records"), location.projectId()).save(record, null));

@@ -15,7 +15,6 @@ import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.DecisionStatus;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Test-only independent JVM endpoint for CP-R4 record exchange evidence.
@@ -96,14 +95,13 @@ public final class DecisionRecordPeerProcess {
     config.save(profile.resolve("project.conf"));
     DecisionStore store = new DecisionStore(profile.resolve("records"), project);
     ProjectRecordSync sync = new ProjectRecordSync(config, store);
-    Ed25519Signer signer = Ed25519Signer.from(identity);
     Onboarding onboarding = new Onboarding(profile.resolve("link"), _ -> {
     });
     onboarding.join(Files.readString(invitation), sync.handler(), session -> {
       try {
-        DecisionRecord first = record(signer, 1, null, "first");
-        DecisionRecord second = record(signer, 2, first.digest(), "successor");
-        DecisionRecord conflict = record(signer, 2, first.digest(), "divergent");
+        DecisionRecord first = record(identity, 1, null, "first");
+        DecisionRecord second = record(identity, 2, first.digest(), "successor");
+        DecisionRecord conflict = record(identity, 2, first.digest(), "divergent");
         List<ProjectRecordSync.SyncOutcome> results = List.of(sync.publish(session, first),
             sync.publish(session, first), sync.publish(session, second),
             sync.publish(session, first),
@@ -125,13 +123,13 @@ public final class DecisionRecordPeerProcess {
     });
   }
 
-  private static DecisionRecord record(Ed25519Signer signer, long revision, byte[] predecessor,
+  private static DecisionRecord record(NodeIdentity identity, long revision, byte[] predecessor,
       String title)
       throws Exception {
     return DecisionRecord.create(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), RECORD_ID,
         revision,
-        predecessor, signer.nodeId(), signer.nodeId(), DecisionStatus.PROPOSED, TIME, TIME, title,
-        "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), signer);
+        predecessor, identity.nodeId(), identity.nodeId(), DecisionStatus.PROPOSED, TIME, TIME, title,
+        "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), identity);
   }
 
   private static void waitFor(Path path) {

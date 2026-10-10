@@ -23,7 +23,6 @@ import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.DecisionStatus;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 import org.synesis.projectrecord.sync.ProjectReconciliationSync.ReconciliationResult;
 import org.synesis.projectrecord.sync.protocol.ReconciliationMessage;
 import org.synesis.projectrecord.sync.protocol.ReconciliationMessage.ErrorCode;
@@ -40,14 +39,13 @@ final class ReconciliationClientTest {
 
   private DecisionStore store;
   private ReconciliationClient client;
-  private Ed25519Signer signer;
+  private NodeIdentity identity;
   private Function<byte[], CompletionStage<byte[]>> host;
 
   @BeforeEach
   void openClient(@TempDir Path directory) throws Exception {
-    NodeIdentity identity = new IdentityBootstrap(directory.resolve("link")).loadOrCreate()
+    identity = new IdentityBootstrap(directory.resolve("link")).loadOrCreate()
         .identity();
-    signer = Ed25519Signer.from(identity);
     store = new DecisionStore(directory.resolve("records"), PROJECT);
     ProjectConfig config = new ProjectConfig(PROJECT, Set.of("sl1-" + "a".repeat(64)));
     client = new ReconciliationClient(identity.nodeId(), config, store, request -> host.apply(request));
@@ -58,9 +56,9 @@ final class ReconciliationClientTest {
   }
 
   private DecisionRecord record() throws Exception {
-    return DecisionRecord.create(PROJECT, RECORD, 1, null, signer.nodeId(), signer.nodeId(),
+    return DecisionRecord.create(PROJECT, RECORD, 1, null, identity.nodeId(), identity.nodeId(),
         DecisionStatus.PROPOSED, TIME, TIME, "title", "rationale",
-        List.of(new DecisionEvidence("test", "process", new byte[32])), signer);
+        List.of(new DecisionEvidence("test", "process", new byte[32])), identity);
   }
 
   @Test

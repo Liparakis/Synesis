@@ -25,11 +25,11 @@ public final class ProjectConfig {
   /**
    * Maximum UTF-8 configuration file size.
    */
-  public static final int MAX_BYTES = 4_096;
+  private static final int MAX_BYTES = 4_096;
   /**
    * Maximum configured peer count.
    */
-  public static final int MAX_PEERS = 32;
+  private static final int MAX_PEERS = 32;
   /**
    * Wire-format key for the project UUID line.
    */

@@ -12,7 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.synesis.projectrecord.security.Ed25519Signer;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Exercises project-constraint bounds, scope matching, and signatures.
@@ -21,7 +21,7 @@ final class ProjectConstraintTest {
 
   @Test
   void typedConstraintCreationAndExtraction() throws Exception {
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     UUID projectId = UUID.randomUUID();
     UUID recordId = UUID.randomUUID();
 
@@ -45,7 +45,7 @@ final class ProjectConstraintTest {
 
   @Test
   void ordinaryDecisionWithConstraintTitleIsNotTreatedAsConstraint() throws Exception {
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     Instant now = Instant.now()
         .truncatedTo(ChronoUnit.MILLIS);
     byte[] digest = new byte[32];

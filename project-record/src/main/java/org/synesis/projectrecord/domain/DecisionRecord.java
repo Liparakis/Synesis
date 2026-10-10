@@ -22,7 +22,6 @@ import java.util.Objects;
 import java.util.UUID;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.guardrail.ScopeMatcher;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Immutable canonical signed decision revision v2 (SDR2).
@@ -37,25 +36,28 @@ public final class DecisionRecord {
   /**
    * Maximum complete encoded record size.
    */
-  public static final int MAX_BYTES = 16_384;
+  static final int MAX_BYTES = 16_384;
   /**
    * Maximum UTF-8 title size.
    */
-  public static final int MAX_TITLE_BYTES = 512;
+  static final int MAX_TITLE_BYTES = 512;
   /**
    * Maximum UTF-8 rationale size.
    */
-  public static final int MAX_RATIONALE_BYTES = 4_096;
+  private static final int MAX_RATIONALE_BYTES = 4_096;
   /**
    * Maximum evidence references per revision.
    */
-  public static final int MAX_EVIDENCE = 8;
+  private static final int MAX_EVIDENCE = 8;
 
   private static final int MAGIC = 0x53445232;
   private static final int VERSION = 2;
   private static final int MAX_NODE_ID_BYTES = 128;
   private static final int MAX_KEY_BYTES = 256;
   private static final int MAX_SIGNATURE_BYTES = 128;
+  private static final int MAX_SCOPES = 16;
+  private static final int MAX_SCOPE_BYTES = 1_024;
+  private static final int MAX_SUPERSEDES = 16;
   private final UUID projectId;
   private final UUID recordId;
   private final RecordType recordType;
@@ -163,7 +165,7 @@ public final class DecisionRecord {
    * @param title          bounded readable title
    * @param rationale      bounded readable rationale
    * @param evidence       at least one bounded evidence reference
-   * @param signer         Ed25519 signer
+   * @param signer         identity whose key signs the record
    * @return a canonical signed record
    * @throws GeneralSecurityException if signing fails
    */
@@ -171,7 +173,7 @@ public final class DecisionRecord {
       byte[] previousDigest,
       String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
       Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-      Ed25519Signer signer) throws GeneralSecurityException {
+      NodeIdentity signer) throws GeneralSecurityException {
     return createTyped(projectId, recordId, RecordType.DECISION, revision, previousDigest,
         ownerNodeId,
         authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, null, signer);
@@ -193,7 +195,7 @@ public final class DecisionRecord {
    * @param rationale         bounded readable rationale
    * @param evidence          at least one bounded evidence reference
    * @param constraintPayload explicit constraint payload
-   * @param signer            Ed25519 signer
+   * @param signer            identity whose key signs the record
    * @return a canonical signed project constraint record
    * @throws GeneralSecurityException if signing fails
    */
@@ -201,7 +203,7 @@ public final class DecisionRecord {
       byte[] previousDigest,
       String ownerNodeId, String authorNodeId, DecisionStatus status, Instant createdAt,
       Instant updatedAt, String title, String rationale, List<DecisionEvidence> evidence,
-      ConstraintPayload constraintPayload, Ed25519Signer signer) throws GeneralSecurityException {
+      ConstraintPayload constraintPayload, NodeIdentity signer) throws GeneralSecurityException {
     return createTyped(projectId, recordId, RecordType.PROJECT_CONSTRAINT, revision, previousDigest,
         ownerNodeId,
         authorNodeId, status, createdAt, updatedAt, title, rationale, evidence, constraintPayload,
@@ -222,7 +224,7 @@ public final class DecisionRecord {
       String rationale,
       List<DecisionEvidence> evidence,
       ConstraintPayload constraintPayload,
-      Ed25519Signer signer) throws GeneralSecurityException {
+      NodeIdentity signer) throws GeneralSecurityException {
     Objects.requireNonNull(signer, "signer");
     if (!signer.nodeId()
         .equals(ownerNodeId)) {
@@ -312,15 +314,15 @@ public final class DecisionRecord {
           throw new IOException("invalid status");
         }
         int scopeCount = input.readUnsignedByte();
-        if (scopeCount == 0 || scopeCount > 16) {
+        if (scopeCount == 0 || scopeCount > MAX_SCOPES) {
           throw new IOException("invalid scope count");
         }
         List<String> scopes = new ArrayList<>(scopeCount);
         for (int i = 0; i < scopeCount; i++) {
-          scopes.add(readText(input, 1_024));
+          scopes.add(readText(input, MAX_SCOPE_BYTES));
         }
         int supCount = input.readUnsignedByte();
-        if (supCount > 16) {
+        if (supCount > MAX_SUPERSEDES) {
           throw new IOException("invalid supersedes count");
         }
         List<UUID> supersedes = new ArrayList<>(supCount);
@@ -432,7 +434,7 @@ public final class DecisionRecord {
     return value;
   }
 
-  private static byte[] sha256(byte[] bytes) {
+  static byte[] sha256(byte[] bytes) {
     try {
       return MessageDigest.getInstance("SHA-256")
           .digest(bytes);
@@ -568,7 +570,6 @@ public final class DecisionRecord {
    *
    * @return updated instant
    */
-  @SuppressWarnings("unused")
   public Instant updatedAt() {
     return updatedAt;
   }
@@ -607,25 +608,6 @@ public final class DecisionRecord {
    */
   public ConstraintPayload constraintPayload() {
     return constraintPayload;
-  }
-
-  /**
-   * Returns a copy of the owner public key bytes.
-   *
-   * @return public key bytes
-   */
-  @SuppressWarnings("unused")
-  public byte[] publicKeyEncoded() {
-    return publicKey.clone();
-  }
-
-  /**
-   * Returns a copy of the Ed25519 signature bytes.
-   *
-   * @return signature bytes
-   */
-  public byte[] signature() {
-    return signature.clone();
   }
 
   private byte[] encodeUnsigned() {
@@ -730,19 +712,19 @@ public final class DecisionRecord {
       Objects.requireNonNull(status, "status");
       Objects.requireNonNull(scopes, "scopes");
       Objects.requireNonNull(supersedes, "supersedes");
-      if (scopes.isEmpty() || scopes.size() > 16) {
+      if (scopes.isEmpty() || scopes.size() > MAX_SCOPES) {
         throw new IllegalArgumentException("scopes count outside bound");
       }
       List<String> normScopes = new ArrayList<>();
       for (String s : scopes) {
-        String n = ScopeMatcher.normalizePath(s);
+        String n = text(ScopeMatcher.normalizePath(s), MAX_SCOPE_BYTES, "scope");
         if (normScopes.contains(n)) {
           throw new IllegalArgumentException("duplicate normalized scope: " + n);
         }
         normScopes.add(n);
       }
       scopes = List.copyOf(normScopes);
-      if (supersedes.size() > 16) {
+      if (supersedes.size() > MAX_SUPERSEDES) {
         throw new IllegalArgumentException("supersedes count outside bound");
       }
       supersedes = List.copyOf(supersedes.stream()

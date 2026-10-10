@@ -2,15 +2,13 @@ package org.synesis.projectrecord.domain;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.guardrail.ScopeMatcher;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Immutable domain representation of an explicit typed project constraint.
@@ -82,13 +80,13 @@ public final class ProjectConstraint {
    * @param scope     primary scope pattern
    * @param title     constraint title
    * @param rationale constraint rationale
-   * @param signer    Ed25519 signer
+   * @param signer    identity whose key signs the record
    * @return signed DecisionRecord containing typed constraint payload
    * @throws GeneralSecurityException if signing fails
    */
   public static DecisionRecord createTypedRecord(UUID projectId, UUID recordId, String ownerNode,
       Effect effect, String scope, String title,
-      String rationale, Ed25519Signer signer) throws GeneralSecurityException {
+      String rationale, NodeIdentity signer) throws GeneralSecurityException {
     return createTypedRecord(projectId, recordId, ownerNode, effect, scope, title, rationale,
         List.of(), signer);
   }
@@ -105,35 +103,26 @@ public final class ProjectConstraint {
    * @param title      constraint title
    * @param rationale  constraint rationale
    * @param supersedes list of superseded constraint UUIDs
-   * @param signer     Ed25519 signer
+   * @param signer     identity whose key signs the record
    * @return signed DecisionRecord containing typed constraint payload
    * @throws GeneralSecurityException if signing fails
    */
   public static DecisionRecord createTypedRecord(UUID projectId, UUID recordId, String ownerNode,
       Effect effect, String scope, String title,
       String rationale, List<UUID> supersedes,
-      Ed25519Signer signer) throws GeneralSecurityException {
+      NodeIdentity signer) throws GeneralSecurityException {
     Objects.requireNonNull(scope, "scope");
     String normScope = ScopeMatcher.normalizePath(scope);
     DecisionRecord.ConstraintPayload payload = new DecisionRecord.ConstraintPayload(
         effect, ConstraintStatus.ACTIVE, List.of(normScope), supersedes);
 
-    byte[] digest = sha256("scope=" + normScope);
+    byte[] digest = DecisionRecord.sha256(("scope=" + normScope).getBytes(StandardCharsets.UTF_8));
     DecisionEvidence evidence = new DecisionEvidence("constraint", "scope=" + normScope, digest);
 
     Instant now = Instant.now()
         .truncatedTo(ChronoUnit.MILLIS);
     return DecisionRecord.createConstraint(projectId, recordId, 1, null, ownerNode, ownerNode,
         DecisionStatus.ACCEPTED, now, now, title, rationale, List.of(evidence), payload, signer);
-  }
-
-  private static byte[] sha256(String text) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
-      return md.digest(text.getBytes(StandardCharsets.UTF_8));
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 algorithm missing", e);
-    }
   }
 
   /**

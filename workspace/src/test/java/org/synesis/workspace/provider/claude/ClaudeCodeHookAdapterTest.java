@@ -15,7 +15,6 @@ import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.domain.ProjectConstraint;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Exercises Claude Code hook parsing and fail-closed provider behavior.
@@ -58,11 +57,10 @@ final class ClaudeCodeHookAdapterTest {
       Files.writeString(protectedFile, initialContent);
 
       // Add active typed constraint for src/protocol/**
-      Ed25519Signer signer = Ed25519Signer.from(identity);
       DecisionRecord constraintRecord = ProjectConstraint.createTypedRecord(projectId,
           UUID.randomUUID(),
           identity.nodeId(), ProjectConstraint.Effect.BLOCK, "src/protocol/**",
-          "Lock protocol wire format", "Protocol formats frozen.", signer);
+          "Lock protocol wire format", "Protocol formats frozen.", identity);
 
       DecisionStore store = new DecisionStore(tempDir.resolve("records"), projectId);
       assertEquals(DecisionStore.SaveResult.APPLIED, store.save(constraintRecord, null));

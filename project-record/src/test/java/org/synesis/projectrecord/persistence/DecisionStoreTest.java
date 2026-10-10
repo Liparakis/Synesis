@@ -11,10 +11,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.domain.DecisionEvidence;
 import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.DecisionStatus;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Verifies immutable heads, append results, corruption detection, and recovery.
@@ -25,13 +25,13 @@ final class DecisionStoreTest {
   private static final UUID RECORD = UUID.fromString("44444444-4444-4444-4444-444444444444");
   private static final Instant TIME = Instant.parse("2026-01-01T00:00:00Z");
 
-  private static DecisionRecord record(Ed25519Signer signer, long revision, byte[] previous,
+  private static DecisionRecord record(NodeIdentity signer, long revision, byte[] previous,
       String title)
       throws Exception {
     return record(signer, RECORD, revision, previous, title);
   }
 
-  private static DecisionRecord record(Ed25519Signer signer, UUID recordId, long revision,
+  private static DecisionRecord record(NodeIdentity signer, UUID recordId, long revision,
       byte[] previous, String title)
       throws Exception {
     return DecisionRecord.create(PROJECT, recordId, revision, previous, signer.nodeId(),
@@ -43,7 +43,7 @@ final class DecisionStoreTest {
   @Test
   void duplicateStaleAndConflictNeverOverwriteHead() throws Exception {
     Path root = Files.createTempDirectory("decision-store-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(root, PROJECT);
     DecisionRecord first = record(signer, 1, null, "one");
     assertEquals(DecisionStore.SaveResult.APPLIED, store.save(first, null));
@@ -68,7 +68,7 @@ final class DecisionStoreTest {
   @Test
   void corruptionIsRejectedAndMissingHeadRecoversOnRestart() throws Exception {
     Path root = Files.createTempDirectory("decision-recovery-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(root, PROJECT);
     DecisionRecord first = record(signer, 1, null, "one");
     assertEquals(DecisionStore.SaveResult.APPLIED, store.save(first, null));
@@ -93,7 +93,7 @@ final class DecisionStoreTest {
   @Test
   void invalidSignatureCandidateIsNotPersisted() throws Exception {
     Path root = Files.createTempDirectory("decision-corrupt-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(root, PROJECT);
     DecisionRecord record = record(signer, 1, null, "one");
     byte[] bytes = record.encoded();
@@ -108,7 +108,7 @@ final class DecisionStoreTest {
   @Test
   void recoveryRejectsRevisionWithCorruptedSignature() throws Exception {
     Path root = Files.createTempDirectory("decision-recover-signature-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     new DecisionStore(root, PROJECT).save(record(signer, 1, null, "one"), null);
     flipLastByte(revisionFile(root, RECORD));
     java.io.IOException failure = assertThrows(java.io.IOException.class,
@@ -118,7 +118,7 @@ final class DecisionStoreTest {
 
   @Test
   void quarantineRejectsBadSignatureAndForeignProject() throws Exception {
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(Files.createTempDirectory("decision-quarantine-"),
         PROJECT);
     byte[] bytes = record(signer, 1, null, "one").encoded();
@@ -136,7 +136,7 @@ final class DecisionStoreTest {
   @Test
   void corruptRecordCountSeesOnlyTheCorruptedRecord() throws Exception {
     Path root = Files.createTempDirectory("decision-audit-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(root, PROJECT);
     UUID healthy = UUID.fromString("55555555-5555-5555-5555-555555555555");
     assertEquals(DecisionStore.SaveResult.APPLIED,
@@ -151,7 +151,7 @@ final class DecisionStoreTest {
   @Test
   void storeRefusesRevisionsItCouldNotReadBack() throws Exception {
     Path root = Files.createTempDirectory("decision-limit-");
-    Ed25519Signer signer = Ed25519Signer.generate();
+    NodeIdentity signer = NodeIdentity.generate();
     DecisionStore store = new DecisionStore(root, PROJECT);
     DecisionRecord previous = null;
     for (int revision = 1; revision <= DecisionStore.MAX_REVISIONS_PER_RECORD; revision++) {

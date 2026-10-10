@@ -15,7 +15,6 @@ import org.synesis.projectrecord.domain.DecisionRecord;
 import org.synesis.projectrecord.domain.DecisionStatus;
 import org.synesis.projectrecord.domain.ProjectConfig;
 import org.synesis.projectrecord.persistence.DecisionStore;
-import org.synesis.projectrecord.security.Ed25519Signer;
 
 /**
  * Test-only independent JVM endpoint for project-wide reconciliation test.
@@ -63,18 +62,17 @@ public final class ProjectReconciliationPeerProcess {
             .trim()));
     config.save(profile.resolve("project.conf"));
     DecisionStore store = new DecisionStore(profile.resolve("records"), project);
-    Ed25519Signer signer = Ed25519Signer.from(identity);
 
     // Pre-populate Host store depending on the scenario
     if ("conflict".equals(scenario)) {
       // Host has RECORD_A revision 1 (diff title/digest) -> conflict!
-      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Host version of A", signer);
+      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Host version of A", identity);
       store.save(r1, null);
     } else if ("normal".equals(scenario) || "corrupt".equals(scenario)) {
       // Host has RECORD_B revision 1 and 2 (client starts empty for B)
-      DecisionRecord rb1 = record(project, RECORD_B, 1, null, "Record B rev 1", signer);
+      DecisionRecord rb1 = record(project, RECORD_B, 1, null, "Record B rev 1", identity);
       store.save(rb1, null);
-      DecisionRecord rb2 = record(project, RECORD_B, 2, rb1.digest(), "Record B rev 2", signer);
+      DecisionRecord rb2 = record(project, RECORD_B, 2, rb1.digest(), "Record B rev 2", identity);
       store.save(rb2,
           store.headState(RECORD_B)
               .orElse(null));
@@ -114,24 +112,23 @@ public final class ProjectReconciliationPeerProcess {
             .trim()));
     config.save(profile.resolve("project.conf"));
     DecisionStore store = new DecisionStore(profile.resolve("records"), project);
-    Ed25519Signer signer = Ed25519Signer.from(identity);
 
     // Pre-populate Joiner store depending on the scenario
     if ("conflict".equals(scenario)) {
       // Joiner has RECORD_A revision 1 (diff title/digest) -> conflict!
-      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Joiner version of A", signer);
+      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Joiner version of A", identity);
       store.save(r1, null);
     } else if ("normal".equals(scenario) || "corrupt".equals(scenario)) {
       // Joiner has RECORD_A revision 2
-      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Record A rev 1", signer);
+      DecisionRecord r1 = record(project, RECORD_A, 1, null, "Record A rev 1", identity);
       store.save(r1, null);
-      DecisionRecord r2 = record(project, RECORD_A, 2, r1.digest(), "Record A rev 2", signer);
+      DecisionRecord r2 = record(project, RECORD_A, 2, r1.digest(), "Record A rev 2", identity);
       store.save(r2,
           store.headState(RECORD_A)
               .orElse(null));
 
       // Joiner has RECORD_C revision 1 (local-only)
-      DecisionRecord rc1 = record(project, RECORD_C, 1, null, "Record C rev 1", signer);
+      DecisionRecord rc1 = record(project, RECORD_C, 1, null, "Record C rev 1", identity);
       store.save(rc1, null);
     }
 
@@ -165,11 +162,11 @@ public final class ProjectReconciliationPeerProcess {
       long revision,
       byte[] predecessor,
       String title,
-      Ed25519Signer signer)
+      NodeIdentity identity)
       throws Exception {
     return DecisionRecord.create(project, recordId, revision,
-        predecessor, signer.nodeId(), signer.nodeId(), DecisionStatus.PROPOSED, TIME, TIME, title,
-        "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), signer);
+        predecessor, identity.nodeId(), identity.nodeId(), DecisionStatus.PROPOSED, TIME, TIME, title,
+        "rationale", List.of(new DecisionEvidence("test", "process", new byte[32])), identity);
   }
 
   private static void waitFor(Path path) {
