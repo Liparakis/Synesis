@@ -5,8 +5,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -45,9 +43,6 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
    * Maximum graceful-close wait before the control stream is forced closed.
    */
   public static final int MAX_CLOSE_MILLIS = 2_000;
-  private static final int READY_BYTES = 20;
-  private static final int GOODBYE_BYTES = 17;
-  private static final int ACK_BYTES = 16;
   private final PeerSession session;
   private final CompletableFuture<PeerSession> established;
   private final Runnable claim;
@@ -103,7 +98,8 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   @Override
   public void channelActive(ChannelHandlerContext context) {
     this.context = context;
-    write(ControlFrame.of(ControlMessageType.CONTROL_READY, sessionPayload()));
+    write(ControlFrame.of(ControlMessageType.CONTROL_READY,
+        SessionPayload.ready(sessionId)));
   }
 
   @Override
@@ -125,10 +121,7 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   }
 
   private void receiveReady(byte[] payload) throws HandshakeException {
-    validateSessionPayload(payload, READY_BYTES);
-    if (ByteBuffer.wrap(payload)
-        .order(ByteOrder.BIG_ENDIAN)
-        .getInt(16) != ControlFrame.MAX_PAYLOAD) {
+    if (SessionPayload.readyMaximumPayload(payload, sessionId) != ControlFrame.MAX_PAYLOAD) {
       protocolFailure(ControlErrorCode.ILLEGAL_STATE);
       return;
     }
@@ -223,9 +216,7 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   }
 
   private void receiveGoodbye(byte[] payload) throws HandshakeException {
-    validateSessionPayload(payload, GOODBYE_BYTES);
-    SessionCloseReason remoteReason = decodeReason(payload[16]);
-    if (remoteReason == null) {
+    if (SessionPayload.goodbyeReason(payload, sessionId) == null) {
       protocolFailure(ControlErrorCode.MALFORMED_FRAME);
       return;
     }
@@ -238,12 +229,13 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
     }
     setReason(SessionCloseReason.REMOTE_REQUEST);
     stopLiveness(LivenessState.CLOSED_BY_PEER);
-    write(ControlFrame.of(ControlMessageType.GOODBYE_ACK, sessionOnlyPayload()));
+    write(ControlFrame.of(ControlMessageType.GOODBYE_ACK,
+        SessionPayload.acknowledgement(sessionId)));
     closeTransport();
   }
 
   private void receiveGoodbyeAck(byte[] payload) throws HandshakeException {
-    validateSessionPayload(payload, ACK_BYTES);
+    SessionPayload.requireAcknowledgement(payload, sessionId);
     if (!goodbyeSent.get()) {
       protocolFailure(ControlErrorCode.ILLEGAL_STATE);
       return;
@@ -252,47 +244,10 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   }
 
   private void receiveProtocolError(byte[] payload) throws HandshakeException {
-    validateSessionPayload(payload, GOODBYE_BYTES);
-    if ((payload[16] & 255) == 0 || (payload[16] & 255) > ControlErrorCode.values().length) {
-      throw new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
-    }
+    SessionPayload.requireProtocolError(payload, sessionId);
     setReason(SessionCloseReason.PROTOCOL_ERROR);
     stopLiveness(LivenessState.CLOSED_BY_PROTOCOL);
     closeTransport();
-  }
-
-  private void validateSessionPayload(byte[] payload, int expectedLength)
-      throws HandshakeException {
-    if (payload == null || payload.length != expectedLength) {
-      throw new HandshakeException(HandshakeFailureCode.MALFORMED_HANDSHAKE);
-    }
-    ByteBuffer buffer = ByteBuffer.wrap(payload)
-        .order(ByteOrder.BIG_ENDIAN);
-    if (!new UUID(buffer.getLong(), buffer.getLong()).equals(sessionId)) {
-      throw new HandshakeException(HandshakeFailureCode.IDENTITY_MISMATCH);
-    }
-  }
-
-  private SessionCloseReason decodeReason(byte value) {
-    SessionCloseReason[] values = SessionCloseReason.values();
-    return (value & 255) < values.length ? values[value & 255] : null;
-  }
-
-  private byte[] sessionPayload() {
-    ByteBuffer buffer = ByteBuffer.allocate(READY_BYTES)
-        .order(ByteOrder.BIG_ENDIAN);
-    buffer.putLong(sessionId.getMostSignificantBits())
-        .putLong(sessionId.getLeastSignificantBits())
-        .putInt(ControlFrame.MAX_PAYLOAD);
-    return buffer.array();
-  }
-
-  private byte[] sessionOnlyPayload() {
-    ByteBuffer buffer = ByteBuffer.allocate(ACK_BYTES)
-        .order(ByteOrder.BIG_ENDIAN);
-    return buffer.putLong(sessionId.getMostSignificantBits())
-        .putLong(sessionId.getLeastSignificantBits())
-        .array();
   }
 
   private void sendHeartbeat() {
@@ -366,12 +321,8 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
     Runnable close = () -> {
       if (!terminal.isDone() && context != null && context.channel()
           .isOpen()) {
-        ByteBuffer payload = ByteBuffer.allocate(GOODBYE_BYTES)
-            .order(ByteOrder.BIG_ENDIAN)
-            .putLong(sessionId.getMostSignificantBits())
-            .putLong(sessionId.getLeastSignificantBits())
-            .put((byte) closeReason.ordinal());
-        write(ControlFrame.of(ControlMessageType.GOODBYE, payload.array()));
+        write(ControlFrame.of(ControlMessageType.GOODBYE,
+            SessionPayload.goodbye(sessionId, closeReason)));
         context.executor()
             .schedule(this::closeTransport, MAX_CLOSE_MILLIS, TimeUnit.MILLISECONDS);
       } else {
@@ -458,13 +409,8 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
     }
     if (context != null && context.channel()
         .isOpen()) {
-      byte[] payload = ByteBuffer.allocate(GOODBYE_BYTES)
-          .order(ByteOrder.BIG_ENDIAN)
-          .putLong(sessionId.getMostSignificantBits())
-          .putLong(sessionId.getLeastSignificantBits())
-          .put((byte) code.code)
-          .array();
-      write(ControlFrame.of(ControlMessageType.PROTOCOL_ERROR, payload));
+      write(ControlFrame.of(ControlMessageType.PROTOCOL_ERROR,
+          SessionPayload.protocolError(sessionId, code)));
       context.close();
     } else {
       finishTerminal();
