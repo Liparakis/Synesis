@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Routes bounded opaque overlay frames through currently available physical peer transports.
@@ -111,15 +112,6 @@ public final class OverlayForwarder {
     return CompletableFuture.failedFuture(failure);
   }
 
-  private static boolean isNodeId(String nodeId) {
-    try {
-      OverlayCodecSupport.requireNodeId(nodeId);
-      return true;
-    } catch (RuntimeException invalid) {
-      return false;
-    }
-  }
-
   /**
    * Returns the newest membership snapshot used for validation and routing.
    *
@@ -166,7 +158,7 @@ public final class OverlayForwarder {
       validateFrame(frame, now);
       OverlayMembershipSnapshot currentMembership = membership.current();
       boolean authorizedImmediateSender =
-          immediateSenderNodeId != null && isNodeId(immediateSenderNodeId)
+          NodeIdentity.isNodeId(immediateSenderNodeId)
               && (immediateSenderNodeId.equals(relayNodeId)
               || (currentMembership.allows(immediateSenderNodeId)
               && peers.contains(immediateSenderNodeId)));

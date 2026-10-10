@@ -12,6 +12,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HexFormat;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * An Ed25519 Synesis node identity.
@@ -28,6 +29,7 @@ public final class NodeIdentity {
   private static final String ALGORITHM = "Ed25519";
   private static final String SIGNATURE_ALGORITHM = "Ed25519";
   private static final String NODE_ID_PREFIX = "sl1-";
+  private static final Pattern NODE_ID_PATTERN = Pattern.compile(NODE_ID_PREFIX + "[0-9a-f]{64}");
   private static final int MAX_PUBLIC_KEY_BYTES = 16_384;
   private static final int MAX_PRIVATE_KEY_BYTES = 16_384;
 
@@ -112,6 +114,40 @@ public final class NodeIdentity {
         .withUpperCase()
         .formatHex(digest)
         .toLowerCase(java.util.Locale.ROOT);
+  }
+
+  /**
+   * Tells whether a string is a well-formed node ID: {@code sl1-} followed by 64 lowercase
+   * hexadecimal characters. It does not prove that any key derives this ID.
+   *
+   * @param value candidate text; may be {@code null}
+   * @return {@code true} only for a well-formed node ID
+   */
+  public static boolean isNodeId(String value) {
+    return value != null && NODE_ID_PATTERN.matcher(value)
+        .matches();
+  }
+
+  /**
+   * Verifies an Ed25519 signature against an X.509-encoded public key. Callers decide how a
+   * {@code false} result or a thrown failure is reported.
+   *
+   * @param publicKeyEncoded X.509 public-key bytes
+   * @param message          exact signed bytes
+   * @param signature        signature bytes
+   * @return {@code true} only when the signature is valid for the message and key
+   * @throws GeneralSecurityException if the key encoding is invalid or the signature is
+   *                                  malformed, such as one of the wrong length
+   * @throws NullPointerException     if an argument is {@code null}
+   */
+  public static boolean verifySignature(byte[] publicKeyEncoded, byte[] message, byte[] signature)
+      throws GeneralSecurityException {
+    PublicKey key = KeyFactory.getInstance(ALGORITHM)
+        .generatePublic(new X509EncodedKeySpec(publicKeyEncoded));
+    Signature verifier = Signature.getInstance(SIGNATURE_ALGORITHM);
+    verifier.initVerify(key);
+    verifier.update(message);
+    return verifier.verify(signature);
   }
 
   private static byte[] sha256(byte[] value) {

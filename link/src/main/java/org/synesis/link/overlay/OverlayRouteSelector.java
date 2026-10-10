@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Deterministic route selector for direct, peer-transit, and relay paths.
@@ -107,11 +108,6 @@ public final class OverlayRouteSelector {
   }
 
   private static boolean isAuthorizedNode(String nodeId, OverlayMembershipSnapshot membership) {
-    try {
-      OverlayCodecSupport.requireNodeId(nodeId);
-      return membership.allows(nodeId);
-    } catch (RuntimeException invalid) {
-      return false;
-    }
+    return NodeIdentity.isNodeId(nodeId) && membership.allows(nodeId);
   }
 }

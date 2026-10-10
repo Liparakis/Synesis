@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Immutable logical route decision independent of any physical transport.
@@ -27,7 +28,7 @@ public final class OverlayRoute {
     if (kind == Kind.PEER_TRANSIT) {
       if (this.path.size() < 2 || this.path.size() > OverlayForwardingFrame.MAX_HOPS
           || !this.path.get(this.path.size() - 1).equals(destinationNodeId)
-          || this.path.stream().anyMatch(value -> !isNodeId(value))
+          || this.path.stream().anyMatch(value -> !NodeIdentity.isNodeId(value))
           || this.path.size() != new HashSet<>(this.path).size() || relayNodeId != null) {
         throw new IllegalArgumentException("peer-transit route shape is invalid");
       }
@@ -85,15 +86,6 @@ public final class OverlayRoute {
    */
   public static OverlayRoute unreachable(String destinationNodeId) {
     return new OverlayRoute(Kind.UNREACHABLE, destinationNodeId, List.of(), null);
-  }
-
-  private static boolean isNodeId(String value) {
-    try {
-      OverlayCodecSupport.requireNodeId(value);
-      return true;
-    } catch (RuntimeException invalid) {
-      return false;
-    }
   }
 
   /**

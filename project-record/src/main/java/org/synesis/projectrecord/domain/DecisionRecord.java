@@ -20,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.link.identity.NodeIdentity;
 import org.synesis.projectrecord.guardrail.ScopeMatcher;
 import org.synesis.projectrecord.security.Ed25519Signer;
 
@@ -417,7 +418,7 @@ public final class DecisionRecord {
 
   private static String nodeId(String value, String name) {
     String result = text(value, MAX_NODE_ID_BYTES, name);
-    if (!result.matches("sl1-[0-9a-f]{64}")) {
+    if (!NodeIdentity.isNodeId(result)) {
       throw new IllegalArgumentException("invalid " + name);
     }
     return result;
@@ -475,10 +476,10 @@ public final class DecisionRecord {
    * @throws GeneralSecurityException if verification fails
    */
   public boolean verify() throws GeneralSecurityException {
-    return Ed25519Signer.deriveNodeId(publicKey)
+    return NodeIdentity.deriveNodeId(publicKey)
         .equals(ownerNodeId)
         && ownerNodeId.equals(authorNodeId)
-        && Ed25519Signer.verify(publicKey, unsignedBytes, signature);
+        && NodeIdentity.verifySignature(publicKey, unsignedBytes, signature);
   }
 
   /**

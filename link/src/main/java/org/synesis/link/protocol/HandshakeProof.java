@@ -7,10 +7,6 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
@@ -197,12 +193,7 @@ public final class HandshakeProof {
         .equals(nodeId)) {
       return false;
     }
-    PublicKey key = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKey));
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(key);
-    verifier.update(unsignedBytes);
-    return verifier.verify(signature);
+    return NodeIdentity.verifySignature(publicKey, unsignedBytes, signature);
   }
 
   /**

@@ -9,10 +9,8 @@ import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.PublicKey;
-import java.security.Signature;
 import java.security.interfaces.XECPublicKey;
 import java.security.spec.NamedParameterSpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.security.spec.XECPublicKeySpec;
 import java.util.Arrays;
 import java.util.HexFormat;
@@ -22,6 +20,7 @@ import javax.crypto.KeyAgreement;
 import javax.crypto.spec.HKDFParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Package-private validation and cryptographic helpers for the overlay wire records.
@@ -46,7 +45,7 @@ final class OverlayCodecSupport {
 
   static void requireNodeId(String nodeId) {
     Objects.requireNonNull(nodeId, "node ID");
-    if (!nodeId.matches("sl1-[0-9a-f]{64}")) {
+    if (!NodeIdentity.isNodeId(nodeId)) {
       throw new IllegalArgumentException("invalid node ID");
     }
   }
@@ -148,16 +147,6 @@ final class OverlayCodecSupport {
     } catch (IOException impossible) {
       throw new AssertionError(impossible);
     }
-  }
-
-  static boolean verifyEd25519(byte[] publicKeyBytes, byte[] message, byte[] signatureBytes)
-      throws GeneralSecurityException {
-    PublicKey key = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(key);
-    verifier.update(message);
-    return verifier.verify(signatureBytes);
   }
 
   static byte[] x25519PublicKeyBytes(java.security.KeyPair keyPair) {

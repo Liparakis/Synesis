@@ -3,6 +3,7 @@ package org.synesis.link.identity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -33,6 +34,35 @@ final class NodeIdentityTest {
     assertNotEquals(identity.nodeId(),
         NodeIdentity.generate()
             .nodeId());
+  }
+
+  @Test
+  void verifiesSignaturesAgainstEncodedKeys() throws GeneralSecurityException {
+    NodeIdentity identity = NodeIdentity.generate();
+    byte[] message = "synesis-link".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] signature = identity.sign(message);
+
+    assertTrue(NodeIdentity.verifySignature(identity.publicKeyEncoded(), message, signature));
+    assertFalse(NodeIdentity.verifySignature(identity.publicKeyEncoded(),
+        "tampered".getBytes(java.nio.charset.StandardCharsets.UTF_8), signature));
+    assertThrows(GeneralSecurityException.class,
+        () -> NodeIdentity.verifySignature(new byte[] {1, 2, 3}, message, signature));
+    assertThrows(GeneralSecurityException.class,
+        () -> NodeIdentity.verifySignature(identity.publicKeyEncoded(), message,
+            new byte[signature.length - 1]));
+  }
+
+  @Test
+  void recognizesOnlyCanonicalNodeIds() throws GeneralSecurityException {
+    String nodeId = NodeIdentity.generate()
+        .nodeId();
+
+    assertTrue(NodeIdentity.isNodeId(nodeId));
+    assertFalse(NodeIdentity.isNodeId(nodeId.toUpperCase(java.util.Locale.ROOT)));
+    assertFalse(NodeIdentity.isNodeId("xx1-" + nodeId.substring(4)));
+    assertFalse(NodeIdentity.isNodeId(nodeId.substring(1)));
+    assertFalse(NodeIdentity.isNodeId(nodeId + "0"));
+    assertFalse(NodeIdentity.isNodeId(null));
   }
 
   @Test

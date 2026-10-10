@@ -226,7 +226,7 @@ public final class OverlayTopologyAdvertisement {
     }
     OverlayMembershipSnapshot.Member member = membership.member(originNodeId)
         .orElseThrow(() -> new GeneralSecurityException("topology origin is not a member"));
-    if (!OverlayCodecSupport.verifyEd25519(member.publicKeyEncoded(), unsignedBytes, signature)) {
+    if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
       throw new GeneralSecurityException("invalid topology signature");
     }
   }

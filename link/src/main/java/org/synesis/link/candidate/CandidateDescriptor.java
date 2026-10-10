@@ -8,10 +8,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -285,18 +281,10 @@ public final class CandidateDescriptor {
    * @return {@code true} only when the signature and binding are valid
    * @throws GeneralSecurityException if key parsing or signature verification fails
    */
-  @SuppressWarnings("DuplicatedCode")
   public boolean verify() throws GeneralSecurityException {
-    PublicKey signer = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKey));
-    if (!NodeIdentity.deriveNodeId(publicKey)
-        .equals(nodeId)) {
-      return false;
-    }
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(signer);
-    verifier.update(canonicalBytes);
-    return verifier.verify(signature);
+    return NodeIdentity.deriveNodeId(publicKey)
+        .equals(nodeId)
+        && NodeIdentity.verifySignature(publicKey, canonicalBytes, signature);
   }
 
   /**

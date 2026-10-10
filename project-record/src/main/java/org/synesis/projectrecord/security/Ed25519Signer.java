@@ -1,16 +1,11 @@
 package org.synesis.projectrecord.security;
 
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.HexFormat;
 import java.util.Objects;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -40,7 +35,7 @@ public final class Ed25519Signer {
         || privateKey.getEncoded().length == 0 || privateKey.getEncoded().length > MAX_KEY_BYTES) {
       throw new IllegalArgumentException("key encoding exceeds the supported bound");
     }
-    this.nodeId = deriveNodeId(publicKey);
+    this.nodeId = NodeIdentity.deriveNodeId(publicKey);
     this.signingOperation = message -> signWithKey(privateKey, message);
   }
 
@@ -63,29 +58,6 @@ public final class Ed25519Signer {
   }
 
   /**
-   * Reconstructs a signer from standard JDK key encodings.
-   *
-   * @param publicKeyEncoded  X.509 public-key bytes
-   * @param privateKeyEncoded PKCS#8 private-key bytes
-   * @return signer retaining private material in memory only
-   * @throws GeneralSecurityException if either encoding is invalid
-   */
-  @SuppressWarnings("unused")
-  public static Ed25519Signer fromEncoded(byte[] publicKeyEncoded, byte[] privateKeyEncoded)
-      throws GeneralSecurityException {
-    Objects.requireNonNull(publicKeyEncoded, "public key");
-    Objects.requireNonNull(privateKeyEncoded, "private key");
-    if (publicKeyEncoded.length == 0 || publicKeyEncoded.length > MAX_KEY_BYTES
-        || privateKeyEncoded.length == 0 || privateKeyEncoded.length > MAX_KEY_BYTES) {
-      throw new IllegalArgumentException("key encoding exceeds the supported bound");
-    }
-    KeyFactory factory = KeyFactory.getInstance(ALGORITHM);
-    return new Ed25519Signer(new KeyPair(
-        factory.generatePublic(new X509EncodedKeySpec(publicKeyEncoded)),
-        factory.generatePrivate(new PKCS8EncodedKeySpec(privateKeyEncoded))));
-  }
-
-  /**
    * Adapts the authenticated Link identity for signing project records.
    *
    * @param identity Link identity whose node ID and key sign records
@@ -102,43 +74,6 @@ public final class Ed25519Signer {
     signature.initSign(key);
     signature.update(message);
     return signature.sign();
-  }
-
-  /**
-   * Verifies an Ed25519 signature against the supplied encoded public key.
-   *
-   * @param publicKeyBytes X.509 encoded Ed25519 public key
-   * @param message        signed message bytes
-   * @param signatureBytes signature bytes to verify
-   * @return true when the signature is valid for the message and key
-   * @throws GeneralSecurityException if the key or signature is invalid
-   */
-  public static boolean verify(byte[] publicKeyBytes, byte[] message, byte[] signatureBytes)
-      throws GeneralSecurityException {
-    PublicKey key = KeyFactory.getInstance(ALGORITHM)
-        .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
-    Signature verifier = Signature.getInstance(ALGORITHM);
-    verifier.initVerify(key);
-    verifier.update(message);
-    return verifier.verify(signatureBytes);
-  }
-
-  /**
-   * Derives the stable node identifier from an encoded Ed25519 public key.
-   *
-   * @param publicKeyBytes X.509 encoded Ed25519 public key
-   * @return deterministic node identifier string
-   */
-  public static String deriveNodeId(byte[] publicKeyBytes) {
-    byte[] digest;
-    try {
-      digest = MessageDigest.getInstance("SHA-256")
-          .digest(publicKeyBytes);
-    } catch (java.security.NoSuchAlgorithmException impossible) {
-      throw new AssertionError("SHA-256 is required by the JDK", impossible);
-    }
-    return "sl1-" + HexFormat.of()
-        .formatHex(digest);
   }
 
   private static boolean isUnsupportedAlgorithm(String algorithm) {

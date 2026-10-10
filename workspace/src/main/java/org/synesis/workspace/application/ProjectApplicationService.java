@@ -661,7 +661,7 @@ public final class ProjectApplicationService {
      */
     public ProjectCreateResult createProject(ProjectLocation location, String peerNodeId) throws ProjectApplicationException {
         Objects.requireNonNull(location, "location");
-        if (peerNodeId == null || !peerNodeId.matches("sl1-[0-9a-f]{64}")) {
+        if (!NodeIdentity.isNodeId(peerNodeId)) {
             throw new ProjectApplicationException("PROJECT_INVALID", "Invalid peer node ID");
         }
         try {

@@ -255,7 +255,7 @@ public final class OverlayMembershipSnapshot {
     try {
       Member authority = find(members, authorityNodeId).orElse(null);
       return authority != null && authority.status() == STATUS_ACTIVE
-          && OverlayCodecSupport.verifyEd25519(authority.publicKeyEncoded(), unsignedBytes,
+          && NodeIdentity.verifySignature(authority.publicKeyEncoded(), unsignedBytes,
           signature);
     } catch (GeneralSecurityException failure) {
       return false;

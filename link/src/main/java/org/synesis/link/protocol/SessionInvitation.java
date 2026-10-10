@@ -9,10 +9,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -234,7 +230,8 @@ public final class SessionInvitation {
     if (!host.isValidAt(now, allowedClockSkew) || !host.expiresAt()
         .equals(expiresAt)
         || !host.issuedAt()
-        .equals(issuedAt) || !verifySignature(host.publicKeyEncoded())) {
+        .equals(issuedAt)
+        || !NodeIdentity.verifySignature(host.publicKeyEncoded(), unsigned, signature)) {
       return false;
     }
     return !now.isBefore(issuedAt.minus(allowedClockSkew)) && now.isBefore(expiresAt);
@@ -325,15 +322,6 @@ public final class SessionInvitation {
    */
   public byte[] descriptorEncoded() {
     return descriptor.clone();
-  }
-
-  private boolean verifySignature(byte[] publicKeyBytes) throws GeneralSecurityException {
-    PublicKey key = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKeyBytes));
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(key);
-    verifier.update(unsigned);
-    return verifier.verify(signature);
   }
 
   private byte[] encodeUnsigned() {

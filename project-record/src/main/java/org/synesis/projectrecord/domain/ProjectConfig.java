@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.synesis.link.identity.NodeIdentity;
 
 /**
  * Immutable local project namespace and explicit authenticated peer allowlist.
@@ -58,7 +59,7 @@ public final class ProjectConfig {
     }
     LinkedHashSet<String> checked = new LinkedHashSet<>();
     for (String peer : peerNodeIds) {
-      if (peer == null || !peer.matches("sl1-[0-9a-f]{64}")) {
+      if (!NodeIdentity.isNodeId(peer)) {
         throw new IllegalArgumentException("invalid peer ID");
       }
       checked.add(peer);

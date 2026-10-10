@@ -9,12 +9,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.UUID;
 import org.synesis.coordination.domain.identity.EventSequence;
@@ -541,14 +537,8 @@ public final class PredictionEvent {
                 }
             }
         }
-        PublicKey key = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(signerPublicKey));
-        if (!NodeIdentity.deriveNodeId(signerPublicKey).equals(actorNodeId)) {
-            return false;
-        }
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(key);
-        verifier.update(canonical);
-        return verifier.verify(signature);
+        return NodeIdentity.deriveNodeId(signerPublicKey).equals(actorNodeId)
+                && NodeIdentity.verifySignature(signerPublicKey, canonical, signature);
     }
 
     /**

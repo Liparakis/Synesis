@@ -10,10 +10,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -309,7 +305,7 @@ public final class TraversalAnswer {
     return candidateDescriptor.isValidAt(now, allowedClockSkew)
         && candidateDescriptor.nodeId().equals(responderNodeId)
         && Arrays.equals(candidateDescriptor.publicKeyEncoded(), responderPublicKey)
-        && verifySignature();
+        && NodeIdentity.verifySignature(responderPublicKey, unsigned, signature);
   }
 
   /**
@@ -439,15 +435,6 @@ public final class TraversalAnswer {
    */
   public byte[] descriptorEncoded() {
     return descriptor.clone();
-  }
-
-  private boolean verifySignature() throws GeneralSecurityException {
-    PublicKey publicKey = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(responderPublicKey));
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(publicKey);
-    verifier.update(unsigned);
-    return verifier.verify(signature);
   }
 
   private byte[] encodeUnsigned() {

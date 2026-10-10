@@ -12,11 +12,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -377,11 +373,7 @@ public final class CompactBootstrapInvitation {
     if (now.isBefore(issuedAt.minus(allowedClockSkew)) || !now.isBefore(expiresAt)) {
       return false;
     }
-    PublicKey key = publicKey();
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(key);
-    verifier.update(unsigned);
-    return verifier.verify(signature)
+    return NodeIdentity.verifySignature(publicKeyEncoded(), unsigned, signature)
         && NodeIdentity.deriveNodeId(publicKeyEncoded()).equals(hostNodeId());
   }
 
@@ -654,11 +646,6 @@ public final class CompactBootstrapInvitation {
   private static int minimizedEncodedLength(int addressLength) {
     return Integer.BYTES + Short.BYTES + MINIMIZED_CAPABILITY_BYTES + RAW_PUBLIC_KEY_BYTES
         + addressLength + Short.BYTES + SIGNATURE_BYTES;
-  }
-
-  private PublicKey publicKey() throws GeneralSecurityException {
-    return KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKeyEncoded()));
   }
 
   private static Instant readEpoch(DataInputStream input) throws IOException {

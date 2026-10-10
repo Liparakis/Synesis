@@ -8,11 +8,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -347,7 +343,7 @@ public final class TraversalOffer {
     return candidateDescriptor.isValidAt(now, allowedClockSkew)
         && candidateDescriptor.nodeId().equals(initiatorNodeId)
         && Arrays.equals(candidateDescriptor.publicKeyEncoded(), initiatorPublicKey)
-        && verifySignature();
+        && NodeIdentity.verifySignature(initiatorPublicKey, unsigned, signature);
   }
 
   /**
@@ -485,15 +481,6 @@ public final class TraversalOffer {
    */
   public byte[] digest() {
     return digestOf(encoded());
-  }
-
-  private boolean verifySignature() throws GeneralSecurityException {
-    PublicKey publicKey = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(initiatorPublicKey));
-    Signature verifier = Signature.getInstance("Ed25519");
-    verifier.initVerify(publicKey);
-    verifier.update(unsigned);
-    return verifier.verify(signature);
   }
 
   private byte[] encodeUnsigned() {

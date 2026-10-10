@@ -403,7 +403,7 @@ public final class OverlayKeyAgreement {
           membership);
       OverlayMembershipSnapshot.Member member = membership.member(originNodeId).orElseThrow(
           () -> new GeneralSecurityException("origin is not a member"));
-      if (!OverlayCodecSupport.verifyEd25519(member.publicKeyEncoded(), unsignedBytes, signature)) {
+      if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
         throw new GeneralSecurityException("invalid key-agreement INIT signature");
       }
     }
@@ -632,7 +632,7 @@ public final class OverlayKeyAgreement {
           membership);
       OverlayMembershipSnapshot.Member member = membership.member(destinationNodeId).orElseThrow(
           () -> new GeneralSecurityException("destination is not a member"));
-      if (!OverlayCodecSupport.verifyEd25519(member.publicKeyEncoded(), unsignedBytes, signature)) {
+      if (!NodeIdentity.verifySignature(member.publicKeyEncoded(), unsignedBytes, signature)) {
         throw new GeneralSecurityException("invalid key-agreement response signature");
       }
     }

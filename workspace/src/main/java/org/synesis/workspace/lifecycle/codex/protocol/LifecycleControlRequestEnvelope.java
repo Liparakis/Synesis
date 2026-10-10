@@ -7,9 +7,6 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -619,11 +616,7 @@ public final class LifecycleControlRequestEnvelope {
             if (!NodeIdentity.deriveNodeId(signerPublicKey).equals(signerNodeId)) {
                 return false;
             }
-            PublicKey key = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(signerPublicKey));
-            java.security.Signature verifier = java.security.Signature.getInstance("Ed25519");
-            verifier.initVerify(key);
-            verifier.update(request.canonicalBytes());
-            return verifier.verify(signature);
+            return NodeIdentity.verifySignature(signerPublicKey, request.canonicalBytes(), signature);
         }
 
         /**

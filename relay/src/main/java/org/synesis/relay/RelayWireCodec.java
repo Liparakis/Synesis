@@ -7,11 +7,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Objects;
@@ -67,11 +63,7 @@ final class RelayWireCodec {
     }
 
     static void verifyHello(Hello hello) throws GeneralSecurityException {
-        PublicKey publicKey = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(hello.publicKey));
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(publicKey);
-        verifier.update(hello.unsigned());
-        if (!verifier.verify(hello.signature)) {
+        if (!NodeIdentity.verifySignature(hello.publicKey, hello.unsigned(), hello.signature)) {
             throw new GeneralSecurityException("invalid relay hello signature");
         }
     }
@@ -111,11 +103,7 @@ final class RelayWireCodec {
         if (!hello.nodeId.equals(ack.clientNodeId) || !Arrays.equals(hello.nonce, ack.nonce)) {
             throw new GeneralSecurityException("relay acknowledgement is not bound to the client hello");
         }
-        PublicKey publicKey = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(ack.publicKey));
-        Signature verifier = Signature.getInstance("Ed25519");
-        verifier.initVerify(publicKey);
-        verifier.update(ackUnsigned(ack));
-        if (!verifier.verify(ack.signature)) {
+        if (!NodeIdentity.verifySignature(ack.publicKey, ackUnsigned(ack), ack.signature)) {
             throw new GeneralSecurityException("invalid relay acknowledgement signature");
         }
     }
@@ -301,7 +289,7 @@ final class RelayWireCodec {
     }
 
     private static byte[] nodeIdBytes(String nodeId) {
-        if (nodeId == null || !nodeId.matches("sl1-[0-9a-f]{64}")) {
+        if (!NodeIdentity.isNodeId(nodeId)) {
             throw new IllegalArgumentException("invalid relay node ID");
         }
         return HexFormat.of().parseHex(nodeId.substring(4));
