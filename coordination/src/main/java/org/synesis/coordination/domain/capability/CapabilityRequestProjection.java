@@ -708,11 +708,16 @@ public final class CapabilityRequestProjection {
         }
         for (Map.Entry<CapabilityRequestHandle, CapabilityRequestRecord> entry : List.copyOf(records.entrySet())) {
             CapabilityRequestRecord current = entry.getValue();
-            if (!followsLane(current.state())) {
+            // A request its owner superseded by finishing binds nobody, yet the requester's
+            // successor is the one who has to learn that the owner went ahead and what it last
+            // proposed. Left with the predecessor, the successor would see a dependency it
+            // apparently never requested and no explanation. The owner's side is over.
+            boolean informsRequester = current.ownerFinishedWithoutAnswer() && current.matchesRequester(source);
+            if (!followsLane(current.state()) && !informsRequester) {
                 continue;
             }
             boolean requester = current.matchesRequester(source);
-            boolean owner = current.matchesOwner(source);
+            boolean owner = !informsRequester && current.matchesOwner(source);
             if (!requester && !owner) {
                 continue;
             }

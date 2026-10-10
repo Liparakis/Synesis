@@ -174,6 +174,55 @@ final class CapabilityContinuationProjectionTest {
         assertEquals(CapabilityLifecycleState.VALIDATED, afterRequester.state());
     }
 
+    @Test
+    void requestTheOwnerSupersededByFinishingFollowsTheRequesterSoItsSuccessorIsTold(@TempDir Path temp) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        var signer = new IdentityBootstrap(temp.resolve("link")).loadOrCreate().identity();
+        CapabilityRequestHandle handle = new CapabilityRequestHandle("req_31234567890123456789012345678901");
+        UUID lineage = UUID.randomUUID();
+        CapabilityContract draft = new CapabilityContract("lookup", "id: UUID", "value: string", List.of("stable"),
+                "not found", "none", "pure", "v1", "local", "serialized", List.of("lookup returns value"));
+        CapabilityContract proposed = new CapabilityContract("lookup", "id: UUID", "value: string", List.of("stable", "rejects null ids"),
+                "not found", "none", "pure", "v1", "local", "serialized", List.of("lookup returns value"));
+        CapabilityRequestProjection projection = new CapabilityRequestProjection();
+        apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, draft, CapabilityLifecycleState.AWAITING_OWNER, null, -1).encode());
+        apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, proposed, CapabilityLifecycleState.REVISION_REQUESTED, "Null ids must be rejected", -1).encode());
+        apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, proposed, CapabilityLifecycleState.SUPERSEDED,
+                        CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER, -1).encode());
+        assertTrue(projection.findByHandle(handle).orElseThrow().ownerFinishedWithoutAnswer());
+
+        // The requester was away while the owner waited and finished. Whoever continues the
+        // requester's lane must find the request, or it would never learn the owner went ahead.
+        var requesterTarget = new WorkIntent(UUID.randomUUID(), projectId, "agt_requester_successor", "codex", UUID.randomUUID(), "task", "acceptance", "base",
+                List.of(ResourceSelector.pathExact("task_cli.py")), 2, UUID.randomUUID(), UUID.randomUUID(), WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER, List.of(), List.of("catalog.lookup"));
+        apply(projection, projectId, signer, 4, PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                CollaborationCodec.encodeContinuation(new LaneContinuation(UUID.randomUUID(), UUID.randomUUID(), requesterTarget, "agt_requester", "agt_requester_successor", 1, "snapshot#hash",
+                        new CapabilityActorScope("requester-node", "requester-supervisor", "requester-worker", "old-requester-session"),
+                        new CapabilityActorScope("requester-node", "new-requester-supervisor", "new-requester-worker", "new-requester-session"))));
+        CapabilityRequestRecord afterRequester = projection.findByHandle(handle).orElseThrow();
+        assertTrue(afterRequester.matchesRequester("requester-node", "new-requester-supervisor", "new-requester-worker"));
+        assertTrue(afterRequester.ownerFinishedWithoutAnswer(), "the outcome itself is not changed by the continuation");
+        assertEquals(proposed, afterRequester.contract(), "the successor is shown what the owner last proposed");
+
+        // The owner's side ended with its lane. A later continuation under the owner's old
+        // identity must not pick the request up again.
+        var ownerTarget = new WorkIntent(UUID.randomUUID(), projectId, "agt_owner_successor", "claude", UUID.randomUUID(), "task", "acceptance", "base",
+                List.of(ResourceSelector.pathExact("task_store.py")), 2, UUID.randomUUID(), lineage, WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER, List.of(), List.of());
+        apply(projection, projectId, signer, 5, PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                CollaborationCodec.encodeContinuation(new LaneContinuation(UUID.randomUUID(), UUID.randomUUID(), ownerTarget, "agt_owner", "agt_owner_successor", 1, "snapshot#hash",
+                        new CapabilityActorScope("owner-node", "owner-supervisor", "owner-worker", "old-owner-session"),
+                        new CapabilityActorScope("owner-node", "new-owner-supervisor", "new-owner-worker", "new-owner-session"))));
+        assertTrue(projection.findByHandle(handle).orElseThrow().matchesOwner("owner-node", "owner-supervisor", "owner-worker"), "a finished owner side is left as it ended");
+    }
+
     private static void apply(CapabilityRequestProjection projection, UUID project, org.synesis.link.identity.NodeIdentity signer,
             long sequence, PredictionEventType type, byte[] payload) throws Exception {
         PredictionEvent event = PredictionEvent.create(project, UUID.randomUUID(), sequence, type, signer.nodeId(), payload, new byte[32], signer,
