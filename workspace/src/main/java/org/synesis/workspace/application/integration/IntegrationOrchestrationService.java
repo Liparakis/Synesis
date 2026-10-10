@@ -11,11 +11,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.synesis.coordination.application.WorkIntentService;
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
-import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
@@ -78,101 +75,6 @@ public final class IntegrationOrchestrationService {
     }
 
     /**
-     * Returns whether one candidate has the exact durable authority required for integration.
-     */
-    private static boolean reviewAccepted(TaskSnapshotRecord snapshot, PredictionEventStore store) {
-        if (!snapshot.reviewRequired()) {
-            return true;
-        }
-        if (store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) != TaskCompletionState.REVIEW_ACCEPTED) {
-            return false;
-        }
-        return store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId()).filter(validation -> "ACCEPTED".equals(validation.result()))
-                .filter(validation -> validation.taskId().equals(snapshot.taskId())).filter(validation -> validation.workGroupId().equals(snapshot.provenance().workGroupId()))
-                .filter(validation -> validation.targetIntentId().equals(snapshot.provenance().laneId())).filter(validation -> validation.claimEpoch() == snapshot.provenance().claimEpoch())
-                .filter(validation -> validation.sourceParticipant().equals(snapshot.provenance().participant())).isPresent();
-    }
-
-    private static CandidateResolution resolveCandidate(Path controlRoot,
-            TaskSnapshotRecord candidate,
-            List<TaskSnapshotRecord> allSnapshots,
-            CapabilityRequestProjection capProj,
-            org.synesis.coordination.domain.task.TaskCompletionProjection completion) {
-        List<TaskSnapshotRecord> dependencies = new ArrayList<>();
-        List<String> structuralFailures = new ArrayList<>();
-        boolean pendingDependency = false;
-        for (String dependencyHandle : candidate.capabilityDependencies()) {
-            CapabilityRequestRecord capability = capProj.findByHandle(dependencyHandle).orElse(null);
-            if (capability == null) {
-                structuralFailures.add("MISSING_CAPABILITY_DEPENDENCY:" + dependencyHandle);
-                continue;
-            }
-            if (capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.REJECTED || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.CANCELLED
-                    || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.EXPIRED
-                    || capability.state() == org.synesis.coordination.domain.capability.CapabilityLifecycleState.SUPERSEDED) {
-                structuralFailures.add("STALE_CAPABILITY_DEPENDENCY:" + dependencyHandle);
-                continue;
-            }
-            if (capability.state() != CapabilityLifecycleState.VALIDATED) {
-                pendingDependency = true;
-                continue;
-            }
-            var implementation = capProj.findLatestImplementation(dependencyHandle).orElse(null);
-            if (implementation == null) {
-                pendingDependency = true;
-                continue;
-            }
-            if (!capability.authorityLineageId().equals(implementation.authorityLineageId())) {
-                structuralFailures.add("CAPABILITY_LINEAGE_MISMATCH:" + dependencyHandle);
-                continue;
-            }
-            TaskSnapshotRecord ownerSnapshot = ownerSnapshotCarrying(controlRoot, implementation, allSnapshots);
-            if (ownerSnapshot == null) {
-                // Validation alone does not put the implementation in the
-                // integration history. Keep the consumer pending until the
-                // owner lane publishes a task snapshot that carries it.
-                pendingDependency = true;
-                continue;
-            }
-            TaskCompletionState ownerState = completion.snapshotState(ownerSnapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
-            if (ownerState == TaskCompletionState.INTEGRATED) {
-                continue;
-            }
-            dependencies.add(ownerSnapshot);
-            pendingDependency = true;
-        }
-        return new CandidateResolution(structuralFailures.isEmpty() && !pendingDependency, dependencies, structuralFailures);
-    }
-
-    /**
-     * Finds the owner-lane snapshot that puts a validated implementation into the integration
-     * history.
-     *
-     * <p>The snapshot of the validated commit itself is preferred. A lane that changed hands is
-     * rebuilt from recovery evidence, so its later snapshot is a different commit even when nothing
-     * in it changed; requiring the same commit would leave every consumer of a recovered owner
-     * waiting forever. Such a snapshot qualifies only when every path the implementation changed
-     * has, in it, exactly the content the requester validated.</p>
-     */
-    private static TaskSnapshotRecord ownerSnapshotCarrying(Path controlRoot, org.synesis.coordination.domain.integration.ImplementationRevisionRecord implementation, List<TaskSnapshotRecord> allSnapshots) {
-        List<TaskSnapshotRecord> ownerSnapshots = allSnapshots.stream()
-                .filter(snapshot -> snapshot.provenance().authorityLineageId().equals(implementation.authorityLineageId()))
-                .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId))
-                .toList();
-        for (TaskSnapshotRecord snapshot : ownerSnapshots) {
-            if (snapshot.commitSha().equals(implementation.commitSha())) {
-                return snapshot;
-            }
-        }
-        for (TaskSnapshotRecord snapshot : ownerSnapshots) {
-            if (carriesValidatedContent(controlRoot, implementation.commitSha(), implementation.changedPaths(), snapshot.commitSha())) {
-                return snapshot;
-            }
-        }
-        return null;
-    }
-
-    /**
      * Reports whether a commit holds, for every given path, the same content as the validated
      * commit, including the same absence. Anything Git cannot answer counts as a difference.
      *
@@ -227,48 +129,6 @@ public final class IntegrationOrchestrationService {
         return normalized.contains("merge conflict") || normalized.contains("cherry-pick conflict") || normalized.contains("unresolved cherry-pick");
     }
 
-    private static List<TaskSnapshotRecord> sortSnapshotsTopologically(List<TaskSnapshotRecord> snapshots, CapabilityRequestProjection capProj) {
-        Map<UUID, List<TaskSnapshotRecord>> byLineage = new LinkedHashMap<>();
-        for (TaskSnapshotRecord s : snapshots) {
-            byLineage.computeIfAbsent(s.provenance().authorityLineageId(), ignored -> new ArrayList<>()).add(s);
-        }
-
-        // Build adjacency: dependent -> dependencies
-        Map<TaskSnapshotRecord, List<TaskSnapshotRecord>> dependencies = new LinkedHashMap<>();
-        for (TaskSnapshotRecord s : snapshots) {
-            List<TaskSnapshotRecord> deps = new ArrayList<>();
-            for (String capHandle : s.capabilityDependencies()) {
-                var capOpt = capProj.findByHandle(capHandle);
-                if (capOpt.isPresent()) {
-                    CapabilityRequestRecord cap = capOpt.get();
-                    var ownerCandidates = byLineage.getOrDefault(cap.authorityLineageId(), List.of());
-                    var implementation = capProj.findLatestImplementation(cap.handle().value());
-                    for (TaskSnapshotRecord ownerSnap : ownerCandidates) {
-                        boolean exactPublishedImplementation = implementation.isEmpty() || implementation.get().commitSha().equals(ownerSnap.commitSha());
-                        if (exactPublishedImplementation && !ownerSnap.equals(s) && !deps.contains(ownerSnap)) {
-                            deps.add(ownerSnap);
-                            break;
-                        }
-                    }
-                }
-            }
-            dependencies.put(s, deps);
-        }
-
-        // Kahn's algorithm or DFS topological sort
-        List<TaskSnapshotRecord> sorted = new ArrayList<>();
-        Set<TaskSnapshotRecord> visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        Set<TaskSnapshotRecord> inStack = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-
-        for (TaskSnapshotRecord node : snapshots) {
-            if (!visited.contains(node)) {
-                visitDfs(node, dependencies, visited, inStack, sorted);
-            }
-        }
-
-        return List.copyOf(sorted);
-    }
-
     private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId, List<TaskSnapshotRecord> snapshots, String base, String commit, String reason) {
         try {
             IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId, store.projectId(), snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(), base, commit, "failed", reason);
@@ -279,31 +139,11 @@ public final class IntegrationOrchestrationService {
         }
     }
 
-    private static void visitDfs(TaskSnapshotRecord node,
-            Map<TaskSnapshotRecord, List<TaskSnapshotRecord>> dependencies,
-            Set<TaskSnapshotRecord> visited,
-            Set<TaskSnapshotRecord> inStack,
-            List<TaskSnapshotRecord> sorted) {
-        if (inStack.contains(node)) {
-            throw new IllegalStateException("Dependency cycle detected involving snapshot " + node.snapshotId());
-        }
-        if (!visited.contains(node)) {
-            inStack.add(node);
-            List<TaskSnapshotRecord> deps = dependencies.getOrDefault(node, List.of());
-            for (TaskSnapshotRecord dep : deps) {
-                visitDfs(dep, dependencies, visited, inStack, sorted);
-            }
-            inStack.remove(node);
-            visited.add(node);
-            sorted.add(node);
-        }
-    }
-
     private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots, String controlHead, PredictionEventStore store) {
         Set<String> changed = new java.util.HashSet<>();
         List<String> failures = new ArrayList<>();
         if (store.collaborationProjection().requests().stream()
-                .anyMatch(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING && liveCoordinationRequest(store, request))) {
+                .anyMatch(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING && IntegrationCandidatePolicy.liveCoordinationRequest(store, request))) {
             failures.add("UNRESOLVED_COORDINATION_REQUEST");
         }
         for (TaskSnapshotRecord snapshot : snapshots) {
@@ -314,7 +154,7 @@ public final class IntegrationOrchestrationService {
             if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
                 failures.add("STALE_BASE:" + snapshot.snapshotId());
             }
-            WorkIntent laneIntent = currentIntentForSnapshot(store, snapshot);
+            WorkIntent laneIntent = IntegrationCandidatePolicy.currentIntentForSnapshot(store, snapshot);
             boolean exactLane = laneIntent != null && laneIntent.intentId().equals(snapshot.provenance().laneId());
             if (laneIntent == null || !laneIntent.taskId().equals(snapshot.taskId()) || !laneIntent.workGroupId().equals(snapshot.provenance().workGroupId()) || !laneIntent.authorityLineageId()
                     .equals(snapshot.provenance().authorityLineageId()) || (exactLane ? laneIntent.version() != snapshot.provenance().claimEpoch() : laneIntent.version() <= snapshot.provenance().claimEpoch())) {
@@ -386,16 +226,6 @@ public final class IntegrationOrchestrationService {
             }
         }
         return List.copyOf(failures);
-    }
-
-    private static WorkIntent currentIntentForSnapshot(PredictionEventStore store, TaskSnapshotRecord snapshot) {
-        WorkIntent exact = store.collaborationProjection().intent(snapshot.provenance().laneId()).orElse(null);
-        if (exact != null) {
-            return exact;
-        }
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.taskId().equals(snapshot.taskId())).filter(intent -> intent.workGroupId().equals(snapshot.provenance().workGroupId()))
-                .filter(intent -> intent.authorityLineageId().equals(snapshot.provenance().authorityLineageId())).filter(intent -> intent.version() > snapshot.provenance().claimEpoch())
-                .min(java.util.Comparator.comparingLong(WorkIntent::version)).orElse(null);
     }
 
     private static boolean isAncestor(Path workdir, String base, String head) {
@@ -502,7 +332,7 @@ public final class IntegrationOrchestrationService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "COORDINATION_STATE_UNAVAILABLE"));
             }
             var pendingRequests = new WorkIntentService(coordinationStore, identity).requests().stream()
-                    .filter(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING).filter(request -> liveCoordinationRequest(coordinationStore, request))
+                    .filter(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING).filter(request -> IntegrationCandidatePolicy.liveCoordinationRequest(coordinationStore, request))
                     .toList();
             if (!pendingRequests.isEmpty()) {
                 // This pump has no participant binding. Only the caller's inbox
@@ -529,8 +359,7 @@ public final class IntegrationOrchestrationService {
             // work group travel through one guarded integration attempt so a
             // project gate can validate their complete change set together.
             List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
-            List<TaskSnapshotRecord> eligible = store.taskCompletionProjection().eligibleSnapshots().stream().filter(snapshot -> reviewAccepted(snapshot, store))
-                    .sorted(java.util.Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId)).toList();
+            List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store);
             if (eligible.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("state", "review_acceptance_required");
@@ -541,7 +370,11 @@ public final class IntegrationOrchestrationService {
             List<TaskSnapshotRecord> readyCandidates = new ArrayList<>();
             boolean sawPendingDependency = false;
             for (TaskSnapshotRecord candidate : eligible) {
-                CandidateResolution resolution = resolveCandidate(controlRoot, candidate, allSnapshots, capProj, store.taskCompletionProjection());
+                IntegrationCandidatePolicy.CandidateResolution resolution = IntegrationCandidatePolicy.resolveCandidate(candidate,
+                        allSnapshots,
+                        capProj,
+                        store.taskCompletionProjection(),
+                        (implementation, owner) -> carriesValidatedContent(controlRoot, implementation.commitSha(), implementation.changedPaths(), owner.commitSha()));
                 if (!resolution.structuralFailures().isEmpty()) {
                     if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, resolution.structuralFailures())) {
                         return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
@@ -567,11 +400,10 @@ public final class IntegrationOrchestrationService {
                 }
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("state", "integration_blocked"));
             }
-            UUID selectedWorkGroup = readyCandidates.getFirst().provenance().workGroupId();
-            snapshots = readyCandidates.stream().filter(candidate -> candidate.provenance().workGroupId().equals(selectedWorkGroup)).toList();
+            snapshots = IntegrationCandidatePolicy.oldestWorkGroup(readyCandidates);
             List<TaskSnapshotRecord> ordered;
             try {
-                ordered = sortSnapshotsTopologically(snapshots, capProj);
+                ordered = IntegrationCandidatePolicy.sortTopologically(snapshots, capProj);
             } catch (IllegalStateException cycleErr) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "Dependency cycle detected"));
             }
@@ -709,54 +541,18 @@ public final class IntegrationOrchestrationService {
     }
 
     /**
-     * Keeps integration blocked only for a pending request that still has an authorized participant
-     * capable of responding. Requests owned entirely by terminal participants are historical
-     * evidence; leaving them pending must not make an active work group permanently unintegrable.
-     *
-     * @param store   current project event store
-     * @param request pending coordination request
-     * @return {@code true} when the request still belongs to a live collaboration edge
-     */
-    private static boolean liveCoordinationRequest(PredictionEventStore store, CoordinationRequest request) {
-        return liveParticipant(store, request.requester()) && liveParticipant(store, request.target());
-    }
-
-    /**
-     * Treats unknown participants conservatively while excluding only explicit terminal states.
-     *
-     * @param store       current project event store
-     * @param participant participant handle
-     * @return {@code true} when the participant may still answer a request
-     */
-    private static boolean liveParticipant(PredictionEventStore store, String participant) {
-        return store.collaborationProjection().participantState(participant)
-                .map(state -> state != Participant.State.REVOKED && state != Participant.State.COMPLETED && state != Participant.State.CANCELLED && state != Participant.State.DETACHED).orElse(true);
-    }
-
-    /**
      * Finalizes only lanes whose exact immutable snapshots have integrated.
      */
     private void finalizeIntegratedLanes(ProjectAppendLock appendLock, Path controlRoot, List<TaskSnapshotRecord> snapshots, PredictionEventStore store, NodeIdentity identity) throws Exception {
         ProjectLocation location = projectService.locate(controlRoot);
         WorkIntentService intentService = new WorkIntentService(store, identity);
         for (TaskSnapshotRecord snapshot : snapshots) {
-            WorkIntent currentIntent = currentIntentForSnapshot(store, snapshot);
+            WorkIntent currentIntent = IntegrationCandidatePolicy.currentIntentForSnapshot(store, snapshot);
             String provider = currentIntent == null ? null : currentIntent.provider();
             intentService.releaseAfterIntegration(appendLock, snapshot);
             if (provider != null) {
                 bindingService.completeBySessionId(location, provider, snapshot.providerSessionId(), appendLock);
             }
-        }
-    }
-
-    /**
-     * Holds resolved integration dependencies and readiness evidence.
-     */
-    private record CandidateResolution(boolean ready, List<TaskSnapshotRecord> dependencies, List<String> structuralFailures) {
-
-        private CandidateResolution {
-            dependencies = List.copyOf(dependencies);
-            structuralFailures = List.copyOf(structuralFailures);
         }
     }
 }

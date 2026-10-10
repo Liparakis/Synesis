@@ -277,7 +277,6 @@ public final class ImplementationValidationService {
      *                               internal recovery callers)
      * @param failedAcceptanceTests  list of failed acceptance test names (for revision_required)
      */
-    @SuppressWarnings("unused")
     public record ValidateRequest(Path projectRoot, String provider, String connectionInstanceId, String requestHandle, String result, String reason, int implementationRevision, List<String> failedAcceptanceTests) {
 
         /**
@@ -293,22 +292,6 @@ public final class ImplementationValidationService {
                 throw new IllegalArgumentException("implementationRevision must not be negative");
             }
             failedAcceptanceTests = failedAcceptanceTests != null ? List.copyOf(failedAcceptanceTests) : List.of();
-        }
-
-        /**
-         * Creates an internal validation request without an externally supplied revision. MCP callers
-         * must use the revision-bearing constructor.
-         *
-         * @param projectRoot           project root
-         * @param provider              provider identifier
-         * @param connectionInstanceId  exact connection instance
-         * @param requestHandle         capability request handle
-         * @param result                validation result
-         * @param reason                revision explanation
-         * @param failedAcceptanceTests failed acceptance tests
-         */
-        public ValidateRequest(Path projectRoot, String provider, String connectionInstanceId, String requestHandle, String result, String reason, List<String> failedAcceptanceTests) {
-            this(projectRoot, provider, connectionInstanceId, requestHandle, result, reason, 0, failedAcceptanceTests);
         }
     }
 }

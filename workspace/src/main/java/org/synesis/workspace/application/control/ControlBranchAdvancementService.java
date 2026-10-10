@@ -112,43 +112,10 @@ public final class ControlBranchAdvancementService {
             // 3. Fast-forward merge or update control branch
             runGit(controlRoot, "merge", "--ff-only", integrationCommitSha);
 
-            // 4. Append CONTROL_BRANCH_ADVANCED event
-            IntegrationAttemptPayload advPayload = new IntegrationAttemptPayload(attemptId,
-                    store.projectId(),
-                    integratedSnapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                    expectedControlHead,
-                    integrationCommitSha,
-                    "advanced",
-                    "");
-            store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(), advPayload.encode(), identity);
-
-            // 5. Append TASK_INTEGRATED, OWNERSHIP_RELEASED, and SESSION_FINALIZED events
+            // 4. Append CONTROL_BRANCH_ADVANCED, then TASK_INTEGRATED, OWNERSHIP_RELEASED, and SESSION_FINALIZED per lane
+            appendControlBranchAdvanced(attemptId, expectedControlHead, integrationCommitSha, integratedSnapshots, store, identity);
             for (TaskSnapshotRecord snap : integratedSnapshots) {
-                TaskSnapshotPayload snapPayload = new TaskSnapshotPayload(snap.taskId(),
-                        snap.snapshotId(),
-                        snap.nodeId(),
-                        snap.supervisorId(),
-                        snap.workerId(),
-                        snap.providerSessionId(),
-                        snap.baseCommit(),
-                        snap.commitSha(),
-                        snap.changedPaths(),
-                        snap.capabilityDependencies(),
-                        snap.summary());
-
-                store.append(UUID.randomUUID(), PredictionEventType.TASK_INTEGRATED, identity.nodeId(), snapPayload.encode(), identity);
-
-                // Release semantic ownership if claim exists
-                var ownerships = store.coordinationProjection().ownerships();
-                for (var entry : ownerships.entrySet()) {
-                    OwnershipClaim claim = entry.getValue();
-                    if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {
-                        CoordinationCommand relCmd = CoordinationCommand.create(UUID.randomUUID(), store.projectId(), claim.taskId(), PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), claim.encoded(), identity);
-                        store.append(claim.taskId(), PredictionEventType.OWNERSHIP_RELEASED, identity.nodeId(), relCmd.encoded(), identity);
-                    }
-                }
-
-                store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(), snapPayload.encode(), identity);
+                appendLaneIntegrated(snap, store, identity);
             }
 
             return new AdvancementResult(true, false, false, "");
@@ -196,33 +163,42 @@ public final class ControlBranchAdvancementService {
         var projection = store.taskCompletionProjection();
         boolean branchRecorded = projection.lastControlHeadAdvanced() != null && projection.lastControlHeadAdvanced().equals(integrationCommitSha);
         if (!branchRecorded) {
-            IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId,
-                    store.projectId(),
-                    snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                    expectedControlHead,
-                    integrationCommitSha,
-                    "advanced",
-                    "");
-            store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(), payload.encode(), identity);
+            appendControlBranchAdvanced(attemptId, expectedControlHead, integrationCommitSha, snapshots, store, identity);
         }
         for (TaskSnapshotRecord snap : snapshots) {
             if (projection.taskState(snap.taskId()) != org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED) {
-                TaskSnapshotPayload payload = new TaskSnapshotPayload(snap.taskId(),
-                        snap.snapshotId(),
-                        snap.nodeId(),
-                        snap.supervisorId(),
-                        snap.workerId(),
-                        snap.providerSessionId(),
-                        snap.baseCommit(),
-                        snap.commitSha(),
-                        snap.changedPaths(),
-                        snap.capabilityDependencies(),
-                        snap.summary());
-                store.append(UUID.randomUUID(), PredictionEventType.TASK_INTEGRATED, identity.nodeId(), payload.encode(), identity);
-                releaseExactOwnership(snap, store, identity);
-                store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(), payload.encode(), identity);
+                appendLaneIntegrated(snap, store, identity);
             }
         }
+    }
+
+    private void appendControlBranchAdvanced(String attemptId, String expectedControlHead, String integrationCommitSha, List<TaskSnapshotRecord> snapshots, PredictionEventStore store, NodeIdentity identity)
+            throws IOException, GeneralSecurityException {
+        IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId,
+                store.projectId(),
+                snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                expectedControlHead,
+                integrationCommitSha,
+                "advanced",
+                "");
+        store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(), payload.encode(), identity);
+    }
+
+    private void appendLaneIntegrated(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
+        TaskSnapshotPayload payload = new TaskSnapshotPayload(snap.taskId(),
+                snap.snapshotId(),
+                snap.nodeId(),
+                snap.supervisorId(),
+                snap.workerId(),
+                snap.providerSessionId(),
+                snap.baseCommit(),
+                snap.commitSha(),
+                snap.changedPaths(),
+                snap.capabilityDependencies(),
+                snap.summary());
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_INTEGRATED, identity.nodeId(), payload.encode(), identity);
+        releaseExactOwnership(snap, store, identity);
+        store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(), payload.encode(), identity);
     }
 
     private void releaseExactOwnership(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
