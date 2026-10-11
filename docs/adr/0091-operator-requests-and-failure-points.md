@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted on 2026-10-12 by the repository owner. Not yet built.
+Accepted on 2026-10-12 by the repository owner. Built on the same day except
+where "Measured on 2026-10-12" and "Built, and not built" below say otherwise.
 
 Step 1 of three. ADR-0092 (one public contract per owner) and ADR-0093 (agent
 conversations) follow it and do not depend on it.
@@ -227,3 +228,22 @@ so by addressing the operator with the message tool of ADR-0093, so it arrives
 with step 3. The operator request of this step is built to carry a request
 raised by a lane as well as one raised by Synesis, and to be answered by an
 operator agent later as well as by a human now.
+
+## Built, and not built
+
+Built: the operator request for a control checkout with foreign changes, its
+closing by observation, the pending outcome for a refusal by the checkout or by
+a moved control head, the `OPERATOR_REQUIRED` answer for lanes that wait on
+integration, `NEEDS_OPERATOR`, the two CLI commands, failure points for the
+paths listed in `docs/providers/mcp.md`, and the hook record.
+
+Not built:
+
+- An operator request for an integration conflict. Agents already repair
+  conflicts through the repair lane, so a request for each would end runs that
+  can continue. It would belong to a conflict nobody is left to repair, which
+  has not been observed.
+- A failure point on every `failed` answer. The paths that swallowed a cause in
+  the recorded runs are covered; others are not.
+- Operator requests in the web UI.
+- The second guard layer, which waits for a decision as described above.

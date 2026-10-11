@@ -1,3 +1,79 @@
+# 2026-10-12 — Step 1 of three: operator requests, failure points, and what the Codex guard really was
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster23-20261012` and `remaster24`. Decisions of
+the repository owner recorded as ADR-0091 (this step, built), ADR-0092 (one public contract per owned
+file) and ADR-0093 (agent conversations), both accepted and not built.
+
+Built, ADR-0091:
+
+- A project checkout holding a file Synesis did not make raises an **operator request** that names
+  the files as `git status` reports them. It closes when the checkout is observed clean. Synesis does
+  not touch the files.
+- A refusal by the checkout, or by a control head that moved under an attempt, no longer fails the
+  work. Before, the snapshots became `INTEGRATION_FAILED` and were never tried again, even after a
+  person had cleaned the checkout.
+- Only a lane that waits on integration is answered `blocked` / `operator_required` and told to stop.
+  A lane with work of its own keeps working and publishing.
+- A run in which every agent has stopped with a request open ends `NEEDS_OPERATOR`. An agent whose
+  published work waits for an operator is not resumed.
+- `synesis operator list` and `synesis operator recheck`. The second looks again and integrates what
+  was waiting, with no agent running. No command declares a request resolved.
+- An internal failure of session binding, lane finish, cancel or announcement, capability publication
+  or validation, or integration records its cause and stack in `.synesis/local/diagnostics`, and the
+  answer names the entry. Every Codex hook invocation is recorded.
+
+Semantic changes: `finish_lane` on a dirty control checkout answers `blocked` / `operator_required`
+where it answered `waiting` / `integration_pending` (`Slice4FailureScenariosTest` updated); an attempt
+refused for a moved control head is recorded `pending`, not `failed`; `AGENT_RUN_RESULT` has one more
+value; two event types and one projection are added to the coordination log. The MCP tool catalog is
+unchanged.
+
+Real runs. In the two marked "stray" the bootstrapper put a file into the project checkout 25
+seconds after the agents started, as an injected failure, later removed it and ran
+`synesis operator recheck`, and then started the same agents again. It assigned and relayed nothing.
+
+| Goal | remaster23 | remaster24 |
+| --- | --- | --- |
+| Stray file, two agents (SL, LS): ends `NEEDS_OPERATOR` naming the file | 1 of 1, after 11 resumes and 472 s | 2 of 2, after 1 resume and 88 to 115 s |
+| Recheck after the file is removed: request closes, waiting snapshot integrated | 1 of 1 | 2 of 2 |
+| Run started again: `COMPLETED`, tests pass | not run | 2 of 2 |
+| Five agents, mixed | not run | 1 of 1 |
+| Negotiated, two agents (SL) | not run | 1 of 1 |
+| Review with the policy (LS) | not run | 1 of 1 |
+| Three agents (LLL) | not run | 1 of 1 |
+
+On `remaster23` the blocked owner was resumed eleven times: each resumed process is a new session,
+was offered its own lane to continue, published the same work again and was refused again. Fixed in
+`remaster24` in the run controller. A resumed session is still offered that continuation if something
+else resumes it; with two agents of one provider, one blocked and one not, both are resumed.
+
+What the guard was. With hook invocations recorded, the stall that started this was reproduced on
+Codex CLI 0.162.0: a headless Codex session does not run the project's hooks at all. They need a
+person's review, and `provider status` had reported `NATIVE_MUTATION_INTERCEPTION=UNPROVEN` all along.
+No Codex session in any recorded run was guarded. Measured: the read-only sandbox blocks the native
+write and a writing shell command; alone it also blocks the Synesis tools; with the Synesis server's
+tools approved they work. That launch policy is recorded in ADR-0091 and NOT built: a test and the
+command reference state on purpose that Synesis passes no sandbox argument. Not tried on macOS or
+Linux.
+
+Design review of ADR-0092. Four reviewers on four models, read-only, one brief. At least three of the
+four independently found the same gaps: a consumer that is gone holds the owner for ever; the exit
+"cancel your lane" is refused by a gate the record keeps; validation is tied to the commit and not
+to the contract revision; a lane cannot give up one file; a request that arrives as the owner
+finishes has no exit; the invariants cannot be enforced on replay as the log is built. The record
+now says it is not to be built as written and lists what must be settled, three points of which are
+the owner's to decide. Step 2 has not started.
+
+Not done in step 1: operator requests are raised for one condition, the foreign file. An integration
+conflict was to be the second; agents already repair conflicts themselves, so raising a request for
+each would end runs that can continue, and it was left out. A `failed` answer from a path not listed
+above carries no failure point. The web UI does not show operator requests.
+
+Verification: `check repositoryHygieneCheck` on Windows on the final tree, link 172, coordination 196,
+project-record 60, relay 12, mcp-contract 17, workspace 604 (1 skipped), MCP 165, CLI 114, 0
+failures. Not run on Linux. No test subagent was used; the design reviewers followed the pstack model
+sheet. Link between two machines, macOS, and Linux agents with real models remain NOT REACHED.
+
 # 2026-10-11 — A capability request names a file: the lane claiming it is the owner
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster21-20261011` and `remaster22`. Real runs as in
