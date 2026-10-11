@@ -77,9 +77,16 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     }
 
     /**
-     * Runs Codex with {@code codex exec}, reading the prompt from standard input, without
-     * bypassing its approval or sandbox policy. Codex finds the Synesis server through its own
-     * configuration and the project through the working directory.
+     * Runs Codex with {@code codex exec}, reading the prompt from standard input. Codex finds the
+     * Synesis server through its own configuration and the project through the working directory.
+     *
+     * <p>The session is started in Codex's read-only sandbox with the Synesis server's tools
+     * approved (ADR-0091). Codex starts in the project checkout, and it runs a project's hooks
+     * only after a person has reviewed them, which a headless session has nobody to do: the hook
+     * that should route a native write into the lane never ran, and a write reached the checkout.
+     * Read-only makes that write impossible instead of forbidden. Alone it would also refuse
+     * every Synesis tool, which is the only way such a session may change anything. Neither
+     * setting loosens what Codex may do outside the Synesis tools.</p>
      */
     @Override
     public java.util.Optional<HeadlessSession> headlessSession() {
@@ -88,7 +95,7 @@ public final class CodexProviderIntegration implements ProviderIntegration {
             @Override
             public List<String> startCommand(Path projectRoot, HeadlessOptions options) {
                 List<String> command = new java.util.ArrayList<>(List.of("codex", "exec", "--json", "--cd", projectRoot.toAbsolutePath().normalize().toString()));
-                command.addAll(modelArguments(options));
+                command.addAll(sessionArguments(options));
                 command.add("-");
                 return List.copyOf(command);
             }
@@ -96,7 +103,7 @@ public final class CodexProviderIntegration implements ProviderIntegration {
             @Override
             public List<String> resumeCommand(Path projectRoot, String providerSessionId, HeadlessOptions options) {
                 List<String> command = new java.util.ArrayList<>(List.of("codex", "exec", "resume", providerSessionId, "--json"));
-                command.addAll(modelArguments(options));
+                command.addAll(sessionArguments(options));
                 command.add("-");
                 return List.copyOf(command);
             }
@@ -118,8 +125,9 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         });
     }
 
-    private static List<String> modelArguments(HeadlessOptions options) {
-        List<String> arguments = new java.util.ArrayList<>();
+    private static List<String> sessionArguments(HeadlessOptions options) {
+        // Given as configuration overrides: `exec resume` takes no sandbox flag.
+        List<String> arguments = new java.util.ArrayList<>(List.of("--config", "sandbox_mode=read-only", "--config", "mcp_servers.synesis.default_tools_approval_mode=approve"));
         if (options.model() != null) {
             arguments.addAll(List.of("--model", options.model()));
         }

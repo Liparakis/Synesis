@@ -197,12 +197,13 @@ sessions it starts: the read-only sandbox, and approval of the Synesis server's
 own tools. It matches how Claude Code sessions are already started, limited to
 the Synesis tools and read-only tools.
 
-This is NOT yet built. It changes a rule the repository states on purpose:
-`HeadlessSessionContractTest` asserts that Synesis passes no sandbox argument
-("the provider's own policy is never overridden") and the command reference
-says provider commands keep the provider's own approval and sandbox policy. The
-change tightens the sandbox and, for the Synesis tools only, loosens approval.
-It waits for the repository owner's decision.
+The repository owner decided on 2026-10-12 to build it, and it is built:
+`CodexProviderIntegration` gives both settings to every session it starts and
+resumes. It changes a rule the repository stated on purpose, that Synesis
+passes no sandbox argument; `HeadlessSessionContractTest` and the command
+reference now state the new rule. The sandbox is tightened and, for the Synesis
+tools only, approval is given. A probe through `synesis agents run` on build
+`remaster25` was refused its native write and kept its Synesis tools.
 
 Not chosen: `--dangerously-bypass-hook-trust` would make the hook run, covers
 the patch tool only, and skips review of every hook in a file the user shares.
@@ -210,8 +211,7 @@ the patch tool only, and skips review of every hook in a file the user shares.
 ## Open questions
 
 - None on which answers raise an operator request: settled below.
-- Whether Synesis starts Codex sessions with the read-only sandbox and its own
-  tools approved, as measured above. Not tried on macOS or Linux.
+- The Codex launch settings are not tried on macOS or Linux.
 
 Settled on 2026-10-12: Synesis raises an operator request for two conditions
 in this step, a control checkout with changes it did not make and an
@@ -246,4 +246,3 @@ Not built:
 - A failure point on every `failed` answer. The paths that swallowed a cause in
   the recorded runs are covered; others are not.
 - Operator requests in the web UI.
-- The second guard layer, which waits for a decision as described above.

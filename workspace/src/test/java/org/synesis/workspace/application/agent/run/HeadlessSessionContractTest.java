@@ -48,14 +48,15 @@ final class HeadlessSessionContractTest {
     }
 
     @Test
-    void codexRunsExecWithThePromptOnStandardInputAndKeepsItsOwnSandboxPolicy() {
+    void codexRunsExecWithThePromptOnStandardInputInTheReadOnlySandboxWithTheSynesisToolsApproved() {
         HeadlessSession codex = ProviderRegistry.find("codex").headlessSession().orElseThrow();
 
-        assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--model", "gpt-6-luna", "--config", "model_reasoning_effort=medium", "-"),
+        assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--config", "sandbox_mode=read-only", "--config", "mcp_servers.synesis.default_tools_approval_mode=approve", "--model", "gpt-6-luna", "--config", "model_reasoning_effort=medium", "-"),
                 codex.startCommand(PROJECT, new HeadlessOptions("gpt-6-luna", "medium")));
         List<String> resume = codex.resumeCommand(PROJECT, "01a12165-781c-70e0-b010-e8d2c048e4e5", new HeadlessOptions(null, null));
-        assertEquals(List.of("codex", "exec", "resume", "01a12165-781c-70e0-b010-e8d2c048e4e5", "--json", "-"), resume);
-        assertFalse(resume.stream().anyMatch(argument -> argument.contains("bypass") || argument.contains("sandbox")), "the provider's own policy is never overridden");
+        // A resumed session is a new process and must be held to the same two settings (ADR-0091).
+        assertEquals(List.of("codex", "exec", "resume", "01a12165-781c-70e0-b010-e8d2c048e4e5", "--json", "--config", "sandbox_mode=read-only", "--config", "mcp_servers.synesis.default_tools_approval_mode=approve", "-"), resume);
+        assertFalse(resume.stream().anyMatch(argument -> argument.contains("bypass") || argument.contains("danger")), "Synesis tightens the provider's policy and never loosens it");
 
         assertEquals(Optional.of("01a12165-781c-70e0-b010-e8d2c048e4e5"), codex.sessionId("{\"type\":\"thread.started\",\"thread_id\":\"01a12165-781c-70e0-b010-e8d2c048e4e5\"}"));
         assertEquals(Optional.empty(), codex.sessionId("{\"type\":\"item.completed\",\"item\":{\"text\":\"thread.started thread_id\"}}"));
@@ -73,7 +74,7 @@ final class HeadlessSessionContractTest {
         assertEquals(java.util.Map.of(), claude.environment(new HeadlessOptions(null, null)), "without an identity the server chooses its own");
 
         assertEquals(java.util.Map.of(), codex.environment(named), "Codex does not pass its environment to an MCP server");
-        assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--model", "gpt-6-luna", "--config",
+        assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--config", "sandbox_mode=read-only", "--config", "mcp_servers.synesis.default_tools_approval_mode=approve", "--model", "gpt-6-luna", "--config",
                 "mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a", "-"), codex.startCommand(PROJECT, named));
         List<String> resume = codex.resumeCommand(PROJECT, "01a12165-781c-70e0-b010-e8d2c048e4e5", named);
         assertTrue(resume.indexOf("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a") < resume.indexOf("-"), "the prompt marker stays last: " + resume);

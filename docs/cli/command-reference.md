@@ -90,9 +90,14 @@ lanes that never received one holds no work) and at least one group finished its
 and an operator request is open (each is printed as `OPERATOR_REQUEST=<id> CONDITION=<condition>`), `STALLED` when every agent
 has stopped and nothing has progressed since, `NO_WORK_ANNOUNCED`, `RESUME_LIMIT_REACHED`, or
 `TIMED_OUT`. Only `COMPLETED` exits with 0. Each provider must already be
-installed in the project. Provider commands keep the provider's own approval and
-sandbox policy; Claude Code is limited to the Synesis tools and its read-only
-tools. Agent output is kept as log files under the Synesis state directory,
+installed in the project. Claude Code is limited to the Synesis tools and its read-only
+tools. Codex is started in its read-only sandbox with the Synesis server's
+tools approved (`sandbox_mode=read-only`,
+`mcp_servers.synesis.default_tools_approval_mode=approve`), whatever the
+user's Codex configuration says: a headless Codex session does not run the
+project's hooks, so without this nothing kept its own file tool or a shell
+command out of the project checkout (ADR-0091). Neither provider's policy is
+ever loosened outside the Synesis tools. Agent output is kept as log files under the Synesis state directory,
 outside the project.
 
 ## Operator requests
