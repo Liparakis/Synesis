@@ -145,6 +145,13 @@ class McpToolMalformedArgumentsTest {
     }
 
     @Test
+    void applyPatchRefusesAnEditWhoseCountIsNotAPositiveWholeNumber() {
+        String refused = "{'status':'blocked','reason':'invalid_path','result':{'reason':'PATCH_EDIT_INVALID','instruction':'expectedOccurrences, when given, is a whole number of at least 1.'}}";
+        assertText(refused, call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':0}]}"));
+        assertText(refused, call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':'1'}]}"));
+    }
+
+    @Test
     void applyPatchRejectsAnEditWhoseFindOrReplaceIsNotAString() {
         assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':5,'replace':'a','expectedOccurrences':1}]}"));
         assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':true,'expectedOccurrences':1}]}"));

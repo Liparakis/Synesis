@@ -740,6 +740,19 @@ class McpServerTest {
         String readModResp = handler.handleMessage(readReq);
         assertTrue(readModResp.contains("Hello MCP Claude"));
 
+        // 5b. An edit that does not say how often its text occurs is applied as one occurrence.
+        // It used to be dropped, which left an empty patch refused as an invalid path.
+        String claudeHash;
+        try {
+            claudeHash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest("Hello MCP Claude\n".getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        String uncountedResp = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"apply_patch\",\"arguments\":{\"path\":\"src/McpFile.txt\",\"expectedHash\":\"" + claudeHash
+                + "\",\"edits\":[{\"find\":\"Claude\",\"replace\":\"Codex\"}]}}}");
+        assertTrue(uncountedResp.contains("completed"), uncountedResp);
+        assertTrue(handler.handleMessage(readReq).contains("Hello MCP Codex"));
+
         // 6. Run Command (direct argv)
         String runCmdReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"run_command\",\"arguments\":{\"argv\":[\"git\",\"status\",\"--porcelain\"]}}}";
         String runCmdResp = handler.handleMessage(runCmdReq);

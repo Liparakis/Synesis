@@ -10,6 +10,7 @@ import java.util.Map;
 
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.workspace.mutation.PatchEdit;
 import org.synesis.workspace.application.workspace.mutation.PatchRequest;
 import org.synesis.workspace.application.workspace.read.ReadRequest;
@@ -112,9 +113,16 @@ final class McpWorkspaceTools {
                     if (find != null && !(find instanceof String) || replace != null && !(replace instanceof String)) {
                         return AgentResponse.blocked(AgentReason.INVALID_PATH);
                     }
-                    int expectedOccurrences = (editMap.get("expectedOccurrences") instanceof Number n) ? n.intValue() : 0;
-                    if (find != null && replace != null && expectedOccurrences >= 1) {
-                        patchEdits.add(new PatchEdit((String) find, (String) replace, expectedOccurrences));
+                    // An edit that does not say how often its text occurs means the usual case,
+                    // once. Dropping it left an empty patch that was refused as an invalid path,
+                    // and an agent holding the right file could not learn what was wrong.
+                    Object occurrences = editMap.get("expectedOccurrences");
+                    if (occurrences != null && !(occurrences instanceof Number number && number.intValue() >= 1)) {
+                        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, null,
+                                McpJsonRpcResponses.object("reason", "PATCH_EDIT_INVALID", "instruction", "expectedOccurrences, when given, is a whole number of at least 1."));
+                    }
+                    if (find != null && replace != null) {
+                        patchEdits.add(new PatchEdit((String) find, (String) replace, occurrences instanceof Number number ? number.intValue() : 1));
                     }
                 }
             }
