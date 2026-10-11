@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
@@ -119,7 +120,14 @@ func installStableLauncher(target string, launcher []byte) error {
 	}
 	aside := reserved.Name()
 	reserved.Close()
-	if err := os.Rename(target, aside); err != nil {
+	// An image whose process started a moment ago is still held without delete sharing, by the
+	// loader or by a scanner, and cannot be moved until that is released.
+	moveErr := os.Rename(target, aside)
+	for attempt := 0; moveErr != nil && attempt < 40; attempt++ {
+		time.Sleep(50 * time.Millisecond)
+		moveErr = os.Rename(target, aside)
+	}
+	if moveErr != nil {
 		_ = os.Remove(aside)
 		return writeErr
 	}
