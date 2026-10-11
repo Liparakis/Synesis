@@ -277,7 +277,39 @@ public final class AgentNextActionService {
 
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
         AgentResponse resolved = durable != null ? durable : LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
-        return request.completionRequested() ? notingNothingToPublish(resolved, inspection.location(), readiness.binding(), readiness.worktree()) : resolved;
+        AgentResponse answered = notingRejection(resolved, inspection.location(), readiness.binding());
+        return request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
+    }
+
+    /**
+     * Tells a producer whose last snapshot was rejected that it was, and why, in whatever answer
+     * it is given until it submits a new one.
+     *
+     * @param response the resolved answer
+     * @param location project location
+     * @param binding  the verified binding of the calling session
+     * @return the answer, carrying the rejected snapshot and its review decision when one is unanswered
+     */
+    private AgentResponse notingRejection(AgentResponse response, ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        if (response.result() != null && !(response.result() instanceof Map<?, ?>)) {
+            return response;
+        }
+        try {
+            Optional<PredictionEventStore> store = openEventStore(location);
+            Map<String, Object> rejected = store.isEmpty() ? null : ReviewLaneProjection.unansweredRejection(store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+            if (rejected == null) {
+                return response;
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            putResult(result, response.result(), null);
+            result.putIfAbsent("rejectedSnapshot", rejected);
+            result.putIfAbsent("instruction", "The reviewer rejected your last snapshot; rejectedSnapshot.reviewDecision.reason says what to correct. Make that correction in your claimed files, "
+                    + "then ask to finish again with get_next_action and completionRequested.");
+            return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+        } catch (Exception failure) {
+            logSuppressed("rejection projection", failure);
+            return response;
+        }
     }
 
     /**
@@ -587,14 +619,25 @@ public final class AgentNextActionService {
             }
         }
 
+        Optional<WorkIntent> callerIntent = activeIntentOf(store, lane.participantId());
+        boolean coordinationActivated = store.collaborationProjection().activated();
+        if (integrationPump.status() == AgentStatus.WAITING && integrationPump.reason() == AgentReason.INTEGRATION_PENDING && callerIntent.isPresent()) {
+            // One lane's snapshot waiting on a dependency makes the pump answer WAIT to every
+            // caller. A caller with a capability step of its own, a published implementation to
+            // validate or a request to answer or publish for, is the one who can end that wait.
+            // Shown only the wait, five agents waited on each other.
+            AgentResponse owed = CapabilityActionProjection.capabilityAction(store, actor, callerIntent.get(), coordinationActivated);
+            if (owed != null && owed.status() != AgentStatus.WAITING && owed.result() instanceof Map<?, ?> owedResult && owedResult.containsKey(NextActionKeys.CAPABILITY_REQUEST_HANDLE)) {
+                return owed;
+            }
+        }
+
         AgentResponse continuation = RecoveryContinuationProjection.continuationAction(lane.participantId(), collaboration);
         AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, integrationPump, continuation);
         if (integrationOrContinuation != null) {
             return integrationOrContinuation;
         }
 
-        Optional<WorkIntent> callerIntent = activeIntentOf(store, lane.participantId());
-        boolean coordinationActivated = store.collaborationProjection().activated();
         if (coordinationActivated && callerIntent.isEmpty()) {
             // A cancelled lane is closed, as a finished one is. Asking its session for a new intent
             // would invite the agent to announce the work it has just cancelled.

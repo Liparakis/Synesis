@@ -143,6 +143,30 @@ final class ReviewLaneProjection {
     }
 
     /**
+     * Finds the rejection a producer has not yet answered with a new snapshot.
+     *
+     * <p>{@link #revisionRequiredAction} projects it only until the producer admits the reviewer's
+     * next request. From then on the producer was answered as if it were implementing from the
+     * start, and an implementer left without learning that its snapshot had been rejected.</p>
+     *
+     * @param store         current project projection
+     * @param participantId exact caller participant
+     * @return the rejected snapshot with its review decision, or {@code null} when none is unanswered
+     */
+    static Map<String, Object> unansweredRejection(PredictionEventStore store, String participantId) {
+        for (WorkIntent intent : store.collaborationProjection().activeIntents()) {
+            if (!isProducerLane(intent, participantId) || store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).isPresent()) {
+                continue;
+            }
+            TaskSnapshotRecord rejected = latestRejectedSnapshot(store, intent);
+            if (rejected != null) {
+                return CollaborationResponseMapper.snapshotMap(rejected, store);
+            }
+        }
+        return null;
+    }
+
+    /**
      * Returns whether a review request addressed to the participant is still pending admission.
      *
      * @param store         current project projection

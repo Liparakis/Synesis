@@ -278,6 +278,11 @@ final class McpSyn039RejectedContinuationTest {
                                 "targetParticipant",
                                 grantTwo.get("targetParticipant"))))));
 
+        // The reviewer's next request is admitted and its grant consumed. The implementer is still
+        // told that its first snapshot was rejected, and why: one left without ever learning it.
+        Map<String, Object> afterAdmission = map(innerResult(owner.handleMessage(toolCall("get_next_action", "{}"))).get("result"));
+        assertEquals("invalid indexes do not raise IndexError", map(map(afterAdmission.get("rejectedSnapshot")).get("reviewDecision")).get("reason"), afterAdmission.toString());
+
         String rejectedImplementation = "def complete_todo(items, index):\n" + "    return items[:index] + items[index + 1:]\n";
         String correctedImplementation = "def complete_todo(items, index):\n" + "    if index < 0 or index >= len(items):\n" + "        raise IndexError(index)\n" + "    return items[:index] + items[index + 1:]\n";
         String currentRevision = TextFileDocument.decode(Files.readAllBytes(ownerWorktree.resolve("todo.py"))).revision();

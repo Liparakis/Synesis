@@ -133,8 +133,18 @@ public final class CollaborationResponseMapper {
         map.put(NextActionKeys.PARTICIPANT, snapshot.provenance().participant());
         map.put(NextActionKeys.REVIEW_REQUIRED, snapshot.reviewRequired());
         store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).ifPresent(state -> map.put(NextActionKeys.SNAPSHOT_STATE, state.name()));
-        store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId())
-                .ifPresent(decision -> map.put(NextActionKeys.REVIEW_DECISION, Map.of(NextActionKeys.GRANT_ID, decision.grantId().toString(), NextActionKeys.SNAPSHOT_ID, decision.snapshotId(), "result", decision.result())));
+        store.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotId()).ifPresent(decision -> {
+            Map<String, Object> shown = new LinkedHashMap<>();
+            shown.put(NextActionKeys.GRANT_ID, decision.grantId().toString());
+            shown.put(NextActionKeys.SNAPSHOT_ID, decision.snapshotId());
+            shown.put("result", decision.result());
+            // The reviewer's explanation is the correction the implementer has to make. It was
+            // recorded and never shown.
+            if (decision.reason() != null && !decision.reason().isBlank()) {
+                shown.put("reason", decision.reason());
+            }
+            map.put(NextActionKeys.REVIEW_DECISION, shown);
+        });
         return map;
     }
 
