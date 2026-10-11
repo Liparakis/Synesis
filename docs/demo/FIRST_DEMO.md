@@ -19,8 +19,9 @@ identities through the existing Link handshake, exercises control/liveness and
 the bounded demo request, then closes gracefully.
 
 Stable terminal failure lines use `FAILURE=...`; common bounded outcomes are
-`INVITE_INVALID`, `NO_USABLE_CANDIDATE`, `CONNECTION_FAILED`,
-`HOST_IDENTITY_MISMATCH`, and `HOST_TIMEOUT`. A failure before identity
+`INVITE_INVALID`, `OWN_INVITATION` (the joining identity created the invitation),
+`NO_USABLE_CANDIDATE`, `CONNECTION_FAILED`, `HOST_IDENTITY_MISMATCH`, and
+`HOST_TIMEOUT`. A failure before identity
 authentication releases the host's short reservation; authenticated admission
 is consumed even if later control work fails.
 

@@ -206,6 +206,7 @@ public final class Onboarding {
     IdentityBootstrap.Result local = loadIdentity();
     emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
         : OnboardingEventType.IDENTITY_LOADED, "");
+    requireAnotherHost(invitation.hostNodeId(), local);
     emit(OnboardingEventType.HOST_IDENTITY_PINNED, invitation.hostNodeId());
     OnboardingEndpoint endpoint = null;
     try {
@@ -384,6 +385,7 @@ public final class Onboarding {
       CandidateDescriptor host = CandidateDescriptor.decode(invitation.descriptorEncoded());
       emit(OnboardingEventType.INVITE_PARSED, "");
       emit(OnboardingEventType.INVITE_VERIFIED, "");
+      requireAnotherHost(host.nodeId(), local);
       emit(OnboardingEventType.HOST_IDENTITY_PINNED, host.nodeId());
       OnboardingEndpoint endpoint = null;
       try {
@@ -581,6 +583,7 @@ public final class Onboarding {
     IdentityBootstrap.Result local = loadIdentity();
     emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
         : OnboardingEventType.IDENTITY_LOADED, "");
+    requireAnotherHost(host.nodeId(), local);
     emit(OnboardingEventType.HOST_IDENTITY_PINNED, host.nodeId());
     try (OnboardingEndpoint endpoint = OnboardingEndpoint.openClient(stunServer)) {
       List<Candidate> localCandidates = endpoint.gatherCandidates("join");
@@ -707,6 +710,17 @@ public final class Onboarding {
 
   private IdentityBootstrap bootstrap() {
     return new IdentityBootstrap(profileDirectory);
+  }
+
+  /**
+   * Refuses an invitation this identity created. A node cannot hold a session with itself, and a
+   * join that tried ran its whole traversal and ended as an unexplained connection failure.
+   */
+  private void requireAnotherHost(String hostNodeId, IdentityBootstrap.Result local)
+      throws OnboardingFailure {
+    if (hostNodeId.equals(local.identity().nodeId())) {
+      throw failure(OnboardingFailureCode.OWN_INVITATION, null);
+    }
   }
 
   private IdentityBootstrap.Result loadIdentity() throws OnboardingFailure {

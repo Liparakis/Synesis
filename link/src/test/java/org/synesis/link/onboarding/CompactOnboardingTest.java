@@ -19,6 +19,34 @@ import org.synesis.link.protocol.CompactBootstrapInvitation;
 final class CompactOnboardingTest {
 
   @Test
+  void joiningAnInvitationOfTheSameIdentityIsRefusedAsItsOwn() throws Exception {
+    Path profile = Files.createTempDirectory("synesis-compact-own");
+    List<OnboardingEvent> hostEvents = new CopyOnWriteArrayList<>();
+    Onboarding host = new Onboarding(profile, hostEvents::add);
+    try (Onboarding.PreparedHost prepared = host.createCompactInvitation(null, null, ignored -> {
+    })) {
+      assertNotNull(prepared);
+      String invitation = hostEvents.stream()
+          .filter(event -> event.type() == OnboardingEventType.SHARE_LINK)
+          .map(OnboardingEvent::value)
+          .findFirst()
+          .orElseThrow();
+      Onboarding join = new Onboarding(profile, ignored -> {
+      });
+
+      OnboardingFailure failure = org.junit.jupiter.api.Assertions.assertThrows(
+          OnboardingFailure.class, () -> {
+            try (Onboarding.PreparedJoin attempt = join.importInvitation(invitation)) {
+              attempt.connect();
+            }
+          });
+
+      org.junit.jupiter.api.Assertions.assertEquals(OnboardingFailureCode.OWN_INVITATION,
+          failure.code());
+    }
+  }
+
+  @Test
   void completesOneWayInviteAndExchangesDescriptorsAfterControlReady() throws Exception {
     Path hostProfile = Files.createTempDirectory("synesis-compact-host");
     Path joinProfile = Files.createTempDirectory("synesis-compact-join");

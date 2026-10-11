@@ -25,7 +25,7 @@ public final class FailureMapper {
         terminal.stderr(human(code));
         return switch (code) {
             case IDENTITY_FAILED -> ExitCodes.LOCAL_CONFIGURATION;
-            case INVITE_INVALID -> ExitCodes.INVITE_INVALID;
+            case INVITE_INVALID, OWN_INVITATION -> ExitCodes.INVITE_INVALID;
             case ANSWER_INVALID -> ExitCodes.ANSWER_INVALID;
             case HOST_IDENTITY_MISMATCH -> ExitCodes.HOST_IDENTITY_MISMATCH;
             case NO_USABLE_CANDIDATE, HOST_TIMEOUT, CONNECTION_FAILED -> ExitCodes.SESSION_FAILED;
@@ -51,6 +51,7 @@ public final class FailureMapper {
             case INVITE_INVALID -> "The invitation is invalid or expired.";
             case ANSWER_INVALID -> "The answer is invalid, expired, mismatched, or already used.";
             case HOST_IDENTITY_MISMATCH -> "The authenticated host identity did not match the invitation.";
+            case OWN_INVITATION -> "This invitation was created by this identity. Join it from another identity or machine.";
             case NO_USABLE_CANDIDATE -> "No usable direct candidate was available.";
             case HOST_TIMEOUT -> "The host wait expired.";
             case CONNECTION_FAILED -> "The bounded session connection failed.";

@@ -21,6 +21,10 @@ public enum OnboardingFailureCode {
    */
   HOST_IDENTITY_MISMATCH,
   /**
+   * The invitation was created by the identity that is trying to join it.
+   */
+  OWN_INVITATION,
+  /**
    * Candidate gathering or pairing produced no usable route.
    */
   NO_USABLE_CANDIDATE,
