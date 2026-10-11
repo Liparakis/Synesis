@@ -1,3 +1,83 @@
+# 2026-10-11 — Sonnet 5.5 medium with Luna 6 high: refusals that explain themselves, and what still stalls
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster12-20261011` to `remaster16`. Real runs in new
+disposable projects under `Documents\SynesisRemasterAcceptance`, started by `synesis agents run`. The
+bootstrapper created each repository and goal, ran `synesis init` and `synesis provider install`,
+started the controller and validated; it assigned nothing and relayed nothing. From `remaster14` on,
+Claude Code `claude-sonnet-5-5` medium and Codex `gpt-6-luna` high; before that, Claude Code
+`claude-opus-5-5` high and Codex `gpt-6-luna` medium.
+
+Defects found by these runs and fixed, each with a test unless stated:
+
+- An installed Synesis on Linux could start no child process: the installer restored the executable
+  bit on four files and the runtime needs `lib/jspawnhelper` and `bin/keytool`. `synesis init` answered
+  `GIT_REQUIRED` and `synesis host` `CONNECTION_FAILED`. On master too.
+- The controller's record that an agent's process ended was dropped when the project lock stayed busy
+  for two seconds. The lane looked held by a live session for eleven minutes and the agent resumed to
+  continue it was offered nothing.
+- A patch edit without `expectedOccurrences` was dropped and the patch refused as an invalid path.
+- A session holding a lane by continuation could not extend it, name it again, or release it: the lane
+  was looked up only by the identifier derived from the session.
+- What a stopped agent is taken to have seen is now the earlier of its last recorded call and the log
+  as it stood 30 seconds before its process ended. Either bound alone left an agent unresumed.
+- A session with no lane, while others worked, was answered with `ensure_session` and empty arguments
+  as the only permitted operation, and another participant's lane as its context.
+- Every refusal now carries an instruction. A malformed argument keeps the parser's finding as
+  `detail`; a refused payload names the accepted kinds, fields, contract fields or status values; a
+  patch whose text did not match names the edit and both counts. Input that could not be read (an edit
+  that was not an object, a claim without a path, a work group identifier that was not a UUID) was
+  dropped and the call answered as a success; each is refused by name. Refusal codes and next actions
+  are unchanged.
+- An answer that depends on a peer allowed three unchanged polls, fifteen seconds, and a resumed agent
+  takes about half a minute to reach Synesis. Agents woke each other in turn; a review ran sixteen
+  resumes. Such answers now allow twelve. A recovery action keeps three.
+- One lane's snapshot waiting on a dependency made the integration pump answer `integration_pending`
+  to every caller ahead of that caller's own capability step. No dedicated test.
+- The reason a reviewer gives with a rejection was recorded and never shown to the implementer, and an
+  implementer that had admitted the next review request was answered as if implementing from the start.
+- An active reviewer lane declared for exactly one producer lane makes that producer subject to review
+  before any request or grant exists. A reviewer suspended or held for recovery does not.
+- A waiting reviewer is told when its work group has no producer lane and may cancel.
+- `synesis join` of an invitation created by the same identity is refused with `OWN_INVITATION`.
+- Replacing a launcher within a moment of its process starting failed on Windows; the move is retried.
+
+Runs with Sonnet 5.5 medium (S) and Luna 6 high (L), per build. A run is counted complete when
+the controller reported `COMPLETED` and the project's tests passed; two runs that reported it without
+meeting the goal are counted as failures. For the review goal only some logs were read, so a
+completed review run is not proof that the rejection and correction both took place.
+
+| Goal | remaster14 | remaster15 | remaster16 |
+| --- | --- | --- | --- |
+| Negotiated, two agents (SS, LL, SL, LS) | 8 of 8 | 5 of 6 | 5 of 6 |
+| Cancel | 2 of 2 | 2 of 2 | 2 of 2 |
+| Three agents | 2 of 2 | 2 of 2 | 0 of 1 |
+| Five agents | 0 of 1 | 1 of 2 | 2 of 3, one of them five Sonnet agents |
+| Review that rejects the first snapshot | 2 of 4 | 1 of 5 | 4 of 6 |
+
+What still fails, by cause:
+
+- A producer that finishes before any reviewer has announced is integrated unreviewed, and the late
+  reviewer has nothing to review. A work group requires review only when it was created with a
+  mandatory review policy; a project cannot state it. `.synesis/project.json` is read strictly, so a
+  project-level policy is a persisted-format decision and was not made here.
+- Two agents that both announce the reviewer role wait on each other. Told there is no producer, both
+  cancelled, and neither could then announce the implementation: a session holds one lane for its
+  life and a cancelled session is fenced (`workspace_generation_changed`). The run ended `COMPLETED`
+  with every lane cancelled and nothing built. Refusing a reviewer lane with no producer at admission
+  would leave the session free; it contradicts ADR-0046, whose tests admit a reviewer first, and was
+  prepared and withdrawn pending a decision.
+- With several requesters of one capability the owner publishes per request, each gated on the
+  previous requester's validation. One requester that stops holds the rest.
+- A run in which every lane was cancelled reports `COMPLETED`.
+
+Link: `synesis host` on the Linux install creates its listener and invitation. A join between Windows
+and the Linux container was NOT REACHED: plain UDP did not pass between them in either direction.
+macOS: NOT REACHED. Linux agents with real models: NOT REACHED.
+
+Verification: `check repositoryHygieneCheck` on Windows, link 172, coordination 190, project-record
+60, relay 12, mcp-contract 17, workspace 596 (1 skipped), MCP 158, CLI 113, 0 failures. Linux container
+`check` on commit `743df498`, 0 failures; the commits after it were not run on Linux.
+
 # 2026-10-11 — Everything recorded as wrong or unproven on the remaster branch, fixed or run
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster9-20261011` to `remaster11`. Real runs in new
