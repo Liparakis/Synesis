@@ -66,7 +66,12 @@ Still open, in order of how often it fails a run:
   `workspace_stale` with `ensure_session`, and the manual forbids rebinding a stale review lane. One
   reviewer stopped there with the review complete and its own lane open.
 - A requester that validated and stopped is needed again when the owner revises for another
-  requester, and comes back only if the controller resumes it. Link between two machines,
+  requester, and comes back only if the controller resumes it.
+
+Verification: `check repositoryHygieneCheck` on Windows on the final tree, link 172, coordination 192,
+project-record 60, relay 12, mcp-contract 17, workspace 599 (1 skipped), MCP 163, CLI 113, 0 failures.
+Not run on Linux. Test subagents: Sonnet 5.5 at medium effort, pinned at launch; the harness exposed no
+effective runtime metadata. Link between two machines,
 macOS, and Linux agents with real models remain NOT REACHED.
 
 # 2026-10-11 — Sonnet 5.5 medium with Luna 6 high: refusals that explain themselves, and what still stalls
