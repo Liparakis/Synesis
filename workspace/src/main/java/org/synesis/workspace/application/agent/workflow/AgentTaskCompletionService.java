@@ -169,6 +169,58 @@ public final class AgentTaskCompletionService {
     }
 
     /**
+     * Events that cannot make a projected finish stale. Liveness and takeover of a lane are fenced
+     * by the envelope's own intent, epoch and participant. Another lane's announcement cannot touch
+     * this one, whose claims are exclusive. Capability events are judged afresh by the readiness
+     * check, which reads the same current log before the envelope is examined. Another lane being
+     * integrated and released changes neither this lane nor what it may publish, and this lane's
+     * own group closing is fenced by the group version. A prepared completion or a new snapshot
+     * still makes the envelope stale: it may be this lane's own, and the event does not say whose.
+     */
+    private static final java.util.Set<PredictionEventType> NOT_STALING_A_FINISH = java.util.Set.of(PredictionEventType.PARTICIPANT_HEARTBEAT,
+            PredictionEventType.PARTICIPANT_SUSPENDED,
+            PredictionEventType.RECOVERY_SNAPSHOT_HELD,
+            PredictionEventType.PARTICIPANT_DETACHED,
+            PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+            PredictionEventType.WORK_INTENT_ANNOUNCED,
+            PredictionEventType.WORK_GROUP_CREATED,
+            PredictionEventType.WORK_GROUP_STATUS_CHANGED,
+            PredictionEventType.WORK_INTENT_RELEASED,
+            PredictionEventType.TASK_WAITING_FOR_DEPENDENCIES,
+            PredictionEventType.INTEGRATION_ATTEMPT_STARTED,
+            PredictionEventType.INTEGRATION_COMMIT_CREATED,
+            PredictionEventType.CONTROL_BRANCH_ADVANCED,
+            PredictionEventType.TASK_INTEGRATED,
+            PredictionEventType.SESSION_FINALIZED,
+            PredictionEventType.PROVIDER_SESSION_TERMINALIZED,
+            PredictionEventType.CAPABILITY_REQUEST_CREATED,
+            PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
+            PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
+            PredictionEventType.CAPABILITY_REQUEST_REJECTED,
+            PredictionEventType.CAPABILITY_REQUEST_CANCELLED,
+            PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED,
+            PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
+            PredictionEventType.CAPABILITY_VALIDATION_STARTED,
+            PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
+            PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED);
+
+    /**
+     * Reports whether a finish projected at {@code revision} still describes the log.
+     *
+     * <p>Requiring that nothing but heartbeats followed let any other agent's activity invalidate
+     * the envelope. With five agents announcing and negotiating, an owner's finish was refused as
+     * stale twelve times in a row and it gave up with its work unpublished; with two, a requester
+     * was refused three times while its owner's lane was being integrated. A review decision, a
+     * grant, a coordination request, a scope change, a failed or blocked integration, or any event
+     * not listed still makes the envelope stale.</p>
+     */
+    private static boolean finishEnvelopeStillHolds(PredictionEventStore store, long revision) {
+        List<org.synesis.coordination.domain.prediction.PredictionEvent> events = store.events();
+        return revision >= 0L && revision <= events.size()
+                && events.subList((int) revision, events.size()).stream().allMatch(event -> NOT_STALING_A_FINISH.contains(event.type()));
+    }
+
+    /**
      * Validates optional server-issued finish evidence for the current lane revision.
      */
     private static AgentResponse validateSnapshotEvidence(CompleteTaskRequest request, WorkIntent intent, PredictionEventStore store, String participantHandle) {
@@ -186,7 +238,7 @@ public final class AgentTaskCompletionService {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_WORK_GROUP_NOT_FOUND);
         }
         if (!request.expectedIntentId().equals(intent.intentId()) || !request.expectedWorkGroupId().equals(intent.workGroupId()) || !request.expectedClaimEpoch().equals(intent.version())
-                || !request.expectedWorkGroupVersion().equals(group.version()) || !store.unchangedSince(request.expectedRevision()) || !request.expectedParticipant().equals(participantHandle)
+                || !request.expectedWorkGroupVersion().equals(group.version()) || !finishEnvelopeStillHolds(store, request.expectedRevision()) || !request.expectedParticipant().equals(participantHandle)
                 || !intent.participant().equals(participantHandle) || intent.status() != WorkIntent.Status.ANNOUNCED) {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_STALE);
         }
