@@ -1,3 +1,66 @@
+# 2026-10-11 — A capability request names a file: the lane claiming it is the owner
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster21-20261011` and `remaster22`. Real runs as in
+the entries below, Claude Code `claude-sonnet-5-5` medium (S) and Codex `gpt-6-luna` high (L).
+
+Decision made by the repository owner and recorded: ADR-0090. A declaration by the owner lane
+("provides") was what had been proposed; it was not built, because the claim on a file already says
+whose it is and needs no new state. The MCP tool catalog changes additively: `capability_request`
+gains the optional `ownerPath`, and the pinned golden projection and digests change with it.
+
+- A capability request names the repository file that implements the capability. The open lane of
+  another participant that claims that file is the owner. A lineage sent with it does not overrule
+  the claim, and a file no other lane claims leaves the request unrecorded.
+- A request whose owner cannot be told, and a declared dependency not yet requested, are answered
+  with the open lanes, their goals and claims, and what to send.
+- A recorded request answers with the goal and claims of the lane that received it.
+- A refused claim no longer tells the caller to request a capability from the lane it collided with.
+  The manual said so, and that sentence was the cause of the misaddressed requests.
+
+| Goal | remaster20 | remaster21 and 22 |
+| --- | --- | --- |
+| Five agents, one provider (SSSSS, LLLLL) | 0 of 2 | 3 of 4 |
+| Five agents, mixed | 2 of 2 | 2 of 2 |
+| Three agents (LLL, SLS) | 0 of 1 | 2 of 2 |
+| Negotiated, two agents (SL, LS, SS, LL) | 4 of 4 | 3 of 4 |
+| Review with the policy (LS, SL) | 4 of 4 | 2 of 2 |
+| Cancel | 1 of 1 | 1 of 1 |
+
+In every run of both builds each capability request named `ownerPath` on the first attempt and was
+recorded against the lane claiming that file. The two runs that did not complete, both Luna only,
+have other causes:
+
+- **Two accepted contracts for one capability contradicted each other.** In the five-agent run the
+  storage owner agreed with one requester that an unknown task id raises `FileNotFoundError` and
+  that listing creates a missing store, and with another that `FileNotFoundError` is for filesystem
+  failures only and listing has no side effects. One implementation is published to both (ADR-0089),
+  so each revision failed one validator. The owner said so and stopped at the polling limit. Nothing
+  stops an owner from accepting a second, different contract for a capability it already agreed.
+- **An agent wrote into the control checkout with its provider's own file tool.** In the two-agent
+  run a Codex `file_change` added the two command-line files to the project checkout, although the
+  project's Codex `PreToolUse` hook for `apply_patch` was installed. Integration refuses a control
+  checkout with changes Synesis did not make, which is intended. Neither agent was told why: the
+  owner's snapshot showed `INTEGRATION_FAILED` and its next action was an ordinary `IMPLEMENT`. One
+  occurrence in 361 Codex sessions; why the hook did not route or deny the patch is not established.
+
+Also seen once, not diagnosed: `ensure_session` answered `internal_failure` with
+`SESSION_BINDING_FAILED` while a workspace was being refreshed, and succeeded when the agent called
+again. The cause is not logged.
+
+The Luna agents are not fully blind. Each read `~/.codex/memories/MEMORY.md`, where Codex keeps notes
+from this user's earlier Synesis runs, including a required lifecycle. The bootstrapper did not put
+them there and did not remove them.
+
+Still open from the entry below: a reviewer with a stale workspace is told `ensure_session` against
+the manual, and a requester that validated and stopped is needed again after an owner revision.
+
+Verification: `check repositoryHygieneCheck` on Windows, link 172, coordination 192, project-record
+60, relay 12, mcp-contract 17, workspace 600 (1 skipped), MCP 163, CLI 113, 0 failures; after it one
+conditional was rewritten and one assertion added, and the workspace and MCP suites were run again.
+Not run on Linux. No test subagent was used. A single-reviewer quality pass was made in place of the
+multi-agent review. Link between two machines, macOS, and Linux agents with real models remain NOT
+REACHED.
+
 # 2026-10-11 — Reviewer admission, project review policy, shared publication: the four remaining causes closed
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster17-20261011` to `remaster19`. Real runs as in
