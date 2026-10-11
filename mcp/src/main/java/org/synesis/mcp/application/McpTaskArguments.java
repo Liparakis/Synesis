@@ -101,7 +101,9 @@ final class McpTaskArguments {
         if (map.get("workGroupId") instanceof String value && !value.isBlank()) {
             try {
                 workGroupId = UUID.fromString(value);
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException invalid) {
+                // Swallowed, this put the lane in whichever work group was first.
+                throw new IllegalArgumentException("workGroupId must be a UUID string", invalid);
             }
         }
         if (map.containsKey("completionMode")) {
@@ -224,16 +226,20 @@ final class McpTaskArguments {
         }
         Object taskObj = arguments.get("task");
         Object claimsObj = taskObj instanceof Map<?, ?> taskMap ? taskMap.get("claims") : arguments.get("claims");
-        if (!(claimsObj instanceof List<?> claims)) {
+        if (claimsObj == null) {
             return List.of();
         }
+        if (!(claimsObj instanceof List<?> claims)) {
+            throw new IllegalArgumentException("claims must be an array of {path, kind} objects");
+        }
         List<ResourceSelector> selectors = new ArrayList<>();
-        for (Object item : claims) {
-            if (item instanceof Map<?, ?> claim) {
-                if (selectorPath(claim) instanceof String value) {
-                    selectors.add(PATH_SUBTREE.equals(kindName(claim.get("kind"))) ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
-                }
+        for (int index = 0; index < claims.size(); index++) {
+            // A claim that cannot be read is refused: dropped, the lane was announced with less
+            // than the agent believed it held.
+            if (!(claims.get(index) instanceof Map<?, ?> claim) || !(selectorPath(claim) instanceof String value)) {
+                throw new IllegalArgumentException("claims[" + index + "] must be an object with a string path");
             }
+            selectors.add(PATH_SUBTREE.equals(kindName(claim.get("kind"))) ? ResourceSelector.pathSubtree(value) : ResourceSelector.pathExact(value));
         }
         return List.copyOf(selectors);
     }

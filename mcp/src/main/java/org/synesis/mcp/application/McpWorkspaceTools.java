@@ -106,25 +106,20 @@ final class McpWorkspaceTools {
 
         List<PatchEdit> patchEdits = new ArrayList<>();
         if (arguments != null && arguments.get("edits") instanceof List<?> editsList) {
-            for (Object item : editsList) {
-                if (item instanceof Map<?, ?> editMap) {
-                    Object find = editMap.get("find");
-                    Object replace = editMap.get("replace");
-                    if (find != null && !(find instanceof String) || replace != null && !(replace instanceof String)) {
-                        return AgentResponse.blocked(AgentReason.INVALID_PATH);
-                    }
-                    // An edit that does not say how often its text occurs means the usual case,
-                    // once. Dropping it left an empty patch that was refused as an invalid path,
-                    // and an agent holding the right file could not learn what was wrong.
-                    Object occurrences = editMap.get("expectedOccurrences");
-                    if (occurrences != null && !(occurrences instanceof Number number && number.intValue() >= 1)) {
-                        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, null,
-                                McpJsonRpcResponses.object("reason", "PATCH_EDIT_INVALID", "instruction", "expectedOccurrences, when given, is a whole number of at least 1."));
-                    }
-                    if (find != null && replace != null) {
-                        patchEdits.add(new PatchEdit((String) find, (String) replace, occurrences instanceof Number number ? number.intValue() : 1));
-                    }
+            for (int index = 0; index < editsList.size(); index++) {
+                // An edit that cannot be read refuses the patch. Dropped, the rest was applied and
+                // reported as success.
+                if (!(editsList.get(index) instanceof Map<?, ?> editMap) || !(editMap.get("find") instanceof String find) || !(editMap.get("replace") instanceof String replace)) {
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, null,
+                            McpJsonRpcResponses.object("reason", "PATCH_EDIT_INVALID", "editIndex", index, "instruction", "Each edit is an object with a string find and a string replace."));
                 }
+                // An edit that does not say how often its text occurs means the usual case, once.
+                Object occurrences = editMap.get("expectedOccurrences");
+                if (occurrences != null && !(occurrences instanceof Number number && number.intValue() >= 1)) {
+                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, null,
+                            McpJsonRpcResponses.object("reason", "PATCH_EDIT_INVALID", "editIndex", index, "instruction", "expectedOccurrences, when given, is a whole number of at least 1."));
+                }
+                patchEdits.add(new PatchEdit(find, replace, occurrences instanceof Number number ? number.intValue() : 1));
             }
         }
 

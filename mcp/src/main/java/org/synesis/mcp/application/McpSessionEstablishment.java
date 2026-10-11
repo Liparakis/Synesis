@@ -162,10 +162,17 @@ final class McpSessionEstablishment {
             task = parseTaskIntent(arguments);
         } catch (IllegalArgumentException invalidTask) {
             String reason = "TASK_FIELDS_MUST_BE_NESTED".equals(invalidTask.getMessage()) ? "TASK_FIELDS_MUST_BE_NESTED" : "INVALID_TASK_INTENT";
-            return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", reason).toJson());
+            return textResultResponse(id, McpRefusalGuidance.of(McpRefusalGuidance.malformed(AgentNextAction.REQUEST_HUMAN_HELP, "reason", reason, invalidTask)).toJson());
         }
         boolean refresh = arguments != null && Boolean.TRUE.equals(arguments.get("refresh"));
-        List<ResourceSelector> selectors = parseClaimSelectors(arguments);
+        List<ResourceSelector> selectors;
+        try {
+            selectors = parseClaimSelectors(arguments);
+        } catch (IllegalArgumentException invalidClaim) {
+            // An absolute, escaping or protected claim path used to surface as a JSON-RPC internal error.
+            return textResultResponse(id, McpRefusalGuidance.of(new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, null,
+                    object("reason", "INVALID_CLAIM", "detail", String.valueOf(invalidClaim.getMessage())))).toJson());
+        }
 
         if (!selectors.isEmpty() && !manualService.attest(provider).valid()) {
             return claimsRejectedResponse(id);
@@ -173,7 +180,7 @@ final class McpSessionEstablishment {
 
         AgentResponse admitted = sessionService.ensureSession(new SessionResolutionRequest(activeProjectRoot, provider, connectionInstanceId, task, refresh, managedAdmission));
         if (admitted.status() != AgentStatus.READY) {
-            return textResultResponse(id, admitted.toJson());
+            return textResultResponse(id, McpRefusalGuidance.of(admitted).toJson());
         }
         bindVerifiedSession(activeProjectRoot);
         // Every phase runs, and when several produce a reply the later one wins: the claim
@@ -182,7 +189,7 @@ final class McpSessionEstablishment {
         AgentResponse repaired = repairJoin(arguments, activeProjectRoot);
         AgentResponse claimed = claimPhase(task, selectors, refresh, claimsFieldSpecified(arguments), activeProjectRoot);
         AgentResponse reply = claimed != null ? claimed : repaired != null ? repaired : unwound != null ? unwound : admitted;
-        return textResultResponse(id, reply.toJson());
+        return textResultResponse(id, McpRefusalGuidance.of(reply).toJson());
     }
 
     /**
@@ -337,6 +344,11 @@ final class McpSessionEstablishment {
                 // Another session held the project log; nothing was recorded and the
                 // same announcement is safe to repeat.
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
+            }
+            if (failure instanceof org.synesis.coordination.exception.CoordinationException || failure instanceof IllegalArgumentException) {
+                // The announcement itself was refused: a closed work group, a blank goal, review
+                // targets on a producer. Answering an internal failure hid which.
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", String.valueOf(failure.getMessage())));
             }
             System.err.println("SYNESIS_MCP_ANNOUNCE_FAILURE=" + failureDiagnostic(failure));
             return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);

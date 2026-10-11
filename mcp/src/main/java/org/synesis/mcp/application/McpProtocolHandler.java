@@ -699,6 +699,6 @@ public final class McpProtocolHandler {
                 return errorTextResultResponse(id, "Unknown tool: " + UNKNOWN_TOOL_PREFIX + tool);
             }
         }
-        return textResultResponse(id, agentResponse.toJson());
+        return textResultResponse(id, McpRefusalGuidance.of(agentResponse).toJson());
     }
 }

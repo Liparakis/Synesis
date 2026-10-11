@@ -24,6 +24,17 @@ import org.synesis.coordination.domain.collaboration.ReviewPolicy;
  */
 final class McpCoordinationPayload {
 
+    /** The request kinds, as a refusal of an unknown kind names them. Each has a case in {@link #normalizeStrictCoordination}. */
+    private static final List<String> REQUEST_KINDS = List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join",
+            "work_group_create", "continuation");
+
+    /** The response kinds, as a refusal of an unknown kind names them. Each has a case in {@link #normalizeStrictResponse}. */
+    private static final List<String> RESPONSE_KINDS = List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation");
+
+    /** The fields a capability contract has, all of them required and no others allowed. */
+    private static final List<String> CONTRACT_FIELDS = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency",
+            "acceptanceTests");
+
     /** Utility class; these rules are exposed through static operations. */
     private McpCoordinationPayload() {
     }
@@ -53,11 +64,11 @@ final class McpCoordinationPayload {
             case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant", "proposal", "snapshotId", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
             case "work_group_create" -> List.of("workGroupId", "goal", "acceptance", "reviewPolicy");
             case "continuation" -> payload.containsKey("grantId") ? List.of("grantId", "intentId", "claimEpoch") : List.of("intentId", "claimEpoch");
-            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_KIND");
+            default -> throw new RefusedPayloadException("UNKNOWN_COORDINATION_KIND", "allowedKinds", REQUEST_KINDS);
         };
         for (String key : payload.keySet()) {
             if (!allowed.contains(key)) {
-                throw new FieldNotAllowedException(key, allowed);
+                throw new RefusedPayloadException("COORDINATION_FIELD_NOT_ALLOWED:" + key, "allowedFields", allowed);
             }
         }
         List<String> required = switch (kind) {
@@ -117,7 +128,7 @@ final class McpCoordinationPayload {
             case "capability_request" -> {
                 CapabilityContract contract = parseContract(payload.get("contract"));
                 if (contract == null) {
-                    throw new IllegalArgumentException("CAPABILITY_CONTRACT_INVALID");
+                    throw new RefusedPayloadException("CAPABILITY_CONTRACT_INVALID", "contractFields", CONTRACT_FIELDS);
                 }
                 yield new McpCoordinationRequest.DescribeCapability(String.valueOf(payload.get("capability")),
                         contract,
@@ -183,11 +194,11 @@ final class McpCoordinationPayload {
             case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
             case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "failedAcceptanceTests");
             case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
-            default -> throw new IllegalArgumentException("UNKNOWN_COORDINATION_RESPONSE_KIND");
+            default -> throw new RefusedPayloadException("UNKNOWN_COORDINATION_RESPONSE_KIND", "allowedKinds", RESPONSE_KINDS);
         };
         for (String key : payload.keySet()) {
             if (!allowed.contains(key)) {
-                throw new IllegalArgumentException("COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:" + key);
+                throw new RefusedPayloadException("COORDINATION_RESPONSE_FIELD_NOT_ALLOWED:" + key, "allowedFields", allowed);
             }
         }
         List<String> required = switch (kind) {
@@ -270,11 +281,11 @@ final class McpCoordinationPayload {
                     optionalLongArgument(payload, "contractRevision", 1));
             case "coordination_response" -> new McpCoordinationResponse.RespondToRequest(optionalUuidArgument(payload, "coordinationRequest"),
                     (String) payload.get("coordinationRequest"),
-                    CoordinationRequest.Status.valueOf(String.valueOf(payload.get("coordinationStatus"))),
+                    status(payload, "coordinationStatus"),
                     String.valueOf(payload.getOrDefault("proposal", "")));
             case "inbox_acknowledge" -> new McpCoordinationResponse.AcknowledgeInbox(optionalUuidArgument(payload, "inboxItemId"));
             case "inbox_resolve" -> new McpCoordinationResponse.ResolveInbox(optionalUuidArgument(payload, "inboxItemId"),
-                    CoordinationRequest.Status.valueOf(String.valueOf(payload.get("resolution"))),
+                    status(payload, "resolution"),
                     String.valueOf(payload.getOrDefault("proposal", "")));
             default -> throw new IllegalStateException("unvalidated coordination response kind: " + kind);
         };
@@ -456,8 +467,7 @@ final class McpCoordinationPayload {
         if (!(contractObj instanceof Map<?, ?> map)) {
             return null;
         }
-        List<String> contractFields = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests");
-        if (map.size() != contractFields.size() || map.keySet().stream().anyMatch(key -> !(key instanceof String field) || !contractFields.contains(field))) {
+        if (map.size() != CONTRACT_FIELDS.size() || map.keySet().stream().anyMatch(key -> !(key instanceof String field) || !CONTRACT_FIELDS.contains(field))) {
             return null;
         }
         Object rawPurpose = map.get("purpose");
@@ -502,22 +512,41 @@ final class McpCoordinationPayload {
     }
 
     /**
-     * A payload field its request kind does not take. It carries the fields the kind does take, so
-     * the refusal can name them: an agent told only which field was wrong had to guess the rest.
+     * A payload the schema refuses, with what it would have accepted in that place: the fields of
+     * the kind, the kinds, the fields of a contract, the values of a status. An agent told only
+     * what was wrong had to guess the rest.
      */
-    static final class FieldNotAllowedException extends IllegalArgumentException {
+    static final class RefusedPayloadException extends IllegalArgumentException {
 
         private static final long serialVersionUID = 1L;
 
-        private final transient List<String> allowedFields;
+        private final transient String acceptedName;
+        private final transient List<String> accepted;
 
-        FieldNotAllowedException(String field, List<String> allowedFields) {
-            super("COORDINATION_FIELD_NOT_ALLOWED:" + field);
-            this.allowedFields = List.copyOf(allowedFields);
+        RefusedPayloadException(String code, String acceptedName, List<String> accepted) {
+            super(code);
+            this.acceptedName = acceptedName;
+            this.accepted = List.copyOf(accepted);
         }
 
-        List<String> allowedFields() {
-            return allowedFields;
+        /** Result key under which the accepted values are reported, such as {@code allowedFields}. */
+        String acceptedName() {
+            return acceptedName;
         }
+
+        List<String> accepted() {
+            return accepted;
+        }
+    }
+
+    /** Reads a request status in any letter case; a model writes {@code accepted} as readily as {@code ACCEPTED}. */
+    private static CoordinationRequest.Status status(Map<String, Object> payload, String key) {
+        String given = String.valueOf(payload.get(key));
+        for (CoordinationRequest.Status status : CoordinationRequest.Status.values()) {
+            if (status.name().equalsIgnoreCase(given)) {
+                return status;
+            }
+        }
+        throw new RefusedPayloadException("COORDINATION_FIELD_INVALID:" + key, "allowedValues", java.util.Arrays.stream(CoordinationRequest.Status.values()).map(Enum::name).toList());
     }
 }

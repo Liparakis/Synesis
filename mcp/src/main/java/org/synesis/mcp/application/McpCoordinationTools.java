@@ -165,7 +165,7 @@ final class McpCoordinationTools {
         try {
             completionRequested = optionalBooleanArgument(arguments, "completionRequested");
         } catch (IllegalArgumentException invalidCompletionRequest) {
-            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_COMPLETION_REQUEST");
+            agentResponse = McpRefusalGuidance.malformed(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_COMPLETION_REQUEST", invalidCompletionRequest);
             return agentResponse;
         }
         if (arguments != null && arguments.get("integrationCheck") instanceof Map<?, ?> check) {
@@ -192,9 +192,8 @@ final class McpCoordinationTools {
         McpCoordinationRequest request;
         try {
             request = normalizeStrictCoordination(arguments);
-        } catch (McpCoordinationPayload.FieldNotAllowedException failure) {
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                    object("error", failure.getMessage(), "allowedFields", failure.allowedFields()));
+        } catch (McpCoordinationPayload.RefusedPayloadException failure) {
+            return refusedPayload(failure);
         } catch (IllegalArgumentException failure) {
             return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
         }
@@ -259,7 +258,7 @@ final class McpCoordinationTools {
                 }
             };
         } catch (Exception failure) {
-            return policyDenied(AgentNextAction.RETRY, "error", failure.getMessage());
+            return policyDenied(AgentNextAction.RETRY, "error", String.valueOf(failure.getMessage()));
         }
     }
 
@@ -323,9 +322,16 @@ final class McpCoordinationTools {
                     yield completed(object("inboxItemId", resolve.itemId().toString(), "acknowledged", true, "resolved", true));
                 }
             };
+        } catch (McpCoordinationPayload.RefusedPayloadException failure) {
+            return refusedPayload(failure);
         } catch (Exception failure) {
-            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
+            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", String.valueOf(failure.getMessage()));
         }
+    }
+
+    private static AgentResponse refusedPayload(McpCoordinationPayload.RefusedPayloadException failure) {
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
+                object("error", failure.getMessage(), failure.acceptedName(), failure.accepted()));
     }
 
     /**
@@ -362,7 +368,7 @@ final class McpCoordinationTools {
                 agentResponse = publicationService.publishImplementation(pubReq);
             }
         } catch (IllegalArgumentException invalidPublication) {
-            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "CAPABILITY_PUBLICATION_EVIDENCE_INVALID");
+            agentResponse = McpRefusalGuidance.malformed(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "CAPABILITY_PUBLICATION_EVIDENCE_INVALID", invalidPublication);
         }
         return agentResponse;
     }
@@ -400,7 +406,7 @@ final class McpCoordinationTools {
                     terminalSession);
             agentResponse = taskCompletionService.completeTask(completeReq);
         } catch (IllegalArgumentException invalidFinish) {
-            agentResponse = policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_FINISH_LANE_ARGUMENTS");
+            agentResponse = McpRefusalGuidance.malformed(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_FINISH_LANE_ARGUMENTS", invalidFinish);
         }
         return agentResponse;
     }
@@ -418,7 +424,7 @@ final class McpCoordinationTools {
         try {
             reason = optionalStringArgument(arguments, "reason");
         } catch (IllegalArgumentException invalidReason) {
-            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_CANCEL_LANE_ARGUMENTS");
+            return McpRefusalGuidance.malformed(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "INVALID_CANCEL_LANE_ARGUMENTS", invalidReason);
         }
         CancelTaskRequest cancelReq = new CancelTaskRequest(activeProjectRoot, provider, connectionInstanceId, reason);
         agentResponse = taskCancellationService.cancelTask(cancelReq);

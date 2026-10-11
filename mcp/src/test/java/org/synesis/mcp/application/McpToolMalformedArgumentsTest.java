@@ -97,10 +97,24 @@ class McpToolMalformedArgumentsTest {
         return handler.handleMessage(q("{'jsonrpc':'2.0','id':7,'method':'tools/call','params':{'name':'" + tool + "','arguments':" + arguments + "}}"));
     }
 
-    /** Asserts the frame is exactly the text envelope around this body. */
+    /**
+     * Compares what an answer states. Every refusal also says what to do about it, and a malformed
+     * argument what the parser found; {@link #everyRefusalSaysWhatToDoAboutIt} asserts those.
+     */
+    @SuppressWarnings("unchecked")
     private static void assertText(String expectedBody, String frame) {
-        String escaped = q(expectedBody).replace("\"", "\\\"");
-        assertEquals(q("{'jsonrpc':'2.0','id':7,'result':{'content':[{'type':'text','text':'" + escaped + "'}]}}"), frame);
+        Map<String, Object> actual = new LinkedHashMap<>(innerResponse(frame));
+        if (actual.get("result") instanceof Map<?, ?> result) {
+            Map<String, Object> stated = new LinkedHashMap<>((Map<String, Object>) result);
+            stated.remove("instruction");
+            stated.remove("detail");
+            if (stated.isEmpty()) {
+                actual.remove("result");
+            } else {
+                actual.put("result", stated);
+            }
+        }
+        assertEquals(ProviderJson.parse(q(expectedBody)), actual, frame);
     }
 
     @SuppressWarnings("unchecked")
@@ -139,22 +153,45 @@ class McpToolMalformedArgumentsTest {
         }
     }
 
+    private static String editRefused(int index) {
+        return "{'status':'blocked','reason':'invalid_path','result':{'reason':'PATCH_EDIT_INVALID','editIndex':" + index + "}}";
+    }
+
+    /** An unreadable edit used to be dropped and the rest of the patch applied and reported as success. */
     @Test
-    void applyPatchSilentlyDropsAnEditThatIsNotAnObject() {
-        assertText("{'status':'retry_required','reason':'patch_precondition_required','nextAction':'retry'}", call(bound, "apply_patch", "{'path':'README.md','edits':['x']}"));
+    void applyPatchRefusesAnEditItCannotReadAndNamesIt() {
+        assertText(editRefused(0), call(bound, "apply_patch", "{'path':'README.md','edits':['x']}"));
+        assertText(editRefused(1), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b'},{'find':'only-find'}]}"));
+        assertText(editRefused(0), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':5,'replace':'a','expectedOccurrences':1}]}"));
+        assertText(editRefused(0), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':true,'expectedOccurrences':1}]}"));
     }
 
     @Test
     void applyPatchRefusesAnEditWhoseCountIsNotAPositiveWholeNumber() {
-        String refused = "{'status':'blocked','reason':'invalid_path','result':{'reason':'PATCH_EDIT_INVALID','instruction':'expectedOccurrences, when given, is a whole number of at least 1.'}}";
-        assertText(refused, call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':0}]}"));
-        assertText(refused, call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':'1'}]}"));
+        assertText(editRefused(0), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':0}]}"));
+        assertText(editRefused(0), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':'b','expectedOccurrences':'1'}]}"));
     }
 
     @Test
-    void applyPatchRejectsAnEditWhoseFindOrReplaceIsNotAString() {
-        assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':5,'replace':'a','expectedOccurrences':1}]}"));
-        assertText(blocked("invalid_path"), call(bound, "apply_patch", "{'path':'README.md','edits':[{'find':'a','replace':true,'expectedOccurrences':1}]}"));
+    @SuppressWarnings("unchecked")
+    void everyRefusalSaysWhatToDoAboutIt() {
+        Map<String, Object> finish = (Map<String, Object>) innerResponse(call(bound, "finish_lane", "{'claimEpoch':0}")).get("result");
+        assertTrue(String.valueOf(finish.get("instruction")).contains("changed nothing"), finish.toString());
+        assertTrue(String.valueOf(finish.get("detail")).contains("claimEpoch"), "the parser's finding must reach the caller: " + finish);
+        Map<String, Object> kind = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'nope','payload':{}}")).get("result");
+        assertTrue(((List<String>) kind.get("allowedKinds")).contains("capability_request"), kind.toString());
+        assertTrue(kind.containsKey("instruction"), kind.toString());
+        Map<String, Object> responseKind = (Map<String, Object>) innerResponse(call(bound, "respond_coordination", "{'kind':'nope','payload':{}}")).get("result");
+        assertTrue(((List<String>) responseKind.get("allowedKinds")).contains("review_validation"), responseKind.toString());
+        Map<String, Object> contract = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'capability_request','payload':{'capability':'c','contract':{'purpose':'p'}}}")).get("result");
+        assertEquals("CAPABILITY_CONTRACT_INVALID", contract.get("error"), contract.toString());
+        assertEquals(11, ((List<String>) contract.get("contractFields")).size(), contract.toString());
+        Map<String, Object> status = (Map<String, Object>) innerResponse(call(bound, "respond_coordination",
+                "{'kind':'coordination_response','payload':{'coordinationRequest':'00000000-0000-0000-0000-000000000001','coordinationStatus':'maybe'}}")).get("result");
+        assertEquals("COORDINATION_FIELD_INVALID:coordinationStatus", status.get("error"), status.toString());
+        assertTrue(((List<String>) status.get("allowedValues")).contains("ACCEPTED"), status.toString());
+        Map<String, Object> group = (Map<String, Object>) innerResponse(call(handler("codex"), "ensure_session", "{'task':{'goal':'g','acceptance':'a','workGroupId':'not-a-uuid'}}")).get("result");
+        assertTrue(String.valueOf(group.get("detail")).contains("workGroupId"), group.toString());
     }
 
     @Test
@@ -218,7 +255,7 @@ class McpToolMalformedArgumentsTest {
         String help = "request_human_help";
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", help), call(bound, "request_coordination", "{'payload':{}}"));
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", help), call(bound, "request_coordination", "{'kind':'collaboration_status'}"));
-        assertText(denied("error", "UNKNOWN_COORDINATION_KIND", help), call(bound, "request_coordination", "{'kind':'nope','payload':{}}"));
+        assertEquals("UNKNOWN_COORDINATION_KIND", ((Map<?, ?>) innerResponse(call(bound, "request_coordination", "{'kind':'nope','payload':{}}")).get("result")).get("error"));
         assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:x','allowedFields':[]}}",
                 call(bound, "request_coordination", "{'kind':'collaboration_status','payload':{'x':1}}"));
         assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:goal','allowedFields':['intentId','selectors','proposal']}}",
@@ -254,11 +291,19 @@ class McpToolMalformedArgumentsTest {
         }
     }
 
-    /** Records current behavior: unlike reviewTargets, a malformed claims entry is dropped or defaulted and admission still succeeds. */
+    /**
+     * A claim that cannot be read is refused: dropped, the lane was announced with less than the
+     * agent believed it held. An unknown kind is still read as an exact path.
+     */
     @Test
-    void ensureSessionDropsOrDefaultsMalformedClaimEntries() {
-        List<String> claims = List.of("[5]", "[{'kind':'path_exact'}]", "[{'path':'claim-a.txt','kind':'zzz'}]", "[{'path':'claim-b.txt','kind':5}]");
-        for (String entry : claims) {
+    @SuppressWarnings("unchecked")
+    void ensureSessionRefusesAClaimItCannotReadAndDefaultsAnUnknownKind() {
+        for (String entry : List.of("[5]", "[{'kind':'path_exact'}]", "{}", "[{'path':'/etc/passwd'}]")) {
+            Map<String, Object> reply = innerResponse(call(handler("codex"), "ensure_session", "{'task':{'goal':'g','acceptance':'a','claims':" + entry + "}}"));
+            assertEquals("blocked", reply.get("status"), entry + " " + reply);
+            assertEquals("INVALID_CLAIM", ((Map<String, Object>) reply.get("result")).get("reason"), entry + " " + reply);
+        }
+        for (String entry : List.of("[{'path':'claim-a.txt','kind':'zzz'}]", "[{'path':'claim-b.txt','kind':5}]")) {
             Map<String, Object> reply = innerResponse(call(handler("codex"), "ensure_session", "{'task':{'goal':'g','acceptance':'a','claims':" + entry + "}}"));
             assertEquals("ready", reply.get("status"), entry);
         }

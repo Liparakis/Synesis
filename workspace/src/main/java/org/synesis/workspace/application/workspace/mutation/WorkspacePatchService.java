@@ -9,6 +9,7 @@ import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -144,7 +145,8 @@ public final class WorkspacePatchService {
             }
 
             if (request.expectedHash() == null || request.expectedHash().isBlank()) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_PRECONDITION_REQUIRED, AgentNextAction.RETRY, null);
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_PRECONDITION_REQUIRED, AgentNextAction.RETRY,
+                        Map.of("instruction", "Changing an existing file needs expectedHash: the contentHash read_file returned for it."));
             }
 
             if (request.edits() == null || request.edits().isEmpty()) {
@@ -168,15 +170,24 @@ public final class WorkspacePatchService {
             String actualHash = document.revision();
 
             if (!actualHash.equalsIgnoreCase(request.expectedHash().trim())) {
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.FILE_REVISION_STALE, AgentNextAction.RETRY, null);
+                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.FILE_REVISION_STALE, AgentNextAction.RETRY,
+                        Map.of("instruction", "The file changed after that hash was read. Read it again with read_file and use the new contentHash."));
             }
 
             // Apply edits against one deterministic snapshot
             String snapshot = currentContent;
-            for (PatchEdit edit : request.edits()) {
+            for (int index = 0; index < request.edits().size(); index++) {
+                PatchEdit edit = request.edits().get(index);
                 int count = countOccurrences(snapshot, edit.find());
                 if (count != edit.expectedOccurrences()) {
-                    return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_CONTEXT_MISMATCH, AgentNextAction.RETRY, null);
+                    // Which edit missed, and by how much, is what the caller needs to repair it.
+                    Map<String, Object> mismatch = new java.util.LinkedHashMap<>();
+                    mismatch.put("editIndex", index);
+                    mismatch.put("expectedOccurrences", edit.expectedOccurrences());
+                    mismatch.put("actualOccurrences", count);
+                    mismatch.put("instruction", "The find text of this edit does not occur the expected number of times. Read the file again and copy the text to replace exactly, "
+                            + "or set expectedOccurrences to the number of places it should change. Nothing was written.");
+                    return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.PATCH_CONTEXT_MISMATCH, AgentNextAction.RETRY, mismatch);
                 }
                 snapshot = snapshot.replace(edit.find(), edit.replace());
             }
