@@ -183,6 +183,9 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         result.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
         result.put("coordinationKind", NextActionProtocol.KIND_CAPABILITY_REQUEST);
+        result.put("lanes", CollaborationResponseMapper.otherLanes(store.collaborationProjection(), intent.participant()));
+        result.put("instruction", "Request " + missingDependency + " with request_coordination kind capability_request: the complete contract, and ownerPath set to the repository file that implements it. "
+                + "The lane that claims that file receives the request; lanes lists what each open lane claims.");
         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 

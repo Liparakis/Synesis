@@ -51,6 +51,16 @@ stored as the request's owner may answer it or see it in its inbox. Local
 sessions share one node identity, so a sibling session on the same node receives
 `policy_denied`.
 
+A new capability request says whose it is by `ownerPath`, the repository file
+that implements the capability. The open lane of another participant that
+claims that file is the owner (ADR-0090). A lineage sent with it does not
+overrule the claim, and a file no other lane claims leaves the request
+unrecorded. Without `ownerPath`, `ownerAuthorityLineageId` is used, or the only
+other open lane when there is exactly one. When the owner cannot be told the
+answer is `needs_capability` / `owner_required` with `lanes`, the goal and
+claims of each open lane, and an `instruction`. A recorded request answers with
+`owner`, the goal and claims of the lane it went to.
+
 When the owner asks for a contract revision, the requester's `get_next_action`
 returns `revise_capability_request` with the capability name, the revised
 contract, its `contractRevision`, and `acceptRevision`: the exact

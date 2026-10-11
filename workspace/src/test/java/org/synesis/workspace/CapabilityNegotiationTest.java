@@ -350,6 +350,57 @@ class CapabilityNegotiationTest {
         assertEquals(1, reloaded.capabilityRequestProjection().records().size());
     }
 
+    /**
+     * With several lanes open a request has to say whose it is. The file it names decides: the
+     * lane claiming that file receives it, a lineage sent with it does not overrule the claim, and
+     * a file no other lane claims leaves the request unrecorded.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRequestNamingAFileGoesToTheLaneThatClaimsIt() throws Exception {
+        var location = projectService.locate(projectRoot);
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(projectRoot, "codex", "inst-3", null, false));
+        var third = bindingService.find(location, "codex", "inst-3").orElseThrow();
+        bindingService.verifyWorkspaceTrust(location, "codex", third.sessionId(), Path.of(third.worktreePath()));
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(projectRoot, "codex", "inst-2", "Write the usage notes", "Notes cover every subcommand", List.of(ResourceSelector.pathExact("docs/USAGE.md")));
+        collaboration.announce(projectRoot, "codex", "inst-3", "Implement the store", "Store passes its tests", List.of(ResourceSelector.pathExact("src/store.py")));
+        collaboration.announce(projectRoot, "claude", "inst-1", "Implement the command line", "Command line passes its tests", List.of(ResourceSelector.pathExact("src/cli.py")));
+        java.util.function.Function<String, UUID> lineageOf = instance -> {
+            try {
+                String participant = WorkspaceCollaborationService.participantHandle(bindingService.find(location, "codex", instance).orElseThrow().sessionId());
+                return replayedStore().collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst().orElseThrow().authorityLineageId();
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+        };
+        CapabilityContract contract = new CapabilityContract("task records", "JSON-serializable task records", List.of("keeps tasks across runs"), List.of("the command line can import the store"));
+
+        AgentResponse unaddressed = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "store.api", contract, null, null));
+        assertEquals(AgentReason.OWNER_REQUIRED, unaddressed.reason(), unaddressed.toJson());
+        Map<String, Object> told = (Map<String, Object>) unaddressed.result();
+        assertEquals(List.of(List.of("docs/USAGE.md"), List.of("src/store.py")), ((List<Map<String, Object>>) told.get("lanes")).stream().map(lane -> lane.get("claims")).toList());
+        assertTrue(String.valueOf(told.get("instruction")).contains("ownerPath"), unaddressed.toJson());
+
+        AgentResponse unclaimed = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "store.api", contract, null, null,
+                lineageOf.apply("inst-2"), -1, ResourceSelector.pathExact("src/export.py")));
+        assertEquals(AgentReason.OWNER_REQUIRED, unclaimed.reason(), "a named file nobody claims must not fall back to the lineage sent with it: " + unclaimed.toJson());
+        AgentResponse ownFile = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "store.api", contract, null, null,
+                null, -1, ResourceSelector.pathExact("src/cli.py")));
+        assertEquals(AgentReason.OWNER_REQUIRED, ownFile.reason(), ownFile.toJson());
+        assertTrue(replayedStore().capabilityRequestProjection().records().isEmpty());
+
+        // The lineage is the usage-notes lane's, as an agent that collided with that lane would send.
+        AgentResponse addressed = requestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot, "claude", "inst-1", "store.api", contract, null, null,
+                lineageOf.apply("inst-2"), -1, ResourceSelector.pathExact("src/store.py")));
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, addressed.reason(), addressed.toJson());
+        Map<String, Object> recorded = (Map<String, Object>) addressed.result();
+        assertEquals(List.of("src/store.py"), ((Map<String, Object>) recorded.get("owner")).get("claims"));
+        CapabilityRequestRecord request = replayedRequest((String) recorded.get("capabilityRequestHandle"));
+        assertEquals(lineageOf.apply("inst-3"), request.authorityLineageId());
+        assertEquals(third.workerId(), request.ownerWorkerId());
+    }
+
     @Test
     void concurrentEquivalentRequestsRecordOneActiveRequest() throws Exception {
         CapabilityContract contract = new CapabilityContract("UUID productId", "Optional<Product>", List.of("Return exact matching product"), List.of("existing product returned"));

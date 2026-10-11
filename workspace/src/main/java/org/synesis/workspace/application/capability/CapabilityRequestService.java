@@ -20,6 +20,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.capability.SecureRandomCapabilityRequestHandleGenerator;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -33,6 +34,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
+import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -74,15 +76,20 @@ public final class CapabilityRequestService {
         this.handleGenerator = Objects.requireNonNull(handleGenerator, "handleGenerator");
     }
 
+    /** Returns the open lanes of other participants in one lineage: the lanes a request addressed to it reaches. */
+    private static List<WorkIntent> ownerIntents(PredictionEventStore store, UUID authorityLineageId, String requesterParticipant) {
+        return store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> !intent.participant().equals(requesterParticipant))
+                .filter(intent -> intent.authorityLineageId().equals(authorityLineageId))
+                .toList();
+    }
+
     private Optional<ProviderSessionBindingService.Binding> exactOwnerBinding(ProjectLocation location,
             PredictionEventStore store,
             UUID authorityLineageId,
             String requesterParticipant,
             String ownerNodeId) throws Exception {
-        List<WorkIntent> ownerIntents = store.collaborationProjection().activeIntents().stream()
-                .filter(intent -> !intent.participant().equals(requesterParticipant))
-                .filter(intent -> intent.authorityLineageId().equals(authorityLineageId))
-                .toList();
+        List<WorkIntent> ownerIntents = ownerIntents(store, authorityLineageId, requesterParticipant);
         if (ownerIntents.isEmpty()) {
             return Optional.empty();
         }
@@ -112,8 +119,7 @@ public final class CapabilityRequestService {
         if (requestedOwnerLineage == null) {
             return null;
         }
-        boolean foreignActiveLineage = store.collaborationProjection().activeIntents().stream()
-                .anyMatch(intent -> !intent.participant().equals(requesterParticipant) && intent.authorityLineageId().equals(requestedOwnerLineage));
+        boolean foreignActiveLineage = !ownerIntents(store, requestedOwnerLineage, requesterParticipant).isEmpty();
         // Provider bindings in the local project share the project node
         // identity; the durable lineage and exact owner session remain the
         // authority boundary for the response and publication steps.
@@ -147,6 +153,47 @@ public final class CapabilityRequestService {
             return null;
         }
         return candidates.getFirst().authorityLineageId();
+    }
+
+    /**
+     * Returns the lineage of the lane a new request is addressed to, or {@code null} when it
+     * cannot be told.
+     *
+     * <p>Claims are exclusive, so the lane that claims the file a requester names is the owner of
+     * what that file provides, and that is durable state. A lineage the requester supplies is only
+     * its belief. With five lanes open, agents reused the lineage of a lane they had collided with
+     * over an unrelated file, and every request for the storage API went to the lane writing the
+     * usage notes. A named file therefore decides alone: it is never overruled by a lineage sent
+     * with it, and when no other lane claims it the single-other-lane guess is not used either.</p>
+     */
+    private static UUID addressedLineage(PredictionEventStore store, DescribeCapabilityRequest request, Optional<WorkIntent> requesterIntent, String requesterParticipant) {
+        if (request.ownerPath() != null) {
+            List<WorkIntent> claimants = store.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> !intent.participant().equals(requesterParticipant))
+                    .filter(intent -> intent.selectors().stream().anyMatch(request.ownerPath()::overlaps))
+                    .toList();
+            return claimants.size() == 1 ? claimants.getFirst().authorityLineageId() : null;
+        }
+        if (request.ownerAuthorityLineageId() != null) {
+            return request.ownerAuthorityLineageId();
+        }
+        return requesterIntent.map(intent -> inferUniqueOwnerLineage(store, intent.participant())).orElse(null);
+    }
+
+    /**
+     * Answers a request whose owner cannot be told with what is claimed now and how to name the
+     * owner. The bare capability name left the requester to guess a lineage or to ask again.
+     */
+    private static AgentResponse ownerRequired(PredictionEventStore store, DescribeCapabilityRequest request, String requesterParticipant) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("capability", request.capability());
+        result.put("lanes", CollaborationResponseMapper.otherLanes(store.collaborationProjection(), requesterParticipant));
+        result.put("instruction", request.ownerPath() != null
+                ? "No other lane claims " + request.ownerPath().value() + ", so nobody can answer this request yet. lanes lists what each open lane claims. "
+                        + "If that file is still to be built, its lane has not announced: call get_next_action, and submit the request again once a lane claims the file."
+                : "Synesis cannot tell which lane owns this capability. Submit the request again with payload.ownerPath set to the repository file that implements it; "
+                        + "the lane that claims that file receives the request. lanes lists what each open lane claims.");
+        return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 
     /**
@@ -237,27 +284,25 @@ public final class CapabilityRequestService {
         if (requesterIntent.isEmpty() && store.collaborationProjection().activated()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
-        UUID requestedOwnerLineage = request.ownerAuthorityLineageId();
-        UUID inferredOwnerLineage = requestedOwnerLineage != null ? requestedOwnerLineage : requesterIntent.map(intent -> inferUniqueOwnerLineage(store, intent.participant())).orElse(null);
+        UUID addressedLineage = addressedLineage(store, request, requesterIntent, requesterParticipant);
 
         // First-release collaboration lanes are the authoritative owner
         // source.  The older semantic-ownership projection is still
         // honored when present, but a capability request tied to an
         // active foreign lane must not require a second, unrelated task
         // ownership record before it can be durably recorded.
-        String ownerNodeId = resolveOwnerNodeId(store, capability, inferredOwnerLineage, requesterParticipant, requesterNodeId);
+        String ownerNodeId = resolveOwnerNodeId(store, capability, addressedLineage, requesterParticipant, requesterNodeId);
         if (ownerNodeId == null || ownerNodeId.isBlank()) {
             if (requesterIntent.isPresent() && integratedDependencies(store, projection, requesterIntent.get(), requesterNodeId, binding).contains(capability)) {
                 // Nobody is left to negotiate with, and what this lane depends on is already in
                 // its base. Answering "find an owner" again would send it in a circle.
                 return new AgentResponse(AgentStatus.READY, null, null, Map.of("capability", capability, "reason", "CAPABILITY_OWNER_INTEGRATED"));
             }
-            Map<String, Object> result = Map.of("capability", capability);
-            return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
+            return ownerRequired(store, request, requesterParticipant);
         }
 
-        UUID ownerLineage = request.ownerAuthorityLineageId() != null ? request.ownerAuthorityLineageId() : requesterIntent.isPresent() ? inferUniqueOwnerLineage(store, requesterIntent.get().participant())
-                : unscopedOwnerLineage(ownerNodeId);
+        // A project with no lanes has only its semantic owner to address, and no lineage to name.
+        UUID ownerLineage = addressedLineage == null && requesterIntent.isEmpty() ? unscopedOwnerLineage(ownerNodeId) : addressedLineage;
         if (ownerLineage == null) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_LINEAGE_MISMATCH, AgentNextAction.REQUEST_COORDINATION, Map.of("reason", "OWNER_LINEAGE_REQUIRED"));
         }
@@ -302,10 +347,7 @@ public final class CapabilityRequestService {
         // A lane that has prepared its completion closes without reading its inbox again. A
         // request recorded against it now would never be answered, so it is not recorded; the
         // requester waits for that lane's work to be integrated instead.
-        boolean ownerClosing = store.collaborationProjection().activeIntents().stream()
-                .filter(intent -> !intent.participant().equals(requesterParticipant))
-                .filter(intent -> intent.authorityLineageId().equals(ownerLineage))
-                .anyMatch(intent -> PeerDependencyPolicy.closing(store.taskCompletionProjection(), intent));
+        boolean ownerClosing = ownerIntents(store, ownerLineage, requesterParticipant).stream().anyMatch(intent -> PeerDependencyPolicy.closing(store.taskCompletionProjection(), intent));
         if (ownerClosing) {
             return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("capability", capability, "reason", "CAPABILITY_OWNER_COMPLETING"));
         }
@@ -344,6 +386,8 @@ public final class CapabilityRequestService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("capabilityRequestHandle", handle.value());
         result.put("pending", 1);
+        // Shown so a requester that addressed the wrong lane sees it now, not after a silent wait.
+        ownerIntents(store, ownerLineage, requesterParticipant).stream().findFirst().ifPresent(owner -> result.put("owner", CollaborationResponseMapper.laneMap(owner)));
         return new AgentResponse(AgentStatus.WAITING, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
     }
 
@@ -475,9 +519,11 @@ public final class CapabilityRequestService {
      *                                (optional)
      * @param ownerAuthorityLineageId optional explicit owner authority lineage
      * @param contractRevision        exact existing contract revision being answered
+     * @param ownerPath               optional file implementing the capability; the lane claiming
+     *                                it is the owner, whatever lineage is also sent
      */
     public record DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse,
-                                            UUID ownerAuthorityLineageId, long contractRevision) {
+                                            UUID ownerAuthorityLineageId, long contractRevision, ResourceSelector ownerPath) {
 
         /**
          * Validates non-null core parameters.
@@ -501,6 +547,24 @@ public final class CapabilityRequestService {
          */
         public DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse) {
             this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, null, -1);
+        }
+
+        /**
+         * Constructs a request that names no owner file.
+         *
+         * @param projectRoot             project root
+         * @param provider                provider ID
+         * @param connectionInstanceId    connection ID
+         * @param capability              capability
+         * @param contract                contract
+         * @param requestHandle           request handle
+         * @param revisionResponse        revision response
+         * @param ownerAuthorityLineageId optional explicit owner authority lineage
+         * @param contractRevision        exact existing contract revision being answered
+         */
+        public DescribeCapabilityRequest(Path projectRoot, String provider, String connectionInstanceId, String capability, CapabilityContract contract, String requestHandle, String revisionResponse,
+                UUID ownerAuthorityLineageId, long contractRevision) {
+            this(projectRoot, provider, connectionInstanceId, capability, contract, requestHandle, revisionResponse, ownerAuthorityLineageId, contractRevision, null);
         }
     }
 }

@@ -11,6 +11,7 @@ import java.util.Objects;
 
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 
 /**
@@ -55,7 +56,7 @@ final class McpCoordinationPayload {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId");
+            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId", "ownerPath");
             case "collaboration_status" -> List.of();
             case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
             case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
@@ -135,7 +136,8 @@ final class McpCoordinationPayload {
                         payload.get("capabilityRequestHandle") instanceof String value ? value : null,
                         payload.get("revisionResponse") instanceof String value ? value : null,
                         payload.get("ownerAuthorityLineageId") instanceof String value ? value : null,
-                        payload.get("contractRevision") instanceof Number value ? value.longValue() : -1);
+                        payload.get("contractRevision") instanceof Number value ? value.longValue() : -1,
+                        ownerPath(payload.get("ownerPath")));
             }
             case "collaboration_status" -> new McpCoordinationRequest.Status();
             case "contract_proposal" -> new McpCoordinationRequest.PublishContract(optionalUuidArgument(payload, "contractId"),
@@ -454,6 +456,19 @@ final class McpCoordinationPayload {
             return new ReviewPolicy((Boolean) policy.get("mandatory"), (Boolean) policy.get("independenceRequired"));
         } catch (IllegalArgumentException invalidPolicy) {
             throw new IllegalArgumentException("REVIEW_POLICY_UNSUPPORTED", invalidPolicy);
+        }
+    }
+
+    /** Reads the file whose claimant owns the capability; {@code null} when the request names none. */
+    private static ResourceSelector ownerPath(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            // The cast fails for a non-string as the selector fails for an escaping path: one refusal for both.
+            return ResourceSelector.pathExact((String) value);
+        } catch (ClassCastException | IllegalArgumentException notARepositoryFile) {
+            throw new IllegalArgumentException("OWNER_PATH_MUST_BE_A_REPOSITORY_RELATIVE_FILE");
         }
     }
 

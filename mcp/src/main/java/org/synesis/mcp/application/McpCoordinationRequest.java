@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 
 /**
  * One validated {@code request_coordination} operation, with every field already read out of the
@@ -25,13 +26,15 @@ sealed interface McpCoordinationRequest {
      * @param ownerAuthorityLineageId  owner lineage as sent, or {@code null}; parsed by the service call because a
      *                                 malformed value is reported as a retryable dispatch failure
      * @param contractRevision         contract revision being answered, or {@code -1} when none
+     * @param ownerPath                file whose claimant owns the capability, or {@code null}
      */
     record DescribeCapability(String capability,
             CapabilityContract contract,
             String capabilityRequestHandle,
             String revisionResponse,
             String ownerAuthorityLineageId,
-            long contractRevision) implements McpCoordinationRequest {
+            long contractRevision,
+            ResourceSelector ownerPath) implements McpCoordinationRequest {
     }
 
     /** Reads the collaboration status together with the published contracts and dependencies. */

@@ -207,7 +207,8 @@ final class McpCoordinationTools {
                         describe.capabilityRequestHandle(),
                         describe.revisionResponse(),
                         describe.ownerAuthorityLineageId() == null ? null : UUID.fromString(describe.ownerAuthorityLineageId()),
-                        describe.contractRevision()));
+                        describe.contractRevision(),
+                        describe.ownerPath()));
                 case McpCoordinationRequest.Status ignored -> {
                     var snapshot = collaborationService.contractStatus(activeProjectRoot);
                     Map<String, Object> status = new LinkedHashMap<>(collaborationStatusMap(collaborationService.status(activeProjectRoot)));

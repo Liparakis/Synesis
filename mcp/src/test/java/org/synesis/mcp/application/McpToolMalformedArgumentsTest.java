@@ -195,6 +195,11 @@ class McpToolMalformedArgumentsTest {
         Map<String, Object> sentence = innerResponse(call(bound, "request_coordination",
                 "{'kind':'capability_request','payload':{'capability':'c','contract':{" + complete + ",'requiredBehavior':'does it','acceptanceTests':'passes'}}}"));
         assertFalse(String.valueOf(sentence).contains("CAPABILITY_CONTRACT_INVALID"), sentence.toString());
+        for (String ownerPath : List.of("'../outside.py'", "'C:/abs.py'", "5")) {
+            Map<String, Object> owner = (Map<String, Object>) innerResponse(call(bound, "request_coordination",
+                    "{'kind':'capability_request','payload':{'capability':'c','ownerPath':" + ownerPath + ",'contract':{" + complete + ",'requiredBehavior':['b'],'acceptanceTests':['t']}}}")).get("result");
+            assertEquals("OWNER_PATH_MUST_BE_A_REPOSITORY_RELATIVE_FILE", owner.get("error"), owner.toString());
+        }
         Map<String, Object> status = (Map<String, Object>) innerResponse(call(bound, "respond_coordination",
                 "{'kind':'coordination_response','payload':{'coordinationRequest':'00000000-0000-0000-0000-000000000001','coordinationStatus':'maybe'}}")).get("result");
         assertEquals("COORDINATION_FIELD_INVALID:coordinationStatus", status.get("error"), status.toString());

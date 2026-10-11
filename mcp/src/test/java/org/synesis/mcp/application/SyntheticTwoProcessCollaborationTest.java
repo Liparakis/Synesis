@@ -973,13 +973,13 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     private String fileRequest(McpProtocolHandler requester) throws Exception {
-        // With more than one open lane the request names the owner's lane.
-        String ownerLineage = replayedStore().collaborationProjection().activeIntents().stream()
-                .filter(intent -> intent.provider().equals("codex")).findFirst().orElseThrow().authorityLineageId().toString();
+        // With more than one open lane the request names the file it builds on; the lane claiming it is the owner.
         String filed = toolCall(requester, "request_coordination", Map.of("kind", "capability_request",
-                "payload", Map.of("capability", "catalog.product-query", "ownerAuthorityLineageId", ownerLineage, "contract", productQueryContract("Return product when found"))));
+                "payload", Map.of("capability", "catalog.product-query", "ownerPath", "ProductQuery.java", "contract", productQueryContract("Return product when found"))));
         String handle = extractResultField(filed);
         assertNotNull(handle, filed);
+        assertEquals(replayedStore().collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals("codex")).findFirst().orElseThrow().authorityLineageId(),
+                replayedStore().capabilityRequestProjection().findByHandle(handle).orElseThrow().authorityLineageId(), filed);
         return handle;
     }
 

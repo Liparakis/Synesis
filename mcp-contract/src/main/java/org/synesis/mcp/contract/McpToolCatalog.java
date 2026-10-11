@@ -330,6 +330,7 @@ public final class McpToolCatalog {
         payload.put("revisionResponse", enumOf(List.of("accept", "counter", "cancel")));
         payload.put("contractRevision", positiveInteger("Exact contract revision shown in the current request projection"));
         payload.put("ownerAuthorityLineageId", uuid("Durable authority lineage of the intended capability publisher"));
+        payload.put("ownerPath", text("Repository-relative file that implements the capability; the lane claiming it receives the request. Prefer this to ownerAuthorityLineageId"));
         payload.put("workGroupId", uuid());
         payload.put("goal", property("string"));
         payload.put("acceptance", property("string"));
@@ -340,10 +341,10 @@ public final class McpToolCatalog {
         Map<String, Object> schema = kindDiscriminatedSchema(
                 List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join", "continuation", "work_group_create"),
                 payload,
-                List.of(new PayloadKind("capability_request", List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId"), List.of("capability", "contract")),
+                List.of(new PayloadKind("capability_request", List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId", "ownerPath"), List.of("capability", "contract")),
                         new PayloadKind("contract_request", List.of("conflictingIntentId", "proposal", "contractId", "revision"), List.of("conflictingIntentId", "proposal"))));
         return descriptor(REQUEST_COORDINATION,
-                "Submits one strict capability or collaboration request. A capability_request includes the complete API contract. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
+                "Submits one strict capability or collaboration request. A capability_request includes the complete API contract and names its owner by ownerPath, the repository file that implements the capability. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
                 schema,
                 "request-coordination",
                 "MUTATING",

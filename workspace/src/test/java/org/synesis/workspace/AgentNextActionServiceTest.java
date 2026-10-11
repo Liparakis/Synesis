@@ -645,6 +645,9 @@ class AgentNextActionServiceTest {
         assertEquals(List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests"), result.get("requiredFields"));
         Map<String, Object> currentIntent = (Map<String, Object>) result.get("currentIntent");
         assertEquals(List.of("tasktracker.domain"), currentIntent.get("knownDependencies"));
+        // The requester is shown who claims what, so it can name the file it builds on.
+        assertEquals(List.of(List.of("src/domain")), ((List<Map<String, Object>>) result.get("lanes")).stream().map(lane -> lane.get("claims")).toList());
+        assertTrue(String.valueOf(result.get("instruction")).contains("ownerPath"), response.toJson());
 
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         assertEquals("REVISE_SCOPE", workflow.get("type"));

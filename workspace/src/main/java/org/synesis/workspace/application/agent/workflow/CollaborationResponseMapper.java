@@ -1,7 +1,9 @@
 package org.synesis.workspace.application.agent.workflow;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.Participant;
@@ -37,6 +39,31 @@ public final class CollaborationResponseMapper {
         map.put(NextActionKeys.REVIEW_TARGETS, intent.reviewTargetSelectors().stream().map(CollaborationResponseMapper::selectorMap).toList());
         map.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
         return map;
+    }
+
+    /**
+     * Describes a lane by what it is for and the files it claims: what a caller needs to tell
+     * whose a file is, without an identifier to copy.
+     *
+     * @param intent the lane's intent
+     * @return {@code goal} and {@code claims}
+     */
+    public static Map<String, Object> laneMap(WorkIntent intent) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("goal", intent.goal());
+        map.put("claims", intent.selectors().stream().map(ResourceSelector::value).toList());
+        return map;
+    }
+
+    /**
+     * Lists the open lanes of every participant but the caller.
+     *
+     * @param collaboration collaboration projection
+     * @param participant   the caller, whose own lane is left out
+     * @return one {@link #laneMap} per lane
+     */
+    public static List<Map<String, Object>> otherLanes(CollaborationProjection collaboration, String participant) {
+        return collaboration.activeIntents().stream().filter(intent -> !intent.participant().equals(participant)).map(CollaborationResponseMapper::laneMap).toList();
     }
 
     static Map<String, Object> participantMap(Participant participant) {
