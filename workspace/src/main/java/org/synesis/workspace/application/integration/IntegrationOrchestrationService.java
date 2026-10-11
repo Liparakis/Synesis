@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,6 +17,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
@@ -26,6 +28,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
@@ -148,9 +151,13 @@ public final class IntegrationOrchestrationService {
         return normalized.contains("merge conflict") || normalized.contains("cherry-pick conflict") || normalized.contains("unresolved cherry-pick");
     }
 
-    private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId, List<TaskSnapshotRecord> snapshots, String base, String commit, String reason) {
+    /**
+     * Records how an attempt ended. {@code pending} returns its snapshots to the state they had,
+     * so they are tried again; {@code failed} ends them.
+     */
+    private static void appendAttemptFailure(PredictionEventStore store, NodeIdentity identity, String attemptId, List<TaskSnapshotRecord> snapshots, String base, String commit, String status, String reason) {
         try {
-            IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId, store.projectId(), snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(), base, commit, "failed", reason);
+            IntegrationAttemptPayload payload = new IntegrationAttemptPayload(attemptId, store.projectId(), snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList(), base, commit, status, reason);
             store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED, identity.nodeId(), payload.encode(), identity);
         } catch (Exception ignored) {
             // The primary response remains actionable; the next reconciliation
@@ -277,7 +284,7 @@ public final class IntegrationOrchestrationService {
             try {
                 current = new PredictionEventStore(store.rootDirectory(), store.projectId());
             } catch (IOException | java.security.GeneralSecurityException failure) {
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
+                return AgentFailures.internal(controlRoot, "integration.open_state", failure, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
             }
             return orchestrateIntegrationLocked(lock, controlRoot, current, identity);
         } catch (IOException failure) {
@@ -288,6 +295,12 @@ public final class IntegrationOrchestrationService {
     private AgentResponse orchestrateIntegrationLocked(ProjectAppendLock appendLock, Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
+            // Looked at on every pass, not only when the branch is advanced: the operator is asked
+            // when the stray file appears, and no attempt is started that could only be refused.
+            Optional<OperatorRequest> operator = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
+            if (operator.isPresent()) {
+                return ControlCheckoutGuard.blocked(operator.get());
+            }
             List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
             if (snapshots.isEmpty()) {
                 List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
@@ -364,7 +377,7 @@ public final class IntegrationOrchestrationService {
             try {
                 expectedControlHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
             } catch (Exception ex) {
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+                return AgentFailures.internal(controlRoot, "integration.read_control_head", ex, null);
             }
 
             // Pick the oldest dependency-ready work group. Structurally
@@ -431,7 +444,7 @@ public final class IntegrationOrchestrationService {
                 IntegrationAttemptPayload startPayload = new IntegrationAttemptPayload(attemptId, store.projectId(), ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(), expectedControlHead, "", "started", "");
                 store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED, identity.nodeId(), startPayload.encode(), identity);
             } catch (Exception ex) {
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+                return AgentFailures.internal(controlRoot, "integration.start_attempt", ex, null);
             }
 
             // 6. Prepare integration worktree and apply snapshots
@@ -522,14 +535,27 @@ public final class IntegrationOrchestrationService {
             workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
 
             if (advResult.stale()) {
-                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "STALE_CONTROL_HEAD");
+                // The head moved under the attempt. That says nothing against the snapshots,
+                // which are tried again on the new head.
+                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", "STALE_CONTROL_HEAD");
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
                 return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.INTEGRATION_STALE, AgentNextAction.RETRY, result);
             }
 
+            if (advResult.dirtyControl()) {
+                // A foreign change that appeared during the attempt. Recording the attempt as
+                // failed ended the snapshots for good: after a person had cleaned the checkout
+                // the work was still never integrated.
+                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", advResult.failureReason());
+                Optional<OperatorRequest> raised = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
+                if (raised.isPresent()) {
+                    return ControlCheckoutGuard.blocked(raised.get());
+                }
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, Map.of("pending", 1));
+            }
             if (!advResult.advanced()) {
-                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), advResult.failureReason());
+                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "failed", advResult.failureReason());
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("pending", 1);
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
@@ -538,9 +564,7 @@ public final class IntegrationOrchestrationService {
             try {
                 finalizeIntegratedLanes(appendLock, controlRoot, ordered, store, identity);
             } catch (Exception failure) {
-                return new AgentResponse(AgentStatus.FAILED,
-                        AgentReason.INTERNAL_FAILURE,
-                        AgentNextAction.REQUEST_HUMAN_HELP,
+                return AgentFailures.internal(controlRoot, "integration.finalize_lanes", failure,
                         Map.of("failure", "INTEGRATION_TERMINALIZATION_FAILED", "message", failure.getMessage() == null ? "unknown" : failure.getMessage()));
             }
 

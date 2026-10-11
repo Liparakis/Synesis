@@ -141,9 +141,9 @@ Candidates for the second guard layer, none chosen:
 
 ## Consequences
 
-- The MCP tool catalog does not change in this step. The CLI gains commands to
-  list, show and re-check operator requests, and `agents run` gains one outcome
-  value. Both are additive.
+- The MCP tool catalog does not change in this step. The CLI gains
+  `operator list`, which shows each request in full, and `operator recheck`,
+  and `agents run` gains one outcome value. Both are additive.
 - One new durable event family in the coordination log, and one diagnostics
   file format in local state. ADR-0088 applies to both.
 - A run that needs a person now says so and costs nothing while it waits. It
@@ -168,11 +168,49 @@ Candidates for the second guard layer, none chosen:
 - A real run in which the bootstrapper injects the stray file, as it may inject
   a process failure, and independently checks all of the above.
 
+## Measured on 2026-10-12
+
+With each hook invocation recorded, the miss was reproduced in a disposable
+project on Codex CLI 0.162.0 (build `remaster23`). All VERIFIED.
+
+- **The Codex hook never runs in a headless session.** An agent started by
+  `synesis agents run` and told to use its own file tool wrote the file into
+  the project checkout. No hook invocation was recorded, for the write or for
+  the session start. The project's own status had said so all along:
+  `TRUST_STATUS=REVIEW_REQUIRED`, `NATIVE_MUTATION_INTERCEPTION=UNPROVEN`. Codex
+  runs a project's hooks only after a person has reviewed them, and a headless
+  session has nobody to do that. So no Codex session in any recorded run was
+  guarded; the agents kept to the Synesis tools because the manual says to.
+- **Codex's read-only sandbox blocks the write.** With
+  `sandbox_mode=read-only` the native patch was refused ("writing is blocked by
+  read-only sandbox") and a shell command that writes did not run. A shell
+  command that reads still ran. The checkout stayed clean.
+- **Read-only alone also blocks the Synesis tools.** Every tool call then
+  "requires approval, but approval policy is never".
+- **Pre-approving the Synesis server's tools restores them.** With
+  `mcp_servers.synesis.default_tools_approval_mode=approve` added,
+  `ensure_session` answered `ready` and the native write was still refused.
+
+So the second layer for Codex is two launch settings, given by Synesis for the
+sessions it starts: the read-only sandbox, and approval of the Synesis server's
+own tools. It matches how Claude Code sessions are already started, limited to
+the Synesis tools and read-only tools.
+
+This is NOT yet built. It changes a rule the repository states on purpose:
+`HeadlessSessionContractTest` asserts that Synesis passes no sandbox argument
+("the provider's own policy is never overridden") and the command reference
+says provider commands keep the provider's own approval and sandbox policy. The
+change tightens the sandbox and, for the Synesis tools only, loosens approval.
+It waits for the repository owner's decision.
+
+Not chosen: `--dangerously-bypass-hook-trust` would make the hook run, covers
+the patch tool only, and skips review of every hook in a file the user shares.
+
 ## Open questions
 
 - None on which answers raise an operator request: settled below.
-- The second guard layer. The owner agreed on 2026-10-12 that the candidates
-  are tried on Windows before one is recommended.
+- Whether Synesis starts Codex sessions with the read-only sandbox and its own
+  tools approved, as measured above. Not tried on macOS or Linux.
 
 Settled on 2026-10-12: Synesis raises an operator request for two conditions
 in this step, a control checkout with changes it did not make and an

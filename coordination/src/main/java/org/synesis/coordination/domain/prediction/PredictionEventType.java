@@ -302,7 +302,15 @@ public enum PredictionEventType {
     /**
      * Extends one active intent without releasing its existing claims or dependencies.
      */
-    WORK_INTENT_SCOPE_EXTENDED(72);
+    WORK_INTENT_SCOPE_EXTENDED(72),
+    /**
+     * Records a block that only someone with authority over the project can clear.
+     */
+    OPERATOR_REQUEST_RAISED(73),
+    /**
+     * Records that the condition behind an operator request was observed not to hold.
+     */
+    OPERATOR_REQUEST_CLOSED(74);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

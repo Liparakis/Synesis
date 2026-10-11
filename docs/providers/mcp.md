@@ -51,6 +51,22 @@ stored as the request's owner may answer it or see it in its inbox. Local
 sessions share one node identity, so a sibling session on the same node receives
 `policy_denied`.
 
+When only someone with authority over the project can clear what blocks a step,
+the answer is `blocked` / `operator_required` with `operatorRequest` (`id`,
+`condition`, `summary`, and `evidence` as the refusing tool reported it) and an
+`instruction` (ADR-0091). Its workflow type is `OPERATOR_REQUIRED`, it permits
+only `get_next_action`, and `maxUnchangedPolls` is 1: polling cannot change it.
+It is shown to a lane that waits on integration, including the `finish_lane`
+that published its snapshot, and not to a lane that still has work of its own.
+The published work is kept and is integrated when the request closes.
+
+An internal failure while binding a session, announcing, finishing or
+cancelling a lane, publishing or validating an implementation, or integrating
+is answered `failed` with `failurePoint`: the identifier of an entry in
+`.synesis/local/diagnostics/failure-points.jsonl` that holds the cause and its
+stack. The answer itself never carries them. A `failed` answer from another
+path does not yet carry one.
+
 A new capability request says whose it is by `ownerPath`, the repository file
 that implements the capability. The open lane of another participant that
 claims that file is the owner (ADR-0090). A lineage sent with it does not

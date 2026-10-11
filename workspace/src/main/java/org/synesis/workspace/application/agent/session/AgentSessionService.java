@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -168,9 +169,10 @@ public final class AgentSessionService {
             if (AgentResponse.SESSION_TERMINAL_STATE_UNAVAILABLE.equals(ex.code())) {
                 return AgentResponse.sessionTerminalStateUnavailable(ex);
             }
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("reason", ex.code()));
+            // The code alone left nothing to diagnose when a session could not be bound once in a real run.
+            return AgentFailures.internal(request.projectRoot(), "session.bind", ex, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(request.projectRoot(), "session.ensure", ex, null);
         }
     }
 

@@ -24,6 +24,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
@@ -283,11 +284,11 @@ final class McpSessionEstablishment {
             return null;
         } catch (IOException missing) {
             if (!"INTENT_NOT_FOUND".equals(missing.getMessage())) {
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+                return AgentFailures.internal(activeProjectRoot, "lane.release_claims", missing, null);
             }
             return task.role() == WorkIntent.Role.REVIEWER ? reviewerClaimRequiredResponse() : null;
         } catch (Exception failure) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(activeProjectRoot, "lane.release_claims", failure, null);
         }
     }
 
@@ -362,7 +363,7 @@ final class McpSessionEstablishment {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("reason", String.valueOf(failure.getMessage())));
             }
             System.err.println("SYNESIS_MCP_ANNOUNCE_FAILURE=" + failureDiagnostic(failure));
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(activeProjectRoot, "lane.announce", failure, null);
         }
     }
 

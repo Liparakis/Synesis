@@ -46,20 +46,32 @@ public final class ControlBranchAdvancementService {
      * blockers.
      *
      * @param status porcelain status output
-     * @return whether source or unrelated user changes block advancement
+     * @return the status lines of source or unrelated user changes that block advancement
      */
-    private static boolean hasBlockingControlChanges(String status) {
+    private static List<String> blockingControlChanges(String status) {
         if (status == null || status.isBlank()) {
-            return false;
+            return List.of();
         }
-        return status.lines().map(String::trim).filter(line -> !line.isBlank()).anyMatch(line -> {
+        return status.lines().map(String::trim).filter(line -> !line.isBlank()).filter(line -> {
             if (!line.startsWith("?? ")) {
                 return true;
             }
             String path = line.substring(3).replace('\\', '/');
             return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/") || path.equals(".mcp.json") || path.equals(".codex") || path.startsWith(".codex/") || path.equals(".claude")
                     || path.startsWith(".claude/"));
-        });
+        }).toList();
+    }
+
+    /**
+     * Lists what the control checkout holds that Synesis did not put there, as {@code git status}
+     * reports it. Integration refuses such a checkout, so this is also what an operator is shown.
+     *
+     * @param controlRoot absolute control project root path
+     * @return the blocking status lines; empty when the checkout can be advanced
+     * @throws Exception when the checkout's status cannot be read
+     */
+    public static List<String> foreignChanges(Path controlRoot) throws Exception {
+        return blockingControlChanges(GitProcessRunner.run(controlRoot, "status", "--porcelain"));
     }
 
     /**
@@ -91,9 +103,9 @@ public final class ControlBranchAdvancementService {
 
         try {
             // 1. Verify control checkout is clean
-            String status = GitProcessRunner.run(controlRoot, "status", "--porcelain");
-            if (hasBlockingControlChanges(status)) {
-                return new AdvancementResult(false, false, true, "Control checkout working tree is dirty: " + status);
+            List<String> foreign = foreignChanges(controlRoot);
+            if (!foreign.isEmpty()) {
+                return new AdvancementResult(false, false, true, "Control checkout working tree is dirty: " + String.join("\n", foreign));
             }
 
             // 2. Verify current control HEAD equals expectedControlHead

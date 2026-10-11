@@ -124,6 +124,35 @@ final class AgentRunControllerTest {
         assertEquals(2, script.launches.size(), "an idle project must not be poked");
     }
 
+    /** A run nobody in it can continue says who can, and names the request instead of a stall. */
+    @Test
+    void runLeftWithAnOpenOperatorRequestSaysItNeedsAnOperator() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().operatorRequest("opr_1 CONDITION=control_checkout_foreign_changes");
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.NEEDS_OPERATOR, result.outcome());
+        assertTrue(script.events.contains("OPERATOR_REQUEST=opr_1 CONDITION=control_checkout_foreign_changes"), script.events.toString());
+    }
+
+    /** Resuming an agent whose published work waits for an operator only repeats the refusal. */
+    @Test
+    void agentWhoseLanesWaitForAnOperatorIsNotResumedForAnotherLanesProgress() throws Exception {
+        Script script = new Script();
+        script.lifetimes(1, 3);
+        script.heldByOperator.add("claude");
+        script.at(0).head(3).announced().operatorRequest("opr_1 CONDITION=control_checkout_foreign_changes");
+        script.at(2).head(9).progressAfter(3).announced().operatorRequest("opr_1 CONDITION=control_checkout_foreign_changes");
+
+        AgentRunController.Result result = script.run(8);
+
+        assertFalse(script.events.stream().anyMatch(event -> event.startsWith("AGENT_RESUMED=claude")), "the held agent stays stopped: " + script.events);
+        assertTrue(script.events.contains("AGENT_RESUMED=codex#2 resume=1"), "an agent that can still work is resumed as before: " + script.events);
+        assertEquals(AgentRunController.Outcome.NEEDS_OPERATOR, result.outcome());
+    }
+
     @Test
     void agentsThatNeverAnnounceWorkAreReportedAsSuch() throws Exception {
         Script script = new Script();
@@ -290,6 +319,7 @@ final class AgentRunControllerTest {
         private final List<String> stopped = new ArrayList<>();
         private final List<String> withoutSessionId = new ArrayList<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
+        private final List<String> heldByOperator = new ArrayList<>();
         private final List<String> connections = new ArrayList<>();
         private final List<Map<String, String>> environments = new ArrayList<>();
         private final List<List<String>> commands = new ArrayList<>();
@@ -398,6 +428,16 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public List<String> operatorRequests() {
+                    return state.operatorRequests;
+                }
+
+                @Override
+                public boolean heldByOperator(String provider) {
+                    return heldByOperator.contains(provider);
+                }
+
+                @Override
                 public boolean workAnnounced() {
                     return announced;
                 }
@@ -445,6 +485,12 @@ final class AgentRunControllerTest {
         private boolean announced;
         private boolean complete;
         private boolean allCancelled;
+        private final List<String> operatorRequests = new ArrayList<>();
+
+        private State operatorRequest(String line) {
+            operatorRequests.add(line);
+            return this;
+        }
 
         /** Nothing is left open because every lane was cancelled, not because any work was finished. */
         private State allCancelled() {

@@ -583,6 +583,34 @@ public final class AgentNextActionService {
             }
         }
 
+        AgentResponse action = stagedAction(request, binding, worktree, store, callerIdentity, integrationPump);
+        return operatorHolds(integrationPump, action, store, callerIdentity, binding) ? integrationPump : action;
+    }
+
+    /**
+     * Tells whether an open operator request is what this caller is waiting on.
+     *
+     * <p>The request stops integration. A lane that still has a step of its own keeps that step:
+     * it is held only when integration is all it waits for, or when it has nothing to do and its
+     * published snapshot is waiting to be integrated. Shown an ordinary implementation step
+     * instead, the owner of a refused snapshot polled to the limit and stopped.</p>
+     */
+    private static boolean operatorHolds(AgentResponse pump, AgentResponse action, PredictionEventStore store, NodeIdentity callerIdentity, ProviderSessionBindingService.Binding binding) {
+        if (pump.reason() != AgentReason.OPERATOR_REQUIRED) {
+            return false;
+        }
+        if (action != null) {
+            return action.reason() == AgentReason.INTEGRATION_PENDING;
+        }
+        var completion = store.taskCompletionProjection();
+        return completion.findLatestSnapshotForWorker(callerIdentity.nodeId(), binding.workerId())
+                .flatMap(snapshot -> completion.snapshotState(snapshot.snapshotId()))
+                .filter(org.synesis.coordination.domain.task.TaskCompletionState::awaitsIntegration).isPresent();
+    }
+
+    /** Evaluates the stages after the integration pump, in the order {@link #durableCoordinationAction} documents. */
+    private AgentResponse stagedAction(NextActionRequest request, ProviderSessionBindingService.Binding binding, Path worktree, PredictionEventStore store, NodeIdentity callerIdentity,
+            AgentResponse integrationPump) throws Exception {
         Map<String, Object> collaboration = CollaborationView.collaborationDetails(store, binding.sessionId(), null, binding.provider());
         LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
         CapabilityActor actor = new CapabilityActor(callerIdentity.nodeId(), binding.supervisorId(), binding.workerId(), binding.sessionId());
@@ -712,7 +740,9 @@ public final class AgentNextActionService {
 
         boolean reviewCandidateSelectionRequired = Boolean.TRUE.equals(collaboration.get(NextActionKeys.REVIEW_CANDIDATE_SELECTION_REQUIRED));
         boolean reviewerContinuationForPendingReview = AgentReviewActionProjection.hasAvailableReviewerReviewContinuation(store, collaboration);
-        boolean pumpIsNonTerminal = pump.status() != AgentStatus.READY && pump.status() != AgentStatus.COMPLETED;
+        // An operator request stops integration, not every lane: it is shown to the lanes that
+        // wait on integration, by the caller, and not to one that still has work to do.
+        boolean pumpIsNonTerminal = pump.status() != AgentStatus.READY && pump.status() != AgentStatus.COMPLETED && pump.reason() != AgentReason.OPERATOR_REQUIRED;
         if (pumpIsNonTerminal && !reviewCandidateSelectionRequired && !reviewerContinuationForPendingReview) {
             return pump;
         }

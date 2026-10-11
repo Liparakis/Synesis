@@ -743,6 +743,9 @@ final class ProviderSessionBindingServiceTest {
         assertEquals("ALLOWED", result.outcome(), result.responseJson() + " " + result.humanReason());
         assertTrue(result.humanReason().contains("SESSION_ID=" + binding.sessionId()));
         assertTrue(Files.notExists(root.resolve("src/free.txt")));
+        // Whether the hook ran, and what it decided, can be read afterwards.
+        String recorded = Files.readString(root.resolve(".synesis/local/diagnostics/hooks.jsonl"));
+        assertTrue(recorded.contains("\"event\":\"PreToolUse\"") && recorded.contains("\"outcome\":\"ALLOWED\""), recorded);
     }
 
     @Test
@@ -759,6 +762,7 @@ final class ProviderSessionBindingServiceTest {
 
         assertEquals("INVALID_INPUT", result.outcome());
         assertTrue(result.responseJson().contains("GIT_HEAD_UNAVAILABLE"));
+        assertTrue(Files.readString(root.resolve(".synesis/local/diagnostics/hooks.jsonl")).contains("\"outcome\":\"INVALID_INPUT\""));
         try (var paths = Files.list(root.resolve(".synesis/local/sessions"))) {
             assertTrue(paths.findAny().isPresent());
         }

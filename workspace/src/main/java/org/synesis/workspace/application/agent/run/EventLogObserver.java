@@ -109,7 +109,29 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                     .filter(intent -> intent.authorityLineageId().equals(request.authorityLineageId()))
                     .forEach(intent -> answerDeadlines.merge(intent.provider(), deadline, Math::max));
         }
+        List<String> operatorRequests = store.operatorRequestProjection().open().stream().map(request -> request.id() + " CONDITION=" + request.condition()).toList();
+        // A lane is held when a request Synesis raised is open and the lane's work is published
+        // and waiting to be integrated. A provider is held when that is true of all its lanes.
+        var completion = store.taskCompletionProjection();
+        java.util.Set<java.util.UUID> waitingLineages = completion.allSnapshots().stream()
+                .filter(snapshot -> completion.snapshotState(snapshot.snapshotId()).filter(org.synesis.coordination.domain.task.TaskCompletionState::awaitsIntegration).isPresent())
+                .map(snapshot -> snapshot.provenance().authorityLineageId()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        boolean synesisAsksOperator = store.operatorRequestProjection().open().stream().anyMatch(org.synesis.coordination.domain.operator.OperatorRequest::raisedBySynesis);
+        java.util.Set<String> heldProviders = !synesisAsksOperator ? java.util.Set.of() : openLaneProviders.stream()
+                .filter(provider -> store.collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals(provider))
+                        .allMatch(intent -> waitingLineages.contains(intent.authorityLineageId())))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
         return new AgentRunController.Observation() {
+
+            @Override
+            public List<String> operatorRequests() {
+                return operatorRequests;
+            }
+
+            @Override
+            public boolean heldByOperator(String provider) {
+                return heldProviders.contains(provider);
+            }
 
             @Override
             public OptionalLong answerDeadline(String provider) {

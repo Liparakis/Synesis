@@ -113,6 +113,16 @@ public enum TaskCompletionState {
     }
 
     /**
+     * Tells whether a snapshot in this state has left its lane and only integration stands
+     * between it and the control branch.
+     *
+     * @return true while the snapshot waits to be integrated
+     */
+    public boolean awaitsIntegration() {
+        return this == SNAPSHOT_READY || this == WAITING_FOR_DEPENDENCIES || this == READY_FOR_INTEGRATION || this == INTEGRATING || this == INTEGRATION_PENDING || this == REVIEW_ACCEPTED;
+    }
+
+    /**
      * Returns the stable lowercase JSON representation.
      *
      * @return lowercase string representation

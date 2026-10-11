@@ -445,7 +445,10 @@ class Slice4FailureScenariosTest {
                 + "      \"summary\": \"Complete while control checkout is dirty\"\n" + "    }\n" + "  }\n" + "}";
         String ownerCompRes = ownerHandler.handleMessage(ownerCompJson);
         assertNotNull(ownerCompRes);
-        assertEquals("waiting", extractResponseStatus(ownerCompRes), ownerCompRes);
-        assertEquals("integration_pending", extractResponseReason(ownerCompRes));
+        // The checkout refuses the advancement as before. Since ADR-0091 the caller is told who
+        // can clear it, where it used to be told only to wait.
+        assertEquals("blocked", extractResponseStatus(ownerCompRes), ownerCompRes);
+        assertEquals("operator_required", extractResponseReason(ownerCompRes));
+        assertTrue(ownerCompRes.contains("dirty_file.tmp"), ownerCompRes);
     }
 }

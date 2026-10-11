@@ -22,6 +22,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -160,7 +161,7 @@ public final class ImplementationValidationService {
                     && ioFailure.getMessage().startsWith("VALIDATION_WORKSPACE")) {
                 return blocked(ioFailure.getMessage(), AgentReason.TASK_NOT_READY);
             }
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(request.projectRoot(), "capability.validate", ex, null);
         }
     }
 

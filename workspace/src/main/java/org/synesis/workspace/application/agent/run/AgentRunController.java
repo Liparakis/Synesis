@@ -155,6 +155,12 @@ public final class AgentRunController {
                         if (!agent.resumable(request.maxResumesPerAgent()) || !observation.hasOpenLane(agent.spec.provider())) {
                             continue;
                         }
+                        if (observation.heldByOperator(agent.spec.provider())) {
+                            // Its published work waits for an operator. Resumed, it took its lane
+                            // back, published the same work again and was refused again: eleven
+                            // times in one real run, each on another lane's progress.
+                            continue;
+                        }
                         OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
                         if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed) {
@@ -175,7 +181,11 @@ public final class AgentRunController {
                 // With every agent stopped the run is over, unless a stopped owner is only waiting
                 // for its answer period to end: nothing in the log will announce that moment.
                 if (agents.stream().noneMatch(agent -> agent.process != null) && !awaitingDeadline) {
-                    return new Result(observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent()), resumes(agents));
+                    Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
+                    if (outcome == Outcome.NEEDS_OPERATOR) {
+                        observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
+                    }
+                    return new Result(outcome, resumes(agents));
                 }
                 if (clockMillis.getAsLong() >= deadline) {
                     return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
@@ -200,6 +210,11 @@ public final class AgentRunController {
     private static Outcome stalledOutcome(List<Agent> agents, Observation observation, int maxResumes) {
         if (!observation.workAnnounced()) {
             return Outcome.NO_WORK_ANNOUNCED;
+        }
+        if (!observation.operatorRequests().isEmpty()) {
+            // Every agent has stopped with a request open that none of them may clear. Naming a
+            // stall or a resume limit would send the reader to the agents for the cause.
+            return Outcome.NEEDS_OPERATOR;
         }
         boolean limitReached = agents.stream().anyMatch(agent -> agent.resumes >= maxResumes && observation.hasOpenLane(agent.spec.provider()) && observation.progressedSince(agent.stoppedAtSequence));
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
@@ -231,6 +246,11 @@ public final class AgentRunController {
          * Every agent has stopped and nothing has progressed since, so resuming any would change nothing.
          */
         STALLED,
+        /**
+         * Every agent has stopped and an operator request is open: what is left waits for someone
+         * with authority over the project. Running again after the operator has acted continues.
+         */
+        NEEDS_OPERATOR,
         /**
          * Every agent stopped without any work having been announced.
          */
@@ -425,6 +445,28 @@ public final class AgentRunController {
          * @return the latest such deadline in epoch milliseconds, or empty when none is pending
          */
         OptionalLong answerDeadline(String provider);
+
+        /**
+         * Returns the operator requests that are open, one stable line each: the identifier,
+         * then {@code CONDITION=} and the condition.
+         *
+         * @return open operator requests, oldest first; empty when none is open
+         */
+        default List<String> operatorRequests() {
+            return List.of();
+        }
+
+        /**
+         * Tells whether every open lane of a provider has published work that an open operator
+         * request keeps from being integrated. Nothing an agent of that provider could do would
+         * move such a lane, so the controller leaves it stopped until the request closes.
+         *
+         * @param provider provider identifier
+         * @return {@code true} when the provider's lanes wait only for an operator
+         */
+        default boolean heldByOperator(String provider) {
+            return false;
+        }
     }
 
     /**

@@ -64,6 +64,15 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void operatorSubcommandsAreInstantiable() throws Exception {
+        for (String subcommand : new String[]{"list", "recheck"}) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(new String[]{"operator", subcommand, "--help"}, invocation.runtime()), subcommand);
+            assertTrue(invocation.stdout().contains("synesis operator " + subcommand), subcommand);
+        }
+    }
+
+    @Test
     void contractSubcommandsAreInstantiable() throws Exception {
         for (String subcommand : new String[]{"publish", "bind", "status"}) {
             Invocation invocation = invocation();

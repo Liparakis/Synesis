@@ -92,7 +92,9 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.COMPLETION_UNWOUND, 69),
             entry(PredictionEventType.REVIEW_VALIDATION_RECORDED, 70),
             entry(PredictionEventType.PROVIDER_SESSION_TERMINALIZED, 71),
-            entry(PredictionEventType.WORK_INTENT_SCOPE_EXTENDED, 72)
+            entry(PredictionEventType.WORK_INTENT_SCOPE_EXTENDED, 72),
+            entry(PredictionEventType.OPERATOR_REQUEST_RAISED, 73),
+            entry(PredictionEventType.OPERATOR_REQUEST_CLOSED, 74)
     );
 
     @Test

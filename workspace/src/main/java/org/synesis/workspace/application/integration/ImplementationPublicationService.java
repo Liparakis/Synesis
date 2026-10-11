@@ -25,6 +25,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -357,17 +358,13 @@ public final class ImplementationPublicationService {
             if (isPublicationPolicyFailure(message)) {
                 return blocked(message, AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
             }
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP,
-                    Map.of("error", stale.getClass().getSimpleName(), "message", message));
+            return AgentFailures.internal(request.projectRoot(), "capability.publish", stale, Map.of("error", stale.getClass().getSimpleName(), "message", message));
         } catch (Exception failure) {
             String message = Objects.toString(failure.getMessage(), "publication failed");
             if (isPublicationPolicyFailure(message)) {
                 return blocked(message, AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
             }
-            return new AgentResponse(AgentStatus.FAILED,
-                    AgentReason.INTERNAL_FAILURE,
-                    AgentNextAction.REQUEST_HUMAN_HELP,
-                    Map.of("error", failure.getClass().getSimpleName(), "message", message));
+            return AgentFailures.internal(request.projectRoot(), "capability.publish", failure, Map.of("error", failure.getClass().getSimpleName(), "message", message));
         }
     }
 

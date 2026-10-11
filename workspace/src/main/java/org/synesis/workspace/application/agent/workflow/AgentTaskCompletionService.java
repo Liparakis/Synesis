@@ -33,6 +33,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
@@ -202,7 +203,9 @@ public final class AgentTaskCompletionService {
             PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
             PredictionEventType.CAPABILITY_VALIDATION_STARTED,
             PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
-            PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED);
+            PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
+            PredictionEventType.OPERATOR_REQUEST_RAISED,
+            PredictionEventType.OPERATOR_REQUEST_CLOSED);
 
     /**
      * Reports whether a finish projected at {@code revision} still describes the log.
@@ -472,7 +475,7 @@ public final class AgentTaskCompletionService {
             Map<String, Object> failure = new LinkedHashMap<>();
             failure.put("error", ex.getClass().getSimpleName());
             failure.put("message", ex.getMessage() == null ? "unknown completion failure" : ex.getMessage());
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, failure);
+            return AgentFailures.internal(request.projectRoot(), "lane.finish", ex, failure);
         }
     }
 
@@ -839,7 +842,7 @@ public final class AgentTaskCompletionService {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("error", failure.getClass().getSimpleName());
             result.put(NextActionKeys.REASON, reason);
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, result);
+            return AgentFailures.internal(request.projectRoot(), "lane.finish_without_changes", failure, result);
         }
     }
 
@@ -948,13 +951,11 @@ public final class AgentTaskCompletionService {
             try {
                 snapshotService.removePreparedRef(Path.of(binding.worktreePath()), prepared.preparedRef());
             } catch (Exception cleanupFailure) {
-                return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "PREPARED_REF_CLEANUP_FAILED", "message", cleanupFailure.getMessage()));
+                return AgentFailures.internal(request.projectRoot(), "lane.unwind_cleanup", cleanupFailure, Map.of("error", "PREPARED_REF_CLEANUP_FAILED", "message", String.valueOf(cleanupFailure.getMessage())));
             }
             return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("task", "completion_unwound", NextActionKeys.CLAIM_EPOCH, replacement.version()));
         } catch (Exception failure) {
-            return new AgentResponse(AgentStatus.FAILED,
-                    AgentReason.INTERNAL_FAILURE,
-                    AgentNextAction.REQUEST_HUMAN_HELP,
+            return AgentFailures.internal(request.projectRoot(), "lane.unwind", failure,
                     Map.of("error", failure.getClass().getSimpleName(), "message", failure.getMessage() == null ? "unwind failed" : failure.getMessage()));
         }
     }

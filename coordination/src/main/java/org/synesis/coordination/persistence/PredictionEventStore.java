@@ -21,6 +21,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
 import org.synesis.coordination.domain.contract.ContractProjection;
+import org.synesis.coordination.domain.operator.OperatorRequestProjection;
 import org.synesis.coordination.domain.identity.EventSequence;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.PredictionId;
@@ -102,6 +103,10 @@ public final class PredictionEventStore {
      */
     private final ContractProjection contractProjection = new ContractProjection();
     /**
+     * Projection for operator requests.
+     */
+    private final OperatorRequestProjection operatorRequestProjection = new OperatorRequestProjection();
+    /**
      * Every projection above, in validation and application order; the one place a new projection is registered.
      */
     private final List<Stage> stages = List.of(
@@ -111,7 +116,8 @@ public final class PredictionEventStore {
             new Stage(taskCompletionProjection::validate, taskCompletionProjection::apply),
             new Stage(collaborationProjection::validate, collaborationProjection::apply),
             new Stage(workGroupProjection::validate, workGroupProjection::apply),
-            new Stage(contractProjection::validate, contractProjection::apply));
+            new Stage(contractProjection::validate, contractProjection::apply),
+            new Stage(operatorRequestProjection::validate, operatorRequestProjection::apply));
     /**
      * Events replayed into this instance's in-memory projections.
      */
@@ -489,6 +495,15 @@ public final class PredictionEventStore {
      */
     public ContractProjection contractProjection() {
         return contractProjection;
+    }
+
+    /**
+     * Returns the replayed operator request projection.
+     *
+     * @return operator request projection
+     */
+    public OperatorRequestProjection operatorRequestProjection() {
+        return operatorRequestProjection;
     }
 
     /**

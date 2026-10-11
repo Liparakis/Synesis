@@ -124,6 +124,9 @@ public final class AgentsRunCommand implements Callable<Integer> {
                     Thread::sleep);
             AgentRunController.Result result = controller.run(request, runtime.terminal()::stdout);
             runtime.terminal().stdout("AGENT_RUN_RESULT=" + result.outcome());
+            if (result.outcome() == AgentRunController.Outcome.NEEDS_OPERATOR) {
+                runtime.terminal().stdout("HINT=synesis operator list");
+            }
             runtime.terminal().stdout("AGENT_RESUMES=" + result.resumes());
             runtime.terminal().stdout("ELAPSED_SECONDS=" + (System.currentTimeMillis() - started) / 1000L);
             return result.outcome() == AgentRunController.Outcome.COMPLETED ? ExitCodes.OK : ExitCodes.COMMAND_FAILED;

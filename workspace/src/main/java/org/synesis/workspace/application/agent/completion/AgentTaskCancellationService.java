@@ -17,6 +17,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
@@ -170,7 +171,7 @@ public final class AgentTaskCancellationService {
             return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
 
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(request.projectRoot(), "lane.cancel", ex, null);
         }
     }
 

@@ -9,6 +9,7 @@ import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.JsonFields;
+import org.synesis.workspace.infrastructure.diagnostics.LocalDiagnostics;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
@@ -105,16 +106,22 @@ public final class HookApplicationService {
      * @return structured hook result
      */
     public HookExecutionResult codex(InputStream input) {
+        Path projectRoot = null;
+        String eventName = null;
         try {
             String json = read(input);
             Map<String, Object> event = object(ProviderJson.parse(json));
+            eventName = text(event, "hook_event_name");
             Path eventCwd = Path.of(text(event, "cwd"));
             ProjectLocation location = new ProjectApplicationService().require(controlRoot(eventCwd));
-            if ("SessionStart".equals(text(event, "hook_event_name"))) {
-                return sessionStart(location, json);
-            }
-            return toolEvent(location, event, eventCwd, json);
+            projectRoot = location.root();
+            HookExecutionResult result = "SessionStart".equals(eventName) ? sessionStart(location, json) : toolEvent(location, event, eventCwd, json);
+            // In a real run a native write reached the project checkout with this hook installed,
+            // and nothing could say whether the hook had run.
+            LocalDiagnostics.hook(projectRoot, "codex", eventName, result.outcome(), result.humanReason());
+            return result;
         } catch (Exception failure) {
+            LocalDiagnostics.hook(projectRoot, "codex", eventName, "DENIED", "failure " + LocalDiagnostics.failurePoint(projectRoot, "hook", "codex", "could not establish a trusted project session", failure));
             return denied("Synesis could not establish a trusted project session.");
         }
     }

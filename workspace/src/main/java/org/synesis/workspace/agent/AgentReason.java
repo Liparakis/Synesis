@@ -268,6 +268,11 @@ public enum AgentReason {
     INTEGRATION_FAILED("integration_failed"),
 
     /**
+     * Only someone with authority over the project can clear what blocks this step.
+     */
+    OPERATOR_REQUIRED("operator_required"),
+
+    /**
      * Control branch moved during integration attempt; retry required.
      */
     INTEGRATION_STALE("integration_stale"),

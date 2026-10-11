@@ -11,6 +11,7 @@ import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -155,7 +156,7 @@ public record CallerAdmission(ProjectLocation location, ProviderSessionBindingSe
             }
             return action.run(new CallerAdmission(location, binding, identity, false, null));
         } catch (Exception ex) {
-            return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, null);
+            return AgentFailures.internal(projectRoot, "session.admit", ex, null);
         }
     }
 

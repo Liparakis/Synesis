@@ -86,10 +86,24 @@ run while one is still pending.
 The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when no lane is open and
 every work group that ever had a lane is closed (a group created ahead of its
 lanes that never received one holds no work) and at least one group finished its work,
-`ALL_WORK_CANCELLED` when nothing is open because every lane was cancelled, `STALLED` when every agent has stopped and nothing
-has progressed since, `NO_WORK_ANNOUNCED`, `RESUME_LIMIT_REACHED`, or
+`ALL_WORK_CANCELLED` when nothing is open because every lane was cancelled, `NEEDS_OPERATOR` when every agent has stopped
+and an operator request is open (each is printed as `OPERATOR_REQUEST=<id> CONDITION=<condition>`), `STALLED` when every agent
+has stopped and nothing has progressed since, `NO_WORK_ANNOUNCED`, `RESUME_LIMIT_REACHED`, or
 `TIMED_OUT`. Only `COMPLETED` exits with 0. Each provider must already be
 installed in the project. Provider commands keep the provider's own approval and
 sandbox policy; Claude Code is limited to the Synesis tools and its read-only
 tools. Agent output is kept as log files under the Synesis state directory,
 outside the project.
+
+## Operator requests
+
+When only someone with authority over the project can clear what blocks it,
+Synesis records an operator request (ADR-0091). The first condition it raises
+one for is a project checkout holding changes Synesis did not make: nothing is
+integrated into such a checkout, and the work that is finished waits.
+
+`synesis operator list` prints the open requests, each with a `SUMMARY` and its
+`EVIDENCE` lines exactly as the refusing tool reported them (`--all` adds the
+closed ones). `synesis operator recheck` looks again and integrates what was
+waiting; it exits with 0 when no request is left open. No command declares a
+request resolved: a request closes when its condition is observed not to hold.

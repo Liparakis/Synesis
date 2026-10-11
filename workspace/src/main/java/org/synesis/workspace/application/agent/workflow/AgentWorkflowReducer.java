@@ -26,6 +26,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
 public final class AgentWorkflowReducer {
 
     private static final int RETRY_AFTER_MS = 5000;
+    /** The lane waits for an operator; polling cannot change that, so it is told to stop at once. */
+    private static final String LANE_OPERATOR_REQUIRED = "OPERATOR_REQUIRED";
+
     private static final int MAX_UNCHANGED_POLLS = 3;
 
     /**
@@ -148,6 +151,10 @@ public final class AgentWorkflowReducer {
                         List.of(NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_APPLY_PATCH, NextActionProtocol.TOOL_RUN_COMMAND, NextActionProtocol.TOOL_CANCEL_LANE), true);
             }
             return new LaneAction(LANE_IMPLEMENT, List.of(), List.of(NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_APPLY_PATCH, NextActionProtocol.TOOL_RUN_COMMAND), true);
+        }
+        if (reason == AgentReason.OPERATOR_REQUIRED) {
+            // Nothing the agent may do clears it, so nothing but reading the inbox is permitted.
+            return new LaneAction(LANE_OPERATOR_REQUIRED, List.of(reasonCode(reason)), List.of(NextActionProtocol.TOOL_GET_NEXT_ACTION), false);
         }
         return switch (next) {
             case ENSURE_SESSION -> new LaneAction(LANE_RECOVER, List.of(reasonCode(reason)), claimsRequired(result)
@@ -349,7 +356,7 @@ public final class AgentWorkflowReducer {
         workflow.put("permittedOperations", action.permittedOperations());
         workflow.put("retrySafe", action.retrySafe());
         workflow.put("retryAfterMs", RETRY_AFTER_MS);
-        workflow.put("maxUnchangedPolls", LANE_RECOVER.equals(action.type()) ? MAX_UNCHANGED_POLLS : MAX_UNCHANGED_PEER_POLLS);
+        workflow.put("maxUnchangedPolls", LANE_OPERATOR_REQUIRED.equals(action.type()) ? 1 : LANE_RECOVER.equals(action.type()) ? MAX_UNCHANGED_POLLS : MAX_UNCHANGED_PEER_POLLS);
         workflow.put(NextActionKeys.DELIVERY, NextActionProtocol.DELIVERY_AT_LEAST_ONCE);
         workflow.put(NextActionKeys.ACKNOWLEDGEMENT_REQUIRED, true);
         Map<String, Object> executable = executableAction(response, result);
