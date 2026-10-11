@@ -2,10 +2,9 @@
 
 ## Status
 
-Accepted on 2026-10-12 by the repository owner. Not yet built, and not to be
-built as written: an independent design review on the same day found the record
-incomplete. See "Review of 2026-10-12" at the end. The decision stands; the
-points listed there are settled in this record before step 2 starts.
+Accepted on 2026-10-12 by the repository owner, and revised the same day after
+an independent design review whose four decisions the owner took. This is the
+revised record. Being built.
 
 Step 2 of three, after ADR-0091 (operator requests) and before ADR-0093 (agent
 conversations). It removes kinds from the MCP tool catalog, which is a breaking
@@ -66,290 +65,221 @@ file can edit them. (USER-STATED.)
 
 ## Decision
 
-Decided by the repository owner in discussion on 2026-10-11.
+Decided by the repository owner in discussion on 2026-10-11 and 2026-10-12. The
+points marked (review) were settled on 2026-10-12 after the design review
+described at the end.
 
 ### The contract
 
-- A contract is attached to files that its publishing lane claims. It may
-  cover several files or a subtree, all held by that one lane. A claimed file
-  is covered by at most one active contract. A lane may publish several
-  contracts over disjoint files.
-- A lane that releases one of a contract's files keeps the contract, and the
-  contract still covers the released file. Releasing a file never shrinks a
-  contract; only a new revision removes a file from it. A consumer does not
-  lose a promise it relied on because the owner let go of a file.
-- A contract is one text, and Synesis cannot tell which sentence concerns which
-  file. So the part about a released file is not frozen separately: it is
-  protected by the rule that every revision is accepted again by every bound
-  consumer.
-- When another lane claims a released file and publishes its own contract for
-  it, the file moves to that contract. Consumers bound to the earlier contract
-  are told, as for any revision. A contract never has two editors.
+- A contract is published by a lane over files that lane claims. It may cover
+  several files or a subtree. It holds the eleven fields of today's capability
+  contract. A claimed file is covered by at most one active contract, and a lane
+  may publish several contracts over disjoint files.
+- The owner of a contract is the authority lineage of the lane that published
+  it. Only that lineage publishes a revision. A lane that continues a stopped
+  lane has the same lineage and so the same contracts.
 - A lane that claims more files adds them to a contract only by publishing a
-  new revision. That is a change like any other: every bound consumer is told
-  and binds again. No file joins a contract silently.
-- Only the lane holding the claim on those files publishes a contract or a new
-  revision of it. A lane that continues a stopped lane inherits its contracts
-  with its claims.
+  revision.
 - Every agent in the project can read every contract and its history.
-- When the files are no longer claimed, the contract stays readable and can no
-  longer be edited. Whoever next claims the files is its editor.
-- There is one contract store. The per-requester contract is removed.
-- A contract keeps the eleven fields of today's capability contract. The owner
-  now writes them once, and they are what let two validators state the
-  contradiction precisely.
+- (review) A lane cannot give up one file: claims only grow, and a lane keeps
+  its files until it ends. When the owner's lane ends, its contracts are
+  **frozen**: readable, never edited again. A lane that later claims those
+  files publishes a new contract. Nothing bound to a frozen contract goes
+  stale.
 
 ### The consumer
 
 - A consumer names the file it builds on, as in ADR-0090, and **binds** to the
-  contract's current revision. Binding is the consumer's acceptance of that
-  revision.
+  current revision of the contract that covers it. Binding is the consumer's
+  acceptance of that revision. A binding belongs to the consumer's lane and
+  follows it to a successor.
 - A consumer whose need the contract does not cover files a **change
-  request**: a typed record against the contract, saying what it needs. It is
-  visible to every agent. Where no contract exists yet for a claimed file, the
-  change request is how a consumer asks for one.
-- The owner answers every change request: it accepts by publishing a revision
-  that covers it, or declines with a reason. The owner cannot finish its lane
-  with a change request unanswered.
+  request**: a typed record against the contract, or against the claimed file
+  when no contract exists yet, saying what it needs. Every agent can read it.
+- The owner answers each change request by its identifier: accepted by
+  revision R, or declined with a reason. (review) A change request that a new
+  revision does not answer stays open. The owner cannot finish its lane with
+  one open.
 - The owner is shown all open change requests on a contract together, with the
-  contract's current text. This is what the failed run lacked.
+  contract's current text.
 
 ### When the contract changes
 
 - A new revision makes every binding to the previous one stale. Each bound
-  consumer is told, is resumed if it has stopped, and must bind to the new
-  revision before the owner's work can be integrated.
-- A consumer that will not accept the new revision files a change request or
-  cancels its lane. A declined consumer may bind anyway, cancel, or ask for an
-  operator (ADR-0091). A disagreement is therefore always visible, and it ends
-  at the owner's decision, a cancellation, or the operator.
+  consumer is told and must bind to the new revision before the owner's work
+  can be integrated.
+- (review) A new revision ends every validation in progress and every verdict
+  given under the previous revision. A verdict names the contract revision and
+  the implementation commit it was given for. The owner may publish an
+  unchanged commit again for a new revision.
+- A consumer that will not accept a revision files a change request or cancels
+  its lane. A declined consumer may bind anyway or cancel.
 
 ### Before the owner's work is integrated
 
 - Every consumer bound to the contract checks the owner's published
-  implementation against the contract, as today. The owner's snapshot is
-  integrated when every binding is at the current revision and has validated
+  implementation against the contract. The owner's snapshot is integrated when
+  every binding that still counts is at the current revision and has validated
   the published implementation.
+- (review) A verdict that asks for a revision names the contract field the
+  implementation breaks. A point of the consumer's own declined change request
+  is not grounds. Synesis can require the field and show the consumer its
+  declined requests; it cannot judge the text. A consumer and an owner that
+  still disagree end at the operator.
 - A new implementation commit returns every binding to validation, as ADR-0089
-  already decides.
+  decides.
+
+### When an agent is gone (review)
+
+- A binding of a lane that was cancelled or has ended no longer counts.
+  Cancelling a lane withdraws its bindings and its open change requests in any
+  state; no gate may refuse a cancellation because of them.
+- When the owner's lane is released after integration, every change request
+  still open on its contracts is declined with a fixed reason under the same
+  lock, and every binding not yet validated is closed as "the owner finished".
+  A consumer that binds after that is satisfied by the integrated work and
+  waits for no validation.
+- When the owner's lane is cancelled, its contracts are frozen and its
+  bindings are closed as "the owner's lane ended". The dependency is open again.
+- When a bound consumer's lane is still open and its agent does not return
+  within a stated time after the owner published, Synesis raises an operator
+  request (ADR-0091) naming that lane. It does not skip the consumer.
+- A consumer that declared a dependency and never bound does not hold the
+  owner. It is satisfied by the integrated work, unchecked, as an unrequested
+  dependency is today.
 
 ### The tool surface
 
 Removed from `request_coordination`: `capability_request`, `contract_proposal`,
-`contract_request`. The last shares only a name with contracts; in 859
-recorded agent sessions neither it nor `contract_proposal` was ever called.
-Removed from `respond_coordination`: `capability_response`.
+`contract_request`. In 859 recorded agent sessions the last two were never
+called. Removed from `respond_coordination`: `capability_response`.
 
-Added to `request_coordination`: publish a contract or a revision, bind to a
-revision, file a change request. Added to `respond_coordination`: answer a
-change request.
+Added to `request_coordination`: `contract_publish` (the owner publishes a
+contract or a revision), `contract_bind` (a consumer binds to a revision, or
+binds again after one), `contract_change_request`. Added to
+`respond_coordination`: `contract_change_response`.
 
-Kept: `implementation_validation`, and the tool
-`publish_capability_implementation`, which names a contract and revision where
-it named a request. `task.knownDependencies` keeps its place and names the
-files a lane builds on.
+Kept: `implementation_validation`, which gains the contract field when it asks
+for a revision, and the tool `publish_capability_implementation`.
+`task.knownDependencies` keeps its meaning: the consumer's own name for what it
+depends on, which its binding carries.
 
 The tool count stays at ten in this step.
 
-## What is removed, kept and corrected
+## How it is built (review)
 
-- **Removed:** the negotiation half of the capability request. Its states for
-  awaiting the owner, a requested revision, a counter-proposal and a rejection
-  go, with their events and the two services' negotiation paths.
-- **Kept:** the publication and validation half. The record that today is "an
-  accepted request" becomes "a consumer's binding": the same implementation
-  revisions, the same validation workspace, the same gates on finish,
-  integration, cancellation and release, read through the binding.
-- **Corrected:** contract ownership and the tie to claims are enforced where
-  events are validated and replayed, so a log holding a revision from a lane
-  that did not hold the files is rejected. Today both systems check authority
-  only in the calling service.
-- **Removed:** the integration gate that cannot be reached, and whichever of
-  the two contract records is not kept.
+The review showed that building the new flow beside the old one would give
+agents two ways to agree a contract and two record types behind one set of
+gates. It is built in place instead.
 
-Which existing record carries the contract is left to the implementation. The
-constraint is that one remains.
+- **The shared contract** replaces the unused contract store: its records, its
+  projection and its three event types are rewritten for the contract described
+  above, with the change requests. Nothing at run time read the old store.
+- **A binding is today's request record.** It is created by `contract_bind`
+  already agreed, carrying the contract's identifier and revision. A contract
+  revision moves each binding to the state that today means "the owner revised,
+  accept or counter", and binding again is today's requester acceptance. From
+  there the record is what it was: implementation revisions, the validation
+  workspace, continuation to a successor, and every gate on finish,
+  integration, cancellation and release.
+- **Removed:** a request created with the requester's own contract, the owner's
+  accept, reject and revise of it, and the requester's counter-proposal, with
+  the states only they used.
+
+Authority is checked where every other authority in this log is checked: by the
+service that appends, under the project append lock, against the claims and
+lanes of that moment. The projection additionally refuses what it can judge
+from its own state: a revision from another lineage than the contract's owner,
+a revision number that does not follow, a second active contract over a covered
+file, a binding to a revision that is not current. (review) The record first
+said these would all be enforced on replay. They cannot be: a projection does
+not see claims, and every local session signs with one node identity.
+
+Order: the contract store and its tests; the binding in the request
+projection; the services and what an owner and a consumer are shown; the MCP
+kinds, the catalog and the manual; the tests that exercised negotiation; the
+full repository check; real runs against the recorded baseline.
 
 ## Alternatives considered
 
 - **Show the owner what it has already agreed.** Cheap and adds no rule.
   Proposed first. It relies on the owner's judgment across separate
-  negotiations; one earlier soft instruction on this branch failed in a real
-  run before a rule fixed it. The owner chose the structural change.
+  negotiations. The owner chose the structural change.
 - **The first accepted contract binds later requesters.** Rejected. Contracts
-  are compared as exact text, so every later requester would be refused;
-  compatible differences would be refused with real ones; the first requester
-  would set terms it did not know others needed; and two names for one file
-  would escape it.
+  are compared as exact text, so every later requester would be refused,
+  compatible differences with real ones.
 - **Keep the tool names and change what is behind them.** Proposed. Rejected
-  by the owner in favour of removing and replacing: the old kinds describe a
-  negotiation that no longer exists.
+  by the owner in favour of removing and replacing.
 - **Keep both systems.** Rejected: the contradiction stays possible in the one
-  agents actually use.
-- **Consumers may edit, the owner approves.** Not chosen: two agents write one
-  document.
+  agents use.
+- **Build the new flow beside the old one behind a project setting.** Proposed
+  by the review as the way to keep the two apart. Not chosen: it builds a second
+  copy of the publication and validation half, which this decision does not
+  change, and then deletes the first.
+- **Skip a consumer that does not come back after a stated time.** Rejected by
+  the owner: every consumer checks, and an absent one is the operator's to
+  resolve.
 
 ## Consequences
 
 - Two contracts for one file cannot exist, so they cannot contradict.
-- The owner decides. A consumer that needs something the owner declines cannot
-  get it by negotiation. It can adapt, cancel or ask the operator.
+- The owner decides. A consumer that needs something the owner declines can
+  adapt or cancel.
 - Who writes first is reversed. A consumer that arrives before the owner has
   published files a change request and waits for revision one.
-- Every revision costs each bound consumer one more step, and resumes each one
-  that has stopped. With N consumers and R revisions that is up to N times R
-  wake-ups. Not measured.
-- This is the largest change on the branch. It touches about 5,100 lines of
-  main code and 38 test files, in the part of the system where most of this
-  branch's defects were found.
-- The MCP catalog breaks: four kinds removed, four added, one tool's
-  arguments changed, one field's meaning changed. Provider manuals, the golden
-  projection, its digests and the managed agent instructions change with it.
+- Every revision costs each bound consumer one more step and a new validation.
+  Every recorded event still resumes every stopped agent that holds a lane, so
+  N consumers binding again cost up to N times N resumes against the resume
+  limit. Not measured; if it ends runs, an agent must be resumed only for the
+  events that concern it.
+- The gate that blocks every lane's finish while any validation workspace
+  exists in the project is held longer than today. Not changed here.
+- The MCP catalog breaks: four kinds removed, four added, one kind gains a
+  field. Provider manuals, the golden projection, its digests and the managed
+  agent instructions change with it. The CLI's `collaboration contract`
+  commands, which wrote to the unused store, are removed or pointed at the new
+  one.
 - Durable state written by an earlier prerelease build is not migrated
-  (ADR-0088). A project started on an older build is started again.
-- ADR-0090 stands: the owner is still named by a file. ADR-0089 stands for
-  publication and validation. ADR-0035 is completed, not replaced. ADR-0041 and
-  ADR-0054 are superseded where they describe per-requester negotiation.
-
-## How it will be built
-
-In order, each stage with its tests before the next:
-
-1. The contract's invariants, bindings and change requests in the coordination
-   module, beside the existing flow.
-2. The workspace services and the next-action projections: what an owner and a
-   consumer are shown.
-3. The MCP kinds, the catalog, the manual.
-4. Real runs on the new flow against the recorded baseline, with the old flow
-   still present.
-5. Removal of the negotiation half, the old kinds, the unused contract record
-   and the unreachable gate, and the rewrite of the tests that exercised them.
-6. The full repository check and the real runs again.
-
-Nothing is merged between stage 3 and stage 6 that leaves agents with two ways
-to agree a contract.
+  (ADR-0088).
+- ADR-0090 stands: the owner is named by a file. ADR-0089 stands for
+  publication and validation. ADR-0035 is replaced. ADR-0041 and ADR-0054 are
+  superseded where they describe per-requester negotiation.
 
 ## How it will be checked
 
-- Tests of each invariant at the projection: a revision from a lane that does
-  not hold the files is rejected on append and on replay; a second active
-  contract over a covered file is rejected; a binding to a revision that is not
-  current is rejected.
-- A test of the failed run's shape: two consumers with opposite needs. Both
-  change requests are shown to the owner together, the owner declines one with
-  a reason, and the declined consumer's next action says so.
-- Tests that a new revision makes each binding stale, that the owner's snapshot
-  is not integrated until each is current and validated, and that a stopped
-  consumer is resumed for it.
-- A test that the owner cannot finish with a change request unanswered.
-- A test that a successor lane edits its predecessor's contract and that no
-  other lane can.
-- A test that a contract over two files keeps both after its lane releases
-  one, that a lane which then claims the released file and publishes a contract
-  for it takes the file over, and that each consumer bound to the earlier
-  contract is told.
-- A test that a newly claimed file is covered only after a new revision, and
-  that the revision makes each binding stale.
+- The projection refuses: a revision from another lineage, a second active
+  contract over a covered file, a binding to a revision that is not current.
+- The failed run's shape: two consumers with opposite needs. Both change
+  requests are shown to the owner together, the owner declines one with a
+  reason, and the declined consumer's next action says so.
+- A new revision makes each binding stale, ends a validation in progress, and
+  the owner's snapshot is not integrated until each binding is current and
+  validated at that revision; an unchanged commit can be published for it.
+- The owner cannot finish with a change request open; a change request filed
+  between its finish and its release is declined at release.
+- Cancelling a consumer's lane withdraws a binding in every state and releases
+  the owner's integration.
+- A consumer binding after the owner was integrated waits for nothing.
+- A successor lane publishes its predecessor's contract and no other lane can;
+  a consumer's successor holds its bindings.
+- A verdict asking for a revision without a contract field is refused.
 - Real runs with the goals and model mixes of `docs/agent/CURRENT.md`. The
-  baseline is 13 of 15 on `remaster21` and `remaster22`. The step is accepted when completion
-  does not fall and the five-agent single-provider project completes
-  repeatedly.
+  baseline is 13 of 15 on `remaster21` and `remaster22`. The step is accepted
+  when completion does not fall and the five-agent single-provider project
+  completes repeatedly.
 
-## Open questions
+## The design review of 2026-10-12
 
-- Settled on 2026-10-12: `contract_request` is removed, and
-  `publish_capability_implementation` keeps its name.
-- Whether a consumer must bind before it may write code, or only before it may
-  finish. Proposed: before it may finish, as today.
-
-## Review of 2026-10-12
-
-Four reviewers on four different models read this record and the code it
-replaces, independently and read-only, with one brief: find where the design
-as written gets stuck. Their findings agree to an unusual degree. Items 1 to 6
-and 9 below were each raised by at least three of the four, with different
-evidence pointing at the same gates.
-
-The record described the path on which every agent stays and agrees. It left
-open every path on which the other agent is gone, which is where this branch's
-real stalls came from.
-
-**To be decided by the repository owner**
-
-1. *A consumer that is gone holds the owner for ever.* "Integrated when every
-   binding is current and validated" has no exit when a bound consumer has
-   stopped for good or reached its resume limit. The bounded wait and the
-   supersede-at-release that exist today cover only the negotiation states this
-   record removes. Proposed: a binding of a lane that was cancelled or released
-   is void. For a lane still open whose agent does not return, either an
-   operator request is raised, or the binding stops counting after a stated
-   time.
-2. *A lane cannot give up one file.* Claims only grow, and release drops the
-   whole lane. The rules above about a released file describe something that
-   cannot happen, and they contradict each other: one contract per file, the
-   contract still covers the file, the file moves, the next claimant is the
-   editor. Proposed, replacing them: when the owner's lane ends its contracts
-   are frozen and stay readable; a lane that later claims the files starts a
-   new contract; bindings to the old one do not go stale.
-3. *The contradiction moves from the contract to validation.* A consumer whose
-   change request was declined may bind anyway and then fail the implementation
-   on the declined point. The owner cannot satisfy two validators: the original
-   stall, one consumer wide. Proposed: a validation failure must rest on the
-   text of the revision the consumer bound to. A declined point is not grounds.
-
-**To be settled in the record, no decision needed**
-
-4. *The exit "cancel your lane" is refused by a gate this record keeps.*
-   Cancelling is blocked while a request is accepted and not validated, and so
-   are finishing and sealing the session. Cancelling a consumer's lane must
-   withdraw its bindings in any state.
-5. *Validation is tied to the implementation commit, not to the contract
-   revision.* A revision that changes only text can be accepted with the old
-   verdict standing, or can never be validated, because publishing the same
-   commit again is refused. A contract revision returns every binding to
-   unvalidated and ends its validation workspace; a verdict names the contract
-   revision and the commit; the same commit may be published for a new
-   revision.
-6. *A change request or a binding that arrives while the owner finishes, or
-   after it is released, has no exit.* This is the race that stalled three real
-   runs, in a new shape. Under the release lock, open change requests on the
-   lane's contracts are declined with a fixed reason. A binding to a contract
-   whose owner has been integrated is satisfied by that integration and waits
-   for no validation.
-7. *"Enforced where events are validated and replayed" cannot be done as the
-   log is built.* Each projection validates alone, so the contract's cannot see
-   claims. Every local session signs with one node identity, so the lane named
-   in an event is its own assertion. An event rejected on replay makes the
-   whole project unreadable. The owner of a contract is an authority lineage; a
-   revision carries the lineage and its claim epoch; one projection holds
-   claims and contracts together; a revision found unauthorised on replay is
-   ignored, not fatal.
-8. *Nothing links a revision to the change requests it answers.* Without an
-   answer recorded for each change request, "unanswered" cannot be computed.
-   Each change request gets its own answer: accepted by revision R, or declined
-   with a reason. One not answered by a revision carries forward to the next.
-9. *The build order collides with the flow it replaces.* Bindings were to reuse
-   the request record and its gates while the old flow still ran, and agents
-   would have been offered two ways to agree a contract, which this record
-   forbids. The new flow gets its own records and event types behind one
-   project setting, the comparison runs use that setting, and their logs are
-   discarded.
-
-**Also raised, to be answered in the record**
-
-- Every recorded event resumes every stopped agent that holds a lane. N
-  consumers binding again is N events, each resuming the others, against a
-  resume limit. An agent should be resumed for the events that concern it.
-- A consumer that declared a dependency and never bound lets the owner
-  integrate with no bindings, and is then satisfied by integration without
-  having checked anything.
-- `task.knownDependencies` now names files, and three places compare it with
-  capability names. What a consumer's snapshot records, and what satisfies a
-  dependency, must be stated.
-- A binding is keyed by the consumer's lineage and the contract, and a
-  consumer's successor inherits its bindings and change requests.
-- The gate that blocks every lane's finish while any validation workspace
-  exists in the project is held far longer once every revision is validated
-  again. It should be scoped to the lane.
-- "Ask for an operator" is named as an exit for a declined consumer. It does
-  not exist until step 3 and changes only the run's result then.
+Four reviewers on four different models read the first version of this record
+and the code it replaces, independently and read-only, with one brief: find
+where the design as written gets stuck. At least three of the four found each
+of these: a consumer that is gone holds the owner for ever; the exit "cancel
+your lane" is refused by a gate the record kept; validation is tied to the
+commit and not to the contract revision; a lane cannot give up one file, so the
+rules for a released file described nothing and contradicted each other; a
+request that arrives as the owner finishes has no exit; the invariants cannot be
+enforced on replay as the log is built; nothing linked a revision to the change
+requests it answers; the build order would have run two flows behind one set of
+gates. The first version described the path on which every agent stays and
+agrees. This version is what the review and the owner's four decisions made of
+it.
