@@ -171,11 +171,10 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
             boolean producerLaneOpen = store.collaborationProjection().activeIntents().stream()
                     .anyMatch(intent -> intent.workGroupId().equals(reviewer.workGroupId()) && intent.role() == WorkIntent.Role.PRODUCER);
             if (!producerLaneOpen) {
-                // A reviewer may arrive before its producer (ADR-0046), but two agents that both
-                // chose to review waited on each other with nothing saying nobody was producing.
-                result.put("instruction", "No producer lane exists in this work group, so nothing will be submitted for review until a participant announces one. "
-                        + "If the project goal has implementation work that no listed participant claims, call cancel_lane with the reason and announce that work "
-                        + "with ensure_session as a producer. Otherwise keep waiting.");
+                // Reached when the producer left after this reviewer was admitted. A session holds
+                // one lane, so the reviewer cannot take the implementation over itself.
+                result.put("instruction", "No producer lane exists in this work group any more, so nothing will be submitted for review until a participant announces one. "
+                        + "Keep waiting, or call cancel_lane with the reason if no producer is coming.");
             }
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
             result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
