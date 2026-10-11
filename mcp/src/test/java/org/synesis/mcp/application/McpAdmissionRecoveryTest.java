@@ -133,6 +133,24 @@ class McpAdmissionRecoveryTest {
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore initial = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         UUID groupId = UUID.randomUUID();
+        WorkIntentService service = new WorkIntentService(initial, identity);
+        // A reviewer lane is admitted only beside an open producer lane of another participant in its group.
+        ProviderSessionBindingService.Binding producerBinding = new ProviderSessionBindingService().ensure(location, "codex", "live-producer-connection").binding();
+        WorkIntent producerIntent = new WorkIntent(UUID.randomUUID(),
+                location.projectId(),
+                WorkspaceCollaborationService.participantHandle(producerBinding.sessionId()),
+                "codex",
+                UUID.randomUUID(),
+                "produce the product",
+                "publish the product",
+                producerBinding.baseCommit(),
+                List.of(ResourceSelector.pathExact("product.md")),
+                1,
+                groupId,
+                UUID.randomUUID(),
+                WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER);
+        assertTrue(service.announce(producerIntent).acquired());
         WorkIntent oldIntent = new WorkIntent(UUID.randomUUID(),
                 location.projectId(),
                 oldParticipant,
@@ -147,7 +165,6 @@ class McpAdmissionRecoveryTest {
                 UUID.randomUUID(),
                 WorkIntent.Status.ANNOUNCED,
                 WorkIntent.Role.REVIEWER);
-        WorkIntentService service = new WorkIntentService(initial, identity);
         assertTrue(service.announce(oldIntent).acquired());
         service.suspend(oldParticipant);
         service.holdRecovery(oldParticipant, "snapshot-root#review-snapshot");

@@ -34,6 +34,25 @@ final class ReviewAdmissionRules {
     }
 
     /**
+     * Returns whether a reviewer lane about to be announced has a producer lane to review: an open
+     * producer lane of another participant in its work group, covered by its review targets when
+     * it declares any.
+     *
+     * <p>A session holds one lane for its life. Two agents that each took the reviewer role before
+     * anyone produced could not give it up for the producer role, and waited on each other. Refused
+     * at admission, a session is still free to announce the implementation (ADR-0046, amended).</p>
+     *
+     * @param current  fresh authoritative project projection
+     * @param reviewer the reviewer intent about to be announced
+     * @return {@code true} when there is a producer lane for it to review
+     */
+    static boolean hasProducerToReview(PredictionEventStore current, WorkIntent reviewer) {
+        return current.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER && intent.workGroupId().equals(reviewer.workGroupId()) && !intent.participant().equals(reviewer.participant()))
+                .anyMatch(producer -> reviewer.reviewTargetSelectors().isEmpty() || reviewTargetsMatch(reviewer, producer));
+    }
+
+    /**
      * Validates the semantic direction of an explicit review request.
      */
     private static void validateReviewDirection(PredictionEventStore current,
@@ -74,7 +93,7 @@ final class ReviewAdmissionRules {
     /**
      * Returns whether every declared review target overlaps a producer selector.
      */
-    private static boolean reviewTargetsMatch(WorkIntent reviewer, WorkIntent producer) {
+    static boolean reviewTargetsMatch(WorkIntent reviewer, WorkIntent producer) {
         return reviewer.reviewTargetSelectors().stream()
                 .allMatch(targetSelector -> producer.selectors().stream().anyMatch(targetSelector::overlaps));
     }

@@ -1631,7 +1631,7 @@ class AgentNextActionServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void reviewerFirstIntentTargetsThePublishedPeerSnapshot() throws Exception {
+    void reviewerIntentTargetsThePublishedPeerSnapshot() throws Exception {
         new org.synesis.workspace.application.provider.ProviderManualService().install("codex");
         new org.synesis.workspace.application.provider.ProviderManualService().install("claude");
 
@@ -1643,16 +1643,16 @@ class AgentNextActionServiceTest {
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         var ownerBinding = bindings.find(location, "codex", "owner-second").orElseThrow();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second", "Implement source", "Publish the completed source", List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         var reviewerClaim = collaboration.announce(controlRoot,
                 "claude",
                 "reviewer-first",
                 "Review source",
                 "Validate the published source",
                 List.of(ResourceSelector.pathExact("tests/test_task_tracker.py")),
-                null,
+                ownerClaim.intent().workGroupId(),
                 WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("src/task_tracker.py")));
-        var ownerClaim = collaboration.announce(controlRoot, "codex", "owner-second", "Implement source", "Publish the completed source", List.of(ResourceSelector.pathExact("src/task_tracker.py")));
         assertEquals(reviewerClaim.intent().workGroupId(), ownerClaim.intent().workGroupId());
 
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
@@ -1723,22 +1723,29 @@ class AgentNextActionServiceTest {
         var completedBinding = bindings.find(location, "codex", "completed-reviewer").orElseThrow();
         bindings.find(location, "codex", "active-owner").orElseThrow();
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        // A reviewer lane is only admitted into a group that already has a producer, so the owner announces first then.
+        boolean reviewer = role == WorkIntent.Role.REVIEWER;
+        org.synesis.coordination.domain.collaboration.ClaimResult ownerClaim = reviewer
+                ? collaboration.announce(controlRoot, "codex", "active-owner", "Implement the sibling source", "Publish the completed source", List.of(ResourceSelector.pathExact("src/sibling.py")))
+                : null;
         var completedClaim = collaboration.announce(controlRoot,
                 "codex",
                 "completed-reviewer",
                 "Review the sibling implementation",
                 "Review the immutable sibling snapshot",
                 List.of(ResourceSelector.pathExact("tests/completed_review.py")),
-                null,
+                reviewer ? ownerClaim.intent().workGroupId() : null,
                 role,
-                role == WorkIntent.Role.REVIEWER ? List.of(ResourceSelector.pathExact("src/sibling.py")) : List.of());
-        var ownerClaim = collaboration.announce(controlRoot,
-                "codex",
-                "active-owner",
-                "Implement the sibling source",
-                "Publish the completed source",
-                List.of(ResourceSelector.pathExact("src/sibling.py")),
-                completedClaim.intent().workGroupId());
+                reviewer ? List.of(ResourceSelector.pathExact("src/sibling.py")) : List.of());
+        if (!reviewer) {
+            ownerClaim = collaboration.announce(controlRoot,
+                    "codex",
+                    "active-owner",
+                    "Implement the sibling source",
+                    "Publish the completed source",
+                    List.of(ResourceSelector.pathExact("src/sibling.py")),
+                    completedClaim.intent().workGroupId());
+        }
 
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());

@@ -345,6 +345,13 @@ final class McpSessionEstablishment {
                 // same announcement is safe to repeat.
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
             }
+            if ("REVIEWER_REQUIRES_PRODUCER".equals(failure.getMessage())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.ENSURE_SESSION,
+                        object("reason", "REVIEWER_REQUIRES_PRODUCER", "instruction",
+                                "No producer lane exists in this work group for a reviewer to review, so the reviewer lane was not announced and this session holds no lane. "
+                                        + "If the implementation in the project goal is unclaimed, announce it with ensure_session as a producer. "
+                                        + "Otherwise call ensure_session with the reviewer task again once get_next_action lists a producer lane."));
+            }
             if (failure instanceof org.synesis.coordination.exception.CoordinationException || failure instanceof IllegalArgumentException) {
                 // The announcement itself was refused: a closed work group, a blank goal, review
                 // targets on a producer. Answering an internal failure hid which.

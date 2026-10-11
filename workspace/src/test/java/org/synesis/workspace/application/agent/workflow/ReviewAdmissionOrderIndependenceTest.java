@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -16,12 +17,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
+import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.link.identity.IdentityBootstrap;
 
 import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
@@ -44,7 +49,8 @@ import org.synesis.workspace.test.TestGit;
 final class ReviewAdmissionOrderIndependenceTest {
 
     /**
-     * Runs one complete admission-to-producer-publication projection for one order.
+     * Runs one complete admission-to-producer-publication projection; when {@code reviewerFirst}, the reviewer
+     * first tries to announce before any producer and is refused.
      */
     private static ReviewRun run(Path project, boolean reviewerFirst) throws Exception {
         initializeProject(project);
@@ -54,42 +60,19 @@ final class ReviewAdmissionOrderIndependenceTest {
         String producerConnection = reviewerFirst ? "reviewer-first-producer" : "producer-first-producer";
         String reviewerConnection = reviewerFirst ? "reviewer-first-reviewer" : "producer-first-reviewer";
 
-        ClaimResult producer;
-        ClaimResult reviewer;
         if (reviewerFirst) {
-            reviewer = collaboration.announce(project,
-                    "claude",
-                    reviewerConnection,
-                    "Review producer source",
-                    "Review the producer snapshot",
-                    List.of(ResourceSelector.pathExact("tests/todo_test.py")),
-                    null,
-                    WorkIntent.Role.REVIEWER,
-                    List.of(ResourceSelector.pathExact("src/todo.py")));
-            producer = collaboration.announce(project, "codex", producerConnection, "Produce source", "Publish source snapshot", List.of(ResourceSelector.pathExact("src/todo.py")), reviewer.intent().workGroupId(),
-
-                    WorkIntent.Role.PRODUCER, List.of());
-        } else {
-            producer = collaboration.announce(project,
-                    "codex",
-                    producerConnection,
-                    "Produce source",
-                    "Publish source snapshot",
-                    List.of(ResourceSelector.pathExact("src/todo.py")),
-                    null,
-                    WorkIntent.Role.PRODUCER,
-                    List.of());
-            reviewer = collaboration.announce(project,
-                    "claude",
-                    reviewerConnection,
-                    "Review producer source",
-                    "Review the producer snapshot",
-                    List.of(ResourceSelector.pathExact("tests/todo_test.py")),
-                    producer.intent().workGroupId(),
-
-                    WorkIntent.Role.REVIEWER,
-                    List.of(ResourceSelector.pathExact("src/todo.py")));
+            assertReviewerFirstRefused(project, collaboration, reviewerConnection);
         }
+        ClaimResult producer = collaboration.announce(project,
+                "codex",
+                producerConnection,
+                "Produce source",
+                "Publish source snapshot",
+                List.of(ResourceSelector.pathExact("src/todo.py")),
+                null,
+                WorkIntent.Role.PRODUCER,
+                List.of());
+        ClaimResult reviewer = announceReviewer(project, collaboration, reviewerConnection, producer.intent().workGroupId(), "Review the producer snapshot");
         assertTrue(producer.acquired());
         assertTrue(reviewer.acquired());
 
@@ -117,6 +100,33 @@ final class ReviewAdmissionOrderIndependenceTest {
         Files.writeString(producerWorktree.resolve("src/todo.py"), "changed\n");
         AgentResponse producerAfter = next.getNextAction(new NextActionRequest(project, "codex", producerConnection, true));
         return new ReviewRun(producer.intent().intentId(), reviewerParticipant, producerAfter, producerBefore, String.valueOf(payload.get("intentId")), grant, reviewerAdmission);
+    }
+
+    /**
+     * Announces the fixture reviewer lane in the given work group.
+     */
+    private static ClaimResult announceReviewer(Path project, WorkspaceCollaborationService collaboration, String reviewerConnection, UUID workGroupId, String acceptance) throws Exception {
+        return collaboration.announce(project,
+                "claude",
+                reviewerConnection,
+                "Review producer source",
+                acceptance,
+                List.of(ResourceSelector.pathExact("tests/todo_test.py")),
+                workGroupId,
+                WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("src/todo.py")));
+    }
+
+    /**
+     * Asserts that a reviewer announced before any producer is refused and leaves no intent or work group behind.
+     */
+    private static void assertReviewerFirstRefused(Path project, WorkspaceCollaborationService collaboration, String reviewerConnection) throws Exception {
+        CoordinationException refused = assertThrows(CoordinationException.class, () -> announceReviewer(project, collaboration, reviewerConnection, null, "Review the producer snapshot"));
+        assertEquals("REVIEWER_REQUIRES_PRODUCER", refused.getMessage());
+        var location = new ProjectApplicationService().locate(project);
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(store.collaborationProjection().activeIntents().isEmpty());
+        assertTrue(store.events().stream().noneMatch(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED || event.type() == PredictionEventType.WORK_GROUP_CREATED));
     }
 
     /**
@@ -171,10 +181,10 @@ final class ReviewAdmissionOrderIndependenceTest {
     }
 
     /**
-     * The producer and reviewer must have the same semantic workflow in both orders.
+     * A reviewer refused for lack of a producer must not change who reviews whom once the producer has announced.
      */
     @Test
-    void producerFirstAndReviewerFirstHaveEquivalentReviewDirection(@TempDir Path temp) throws Exception {
+    void producerFirstAndRefusedReviewerFirstAttemptHaveEquivalentReviewDirection(@TempDir Path temp) throws Exception {
         ReviewRun producerFirst = run(temp.resolve("producer-first"), false);
         ReviewRun reviewerFirst = run(temp.resolve("reviewer-first"), true);
 
@@ -186,10 +196,10 @@ final class ReviewAdmissionOrderIndependenceTest {
     }
 
     /**
-     * A producer must not receive review semantics merely because it arrived second.
+     * A producer must not receive review semantics because a reviewer tried to arrive before it and was refused.
      */
     @Test
-    void reviewerFirstNeverGrantsProducerReviewSemantics(@TempDir Path temp) throws Exception {
+    void refusedReviewerFirstAttemptNeverGrantsProducerReviewSemantics(@TempDir Path temp) throws Exception {
         ReviewRun run = run(temp.resolve("wrong-peer"), true);
 
         assertFalse(run.producerBeforeMutation().toJson().contains("REVIEW_ADMISSION_REQUIRED"), run.producerBeforeMutation().toJson());
@@ -201,24 +211,34 @@ final class ReviewAdmissionOrderIndependenceTest {
     }
 
     /**
-     * A reviewer admitted before its producer must wait instead of completing its lane.
+     * A reviewer is refused before any producer exists; once admitted and then left without its producer, it must
+     * wait instead of completing its lane, and a later producer is routed to it for review.
      */
     @Test
-    void reviewerFirstWaitsForProducerBeforeNoChangeCompletion(@TempDir Path temp) throws Exception {
+    void reviewerWhoseProducerLeftWaitsInsteadOfNoChangeCompletion(@TempDir Path temp) throws Exception {
         Path project = initializeProject(temp.resolve("reviewer-before-producer"));
         installProviders(project);
         AgentSessionServiceFixture sessions = establishSessions(project, "reviewer-before-producer");
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        ClaimResult reviewer = collaboration.announce(project,
-                "claude",
-                "reviewer-before-producer-reviewer",
-                "Review the producer source",
-                "Inspect the producer snapshot without repository mutation",
-                List.of(ResourceSelector.pathExact("tests/todo_test.py")),
+        assertReviewerFirstRefused(project, collaboration, "reviewer-before-producer-reviewer");
+
+        ClaimResult leavingProducer = collaboration.announce(project,
+                "codex",
+                "reviewer-before-producer-producer",
+                "Produce the source",
+                "Publish the producer snapshot",
+                List.of(ResourceSelector.pathExact("src/todo.py")),
                 null,
-                WorkIntent.Role.REVIEWER,
-                List.of(ResourceSelector.pathExact("src/todo.py")));
+                WorkIntent.Role.PRODUCER,
+                List.of());
+        ClaimResult reviewer = announceReviewer(project, collaboration, "reviewer-before-producer-reviewer", leavingProducer.intent().workGroupId(), "Inspect the producer snapshot without repository mutation");
         assertTrue(reviewer.acquired());
+
+        var firstLocation = new ProjectApplicationService().locate(project);
+        var leavingBinding = new ProviderSessionBindingService().find(firstLocation, "codex", "reviewer-before-producer-producer").orElseThrow();
+        new WorkIntentService(new PredictionEventStore(firstLocation.root().resolve(".synesis/coordination"), firstLocation.projectId()),
+                new IdentityBootstrap(firstLocation.profile().resolve("link")).loadOrCreate().identity())
+                .cancel(WorkspaceCollaborationService.participantHandle(leavingBinding.sessionId()));
 
         AgentNextActionService next = new AgentNextActionService();
         AgentResponse waiting = next.getNextAction(new NextActionRequest(project, "claude", "reviewer-before-producer-reviewer"));
@@ -248,10 +268,10 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertEquals(AgentReason.TASK_NOT_READY, prematureCompletion.reason());
         assertEquals("NO_CHANGE_REVIEWER_PENDING", map(prematureCompletion.result()).get("reason"));
 
-        sessions.ensure("codex", "reviewer-before-producer-producer");
+        sessions.ensure("codex", "reviewer-before-producer-producer-2");
         ClaimResult producer = collaboration.announce(project,
                 "codex",
-                "reviewer-before-producer-producer",
+                "reviewer-before-producer-producer-2",
                 "Produce the source",
                 "Publish the producer snapshot",
                 List.of(ResourceSelector.pathExact("src/todo.py")),

@@ -48,6 +48,9 @@ final class LaneClaimService {
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
+    /** Refusal of a reviewer lane announced while its work group has no producer lane for it to review. */
+    static final String REVIEWER_REQUIRES_PRODUCER = "REVIEWER_REQUIRES_PRODUCER";
+
     /**
      * Announces an intent and atomically acquires all requested selectors.
      *
@@ -69,6 +72,9 @@ final class LaneClaimService {
             WorkGroup existingGroup = current.workGroupProjection().group(intent.group()).orElse(null);
             if (existingGroup != null && existingGroup.status() != WorkGroup.Status.ACTIVE) {
                 throw new CoordinationException("WORK_GROUP_NOT_ACTIVE");
+            }
+            if (intent.role() == WorkIntent.Role.REVIEWER && !ReviewAdmissionRules.hasProducerToReview(current, intent)) {
+                throw new CoordinationException(REVIEWER_REQUIRES_PRODUCER);
             }
             if (existingGroup == null) {
                 WorkGroup group = new WorkGroup(intent.group().value(),

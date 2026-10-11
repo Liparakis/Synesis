@@ -43,6 +43,10 @@ import org.synesis.link.identity.NodeIdentity;
  */
 final class WorkIntentServiceTest {
 
+    private static PredictionEventStore fresh(Path temp, UUID project) throws Exception {
+        return new PredictionEventStore(temp, project);
+    }
+
     private static WorkIntent intent(UUID project, String participant, ResourceSelector selector) {
         return new WorkIntent(UUID.randomUUID(),
                 project,
@@ -152,6 +156,32 @@ final class WorkIntentServiceTest {
         } catch (IOException expected) {
             return expected.getMessage();
         }
+    }
+
+    @Test
+    void reviewerIsAdmittedOnlyBesideAProducerOfAnotherParticipantThatItsTargetsCover(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        WorkIntentService service = new WorkIntentService(store, NodeIdentity.generate());
+        List<ResourceSelector> sourceTargets = List.of(ResourceSelector.pathExact("src/board.py"));
+
+        WorkIntent early = lane(project, groupId, "agt-reviewer", WorkIntent.Role.REVIEWER, "tests/board_test.py", sourceTargets);
+        IOException refused = assertThrows(IOException.class, () -> service.announce(early));
+        assertEquals("REVIEWER_REQUIRES_PRODUCER", refused.getMessage());
+        assertTrue(fresh(temp, project).collaborationProjection().intent(early.identity()).isEmpty());
+        assertTrue(fresh(temp, project).collaborationProjection().activeIntents().isEmpty());
+        assertTrue(fresh(temp, project).workGroupProjection().group(early.group()).isEmpty());
+
+        WorkIntent producer = lane(project, groupId, "agt-producer", WorkIntent.Role.PRODUCER, "src/board.py", List.of());
+        assertTrue(service.announce(producer).acquired());
+
+        WorkIntent elsewhere = lane(project, groupId, "agt-elsewhere", WorkIntent.Role.REVIEWER, "tests/other_test.py", List.of(ResourceSelector.pathExact("src/other.py")));
+        assertEquals("REVIEWER_REQUIRES_PRODUCER", assertThrows(IOException.class, () -> service.announce(elsewhere)).getMessage());
+        assertTrue(fresh(temp, project).collaborationProjection().intent(elsewhere.identity()).isEmpty());
+
+        assertTrue(service.announce(early).acquired());
+        assertTrue(fresh(temp, project).collaborationProjection().intent(early.identity()).isPresent());
     }
 
     @Test

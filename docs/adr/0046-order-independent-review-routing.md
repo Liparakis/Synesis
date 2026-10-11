@@ -38,3 +38,28 @@ arrival-order protocol, generalized identity machinery, provider-specific
 behavior, new MCP tools, or manual repair/orchestration. Existing explicit
 review requests and durable grants remain consumable for compatibility, while
 automatic admission no longer infers a reviewer from peer order.
+
+## Amendment 2026-10-11: a reviewer lane needs a producer lane to review
+
+Decided by the project owner after real two-agent runs in which both agents
+read the same goal and both announced the reviewer role. A session holds one
+lane for its life, so neither could give the role up for the producer role, and
+each waited for a producer that was not coming.
+
+- A reviewer intent is admitted only when its work group has an open producer
+  intent of another participant, covered by the reviewer's review targets when
+  it declares any. Otherwise the announcement is refused with
+  `REVIEWER_REQUIRES_PRODUCER`, nothing is recorded, and the session is still
+  free to announce the implementation, or to announce the reviewer intent again
+  once a producer lane exists.
+- An active reviewer intent declared for exactly one producer intent, by the
+  matching rule above, makes that producer's work subject to review from the
+  moment the reviewer is admitted, before any request or grant exists. A
+  reviewer whose session is suspended or held for recovery does not.
+
+This reverses one consequence of the original decision: a reviewer can no
+longer be admitted before its producer and wait. The purpose of the decision
+is kept. Arrival order still cannot change who reviews whom, because roles and
+targets stay explicit; the order that produced a reviewer with nothing to
+review is now refused instead of admitted. Recovery continuation of an existing
+reviewer lane does not pass through announcement and is unaffected.

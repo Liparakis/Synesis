@@ -309,6 +309,26 @@ class McpToolMalformedArgumentsTest {
         }
     }
 
+    /**
+     * A reviewer with no producer lane in its work group is refused and told what to do, and the refusal does not
+     * spend the session's one lane: the same session can then announce a producer lane.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void ensureSessionRefusesAReviewerWithoutAProducerAndLeavesTheSessionItsLane() {
+        McpProtocolHandler handler = handler("codex");
+        Map<String, Object> refused = innerResponse(call(handler, "ensure_session", "{'task':{'role':'reviewer','goal':'g','acceptance':'a','claims':[{'path':'review-without-producer.md'}]}}"));
+        assertEquals("blocked", refused.get("status"), refused.toString());
+        assertEquals("policy_denied", refused.get("reason"), refused.toString());
+        assertEquals("ensure_session", refused.get("nextAction"), refused.toString());
+        Map<String, Object> result = (Map<String, Object>) refused.get("result");
+        assertEquals("REVIEWER_REQUIRES_PRODUCER", result.get("reason"), refused.toString());
+        assertFalse(String.valueOf(result.get("instruction")).isBlank(), refused.toString());
+
+        Map<String, Object> admitted = innerResponse(call(handler, "ensure_session", "{'task':{'goal':'g','acceptance':'a','claims':[{'path':'producer-after-refusal.txt'}]}}"));
+        assertEquals("ready", admitted.get("status"), admitted.toString());
+    }
+
     @Test
     void aMalformedToolCallEnvelopeIsAnInvalidParamsErrorBeforeAnyOtherGate() {
         McpProtocolHandler handler = handler("codex");
