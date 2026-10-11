@@ -1091,7 +1091,7 @@ class SyntheticTwoProcessCollaborationTest {
         ownerAccepts(first);
         ownerAccepts(second);
         ownerCommits("public class ProductQuery { /* v1 */ }\n");
-        ownerPublishes(first);
+        ownerPublishes(null);
         String firstCommit = latestCommit(second);
 
         assertEquals("completed", extractResponseStatus(requesterJudges(requesterTwo, second, 1, "accepted")));

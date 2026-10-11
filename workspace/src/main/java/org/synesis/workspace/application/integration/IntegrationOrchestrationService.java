@@ -288,7 +288,7 @@ public final class IntegrationOrchestrationService {
     private AgentResponse orchestrateIntegrationLocked(ProjectAppendLock appendLock, Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
 
         synchronized (INTEGRATION_LOCK) {
-            List<TaskSnapshotRecord> snapshots = store.taskCompletionProjection().eligibleSnapshots();
+            List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
             if (snapshots.isEmpty()) {
                 List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
                 if (!pendingReviews.isEmpty()) {

@@ -171,7 +171,8 @@ final class LaneCompletionRules {
     }
 
     /**
-     * Requires every group snapshot to be integrated or superseded by an integrated correction.
+     * Requires every group snapshot to be integrated or superseded by an integrated later revision
+     * of the same task and authority lineage.
      */
     static boolean allGroupSnapshotsIntegrated(PredictionEventStore current, WorkGroupId workGroupId) {
         for (var snapshot : current.taskCompletionProjection().allSnapshots()) {
@@ -180,7 +181,9 @@ final class LaneCompletionRules {
             }
             TaskCompletionState state = current.taskCompletionProjection().snapshotState(snapshot.snapshotIdentity())
                     .orElse(TaskCompletionState.ACTIVE);
-            if (state == TaskCompletionState.REVIEW_REJECTED) {
+            if (state != TaskCompletionState.INTEGRATED) {
+                // Rejected and corrected, or left behind when its continued lane published again:
+                // either way the lane's work is the later revision, and that one is integrated.
                 boolean corrected = current.taskCompletionProjection().allSnapshots().stream()
                         .anyMatch(candidate -> candidate.taskIdentity().equals(snapshot.taskIdentity())
                                 && candidate.provenance().lineageIdentity()
@@ -192,8 +195,6 @@ final class LaneCompletionRules {
                 if (!corrected) {
                     return false;
                 }
-            } else if (state != TaskCompletionState.INTEGRATED) {
-                return false;
             }
         }
         return true;

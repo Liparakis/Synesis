@@ -46,8 +46,27 @@ final class IntegrationCandidatePolicy {
      * integration, oldest first.
      */
     static List<TaskSnapshotRecord> reviewAcceptedInOrder(PredictionEventStore store) {
-        return store.taskCompletionProjection().eligibleSnapshots().stream().filter(snapshot -> reviewAccepted(snapshot, store))
+        return currentRevisions(store).stream().filter(snapshot -> reviewAccepted(snapshot, store))
                 .sorted(Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId)).toList();
+    }
+
+    /**
+     * Returns the eligible snapshots that are still their lane's work: those with no snapshot of a
+     * later claim epoch in the same task and authority lineage.
+     *
+     * <p>A lane whose snapshot waited on a dependency was continued by its resumed agent, which
+     * published again. Both snapshots were eligible, the earlier was integrated first, and the
+     * later then conflicted with its own lane's content: the integration was blocked for good and
+     * the work group could not close, with every lane's work integrated. The later revision starts
+     * from the earlier one's worktree, so it is the lane's work and the earlier is left behind.</p>
+     */
+    static List<TaskSnapshotRecord> currentRevisions(PredictionEventStore store) {
+        List<TaskSnapshotRecord> all = store.taskCompletionProjection().allSnapshots();
+        return store.taskCompletionProjection().eligibleSnapshots().stream()
+                .filter(snapshot -> all.stream().noneMatch(later -> later.taskId().equals(snapshot.taskId())
+                        && later.provenance().authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                        && later.provenance().claimEpoch() > snapshot.provenance().claimEpoch()))
+                .toList();
     }
 
     /** Returns whether one candidate has the exact durable authority required for integration. */
