@@ -217,13 +217,17 @@ public final class ImplementationPublicationService {
                     return blocked("CAPABILITY_PUBLICATION_REPLAY_MISMATCH", AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
                 }
                 ImplementationRevisionRecord latest = latestOpt.get();
-                if (!latest.authorityLineageId().equals(intent.authorityLineageId())
-                        || !latest.baseCommit().equals(snapshot.baseCommit())
-                        || !latest.commitSha().equals(snapshot.commitSha())
-                        || !latest.changedPaths().equals(snapshot.changedPaths())) {
-                    return blocked("CAPABILITY_PUBLICATION_REPLAY_MISMATCH", AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
+                if (latest.commitSha().equals(snapshot.commitSha())) {
+                    if (!latest.authorityLineageId().equals(intent.authorityLineageId())
+                            || !latest.baseCommit().equals(snapshot.baseCommit())
+                            || !latest.changedPaths().equals(snapshot.changedPaths())) {
+                        return blocked("CAPABILITY_PUBLICATION_REPLAY_MISMATCH", AgentReason.STALE_REQUEST, AgentNextAction.RETRY);
+                    }
+                    publishToOtherRequests(store, capability, intent, snapshot, summary(request), ownerNodeId, binding, identity);
+                    return publicationResult(capability, latest.revisionNumber(), snapshot, request.expectedTreeHash(), true);
                 }
-                return publicationResult(capability, latest.revisionNumber(), snapshot, request.expectedTreeHash(), true);
+                // The owner changed its files after publishing: a new revision, which the
+                // requester validates again.
             }
 
             int nextRevision = latestOpt.map(revision -> revision.revisionNumber() + 1).orElse(1);
@@ -240,7 +244,49 @@ public final class ImplementationPublicationService {
                     List.of(),
                     "");
             store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, ownerNodeId, payload.encode(), identity);
+            publishToOtherRequests(store, capability, intent, snapshot, summary(request), ownerNodeId, binding, identity);
             return publicationResult(capability, nextRevision, snapshot, request.expectedTreeHash(), false);
+        }
+    }
+
+    /**
+     * Publishes the same commit to every other request of this owner lane that has an accepted
+     * contract (ADR-0089).
+     *
+     * <p>Each request keeps its own revisions and its own validation. Published one request at a
+     * time, the owner waited for the first requester's verdict while the others waited for a
+     * publication, and a revision made for one requester left another validated at a commit that
+     * was no longer the owner's. A request already at this commit is left as it is.</p>
+     */
+    private static void publishToOtherRequests(PredictionEventStore store,
+            CapabilityRequestRecord named,
+            WorkIntent intent,
+            TaskSnapshotRecord snapshot,
+            String summary,
+            String ownerNodeId,
+            ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity) throws Exception {
+        for (CapabilityRequestRecord other : List.copyOf(store.capabilityRequestProjection().records().values())) {
+            if (other.handle().equals(named.handle()) || !other.matchesOwner(ownerNodeId, binding.supervisorId(), binding.workerId())
+                    || !other.authorityLineageId().equals(intent.authorityLineageId()) || !other.state().hasAcceptedContract()) {
+                continue;
+            }
+            Optional<ImplementationRevisionRecord> latest = store.capabilityRequestProjection().findLatestImplementation(other.handle().value());
+            if (latest.isPresent() && latest.get().commitSha().equals(snapshot.commitSha())) {
+                continue;
+            }
+            ImplementationEventPayload payload = new ImplementationEventPayload(other.handle(),
+                    intent.authorityLineageId(),
+                    latest.map(revision -> revision.revisionNumber() + 1).orElse(1),
+                    snapshot.baseCommit(),
+                    snapshot.commitSha(),
+                    snapshot.changedPaths(),
+                    summary,
+                    "",
+                    "",
+                    List.of(),
+                    "");
+            store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, ownerNodeId, payload.encode(), identity);
         }
     }
 

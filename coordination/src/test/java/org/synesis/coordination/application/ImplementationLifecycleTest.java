@@ -3,6 +3,7 @@ package org.synesis.coordination.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -23,6 +24,7 @@ import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -350,5 +352,49 @@ class ImplementationLifecycleTest {
                         "First revision", "", "", List.of(), "").encode(), owner);
 
         ProjectionValidation.assertValidateMatchesApplyOnCopy(store.events());
+    }
+
+    @Test
+    void ownerRevisionAfterValidationIsANewRevisionButTheSameCommitIsRefused(@TempDir Path tempDir) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        PredictionEventStore store = new PredictionEventStore(tempDir, projectId);
+        CapabilityRequestHandle handle = CapabilityRequestHandle.parse("req_TEST1234567890ABCDEF");
+        UUID lineage = UUID.randomUUID();
+        CapabilityContract contract = new CapabilityContract("UUID id", "Optional<P>", List.of("behavior"), List.of("test"));
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requester.nodeId(),
+                new CapabilityRequestPayload(handle, "catalog.product-query", requester.nodeId(), owner.nodeId(),
+                        lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode(), requester);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_ACCEPTED, owner.nodeId(),
+                new CapabilityRequestPayload(handle, "catalog.product-query", requester.nodeId(), owner.nodeId(),
+                        lineage, contract, CapabilityLifecycleState.ACCEPTED, null, CAPABILITY_CREATED_AT_SEQUENCE).encode(), owner);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, owner.nodeId(),
+                implementation(handle, lineage, 1, "abc0", "commitX", ""), owner);
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_VALIDATION_STARTED, requester.nodeId(),
+                implementation(handle, lineage, 1, "abc0", "commitX", "/tmp/val-wt"), requester);
+        CapabilityRequestProjection proj = store.capabilityRequestProjection();
+        assertTrue(proj.findValidationContext(handle.value()).isPresent());
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED, requester.nodeId(),
+                implementation(handle, lineage, 1, "abc0", "commitX", ""), requester);
+        assertEquals(CapabilityLifecycleState.VALIDATED, proj.findByHandle(handle.value()).orElseThrow().state());
+
+        store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, owner.nodeId(),
+                implementation(handle, lineage, 2, "commitX", "commitY", ""), owner);
+
+        assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, proj.findByHandle(handle.value()).orElseThrow().state());
+        assertEquals(2, proj.findLatestImplementation(handle.value()).orElseThrow().revisionNumber());
+        assertEquals("commitY", proj.findLatestImplementation(handle.value()).orElseThrow().commitSha());
+        assertFalse(proj.findValidationContext(handle.value()).isPresent());
+
+        CoordinationException sameCommit = assertThrows(CoordinationException.class, () -> store.append(UUID.randomUUID(),
+                PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED, owner.nodeId(),
+                implementation(handle, lineage, 3, "commitX", "commitY", ""), owner));
+        assertEquals("CAPABILITY_REQUEST_NOT_ACCEPTED", sameCommit.getMessage());
+        assertEquals(2, proj.findLatestImplementation(handle.value()).orElseThrow().revisionNumber());
+    }
+
+    private static byte[] implementation(CapabilityRequestHandle handle, UUID lineage, int revision, String base, String commit, String worktree) {
+        return new ImplementationEventPayload(handle, lineage, revision, base, commit, List.of("src/Main.java"), "revision", "", "", List.of(), worktree).encode();
     }
 }

@@ -953,4 +953,177 @@ class SyntheticTwoProcessCollaborationTest {
             }
         }
     }
+
+    // ---- ADR-0089: one publication serves every requester; an unanswered request is superseded ----
+
+    private McpProtocolHandler secondRequesterHandler;
+
+    /** Starts a second requester session that announces its own lane with a claim disjoint from the others. */
+    private McpProtocolHandler secondRequester() throws Exception {
+        AgentSessionService sessions = new AgentSessionService();
+        sessions.ensureSession(new SessionResolutionRequest(projectRoot, "claude", "inst-req-2", null, false));
+        var bindingService = new ProviderSessionBindingService();
+        var location = new ProjectApplicationService().locate(projectRoot);
+        var binding = bindingService.find(location, "claude", "inst-req-2").orElseThrow();
+        bindingService.verifyWorkspaceTrust(location, "claude", binding.sessionId(), Path.of(binding.worktreePath()));
+        new WorkspaceCollaborationService().announce(projectRoot, "claude", "inst-req-2", "Implement the product report", "Publish the report implementation", List.of(ResourceSelector.pathExact("ProductReport.java")));
+        secondRequesterHandler = new McpProtocolHandler(sessions, projectRoot, "claude", "inst-req-2");
+        secondRequesterHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri().toString().replace("\\", "/") + "\"}}");
+        return secondRequesterHandler;
+    }
+
+    private String fileRequest(McpProtocolHandler requester) throws Exception {
+        // With more than one open lane the request names the owner's lane.
+        String ownerLineage = replayedStore().collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.provider().equals("codex")).findFirst().orElseThrow().authorityLineageId().toString();
+        String filed = toolCall(requester, "request_coordination", Map.of("kind", "capability_request",
+                "payload", Map.of("capability", "catalog.product-query", "ownerAuthorityLineageId", ownerLineage, "contract", productQueryContract("Return product when found"))));
+        String handle = extractResultField(filed);
+        assertNotNull(handle, filed);
+        return handle;
+    }
+
+    private void ownerAccepts(String handle) throws Exception {
+        long revision = requestOf(handle).contractRevision();
+        String accepted = toolCall(ownerHandler, "respond_coordination", Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", handle, "response", "accept", "contractRevision", revision)));
+        assertEquals("ready", extractResponseStatus(accepted), accepted);
+    }
+
+    private void ownerCommits(String content) throws Exception {
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), content);
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Owner change");
+    }
+
+    /** Projects the owner's publication, checks which request it names when one is expected, and publishes it. */
+    private void ownerPublishes(String expectedHandle) {
+        String projected = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("publish_capability_implementation", extractInnerResponse(projected).get("nextAction"), projected);
+        Map<String, Object> arguments = new LinkedHashMap<>(extractWorkflowArguments(projected));
+        if (expectedHandle != null) {
+            assertEquals(expectedHandle, arguments.get("capabilityRequestHandle"), projected);
+        }
+        arguments.put("summary", "Implemented product query");
+        String published = toolCall(ownerHandler, "publish_capability_implementation", arguments);
+        assertEquals("waiting", extractResponseStatus(published), published);
+    }
+
+    private org.synesis.coordination.domain.capability.CapabilityRequestRecord requestOf(String handle) throws Exception {
+        return replayedStore().capabilityRequestProjection().findByHandle(handle).orElseThrow();
+    }
+
+    private String latestCommit(String handle) throws Exception {
+        return replayedStore().capabilityRequestProjection().findLatestImplementation(handle).orElseThrow().commitSha();
+    }
+
+    private int latestRevision(String handle) throws Exception {
+        return replayedStore().capabilityRequestProjection().findLatestImplementation(handle).orElseThrow().revisionNumber();
+    }
+
+    /** Inspects, reads and tests the published revision as the requester, then answers with {@code result}. */
+    @SuppressWarnings("unchecked")
+    private String requesterJudges(McpProtocolHandler requester, String handle, int revision, String result) {
+        String next = toolCall(requester, "get_next_action", Map.of());
+        Map<String, Object> inspectArguments = extractWorkflowArguments(next);
+        Map<String, Object> inspectPayload = (Map<String, Object>) inspectArguments.get("payload");
+        assertEquals(handle, inspectPayload.get("capabilityRequestHandle"), next);
+        assertEquals(revision, ((Number) inspectPayload.get("implementationRevision")).intValue(), next);
+        assertEquals("ready", extractResponseStatus(toolCall(requester, "respond_coordination", inspectArguments)));
+        assertEquals("completed", extractResponseStatus(toolCall(requester, "read_file", Map.of("path", "ProductQuery.java", "capabilityRequestHandle", handle, "implementationRevision", revision))));
+        assertEquals("completed", extractResponseStatus(toolCall(requester, "run_command", Map.of("argv", List.of("git", "rev-parse", "HEAD"), "capabilityRequestHandle", handle, "implementationRevision", revision))));
+        Map<String, Object> payload = new LinkedHashMap<>(Map.of("inboxItemId", inspectPayload.get("inboxItemId"), "capabilityRequestHandle", handle, "implementationRevision", revision, "result", result));
+        if (!"accepted".equals(result)) {
+            payload.put("reason", "Needs a change");
+        }
+        return toolCall(requester, "respond_coordination", Map.of("kind", "implementation_validation", "payload", payload));
+    }
+
+    @Test
+    void publishingForOneRequesterPublishesTheSameCommitToEveryAcceptedRequest() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        String first = fileRequest(requesterHandler);
+        String second = fileRequest(requesterTwo);
+        ownerAccepts(first);
+        ownerAccepts(second);
+        ownerCommits("public class ProductQuery {}\n");
+
+        // With two requests accepted the projection may name either; the publication reaches both.
+        ownerPublishes(null);
+
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(first).state().name());
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(second).state().name());
+        assertEquals(1, latestRevision(first));
+        assertEquals(1, latestRevision(second));
+        assertEquals(latestCommit(first), latestCommit(second));
+        requesterTwo.close();
+    }
+
+    @Test
+    void ownerAskingToFinishIsShownTheRequestWaitingForItsImplementationAheadOfAnotherRequestersVerdict() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        String first = fileRequest(requesterHandler);
+        ownerAccepts(first);
+        ownerCommits("public class ProductQuery {}\n");
+        ownerPublishes(first);
+        String second = fileRequest(requesterTwo);
+        ownerAccepts(second);
+
+        String projected = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+
+        assertEquals("ready", extractResponseStatus(projected), projected);
+        assertEquals("publish_capability_implementation", extractInnerResponse(projected).get("nextAction"), projected);
+        assertEquals(second, extractWorkflowArguments(projected).get("capabilityRequestHandle"), projected);
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(first).state().name(), "the first requester has not judged yet");
+
+        ownerPublishes(second);
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(second).state().name());
+        assertEquals(latestCommit(first), latestCommit(second));
+        assertEquals(1, latestRevision(first));
+        requesterTwo.close();
+    }
+
+    @Test
+    void revisionForOneRequesterReturnsAnotherRequestersValidatedRequestToImplementationAvailable() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        String first = fileRequest(requesterHandler);
+        String second = fileRequest(requesterTwo);
+        ownerAccepts(first);
+        ownerAccepts(second);
+        ownerCommits("public class ProductQuery { /* v1 */ }\n");
+        ownerPublishes(first);
+        String firstCommit = latestCommit(second);
+
+        assertEquals("completed", extractResponseStatus(requesterJudges(requesterTwo, second, 1, "accepted")));
+        assertEquals("VALIDATED", requestOf(second).state().name());
+        assertEquals("waiting", extractResponseStatus(requesterJudges(requesterHandler, first, 1, "revision_required")));
+        assertEquals("IMPLEMENTING", requestOf(first).state().name());
+
+        ownerCommits("public class ProductQuery { /* v2 */ }\n");
+        ownerPublishes(first);
+
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(second).state().name());
+        assertEquals(2, latestRevision(second));
+        assertEquals(latestCommit(first), latestCommit(second));
+        assertFalse(firstCommit.equals(latestCommit(second)), "the second requester now holds the revised commit");
+        requesterTwo.close();
+    }
+
+    @Test
+    void requestTheOwnerNeverAnsweredIsSupersededWhenTheOwnerFinishes() throws Exception {
+        ownerCommits("public class ProductQuery {}\n");
+        // The owner has projected its finish; a requester then files a request before the finish lands.
+        Map<String, Object> finishArguments = new LinkedHashMap<>(extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true))));
+        String handle = fileRequest(requesterHandler);
+        assertEquals("AWAITING_OWNER", requestOf(handle).state().name());
+        finishArguments.put("expectedRevision", replayedStore().headSequence());
+
+        String finished = toolCall(ownerHandler, "finish_lane", finishArguments);
+
+        var settled = requestOf(handle);
+        assertEquals("SUPERSEDED", settled.state().name(), finished);
+        assertEquals(RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER, settled.reason(), finished);
+        String requesterNext = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertFalse("owner_response_pending".equals(extractResponseReason(requesterNext)), requesterNext);
+    }
 }

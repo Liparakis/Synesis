@@ -103,7 +103,7 @@ final class LaneCompletionProjection {
     }
 
     /** Projects publication only after the owner explicitly declares its implementation complete. */
-    private static AgentResponse capabilityPublicationAction(TaskSnapshotService snapshotService, PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
+    static AgentResponse capabilityPublicationAction(TaskSnapshotService snapshotService, PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
         if (lane.worktree() == null) {
             return null;
         }

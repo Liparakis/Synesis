@@ -518,10 +518,17 @@ public final class CapabilityRequestProjection {
         if (!current.authorityLineageIdentity().equals(payload.authorityLineageIdentity())) {
             throw new CoordinationException("CAPABILITY_LINEAGE_MISMATCH");
         }
-        if (!current.state().acceptsImplementation()) {
-            throw new CoordinationException("CAPABILITY_REQUEST_NOT_ACCEPTED");
-        }
         ImplementationRevision latest = latestRevision.get(handleKey);
+        if (!current.state().acceptsImplementation()) {
+            // An owner that revised its files publishes again to a request it had already published
+            // to, and the requester validates the new commit (ADR-0089). The same commit again would
+            // only discard a validation, so it is refused.
+            ImplementationRevisionRecord published = latest == null ? null : implementations.get(new ImplementationRevisionKey(handleKey, latest));
+            if (!current.state().hasAcceptedContract() || published == null || published.commitSha().equals(payload.commitSha())) {
+                throw new CoordinationException("CAPABILITY_REQUEST_NOT_ACCEPTED");
+            }
+            validationContexts.remove(handleKey);
+        }
         int expectedRevision = latest == null ? 1 : latest.value() + 1;
         if (payload.revisionNumber() != expectedRevision) {
             throw new CoordinationException("CAPABILITY_IMPLEMENTATION_REVISION_STALE");

@@ -3,6 +3,10 @@ package org.synesis.coordination.application;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.List;
+import java.util.UUID;
+import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
+import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
@@ -88,8 +92,37 @@ final class LaneCompletionService {
                 signer.nodeId(),
                 CollaborationCodec.encodeRelease(intent.intentId()),
                 signer);
+        supersedeRequestsNeverAnswered(current, intent);
         closeSettledWorkGroup(current, intent.group());
         return true;
+    }
+
+    /**
+     * Supersedes the capability requests addressed to a lane that is released with them never
+     * answered (ADR-0089).
+     *
+     * <p>A request can be filed until the moment its owner's lane is released, and one filed after
+     * a fast owner had asked to finish stayed awaiting an owner that no longer existed; its
+     * requester waited for good. Done here, under the lock that releases the lane, no request can
+     * arrive in between. The requester is told the owner finished and builds against the
+     * integrated work.</p>
+     */
+    private void supersedeRequestsNeverAnswered(PredictionEventStore current, WorkIntent owner) throws IOException, GeneralSecurityException {
+        for (CapabilityRequestRecord request : List.copyOf(current.capabilityRequestProjection().records().values())) {
+            if (request.state() != CapabilityLifecycleState.AWAITING_OWNER || !request.authorityLineageId().equals(owner.authorityLineageId())) {
+                continue;
+            }
+            CapabilityRequestPayload superseded = new CapabilityRequestPayload(request.handle(),
+                    request.capability(),
+                    request.requesterNodeId(),
+                    request.ownerNodeId(),
+                    request.authorityLineageId(),
+                    request.contract(),
+                    CapabilityLifecycleState.SUPERSEDED,
+                    CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER,
+                    request.contractRevision());
+            current.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED, signer.nodeId(), superseded.encode(), signer);
+        }
     }
 
     /**

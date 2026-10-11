@@ -597,6 +597,12 @@ public final class AgentNextActionService {
             if (owedReply != null) {
                 return owedReply;
             }
+            // A request still waiting for this owner's implementation outranks the verdict of
+            // another requester: the owner was shown that wait while the rest waited for it.
+            AgentResponse owedPublication = LaneCompletionProjection.capabilityPublicationAction(snapshotService, store, lane, actor);
+            if (owedPublication != null) {
+                return owedPublication;
+            }
             AgentResponse awaitedVerdict = LaneCompletionProjection.awaitedVerdict(store, lane, actor);
             if (awaitedVerdict != null) {
                 return awaitedVerdict;
@@ -633,6 +639,13 @@ public final class AgentNextActionService {
         }
 
         AgentResponse continuation = RecoveryContinuationProjection.continuationAction(lane.participantId(), collaboration);
+        if (callerIntent.isEmpty() && continuation != null) {
+            // A caller that holds no lane has nothing of its own for a project-wide wait to keep
+            // reachable, and a continuation is its only way to a lane. A resumed implementer whose
+            // snapshot awaited review was shown that wait instead, never took its lane back, and
+            // so never admitted the reviewer the wait was for.
+            return continuation;
+        }
         AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, integrationPump, continuation);
         if (integrationOrContinuation != null) {
             return integrationOrContinuation;
