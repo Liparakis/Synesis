@@ -331,7 +331,8 @@ final class McpCoordinationTools {
 
     private static AgentResponse refusedPayload(McpCoordinationPayload.RefusedPayloadException failure) {
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP,
-                object("error", failure.getMessage(), failure.acceptedName(), failure.accepted()));
+                failure.detail() == null ? object("error", failure.getMessage(), failure.acceptedName(), failure.accepted())
+                        : object("error", failure.getMessage(), "detail", failure.detail(), failure.acceptedName(), failure.accepted()));
     }
 
     /**

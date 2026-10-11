@@ -186,6 +186,15 @@ class McpToolMalformedArgumentsTest {
         Map<String, Object> contract = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'capability_request','payload':{'capability':'c','contract':{'purpose':'p'}}}")).get("result");
         assertEquals("CAPABILITY_CONTRACT_INVALID", contract.get("error"), contract.toString());
         assertEquals(11, ((List<String>) contract.get("contractFields")).size(), contract.toString());
+        assertTrue(String.valueOf(contract.get("detail")).contains("contract lacks"), contract.toString());
+        String complete = "'purpose':'p','inputs':'i','output':'o','errorSemantics':'e','sideEffects':'s','invariants':'v','compatibility':'c','performance':'f','concurrency':'n'";
+        Map<String, Object> wrongType = (Map<String, Object>) innerResponse(call(bound, "request_coordination",
+                "{'kind':'capability_request','payload':{'capability':'c','contract':{" + complete + ",'requiredBehavior':5,'acceptanceTests':['t']}}}")).get("result");
+        assertEquals("requiredBehavior must be an array of strings", wrongType.get("detail"), wrongType.toString());
+        // One sentence where a list is expected is read as a list of one, so this contract is not refused for its shape.
+        Map<String, Object> sentence = innerResponse(call(bound, "request_coordination",
+                "{'kind':'capability_request','payload':{'capability':'c','contract':{" + complete + ",'requiredBehavior':'does it','acceptanceTests':'passes'}}}"));
+        assertFalse(String.valueOf(sentence).contains("CAPABILITY_CONTRACT_INVALID"), sentence.toString());
         Map<String, Object> status = (Map<String, Object>) innerResponse(call(bound, "respond_coordination",
                 "{'kind':'coordination_response','payload':{'coordinationRequest':'00000000-0000-0000-0000-000000000001','coordinationStatus':'maybe'}}")).get("result");
         assertEquals("COORDINATION_FIELD_INVALID:coordinationStatus", status.get("error"), status.toString());

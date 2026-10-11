@@ -128,7 +128,7 @@ final class McpCoordinationPayload {
             case "capability_request" -> {
                 CapabilityContract contract = parseContract(payload.get("contract"));
                 if (contract == null) {
-                    throw new RefusedPayloadException("CAPABILITY_CONTRACT_INVALID", "contractFields", CONTRACT_FIELDS);
+                    throw new RefusedPayloadException("CAPABILITY_CONTRACT_INVALID", "contractFields", CONTRACT_FIELDS, contractDefect(payload.get("contract")));
                 }
                 yield new McpCoordinationRequest.DescribeCapability(String.valueOf(payload.get("capability")),
                         contract,
@@ -457,6 +457,43 @@ final class McpCoordinationPayload {
         }
     }
 
+    /** Reads one sentence where a list is expected as a list of one: a model writes either. */
+    private static Object textAsList(Object value) {
+        return value instanceof String text ? List.of(text) : value;
+    }
+
+    /**
+     * Says what is wrong with a contract that {@link #parseContract} refused. An agent told only
+     * the field names sent nine contracts in a row with two of them as strings.
+     *
+     * @param contractObj the refused contract value
+     * @return the first defect found
+     */
+    static String contractDefect(Object contractObj) {
+        if (!(contractObj instanceof Map<?, ?> map)) {
+            return "contract must be an object";
+        }
+        List<String> missing = CONTRACT_FIELDS.stream().filter(field -> !map.containsKey(field)).toList();
+        if (!missing.isEmpty()) {
+            return "contract lacks " + missing;
+        }
+        List<String> unknown = map.keySet().stream().map(String::valueOf).filter(field -> !CONTRACT_FIELDS.contains(field)).toList();
+        if (!unknown.isEmpty()) {
+            return "contract has fields it does not take: " + unknown;
+        }
+        for (String field : CONTRACT_FIELDS) {
+            Object value = map.get(field);
+            boolean list = "requiredBehavior".equals(field) || "acceptanceTests".equals(field);
+            if (list && !(value instanceof String) && !(value instanceof List<?> items && items.stream().allMatch(String.class::isInstance))) {
+                return field + " must be an array of strings";
+            }
+            if (!list && !(value instanceof String)) {
+                return field + " must be a string";
+            }
+        }
+        return "a contract field is blank or too long";
+    }
+
     /**
      * Decodes a capability contract from the JSON-compatible contract object.
      *
@@ -483,14 +520,14 @@ final class McpCoordinationPayload {
                 || !(rawErrorSemantics instanceof String errorSemantics) || !(rawSideEffects instanceof String sideEffects)
                 || !(rawInvariants instanceof String invariants) || !(rawCompatibility instanceof String compatibility)
                 || !(rawPerformance instanceof String performance) || !(rawConcurrency instanceof String concurrency)
-                || !(map.get("requiredBehavior") instanceof List<?>) || !(map.get("acceptanceTests") instanceof List<?>)) {
+                || !(textAsList(map.get("requiredBehavior")) instanceof List<?> rawBehavior) || !(textAsList(map.get("acceptanceTests")) instanceof List<?> rawTests)) {
             return null;
         }
         List<String> requiredBehavior;
         List<String> acceptanceTests;
         try {
-            requiredBehavior = Objects.requireNonNullElse(nullableStringList(map.get("requiredBehavior"), "requiredBehavior"), List.of());
-            acceptanceTests = Objects.requireNonNullElse(nullableStringList(map.get("acceptanceTests"), "acceptanceTests"), List.of());
+            requiredBehavior = Objects.requireNonNullElse(nullableStringList(rawBehavior, "requiredBehavior"), List.of());
+            acceptanceTests = Objects.requireNonNullElse(nullableStringList(rawTests, "acceptanceTests"), List.of());
         } catch (IllegalArgumentException invalid) {
             return null;
         }
@@ -522,11 +559,22 @@ final class McpCoordinationPayload {
 
         private final transient String acceptedName;
         private final transient List<String> accepted;
+        private final transient String detail;
 
         RefusedPayloadException(String code, String acceptedName, List<String> accepted) {
+            this(code, acceptedName, accepted, null);
+        }
+
+        RefusedPayloadException(String code, String acceptedName, List<String> accepted, String detail) {
             super(code);
             this.acceptedName = acceptedName;
             this.accepted = List.copyOf(accepted);
+            this.detail = detail;
+        }
+
+        /** What exactly was wrong, when the code alone does not say; otherwise {@code null}. */
+        String detail() {
+            return detail;
         }
 
         /** Result key under which the accepted values are reported, such as {@code allowedFields}. */
