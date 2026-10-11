@@ -17,6 +17,12 @@ import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
  */
 public final class ControllerConnections implements AgentRunController.Connections {
 
+    /**
+     * How often an end is offered to the lease store. Each attempt waits two seconds for the
+     * project lock, which a session being admitted or a snapshot being taken can hold for longer.
+     */
+    private static final int END_RECORD_ATTEMPTS = 15;
+
     private final Path projectRoot;
     private final SessionLeaseService leases;
 
@@ -43,6 +49,13 @@ public final class ControllerConnections implements AgentRunController.Connectio
     public void ended(String connectionInstanceId) {
         // A process that never reached Synesis, or a provider that did not pass the identity on,
         // left no lease under this name; there is then nothing to close.
-        leases.markClosedCleanly(projectRoot, Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"));
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        // An end that is not recorded leaves the lane looking held by a live session until the
+        // abrupt-loss grace period passes, and the agent resumed to continue it is offered nothing.
+        for (int attempt = 0; attempt < END_RECORD_ATTEMPTS; attempt++) {
+            if (leases.markClosedCleanly(projectRoot, connectionInstanceId)) {
+                return;
+            }
+        }
     }
 }

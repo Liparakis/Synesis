@@ -6,9 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import org.synesis.coordination.persistence.ProjectAppendLock;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
@@ -48,6 +51,33 @@ final class ControllerConnectionsTest {
         assertEquals(SessionLeaseState.CLOSED_CLEANLY, store.load(project, killed).orElseThrow().leaseState(),
                 "a lease whose server was killed with its provider is closed like one that reached end of input");
         assertEquals(SessionLeaseState.ACTIVE, store.load(project, stillRunning).orElseThrow().leaseState());
+    }
+
+    @Test
+    void endIsRecordedAlthoughTheProjectLockWasHeldPastOneWait(@TempDir Path temp) throws Exception {
+        Path project = Files.createDirectories(temp.resolve("project"));
+        new ProjectApplicationService().init(project);
+        SessionLeaseStore store = new SessionLeaseStore();
+        ControllerConnections connections = new ControllerConnections(project, new SessionLeaseService());
+        String ended = connections.open();
+        store.save(project, activeLease(ended));
+
+        CountDownLatch held = new CountDownLatch(1);
+        Thread holder = Thread.ofPlatform().start(() -> {
+            try (ProjectAppendLock _ = ProjectAppendLock.acquire(project.resolve(".synesis").resolve("coordination"))) {
+                held.countDown();
+                // Longer than the two seconds one attempt waits for the lock.
+                Thread.sleep(3_000L);
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+        });
+        held.await();
+        connections.ended(ended);
+        holder.join();
+
+        assertEquals(SessionLeaseState.CLOSED_CLEANLY, store.load(project, ended).orElseThrow().leaseState(),
+                "an end met by a busy project lock must still be recorded");
     }
 
     @Test

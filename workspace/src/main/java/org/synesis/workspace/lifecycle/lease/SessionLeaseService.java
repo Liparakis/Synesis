@@ -149,28 +149,33 @@ public final class SessionLeaseService {
      *
      * @param controlRoot          control project root path
      * @param connectionInstanceId connection instance ID
+     * @return {@code false} when the project lock or the lease store was unavailable and the closure
+     *         is therefore not recorded; {@code true} when it is recorded or there was nothing to
+     *         record
      */
-    public void markClosedCleanly(Path controlRoot, String connectionInstanceId) {
+    public boolean markClosedCleanly(Path controlRoot, String connectionInstanceId) {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
 
         try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(coordinationRoot(controlRoot))) {
             if (!appendLock.isHeld()) {
-                return;
+                return false;
             }
             Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
             if (existing.isEmpty()) {
-                return;
+                return true;
             }
             SessionLeaseRecord previous = existing.get();
             if (previous.leaseState() == SessionLeaseState.CLOSED_CLEANLY || previous.leaseState() == SessionLeaseState.TERMINAL_DISCONNECTED) {
-                return;
+                return true;
             }
 
             SessionLeaseState targetState = SessionLeaseState.CLOSED_CLEANLY;
             store.save(controlRoot, copyWithState(previous, targetState, true));
+            return true;
         } catch (IOException ignored) {
             // A failed finalization remains available for durable reconciliation.
+            return false;
         }
     }
 
