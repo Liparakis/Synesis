@@ -683,8 +683,12 @@ public final class AgentNextActionService {
      */
     private static AgentResponse claimRequiredResponse(Map<String, Object> collaboration) {
         Map<String, Object> claimRequired = new LinkedHashMap<>(collaboration);
-        claimRequired.put("claimsRequired", true);
+        claimRequired.put(NextActionKeys.CLAIMS_REQUIRED, true);
         claimRequired.put(NextActionKeys.REASON, AgentReason.COORDINATION_INTENT_REQUIRED.value());
+        // An agent told only to call ensure_session called it without a task until its polls ran
+        // out, and left without reading the goal.
+        claimRequired.put("instruction", "This session holds no lane. Read the project goal with read_file, choose a part that no listed participant claims, and announce it by calling "
+                + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing.");
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, claimRequired);
     }
 

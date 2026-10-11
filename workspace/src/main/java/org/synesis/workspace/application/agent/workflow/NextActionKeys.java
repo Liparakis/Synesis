@@ -348,6 +348,11 @@ final class NextActionKeys {
     static final String NOTHING_TO_PUBLISH = "nothingToPublish";
 
     /**
+     * Whether the calling session holds no lane and has to announce one before it can act.
+     */
+    static final String CLAIMS_REQUIRED = "claimsRequired";
+
+    /**
      * Not instantiable.
      */
     private NextActionKeys() {

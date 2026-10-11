@@ -138,7 +138,9 @@ public final class AgentWorkflowReducer {
             return new LaneAction(LANE_IMPLEMENT, List.of(), List.of(NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_APPLY_PATCH, NextActionProtocol.TOOL_RUN_COMMAND), true);
         }
         return switch (next) {
-            case ENSURE_SESSION -> new LaneAction(LANE_RECOVER, List.of(reasonCode(reason)), List.of(NextActionProtocol.TOOL_ENSURE_SESSION), true);
+            case ENSURE_SESSION -> new LaneAction(LANE_RECOVER, List.of(reasonCode(reason)), claimsRequired(result)
+                    ? List.of(NextActionProtocol.TOOL_ENSURE_SESSION, NextActionProtocol.TOOL_READ_FILE, NextActionProtocol.TOOL_GET_NEXT_ACTION)
+                    : List.of(NextActionProtocol.TOOL_ENSURE_SESSION), true);
             case REQUEST_COORDINATION, REVISE_CAPABILITY_REQUEST -> {
                 if (reason == AgentReason.CONTINUATION_AVAILABLE) {
                     yield new LaneAction(LANE_RECOVER, List.of(reasonCode(reason)), List.of(NextActionProtocol.ACTION_REQUEST_COORDINATION, NextActionProtocol.TOOL_GET_NEXT_ACTION), true);
@@ -241,7 +243,10 @@ public final class AgentWorkflowReducer {
                 return null;
             }
             case ENSURE_SESSION -> {
-                return Map.of(NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION, NextActionKeys.ARGUMENTS, Map.of());
+                // The task a session without a lane announces is its own to choose; empty
+                // arguments here were taken as the exact call to make.
+                return claimsRequired(result) ? Map.of(NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION)
+                        : Map.of(NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION, NextActionKeys.ARGUMENTS, Map.of());
             }
             case RETRY -> {
                 Map<String, Object> arguments = NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_STALE.equals(result.get(NextActionKeys.REASON)) ? Map.of(NextActionKeys.COMPLETION_REQUESTED, true) : Map.of();
@@ -281,6 +286,10 @@ public final class AgentWorkflowReducer {
         return "";
     }
 
+    private static boolean claimsRequired(Map<String, Object> result) {
+        return Boolean.TRUE.equals(result.get(NextActionKeys.CLAIMS_REQUIRED));
+    }
+
     private static String reasonCode(AgentReason reason) {
         return reason == null ? "none" : reason.value();
     }
@@ -312,7 +321,8 @@ public final class AgentWorkflowReducer {
         if (result.get(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE) != null) {
             workflow.put(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE, result.get(LaneCompletionProjection.REQUESTER_ANSWER_DEADLINE));
         }
-        Map<?, ?> laneContext = firstIntent(result);
+        // A session without a lane has no lane context; the first listed intent is someone else's.
+        Map<?, ?> laneContext = claimsRequired(result) ? Map.of() : firstIntent(result);
         if (laneContext.get(NextActionKeys.WORK_GROUP_ID) != null) {
             workflow.put(NextActionKeys.WORK_GROUP_ID, laneContext.get(NextActionKeys.WORK_GROUP_ID));
         }
@@ -329,7 +339,9 @@ public final class AgentWorkflowReducer {
         Map<String, Object> executable = executableAction(response, result);
         if (executable != null) {
             workflow.put("recommendedTool", executable.get(NextActionKeys.TOOL));
-            workflow.put(NextActionKeys.ARGUMENTS, executable.get(NextActionKeys.ARGUMENTS));
+            if (executable.get(NextActionKeys.ARGUMENTS) != null) {
+                workflow.put(NextActionKeys.ARGUMENTS, executable.get(NextActionKeys.ARGUMENTS));
+            }
         }
         if (result.get(NextActionKeys.REVIEW_DECISION) instanceof Map<?, ?> decision) {
             workflow.put("decision", decision);

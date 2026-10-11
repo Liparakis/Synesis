@@ -703,6 +703,36 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
+     * A session that holds no lane while others work is told how to get one. Before, the answer
+     * permitted only {@code ensure_session}, recommended it with empty arguments, and named another
+     * participant's lane; an agent repeated the empty call until its polls ran out.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void sessionWithoutALaneIsToldToAnnounceOneWhileOthersWork() throws Exception {
+        AgentSessionService lateSessions = new AgentSessionService();
+        lateSessions.ensureSession(new SessionResolutionRequest(projectRoot, "claude", "inst-late-3", null, false));
+        var bindingService = new ProviderSessionBindingService();
+        var projectLocation = new ProjectApplicationService().locate(projectRoot);
+        var lateBinding = bindingService.find(projectLocation, "claude", "inst-late-3").orElseThrow();
+        bindingService.verifyWorkspaceTrust(projectLocation, "claude", lateBinding.sessionId(), Path.of(lateBinding.worktreePath()));
+        McpProtocolHandler lateHandler = new McpProtocolHandler(lateSessions, projectRoot, "claude", "inst-late-3");
+        lateHandler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + projectRoot.toUri().toString().replace("\\", "/") + "\"}}");
+        toolCall(lateHandler, "ensure_session", Map.of());
+
+        String next = toolCall(lateHandler, "get_next_action", Map.of());
+
+        assertEquals("coordination_intent_required", extractResponseReason(next), next);
+        Map<String, Object> result = extractInnerResult(next);
+        assertTrue(String.valueOf(result.get("instruction")).contains("ensure_session with a task"), next);
+        Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
+        assertTrue(((List<String>) workflow.get("permittedOperations")).containsAll(List.of("ensure_session", "read_file")), next);
+        assertFalse(workflow.containsKey("arguments"), "the task is the caller's to choose: " + next);
+        assertFalse(workflow.containsKey("laneId"), "no other participant's lane is this session's context: " + next);
+        lateHandler.close();
+    }
+
+    /**
      * A session that holds no lane, in a project whose lanes are all finished, is told nothing is
      * open. Before, it was told to establish an intent, and a resumed agent whose own lane was done
      * went looking for work to announce.
