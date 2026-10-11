@@ -139,7 +139,21 @@ func restoreBundlePermissions(bundle string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	for _, relative := range []string{"bin/synesis", "bin/synesis-installer", "bin/synesis-mcp", "runtime/bin/java"} {
+	executables := []string{"bin/synesis", "bin/synesis-installer", "bin/synesis-mcp", "bin/synesis-folder-picker"}
+	// The runtime starts every child process through jspawnhelper and makes its TLS material
+	// with keytool. With java alone executable an installed Synesis could start nothing, Git
+	// included.
+	tools, err := os.ReadDir(filepath.Join(bundle, "runtime", "bin"))
+	if err != nil {
+		return err
+	}
+	for _, tool := range tools {
+		executables = append(executables, "runtime/bin/"+tool.Name())
+	}
+	if _, err := os.Stat(filepath.Join(bundle, "runtime", "lib", "jspawnhelper")); err == nil {
+		executables = append(executables, "runtime/lib/jspawnhelper")
+	}
+	for _, relative := range executables {
 		if err := os.Chmod(filepath.Join(bundle, relative), 0o755); err != nil {
 			return err
 		}
