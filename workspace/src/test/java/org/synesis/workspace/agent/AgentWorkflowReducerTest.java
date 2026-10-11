@@ -87,7 +87,7 @@ final class AgentWorkflowReducerTest {
         Map<?, ?> result = (Map<?, ?>) waiting.result();
         Map<?, ?> workflow = (Map<?, ?>) result.get("workflow");
         assertEquals(5000, workflow.get("retryAfterMs"));
-        assertEquals(3, workflow.get("maxUnchangedPolls"));
+        assertEquals(12, workflow.get("maxUnchangedPolls"), "a wait for a peer outlasts the time the peer takes to be resumed");
         assertEquals("get_next_action", workflow.get("recommendedTool"));
         assertEquals(Map.of(), workflow.get("arguments"));
     }
