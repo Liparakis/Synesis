@@ -218,10 +218,11 @@ final class AgentRunControllerTest {
     }
 
     @Test
-    void agentWhoseLastCallCameAfterTheWorkIsNotResumedForIt() throws Exception {
+    void agentThatCalledOnceMoreShortlyBeforeItStoppedIsStillResumedForThatWork() throws Exception {
         Script script = new Script();
-        // The same timing as the test of work recorded shortly before the process ended, but the
-        // log shows claude called again after it: there is nothing it has not seen.
+        // The log shows claude called again after the work, and it stopped all the same. A real
+        // implementer left twelve seconds after a poll that carried its reviewer's grant, and a
+        // last call taken as proof of having acted on the work left the reviewer waiting for good.
         script.lifetimes(3, 2);
         script.closedLaneProviders.add("codex");
         script.lastActivity.put("conn-1", 5L);
@@ -230,8 +231,8 @@ final class AgentRunControllerTest {
 
         AgentRunController.Result result = script.run(8);
 
-        assertEquals(0, result.resumes());
-        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(1, result.resumes());
     }
 
     @Test

@@ -512,11 +512,13 @@ public final class AgentRunController {
         }
 
         /**
-         * Records that the process ended, and how far the agent had seen the log. Its last call
-         * to Synesis is recorded in the log and settles that exactly: an agent can take a minute to
-         * write its closing message, and work recorded in that time was taken as seen. An agent
-         * that never held a lane left no such record, and is taken to have seen the log as it stood
-         * shortly before the process ended. Either way it has seen what was there when the process
+         * Records that the process ended, and how far the agent is taken to have acted on the log:
+         * the earlier of its last recorded call to Synesis and the log as it stood shortly before
+         * the process ended. The last call bounds it because an agent can take a minute to write
+         * its closing message, and work recorded in that time was taken as seen. The time before
+         * the end bounds it because an agent that has decided to stop still polls once more, and
+         * one left that way with its reviewer's grant in the answer. An agent that never held a
+         * lane left no recorded call. Either way it has seen what was there when the process
          * started.
          *
          * @param lastActivity   log head at the last recorded call of the agent, when it has one
@@ -526,7 +528,8 @@ public final class AgentRunController {
         private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit) {
             exitCode = process.exitCode();
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
-            stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? lastActivity.getAsLong() : seenBeforeExit.orElse(startedAtSequence));
+            long seen = seenBeforeExit.orElse(startedAtSequence);
+            stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
             process = null;
         }
 
