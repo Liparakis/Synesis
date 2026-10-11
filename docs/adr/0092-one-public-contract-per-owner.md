@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted on 2026-10-12 by the repository owner. Not yet built.
+Accepted on 2026-10-12 by the repository owner. Not yet built, and not to be
+built as written: an independent design review on the same day found the record
+incomplete. See "Review of 2026-10-12" at the end. The decision stands; the
+points listed there are settled in this record before step 2 starts.
 
 Step 2 of three, after ADR-0091 (operator requests) and before ADR-0093 (agent
 conversations). It removes kinds from the MCP tool catalog, which is a breaking
@@ -258,3 +261,95 @@ to agree a contract.
   `publish_capability_implementation` keeps its name.
 - Whether a consumer must bind before it may write code, or only before it may
   finish. Proposed: before it may finish, as today.
+
+## Review of 2026-10-12
+
+Four reviewers on four different models read this record and the code it
+replaces, independently and read-only, with one brief: find where the design
+as written gets stuck. Their findings agree to an unusual degree. Items 1 to 6
+and 9 below were each raised by at least three of the four, with different
+evidence pointing at the same gates.
+
+The record described the path on which every agent stays and agrees. It left
+open every path on which the other agent is gone, which is where this branch's
+real stalls came from.
+
+**To be decided by the repository owner**
+
+1. *A consumer that is gone holds the owner for ever.* "Integrated when every
+   binding is current and validated" has no exit when a bound consumer has
+   stopped for good or reached its resume limit. The bounded wait and the
+   supersede-at-release that exist today cover only the negotiation states this
+   record removes. Proposed: a binding of a lane that was cancelled or released
+   is void. For a lane still open whose agent does not return, either an
+   operator request is raised, or the binding stops counting after a stated
+   time.
+2. *A lane cannot give up one file.* Claims only grow, and release drops the
+   whole lane. The rules above about a released file describe something that
+   cannot happen, and they contradict each other: one contract per file, the
+   contract still covers the file, the file moves, the next claimant is the
+   editor. Proposed, replacing them: when the owner's lane ends its contracts
+   are frozen and stay readable; a lane that later claims the files starts a
+   new contract; bindings to the old one do not go stale.
+3. *The contradiction moves from the contract to validation.* A consumer whose
+   change request was declined may bind anyway and then fail the implementation
+   on the declined point. The owner cannot satisfy two validators: the original
+   stall, one consumer wide. Proposed: a validation failure must rest on the
+   text of the revision the consumer bound to. A declined point is not grounds.
+
+**To be settled in the record, no decision needed**
+
+4. *The exit "cancel your lane" is refused by a gate this record keeps.*
+   Cancelling is blocked while a request is accepted and not validated, and so
+   are finishing and sealing the session. Cancelling a consumer's lane must
+   withdraw its bindings in any state.
+5. *Validation is tied to the implementation commit, not to the contract
+   revision.* A revision that changes only text can be accepted with the old
+   verdict standing, or can never be validated, because publishing the same
+   commit again is refused. A contract revision returns every binding to
+   unvalidated and ends its validation workspace; a verdict names the contract
+   revision and the commit; the same commit may be published for a new
+   revision.
+6. *A change request or a binding that arrives while the owner finishes, or
+   after it is released, has no exit.* This is the race that stalled three real
+   runs, in a new shape. Under the release lock, open change requests on the
+   lane's contracts are declined with a fixed reason. A binding to a contract
+   whose owner has been integrated is satisfied by that integration and waits
+   for no validation.
+7. *"Enforced where events are validated and replayed" cannot be done as the
+   log is built.* Each projection validates alone, so the contract's cannot see
+   claims. Every local session signs with one node identity, so the lane named
+   in an event is its own assertion. An event rejected on replay makes the
+   whole project unreadable. The owner of a contract is an authority lineage; a
+   revision carries the lineage and its claim epoch; one projection holds
+   claims and contracts together; a revision found unauthorised on replay is
+   ignored, not fatal.
+8. *Nothing links a revision to the change requests it answers.* Without an
+   answer recorded for each change request, "unanswered" cannot be computed.
+   Each change request gets its own answer: accepted by revision R, or declined
+   with a reason. One not answered by a revision carries forward to the next.
+9. *The build order collides with the flow it replaces.* Bindings were to reuse
+   the request record and its gates while the old flow still ran, and agents
+   would have been offered two ways to agree a contract, which this record
+   forbids. The new flow gets its own records and event types behind one
+   project setting, the comparison runs use that setting, and their logs are
+   discarded.
+
+**Also raised, to be answered in the record**
+
+- Every recorded event resumes every stopped agent that holds a lane. N
+  consumers binding again is N events, each resuming the others, against a
+  resume limit. An agent should be resumed for the events that concern it.
+- A consumer that declared a dependency and never bound lets the owner
+  integrate with no bindings, and is then satisfied by integration without
+  having checked anything.
+- `task.knownDependencies` now names files, and three places compare it with
+  capability names. What a consumer's snapshot records, and what satisfies a
+  dependency, must be stated.
+- A binding is keyed by the consumer's lineage and the contract, and a
+  consumer's successor inherits its bindings and change requests.
+- The gate that blocks every lane's finish while any validation workspace
+  exists in the project is held far longer once every revision is validated
+  again. It should be scoped to the lane.
+- "Ask for an operator" is named as an exit for a declined consumer. It does
+  not exist until step 3 and changes only the run's result then.
