@@ -190,6 +190,55 @@ final class McpRecoveryContinuationTest {
     }
 
     @Test
+    void successorHoldsTheContinuedLaneWhenItNamesOrExtendsIt(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("continuation-extend-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+
+        AgentSessionService sessions = new AgentSessionService();
+        ensureAndTrust(sessions, location, project, "extend-owner");
+        ensureAndTrust(sessions, location, project, "extend-successor");
+        var ownerBinding = new ProviderSessionBindingService().find(location, "codex", "extend-owner").orElseThrow();
+        List<ResourceSelector> held = List.of(ResourceSelector.pathExact("src/partial.txt"));
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var claim = collaboration.announce(project, "codex", "extend-owner", "Implement the durable feature", "Publish and validate the feature", held);
+        RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location, ownerBinding.sessionId());
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var intentService = new org.synesis.coordination.application.WorkIntentService(store(project), identity);
+        intentService.suspend(claim.intent().participant());
+        intentService.holdRecovery(claim.intent().participant(), snapshot.root().toString() + "#" + snapshot.contentHash());
+
+        McpProtocolHandler successor = new McpProtocolHandler(sessions, project, "codex", "extend-successor");
+        Map<String, Object> discovered = continuationArguments(successor.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> continued = (Map<String, Object>) innerResult(successor.handleMessage(toolCall("request_coordination", ProviderJson.write(discovered)))).get("result");
+        assertEquals("CONTINUED", continued.get("status"), continued.toString());
+        WorkIntent continuedIntent = store(project).collaborationProjection().activeIntents().stream()
+                .filter(intent -> !intent.participant().equals(claim.intent().participant())).findFirst().orElseThrow();
+
+        // The continued lane does not carry the identifier derived from the successor's session,
+        // so the session has to be recognized as its holder by participant.
+        var named = collaboration.announce(project, "codex", "extend-successor", null, null, held);
+        assertTrue(named.acquired());
+        assertEquals(continuedIntent.intentId(), named.intent().intentId());
+
+        List<ResourceSelector> wider = List.of(ResourceSelector.pathExact("src/partial.txt"), ResourceSelector.pathExact("src/more.txt"));
+        var refused = org.junit.jupiter.api.Assertions.assertThrows(WorkspaceCollaborationService.ScopeExtensionRequiredException.class,
+                () -> collaboration.announce(project, "codex", "extend-successor", null, null, wider));
+        assertEquals(continuedIntent.intentId(), refused.currentIntent().intentId());
+        var stale = org.junit.jupiter.api.Assertions.assertThrows(WorkspaceCollaborationService.ScopeExtensionRequiredException.class,
+                () -> collaboration.announce(project, "codex", "extend-successor", null, null, wider, null, null, null, null,
+                        continuedIntent.intentId(), continuedIntent.version() - 1));
+        assertEquals(continuedIntent.version(), stale.currentIntent().version());
+
+        var extended = collaboration.announce(project, "codex", "extend-successor", null, null, wider, null, null, null, null,
+                continuedIntent.intentId(), continuedIntent.version());
+        assertTrue(extended.acquired(), extended.toString());
+        assertEquals(continuedIntent.intentId(), extended.intent().intentId());
+        assertTrue(extended.intent().selectors().containsAll(wider));
+    }
+
+    @Test
     void reviewerSuccessorConsumesMigratedProducerGrantThroughProjectedMcpAction(@TempDir Path temp) throws Exception {
         Path project = initializedProject(temp.resolve("reviewer-continuation-project"));
         ProjectLocation location = new ProjectApplicationService().locate(project);

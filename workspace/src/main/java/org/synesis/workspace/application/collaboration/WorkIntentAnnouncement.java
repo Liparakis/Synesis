@@ -95,14 +95,14 @@ final class WorkIntentAnnouncement {
         WorkIntentService service = new WorkIntentService(store, identity);
         UUID taskId = LaneIdentities.connectionUuid(connectionInstanceId);
         UUID intentId = LaneIdentities.sessionIntentId(provider, binding.sessionId());
-        WorkIntent existingIntent = store.collaborationProjection().intent(intentId).orElse(null);
+        // A session that took its lane over by continuation holds an intent with the identifier the
+        // continuation gave it, not the one derived from the session. Looked up only by the derived
+        // identifier, that session appeared to hold no lane: it could not extend its scope, and
+        // naming its own lane again was refused as an unknown intent with a call for human help.
+        WorkIntent existingIntent = store.collaborationProjection().intent(intentId)
+                .or(() -> store.collaborationProjection().activeIntents().stream().filter(candidate -> candidate.participant().equals(participant)).findFirst())
+                .orElse(null);
         if (existingIntent != null) {
-            if (expectedIntentId != null && !expectedIntentId.equals(existingIntent.intentId())) {
-                throw new IOException("SCOPE_EXTENSION_INTENT_MISMATCH");
-            }
-            if ((expectedIntentId == null) != (expectedClaimEpoch == null)) {
-                throw new IOException("SCOPE_EXTENSION_PRECONDITION_REQUIRED");
-            }
             boolean hasScopeChange = selectors.stream().anyMatch(selector -> !existingIntent.selectors().contains(selector))
                     || knownDependencies != null && knownDependencies.stream()
                             .anyMatch(dependency -> !existingIntent.knownDependencies().contains(dependency))
@@ -118,15 +118,21 @@ final class WorkIntentAnnouncement {
                     && !reviewTargetSelectors.equals(existingIntent.reviewTargetSelectors())) {
                 throw new IOException("SCOPE_EXTENSION_REVIEW_TARGET_CHANGE_REQUIRES_LIFECYCLE");
             }
-            if (hasScopeChange && expectedIntentId == null) {
-                throw new ScopeExtensionRequiredException(existingIntent);
+            if (!hasScopeChange) {
+                // Naming the lane the session already holds changes nothing, whatever identifier or
+                // epoch it quotes.
+                return new ClaimResult(true, existingIntent, List.of());
             }
-            if (expectedClaimEpoch != null && expectedClaimEpoch.longValue() != existingIntent.version()) {
-                throw new IOException("CLAIM_EPOCH_STALE");
+            // A change has to quote the lane's exact identifier and epoch. A caller that quotes
+            // neither, only one, or a stale pair is answered with the pair to use: it holds the
+            // lane, and an unexplained refusal sent agents looking for human help.
+            if (expectedIntentId == null || expectedClaimEpoch == null || !expectedIntentId.equals(existingIntent.intentId())
+                    || expectedClaimEpoch.longValue() != existingIntent.version()) {
+                throw new ScopeExtensionRequiredException(existingIntent);
             }
             return service.extendScope(existingIntent.identity(),
                     new ParticipantId(participant),
-                    new ClaimEpoch(expectedClaimEpoch == null ? existingIntent.version() : expectedClaimEpoch),
+                    new ClaimEpoch(expectedClaimEpoch),
                     selectors,
                     goal,
                     acceptance,
