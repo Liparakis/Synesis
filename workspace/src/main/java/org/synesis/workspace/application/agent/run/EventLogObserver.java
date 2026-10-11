@@ -43,6 +43,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         }
 
         @Override
+        public boolean workFinished() {
+            return false;
+        }
+
+        @Override
         public boolean hasOpenLane(String provider) {
             return false;
         }
@@ -125,6 +130,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public boolean complete() {
                 return complete;
+            }
+
+            @Override
+            public boolean workFinished() {
+                return groups.stream().anyMatch(group -> group.status() == WorkGroup.Status.COMPLETED);
             }
 
             @Override

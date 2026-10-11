@@ -85,7 +85,8 @@ run while one is still pending.
 
 The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when no lane is open and
 every work group that ever had a lane is closed (a group created ahead of its
-lanes that never received one holds no work), `STALLED` when every agent has stopped and nothing
+lanes that never received one holds no work) and at least one group finished its work,
+`ALL_WORK_CANCELLED` when nothing is open because every lane was cancelled, `STALLED` when every agent has stopped and nothing
 has progressed since, `NO_WORK_ANNOUNCED`, `RESUME_LIMIT_REACHED`, or
 `TIMED_OUT`. Only `COMPLETED` exits with 0. Each provider must already be
 installed in the project. Provider commands keep the provider's own approval and

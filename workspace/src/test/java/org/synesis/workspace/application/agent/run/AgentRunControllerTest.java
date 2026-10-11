@@ -68,6 +68,18 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void runWhereEveryLaneWasCancelledIsNotReportedAsCompleted() throws Exception {
+        Script script = new Script();
+        script.lifetimes(1, 1);
+        script.at(0).head(3).announced();
+        script.at(1).head(6).allCancelled();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.ALL_WORK_CANCELLED, result.outcome(), "nothing was built, so the run did not complete");
+    }
+
+    @Test
     void stoppedOwnerIsResumedOnceWhenItsAnswerPeriodEndsEvenThoughNothingWasRecorded() throws Exception {
         Script script = new Script();
         // Both agents stop at tick 1 and the log never moves. claude owns a proposal whose answer
@@ -396,6 +408,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean workFinished() {
+                    return !state.allCancelled;
+                }
+
+                @Override
                 public boolean hasOpenLane(String provider) {
                     return !closedLaneProviders.contains(provider);
                 }
@@ -427,6 +444,14 @@ final class AgentRunControllerTest {
         private long progressAfter = -1;
         private boolean announced;
         private boolean complete;
+        private boolean allCancelled;
+
+        /** Nothing is left open because every lane was cancelled, not because any work was finished. */
+        private State allCancelled() {
+            complete = true;
+            allCancelled = true;
+            return this;
+        }
 
         private State head(long value) {
             head = value;

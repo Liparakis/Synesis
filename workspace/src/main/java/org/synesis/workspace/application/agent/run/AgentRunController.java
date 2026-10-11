@@ -175,10 +175,10 @@ public final class AgentRunController {
                 // With every agent stopped the run is over, unless a stopped owner is only waiting
                 // for its answer period to end: nothing in the log will announce that moment.
                 if (agents.stream().noneMatch(agent -> agent.process != null) && !awaitingDeadline) {
-                    return new Result(observation.complete() ? Outcome.COMPLETED : stalledOutcome(agents, observation, request.maxResumesPerAgent()), resumes(agents));
+                    return new Result(observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent()), resumes(agents));
                 }
                 if (clockMillis.getAsLong() >= deadline) {
-                    return new Result(observation.complete() ? Outcome.COMPLETED : Outcome.TIMED_OUT, resumes(agents));
+                    return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
                 }
                 pause.forMillis(request.pollInterval().toMillis());
             }
@@ -190,6 +190,11 @@ public final class AgentRunController {
                 }
             }
         }
+    }
+
+    /** With nothing left open, a run is complete only when some of its work was finished rather than all of it cancelled. */
+    private static Outcome closedOutcome(Observation observation) {
+        return observation.workFinished() ? Outcome.COMPLETED : Outcome.ALL_WORK_CANCELLED;
     }
 
     private static Outcome stalledOutcome(List<Agent> agents, Observation observation, int maxResumes) {
@@ -213,9 +218,15 @@ public final class AgentRunController {
      */
     public enum Outcome {
         /**
-         * Every work group is complete and no lane is open.
+         * No lane is open and at least one work group finished its work.
          */
         COMPLETED,
+        /**
+         * No lane is open and no work group finished any work: every lane was cancelled. Two
+         * agents that each gave up the same role ended a run this way with nothing built, and it
+         * was reported as completed.
+         */
+        ALL_WORK_CANCELLED,
         /**
          * Every agent has stopped and nothing has progressed since, so resuming any would change nothing.
          */
@@ -364,6 +375,13 @@ public final class AgentRunController {
          * @return {@code true} when nothing is left to do
          */
         boolean complete();
+
+        /**
+         * Reports whether any work group closed as completed rather than cancelled.
+         *
+         * @return {@code true} once some announced work was finished
+         */
+        boolean workFinished();
 
         /**
          * Reports whether a lane announced through this provider is still open.
