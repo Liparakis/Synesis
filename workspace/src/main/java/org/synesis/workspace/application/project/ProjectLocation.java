@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
@@ -25,8 +26,10 @@ import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
  * @param projectId        stable project identifier
  * @param createdAt        project creation time
  * @param validation       optional project-owned validation command
+ * @param review           review policy the project gives every work group announced in it; never {@code null}
  */
-public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation) {
+public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
+                              ReviewPolicy review) {
 
     /**
      * Constructs a project location without a project-owned validation command.
@@ -39,7 +42,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      * @param createdAt        creation timestamp
      */
     public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt) {
-        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, null);
+        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, null, ReviewPolicy.none());
     }
 
     /**
@@ -52,6 +55,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
         profile = Objects.requireNonNull(profile, "profile").toAbsolutePath().normalize();
         Objects.requireNonNull(projectId, "project ID");
         Objects.requireNonNull(createdAt, "created at");
+        review = review == null ? ReviewPolicy.none() : review;
     }
 
     /**

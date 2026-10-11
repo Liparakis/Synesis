@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.workspace.infrastructure.filesystem.AtomicFiles;
 import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -30,7 +31,8 @@ public final class ProjectMetadataCodec {
      */
     public static final int SCHEMA_VERSION = 2;
 
-    private static final Set<String> DOCUMENT_FIELDS = Set.of("schemaVersion", "projectId", "createdAt", "validation");
+    private static final Set<String> DOCUMENT_FIELDS = Set.of("schemaVersion", "projectId", "createdAt", "validation", "review");
+    private static final Set<String> REVIEW_FIELDS = Set.of("mandatory");
     private static final Set<String> VALIDATION_FIELDS = Set.of("argv", "workingDirectory", "timeoutSeconds");
 
     private ProjectMetadataCodec() {
@@ -64,7 +66,7 @@ public final class ProjectMetadataCodec {
             throw new IOException("validation must be an object when present");
         }
         ProjectCommandSpec validation = parseValidation(value.get("validation"));
-        return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt, validation);
+        return new ProjectLocation(root, synesis, metadata, synesis.resolve("local/profile"), projectId, createdAt, validation, parseReview(value));
     }
 
     /**
@@ -102,6 +104,21 @@ public final class ProjectMetadataCodec {
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    /**
+     * Reads the project's review policy: {@code "review": {"mandatory": true}} makes every work
+     * group announced in the project subject to mandatory independent review. Absent, or with
+     * {@code mandatory} false, work groups are created without a review policy, as before.
+     */
+    private static ReviewPolicy parseReview(Map<String, Object> document) throws IOException {
+        if (!document.containsKey("review")) {
+            return ReviewPolicy.none();
+        }
+        if (!(document.get("review") instanceof Map<?, ?> review) || !REVIEW_FIELDS.containsAll(review.keySet()) || !(review.get("mandatory") instanceof Boolean mandatory)) {
+            throw new IOException("review must be an object with a boolean mandatory");
+        }
+        return mandatory ? ReviewPolicy.mandatoryIndependent() : ReviewPolicy.none();
     }
 
     private static ProjectCommandSpec parseValidation(Object raw) throws IOException {

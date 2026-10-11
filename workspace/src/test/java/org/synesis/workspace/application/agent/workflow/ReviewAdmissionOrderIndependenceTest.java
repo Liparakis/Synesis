@@ -388,4 +388,27 @@ final class ReviewAdmissionOrderIndependenceTest {
             assertTrue(connection.startsWith(prefix), connection);
         }
     }
+
+    /**
+     * The work group an announcement creates takes the review policy the project states, and only then.
+     */
+    @Test
+    void announcementCreatesWorkGroupWithTheProjectReviewPolicy(@TempDir Path temp) throws Exception {
+        assertEquals(true, createdGroupMandatory(temp.resolve("mandatory"), true));
+        assertEquals(false, createdGroupMandatory(temp.resolve("unstated"), false));
+    }
+
+    private static boolean createdGroupMandatory(Path project, boolean statesReview) throws Exception {
+        initializeProject(project);
+        installProviders(project);
+        var location = new ProjectApplicationService().locate(project);
+        if (statesReview) {
+            Files.writeString(location.metadataFile(), "{\"schemaVersion\":2,\"projectId\":\"" + location.projectId() + "\",\"createdAt\":\"" + location.createdAt() + "\",\"review\":{\"mandatory\":true}}");
+        }
+        establishSessions(project, "policy");
+        ClaimResult producer = new WorkspaceCollaborationService().announce(project, "codex", "policy-producer", "Produce source", "Publish source snapshot",
+                List.of(ResourceSelector.pathExact("src/todo.py")), null, WorkIntent.Role.PRODUCER, List.of());
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        return store.workGroupProjection().group(producer.intent().workGroupId()).orElseThrow().reviewPolicy().mandatory();
+    }
 }

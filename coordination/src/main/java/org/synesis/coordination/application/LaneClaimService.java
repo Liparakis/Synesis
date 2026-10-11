@@ -10,6 +10,7 @@ import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.collaboration.WorkIntentScopeExtension;
@@ -59,8 +60,9 @@ final class LaneClaimService {
      * @throws IOException              when persistence or validation fails
      * @throws GeneralSecurityException when event signing fails
      */
-    ClaimResult announce(WorkIntent intent) throws IOException, GeneralSecurityException {
+    ClaimResult announce(WorkIntent intent, ReviewPolicy newGroupPolicy) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(intent, "intent");
+        CoordinationNullException.requireNonNull(newGroupPolicy, "newGroupPolicy");
         if (!store.projectId().equals(intent.projectId())) {
             throw new CoordinationArgumentException("intent project mismatch");
         }
@@ -82,7 +84,8 @@ final class LaneClaimService {
                         intent.goal(),
                         intent.acceptance(),
                         1,
-                        WorkGroup.Status.ACTIVE);
+                        WorkGroup.Status.ACTIVE,
+                        newGroupPolicy);
                 current.append(group.identity().value(),
                         PredictionEventType.WORK_GROUP_CREATED,
                         signer.nodeId(),

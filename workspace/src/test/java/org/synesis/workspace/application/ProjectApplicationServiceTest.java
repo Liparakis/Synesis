@@ -407,4 +407,25 @@ final class ProjectApplicationServiceTest {
         var failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class, () -> new ProjectApplicationService().locate(root));
         assertEquals("MALFORMED", failure.code());
     }
+
+    @Test
+    void readsProjectReviewPolicyAndRefusesMalformedOnes() throws Exception {
+        Path root = Files.createTempDirectory("synesis-review-metadata-");
+        ProjectApplicationService service = new ProjectApplicationService();
+        var initialized = service.init(root, false);
+        String head = "{\"schemaVersion\":2,\"projectId\":\"" + initialized.location().projectId() + "\",\"createdAt\":\"" + initialized.location().createdAt() + "\"";
+
+        Files.writeString(initialized.location().metadataFile(), head + "}");
+        assertFalse(service.locate(root).review().mandatory());
+        Files.writeString(initialized.location().metadataFile(), head + ",\"review\":{\"mandatory\":false}}");
+        assertFalse(service.locate(root).review().mandatory());
+        Files.writeString(initialized.location().metadataFile(), head + ",\"review\":{\"mandatory\":true}}");
+        assertTrue(service.locate(root).review().mandatory());
+
+        for (String malformed : List.of("true", "{\"mandatory\":\"yes\"}", "{\"mandatory\":true,\"extra\":1}", "{}", "null")) {
+            Files.writeString(initialized.location().metadataFile(), head + ",\"review\":" + malformed + "}");
+            var failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class, () -> service.locate(root), malformed);
+            assertEquals("MALFORMED", failure.code(), malformed);
+        }
+    }
 }

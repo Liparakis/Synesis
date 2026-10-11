@@ -155,7 +155,7 @@ final class WorkIntentAnnouncement {
                 role == null ? WorkIntent.Role.PRODUCER : role,
                 reviewTargetSelectors == null ? List.of() : reviewTargetSelectors,
                 knownDependencies == null ? List.of() : knownDependencies);
-        return service.announce(intent);
+        return service.announce(intent, location.review());
     }
 
     static UUID defaultWorkGroupId(UUID projectId) {

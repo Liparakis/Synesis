@@ -9,6 +9,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
@@ -86,7 +87,21 @@ public final class WorkIntentService {
      * @throws GeneralSecurityException when event signing fails
      */
     public ClaimResult announce(WorkIntent intent) throws IOException, GeneralSecurityException {
-        return laneClaims.announce(intent);
+        return laneClaims.announce(intent, ReviewPolicy.none());
+    }
+
+    /**
+     * Announces an intent, giving the work group the announcement creates the stated review policy.
+     * A group that already exists keeps its own.
+     *
+     * @param intent         intent declaration
+     * @param newGroupPolicy review policy of a work group this announcement creates
+     * @return acquisition result
+     * @throws IOException              when persistence or validation fails
+     * @throws GeneralSecurityException when event signing fails
+     */
+    public ClaimResult announce(WorkIntent intent, ReviewPolicy newGroupPolicy) throws IOException, GeneralSecurityException {
+        return laneClaims.announce(intent, newGroupPolicy);
     }
 
     /**
