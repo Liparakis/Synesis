@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -239,6 +240,30 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
     }
 
     /**
+     * Returns whether an active reviewer lane of the same work group is declared for exactly this
+     * producer lane, by the matching rule of automatic review admission (ADR-0046): an empty target
+     * means the only producer of the group, explicit targets the one producer they cover.
+     *
+     * <p>Such a declaration is a durable statement that the lane is to be reviewed. Counting only
+     * requests and grants left a window between a reviewer's announcement and its request: a
+     * producer that published in it was integrated unreviewed, and the reviewer that arrived a
+     * second later had nothing it could lawfully decide. A reviewer whose session is suspended or
+     * held for recovery does not count: it may never return, and its lane must not hold the
+     * producer's publication.</p>
+     */
+    private static boolean hasDeclaredReviewer(PredictionEventStore store, WorkIntent producer) {
+        List<WorkIntent> active = store.collaborationProjection().activeIntents();
+        return active.stream().filter(reviewer -> reviewer.role() == WorkIntent.Role.REVIEWER && reviewer.workGroupId().equals(producer.workGroupId()) && !reviewer.participant().equals(producer.participant()))
+                .filter(reviewer -> store.collaborationProjection().participantState(reviewer.participant()).filter(Participant.State.ACTIVE::equals).isPresent())
+                .anyMatch(reviewer -> {
+                    List<WorkIntent> candidates = active.stream().filter(candidate -> candidate.role() == WorkIntent.Role.PRODUCER && candidate.workGroupId().equals(reviewer.workGroupId()))
+                            .filter(candidate -> !candidate.participant().equals(reviewer.participant()))
+                            .filter(candidate -> reviewer.reviewTargetSelectors().isEmpty() || reviewTargetsMatch(reviewer, candidate)).toList();
+                    return candidates.size() == 1 && candidates.getFirst().intentId().equals(producer.intentId());
+                });
+    }
+
+    /**
      * Determines whether this exact lane revision is subject to review authority.
      */
     static boolean reviewRequired(PredictionEventStore store, WorkIntent intent, String participantHandle) {
@@ -258,7 +283,7 @@ static boolean allowsIndependentReview(PredictionEventStore store, LaneGrant gra
                 .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && requestAppliesToIntent(request.conflictingIntentId(), intent) && (
                         request.status() == CoordinationRequest.Status.PENDING
                                 || request.status() == CoordinationRequest.Status.ACCEPTED));
-        if (requested) {
+        if (requested || hasDeclaredReviewer(store, intent)) {
             return true;
         }
         return store.taskCompletionProjection().allSnapshots().stream()

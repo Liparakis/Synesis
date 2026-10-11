@@ -261,6 +261,10 @@ final class ReviewAdmissionOrderIndependenceTest {
                 List.of());
         assertTrue(producer.acquired());
 
+        var declared = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(AgentReviewActionProjection.reviewRequired(declared, producer.intent(), producer.intent().participant()),
+                "a producer with a declared reviewer is not integrated unreviewed, whether or not the reviewer has asked yet");
+
         AgentResponse admission = next.getNextAction(new NextActionRequest(project, "claude", "reviewer-before-producer-reviewer"));
         Map<String, Object> admissionResult = map(admission.result());
         Map<String, Object> workflow = map(admissionResult.get("workflow"));
