@@ -1,3 +1,74 @@
+# 2026-10-11 — Reviewer admission, project review policy, shared publication: the four remaining causes closed
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster17-20261011` to `remaster19`. Real runs as in
+the entry below, with Claude Code `claude-sonnet-5-5` medium (S) and Codex `gpt-6-luna` high (L). In
+the review runs marked "policy" the bootstrapper also set `"review": {"mandatory": true}` in
+`.synesis/project.json`, as it sets a validation command; it still assigned nothing and relayed
+nothing.
+
+Decisions made by the repository owner and recorded: ADR-0046 amended, ADR-0089 new.
+
+- A reviewer lane is admitted only when its work group has a producer lane to review. Otherwise the
+  announcement is refused with `REVIEWER_REQUIRES_PRODUCER`, nothing is recorded, and the session can
+  still announce the implementation. Six tests that admitted a reviewer first now assert the refusal
+  and then the same review direction.
+- A project can require review: every work group an announcement creates in a project with
+  `review.mandatory` gets the mandatory independent review policy. Persisted-format change under
+  ADR-0088.
+- A capability implementation is published to every request of the owner's lane with an accepted
+  contract. A request validated or published at an older commit receives the new revision and is
+  validated again. A request still waiting for its implementation outranks the owner's wait for
+  another requester's verdict.
+- Requests never answered are superseded where their owner's lane is released, under the same lock.
+  This was the cause of the three stalls left undiagnosed in the entry below: the request was filed
+  about a second before a fast owner finished.
+- A caller that holds no lane is offered the continuation of its lane ahead of any project-wide wait.
+  Found by the first policy run: the resumed implementer was shown "review pending" and never took
+  its lane back, so it never admitted the reviewer. No dedicated test.
+- A run in which every lane was cancelled ends `ALL_WORK_CANCELLED`, not `COMPLETED`.
+- A refused capability contract names the missing, unknown or wrongly typed field, and one sentence
+  where a list is expected is read as a list of one. An agent had sent nine contracts in a row with
+  two fields as strings and the run ended at the resume limit.
+
+| Goal | remaster17 | remaster18 | remaster20 |
+| --- | --- | --- | --- |
+| Negotiated, two agents (SS, LL, SL, LS) | 3 of 7 | 7 of 7 | 4 of 4 |
+| Cancel | 1 of 1 | 1 of 1 | 1 of 1 |
+| Three agents | 2 of 2 mixed | 2 of 2 mixed | 0 of 1, Luna only, not diagnosed |
+| Five agents, mixed | 2 of 2 | 1 of 2 | 2 of 2 |
+| Five agents, one provider | not run | not run | 0 of 2 |
+| Review with the policy (SL, LS, SS, LL) | 4 of 5 | 5 of 5 | 4 of 4 |
+| Review without the policy | 1 of 1 | 1 of 1, integrated unreviewed | not run |
+
+`remaster19` was run while the repository check used the machine: 5 of 11, and its stalls showed
+two more defects, both fixed in `remaster20`. A projected finish was refused as stale whenever
+another agent recorded anything but a heartbeat; an owner was refused twelve times in a row. And a
+lane continued by its resumed agent published a second snapshot while its first still waited on a
+dependency; the first was integrated, the second then conflicted with its own lane, and the work
+group stayed open with all work integrated. Only a lane's latest revision is now integrated.
+
+The four negotiated stalls and the review timeout on `remaster17` are the request-at-release and the
+continuation-behind-a-wait defects, fixed in `remaster18`. The five-agent run that failed on
+`remaster18` is the contract defect, fixed in `remaster19`. In two policy runs the agents' logs show
+both a `REJECTED` and an `ACCEPTED` review decision and one integrated snapshot, the corrected one.
+Without the policy a fast producer is still integrated before a reviewer arrives; the late reviewer
+is refused at admission and the run ends `COMPLETED` unreviewed. That is what the policy is for.
+
+Still open, in order of how often it fails a run:
+
+- A capability has no recorded owner. A requester names the lane it asks, and after an
+  `overlapping_claim` refusal agents reuse the lineage of the lane they collided with. Both
+  five-agent runs with one provider ended this way: the storage lane had already been integrated,
+  the requests for `task_store.api` went to a documentation lane, which accepted or never answered,
+  and the requesters waited on it. Letting a lane declare what it provides is a tool-schema change
+  and was not made.
+- A reviewer whose workspace went stale when the corrected snapshot was integrated is answered
+  `workspace_stale` with `ensure_session`, and the manual forbids rebinding a stale review lane. One
+  reviewer stopped there with the review complete and its own lane open.
+- A requester that validated and stopped is needed again when the owner revises for another
+  requester, and comes back only if the controller resumes it. Link between two machines,
+macOS, and Linux agents with real models remain NOT REACHED.
+
 # 2026-10-11 — Sonnet 5.5 medium with Luna 6 high: refusals that explain themselves, and what still stalls
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster12-20261011` to `remaster16`. Real runs in new
