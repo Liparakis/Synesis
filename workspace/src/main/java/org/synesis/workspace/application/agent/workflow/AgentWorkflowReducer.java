@@ -171,6 +171,10 @@ public final class AgentWorkflowReducer {
             case PUBLISH_CAPABILITY_IMPLEMENTATION -> new LaneAction(LANE_PUBLISH, List.of(reasonCode(reason)), List.of("publish_capability_implementation", NextActionProtocol.TOOL_GET_NEXT_ACTION), true);
             case FINISH_LANE -> new LaneAction(LANE_PUBLISH, List.of(reasonCode(reason)), List.of(NextActionProtocol.ACTION_FINISH_LANE, NextActionProtocol.TOOL_GET_NEXT_ACTION), true);
             case WAIT -> {
+                if (Boolean.TRUE.equals(result.get(NextActionKeys.REVIEWER_PENDING))) {
+                    // A reviewer with no producer to wait for may give its lane up and produce.
+                    yield new LaneAction("WAIT", List.of(reasonCode(reason)), List.of(NextActionProtocol.TOOL_GET_NEXT_ACTION, NextActionProtocol.TOOL_CANCEL_LANE), true);
+                }
                 boolean capabilityImplementation = reason == AgentReason.IMPLEMENTATION_UNAVAILABLE && result.containsKey(NextActionKeys.CAPABILITY_REQUEST_HANDLE);
                 yield new LaneAction(capabilityImplementation ? LANE_IMPLEMENT : "WAIT",
                         List.of(reasonCode(reason)),

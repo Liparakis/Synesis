@@ -353,6 +353,11 @@ final class NextActionKeys {
     static final String CLAIMS_REQUIRED = "claimsRequired";
 
     /**
+     * Whether a reviewer lane is waiting for a producer lane it can review.
+     */
+    static final String REVIEWER_PENDING = "reviewerPending";
+
+    /**
      * Not instantiable.
      */
     private NextActionKeys() {

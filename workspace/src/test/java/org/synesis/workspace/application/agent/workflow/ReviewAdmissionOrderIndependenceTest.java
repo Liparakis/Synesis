@@ -226,6 +226,8 @@ final class ReviewAdmissionOrderIndependenceTest {
         assertEquals(AgentReason.VALIDATION_REQUIRED, waiting.reason());
         Map<String, Object> waitingResult = map(waiting.result());
         assertEquals("REVIEWER_PENDING", waitingResult.get("state"));
+        assertTrue(String.valueOf(waitingResult.get("instruction")).contains("No producer lane exists"), waiting.toJson());
+        assertTrue(((List<?>) map(waitingResult.get("workflow")).get("permittedOperations")).contains("cancel_lane"), waiting.toJson());
         assertFalse(waiting.toJson().contains("NO_CHANGE_COMPLETION_READY"), waiting.toJson());
 
         var location = new ProjectApplicationService().locate(project);
