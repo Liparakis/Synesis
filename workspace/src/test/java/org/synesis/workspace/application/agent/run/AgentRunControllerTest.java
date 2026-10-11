@@ -200,6 +200,41 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void agentIsResumedForWorkRecordedAfterItsLastCallHoweverLongItTookToExit() throws Exception {
+        Script script = new Script();
+        // The last call of claude saw one event. codex records work at tick 2, and the claude
+        // process only ends at tick 40: its closing message took that long. A real reviewer
+        // stalled this way, 43 seconds after the snapshot it was waiting for.
+        script.lifetimes(40, 2);
+        script.closedLaneProviders.add("codex");
+        script.lastActivity.put("conn-1", 1L);
+        script.at(0).head(1).announced();
+        script.at(2).head(5).progressAfter(1);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(1, result.resumes());
+    }
+
+    @Test
+    void agentWhoseLastCallCameAfterTheWorkIsNotResumedForIt() throws Exception {
+        Script script = new Script();
+        // The same timing as the test of work recorded shortly before the process ended, but the
+        // log shows claude called again after it: there is nothing it has not seen.
+        script.lifetimes(3, 2);
+        script.closedLaneProviders.add("codex");
+        script.lastActivity.put("conn-1", 5L);
+        script.at(0).head(1).announced();
+        script.at(2).head(5).progressAfter(1);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(0, result.resumes());
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+    }
+
+    @Test
     void workRecordedLongBeforeAnAgentStoppedIsTakenAsSeen() throws Exception {
         Script script = new Script();
         script.lifetimes(40, 2);
@@ -247,6 +282,7 @@ final class AgentRunControllerTest {
         private final List<List<String>> commands = new ArrayList<>();
         private final List<Integer> resumedAtTicks = new ArrayList<>();
         private final Map<String, Long> answerDeadlines = new java.util.HashMap<>();
+        private final Map<String, Long> lastActivity = new java.util.HashMap<>();
         private final List<Integer> lifetimes = new ArrayList<>();
         private final java.util.TreeMap<Integer, State> states = new java.util.TreeMap<>();
         private boolean endlessProgress;
@@ -361,6 +397,12 @@ final class AgentRunControllerTest {
                 @Override
                 public boolean hasOpenLane(String provider) {
                     return !closedLaneProviders.contains(provider);
+                }
+
+                @Override
+                public OptionalLong lastActivitySequence(String provider, String connectionInstanceId) {
+                    Long sequence = lastActivity.get(connectionInstanceId);
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
                 }
 
                 @Override

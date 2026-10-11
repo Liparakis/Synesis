@@ -11,10 +11,14 @@ import java.util.OptionalLong;
 import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Observes a project by replaying its durable coordination log. It only reads.
@@ -49,6 +53,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         }
 
         @Override
+        public OptionalLong lastActivitySequence(String provider, String connectionInstanceId) {
+            return OptionalLong.empty();
+        }
+
+        @Override
         public OptionalLong answerDeadline(String provider) {
             return OptionalLong.empty();
         }
@@ -79,6 +88,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             throw new IOException("coordination log could not be verified", failure);
         }
         List<PredictionEvent> events = store.events();
+        List<Participant> participants = store.collaborationProjection().participants();
         List<WorkGroup> groups = store.workGroupProjection().groups();
         boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store);
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -123,6 +133,18 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public OptionalLong lastActivitySequence(String provider, String connectionInstanceId) {
+                // Every verified call of a session that holds a lane renews the activity time of its
+                // participant, so that time marks the last look the agent took at the project.
+                String participant = participantOf(provider, connectionInstanceId);
+                OptionalLong lastCall = participants.stream().filter(candidate -> candidate.id().equals(participant)).mapToLong(Participant::lastVerifiedActivity).max();
+                if (participant == null || lastCall.isEmpty()) {
+                    return OptionalLong.empty();
+                }
+                return OptionalLong.of(events.stream().filter(event -> event.createdAtEpochMillis() <= lastCall.getAsLong()).count());
+            }
+
+            @Override
             public boolean progressedSince(long sequence) {
                 if (sequence < 0) {
                     return !events.isEmpty();
@@ -135,5 +157,21 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 return false;
             }
         };
+    }
+
+    /** Returns the participant of the session behind one connection, or {@code null} when it has none. */
+    private String participantOf(String provider, String connectionInstanceId) {
+        if (provider == null || connectionInstanceId == null) {
+            return null;
+        }
+        try {
+            String fingerprint = Sha256.hex(connectionInstanceId);
+            return new ProviderSessionBindingService().list(location, provider).stream()
+                    .filter(binding -> fingerprint.equals(binding.providerInstanceFingerprint()))
+                    .map(binding -> WorkspaceCollaborationService.participantHandle(binding.sessionId()))
+                    .findFirst().orElse(null);
+        } catch (Exception unavailable) {
+            return null;
+        }
     }
 }

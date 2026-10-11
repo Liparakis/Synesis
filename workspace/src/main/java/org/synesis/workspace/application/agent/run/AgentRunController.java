@@ -145,7 +145,7 @@ public final class AgentRunController {
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
                         connections.ended(agent.connectionId);
-                        agent.exited(seenBeforeExit);
+                        agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit);
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
                 }
@@ -378,6 +378,15 @@ public final class AgentRunController {
         boolean hasOpenLane(String provider);
 
         /**
+         * Returns the log head at the last call the agent behind one connection made to Synesis.
+         *
+         * @param provider             provider of the agent
+         * @param connectionInstanceId connection the controller gave that process
+         * @return the head at that call, or empty when the connection recorded none
+         */
+        OptionalLong lastActivitySequence(String provider, String connectionInstanceId);
+
+        /**
          * Reports whether work has progressed after a point in the log.
          *
          * @param sequence number of events that had been recorded at that point
@@ -503,18 +512,21 @@ public final class AgentRunController {
         }
 
         /**
-         * Records that the process ended. The agent is taken to have seen the log as it stood
-         * shortly before the process ended, and never less than what was there when the process
-         * started: assuming more could hide the very event it needs to be resumed for, and
-         * assuming less costs one extra resume at most.
+         * Records that the process ended, and how far the agent had seen the log. Its last call
+         * to Synesis is recorded in the log and settles that exactly: an agent can take a minute to
+         * write its closing message, and work recorded in that time was taken as seen. An agent
+         * that never held a lane left no such record, and is taken to have seen the log as it stood
+         * shortly before the process ended. Either way it has seen what was there when the process
+         * started.
          *
+         * @param lastActivity   log head at the last recorded call of the agent, when it has one
          * @param seenBeforeExit log head shortly before the process ended, when the controller
          *                       has been observing that long
          */
-        private void exited(OptionalLong seenBeforeExit) {
+        private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit) {
             exitCode = process.exitCode();
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
-            stoppedAtSequence = Math.max(startedAtSequence, seenBeforeExit.orElse(startedAtSequence));
+            stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? lastActivity.getAsLong() : seenBeforeExit.orElse(startedAtSequence));
             process = null;
         }
 
