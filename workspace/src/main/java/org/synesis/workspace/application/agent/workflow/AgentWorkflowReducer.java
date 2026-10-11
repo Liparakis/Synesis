@@ -29,13 +29,16 @@ public final class AgentWorkflowReducer {
     private static final int MAX_UNCHANGED_POLLS = 3;
 
     /**
-     * How often a wait for a peer may be polled unchanged: a minute at the retry interval. An agent
-     * resumed to act takes half a minute to start and reach Synesis. With fifteen seconds of
-     * patience the waiting side had always left by then, each was resumed for the other in turn,
-     * and every resume gave its lane a new identity that the review grants of the last one did not
-     * cover: a review ran sixteen resumes without a snapshot being submitted.
+     * How often an answer that depends on a peer may be polled unchanged: a minute at the retry
+     * interval. An agent resumed to act takes half a minute to start and reach Synesis. With
+     * fifteen seconds of patience the waiting side had always left by then, each was resumed for
+     * the other in turn, and every resume gave its lane a new identity that the review grants of
+     * the last one did not cover: a review ran sixteen resumes without a snapshot being submitted.
+     * An agent polling an unchanged implement answer is waiting too, for its owner's
+     * implementation, and one left fifteen seconds in, forty before it was published. Only a
+     * recovery action, which repeating cannot change, keeps the short limit.
      */
-    private static final int MAX_UNCHANGED_WAIT_POLLS = 12;
+    private static final int MAX_UNCHANGED_PEER_POLLS = 12;
     private static final String LANE_RECOVER = "RECOVER";
     private static final String LANE_PUBLISH = "PUBLISH";
     private static final String LANE_REVIEW_CONTRACT = "REVIEW_CONTRACT";
@@ -346,7 +349,7 @@ public final class AgentWorkflowReducer {
         workflow.put("permittedOperations", action.permittedOperations());
         workflow.put("retrySafe", action.retrySafe());
         workflow.put("retryAfterMs", RETRY_AFTER_MS);
-        workflow.put("maxUnchangedPolls", "WAIT".equals(action.type()) ? MAX_UNCHANGED_WAIT_POLLS : MAX_UNCHANGED_POLLS);
+        workflow.put("maxUnchangedPolls", LANE_RECOVER.equals(action.type()) ? MAX_UNCHANGED_POLLS : MAX_UNCHANGED_PEER_POLLS);
         workflow.put(NextActionKeys.DELIVERY, NextActionProtocol.DELIVERY_AT_LEAST_ONCE);
         workflow.put(NextActionKeys.ACKNOWLEDGEMENT_REQUIRED, true);
         Map<String, Object> executable = executableAction(response, result);
