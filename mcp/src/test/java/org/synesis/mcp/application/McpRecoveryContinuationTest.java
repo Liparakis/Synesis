@@ -236,6 +236,10 @@ final class McpRecoveryContinuationTest {
         assertTrue(extended.acquired(), extended.toString());
         assertEquals(continuedIntent.intentId(), extended.intent().intentId());
         assertTrue(extended.intent().selectors().containsAll(wider));
+
+        collaboration.release(project, "codex", "extend-successor");
+        assertTrue(store(project).collaborationProjection().activeIntents().stream().noneMatch(intent -> intent.intentId().equals(continuedIntent.intentId())),
+                "a continued lane is released like an announced one");
     }
 
     @Test

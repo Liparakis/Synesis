@@ -89,6 +89,23 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
+     * Finds the lane a session holds. A lane it announced carries the identifier derived from the
+     * session; one it took over by continuation keeps the identifier the continuation gave it and
+     * is found by the session's participant. Looked up by the derived identifier alone, a session
+     * holding a continued lane appeared to hold none.
+     *
+     * @param store     current project projection
+     * @param provider  provider ID
+     * @param sessionId provider session ID
+     * @return the held lane, when there is one
+     */
+    static java.util.Optional<WorkIntent> heldIntent(PredictionEventStore store, String provider, String sessionId) {
+        String participant = participantHandle(sessionId);
+        return store.collaborationProjection().intent(LaneIdentities.sessionIntentId(provider, sessionId))
+                .or(() -> store.collaborationProjection().activeIntents().stream().filter(candidate -> candidate.participant().equals(participant)).findFirst());
+    }
+
+    /**
      * Returns the stable opaque participant handle for a connection.
      *
      * @param connectionInstanceId connection ID
@@ -278,10 +295,9 @@ public final class WorkspaceCollaborationService {
      */
     public void release(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
         withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
-            UUID intentId = LaneIdentities.sessionIntentId(provider, binding.sessionId());
             WorkIntentService service = new WorkIntentService(store, identity);
-            WorkIntent current = store.collaborationProjection().intent(intentId).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
-            service.release(intentId, participantHandle(binding.sessionId()), WorkIntentMutationPrecondition.capture(current));
+            WorkIntent current = heldIntent(store, provider, binding.sessionId()).orElseThrow(() -> new IOException("INTENT_NOT_FOUND"));
+            service.release(current.intentId(), participantHandle(binding.sessionId()), WorkIntentMutationPrecondition.capture(current));
             return null;
         });
     }

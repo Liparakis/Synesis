@@ -95,13 +95,7 @@ final class WorkIntentAnnouncement {
         WorkIntentService service = new WorkIntentService(store, identity);
         UUID taskId = LaneIdentities.connectionUuid(connectionInstanceId);
         UUID intentId = LaneIdentities.sessionIntentId(provider, binding.sessionId());
-        // A session that took its lane over by continuation holds an intent with the identifier the
-        // continuation gave it, not the one derived from the session. Looked up only by the derived
-        // identifier, that session appeared to hold no lane: it could not extend its scope, and
-        // naming its own lane again was refused as an unknown intent with a call for human help.
-        WorkIntent existingIntent = store.collaborationProjection().intent(intentId)
-                .or(() -> store.collaborationProjection().activeIntents().stream().filter(candidate -> candidate.participant().equals(participant)).findFirst())
-                .orElse(null);
+        WorkIntent existingIntent = WorkspaceCollaborationService.heldIntent(store, provider, binding.sessionId()).orElse(null);
         if (existingIntent != null) {
             boolean hasScopeChange = selectors.stream().anyMatch(selector -> !existingIntent.selectors().contains(selector))
                     || knownDependencies != null && knownDependencies.stream()
