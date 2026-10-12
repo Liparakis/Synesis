@@ -96,6 +96,33 @@ export interface CapabilitySnapshot {
   };
 }
 
+export interface ConversationMemberSnapshot {
+  participant?: string;
+  claims?: string[];
+  lane?: string;
+}
+
+export interface ConversationMessageSnapshot {
+  from: ConversationMemberSnapshot;
+  sentAtEpochMillis: number;
+  text: string;
+}
+
+export interface ConversationSnapshot {
+  conversation: string;
+  members: ConversationMemberSnapshot[];
+  earlierMessages: number;
+  messages: ConversationMessageSnapshot[];
+}
+
+export interface OperatorRequestSnapshot {
+  id: string;
+  condition: string;
+  raisedBy: string;
+  summary: string;
+  evidence: string;
+}
+
 export interface TaskSnapshot {
   id: string;
   title: string;
@@ -207,6 +234,8 @@ export interface Snapshot {
   workgroups: WorkGroupSnapshot[];
   claims: ClaimSnapshot[];
   capabilities: CapabilitySnapshot[];
+  conversations: ConversationSnapshot[];
+  operatorRequests: OperatorRequestSnapshot[];
   tasks: TaskSnapshot[];
   ownerships: OwnershipSnapshot[];
   network: NetworkSnapshot;
@@ -320,6 +349,8 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
     workgroups: input.workgroups ?? [],
     claims: input.claims ?? [],
     capabilities: input.capabilities ?? [],
+    conversations: input.conversations ?? [],
+    operatorRequests: input.operatorRequests ?? [],
     tasks: input.tasks ?? [],
     ownerships: input.ownerships ?? [],
     onboarding: {

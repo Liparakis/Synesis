@@ -7,6 +7,7 @@ import static org.synesis.mcp.application.McpCoordinationPayload.normalizeStrict
 import static org.synesis.mcp.application.McpCoordinationPayload.parseReviewPolicy;
 import static org.synesis.mcp.application.McpJsonRpcResponses.object;
 import static org.synesis.mcp.application.McpJsonRpcResponses.policyDenied;
+import static org.synesis.mcp.application.McpToolArguments.nullableStringList;
 import static org.synesis.mcp.application.McpToolArguments.optionalBooleanArgument;
 import static org.synesis.mcp.application.McpToolArguments.optionalLongArgument;
 import static org.synesis.mcp.application.McpToolArguments.optionalStringArgument;
@@ -15,6 +16,7 @@ import static org.synesis.mcp.application.McpToolArguments.requiredStringArgumen
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,6 +35,7 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
+import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -64,6 +67,16 @@ final class McpCoordinationTools {
      * Service that processes capability-owner responses.
      */
     private final ContractOwnerService contractOwnerService;
+    /**
+     * Service through which lanes send and are handed messages.
+     */
+    private final ConversationService conversationService;
+    /**
+     * Log position of the newest message this connection has been handed. The next call from
+     * this connection is what shows the answer carrying it arrived, so it is kept here and not in
+     * the log: a connection that ends first leaves the batch to whoever continues the lane.
+     */
+    private long messagesHandedThrough;
     /**
      * Service that publishes capability implementations.
      */
@@ -111,6 +124,7 @@ final class McpCoordinationTools {
      * @param nextActionService         service that projects the durable next action
      * @param capabilityRequestService  service that creates capability requests
      * @param contractOwnerService   service through which a lane publishes its contracts and answers change requests
+     * @param conversationService       service through which lanes send and are handed messages
      * @param publicationService        service that publishes capability implementations
      * @param validationService         service that validates published implementations
      * @param reviewValidationService   service that validates immutable review snapshots
@@ -125,6 +139,7 @@ final class McpCoordinationTools {
     McpCoordinationTools(AgentNextActionService nextActionService,
             CapabilityRequestService capabilityRequestService,
             ContractOwnerService contractOwnerService,
+            ConversationService conversationService,
             ImplementationPublicationService publicationService,
             ImplementationValidationService validationService,
             ReviewValidationService reviewValidationService,
@@ -138,6 +153,7 @@ final class McpCoordinationTools {
         this.nextActionService = nextActionService;
         this.capabilityRequestService = capabilityRequestService;
         this.contractOwnerService = contractOwnerService;
+        this.conversationService = conversationService;
         this.publicationService = publicationService;
         this.validationService = validationService;
         this.reviewValidationService = reviewValidationService;
@@ -172,9 +188,53 @@ final class McpCoordinationTools {
         } else {
             reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
             NextActionRequest nextReq = new NextActionRequest(activeProjectRoot, provider, connectionInstanceId, completionRequested);
-            agentResponse = nextActionService.getNextAction(nextReq);
+            agentResponse = withUnreadMessages(nextActionService.getNextAction(nextReq), activeProjectRoot);
         }
         return agentResponse;
+    }
+
+    /**
+     * Puts the messages addressed to the caller's lane beside its next action (ADR-0093). The
+     * action is the one projected without them: no message changes what a lane may do.
+     */
+    private AgentResponse withUnreadMessages(AgentResponse response, Path activeProjectRoot) {
+        if (response.result() != null && !(response.result() instanceof Map<?, ?>)) {
+            return response;
+        }
+        ConversationService.Unread unread = conversationService.unread(activeProjectRoot, provider, connectionInstanceId, messagesHandedThrough);
+        messagesHandedThrough = unread.through();
+        if (unread.messages().isEmpty()) {
+            return response;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (response.result() instanceof Map<?, ?> existing) {
+            existing.forEach((key, value) -> result.put(String.valueOf(key), value));
+        }
+        result.put("messages", unread.shown());
+        return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+    }
+
+    /**
+     * Sends one message from the caller's lane to other lanes or to the operator.
+     *
+     * @param arguments tool arguments, possibly {@code null}
+     * @param activeProjectRoot the connection's currently selected control project root
+     * @return the response to serialize
+     */
+    AgentResponse sendMessage(Map<String, Object> arguments, Path activeProjectRoot) {
+        List<String> to;
+        UUID conversation;
+        String text;
+        try {
+            Object named = arguments == null ? null : arguments.get("to");
+            // One name where a list is expected is a list of one: a model writes either.
+            to = named == null ? List.of() : named instanceof String one ? List.of(one) : nullableStringList(named, "to");
+            conversation = optionalUuidArgument(arguments, "conversation");
+            text = optionalStringArgument(arguments, "text");
+        } catch (IllegalArgumentException invalid) {
+            return McpRefusalGuidance.malformed(AgentNextAction.RETRY, "reason", "INVALID_SEND_MESSAGE_ARGUMENTS", invalid);
+        }
+        return conversationService.send(new ConversationService.SendRequest(activeProjectRoot, provider, connectionInstanceId, to, conversation, text, messagesHandedThrough));
     }
 
     /**
@@ -210,6 +270,8 @@ final class McpCoordinationTools {
                     Map<String, Object> status = new LinkedHashMap<>(collaborationStatusMap(collaborationService.status(activeProjectRoot)));
                     status.put("contracts", contracts.contracts().stream().map(org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper::contractMap).toList());
                     status.put("changeRequests", contracts.changeRequests().stream().map(org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper::changeRequestMap).toList());
+                    // Only the caller's own conversations: Synesis serves a conversation to its members.
+                    status.put("conversations", conversationService.history(activeProjectRoot, provider, connectionInstanceId));
                     yield completed(status);
                 }
                 case McpCoordinationRequest.OpenRequest open -> {

@@ -60,7 +60,11 @@ public final class AgentRunController {
     private static final Set<PredictionEventType> BOOKKEEPING = Set.of(PredictionEventType.PARTICIPANT_HEARTBEAT,
             PredictionEventType.PARTICIPANT_SUSPENDED,
             PredictionEventType.RECOVERY_SNAPSHOT_HELD,
-            PredictionEventType.LANE_CONTINUATION_ACCEPTED);
+            PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+            // A message is not work. It resumes the agent it is addressed to, once, by a rule
+            // of its own; counted as progress it would resume every stopped agent.
+            PredictionEventType.CONVERSATION_MESSAGE_SENT,
+            PredictionEventType.CONVERSATION_MESSAGES_DELIVERED);
 
     /**
      * How long before its process ended an agent is taken to have last looked at the project. A
@@ -163,10 +167,15 @@ public final class AgentRunController {
                         }
                         OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
-                        if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed) {
+                        OptionalLong message = observation.newestMessageFor(agent.spec.provider(), agent.connectionId);
+                        boolean messageWaiting = message.isPresent() && message.getAsLong() > Math.max(agent.stoppedAtSequence, agent.resumedForMessage);
+                        if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
+                            // Whatever it is resumed for, it reads its messages then. A message
+                            // it stops without acting on does not resume it again.
+                            agent.resumedForMessage = Math.max(agent.resumedForMessage, message.orElse(0L));
                             agent.resumes++;
                             agent.startedAtSequence = observation.headSequence();
                             HeadlessOptions options = agent.connect(connections.open());
@@ -467,6 +476,19 @@ public final class AgentRunController {
         default boolean heldByOperator(String provider) {
             return false;
         }
+
+        /**
+         * Returns the log position of the newest message addressed to a lane that the session
+         * behind one connection holds (ADR-0093). The controller resumes a stopped agent for a
+         * message it has not seen, and for that message only once.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's last process
+         * @return that position, or empty when the connection holds no lane or nothing was addressed to it
+         */
+        default OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
+            return OptionalLong.empty();
+        }
     }
 
     /**
@@ -553,6 +575,7 @@ public final class AgentRunController {
         private long startedAtSequence;
         private long stoppedAtSequence;
         private long resumedForDeadline = Long.MIN_VALUE;
+        private long resumedForMessage;
         private int exitCode;
         private int resumes;
 

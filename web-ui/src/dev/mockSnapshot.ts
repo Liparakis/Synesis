@@ -109,6 +109,18 @@ export const mockSnapshot: Snapshot = {
     {intentId: "intent-planner-01", participant: "agent-planner-01", workGroupId: "wg-backend-refactor", role: "planner", state: "CLAIM_HELD", selectors: [{kind: "file", value: "src/parser"}], conflicts: []},
     {intentId: "intent-executor-02", participant: "code-executor-02", workGroupId: "wg-backend-refactor", role: "executor", state: "WAITING_DEP", selectors: [{kind: "file", value: "src/parser/tests"}], conflicts: []},
   ],
+  conversations: [
+    {
+      conversation: "c2f1a1de-6f0f-3a59-9d0a-2f3f6c1b7a11",
+      members: [{participant: "agent-planner-01", claims: ["src/parser"]}, {participant: "code-executor-02", claims: ["src/parser/tests"]}],
+      earlierMessages: 0,
+      messages: [
+        {from: {participant: "code-executor-02", claims: ["src/parser/tests"]}, sentAtEpochMillis: 1791800000000, text: "Does parse() reject an empty document, or return an empty tree?"},
+        {from: {participant: "agent-planner-01", claims: ["src/parser"]}, sentAtEpochMillis: 1791800060000, text: "It returns an empty tree. I have added that to the contract."}
+      ]
+    }
+  ],
+  operatorRequests: [],
   capabilities: [
     {
       handle: "cap-refactor-001",

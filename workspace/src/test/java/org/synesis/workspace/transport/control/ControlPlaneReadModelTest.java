@@ -125,7 +125,7 @@ class ControlPlaneReadModelTest {
         assertEquals(ProviderJson.write(model.capabilities()), ProviderJson.write(model.capabilities()));
 
         Map<String, Object> parsed = object(ProviderJson.parse(first));
-        assertEquals(List.of("apiVersion", "runtime", "project", "knownProjects", "providers", "agents", "workgroups", "claims", "capabilities", "tasks", "ownerships", "network", "diagnostics"), List.copyOf(parsed.keySet()));
+        assertEquals(List.of("apiVersion", "runtime", "project", "knownProjects", "providers", "agents", "workgroups", "claims", "capabilities", "conversations", "operatorRequests", "tasks", "ownerships", "network", "diagnostics"), List.copyOf(parsed.keySet()));
         Map<String, Object> network = object(parsed.get("network"));
         assertEquals(List.of("status", "peers", "routes", "overlay", "relay"), List.copyOf(network.keySet()));
         assertEquals(List.of("nodeId", "sessionId", "liveness", "usable", "establishedAt", "authenticated", "health"), List.copyOf(object(((List<?>) network.get("peers")).getFirst()).keySet()));

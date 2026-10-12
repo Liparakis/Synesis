@@ -56,7 +56,7 @@ class McpSyn028ContractTest {
           "codex", "syn028");
       String list = handler.handleMessage(
           "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
-      assertEquals(10, list.split("\"name\":\"").length - 1);
+      assertEquals(11, list.split("\"name\":\"").length - 1);
       assertTrue(list.contains("request_coordination"));
       assertTrue(list.contains("respond_coordination"));
       assertTrue(list.contains("publish_capability_implementation"));

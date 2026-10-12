@@ -210,7 +210,9 @@ public final class AgentTaskCompletionService {
             PredictionEventType.CONTRACT_DEPENDENCY_BOUND,
             PredictionEventType.CONTRACT_CHANGE_REQUESTED,
             PredictionEventType.CONTRACT_CHANGE_ANSWERED,
-            PredictionEventType.CONTRACT_LANE_ENDED);
+            PredictionEventType.CONTRACT_LANE_ENDED,
+            PredictionEventType.CONVERSATION_MESSAGE_SENT,
+            PredictionEventType.CONVERSATION_MESSAGES_DELIVERED);
 
     /**
      * Reports whether a finish projected at {@code revision} still describes the log.

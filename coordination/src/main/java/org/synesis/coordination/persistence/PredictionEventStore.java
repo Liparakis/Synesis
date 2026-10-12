@@ -21,6 +21,7 @@ import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
 import org.synesis.coordination.domain.contract.ContractProjection;
+import org.synesis.coordination.domain.conversation.ConversationProjection;
 import org.synesis.coordination.domain.operator.OperatorRequestProjection;
 import org.synesis.coordination.domain.identity.EventSequence;
 import org.synesis.coordination.domain.identity.NodeId;
@@ -107,6 +108,10 @@ public final class PredictionEventStore {
      */
     private final OperatorRequestProjection operatorRequestProjection = new OperatorRequestProjection();
     /**
+     * Projection for what lanes said to each other.
+     */
+    private final ConversationProjection conversationProjection = new ConversationProjection();
+    /**
      * Every projection above, in validation and application order; the one place a new projection is registered.
      */
     private final List<Stage> stages = List.of(
@@ -117,7 +122,8 @@ public final class PredictionEventStore {
             new Stage(collaborationProjection::validate, collaborationProjection::apply),
             new Stage(workGroupProjection::validate, workGroupProjection::apply),
             new Stage(contractProjection::validate, contractProjection::apply),
-            new Stage(operatorRequestProjection::validate, operatorRequestProjection::apply));
+            new Stage(operatorRequestProjection::validate, operatorRequestProjection::apply),
+            new Stage(conversationProjection::validate, conversationProjection::apply));
     /**
      * Events replayed into this instance's in-memory projections.
      */
@@ -504,6 +510,15 @@ public final class PredictionEventStore {
      */
     public OperatorRequestProjection operatorRequestProjection() {
         return operatorRequestProjection;
+    }
+
+    /**
+     * Returns the replayed conversation projection.
+     *
+     * @return conversation projection
+     */
+    public ConversationProjection conversationProjection() {
+        return conversationProjection;
     }
 
     /**

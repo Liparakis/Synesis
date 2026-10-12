@@ -134,7 +134,7 @@ class McpServerTest {
 
         assertTrue(handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}").contains("synesis"));
         String tools = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
-        assertEquals(10, tools.split("\"name\":\"").length - 1);
+        assertEquals(11, tools.split("\"name\":\"").length - 1);
 
         String pendingEnsure = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{}}}");
         assertTrue(pendingEnsure.contains("managed_attachment_pending"), pendingEnsure);
@@ -181,7 +181,7 @@ class McpServerTest {
     void toolsListAdvertisesExactlyTenRawNamesAndRejectsDecoratedCalls() {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-raw");
         String response = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/list\"}");
-        assertEquals(10, response.split("\"name\":\"").length - 1);
+        assertEquals(11, response.split("\"name\":\"").length - 1);
         assertTrue(response.contains("\"name\":\"ensure_session\""));
         assertFalse(response.contains("synesis.ensure_session"));
         String decorated = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"synesis.ensure_session\",\"arguments\":{}}}");

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted on 2026-10-12 by the repository owner. Not yet built.
+Accepted on 2026-10-12 by the repository owner. Built on 2026-10-12; see "As built".
 
 Step 3 of three, after ADR-0091 (operator requests) and ADR-0092 (one public
 contract per owner). It is built last so that a change in how runs behave can
@@ -164,6 +164,41 @@ Decided by the repository owner in discussion on 2026-10-11 and 2026-10-12.
   in `docs/agent/CURRENT.md`: completed runs, resumes per run, elapsed time and
   tokens per run. The step is kept only if completion does not fall and the
   cost is stated.
+
+## As built
+
+The decision above is built as written, with these choices where it left room.
+
+- A lane is its authority lineage. The members of a conversation are lineages,
+  and the conversation's identifier is derived from the set, so sending to the
+  same lanes continues the same conversation without anything being opened
+  first. At most sixteen lanes are members.
+- The bounds are kept by the service that appends and not by the log's replay,
+  so they can change without making an old log unreadable. The bound of fifty
+  messages is per lane, for as long as the lane lives, and not per run: the log
+  does not know runs.
+- Delivery is at least once. A lane has one durable mark. It moves when the
+  connection that was handed a batch calls again, which is what shows the
+  answer carrying the batch arrived. A connection that ends first leaves the
+  batch for whoever continues the lane.
+- `collaboration_status` shows the newest twenty messages of each of the
+  caller's conversations and counts the earlier ones.
+- A lane that addresses the operator may have one such request open at a time.
+  A second is refused until the operator closes the first with
+  `synesis operator close`. A request Synesis raised cannot be closed that way.
+- A lane putting something to the operator resumes nobody, like any other
+  message. A request Synesis raises still does.
+- A message resumes the stopped agent whose lane it is addressed to when it is
+  newer than what that agent had seen and newer than the last message it was
+  resumed for. An agent resumed for any reason reads its messages then.
+- The operator reads conversations with `synesis conversations` and in the
+  dashboard, which gained two read-only tabs: conversations and operator
+  requests.
+- A conversation of other lanes is answered as one that does not exist.
+
+Not built: nothing ends a conversation or removes a message, and an operator
+request raised by a lane whose run has since completed stays open until the
+operator closes it.
 
 ## Open questions
 

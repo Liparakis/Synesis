@@ -114,4 +114,17 @@ another lane's contract that owes an action while its agent has not returned
 `EVIDENCE` lines exactly as the refusing tool reported them (`--all` adds the
 closed ones). `synesis operator recheck` looks again and integrates what was
 waiting; it exits with 0 when no request is left open. No command declares a
-request resolved: a request closes when its condition is observed not to hold.
+request Synesis raised resolved: it closes when its condition is observed not
+to hold.
+
+An agent can also put something to the operator itself (ADR-0093). Such a
+request is listed with `CONDITION=lane_asks_operator` and `RAISED_BY_LANE`, blocks
+nothing, and makes a run that stalls end `NEEDS_OPERATOR`. Synesis cannot observe
+that it was dealt with, so `synesis operator close <id> [--because <text>]`
+closes it.
+
+## Conversations
+
+`synesis conversations` lists what agents said to each other, one line per
+conversation with its members and message count; `synesis conversations <id>`
+prints that conversation's messages. It only reads: the operator cannot post.

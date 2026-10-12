@@ -268,6 +268,7 @@ public final class McpProtocolHandler {
         this.coordinationTools = new McpCoordinationTools(nextActionService,
                 capabilityRequestService,
                 contractOwnerService,
+                new org.synesis.workspace.application.conversation.ConversationService(),
                 publicationService,
                 validationService,
                 reviewValidationService,
@@ -328,17 +329,18 @@ public final class McpProtocolHandler {
      * {@code run_command} and {@code finish_lane} skip the lease renewal: the first anchors its own
      * process, and a lane being closed has no liveness to renew while completion stays authoritative.
      */
-    private static final Map<String, ToolPolicy> TOOL_POLICIES = Map.of(
-            McpToolCatalog.ENSURE_SESSION, new ToolPolicy(McpProtocolHandler::unwindOrRepairRequested, false, false),
-            McpToolCatalog.READ_FILE, ToolPolicy.UNRESTRICTED,
-            McpToolCatalog.APPLY_PATCH, new ToolPolicy(ToolPolicy.ALWAYS, false, false),
-            McpToolCatalog.RUN_COMMAND, new ToolPolicy(ToolPolicy.ALWAYS, false, true),
-            McpToolCatalog.GET_NEXT_ACTION, new ToolPolicy(ToolPolicy.NEVER, true, false),
-            McpToolCatalog.REQUEST_COORDINATION, new ToolPolicy(ToolPolicy.ALWAYS, true, false),
-            McpToolCatalog.RESPOND_COORDINATION, new ToolPolicy(McpProtocolHandler::responseKindPresent, true, false),
-            McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, new ToolPolicy(ToolPolicy.ALWAYS, false, false),
-            McpToolCatalog.FINISH_LANE, new ToolPolicy(ToolPolicy.ALWAYS, false, true),
-            McpToolCatalog.CANCEL_LANE, ToolPolicy.UNRESTRICTED);
+    private static final Map<String, ToolPolicy> TOOL_POLICIES = Map.ofEntries(
+            Map.entry(McpToolCatalog.ENSURE_SESSION, new ToolPolicy(McpProtocolHandler::unwindOrRepairRequested, false, false)),
+            Map.entry(McpToolCatalog.READ_FILE, ToolPolicy.UNRESTRICTED),
+            Map.entry(McpToolCatalog.APPLY_PATCH, new ToolPolicy(ToolPolicy.ALWAYS, false, false)),
+            Map.entry(McpToolCatalog.RUN_COMMAND, new ToolPolicy(ToolPolicy.ALWAYS, false, true)),
+            Map.entry(McpToolCatalog.GET_NEXT_ACTION, new ToolPolicy(ToolPolicy.NEVER, true, false)),
+            Map.entry(McpToolCatalog.REQUEST_COORDINATION, new ToolPolicy(ToolPolicy.ALWAYS, true, false)),
+            Map.entry(McpToolCatalog.RESPOND_COORDINATION, new ToolPolicy(McpProtocolHandler::responseKindPresent, true, false)),
+            Map.entry(McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION, new ToolPolicy(ToolPolicy.ALWAYS, false, false)),
+            Map.entry(McpToolCatalog.FINISH_LANE, new ToolPolicy(ToolPolicy.ALWAYS, false, true)),
+            Map.entry(McpToolCatalog.CANCEL_LANE, ToolPolicy.UNRESTRICTED),
+            Map.entry(McpToolCatalog.SEND_MESSAGE, ToolPolicy.UNRESTRICTED));
 
     private static boolean unwindOrRepairRequested(Map<String, Object> arguments) {
         return arguments != null && (Boolean.TRUE.equals(arguments.get("unwindCompletion")) || taskField(arguments, "repairIntentId") != null || taskField(arguments, "repairSnapshotId") != null);
@@ -695,6 +697,7 @@ public final class McpProtocolHandler {
             case McpToolCatalog.PUBLISH_CAPABILITY_IMPLEMENTATION -> agentResponse = coordinationTools.publishCapabilityImplementation(arguments, projectRoots.activeProjectRoot());
             case McpToolCatalog.FINISH_LANE -> agentResponse = coordinationTools.finishLane(arguments, projectRoots.activeProjectRoot());
             case McpToolCatalog.CANCEL_LANE -> agentResponse = coordinationTools.cancelLane(arguments, projectRoots.activeProjectRoot());
+            case McpToolCatalog.SEND_MESSAGE -> agentResponse = coordinationTools.sendMessage(arguments, projectRoots.activeProjectRoot());
             default -> {
                 return errorTextResultResponse(id, "Unknown tool: " + UNKNOWN_TOOL_PREFIX + tool);
             }

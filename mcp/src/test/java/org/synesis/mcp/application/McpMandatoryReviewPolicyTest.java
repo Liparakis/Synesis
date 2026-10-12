@@ -70,7 +70,7 @@ final class McpMandatoryReviewPolicyTest {
             Map<String, Object> response = innerResult(handler.handleMessage(toolCall(arguments)));
 
             assertEquals("completed", response.get("status"), response.toString());
-            assertEquals(10, McpToolCatalog.rawNames().size());
+            assertEquals(11, McpToolCatalog.rawNames().size());
             assertEquals(ReviewPolicy.mandatoryIndependent(),
                     new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).workGroupProjection().group(groupId).orElseThrow().reviewPolicy());
 

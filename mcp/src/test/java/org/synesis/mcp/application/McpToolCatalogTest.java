@@ -86,8 +86,8 @@ class McpToolCatalogTest {
     Map<String, Object> result = (Map<String, Object>) respMap.get("result");
     List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-    // Must equal exactly 10 tools
-    assertEquals(10, tools.size());
+    // Must equal exactly 11 tools
+    assertEquals(11, tools.size());
 
     Map<String, Object> cancelTool = tools.stream()
         .filter(t -> "cancel_lane".equals(t.get("name")))

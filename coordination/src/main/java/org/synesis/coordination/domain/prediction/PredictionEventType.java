@@ -324,7 +324,15 @@ public enum PredictionEventType {
     /**
      * Records that a lane ended: its contracts are frozen and its change requests closed.
      */
-    CONTRACT_LANE_ENDED(77);
+    CONTRACT_LANE_ENDED(77),
+    /**
+     * Records text one lane sent to the other lanes of a conversation. It binds nothing.
+     */
+    CONVERSATION_MESSAGE_SENT(78),
+    /**
+     * Records how far a lane has been handed the messages addressed to it.
+     */
+    CONVERSATION_MESSAGES_DELIVERED(79);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

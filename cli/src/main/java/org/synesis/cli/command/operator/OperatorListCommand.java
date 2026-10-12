@@ -53,6 +53,9 @@ public final class OperatorListCommand implements Callable<Integer> {
         runtime.terminal().stdout("OPERATOR_REQUESTS=" + requests.size());
         for (OperatorRequest request : requests) {
             runtime.terminal().stdout("OPERATOR_REQUEST=" + request.id() + " STATE=" + request.state() + " CONDITION=" + request.condition());
+            if (!request.raisedBySynesis()) {
+                runtime.terminal().stdout("RAISED_BY_LANE=" + request.raisedBy());
+            }
             runtime.terminal().stdout("SUMMARY=" + request.summary());
             request.evidence().lines().forEach(line -> runtime.terminal().stdout("EVIDENCE=" + line));
             if (!request.closedBecause().isEmpty()) {

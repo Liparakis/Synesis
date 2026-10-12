@@ -161,7 +161,7 @@ public final class CoordinationService {
                  COMPLETION_PREPARED, INTEGRATION_BLOCKED, REPAIR_REQUIRED, REPAIR_LANE_CREATED, COMPLETION_UNWOUND,
                  REVIEW_VALIDATION_RECORDED, PROVIDER_SESSION_TERMINALIZED, WORK_GROUP_STATUS_CHANGED,
                  OPERATOR_REQUEST_RAISED, OPERATOR_REQUEST_CLOSED, CONTRACT_CHANGE_REQUESTED, CONTRACT_CHANGE_ANSWERED,
-                 CONTRACT_LANE_ENDED -> true;
+                 CONTRACT_LANE_ENDED, CONVERSATION_MESSAGE_SENT, CONVERSATION_MESSAGES_DELIVERED -> true;
             default -> false;
         };
     }
@@ -315,6 +315,24 @@ public final class CoordinationService {
      */
     public WorkGroupProjection workGroupProjection() {
         return fresh().workGroupProjection();
+    }
+
+    /**
+     * Returns the current durable operator request projection.
+     *
+     * @return operator request projection
+     */
+    public org.synesis.coordination.domain.operator.OperatorRequestProjection operatorRequestProjection() {
+        return fresh().operatorRequestProjection();
+    }
+
+    /**
+     * Returns the current durable projection of what lanes said to each other.
+     *
+     * @return conversation projection
+     */
+    public org.synesis.coordination.domain.conversation.ConversationProjection conversationProjection() {
+        return fresh().conversationProjection();
     }
 
     /**

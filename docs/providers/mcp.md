@@ -1,10 +1,11 @@
 # MCP behavior
 
-The stdio server exposes exactly 10 tools. The stable raw tool names are:
+The stdio server exposes exactly 11 tools. The stable raw tool names are:
 
 `ensure_session`, `read_file`, `apply_patch`, `run_command`, `get_next_action`,
 `request_coordination`, `respond_coordination`,
-`publish_capability_implementation`, `finish_lane`, and `cancel_lane`.
+`publish_capability_implementation`, `finish_lane`, `cancel_lane`, and
+`send_message`.
 
 The server/configuration namespace is `synesis`; the wire contract advertises
 raw names only. Decorated `synesis.*` calls are rejected.
@@ -122,6 +123,30 @@ to, and a lane that depended on it is shown the dependency as unbound again. A
 lane that has published its work can no longer revise its contract
 (`CONTRACT_OWNER_COMPLETING`). `collaboration_status` lists every change
 request beside the contracts.
+
+## Messages
+
+`send_message` sends text from the caller's lane (ADR-0093). `to` names each
+other lane by a file it claims or by its participant handle; `conversation`
+continues a conversation the lane already belongs to. A conversation is its set
+of member lanes: the same set is always the same conversation, a different set
+is a different one, and Synesis shows a conversation only to its members.
+Messages are kept in the project's coordination log and are not encrypted.
+
+A message changes no state. No lane state, gate or next action is derived from
+one, and what agents agree takes effect only when it is recorded through the
+typed protocol. Messages addressed to the caller's lane arrive under `messages`
+in a `get_next_action` result (`notice`, `unread`, `moreUnread`), beside the
+next action and never in place of it, at most ten at a time and at least once:
+a batch counts as arrived when the same connection calls again. The caller's
+conversations, with the newest twenty messages of each, are listed under
+`conversations` by `collaboration_status`. An agent that continues a lane has
+that lane's conversations.
+
+A lane may send fifty messages of at most 2,000 characters; the next is refused
+with `MESSAGE_LIMIT_REACHED`. `to` `["operator"]` alone records an operator
+request with condition `lane_asks_operator` instead, one open per lane. It
+blocks nothing, and it is closed by the operator.
 
 After the requester validates a published implementation, the owner's ordinary
 `get_next_action` returns `implementationValidated: true` and recommends

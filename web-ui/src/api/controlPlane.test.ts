@@ -20,6 +20,8 @@ describe("control-plane client helpers", () => {
       workgroups: [],
       claims: [],
       capabilities: [],
+      conversations: [],
+      operatorRequests: [],
       tasks: [],
       ownerships: [],
       network: {status: "UNCONFIGURED"} as never,

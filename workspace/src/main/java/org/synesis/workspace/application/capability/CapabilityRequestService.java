@@ -293,8 +293,13 @@ public final class CapabilityRequestService {
      * <p>Claims are exclusive, so that lane is the owner of what the file provides, and that is
      * durable state. No lineage the caller believes in is taken instead: with five lanes open,
      * agents reused the lineage of a lane they had collided with over an unrelated file.</p>
+     *
+     * @param store                coordination store
+     * @param path                 the file
+     * @param requesterParticipant the caller, whose own lane is never the answer
+     * @return the one other open lane claiming the file, or empty when none or several do
      */
-    private static Optional<WorkIntent> ownerOf(PredictionEventStore store, ResourceSelector path, String requesterParticipant) {
+    public static Optional<WorkIntent> ownerOf(PredictionEventStore store, ResourceSelector path, String requesterParticipant) {
         List<WorkIntent> claimants = store.collaborationProjection().activeIntents().stream()
                 .filter(intent -> !intent.participant().equals(requesterParticipant))
                 .filter(intent -> intent.selectors().stream().anyMatch(path::overlaps))

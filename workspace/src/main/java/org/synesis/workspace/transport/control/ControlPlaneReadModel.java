@@ -24,6 +24,7 @@ import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.task.CoordinationTask;
 
+import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
@@ -52,6 +53,8 @@ public final class ControlPlaneReadModel {
      * Upper bound on every collection in a response, keeping snapshots bounded.
      */
     private static final int MAX_COLLECTION_ITEMS = 256;
+    /** Newest messages of one conversation the dashboard is sent. */
+    private static final int MAX_CONVERSATION_MESSAGES = 50;
 
     /**
      * Location of the current project.
@@ -124,6 +127,8 @@ public final class ControlPlaneReadModel {
         result.put("workgroups", workgroups());
         result.put("claims", claims());
         result.put("capabilities", capabilities());
+        result.put("conversations", conversations());
+        result.put("operatorRequests", operatorRequests());
         result.put("tasks", tasks());
         result.put("ownerships", ownerships());
         result.put("network", networkSnapshot.toMap());
@@ -392,6 +397,27 @@ public final class ControlPlaneReadModel {
             result.put("selector", selector(conflict.selector()));
             return result;
         }).toList();
+    }
+
+    /**
+     * Builds what agents said to each other, for the operator to read (ADR-0093). The operator
+     * reads every conversation; the dashboard has no way to post in one.
+     *
+     * @return conversations in the order each began, each with its newest messages
+     */
+    List<Map<String, Object>> conversations() {
+        return ConversationService.conversations(coordination.collaborationProjection(), coordination.conversationProjection().messages(), MAX_CONVERSATION_MESSAGES).stream().limit(MAX_COLLECTION_ITEMS).toList();
+    }
+
+    /**
+     * Builds the open operator requests, oldest first.
+     *
+     * @return what the project is waiting on an operator for, or was asked by a lane
+     */
+    List<Map<String, Object>> operatorRequests() {
+        return coordination.operatorRequestProjection().open().stream().limit(MAX_COLLECTION_ITEMS)
+                .map(request -> ordered("id", request.id(), "condition", request.condition(), "raisedBy", request.raisedBy(), "summary", request.summary(), "evidence", request.evidence()))
+                .toList();
     }
 
     /**

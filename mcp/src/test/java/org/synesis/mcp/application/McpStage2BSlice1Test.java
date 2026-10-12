@@ -117,7 +117,7 @@ class McpStage2BSlice1Test {
         @SuppressWarnings("unchecked") Map<String, Object> result = (Map<String, Object>) map.get("result");
         @SuppressWarnings("unchecked") List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
 
-        assertEquals(10, tools.size());
+        assertEquals(11, tools.size());
         assertEquals("ensure_session", tools.get(0).get("name"));
         assertEquals("read_file", tools.get(1).get("name"));
         assertEquals("apply_patch", tools.get(2).get("name"));

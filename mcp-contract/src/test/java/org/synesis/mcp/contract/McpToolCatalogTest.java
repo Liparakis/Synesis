@@ -34,7 +34,7 @@ class McpToolCatalogTest {
     assertEquals(List.of(
         "ensure_session", "read_file", "apply_patch", "run_command", "get_next_action",
         "request_coordination", "respond_coordination", "publish_capability_implementation",
-        "finish_lane", "cancel_lane"), McpToolCatalog.rawNames());
+        "finish_lane", "cancel_lane", "send_message"), McpToolCatalog.rawNames());
     assertEquals(McpToolCatalog.rawNames()
             .size(),
         McpToolCatalog.toolsList()
@@ -180,7 +180,7 @@ class McpToolCatalogTest {
   @Test
   @SuppressWarnings("unchecked")
   void requestCoordinationCarriesBootstrapReviewPolicyAndExactSnapshotChoice() {
-    assertEquals(10, McpToolCatalog.rawNames().size());
+    assertEquals(11, McpToolCatalog.rawNames().size());
     McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors().stream()
         .filter(candidate -> candidate.wireName().equals(McpToolCatalog.REQUEST_COORDINATION))
         .findFirst().orElseThrow();

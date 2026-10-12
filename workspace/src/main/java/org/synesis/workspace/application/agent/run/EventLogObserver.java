@@ -134,6 +134,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant))
+                        .map(intent -> store.conversationProjection().newestAddressedTo(intent.authorityLineageId()))
+                        .filter(OptionalLong::isPresent).mapToLong(OptionalLong::getAsLong).max();
+            }
+
+            @Override
             public OptionalLong answerDeadline(String provider) {
                 Long deadline = answerDeadlines.get(provider);
                 return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
@@ -182,13 +190,25 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                     return !events.isEmpty();
                 }
                 for (int index = (int) Math.min(sequence, events.size()); index < events.size(); index++) {
-                    if (AgentRunController.isProgress(events.get(index).type())) {
+                    if (AgentRunController.isProgress(events.get(index).type()) && !askedByALane(events.get(index))) {
                         return true;
                     }
                 }
                 return false;
             }
         };
+    }
+
+    /** A lane putting something to the operator is a message, not work: it resumes nobody (ADR-0093). */
+    private static boolean askedByALane(PredictionEvent event) {
+        if (event.type() != org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_RAISED) {
+            return false;
+        }
+        try {
+            return !org.synesis.coordination.domain.operator.OperatorRequest.decodeRaised(event.payload()).raisedBySynesis();
+        } catch (IOException malformed) {
+            return false;
+        }
     }
 
     /** Returns the participant of the session behind one connection, or {@code null} when it has none. */

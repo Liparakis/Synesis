@@ -291,6 +291,68 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void aStoppedAddresseeIsResumedOnceForAMessageAndAgainOnlyForANewerOne() throws Exception {
+        Script script = new Script();
+        // claude stops at tick 1 and is sent a message at tick 2. Resumed, it stops again at tick 3
+        // without the log moving, and that message must not wake it a second time. A newer one does.
+        script.lifetimes(1, 100, 1, 1);
+        script.at(0).head(5).announced();
+        script.at(2).head(6).message("claude", 6);
+        script.at(5).head(8).message("claude", 8);
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(2, 5), script.resumedAtTicks);
+        assertEquals(2, result.resumes());
+    }
+
+    @Test
+    void aMessageDoesNotResumeAnAgentItIsNotAddressedTo() throws Exception {
+        Script script = new Script();
+        script.lifetimes(1, 2, 100);
+        script.at(0).head(5).announced();
+        script.at(1).head(6).message("codex", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume codex#2 session-2"), script.launches, "claude stays stopped and no progress was recorded");
+    }
+
+    @Test
+    void aMessageIsNotProgress() {
+        assertFalse(AgentRunController.isProgress(PredictionEventType.CONVERSATION_MESSAGE_SENT));
+        assertFalse(AgentRunController.isProgress(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED));
+    }
+
+    @Test
+    void runLeftWithAnOpenRequestARaisedByALaneSaysItNeedsAnOperator() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().operatorRequest("opr_1 CONDITION=lane_asks_operator");
+        script.at(1).head(7).announced().operatorRequest("opr_1 CONDITION=lane_asks_operator");
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.NEEDS_OPERATOR, result.outcome());
+        assertEquals(0, result.resumes());
+        assertTrue(script.events.contains("OPERATOR_REQUEST=opr_1 CONDITION=lane_asks_operator"), script.events.toString());
+    }
+
+    @Test
+    void aRunWhoseWorkIsCompleteEndsCompletedWhateverIsUnread() throws Exception {
+        Script script = new Script();
+        script.lifetimes(1, 2);
+        script.at(0).head(5).announced();
+        script.at(1).head(9).message("claude", 9).message("codex", 9).complete();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+        assertEquals(0, result.resumes(), "no one is resumed for a message once the work is done");
+    }
+
+    @Test
     void livenessAndLaneTakeoverAreNotProgress() {
         assertFalse(AgentRunController.isProgress(PredictionEventType.PARTICIPANT_HEARTBEAT));
         assertFalse(AgentRunController.isProgress(PredictionEventType.PARTICIPANT_SUSPENDED));
@@ -473,6 +535,12 @@ final class AgentRunControllerTest {
                     Long deadline = answerDeadlines.get(provider);
                     return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
                 }
+
+                @Override
+                public OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
+                    Long sequence = state.messages.get(provider);
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
+                }
             };
         }
     }
@@ -486,6 +554,13 @@ final class AgentRunControllerTest {
         private boolean complete;
         private boolean allCancelled;
         private final List<String> operatorRequests = new ArrayList<>();
+        private final Map<String, Long> messages = new java.util.HashMap<>();
+
+        /** A message addressed to the lane of this provider, at this log position. */
+        private State message(String provider, long sequence) {
+            messages.put(provider, sequence);
+            return this;
+        }
 
         private State operatorRequest(String line) {
             operatorRequests.add(line);

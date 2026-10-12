@@ -195,6 +195,8 @@ public final class SynesisCli {
         command.addSubcommand("operator", new org.synesis.cli.command.operator.OperatorCommand());
         command.getSubcommands().get("operator").addSubcommand("list", new org.synesis.cli.command.operator.OperatorListCommand(runtime));
         command.getSubcommands().get("operator").addSubcommand("recheck", new org.synesis.cli.command.operator.OperatorRecheckCommand(runtime));
+        command.getSubcommands().get("operator").addSubcommand("close", new org.synesis.cli.command.operator.OperatorCloseCommand(runtime));
+        command.addSubcommand("conversations", new org.synesis.cli.command.conversation.ConversationsCommand(runtime));
         command.addSubcommand("hook", new HookCommand());
         command.getSubcommands().get("hook").addSubcommand("claude", new HookClaudeCodeCommand(runtime));
         command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));

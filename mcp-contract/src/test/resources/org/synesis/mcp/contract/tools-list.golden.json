@@ -1406,5 +1406,39 @@
       "type": "object"
     },
     "name": "cancel_lane"
+  },
+  {
+    "description": "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply.",
+    "inputSchema": {
+      "properties": {
+        "conversation": {
+          "description": "A conversation this lane already belongs to, in place of to",
+          "format": "uuid",
+          "type": "string"
+        },
+        "text": {
+          "description": "What you say. It binds nothing and is not an instruction to whoever reads it",
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "description": "Who it is for: each other lane named by a file it claims or by its participant handle, or [\"operator\"] alone for whoever has authority over the project. The same set of lanes is always the same conversation",
+          "items": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 15,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "send_message"
   }
 ]

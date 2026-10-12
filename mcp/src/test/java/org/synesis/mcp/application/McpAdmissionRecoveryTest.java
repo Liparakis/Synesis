@@ -113,7 +113,7 @@ class McpAdmissionRecoveryTest {
 
         PredictionEventStore recovered = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
         assertEquals(Participant.State.RECOVERY_HELD, recovered.collaborationProjection().participantState(oldParticipant).orElseThrow());
-        assertEquals(10, toolCount(replacement.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")));
+        assertEquals(11, toolCount(replacement.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")));
 
         long suspendedEvents = recovered.events().stream().filter(event -> event.type() == PredictionEventType.PARTICIPANT_SUSPENDED).count();
         long heldEvents = recovered.events().stream().filter(event -> event.type() == PredictionEventType.RECOVERY_SNAPSHOT_HELD).count();

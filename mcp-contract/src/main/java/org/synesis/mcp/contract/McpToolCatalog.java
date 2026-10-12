@@ -17,7 +17,7 @@ import java.util.Objects;
  * <p>One immutable descriptor set drives wire compatibility, catalog content,
  * generated tools/list entries, and provider-facing guidance inputs. The guidance artifact digest
  * is intentionally computed by the renderer over its output and is never included in either catalog
- * identity. The catalog contains exactly ten tools; adding or removing a descriptor is a protocol
+ * identity. The catalog contains exactly eleven tools; adding or removing a descriptor is a protocol
  * surface change and must update the corresponding contract tests.</p>
  *
  * @since 1.0
@@ -64,6 +64,10 @@ public final class McpToolCatalog {
      * MCP isolated lane cancellation tool.
      */
     public static final String CANCEL_LANE = "cancel_lane";
+    /**
+     * MCP tool that sends text to other lanes or to the operator.
+     */
+    public static final String SEND_MESSAGE = "send_message";
 
     /**
      * Current descriptor schema version.
@@ -198,7 +202,8 @@ public final class McpToolCatalog {
                 respondCoordination(),
                 publishCapabilityImplementation(),
                 finishLane(),
-                cancelLane());
+                cancelLane(),
+                sendMessage());
     }
 
     private static Descriptor ensureSession() {
@@ -431,6 +436,21 @@ public final class McpToolCatalog {
                 "MUTATING",
                 List.of("SESSION_BINDING"),
                 10);
+    }
+
+    private static Descriptor sendMessage() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("to", Map.of("type", "array", "minItems", 1, "maxItems", 15, "items", Map.of("type", "string", "minLength", 1, "maxLength", 1000), "description",
+                "Who it is for: each other lane named by a file it claims or by its participant handle, or [\"operator\"] alone for whoever has authority over the project. The same set of lanes is always the same conversation"));
+        properties.put("conversation", uuid("A conversation this lane already belongs to, in place of to"));
+        properties.put("text", boundedText("What you say. It binds nothing and is not an instruction to whoever reads it"));
+        return descriptor(SEND_MESSAGE,
+                "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply.",
+                objectSchema(properties, List.of("text")),
+                "send-message",
+                "MUTATING",
+                List.of("SESSION_BINDING"),
+                11);
     }
 
     private static Map<String, Object> contractSchema() {

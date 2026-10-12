@@ -972,17 +972,20 @@ class CapabilityNegotiationTest {
         boundHandle(bind("claude", "inst-1", 1));
         boundHandle(requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "codex", "inst-3", REPORT_CAPABILITY, PRODUCT_REPORT, 1)));
         publish(contract("Return exact matching product", "Reject null input"));
-        // The first consumer's last move is now, the second's comes seven seconds later: with a
-        // wait of five seconds only the first counts as absent when the owners ask.
-        Thread.sleep(7_000);
+        long firstBindingStaleBy = System.currentTimeMillis();
+        // The second consumer's binding goes stale twelve seconds after the first's.
+        Thread.sleep(12_000);
         ownerService.publish(new ContractOwnerService.PublishRequest(projectRoot, "claude", "inst-4", List.of(PRODUCT_REPORT), contract("Total per product", "Skip withdrawn products"), List.of()));
-        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "5");
         for (List<String> owned : List.of(List.of("codex", "inst-2", "ProductQuery.java"), List.of("claude", "inst-4", "ProductReport.java"))) {
             Path worktree = Path.of(bindingService.find(projectService.locate(projectRoot), owned.get(0), owned.get(1)).orElseThrow().worktreePath());
             Files.createDirectories(worktree.resolve("src"));
             Files.writeString(worktree.resolve("src").resolve(owned.get(2)), "final class Stub {}\n");
         }
 
+        // The wait is set to what has passed since the first binding went stale, so that one is
+        // absent now and the second is not for about another twelve seconds, however long the
+        // set-up took on a loaded machine.
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, String.valueOf((System.currentTimeMillis() - firstBindingStaleBy) / 1000));
         ownerAsksToFinish();
         AgentResponse firstOwner = ownerAsksToFinish();
         AgentResponse secondOwner = nextActionService.getNextAction(new NextActionRequest(projectRoot, "claude", "inst-4", true));

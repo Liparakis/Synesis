@@ -19,7 +19,7 @@ import org.synesis.coordination.exception.CoordinationNullException;
  *
  * @param id            stable request identifier
  * @param condition     the condition that holds while the request is open
- * @param raisedBy      participant that asked, or empty when Synesis raised the request itself
+ * @param raisedBy      authority lineage of the lane that asked, or empty when Synesis raised the request itself
  * @param summary       what is blocked and what would clear it
  * @param evidence      the raw output of whatever refused, or empty
  * @param failurePoint  identifier of the local diagnostics entry, or empty
@@ -40,6 +40,13 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      * has not returned. The owner's work is not integrated without it (ADR-0092).
      */
     public static final String BOUND_CONSUMER_ABSENT = "bound_consumer_absent";
+
+    /**
+     * A lane put something to the operator (ADR-0093). Nothing is blocked by it: it changes how a
+     * run that stalls is reported, and it closes when the operator says it is dealt with, since
+     * Synesis cannot observe that a question was answered.
+     */
+    public static final String LANE_ASKS_OPERATOR = "lane_asks_operator";
 
     private static final int MAGIC_RAISED = 0x534f5231;
     private static final int MAGIC_CLOSED = 0x534f5232;
@@ -71,6 +78,20 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public static OperatorRequest raised(String id, String condition, String summary, String evidence) {
         return new OperatorRequest(id, condition, "", summary, bounded(evidence), "", State.OPEN, "");
+    }
+
+    /**
+     * Creates an open request a lane put to the operator.
+     *
+     * @param id      request identifier
+     * @param lineage authority lineage of the lane that asks
+     * @param text    what the lane says
+     * @param context who holds the lane and what it claims, for the operator to place it
+     * @return the open request
+     */
+    public static OperatorRequest askedByLane(String id, String lineage, String text, String context) {
+        requireText(lineage, "lane");
+        return new OperatorRequest(id, LANE_ASKS_OPERATOR, lineage, text, bounded(context), "", State.OPEN, "");
     }
 
     /**

@@ -97,7 +97,9 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.OPERATOR_REQUEST_CLOSED, 74),
             entry(PredictionEventType.CONTRACT_CHANGE_REQUESTED, 75),
             entry(PredictionEventType.CONTRACT_CHANGE_ANSWERED, 76),
-            entry(PredictionEventType.CONTRACT_LANE_ENDED, 77)
+            entry(PredictionEventType.CONTRACT_LANE_ENDED, 77),
+            entry(PredictionEventType.CONVERSATION_MESSAGE_SENT, 78),
+            entry(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED, 79)
     );
 
     @Test
