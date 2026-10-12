@@ -112,10 +112,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         List<String> operatorRequests = store.operatorRequestProjection().open().stream().map(request -> request.id() + " CONDITION=" + request.condition()).toList();
         // A lane is held when a request Synesis raised is open and the lane's work is published
         // and waiting to be integrated. A provider is held when that is true of all its lanes.
-        var completion = store.taskCompletionProjection();
-        java.util.Set<java.util.UUID> waitingLineages = completion.allSnapshots().stream()
-                .filter(snapshot -> completion.snapshotState(snapshot.snapshotId()).filter(org.synesis.coordination.domain.task.TaskCompletionState::awaitsIntegration).isPresent())
-                .map(snapshot -> snapshot.provenance().authorityLineageId()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        java.util.Set<java.util.UUID> waitingLineages = store.taskCompletionProjection().lineagesAwaitingIntegration();
         boolean synesisAsksOperator = store.operatorRequestProjection().open().stream().anyMatch(org.synesis.coordination.domain.operator.OperatorRequest::raisedBySynesis);
         java.util.Set<String> heldProviders = !synesisAsksOperator ? java.util.Set.of() : openLaneProviders.stream()
                 .filter(provider -> store.collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals(provider))

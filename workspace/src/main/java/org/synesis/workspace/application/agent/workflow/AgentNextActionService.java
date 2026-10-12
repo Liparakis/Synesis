@@ -584,7 +584,7 @@ public final class AgentNextActionService {
         }
 
         AgentResponse action = stagedAction(request, binding, worktree, store, callerIdentity, integrationPump);
-        return operatorHolds(integrationPump, action, store, callerIdentity, binding) ? integrationPump : action;
+        return operatorHolds(integrationPump, action, store, binding) ? integrationPump : action;
     }
 
     /**
@@ -595,17 +595,16 @@ public final class AgentNextActionService {
      * published snapshot is waiting to be integrated. Shown an ordinary implementation step
      * instead, the owner of a refused snapshot polled to the limit and stopped.</p>
      */
-    private static boolean operatorHolds(AgentResponse pump, AgentResponse action, PredictionEventStore store, NodeIdentity callerIdentity, ProviderSessionBindingService.Binding binding) {
+    private static boolean operatorHolds(AgentResponse pump, AgentResponse action, PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
         if (pump.reason() != AgentReason.OPERATOR_REQUIRED) {
             return false;
         }
         if (action != null) {
             return action.reason() == AgentReason.INTEGRATION_PENDING;
         }
-        var completion = store.taskCompletionProjection();
-        return completion.findLatestSnapshotForWorker(callerIdentity.nodeId(), binding.workerId())
-                .flatMap(snapshot -> completion.snapshotState(snapshot.snapshotId()))
-                .filter(org.synesis.coordination.domain.task.TaskCompletionState::awaitsIntegration).isPresent();
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        java.util.Set<java.util.UUID> waiting = store.taskCompletionProjection().lineagesAwaitingIntegration();
+        return store.collaborationProjection().activeIntents().stream().anyMatch(intent -> intent.participant().equals(participant) && waiting.contains(intent.authorityLineageId()));
     }
 
     /** Evaluates the stages after the integration pump, in the order {@link #durableCoordinationAction} documents. */

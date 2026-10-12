@@ -96,6 +96,9 @@ public final class HookApplicationService {
      */
     public HookExecutionResult claudeCode(Path profile, InputStream input) {
         ClaudeCodeHookAdapter.Result result = new ClaudeCodeHookAdapter(profile).processStream(input);
+        // The adapter resolves the project from the event it reads; without one the record goes
+        // to the diagnostics that belong to no project.
+        LocalDiagnostics.hook(null, "claude", "PreToolUse", result.outcome().name(), result.humanReason());
         return new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason());
     }
 

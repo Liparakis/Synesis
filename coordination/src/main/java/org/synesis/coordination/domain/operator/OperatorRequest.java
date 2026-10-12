@@ -152,6 +152,17 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
         }
     }
 
+    /**
+     * Returns this request showing other evidence. The condition is the same; what proves it has
+     * changed since the request was raised.
+     *
+     * @param current the refusing tool's output now
+     * @return the request with that evidence
+     */
+    public OperatorRequest withEvidence(String current) {
+        return new OperatorRequest(id, condition, raisedBy, summary, bounded(current), failurePoint, state, closedBecause);
+    }
+
     OperatorRequest closed(String because) {
         return new OperatorRequest(id, condition, raisedBy, summary, evidence, failurePoint, State.CLOSED, because);
     }

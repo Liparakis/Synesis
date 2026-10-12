@@ -44,7 +44,7 @@ public final class OperatorRecheckCommand implements Callable<Integer> {
             runtime.terminal().stdout("RECHECK=" + pass.status().value() + (pass.reason() == null ? "" : " REASON=" + pass.reason().value()));
             var open = location.openCoordinationStore().operatorRequestProjection().open();
             OperatorListCommand.print(runtime, open);
-            return open.isEmpty() ? ExitCodes.OK : ExitCodes.COMMAND_FAILED;
+            return open.isEmpty() && pass.status() != org.synesis.workspace.agent.AgentStatus.FAILED ? ExitCodes.OK : ExitCodes.COMMAND_FAILED;
         } catch (Exception failure) {
             runtime.terminal().stderr("OPERATOR_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;

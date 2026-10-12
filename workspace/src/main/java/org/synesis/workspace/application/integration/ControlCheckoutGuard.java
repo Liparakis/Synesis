@@ -18,6 +18,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
+import org.synesis.workspace.infrastructure.diagnostics.LocalDiagnostics;
 
 /**
  * Keeps the operator request for a control checkout holding changes Synesis did not make in step
@@ -51,27 +52,33 @@ final class ControlCheckoutGuard {
             // its own check and refuses on its own evidence.
             return open;
         }
-        if (foreign.isEmpty() == open.isEmpty()) {
+        if (foreign.isEmpty() && open.isEmpty()) {
             return open;
         }
+        // What the operator and the waiting lanes are shown is the checkout as it is now, not as
+        // it was when the request was raised: a file removed since must not still be named.
+        String evidence = String.join("\n", foreign);
+        OperatorRequest standing = open.map(request -> request.withEvidence(evidence)).orElseGet(() -> OperatorRequest.raised(
+                "opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16),
+                OperatorRequest.CONTROL_CHECKOUT_FOREIGN_CHANGES,
+                "The project checkout at " + controlRoot + " holds changes Synesis did not make, so nothing can be integrated into it. "
+                        + "Commit them or remove them there. This request closes when the checkout is clean, and the waiting work is integrated then.",
+                evidence));
         try {
-            if (open.isPresent()) {
+            if (foreign.isEmpty()) {
                 store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_CLOSED, identity.nodeId(),
-                        OperatorRequest.encodeClosed(open.get().id(), "The control checkout holds no changes Synesis did not make."), identity);
+                        OperatorRequest.encodeClosed(standing.id(), "The control checkout holds no changes Synesis did not make."), identity);
                 return Optional.empty();
             }
-            OperatorRequest request = OperatorRequest.raised("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16),
-                    OperatorRequest.CONTROL_CHECKOUT_FOREIGN_CHANGES,
-                    "The project checkout at " + controlRoot + " holds changes Synesis did not make, so nothing can be integrated into it. "
-                            + "Commit them or remove them there. This request closes when the checkout is clean, and the waiting work is integrated then.",
-                    String.join("\n", foreign));
-            store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), request.encodeRaised(), identity);
-            return Optional.of(request);
+            if (open.isEmpty()) {
+                store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), standing.encodeRaised(), identity);
+            }
         } catch (Exception notRecorded) {
             // The log could not take the event. What stops integration is the checkout, not the
-            // record, so the answer follows the checkout and the next pass records it.
-            return foreign.isEmpty() ? Optional.empty() : open;
+            // record: the answer follows the checkout, and the next pass records it.
+            LocalDiagnostics.failurePoint(controlRoot, "integration", "record_operator_request", String.valueOf(notRecorded.getMessage()), notRecorded);
         }
+        return foreign.isEmpty() ? Optional.empty() : Optional.of(standing);
     }
 
     /**

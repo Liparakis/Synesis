@@ -290,6 +290,27 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Returns the authority lineages whose published work waits to be integrated: those whose
+     * latest snapshot, by claim epoch within its task, is in a state that
+     * {@link TaskCompletionState#awaitsIntegration() awaits integration}.
+     *
+     * <p>A lane continued by a successor keeps its lineage, so its work is found whichever
+     * session holds it now. A snapshot left behind by a later revision of the same lane does not
+     * count: only the lane's current work says whether the lane is waiting.</p>
+     *
+     * @return lineages waiting only for integration
+     */
+    public synchronized java.util.Set<UUID> lineagesAwaitingIntegration() {
+        java.util.Map<String, TaskSnapshotRecord> latest = new java.util.HashMap<>();
+        for (TaskSnapshotRecord snapshot : allSnapshots()) {
+            latest.merge(snapshot.taskId() + "/" + snapshot.provenance().authorityLineageId(), snapshot,
+                    (kept, next) -> next.provenance().claimEpoch() >= kept.provenance().claimEpoch() ? next : kept);
+        }
+        return latest.values().stream().filter(snapshot -> snapshotState(snapshot.snapshotId()).filter(TaskCompletionState::awaitsIntegration).isPresent())
+                .map(snapshot -> snapshot.provenance().authorityLineageId()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    /**
      * Returns all immutable task snapshots, including rejected history.
      *
      * @return immutable snapshot history
