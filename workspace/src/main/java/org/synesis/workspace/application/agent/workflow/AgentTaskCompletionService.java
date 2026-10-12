@@ -197,8 +197,6 @@ public final class AgentTaskCompletionService {
             PredictionEventType.CAPABILITY_REQUEST_CREATED,
             PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED,
             PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
-            PredictionEventType.CAPABILITY_REQUEST_REJECTED,
-            PredictionEventType.CAPABILITY_REQUEST_CANCELLED,
             PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED,
             PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
             PredictionEventType.CAPABILITY_VALIDATION_STARTED,

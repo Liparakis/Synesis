@@ -100,11 +100,14 @@ public enum PredictionEventType {
      */
     CAPABILITY_REQUEST_ACCEPTED(21),
     /**
-     * Rejects a capability request.
+     * Retired with the request that waited for its owner's answer (ADR-0092): a binding is
+     * created already agreed, so there is nothing to reject. Nothing writes it and every
+     * projection ignores it; the wire code is kept so it is never given to another event.
      */
     CAPABILITY_REQUEST_REJECTED(22),
     /**
-     * Cancels a pending capability request.
+     * Retired for the same reason: a binding is not cancelled while it waits, it is closed with
+     * its lane. Nothing writes it and every projection ignores it; the wire code is kept.
      */
     CAPABILITY_REQUEST_CANCELLED(23),
     /**

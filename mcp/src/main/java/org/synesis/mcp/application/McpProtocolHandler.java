@@ -26,7 +26,7 @@ import org.synesis.workspace.application.agent.completion.AgentTaskCancellationS
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
@@ -234,7 +234,7 @@ public final class McpProtocolHandler {
         ProjectCommandService commandService = new ProjectCommandService();
         ProjectCommandAdmissionService commandAdmissionService = new ProjectCommandAdmissionService(commandService, AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
         AgentNextActionService nextActionService = new AgentNextActionService();
-        CapabilityRequestService capabilityRequestService = new CapabilityRequestService();
+        ContractConsumerService contractConsumerService = new ContractConsumerService();
         ContractOwnerService contractOwnerService = new ContractOwnerService();
         ImplementationPublicationService publicationService = new ImplementationPublicationService();
         ImplementationValidationService validationService = new ImplementationValidationService();
@@ -266,7 +266,7 @@ public final class McpProtocolHandler {
         this.workspaceTools = new McpWorkspaceTools(readService, patchService, provider, connectionInstanceId);
         this.reconciliation = new McpRecoveryReconciliation(reconciliationService);
         this.coordinationTools = new McpCoordinationTools(nextActionService,
-                capabilityRequestService,
+                contractConsumerService,
                 contractOwnerService,
                 new org.synesis.workspace.application.conversation.ConversationService(),
                 publicationService,

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.synesis.coordination.application.PeerDependencyPolicy;
@@ -54,7 +55,7 @@ import org.synesis.workspace.application.provider.session.SessionAuthorityResolv
  * was: the implementation revisions the owner publishes to it, the consumer's validation, and
  * every gate on finish, integration, cancellation and release.</p>
  */
-public final class CapabilityRequestService {
+public final class ContractConsumerService {
 
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
@@ -64,7 +65,7 @@ public final class CapabilityRequestService {
     /**
      * Creates a service backed by {@link SecureRandomCapabilityRequestHandleGenerator}.
      */
-    public CapabilityRequestService() {
+    public ContractConsumerService() {
         this(new SecureRandomCapabilityRequestHandleGenerator());
     }
 
@@ -73,7 +74,7 @@ public final class CapabilityRequestService {
      *
      * @param handleGenerator handle generator instance
      */
-    public CapabilityRequestService(CapabilityRequestHandleGenerator handleGenerator) {
+    public ContractConsumerService(CapabilityRequestHandleGenerator handleGenerator) {
         this.projectService = new ProjectApplicationService();
         this.bindingService = new ProviderSessionBindingService();
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
@@ -123,7 +124,7 @@ public final class CapabilityRequestService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
         CapabilityRequestProjection projection = store.capabilityRequestProjection();
-        Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
+        Optional<WorkIntent> owner = WorkspaceCollaborationService.claimantOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
             Optional<ContractRecord> finished = store.contractProjection().frozenCovering(request.ownerPath());
             if (finished.isPresent()) {
@@ -254,7 +255,7 @@ public final class CapabilityRequestService {
         if (requesterIntent.isEmpty()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
-        Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
+        Optional<WorkIntent> owner = WorkspaceCollaborationService.claimantOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
             Optional<ContractRecord> finished = store.contractProjection().frozenCovering(request.ownerPath());
             if (finished.isPresent()) {
@@ -287,27 +288,6 @@ public final class CapabilityRequestService {
     }
 
     /**
-     * Returns the lane a file names as owner: the one open lane of another participant that
-     * claims it.
-     *
-     * <p>Claims are exclusive, so that lane is the owner of what the file provides, and that is
-     * durable state. No lineage the caller believes in is taken instead: with five lanes open,
-     * agents reused the lineage of a lane they had collided with over an unrelated file.</p>
-     *
-     * @param store                coordination store
-     * @param path                 the file
-     * @param requesterParticipant the caller, whose own lane is never the answer
-     * @return the one other open lane claiming the file, or empty when none or several do
-     */
-    public static Optional<WorkIntent> ownerOf(PredictionEventStore store, ResourceSelector path, String requesterParticipant) {
-        List<WorkIntent> claimants = store.collaborationProjection().activeIntents().stream()
-                .filter(intent -> !intent.participant().equals(requesterParticipant))
-                .filter(intent -> intent.selectors().stream().anyMatch(path::overlaps))
-                .toList();
-        return claimants.size() == 1 ? Optional.of(claimants.getFirst()) : Optional.empty();
-    }
-
-    /**
      * Answers a caller whose named file no other lane claims with what is claimed now. The bare
      * refusal left it to guess or to ask again.
      */
@@ -334,7 +314,7 @@ public final class CapabilityRequestService {
         return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
     }
 
-    private static java.util.Set<String> integratedDependencies(PredictionEventStore store, CapabilityRequestProjection projection, WorkIntent requesterIntent, String requesterNodeId,
+    private static Set<String> integratedDependencies(PredictionEventStore store, CapabilityRequestProjection projection, WorkIntent requesterIntent, String requesterNodeId,
             ProviderSessionBindingService.Binding binding) {
         List<CapabilityRequestRecord> own = projection.findAllForRequester(requesterNodeId).stream()
                 .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId())).toList();

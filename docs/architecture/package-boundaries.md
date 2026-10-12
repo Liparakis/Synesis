@@ -110,7 +110,7 @@ The lists below show every top-level Java type under its declared package. Most 
 - `org.synesis.workspace.application.agent.run`: `AgentRunController`, `ControllerConnections`, `EventLogObserver`, `ProviderAgentProcesses`
 - `org.synesis.workspace.application.agent.session`: `AgentSessionContext`, `AgentSessionFailure`, `AgentSessionService`, `AgentTaskIntent`, `CallerAdmission`, `SessionResolutionRequest`
 - `org.synesis.workspace.application.agent.workflow`: `AgentNextActionService`, `AgentReviewActionProjection`, `AgentTaskCompletionService`, `AgentWorkflowReducer`, `CapabilityActionProjection`, `CapabilityActor`, `CollaborationResponseMapper`, `CollaborationView`, `LaneCompletionProjection`, `LaneScope`, `LocalCoordinationFallback`, `NextActionKeys`, `NextActionProtocol`, `NextActionRequest`, `NextActionSupport`, `NoChangeCompletionEligibility`, `Publishability`, `RecoveryContinuationProjection`, `ReviewLaneProjection`
-- `org.synesis.workspace.application.capability`: `CapabilityRequestService`, `CapabilityResponseService`
+- `org.synesis.workspace.application.capability`: `ContractConsumerService`, `ContractOwnerService`
 - `org.synesis.workspace.application.collaboration`: `CollaborationSnapshot`, `ContractSnapshot`, `LaneIdentities`, `MutationAdmission`, `NoChangeLaneCompletion`, `RecoveryLaneContinuation`, `ReviewSnapshotAccessService`, `ReviewValidationService`, `WorkIntentAnnouncement`, `WorkspaceCollaborationService`
 - `org.synesis.workspace.application.constraint`: `ConstraintApplicationService`
 - `org.synesis.workspace.application.control`: `ControlBranchAdvancementService`

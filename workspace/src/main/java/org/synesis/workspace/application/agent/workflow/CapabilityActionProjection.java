@@ -46,17 +46,10 @@ final class CapabilityActionProjection {
     private static final String DEFAULT_REVISION_REASON = "Revision required by requester";
 
     /**
-     * Reason reported when the owner rejected a capability request without stating why.
-     */
-    private static final String DEFAULT_REJECTION_REASON = "Capability request rejected by owner";
-
-    /**
      * Capability states in which a requester has something to act on or wait for. A
      * {@code REVISION_REQUESTED} request outranks all of them and is handled separately.
      */
     private static final Set<CapabilityLifecycleState> REQUESTER_ACTIONABLE_STATES = Set.of(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
-            CapabilityLifecycleState.REJECTED,
-            CapabilityLifecycleState.AWAITING_OWNER,
             CapabilityLifecycleState.ACCEPTED,
             CapabilityLifecycleState.IMPLEMENTING,
             CapabilityLifecycleState.VALIDATING);
@@ -368,11 +361,6 @@ final class CapabilityActionProjection {
         // separates the assigned owner from a sibling. Projecting by node alone would hand a
         // sibling a reply or publication that the owning services then refuse.
         Predicate<CapabilityRequestRecord> ownedByCaller = candidate -> candidate.matchesOwner(actor.nodeId(), actor.supervisorId(), actor.workerId());
-        List<CapabilityRequestRecord> ownerPending = capabilities.findPendingForOwner(actor.nodeId()).stream().filter(ownedByCaller).filter(inCallerLineage).toList();
-        if (!ownerPending.isEmpty()) {
-            return capabilityOwnerResponse(ownerPending, AgentStatus.READY, null, AgentNextAction.RESPOND_COORDINATION);
-        }
-
         List<CapabilityRequestRecord> validationRevisions = capabilities.findValidationRevisionForOwner(actor.nodeId()).stream().filter(ownedByCaller).filter(inCallerLineage).toList();
         if (!validationRevisions.isEmpty()) {
             CapabilityRequestRecord first = validationRevisions.getFirst();
@@ -528,13 +516,8 @@ final class CapabilityActionProjection {
                     NextActionKeys.IMPLEMENTATION_REVISION, implementation.revisionNumber()));
             return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, AgentNextAction.VALIDATE_IMPLEMENTATION, result);
         }
-        if (state == CapabilityLifecycleState.REJECTED) {
-            result.put(NextActionKeys.REASON, Objects.requireNonNullElse(focus.reason(), DEFAULT_REJECTION_REASON));
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.CAPABILITY_REJECTED, AgentNextAction.RETRY, result);
-        }
         result.put(NextActionKeys.PENDING, pending.size());
-        AgentReason reason = state == CapabilityLifecycleState.AWAITING_OWNER ? AgentReason.OWNER_RESPONSE_PENDING : AgentReason.IMPLEMENTATION_UNAVAILABLE;
-        return new AgentResponse(AgentStatus.WAITING, reason, AgentNextAction.WAIT, result);
+        return new AgentResponse(AgentStatus.WAITING, AgentReason.IMPLEMENTATION_UNAVAILABLE, AgentNextAction.WAIT, result);
     }
 
     /**

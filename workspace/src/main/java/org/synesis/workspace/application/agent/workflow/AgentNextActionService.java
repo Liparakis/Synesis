@@ -15,7 +15,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.synesis.coordination.application.WorkIntentService;
-import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.TaskCompletionState;
@@ -197,7 +196,7 @@ public final class AgentNextActionService {
      */
     private AgentResponse projectRecoveryDeadline(NextActionRequest request, AgentResponse response) {
         if (response.status() != AgentStatus.WAITING || response.nextAction() != AgentNextAction.WAIT
-                || (response.reason() != AgentReason.OWNER_RESPONSE_PENDING && response.reason() != AgentReason.IMPLEMENTATION_UNAVAILABLE)
+                || response.reason() != AgentReason.IMPLEMENTATION_UNAVAILABLE
                 || !(response.result() instanceof Map<?, ?> current)) {
             return response;
         }
@@ -214,8 +213,7 @@ public final class AgentNextActionService {
             }
             PredictionEventStore store = openedStore.get();
             var capability = store.capabilityRequestProjection().findByHandle(handle).orElse(null);
-            if (capability == null || capability.contractRevision() != revision.longValue()
-                    || (response.reason() == AgentReason.OWNER_RESPONSE_PENDING && capability.state() != CapabilityLifecycleState.AWAITING_OWNER)) {
+            if (capability == null || capability.contractRevision() != revision.longValue()) {
                 return response;
             }
             List<WorkIntent> ownerIntents = store.collaborationProjection().activeIntents().stream()

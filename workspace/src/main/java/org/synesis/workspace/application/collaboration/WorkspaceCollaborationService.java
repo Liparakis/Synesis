@@ -116,6 +116,26 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
+     * Returns the lane a file names: the one open lane of another participant that claims it.
+     *
+     * <p>Claims are exclusive, so that lane is the owner of what the file provides, and that is
+     * durable state. No lineage the caller believes in is taken instead: with five lanes open,
+     * agents reused the lineage of a lane they had collided with over an unrelated file.</p>
+     *
+     * @param store       current project projection
+     * @param path        the file
+     * @param participant the caller, whose own lane is never the answer
+     * @return the one other open lane claiming the file, or empty when none or several do
+     */
+    public static java.util.Optional<WorkIntent> claimantOf(PredictionEventStore store, ResourceSelector path, String participant) {
+        List<WorkIntent> claimants = store.collaborationProjection().activeIntents().stream()
+                .filter(intent -> !intent.participant().equals(participant))
+                .filter(intent -> intent.selectors().stream().anyMatch(path::overlaps))
+                .toList();
+        return claimants.size() == 1 ? java.util.Optional.of(claimants.getFirst()) : java.util.Optional.empty();
+    }
+
+    /**
      * Returns the stable opaque participant handle for a connection.
      *
      * @param connectionInstanceId connection ID

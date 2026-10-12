@@ -349,7 +349,14 @@ it was acted on, and each was real.
 A lane that has published its work can no longer revise its contract: nobody
 would serve the bindings a revision makes stale.
 
-Not done: `CapabilityRequestService` is now the consumer half of this record
-and still carries its old name, and the replay handlers for a request that
-waits for its owner, is rejected or is cancelled remain although nothing
-produces those events any more.
+The consumer half of this record was still named for the flow it replaced; it
+is `ContractConsumerService` now, beside `ContractOwnerService`, and the lookup
+of the lane a file names moved to where lanes are looked up.
+
+What only served a request that waits for its owner, is rejected or is
+cancelled is removed: the replay of the two events, the lookup of requests
+awaiting an owner, and the branches that showed an agent those states. The two
+event types keep their wire codes and are marked retired, as
+`CONTRACT_SUPERSEDED` is. The state names stay: they are wire values. The
+reason value `capability_rejected` stays in the response vocabulary although
+nothing sends it.

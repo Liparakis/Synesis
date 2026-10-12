@@ -65,8 +65,6 @@ public final class CapabilityRequestProjection {
             case CAPABILITY_REQUEST_CREATED -> processCreated(event);
             case CAPABILITY_REQUEST_CONTRACT_REVISED -> processRevised(event);
             case CAPABILITY_REQUEST_ACCEPTED -> processAccepted(event);
-            case CAPABILITY_REQUEST_REJECTED -> processRejected(event);
-            case CAPABILITY_REQUEST_CANCELLED -> processCancelled(event);
             case CAPABILITY_REQUEST_SUPERSEDED -> processSuperseded(event);
             case CAPABILITY_IMPLEMENTATION_PUBLISHED -> processImplementationPublished(event);
             case CAPABILITY_VALIDATION_STARTED -> processValidationStarted(event);
@@ -114,38 +112,6 @@ public final class CapabilityRequestProjection {
      */
     public synchronized Optional<CapabilityRequestRecord> findByHandle(CapabilityRequestHandle handle) {
         return Optional.ofNullable(records.get(CoordinationNullException.requireNonNull(handle, "handle")));
-    }
-
-    /**
-     * Returns all pending capability requests for an owner node that require a response. Authorization is by node ID
-     * only; caller must
-     * additionally check worker identity.
-     *
-     * @param ownerNodeId assigned owner node ID
-     * @return list of pending requests
-     */
-    public synchronized List<CapabilityRequestRecord> findPendingForOwner(String ownerNodeId) {
-        if (ownerNodeId == null) {
-            return List.of();
-        }
-        return findPendingForOwner(new NodeId(ownerNodeId));
-    }
-
-    /**
-     * Returns pending requests for a typed owner node that require a response.
-     *
-     * @param ownerNodeId assigned owner node identity
-     * @return immutable list of pending requests
-     */
-    public synchronized List<CapabilityRequestRecord> findPendingForOwner(NodeId ownerNodeId) {
-        NodeId owner = CoordinationNullException.requireNonNull(ownerNodeId, "owner node ID");
-        List<CapabilityRequestRecord> list = new ArrayList<>();
-        for (CapabilityRequestRecord rec : records.values()) {
-            if (rec.ownerNodeIdentity().equals(owner) && rec.state() == CapabilityLifecycleState.AWAITING_OWNER) {
-                list.add(rec);
-            }
-        }
-        return List.copyOf(list);
     }
 
     /**
@@ -454,42 +420,6 @@ public final class CapabilityRequestProjection {
                 current.withUpdate(CapabilityLifecycleState.ACCEPTED,
                         payload.contract(),
                         null,
-                        event.createdAtEpochMillis()));
-    }
-
-    /**
-     * Applies the rejected event to this projection.
-     *
-     * @param event event to apply
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private void processRejected(PredictionEvent event) throws IOException {
-        CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        CapabilityRequestRecord current = requireRequest(payload,
-                state -> state == CapabilityLifecycleState.AWAITING_OWNER,
-                "STALE_CAPABILITY_REQUEST_REJECTION");
-        records.put(payload.handle(),
-                current.withUpdate(CapabilityLifecycleState.REJECTED,
-                        null,
-                        payload.reason(),
-                        event.createdAtEpochMillis()));
-    }
-
-    /**
-     * Applies the cancelled event to this projection.
-     *
-     * @param event event to apply
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private void processCancelled(PredictionEvent event) throws IOException {
-        CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
-        CapabilityRequestRecord current = requireRequest(payload,
-                CapabilityLifecycleState::isUnderNegotiation,
-                "STALE_CAPABILITY_REQUEST_CANCELLATION");
-        records.put(payload.handle(),
-                current.withUpdate(CapabilityLifecycleState.CANCELLED,
-                        null,
-                        payload.reason(),
                         event.createdAtEpochMillis()));
     }
 

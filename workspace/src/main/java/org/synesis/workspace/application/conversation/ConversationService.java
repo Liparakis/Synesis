@@ -30,7 +30,6 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
@@ -320,7 +319,7 @@ public final class ConversationService {
             return byHandle;
         }
         try {
-            return CapabilityRequestService.ownerOf(store, ResourceSelector.pathExact(name), caller.participant());
+            return WorkspaceCollaborationService.claimantOf(store, ResourceSelector.pathExact(name), caller.participant());
         } catch (IllegalArgumentException notARepositoryFile) {
             return Optional.empty();
         }

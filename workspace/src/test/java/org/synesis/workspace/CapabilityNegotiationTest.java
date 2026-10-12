@@ -58,7 +58,7 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -85,7 +85,7 @@ class CapabilityNegotiationTest {
     private String configuredGrace;
     private ProjectApplicationService projectService;
     private ProviderSessionBindingService bindingService;
-    private CapabilityRequestService requestService;
+    private ContractConsumerService requestService;
     private ContractOwnerService ownerService;
     private AgentNextActionService nextActionService;
 
@@ -164,7 +164,7 @@ class CapabilityNegotiationTest {
     }
 
     private AgentResponse bind(String provider, String instance, long revision) {
-        return requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, provider, instance, CAPABILITY, PRODUCT_QUERY, revision));
+        return requestService.bind(new ContractConsumerService.BindRequest(projectRoot, provider, instance, CAPABILITY, PRODUCT_QUERY, revision));
     }
 
     private String boundHandle(AgentResponse bound) {
@@ -173,7 +173,7 @@ class CapabilityNegotiationTest {
     }
 
     private AgentResponse requestChange(String provider, String instance, String need) {
-        return requestService.requestChange(new CapabilityRequestService.ChangeRequest(projectRoot, provider, instance, PRODUCT_QUERY, need));
+        return requestService.requestChange(new ContractConsumerService.ChangeRequest(projectRoot, provider, instance, PRODUCT_QUERY, need));
     }
 
     private AgentResponse next(String provider, String instance) {
@@ -234,7 +234,7 @@ class CapabilityNegotiationTest {
         ProviderTestSupport.install(projectService.locate(projectRoot), "codex");
 
         bindingService = new ProviderSessionBindingService();
-        requestService = new CapabilityRequestService();
+        requestService = new ContractConsumerService();
         ownerService = new ContractOwnerService();
         nextActionService = new AgentNextActionService();
 
@@ -350,17 +350,17 @@ class CapabilityNegotiationTest {
         collaboration.announce(projectRoot, "codex", "inst-3", "Implement the store", "Store passes its tests", List.of(ResourceSelector.pathExact("src/store.py")));
         collaboration.announce(projectRoot, "claude", "inst-1", "Implement the command line", "Command line passes its tests", List.of(ResourceSelector.pathExact("src/cli.py")));
 
-        AgentResponse unclaimed = requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "claude", "inst-1", "store.api", ResourceSelector.pathExact("src/export.py"), 1));
+        AgentResponse unclaimed = requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "claude", "inst-1", "store.api", ResourceSelector.pathExact("src/export.py"), 1));
         assertEquals(AgentReason.OWNER_REQUIRED, unclaimed.reason(), unclaimed.toJson());
         assertEquals(List.of(List.of("docs/USAGE.md"), List.of("src/store.py")), ((List<Map<String, Object>>) result(unclaimed).get("lanes")).stream().map(lane -> lane.get("claims")).toList());
-        AgentResponse ownFile = requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "claude", "inst-1", "store.api", ResourceSelector.pathExact("src/cli.py"), 1));
+        AgentResponse ownFile = requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "claude", "inst-1", "store.api", ResourceSelector.pathExact("src/cli.py"), 1));
         assertEquals(AgentReason.OWNER_REQUIRED, ownFile.reason(), ownFile.toJson());
         assertTrue(replayedStore().capabilityRequestProjection().records().isEmpty());
 
         ResourceSelector store = ResourceSelector.pathExact("src/store.py");
         AgentResponse published = ownerService.publish(new ContractOwnerService.PublishRequest(projectRoot, "codex", "inst-3", List.of(store), contract("keeps tasks across runs"), List.of()));
         assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
-        AgentResponse bound = requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "claude", "inst-1", "store.api", store, 1));
+        AgentResponse bound = requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "claude", "inst-1", "store.api", store, 1));
         assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
         assertEquals(List.of("src/store.py"), ((Map<String, Object>) result(bound).get("owner")).get("claims"));
         CapabilityRequestRecord request = replayedRequest((String) result(bound).get("capabilityRequestHandle"));
@@ -379,7 +379,7 @@ class CapabilityNegotiationTest {
         // Separate service instances stand in for separate MCP processes sharing one project.
         List<Callable<AgentResponse>> calls = new ArrayList<>();
         for (int caller = 0; caller < 4; caller++) {
-            calls.add(() -> new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(projectRoot, "claude", "inst-1", CAPABILITY, PRODUCT_QUERY, 1)));
+            calls.add(() -> new ContractConsumerService().bind(new ContractConsumerService.BindRequest(projectRoot, "claude", "inst-1", CAPABILITY, PRODUCT_QUERY, 1)));
         }
         List<AgentResponse> responses = concurrently(calls);
 
@@ -479,7 +479,7 @@ class CapabilityNegotiationTest {
         announceSecondConsumer(consumer.workGroupId());
         publish(contract("Return exact matching product"));
         String first = boundHandle(bind("claude", "inst-1", 1));
-        String second = boundHandle(requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "codex", "inst-3", CAPABILITY, PRODUCT_QUERY, 1)));
+        String second = boundHandle(requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "codex", "inst-3", CAPABILITY, PRODUCT_QUERY, 1)));
         publishImplementation();
         assertEquals(AgentStatus.READY, validate("claude", "inst-1", first, "inspect", 1).status());
         assertTrue(replayedStore().capabilityRequestProjection().findValidationContext(first).isPresent(), "a validation is in progress");
@@ -554,7 +554,7 @@ class CapabilityNegotiationTest {
         assertEquals(AgentStatus.COMPLETED, cancelled.status(), cancelled.toJson());
         assertEquals(CapabilityLifecycleState.SUPERSEDED, replayedRequest(early).state());
 
-        String late = boundHandle(requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "codex", "inst-3", CAPABILITY, PRODUCT_QUERY, 1)));
+        String late = boundHandle(requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "codex", "inst-3", CAPABILITY, PRODUCT_QUERY, 1)));
         publishImplementation();
         assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, replayedRequest(late).state());
 
@@ -812,7 +812,7 @@ class CapabilityNegotiationTest {
         nextAfterRefresh("claude", "inst-1");
         AgentResponse late = bind("claude", "inst-1", 1);
         assertEquals("CAPABILITY_OWNER_INTEGRATED", result(late).get("reason"), late.toJson());
-        String live = boundHandle(requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "claude", "inst-1", REPORT_CAPABILITY, PRODUCT_REPORT, 1)));
+        String live = boundHandle(requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "claude", "inst-1", REPORT_CAPABILITY, PRODUCT_REPORT, 1)));
         publishReport(contract("Total per product", "Skip withdrawn products"));
         assertEquals(CapabilityLifecycleState.REVISION_REQUESTED, replayedRequest(live).state());
 
@@ -970,7 +970,7 @@ class CapabilityNegotiationTest {
         publish(contract("Return exact matching product"));
         ownerService.publish(new ContractOwnerService.PublishRequest(projectRoot, "claude", "inst-4", List.of(PRODUCT_REPORT), contract("Total per product"), List.of()));
         boundHandle(bind("claude", "inst-1", 1));
-        boundHandle(requestService.bind(new CapabilityRequestService.BindRequest(projectRoot, "codex", "inst-3", REPORT_CAPABILITY, PRODUCT_REPORT, 1)));
+        boundHandle(requestService.bind(new ContractConsumerService.BindRequest(projectRoot, "codex", "inst-3", REPORT_CAPABILITY, PRODUCT_REPORT, 1)));
         publish(contract("Return exact matching product", "Reject null input"));
         long firstBindingStaleBy = System.currentTimeMillis();
         // The second consumer's binding goes stale twelve seconds after the first's.

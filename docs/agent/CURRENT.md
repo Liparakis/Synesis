@@ -75,9 +75,10 @@ hold is not shown. No real run exercised a message waking a stopped agent, a suc
 conversation, or an agent addressing the operator; those are proven by source-level tests only. The
 real runs were made on the build before the review of step 3 was acted on, and were not repeated
 after it. From
-the review of step 2: `CapabilityRequestService` still carries the name of the flow it replaced, and
-the replay handlers for a request that waits for its owner, is rejected or is cancelled remain
-although nothing produces those events.
+the review of step 2, both leftovers were dealt with afterwards: the consumer half of the public
+contract, which still carried the name of the flow it replaced, is `ContractConsumerService`, and
+what only served a request that waits for its owner, is rejected or is cancelled is removed, with
+the two event types marked retired.
 
 Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 656
 (1 skipped), MCP 176, CLI 120, 0 failures, with the documentation, format, architecture, dashboard

@@ -44,7 +44,7 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -101,7 +101,7 @@ class AgentNextActionServiceTest {
         AgentResponse published = new ContractOwnerService().publish(new ContractOwnerService.PublishRequest(controlRoot, ownerProvider, ownerConnection,
                 List.of(ResourceSelector.pathExact(ownerFile)), contract, List.of()));
         assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
-        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, consumerProvider, consumerConnection, capability,
+        AgentResponse bound = new ContractConsumerService().bind(new ContractConsumerService.BindRequest(controlRoot, consumerProvider, consumerConnection, capability,
                 ResourceSelector.pathExact(ownerFile), ((Number) ((Map<?, ?>) published.result()).get("revision")).longValue()));
         assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
         return (String) ((Map<?, ?>) bound.result()).get("capabilityRequestHandle");
@@ -734,7 +734,7 @@ class AgentNextActionServiceTest {
                 List.of(ResourceSelector.pathExact("src/SecondConsumer.java")),
                 owner.intent().workGroupId());
         assertTrue(secondRequester.acquired());
-        AgentResponse secondBound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, "codex", "local-capability-requester-two",
+        AgentResponse secondBound = new ContractConsumerService().bind(new ContractConsumerService.BindRequest(controlRoot, "codex", "local-capability-requester-two",
                 "tasktracker.domain", ResourceSelector.pathExact("src/Domain.java"), 1));
         assertEquals(AgentStatus.READY, secondBound.status(), secondBound.toJson());
         AgentResponse afterSecond = nextActions.getNextAction(new NextActionRequest(controlRoot,
@@ -773,7 +773,7 @@ class AgentNextActionServiceTest {
                 List.of(),
                 List.of());
 
-        AgentResponse requestResponse = new CapabilityRequestService().requestChange(new CapabilityRequestService.ChangeRequest(controlRoot,
+        AgentResponse requestResponse = new ContractConsumerService().requestChange(new ContractConsumerService.ChangeRequest(controlRoot,
                 "codex",
                 "requester-owner-filter",
                 ResourceSelector.pathExact("src/domain"),
@@ -817,7 +817,7 @@ class AgentNextActionServiceTest {
                 List.of(),
                 List.of());
 
-        AgentResponse requestResponse = new CapabilityRequestService().requestChange(new CapabilityRequestService.ChangeRequest(controlRoot,
+        AgentResponse requestResponse = new ContractConsumerService().requestChange(new ContractConsumerService.ChangeRequest(controlRoot,
                 "codex",
                 "same-provider-requester",
                 ResourceSelector.pathExact("src/domain"),
@@ -838,7 +838,7 @@ class AgentNextActionServiceTest {
         AgentResponse published = new ContractOwnerService().publish(new ContractOwnerService.PublishRequest(controlRoot, "codex", "same-provider-owner",
                 List.of(ResourceSelector.pathExact("src/domain")), contract, List.of(UUID.fromString(changeRequestId))));
         assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
-        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, "codex", "same-provider-requester", "tasktracker.domain",
+        AgentResponse bound = new ContractConsumerService().bind(new ContractConsumerService.BindRequest(controlRoot, "codex", "same-provider-requester", "tasktracker.domain",
                 ResourceSelector.pathExact("src/domain"), 1));
         assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
         String handle = (String) ((Map<?, ?>) bound.result()).get("capabilityRequestHandle");

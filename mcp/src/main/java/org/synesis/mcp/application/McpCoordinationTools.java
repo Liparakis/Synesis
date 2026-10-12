@@ -33,7 +33,7 @@ import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
@@ -60,11 +60,11 @@ final class McpCoordinationTools {
      */
     private final AgentNextActionService nextActionService;
     /**
-     * Service that creates capability requests.
+     * Service through which a lane binds to a contract and files change requests.
      */
-    private final CapabilityRequestService capabilityRequestService;
+    private final ContractConsumerService contractConsumerService;
     /**
-     * Service that processes capability-owner responses.
+     * Service through which a lane publishes its contracts and answers change requests.
      */
     private final ContractOwnerService contractOwnerService;
     /**
@@ -123,7 +123,7 @@ final class McpCoordinationTools {
      * Creates the coordination tools for one connection.
      *
      * @param nextActionService         service that projects the durable next action
-     * @param capabilityRequestService  service that creates capability requests
+     * @param contractConsumerService   service through which a lane binds to a contract and files change requests
      * @param contractOwnerService   service through which a lane publishes its contracts and answers change requests
      * @param conversationService       service through which lanes send and are handed messages
      * @param publicationService        service that publishes capability implementations
@@ -138,7 +138,7 @@ final class McpCoordinationTools {
      * @param connectionInstanceId      connection incarnation used to prevent cross-connection authority reuse
      */
     McpCoordinationTools(AgentNextActionService nextActionService,
-            CapabilityRequestService capabilityRequestService,
+            ContractConsumerService contractConsumerService,
             ContractOwnerService contractOwnerService,
             ConversationService conversationService,
             ImplementationPublicationService publicationService,
@@ -152,7 +152,7 @@ final class McpCoordinationTools {
             String provider,
             String connectionInstanceId) {
         this.nextActionService = nextActionService;
-        this.capabilityRequestService = capabilityRequestService;
+        this.contractConsumerService = contractConsumerService;
         this.contractOwnerService = contractOwnerService;
         this.conversationService = conversationService;
         this.publicationService = publicationService;
@@ -262,9 +262,9 @@ final class McpCoordinationTools {
                 case McpCoordinationRequest.PublishContract publish ->
                         contractOwnerService.publish(new ContractOwnerService.PublishRequest(activeProjectRoot, provider, connectionInstanceId, publish.paths(), publish.terms(), publish.answers()));
                 case McpCoordinationRequest.BindContract bind ->
-                        capabilityRequestService.bind(new CapabilityRequestService.BindRequest(activeProjectRoot, provider, connectionInstanceId, bind.capability(), bind.ownerPath(), bind.revision()));
+                        contractConsumerService.bind(new ContractConsumerService.BindRequest(activeProjectRoot, provider, connectionInstanceId, bind.capability(), bind.ownerPath(), bind.revision()));
                 case McpCoordinationRequest.RequestChange change ->
-                        capabilityRequestService.requestChange(new CapabilityRequestService.ChangeRequest(activeProjectRoot, provider, connectionInstanceId, change.ownerPath(), change.need()));
+                        contractConsumerService.requestChange(new ContractConsumerService.ChangeRequest(activeProjectRoot, provider, connectionInstanceId, change.ownerPath(), change.need()));
                 case McpCoordinationRequest.Status ignored -> {
                     // Every agent may read every contract and every change request (ADR-0092).
                     var contracts = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot).openCoordinationStore().contractProjection();

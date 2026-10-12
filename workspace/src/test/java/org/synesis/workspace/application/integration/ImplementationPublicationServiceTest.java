@@ -30,7 +30,7 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
-import org.synesis.workspace.application.capability.CapabilityRequestService;
+import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -119,7 +119,7 @@ class ImplementationPublicationServiceTest {
                 contract,
                 List.of()));
         assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
-        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(projectRoot,
+        AgentResponse bound = new ContractConsumerService().bind(new ContractConsumerService.BindRequest(projectRoot,
                 "codex",
                 requesterConnection,
                 "tasktracker.domain",
