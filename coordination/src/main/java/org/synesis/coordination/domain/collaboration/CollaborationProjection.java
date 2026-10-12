@@ -27,6 +27,8 @@ import org.synesis.coordination.exception.CoordinationNullException;
 public final class CollaborationProjection {
 
     private final Map<WorkIntentId, WorkIntent> intents = new LinkedHashMap<>();
+    /** Each lane that has ended, by lineage, as it was then. Kept only to say who a past lane was. */
+    private final Map<UUID, WorkIntent> endedLanes = new LinkedHashMap<>();
     private final CoordinationRequests requests;
     private final Map<WorkIntentId, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
     private final ProviderSessionFences sessionFences;
@@ -50,6 +52,7 @@ public final class CollaborationProjection {
 
     private CollaborationProjection(CollaborationProjection source) {
         intents.putAll(source.intents);
+        endedLanes.putAll(source.endedLanes);
         requests = new CoordinationRequests(source.requests);
         noChangeCompletions.putAll(source.noChangeCompletions);
         sessionFences = new ProviderSessionFences(source.sessionFences);
@@ -246,6 +249,17 @@ public final class CollaborationProjection {
      */
     public synchronized List<WorkIntent> activeIntents() {
         return List.copyOf(intents.values());
+    }
+
+    /**
+     * Returns a lane that has ended, as it was when it ended. It says who a past lane was, for
+     * whoever reads what that lane said or did; nothing a lane may do is derived from it.
+     *
+     * @param lineageId authority lineage of the lane
+     * @return its last intent, or empty when no lane of that lineage has ended
+     */
+    public synchronized Optional<WorkIntent> endedLane(UUID lineageId) {
+        return Optional.ofNullable(endedLanes.get(lineageId));
     }
 
     /**
@@ -524,6 +538,7 @@ public final class CollaborationProjection {
         if (released == null) {
             throw new CoordinationException("INTENT_NOT_FOUND");
         }
+        endedLanes.put(released.authorityLineageId(), released);
         refreshParticipant(released.participantIdentity(), Participant.State.COMPLETED, null);
     }
 
@@ -844,6 +859,7 @@ public final class CollaborationProjection {
      * Removes every intent the participant owns.
      */
     private void dropIntentsOf(ParticipantId participant) {
+        intents.values().stream().filter(intent -> intent.participantIdentity().equals(participant)).forEach(intent -> endedLanes.put(intent.authorityLineageId(), intent));
         intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
     }
 

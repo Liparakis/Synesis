@@ -1,8 +1,89 @@
+# 2026-10-12 — Step 3 of three: agents can talk to each other, and the review of step 2
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster28-20261012` and `remaster29`. ADR-0093 is built. The strict
+quality review of step 2 was run and acted on first.
+
+**The review of step 2 (ADR-0092).** One reviewer read the two commits that built the public contract
+and ran nothing. It found two paths that left a lane with no lawful next action and six further
+defects; each was checked against the code and each was real. ADR-0092 lists them under "The quality
+review of the build". The two that mattered most: a binding closed while its consumer was validating
+left the validation standing, after which no lane of the project could finish; and a lane with one
+dependency already integrated was shown only that note, never a second live binding or its own
+consumers. A contract whose owner ended with nothing integrated is now `WITHDRAWN`, not `FROZEN`.
+
+**Conversations (ADR-0093).** One new tool, the eleventh: `send_message`.
+
+- A lane sends text to other lanes, named by a file they claim or by participant handle, or to a
+  conversation it belongs to. A conversation is its set of member lanes; Synesis shows it only to
+  them. Members are authority lineages, so an agent that continues a lane has its conversations.
+- A message binds nothing and is never an instruction. No projection of lane state, no gate and no
+  next action reads one. It is not progress either: it resumes the stopped agent it is addressed to,
+  once, and nobody else.
+- Unread messages arrive beside the next action of `get_next_action`, at least once, ten at a time.
+  `collaboration_status` lists the caller's conversations.
+- A lane may send fifty messages of 2,000 characters.
+- A lane can address the operator. That records an operator request raised by the lane, which blocks
+  nothing and is closed by the operator with `synesis operator close`.
+- The operator reads every conversation with `synesis conversations` and in two read-only dashboard
+  tabs, and cannot post.
+
+Published contract, additive: the MCP catalog gains `send_message` (golden projection and digests
+regenerated; provider manuals are reinstalled), `get_next_action` results may carry `messages`,
+`collaboration_status` gains `conversations` and `changeRequests`, the CLI gains `conversations` and
+`operator close`, the log gains two event types. Changed by the review fixes, on a branch whose
+durable state is not migrated (ADR-0088): `CONTRACT_LANE_ENDED` carries whether the lane's work was
+integrated, and a contract has a third state.
+
+Real runs on `remaster28`, the same goals and model mixes as on `remaster27`. The bootstrapper said
+nothing about messages; agents knew the tool from the manual only.
+
+| Run | remaster27 | remaster28 | Messages sent |
+| --- | --- | --- | --- |
+| Two agents, SL | 184 s, 1 resume | 170 s, 0 | 0 |
+| Two agents, LL | 189 s, 0 | 194 s, 0 | 0 |
+| Three agents, SLS | 165 s, 2 | 147 s, 1 | 2 |
+| Three agents, LLL | 261 s, 1 | 577 s, 3 | 1 |
+| Five agents, SSSSS | 212 s, 9 | 157 s, 11 | 0 |
+| Five agents, LLLLL | 623 s, 4 | 422 s, 2 | 1 |
+| Five agents, SLSLS | 322 s, 6 | 316 s, 10 | 1 |
+| Five agents, SLSLS again | 319 s, 7 | 271 s, 13 | 0 |
+| Five agents, LSLSL | 343 s, 3 | 249 s, 0 | 0 |
+| Review with the policy, LS | 262 s, 5 | 412 s, 0 | 0 |
+| Cancel, SL | 54 s, 0 | 82 s, 0 | 0 |
+
+Eleven of eleven completed on both builds. Summed over the eleven, elapsed time went from 2,934 to
+2,997 seconds and resumes from 38 to 40: no difference that one run each can show. The stray-file
+cycle ran once more and behaved as before: `NEEDS_OPERATOR` naming the file, `operator recheck`
+closing the request once the file was removed, and the run started again completing.
+
+What agents did with the channel: five messages in four of the eleven runs, every first message from
+the lane that owned the usage document asking the lane that owned the command-line interface for
+its exact syntax. One was answered, with the syntax, twenty-one seconds later. The other three were
+not answered and their runs completed. No agent addressed the operator. Reading these back showed
+that a finished run named every speaker only as an ended lane; a lane that has ended now keeps the
+participant and claims it ended with.
+
+Not done. Tokens per run were not measured, so the cost of the channel is stated in time and
+resumes only. With five messages in eleven runs the bounds were never approached, so whether they
+hold is not shown. No real run exercised a message waking a stopped agent, a successor inheriting a
+conversation, or an agent addressing the operator; those are proven by source-level tests only. From
+the review of step 2: `CapabilityRequestService` still carries the name of the flow it replaced, and
+the replay handlers for a request that waits for its owner, is rejected or is cancelled remain
+although nothing produces those events.
+
+Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 646
+(1 skipped), MCP 175, CLI 118, 0 failures, with the documentation, format, architecture, dashboard
+and hygiene gates. Run from Git Bash, two CLI help tests fail because the CLI colours its output
+there; the gate is run from PowerShell. One gate run died of memory exhaustion in the Java process
+and was run again with four workers. Not run on Linux. Test subagents: Sonnet 5.5 at medium effort
+pinned at launch; each reported its model, and none could show its effort from runtime metadata.
+Link between two machines, macOS, and Linux agents with real models remain NOT REACHED.
+
 # 2026-10-12 — Step 2 of three: one public contract per owned file, and the Codex guard
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster25-20261012` to `remaster27`. ADR-0092 was
 revised after an independent design review and four decisions of the repository owner, and is built.
-ADR-0091's second guard layer is built. ADR-0093 (agent conversations) is not started.
+ADR-0091's second guard layer is built. ADR-0093 (agent conversations) followed as step 3, above.
 
 **The Codex guard (ADR-0091).** Synesis starts and resumes Codex sessions with
 `sandbox_mode=read-only` and `mcp_servers.synesis.default_tools_approval_mode=approve`. A headless

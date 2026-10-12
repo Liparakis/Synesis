@@ -329,8 +329,8 @@ public final class ConversationService {
     }
 
     /**
-     * Shows a member lane as the agent now holding it and the files it claims. A lane that has
-     * ended has neither, and is shown as ended.
+     * Shows a member lane as the agent holding it and the files it claims. A lane that has
+     * ended is shown as it was when it ended, and marked as ended.
      *
      * @param lanes   collaboration projection
      * @param lineage lineage of the member lane
@@ -338,10 +338,14 @@ public final class ConversationService {
      */
     public static Map<String, Object> memberMap(CollaborationProjection lanes, UUID lineage) {
         Map<String, Object> map = new LinkedHashMap<>();
-        openLane(lanes, lineage).ifPresentOrElse(lane -> {
+        Optional<WorkIntent> open = openLane(lanes, lineage);
+        open.or(() -> lanes.endedLane(lineage)).ifPresent(lane -> {
             map.put("participant", lane.participant());
             map.put("claims", lane.selectors().stream().map(ResourceSelector::value).toList());
-        }, () -> map.put("lane", "ended"));
+        });
+        if (open.isEmpty()) {
+            map.put("lane", "ended");
+        }
         return map;
     }
 

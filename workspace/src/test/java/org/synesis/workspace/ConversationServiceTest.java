@@ -389,6 +389,26 @@ class ConversationServiceTest {
     }
 
     @Test
+    void aLaneThatHasEndedIsStillNamedAsItWasInWhatItSaid() throws Exception {
+        String speaker = handle(A);
+        UUID lineage = lineage(A);
+        List<String> claims = laneOf(A).selectors().stream().map(ResourceSelector::value).toList();
+        conversationOf(send(A, List.of(handle(B)), "The store keeps one file per project."));
+
+        AgentResponse cancelled = new org.synesis.workspace.application.agent.completion.AgentTaskCancellationService()
+                .cancelTask(new org.synesis.workspace.application.agent.completion.AgentTaskCancellationService.CancelTaskRequest(projectRoot, PROVIDER, A, "Not needed after all"));
+        assertEquals(AgentStatus.COMPLETED, cancelled.status(), cancelled.toJson());
+
+        // Whoever reads the conversation afterwards has to be able to tell who said what.
+        Map<String, Object> ended = ConversationService.memberMap(store().collaborationProjection(), lineage);
+        assertEquals(speaker, ended.get("participant"));
+        assertEquals(claims, ended.get("claims"));
+        assertEquals("ended", ended.get("lane"));
+        assertFalse(ConversationService.memberMap(store().collaborationProjection(), lineage(B)).containsKey("lane"), "an open lane is not marked as ended");
+        assertEquals(Map.of("lane", "ended"), ConversationService.memberMap(store().collaborationProjection(), UUID.randomUUID()), "a lineage no lane ever had says only that");
+    }
+
+    @Test
     void aSessionWithoutAnOpenLaneIsRefusedAndHandedNothing() throws Exception {
         session("inst-5");
 

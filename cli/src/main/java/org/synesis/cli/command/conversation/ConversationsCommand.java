@@ -77,9 +77,10 @@ public final class ConversationsCommand implements Callable<Integer> {
         }
     }
 
-    /** Names a member lane by the agent now holding it and its files, or by its lineage once it has ended. */
+    /** Names a member lane by the agent holding it and its files; a lane that has ended keeps the name it ended with. */
     private static String label(PredictionEventStore store, UUID lineage) {
         Map<String, Object> member = ConversationService.memberMap(store.collaborationProjection(), lineage);
-        return member.containsKey("participant") ? member.get("participant") + String.valueOf(member.get("claims")) : "ended-lane:" + lineage;
+        String ended = member.containsKey("lane") ? "(ended)" : "";
+        return member.containsKey("participant") ? member.get("participant") + String.valueOf(member.get("claims")) + ended : "ended-lane:" + lineage;
     }
 }
