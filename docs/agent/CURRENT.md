@@ -1,3 +1,87 @@
+# 2026-10-12 — Step 2 of three: one public contract per owned file, and the Codex guard
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster25-20261012` to `remaster27`. ADR-0092 was
+revised after an independent design review and four decisions of the repository owner, and is built.
+ADR-0091's second guard layer is built. ADR-0093 (agent conversations) is not started.
+
+**The Codex guard (ADR-0091).** Synesis starts and resumes Codex sessions with
+`sandbox_mode=read-only` and `mcp_servers.synesis.default_tools_approval_mode=approve`. A headless
+Codex session does not run the project's hooks, so nothing had kept its own file tool or a shell
+command out of the project checkout. This replaces a rule the repository stated on purpose, that
+Synesis passes no sandbox argument. On `remaster25` a probe was refused its native write through the
+real launcher, and five Luna collaborations under the guard completed (LL, LLL, SL, review LL, LLLLL).
+
+**The public contract (ADR-0092).** Built in place: a binding is the request record, created already
+agreed, so publication, validation, continuation and every gate are what they were.
+
+- A lane publishes one contract over files it claims; every agent can read it; only the owner's
+  lineage revises it. A consumer binds to an exact revision or files a change request that the owner
+  must answer, and the owner is shown all open change requests together.
+- A new revision makes every binding stale; each consumer binds again and what it validated before
+  no longer counts. The owner may publish an unchanged commit again for the new revision.
+- A verdict that asks for a revision names the contract field it rests on.
+- Cancelling a lane withdraws its bindings in every state. A lane that ends freezes its contracts,
+  declines the change requests open against them and closes the bindings it can no longer serve.
+- A consumer that arrives after the owner was integrated binds to the frozen contract and is let
+  through, whatever other lanes are open.
+- An owner waits while a bound consumer's lane is open. A consumer that owes an action and has made
+  no verified call for the stated time is put to the operator (`bound_consumer_absent`). The
+  two-minute rule that let an owner finish past such a consumer is gone.
+
+Published contract broken, with the owner's approval: `request_coordination` loses
+`capability_request`, `contract_proposal`, `contract_request` and gains `contract_publish`,
+`contract_bind`, `contract_change_request`; `respond_coordination` loses `capability_response` and
+gains `contract_change_response`; `implementation_validation` gains `contractField`. The golden
+projection and its digests changed. The CLI loses `collaboration contract publish` and `bind`, which
+wrote to a store nothing read. Durable state of an earlier build is not migrated (ADR-0088). Three
+event types are added and one is retired.
+
+Real runs. The projects' coordination policy was reworded for the new flow ("bind to the public
+contract its owner publishes", where it said "capability request"); the bootstrapper still assigned
+and relayed nothing.
+
+| Goal | remaster22 (before) | remaster26 | remaster27 |
+| --- | --- | --- | --- |
+| Two agents, negotiated (SL, LL, LS, SS) | 3 of 4 | 4 of 4 | 2 of 2 |
+| Three agents (LLL, SLS) | 2 of 2 | 2 of 2 | 2 of 2 |
+| Five agents, one provider | 3 of 4 | 3 of 3 | 2 of 2 |
+| Five agents, mixed | 2 of 2 | 1 of 2 | 3 of 3 |
+| Review with the policy | 2 of 2 | 2 of 2 | 1 of 1 |
+| Cancel | 1 of 1 | 1 of 1 | 1 of 1 |
+| Stray file: `NEEDS_OPERATOR`, recheck, run again completes | n/a | not run | 1 of 1 |
+
+In every completed run with a dependency one contract was published, and no run raised an operator
+request it should not have. Five agents of one provider took 179 to 305 seconds on `remaster26`
+where they had taken 269 to 710 or stalled; one Luna run took 659 seconds with 17 resumes.
+
+The one failure on `remaster26` was the code not doing what the record said. With a public contract
+the owner no longer waits for consumers before it finishes, so a consumer arrives after the owner's
+work is in; it was told that no lane claims the file yet. Fixed in `remaster27`, together with the
+absent-consumer rule.
+
+What the reviews found. Four reviewers on four models read the first version of ADR-0092 and agreed
+on the same gaps (a gone consumer holds the owner, the exit "cancel" was refused by a gate, validation
+tied to the commit and not the contract revision, rules for a released file that cannot occur,
+enforcement on replay that the log cannot do); the record was rewritten before anything was built. A
+strict quality review of step 1 found three forms of one rule and an error path that did not block;
+both are fixed. The test subagents found two defects in the new code: a re-bound consumer was skipped
+when an unchanged commit was published again, and an owner was told of the operator request one poll
+late.
+
+Not done: a strict quality review of step 2; operator requests in the web UI; a unit test of
+`PeerDependencyPolicy.satisfiedByIntegratedOwner` (covered through the service and MCP flows); removal
+of code the change left without a producer (the states for a request awaiting its owner and for a
+rejected one, the finish-time supersede of an unanswered proposal). Every recorded event still
+resumes every stopped agent that holds a lane; with several consumers binding again that cost is
+not measured.
+
+Verification: link 172, coordination 200, project-record 60, relay 12, mcp-contract 20, workspace 615
+(1 skipped), MCP 171, CLI 114, 0 failures, with the documentation and hygiene gates. `:cli:test` twice
+failed to start with "Unable to create isolated test state" and passed with an explicit test-state
+directory; it is an environment fault of the test task, not a test failure. Not run on Linux. Test
+subagents: Sonnet 5.5, medium effort pinned at launch; each reported its model, none could report its
+effort. Link between two machines, macOS, and Linux agents with real models remain NOT REACHED.
+
 # 2026-10-12 — Step 1 of three: operator requests, failure points, and what the Codex guard really was
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster23-20261012` and `remaster24`. Decisions of
