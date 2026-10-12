@@ -73,7 +73,14 @@ final class AgentReviewActionProjection {
             // With no producer yet, an empty grant list means the reviewer is waiting for review
             // work to emerge. Open grants were handled above, so any grant left here is either a
             // self-review or already validated and does not imply future review work.
-            return reviewerGrants.isEmpty();
+            //
+            // A grant the reviewer decided on stays decided when the producer's lane was continued
+            // afterwards and superseded it. Counted as no grant at all, a reviewer whose accepted
+            // snapshot was integrated waited for a producer that had finished, and its group
+            // never closed.
+            boolean decided = workGroups.grants().stream().filter(grant -> grant.workGroupId().equals(reviewer.workGroupId()))
+                    .filter(grant -> grant.targetParticipant().equals(reviewer.participant())).anyMatch(grant -> workGroups.reviewValidationForGrant(grant.grantId()).isPresent());
+            return reviewerGrants.isEmpty() && !decided;
         }
         return matching.stream().anyMatch(producer -> !AgentReviewActionProjection.hasCompletedReview(store, reviewer, producer));
     }

@@ -1,3 +1,70 @@
+# 2026-10-13 — The real runs repeated after the reviews, and a reviewer left waiting
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster30-20261013` and `remaster31`. No new
+record. The consumer half of ADR-0092 was renamed and what nothing produces any more was removed
+(ADR-0092, "The quality review of the build"), and the eleven real runs were repeated on the build
+that holds the review fixes of step 3, which the runs of the day before had not.
+
+| Run | remaster28 | remaster30 |
+| --- | --- | --- |
+| Two agents, SL | 170 s, 0 resumes | 66 s, 0 |
+| Two agents, LL | 194 s, 0 | 137 s, 0 |
+| Three agents, SLS | 147 s, 1 | 239 s, 1, one test of the result fails |
+| Three agents, LLL | 577 s, 3 | 509 s, 1 |
+| Five agents, SSSSS | 157 s, 11 | 211 s, 7 |
+| Five agents, LLLLL | 422 s, 2 | TIMED_OUT, 1,801 s, 38 |
+| Five agents, SLSLS | 316 s, 10 | 227 s, 5 |
+| Five agents, SLSLS again | 271 s, 13 | 248 s, 2 |
+| Five agents, LSLSL | 249 s, 0 | 384 s, 7 |
+| Review with the policy, LS | 412 s, 0 | STALLED, 510 s, 3 |
+| Cancel, SL | 82 s, 0 | 80 s, 0 |
+
+Nine of eleven completed. The three that did not end cleanly:
+
+**The review run stalled, and the cause is found and fixed.** The reviewer rejected the first
+snapshot and accepted the corrected one, and it was integrated with its tests passing. The
+reviewer's own lane was then told to wait for a producer, for good, and the group never closed. The
+producer's agent had stopped and been resumed three times while it waited for review; a resumed
+agent continues its lane as a successor, and the continuation after the reviewer's admission left
+the reviewer's decided grant addressed to a superseded lane. The rule that asks whether a reviewer
+still owes a review drops such a grant, saw none, and answered that the reviewer was waiting for
+work to appear. A reviewer that has recorded a decision and has no producer left now owes nothing.
+The rule was not changed by any step of this branch since `remaster27`; the same goal completed on
+the two builds before. On `remaster31` the agents were started again on the stalled project and it
+completed in 132 seconds; two fresh runs of the goal completed (382 s and 279 s, no resumes, so
+neither took the path that had broken). The regression test builds the state through the real
+services and fails with the fix taken out.
+
+**Five Luna agents timed out with their work done.** All five goals were integrated and the
+tests pass. The agents then announced more than thirty lanes to verify what was already integrated,
+most of them cancelled again, and each announcement resumed the other stopped agents, 38 resumes in
+thirty minutes. Progress resumes every stopped agent of a provider that holds any open lane, also
+one whose own lane has ended, and such an agent looks for work. That weakness was recorded before
+(a Luna run of 17 resumes on `remaster26`). The run was repeated on `remaster31` and completed in
+519 seconds with 3 resumes. One of two runs on this code against none of two on the builds before:
+too few to say whether this branch made it more likely. Not fixed.
+
+**One completed run integrated a failing test.** In the three-agent run the lane that wrote the
+command-line interface asserted the wording of an error that the storage lane words differently,
+and that wording was in no contract. The work group completed; the project's own suite has one
+failure. Synesis does not run a project's combined tests before it integrates. The run repeated on
+`remaster31` completed with its tests passing.
+
+Messages: three in two of these runs, each again the usage document's lane asking for the
+command-line syntax; one answered. A Synesis-raised `bound_consumer_absent` request was raised and
+closed by itself in the three-Luna run.
+
+Not done: nothing limits an agent without a lane from being resumed for another lane's progress, or
+from announcing work the goal did not ask for; the combined tests of a project are not run before
+integration; no real run has yet exercised a message waking a stopped agent, a successor
+inheriting a conversation, or an agent addressing the operator.
+
+Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 658
+(1 skipped), MCP 176, CLI 120, 0 failures, with the documentation, format, architecture, dashboard
+and hygiene gates, run from PowerShell with four workers. The test subagent that wrote the regression test: Sonnet 5.5 at
+medium effort pinned at launch; it reported its model and could not show its effort from runtime
+metadata. Not run on Linux.
+
 # 2026-10-12 — Step 3 of three: agents can talk to each other, and the review of step 2
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster28-20261012` and `remaster29`. ADR-0093 is built. The strict
