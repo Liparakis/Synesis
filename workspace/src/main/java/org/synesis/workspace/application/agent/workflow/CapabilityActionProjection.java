@@ -51,11 +51,6 @@ final class CapabilityActionProjection {
     private static final String DEFAULT_REJECTION_REASON = "Capability request rejected by owner";
 
     /**
-     * Capability-request fields a requester must supply, as reported by the durable path.
-     */
-    private static final List<String> DURABLE_CAPABILITY_FIELDS = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests");
-
-    /**
      * Capability states in which a requester has something to act on or wait for. A
      * {@code REVISION_REQUESTED} request outranks all of them and is handled separately.
      */
@@ -95,6 +90,7 @@ final class CapabilityActionProjection {
         CapabilityRequestProjection capabilities = store.capabilityRequestProjection();
         Map<String, CapabilityRequestRecord> localDependencies = Map.of();
         Set<String> locallyOwnedDependencies = Set.of();
+        AgentResponse integratedNote = null;
         if (callerIntent != null) {
             LocalDependencyResolution resolution = localAcceptedDependencies(capabilities, actor, callerIntent);
             if (resolution.ambiguity() != null) {
@@ -107,21 +103,49 @@ final class CapabilityActionProjection {
                     callerIntent,
                     localDependencies,
                     locallyOwnedDependencies);
-            if (missingDependency != null) {
+            if (missingDependency != null && !isIntegratedNote(missingDependency)) {
                 return withResolvedDependencies(missingDependency, localDependencies);
             }
+            integratedNote = missingDependency;
         }
         Predicate<CapabilityRequestRecord> inCallerLineage = inCallerLineage(coordinationActivated, callerIntent);
 
+        // What the lane owes comes first. That one of its dependencies is already integrated is
+        // a note beside it: returned in its place, a lane with a second, live binding was never
+        // shown that binding again, and an owner was never shown its consumers.
         AgentResponse ownerResponse = ownerCapabilityAction(store, actor, callerIntent, inCallerLineage);
-        if (ownerResponse != null) {
-            return withResolvedDependencies(ownerResponse, localDependencies);
+        AgentResponse owed = ownerResponse != null ? ownerResponse : requesterCapabilityAction(store, actor);
+        if (owed != null) {
+            return withResolvedDependencies(withIntegratedNote(owed, integratedNote), localDependencies);
         }
-        AgentResponse requesterResponse = requesterCapabilityAction(store, actor);
-        if (requesterResponse != null) {
-            return withResolvedDependencies(requesterResponse, localDependencies);
+        if (integratedNote != null) {
+            return withResolvedDependencies(integratedNote, localDependencies);
         }
         return localDependencies.isEmpty() ? null : localDependencyReadyResponse(localDependencies, callerIntent);
+    }
+
+    /** Keys under which a lane is told that work it depends on is already integrated. */
+    private static final List<String> INTEGRATED_NOTE_KEYS = List.of("dependenciesIntegrated", "dependencyGuidance", "ownerProceededWithoutAnswer", "ownerProceededGuidance");
+
+    private static boolean isIntegratedNote(AgentResponse response) {
+        return response.result() instanceof Map<?, ?> result && result.containsKey(INTEGRATED_NOTE_KEYS.getFirst());
+    }
+
+    /** Puts the note beside another answer, whose status, reason and next action stand. */
+    private static AgentResponse withIntegratedNote(AgentResponse response, AgentResponse note) {
+        if (note == null || !(note.result() instanceof Map<?, ?> noted)) {
+            return response;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (response.result() instanceof Map<?, ?> existing) {
+            existing.forEach((key, value) -> result.put(String.valueOf(key), value));
+        }
+        for (String key : INTEGRATED_NOTE_KEYS) {
+            if (noted.containsKey(key)) {
+                result.putIfAbsent(key, noted.get(key));
+            }
+        }
+        return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
     }
 
     /**
@@ -157,12 +181,10 @@ final class CapabilityActionProjection {
         List<CapabilityRequestRecord> ownRequests = store.capabilityRequestProjection().findAllForRequester(actor.nodeId()).stream()
                 .filter(candidate -> candidate.matchesRequester(actor.nodeId(), actor.supervisorId(), actor.workerId()))
                 .toList();
-        // A request its owner superseded by finishing no longer stands for the dependency: the
-        // lane holds no agreement, so the dependency is judged like one never requested.
-        var requestedCapabilities = ownRequests.stream().filter(candidate -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(candidate))
-                .map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        Set<String> integrated = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities));
-        integrated.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), ownRequests));
+        // A record closed because its owner's lane ended no longer stands for the dependency:
+        // the lane holds no agreement, so the dependency is judged like one never bound.
+        var requestedCapabilities = ownRequests.stream().filter(candidate -> !candidate.ownerLaneEnded()).map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
+        Set<String> integrated = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfied(store.collaborationProjection(), store.taskCompletionProjection(), intent, ownRequests));
         integrated.removeAll(requestedCapabilities);
         String missingDependency = intent.knownDependencies().stream()
                 .filter(dependency -> !requestedCapabilities.contains(dependency) && !locallyResolved.containsKey(dependency)
@@ -182,7 +204,7 @@ final class CapabilityActionProjection {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(NextActionKeys.CAPABILITY, missingDependency);
-        result.put(NextActionKeys.REQUIRED_FIELDS, DURABLE_CAPABILITY_FIELDS);
+        result.put(NextActionKeys.REQUIRED_FIELDS, List.of("capability", "ownerPath", "revision"));
         result.put(NextActionKeys.PENDING, intent.knownDependencies().size());
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         result.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
@@ -198,6 +220,8 @@ final class CapabilityActionProjection {
         result.put("instruction", "Your lane depends on " + missingDependency + " and is not bound to a contract for it. contracts lists the public contract of each file; lanes lists what each open lane claims. "
                 + "To accept a contract, call request_coordination kind contract_bind with capability " + missingDependency + ", ownerPath set to the file you build on, and the revision you read. "
                 + "A contract whose state is FROZEN belongs to a lane that has finished: bind to it the same way, and you build on its integrated work with nothing to wait for. "
+                + "A contract whose state is WITHDRAWN belonged to a lane that ended with nothing integrated: nothing was built to it and it cannot be bound to. "
+                + "When no open lane claims the file, nobody will provide it: add the file to your own claims with ensure_session and build it, or cancel this lane. "
                 + "If the file has no contract yet, or an ACTIVE contract does not cover what you need, call request_coordination kind contract_change_request with ownerPath and need: "
                 + "the lane claiming the file answers, and a declined request can still be bound to as the contract stands.");
         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
@@ -295,7 +319,7 @@ final class CapabilityActionProjection {
             // The requester must not assume its own draft was built. What the owner last proposed
             // is the closest statement of what it did; the integrated code is the authority.
             result.put("ownerProceededWithoutAnswer", wentAhead);
-            result.put("ownerProceededGuidance", "The owner of this dependency finished before a binding of yours could be served. It may have built a different design than you asked for: its last proposal is included, and the integrated code is what counts. The owner's files are released, so you can claim them if you need a change.");
+            result.put("ownerProceededGuidance", "The owner of this dependency finished before a binding of yours could be served. The contract shown is what it built to, and the integrated code is what counts. The owner's files are released, so you can claim them if you need a change.");
         }
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         return new AgentResponse(AgentStatus.READY, null, null, result);
@@ -604,13 +628,12 @@ final class CapabilityActionProjection {
             return true;
         }
         var projection = store.capabilityRequestProjection();
-        // A request its owner superseded by finishing is no obligation of the requester: nothing
-        // was agreed, and the dependency is judged like one that was never requested.
+        // A record closed because its owner's lane ended is no obligation of the requester:
+        // nothing is agreed any more, and the dependency is judged like one that was never bound.
         List<CapabilityRequestRecord> everyOwnRequest = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).toList();
-        List<CapabilityRequestRecord> requesterRequests = everyOwnRequest.stream().filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
+        List<CapabilityRequestRecord> requesterRequests = everyOwnRequest.stream().filter(request -> !request.ownerLaneEnded()).toList();
         Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        Set<String> integrated = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities));
-        integrated.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), everyOwnRequest));
+        Set<String> integrated = PeerDependencyPolicy.satisfied(store.collaborationProjection(), store.taskCompletionProjection(), intent, everyOwnRequest);
         if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {
             return true;
         }

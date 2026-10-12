@@ -87,15 +87,17 @@ public final class RequesterAnswerPolicy {
     }
 
     /**
-     * Reports whether the owner must still wait for the requester's answer. It must for as long
-     * as the answer is owed: the wait no longer ends at a time.
+     * Returns the moment a consumer that owes an action counts as absent: the wait after the
+     * later of the record's last change and the consumer's last verified call. Whoever asks
+     * (the guard that raises the operator request, the controller that resumes the owner for it)
+     * reads the moment here, so they cannot disagree about it.
      *
-     * @param request   capability request
-     * @param nowMillis current time in epoch milliseconds; kept for callers, no longer consulted
-     * @return {@code true} while the proposal is unanswered
+     * @param request                    binding whose consumer owes an action
+     * @param consumerLastCallEpochMillis last verified call of the consumer's participant, or zero
+     * @return the moment in epoch milliseconds
      */
-    public static boolean ownerMustWait(CapabilityRequestRecord request, long nowMillis) {
-        return awaitsRequesterAnswer(request);
+    public static long absentAtEpochMillis(CapabilityRequestRecord request, long consumerLastCallEpochMillis) {
+        return Math.max(Objects.requireNonNull(request, "request").updatedAtEpochMillis(), consumerLastCallEpochMillis) + grace().toMillis();
     }
 
     /**

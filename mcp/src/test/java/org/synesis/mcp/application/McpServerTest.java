@@ -217,8 +217,9 @@ class McpServerTest {
 
         assertTrue(next.contains("needs_capability"), next);
         assertTrue(next.contains("tasktracker.domain"), next);
-        assertTrue(next.contains("requiredBehavior"), next);
-        assertTrue(next.contains("acceptanceTests"), next);
+        // The lane binds to the owner's public contract; it no longer writes one of its own.
+        assertTrue(next.contains("contract_bind"), next);
+        assertTrue(next.contains("ownerPath"), next);
         assertFalse(next.contains("COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD"), next);
 
         ProjectLocation location = new ProjectApplicationService().locate(tempRoot);

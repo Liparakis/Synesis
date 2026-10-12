@@ -209,6 +209,7 @@ final class McpCoordinationTools {
                     var contracts = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot).openCoordinationStore().contractProjection();
                     Map<String, Object> status = new LinkedHashMap<>(collaborationStatusMap(collaborationService.status(activeProjectRoot)));
                     status.put("contracts", contracts.contracts().stream().map(org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper::contractMap).toList());
+                    status.put("changeRequests", contracts.changeRequests().stream().map(org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper::changeRequestMap).toList());
                     yield completed(status);
                 }
                 case McpCoordinationRequest.OpenRequest open -> {

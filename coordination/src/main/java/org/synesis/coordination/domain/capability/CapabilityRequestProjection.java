@@ -502,6 +502,10 @@ public final class CapabilityRequestProjection {
     private void processSuperseded(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
         CapabilityRequestRecord current = requireRequest(payload, state -> true, null);
+        // A binding can be closed while its consumer is validating: the consumer's lane was
+        // cancelled, or the owner's lane ended. The validation ends with it. Left standing it
+        // counted as running for good, and no lane of the project could finish again.
+        validationContexts.remove(payload.handle());
         records.put(payload.handle(),
                 current.withUpdate(CapabilityLifecycleState.SUPERSEDED,
                         null,

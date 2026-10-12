@@ -449,28 +449,25 @@ final class LaneCompletionProjection {
     }
 
     /**
-     * Returns the bounded wait an owner observes before finishing while a contract it proposed is
-     * still unanswered.
+     * Returns the wait of an owner while a consumer bound to its contract has not bound again to
+     * the revision the owner published.
      *
-     * <p>The requester may accept or counter, and only an open owner lane can act on either. The
-     * wait ends at a stated time whether or not the answer comes, so a late or absent requester
-     * never keeps the owner's agent reserved: after it the completion request is projected as
-     * usual, and finishing records the request as superseded by the owner's work.</p>
+     * <p>The wait has no end of its own: every bound consumer checks the owner's work before it
+     * is integrated (ADR-0092). The moment it names is the earliest a silent consumer is put to
+     * the operator, not when the owner may go on without it; a call the consumer makes in the
+     * meantime moves that moment later.</p>
      *
-     * @param store     current project projection
-     * @param lane      the caller's lane
-     * @param actor     capability identity of the caller
-     * @param nowMillis current time in epoch milliseconds
-     * @return the wait, or {@code null} when no proposal of this lane is inside its answer period
+     * @param store current project projection
+     * @param lane  the caller's lane
+     * @param actor capability identity of the caller
+     * @return the wait, or {@code null} when every consumer of this lane has bound to its current revision
      */
-    static AgentResponse awaitedRequesterAnswer(PredictionEventStore store, LaneScope lane, CapabilityActor actor, long nowMillis) {
+    static AgentResponse awaitedRequesterAnswer(PredictionEventStore store, LaneScope lane, CapabilityActor actor) {
         WorkIntent intent = activeIntentOf(store, lane.participantId()).orElse(null);
         if (intent == null) {
             return null;
         }
-        List<CapabilityRequestRecord> unanswered = unansweredProposals(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId()).stream()
-                .filter(candidate -> RequesterAnswerPolicy.ownerMustWait(candidate, nowMillis))
-                .toList();
+        List<CapabilityRequestRecord> unanswered = unansweredProposals(store, intent, actor.nodeId(), actor.supervisorId(), actor.workerId());
         if (unanswered.isEmpty()) {
             return null;
         }
@@ -479,7 +476,7 @@ final class LaneCompletionProjection {
         result.put(NextActionKeys.REASON, CONTRACT_PROPOSAL_AWAITING_REQUESTER);
         result.put(REQUESTER_ANSWER_DEADLINE, unanswered.stream().mapToLong(RequesterAnswerPolicy::answerDeadlineEpochMillis).max().orElseThrow());
         result.put("guidance", "A lane bound to your contract has not bound again to its new revision. Your work is integrated only when every bound lane has checked it, so this lane waits. "
-                + "If that lane's agent has not returned by the deadline, Synesis asks the operator to start one or to cancel the lane.");
+                + "If that lane's agent has not returned by the deadline, Synesis asks the operator to start one.");
         result.put(NextActionKeys.PENDING, unanswered.size());
         return new AgentResponse(AgentStatus.WAITING, AgentReason.REQUESTER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
     }

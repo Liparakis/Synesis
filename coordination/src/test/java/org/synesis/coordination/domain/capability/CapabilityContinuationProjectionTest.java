@@ -193,6 +193,38 @@ final class CapabilityContinuationProjectionTest {
         assertTrue(projection.findByHandle(handle).orElseThrow().matchesOwner("owner-node", "owner-supervisor", "owner-worker"), "a finished owner side is left as it ended");
     }
 
+    @Test
+    void aBindingSupersededWhileValidatingLeavesNoValidationContextBehind(@TempDir Path temp) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        var signer = new IdentityBootstrap(temp.resolve("link")).loadOrCreate().identity();
+        CapabilityRequestHandle handle = new CapabilityRequestHandle("req_41234567890123456789012345678901");
+        UUID lineage = UUID.randomUUID();
+        CapabilityContract contract = new CapabilityContract("lookup", "id: UUID", "value: string", List.of("stable"),
+                "not found", "none", "pure", "v1", "local", "serialized", List.of("lookup returns value"));
+        CapabilityRequestProjection projection = new CapabilityRequestProjection();
+        apply(projection, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode());
+        apply(projection, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_ACCEPTED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.ACCEPTED, null, 1).encode());
+        apply(projection, projectId, signer, 3, PredictionEventType.CAPABILITY_IMPLEMENTATION_PUBLISHED,
+                new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "published", "", "", List.of(), "").encode());
+        apply(projection, projectId, signer, 4, PredictionEventType.CAPABILITY_VALIDATION_STARTED,
+                new ImplementationEventPayload(handle, lineage, 1, "base", "commit-one", List.of("task_store.py"), "", "", "", List.of(),
+                        temp.resolve("validation-worktree").toString(), "requester-session").encode());
+        assertEquals(1, projection.allValidationContexts().size());
+
+        apply(projection, projectId, signer, 5, PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED,
+                new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                        "owner-node", "owner-supervisor", "owner-worker", lineage, contract, CapabilityLifecycleState.SUPERSEDED,
+                        CapabilityRequestRecord.OWNER_LANE_ENDED_WITHOUT_WORK, 1).encode());
+
+        assertEquals(CapabilityLifecycleState.SUPERSEDED, projection.findByHandle(handle).orElseThrow().state());
+        assertTrue(projection.allValidationContexts().isEmpty());
+        assertTrue(projection.findValidationContext(handle).isEmpty());
+    }
+
     private static void apply(CapabilityRequestProjection projection, UUID project, org.synesis.link.identity.NodeIdentity signer,
             long sequence, PredictionEventType type, byte[] payload) throws Exception {
         PredictionEvent event = PredictionEvent.create(project, UUID.randomUUID(), sequence, type, signer.nodeId(), payload, new byte[32], signer,

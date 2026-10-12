@@ -853,10 +853,13 @@ class SyntheticTwoProcessCollaborationTest {
             assertTrue(deadline > System.currentTimeMillis(), held);
             assertEquals(Map.of("completionRequested", true), ((Map<String, Object>) heldResult.get("workflow")).get("arguments"), "polling again must ask for completion again: " + held);
             assertTrue(replayedStore().operatorRequestProjection().open().isEmpty(), "nobody is asked before the time has passed");
-            // The controller reads the same deadline, for the owner's provider only: the log does
-            // not move when it passes, so this is how a stopped owner is woken for it.
+            // The controller wakes the stopped owner at the moment the consumer counts as absent,
+            // for the owner's provider only: the log does not move when it passes. That moment
+            // is never before the one the owner is shown, and a call the consumer has made
+            // since its binding went stale moves it later.
             var observer = new org.synesis.workspace.application.agent.run.EventLogObserver(new ProjectApplicationService().locate(projectRoot));
-            assertEquals(java.util.OptionalLong.of(deadline), observer.observe().answerDeadline("codex"));
+            long absentAt = observer.observe().answerDeadline("codex").orElseThrow();
+            assertTrue(absentAt >= deadline && absentAt < deadline + 60_000L, "shown " + deadline + ", absent at " + absentAt);
             assertEquals(java.util.OptionalLong.empty(), observer.observe().answerDeadline("claude"));
 
             // 3. The time has passed. The owner is not offered its finish: the operator is asked
@@ -1292,5 +1295,19 @@ class SyntheticTwoProcessCollaborationTest {
         assertEquals("blocked", extractResponseStatus(refused), refused);
         assertEquals("COORDINATION_RESPONSE_FIELD_REQUIRED:contractField", extractInnerResult(refused).get("error"), refused);
         assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(handle).state().name(), "a refused verdict records nothing");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void collaborationStatusListsAFiledChangeRequestBesideTheContracts() throws Exception {
+        ownerPublishesContract("Return product when found");
+        String filed = fileChangeRequest(requesterHandler, "Reject null ids");
+
+        String status = toolCall(requesterHandler, "request_coordination", Map.of("kind", "collaboration_status", "payload", Map.of()));
+
+        assertEquals(1, ((List<Map<String, Object>>) extractInnerResult(status).get("contracts")).size(), status);
+        List<Map<String, Object>> changeRequests = (List<Map<String, Object>>) extractInnerResult(status).get("changeRequests");
+        assertEquals(List.of(filed), changeRequests.stream().map(change -> String.valueOf(change.get("changeRequest"))).toList(), status);
+        assertEquals("OPEN", changeRequests.getFirst().get("state"), status);
     }
 }

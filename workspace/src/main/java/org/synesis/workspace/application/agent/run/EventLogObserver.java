@@ -8,14 +8,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 
-import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.application.WorkIntentService;
-import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
@@ -100,23 +99,25 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
         // is the one whose agent has to come back when the answer period ends.
         Map<String, Long> answerDeadlines = new HashMap<>();
-        for (CapabilityRequestRecord request : store.capabilityRequestProjection().records().values()) {
-            // The moment a silent consumer counts as absent is not an event. The owner is resumed
-            // once then, and its next read is what raises the operator request (ADR-0092).
-            if (!RequesterAnswerPolicy.consumerOwesAction(request)) {
-                continue;
+        // The moment a silent consumer counts as absent is not an event. The owner is resumed
+        // once then, and its next read is what raises the operator request (ADR-0092).
+        try {
+            for (ConsumerAbsenceGuard.Owed owed : ConsumerAbsenceGuard.owed(location.root(), store)) {
+                store.collaborationProjection().activeIntents().stream()
+                        .filter(intent -> intent.authorityLineageId().equals(owed.binding().authorityLineageId()))
+                        .forEach(intent -> answerDeadlines.merge(intent.provider(), owed.absentAtEpochMillis(), Math::max));
             }
-            long deadline = RequesterAnswerPolicy.answerDeadlineEpochMillis(request);
-            store.collaborationProjection().activeIntents().stream()
-                    .filter(intent -> intent.authorityLineageId().equals(request.authorityLineageId()))
-                    .forEach(intent -> answerDeadlines.merge(intent.provider(), deadline, Math::max));
+        } catch (Exception unreadable) {
+            // Who holds which lane could not be read. No owner is resumed for a moment nobody knows.
         }
         List<String> operatorRequests = store.operatorRequestProjection().open().stream().map(request -> request.id() + " CONDITION=" + request.condition()).toList();
-        // A lane is held when a request Synesis raised is open and the lane's work is published
+        // A lane is held when the checkout cannot take integrated work and the lane's work is published
         // and waiting to be integrated. A provider is held when that is true of all its lanes.
         java.util.Set<java.util.UUID> waitingLineages = store.taskCompletionProjection().lineagesAwaitingIntegration();
-        boolean synesisAsksOperator = store.operatorRequestProjection().open().stream().anyMatch(org.synesis.coordination.domain.operator.OperatorRequest::raisedBySynesis);
-        java.util.Set<String> heldProviders = !synesisAsksOperator ? java.util.Set.of() : openLaneProviders.stream()
+        // Only a request that stops integration holds a lane. An absent consumer's own lane is
+        // the one that has to come back for that request to close, and must not be held by it.
+        boolean integrationStopped = store.operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.CONTROL_CHECKOUT_FOREIGN_CHANGES).isPresent();
+        java.util.Set<String> heldProviders = !integrationStopped ? java.util.Set.of() : openLaneProviders.stream()
                 .filter(provider -> store.collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals(provider))
                         .allMatch(intent -> waitingLineages.contains(intent.authorityLineageId())))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());

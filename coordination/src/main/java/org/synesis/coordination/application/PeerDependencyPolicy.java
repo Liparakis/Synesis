@@ -77,7 +77,7 @@ public final class PeerDependencyPolicy {
     /**
      * Returns the dependencies of a lane whose owner is known and has finished with its work
      * integrated: the lane holds a record for the dependency that was closed because the owner
-     * finished, and a snapshot of that owner's lineage is in the control branch.
+     * finished. A record closed because the owner's lane ended with nothing integrated is not one.
      *
      * <p>Unlike {@link #satisfiedByIntegration}, this does not ask that no peer be open. That rule
      * exists because a dependency never bound names no owner, so any open peer might still be it.
@@ -86,20 +86,37 @@ public final class PeerDependencyPolicy {
      * in, with other lanes still open; told to find an owner, it looked for one that no longer
      * existed until the run ended.</p>
      *
-     * @param completion  task-completion projection
      * @param ownRequests every record the lane holds as requester, in any state
      * @return the dependency names those records carry
      */
-    public static Set<String> satisfiedByIntegratedOwner(TaskCompletionProjection completion, java.util.Collection<CapabilityRequestRecord> ownRequests) {
-        Set<java.util.UUID> integratedLineages = completion.allSnapshots().stream()
-                .filter(snapshot -> completion.snapshotState(snapshot.snapshotId()).orElse(null) == TaskCompletionState.INTEGRATED)
-                .map(snapshot -> snapshot.provenance().authorityLineageId()).collect(java.util.stream.Collectors.toSet());
+    public static Set<String> satisfiedByIntegratedOwner(java.util.Collection<CapabilityRequestRecord> ownRequests) {
         Set<String> satisfied = new LinkedHashSet<>();
         for (CapabilityRequestRecord request : ownRequests) {
-            if (request.ownerFinishedWithoutAnswer() && integratedLineages.contains(request.authorityLineageId())) {
+            // The reason is recorded only when the owner's lane is released after integration,
+            // or when the lane binds to a contract frozen by it, so the record is the proof.
+            if (request.ownerFinishedWithoutAnswer()) {
                 satisfied.add(request.capability());
             }
         }
+        return satisfied;
+    }
+
+    /**
+     * Returns every declared dependency of a lane that integrated work satisfies, by either rule:
+     * its owner is known and was integrated, or no owner was ever bound and no peer is left to be
+     * one. The one place the two rules are combined.
+     *
+     * @param collaboration collaboration projection
+     * @param completion    task-completion projection
+     * @param intent        the dependent lane's intent
+     * @param ownRequests   every record the lane holds as requester, in any state
+     * @return dependencies to treat as satisfied; empty when none qualify
+     */
+    public static Set<String> satisfied(CollaborationProjection collaboration, TaskCompletionProjection completion, WorkIntent intent,
+            java.util.Collection<CapabilityRequestRecord> ownRequests) {
+        Set<String> standing = ownRequests.stream().filter(request -> !request.ownerLaneEnded()).map(CapabilityRequestRecord::capability).collect(java.util.stream.Collectors.toSet());
+        Set<String> satisfied = new LinkedHashSet<>(satisfiedByIntegration(collaboration, completion, intent, standing));
+        satisfied.addAll(satisfiedByIntegratedOwner(ownRequests));
         return satisfied;
     }
 

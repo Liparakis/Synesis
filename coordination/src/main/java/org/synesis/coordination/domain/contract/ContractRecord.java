@@ -55,15 +55,18 @@ public record ContractRecord(UUID contractId, UUID ownerLineageId, long revision
         return paths.stream().anyMatch(path::overlaps);
     }
 
-    ContractRecord frozen() {
-        return new ContractRecord(contractId, ownerLineageId, revision, paths, terms, State.FROZEN);
+    /** Ends an active contract with its owner's lane; a contract that has ended stays as it ended. */
+    ContractRecord ended(boolean integrated) {
+        return state != State.ACTIVE ? this : new ContractRecord(contractId, ownerLineageId, revision, paths, terms, integrated ? State.FROZEN : State.WITHDRAWN);
     }
 
     /** Whether a contract can still be revised. */
     public enum State {
         /** Its owner's lane is open. */
         ACTIVE,
-        /** Its owner's lane has ended. The text stays readable and is never edited again. */
-        FROZEN
+        /** Its owner's lane finished and its work is integrated. The text is what the files were built to and is never edited again. */
+        FROZEN,
+        /** Its owner's lane ended with nothing integrated. The text stays readable, and nothing was built to it. */
+        WITHDRAWN
     }
 }

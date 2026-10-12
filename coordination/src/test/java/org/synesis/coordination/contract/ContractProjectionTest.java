@@ -72,7 +72,11 @@ final class ContractProjectionTest {
     }
 
     private void endLane(PredictionEventStore store, UUID lineage) throws Exception {
-        store.append(UUID.randomUUID(), PredictionEventType.CONTRACT_LANE_ENDED, identity.nodeId(), ContractCodec.encodeLaneEnded(lineage), identity);
+        endLane(store, lineage, true);
+    }
+
+    private void endLane(PredictionEventStore store, UUID lineage, boolean integrated) throws Exception {
+        store.append(UUID.randomUUID(), PredictionEventType.CONTRACT_LANE_ENDED, identity.nodeId(), ContractCodec.encodeLaneEnded(lineage, integrated), identity);
     }
 
     @Test
@@ -193,6 +197,26 @@ final class ContractProjectionTest {
         assertThrows(IOException.class, () -> bind(store, "cap_late", CONTRACT, 1), "nothing binds to a frozen contract");
         endLane(store, OWNER);
         assertEquals(ContractRecord.State.FROZEN, store.contractProjection().contract(CONTRACT).orElseThrow().state());
+    }
+
+    @Test
+    void aLaneThatEndsWithNothingIntegratedWithdrawsItsContractAndALaterEndingDoesNotFreezeIt(@TempDir Path temp) throws Exception {
+        PredictionEventStore store = new PredictionEventStore(temp, UUID.randomUUID());
+        publish(store, contract(CONTRACT, OWNER, 1, STORE));
+
+        endLane(store, OWNER, false);
+
+        ContractProjection projection = store.contractProjection();
+        assertEquals(ContractRecord.State.WITHDRAWN, projection.contract(CONTRACT).orElseThrow().state());
+        assertFalse(projection.frozenCovering(STORE).isPresent(), "nothing was built to a withdrawn contract");
+        assertFalse(projection.activeCovering(STORE).isPresent());
+        assertThrows(IOException.class, () -> publish(store, contract(CONTRACT, OWNER, 2, STORE)), "a withdrawn contract is not revised");
+        assertThrows(IOException.class, () -> bind(store, "cap_late", CONTRACT, 1), "nothing binds to a withdrawn contract");
+
+        endLane(store, OWNER, true);
+
+        assertEquals(ContractRecord.State.WITHDRAWN, store.contractProjection().contract(CONTRACT).orElseThrow().state());
+        assertFalse(store.contractProjection().frozenCovering(STORE).isPresent());
     }
 
     @Test

@@ -99,8 +99,9 @@ public final class ContractProjection {
     }
 
     /**
-     * Finds the contract over a file whose owner's lane has ended. The text stays readable, and
-     * a consumer that arrives late still learns what the file was built to.
+     * Finds the contract over a file whose owner's lane finished with its work integrated. The
+     * text stays readable, and a consumer that arrives late still learns what the file was built
+     * to. A contract withdrawn because its owner ended with nothing integrated is not one.
      *
      * @param path file or subtree
      * @return the most recently published frozen contract covering it, or empty
@@ -160,6 +161,16 @@ public final class ContractProjection {
     }
 
     /**
+     * Returns every change request, in every state, oldest first. They are as public as the
+     * contracts they are about.
+     *
+     * @return immutable change request snapshot
+     */
+    public synchronized List<ContractChangeRequest> changeRequests() {
+        return List.copyOf(changeRequests.values());
+    }
+
+    /**
      * Finds one change request.
      *
      * @param id change request identifier
@@ -177,7 +188,7 @@ public final class ContractProjection {
         if (prior != null && !prior.ownerLineageId().equals(published.ownerLineageId())) {
             throw new CoordinationException("CONTRACT_OWNED_BY_ANOTHER_LANE");
         }
-        if (prior != null && prior.state() == ContractRecord.State.FROZEN) {
+        if (prior != null && prior.state() != ContractRecord.State.ACTIVE) {
             throw new CoordinationException("CONTRACT_FROZEN");
         }
         boolean covered = contracts.values().stream()
@@ -228,12 +239,14 @@ public final class ContractProjection {
     }
 
     /**
-     * Ends everything a lane held here: its contracts are frozen, the change requests waiting for
-     * it are declined, and the change requests it filed are withdrawn. Applying it twice changes
-     * nothing, so a release and a cancellation need not know of each other.
+     * Ends everything a lane held here: its contracts are frozen when its work was integrated
+     * and withdrawn when it was not, the change requests waiting for it are declined, and the
+     * change requests it filed are withdrawn. Applying it twice changes nothing, so a release and
+     * a cancellation need not know of each other.
      */
-    private void endLane(UUID lineageId) {
-        contracts.replaceAll((id, contract) -> contract.ownerLineageId().equals(lineageId) ? contract.frozen() : contract);
+    private void endLane(ContractCodec.LaneEnded ended) {
+        UUID lineageId = ended.lineageId();
+        contracts.replaceAll((id, contract) -> contract.ownerLineageId().equals(lineageId) ? contract.ended(ended.integrated()) : contract);
         changeRequests.replaceAll((id, request) -> {
             if (request.state() != ContractChangeRequest.State.OPEN) {
                 return request;

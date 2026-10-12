@@ -114,7 +114,7 @@ final class LaneCompletionService {
      *                   leaves nothing to stand on, and every binding to it is closed.
      */
     private void endOwnedContracts(PredictionEventStore current, UUID lineageId, boolean integrated) throws IOException, GeneralSecurityException {
-        current.append(UUID.randomUUID(), PredictionEventType.CONTRACT_LANE_ENDED, signer.nodeId(), ContractCodec.encodeLaneEnded(lineageId), signer);
+        current.append(UUID.randomUUID(), PredictionEventType.CONTRACT_LANE_ENDED, signer.nodeId(), ContractCodec.encodeLaneEnded(lineageId, integrated), signer);
         for (CapabilityRequestRecord request : List.copyOf(current.capabilityRequestProjection().records().values())) {
             boolean stands = integrated && request.state() == CapabilityLifecycleState.VALIDATED;
             if (!request.state().bindsLanes() || stands || !request.authorityLineageId().equals(lineageId)) {
@@ -127,7 +127,9 @@ final class LaneCompletionService {
                     request.authorityLineageId(),
                     request.contract(),
                     CapabilityLifecycleState.SUPERSEDED,
-                    CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER,
+                    // The reason is what later lets the consumer through or does not: only a
+                    // dependency whose owner's work is in the control branch is satisfied.
+                    integrated ? CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER : CapabilityRequestRecord.OWNER_LANE_ENDED_WITHOUT_WORK,
                     request.contractRevision());
             current.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED, signer.nodeId(), superseded.encode(), signer);
         }
@@ -170,6 +172,9 @@ final class LaneCompletionService {
                     signer.nodeId(),
                     CollaborationCodec.encodeNoChangeCompletion(completion),
                     signer);
+            // A lane that finishes without a change built nothing to a contract it published.
+            // Left active, the contract named an owner no lane could reach.
+            endOwnedContracts(current, intent.authorityLineageId(), false);
             closeSettledWorkGroup(current, intent.group());
             return completion;
         });

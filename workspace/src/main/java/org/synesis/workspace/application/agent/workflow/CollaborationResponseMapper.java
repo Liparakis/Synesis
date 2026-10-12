@@ -80,7 +80,9 @@ public final class CollaborationResponseMapper {
         map.put("contractId", contract.contractId().toString());
         map.put("revision", contract.revision());
         map.put("state", contract.state().name());
-        map.put("paths", contract.paths().stream().map(ResourceSelector::value).toList());
+        // A directory is shown with the trailing slash it is named by. Shown bare, a contract
+        // published again as it was read gained a file of that name and a revision nobody asked for.
+        map.put("paths", contract.paths().stream().map(path -> path.kind() == ResourceSelector.Kind.PATH_SUBTREE ? path.value() + "/" : path.value()).toList());
         map.put("contract", termsMap(contract.terms()));
         return map;
     }

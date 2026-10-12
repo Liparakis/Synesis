@@ -153,15 +153,28 @@ public final class ContractCodec {
     /**
      * Encodes the end of a lane, for the contracts it owned and the change requests it filed.
      *
-     * @param lineageId authority lineage of the lane that ended
+     * @param lineageId  authority lineage of the lane that ended
+     * @param integrated whether the lane's work is in the control branch
      * @return canonical event payload
      */
-    public static byte[] encodeLaneEnded(UUID lineageId) {
-        return encode(MAGIC_LANE_ENDED, out -> writeUuid(out, lineageId));
+    public static byte[] encodeLaneEnded(UUID lineageId, boolean integrated) {
+        return encode(MAGIC_LANE_ENDED, out -> {
+            writeUuid(out, lineageId);
+            out.writeBoolean(integrated);
+        });
     }
 
-    static UUID decodeLaneEnded(byte[] encoded) throws IOException {
-        return decode(encoded, MAGIC_LANE_ENDED, WireFormat::readUuid);
+    static LaneEnded decodeLaneEnded(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_LANE_ENDED, in -> new LaneEnded(readUuid(in), in.readBoolean()));
+    }
+
+    /**
+     * The end of a lane, as the contract projection reads it.
+     *
+     * @param lineageId  authority lineage of the lane
+     * @param integrated whether the lane's work is in the control branch
+     */
+    record LaneEnded(UUID lineageId, boolean integrated) {
     }
 
     private static void writeList(DataOutputStream out, List<String> values) throws IOException {

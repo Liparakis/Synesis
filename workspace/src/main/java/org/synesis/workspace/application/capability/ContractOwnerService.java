@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.synesis.coordination.application.PeerDependencyPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
@@ -100,11 +101,20 @@ public final class ContractOwnerService {
             return refused("CONTRACT_PATHS_SPAN_CONTRACTS", Map.of("contracts", touched.stream().map(contract -> contract.contractId().toString()).toList()),
                     "These paths belong to more than one of your contracts. Publish each contract with its own paths.");
         }
+        if (PeerDependencyPolicy.closing(store.taskCompletionProjection(), owner.get())) {
+            // A revision makes every binding stale, and a lane that has published its work
+            // closes without reading its inbox again: nobody would serve them.
+            return refused("CONTRACT_OWNER_COMPLETING", Map.of(), "This lane has published its work and is closing, so its contract can no longer change.");
+        }
         ContractRecord prior = touched.isEmpty() ? null : touched.getFirst();
         // A revision can add files and never drops one: a consumer bound over a file would lose
         // the promise it relied on.
         LinkedHashSet<ResourceSelector> paths = new LinkedHashSet<>(prior == null ? List.of() : prior.paths());
         paths.addAll(request.paths());
+        if (paths.size() > ContractRecord.MAX_PATHS) {
+            return refused("CONTRACT_COVERS_TOO_MANY_PATHS", Map.of("paths", paths.size(), "limit", ContractRecord.MAX_PATHS),
+                    "One contract covers at most " + ContractRecord.MAX_PATHS + " paths. Name a directory with a trailing slash to cover everything under it.");
+        }
         boolean unchanged = prior != null && prior.terms().isEquivalent(request.terms()) && paths.size() == prior.paths().size();
         ContractRecord published = unchanged ? prior
                 : new ContractRecord(prior == null ? UUID.randomUUID() : prior.contractId(), lineage, prior == null ? 1 : prior.revision() + 1, List.copyOf(paths), request.terms(),
@@ -112,19 +122,22 @@ public final class ContractOwnerService {
         int toldToBindAgain = 0;
         if (!unchanged) {
             store.append(UUID.randomUUID(), PredictionEventType.CONTRACT_PUBLISHED, identity.nodeId(), ContractCodec.encodePublished(published), identity);
-            for (ContractBinding bound : store.contractProjection().bindings(published.contractId())) {
-                Optional<CapabilityRequestRecord> record = store.capabilityRequestProjection().findByHandle(bound.handle());
-                if (record.isEmpty() || !record.get().state().bindsLanes()) {
-                    continue;
-                }
-                // One text for every consumer: each binding to the earlier revision waits to be
-                // made again, and what was validated under it no longer counts.
-                CapabilityRequestPayload revised = new CapabilityRequestPayload(record.get().handle(), record.get().capability(), record.get().requesterNodeId(), record.get().ownerNodeId(),
-                        record.get().authorityLineageId(), published.terms(), CapabilityLifecycleState.REVISION_REQUESTED,
-                        "The owner published revision " + published.revision() + " of the contract.", record.get().contractRevision());
-                store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, identity.nodeId(), revised.encode(), identity);
-                toldToBindAgain++;
+        }
+        // Stale is read from the bindings and not from this call having published: a call that
+        // recorded the revision and then failed is made again, finds nothing to publish, and
+        // must still tell the consumers it had not reached.
+        for (ContractBinding bound : store.contractProjection().bindings(published.contractId())) {
+            Optional<CapabilityRequestRecord> record = store.capabilityRequestProjection().findByHandle(bound.handle());
+            if (record.isEmpty() || !record.get().state().bindsLanes() || bound.revision() == published.revision() || record.get().state() == CapabilityLifecycleState.REVISION_REQUESTED) {
+                continue;
             }
+            // One text for every consumer: each binding to the earlier revision waits to be
+            // made again, and what was validated under it no longer counts.
+            CapabilityRequestPayload revised = new CapabilityRequestPayload(record.get().handle(), record.get().capability(), record.get().requesterNodeId(), record.get().ownerNodeId(),
+                    record.get().authorityLineageId(), published.terms(), CapabilityLifecycleState.REVISION_REQUESTED,
+                    "The owner published revision " + published.revision() + " of the contract.", record.get().contractRevision());
+            store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, identity.nodeId(), revised.encode(), identity);
+            toldToBindAgain++;
         }
         List<String> answered = new ArrayList<>();
         List<String> notAnswered = new ArrayList<>();

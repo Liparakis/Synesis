@@ -356,7 +356,7 @@ public final class AgentTaskCompletionService {
                     .filter(requestRecord -> requestRecord.matchesRequester(callerNodeId, callerSupervisorId, callerWorkerId))
                     // A request its owner superseded by finishing is not a dependency of this
                     // snapshot: nothing was agreed, and the owner's work is already in the base.
-                    .filter(requestRecord -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(requestRecord)).toList();
+                    .filter(requestRecord -> !requestRecord.ownerLaneEnded()).toList();
             // Collaboration participants are derived from the verified durable
             // session binding, never from the transient MCP connection ID.
             // Using the connection here made an otherwise valid claimed lane
@@ -567,7 +567,6 @@ public final class AgentTaskCompletionService {
         }
         String preparedRef = snapshotService.pinPreparedRef(worktree, snapshot, completionId);
         String preparedTreeHash = snapshotService.treeHash(worktree, snapshot.commitSha());
-        supersedeUnansweredProposals(store, snapshot, binding, identity);
         if (store.taskCompletionProjection().findPrepared(taskId, snapshot.provenance().laneId(), snapshot.provenance().claimEpoch()).isEmpty()) {
             CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
                     completionId,
@@ -694,13 +693,10 @@ public final class AgentTaskCompletionService {
                     AgentNextAction.WAIT,
                     Map.of(NextActionKeys.CAPABILITY_REQUEST_HANDLE, unjudged.getFirst().handle().value(), NextActionKeys.REASON, NextActionProtocol.REASON_IMPLEMENTATION_AWAITING_VALIDATION, NextActionKeys.PENDING, unjudged.size()));
         }
-        long now = System.currentTimeMillis();
-        List<CapabilityRequestRecord> unanswered = LaneCompletionProjection.unansweredProposals(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId).stream()
-                .filter(proposal -> RequesterAnswerPolicy.ownerMustWait(proposal, now))
-                .toList();
+        List<CapabilityRequestRecord> unanswered = LaneCompletionProjection.unansweredProposals(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId);
         if (!unanswered.isEmpty()) {
-            // Same bounded wait the inbox projects. Once it has passed, finishing supersedes the
-            // proposal instead of leaving the requester an answer nobody will read.
+            // Same wait the inbox projects: a consumer that has not bound again to the revised
+            // contract has not checked this lane's work, and the lane does not finish past it.
             return new AgentResponse(AgentStatus.BLOCKED,
                     AgentReason.REQUESTER_RESPONSE_PENDING,
                     AgentNextAction.WAIT,
@@ -722,33 +718,6 @@ public final class AgentTaskCompletionService {
                     Map.of(NextActionKeys.CAPABILITY_REQUEST_HANDLE, request.handle().value(), NextActionKeys.CONTRACT_REVISION, request.contractRevision()));
         }
         return null;
-    }
-
-    /**
-     * Records that this lane's unanswered contract proposals are superseded by the work it is
-     * about to publish.
-     *
-     * <p>Readiness has already established that each proposal's answer period is over. Recording
-     * the outcome before the completion is prepared means the requester never finds a proposal
-     * waiting for an answer from a lane that can no longer act on it: it is told the owner went
-     * ahead and builds against the integrated work. Should the completion then fail, the
-     * requester simply asks again while the owner is still open.</p>
-     */
-    private static void supersedeUnansweredProposals(PredictionEventStore store, TaskSnapshotRecord snapshot, ProviderSessionBindingService.Binding binding, NodeIdentity identity)
-            throws IOException, java.security.GeneralSecurityException {
-        WorkIntent ownerIntent = store.collaborationProjection().intent(snapshot.provenance().laneId()).orElse(null);
-        for (CapabilityRequestRecord proposal : LaneCompletionProjection.unansweredProposals(store, ownerIntent, identity.nodeId(), binding.supervisorId(), binding.workerId())) {
-            CapabilityRequestPayload superseded = new CapabilityRequestPayload(proposal.handle(),
-                    proposal.capability(),
-                    proposal.requesterNodeId(),
-                    proposal.ownerNodeId(),
-                    proposal.authorityLineageId(),
-                    proposal.contract(),
-                    CapabilityLifecycleState.SUPERSEDED,
-                    RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER,
-                    proposal.contractRevision());
-            store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_SUPERSEDED, identity.nodeId(), superseded.encode(), identity);
-        }
     }
 
     private static boolean isCompletionBlockingCapability(CapabilityRequestRecord request) {

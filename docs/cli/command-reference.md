@@ -108,7 +108,7 @@ Synesis records an operator request (ADR-0091). It raises one for a project
 checkout holding changes Synesis did not make (nothing is integrated into such
 a checkout, and the work that is finished waits), and for a lane bound to
 another lane's contract that owes an action while its agent has not returned
-(ADR-0092): start the agents again so one continues that lane, or cancel it.
+(ADR-0092): start the agents again so one continues that lane.
 
 `synesis operator list` prints the open requests, each with a `SUMMARY` and its
 `EVIDENCE` lines exactly as the refusing tool reported them (`--all` adds the

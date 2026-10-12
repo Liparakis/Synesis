@@ -318,22 +318,10 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
     public static final String OWNER_FINISHED_WITHOUT_ANSWER = "OWNER_FINISHED_WITHOUT_REQUESTER_ANSWER";
 
     /**
-     * Builds the event payload that cancels this request at its current contract revision.
-     *
-     * @param reason why the request is cancelled
-     * @return payload for a {@code CAPABILITY_REQUEST_CANCELLED} event
+     * Reason recorded on a binding whose owner's lane ended with nothing integrated: it was
+     * cancelled, or it finished without a change. Nothing was built to the contract.
      */
-    public CapabilityRequestPayload cancellation(String reason) {
-        return new CapabilityRequestPayload(handle,
-                capability,
-                requesterNodeId,
-                ownerNodeId,
-                authorityLineageId,
-                contract,
-                CapabilityLifecycleState.CANCELLED,
-                reason,
-                contractRevision);
-    }
+    public static final String OWNER_LANE_ENDED_WITHOUT_WORK = "OWNER_LANE_ENDED_WITHOUT_WORK";
 
     /**
      * Reports whether this request ended because its owner finished without the requester's
@@ -346,6 +334,17 @@ public record CapabilityRequestRecord(CapabilityRequestHandle handle, String cap
      */
     public boolean ownerFinishedWithoutAnswer() {
         return state == CapabilityLifecycleState.SUPERSEDED && OWNER_FINISHED_WITHOUT_ANSWER.equals(reason);
+    }
+
+    /**
+     * Reports whether this record no longer stands for its dependency because the lane that owned
+     * it ended, with its work integrated or with none. The requester's lane then judges the
+     * dependency as one it holds no record for.
+     *
+     * @return {@code true} for a record closed by its owner's lane ending
+     */
+    public boolean ownerLaneEnded() {
+        return state == CapabilityLifecycleState.SUPERSEDED && (OWNER_FINISHED_WITHOUT_ANSWER.equals(reason) || OWNER_LANE_ENDED_WITHOUT_WORK.equals(reason));
     }
 
     /**

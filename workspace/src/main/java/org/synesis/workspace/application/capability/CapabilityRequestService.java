@@ -125,7 +125,7 @@ public final class CapabilityRequestService {
         CapabilityRequestProjection projection = store.capabilityRequestProjection();
         Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
-            Optional<ContractRecord> finished = finishedOwnerContract(store, request.ownerPath());
+            Optional<ContractRecord> finished = store.contractProjection().frozenCovering(request.ownerPath());
             if (finished.isPresent()) {
                 return bindToIntegratedWork(request, store, projection, binding, identity, finished.get());
             }
@@ -197,14 +197,6 @@ public final class CapabilityRequestService {
         return boundAnswer(handle, capability, current, owner.get());
     }
 
-    /** Finds the frozen contract over a file whose owner's work is in the control branch. */
-    private static Optional<ContractRecord> finishedOwnerContract(PredictionEventStore store, ResourceSelector path) {
-        var completion = store.taskCompletionProjection();
-        return store.contractProjection().frozenCovering(path).filter(contract -> completion.allSnapshots().stream()
-                .anyMatch(snapshot -> snapshot.provenance().authorityLineageId().equals(contract.ownerLineageId())
-                        && completion.snapshotState(snapshot.snapshotId()).orElse(null) == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED));
-    }
-
     /**
      * Records that the caller builds on a file whose owner has finished and been integrated
      * (ADR-0092).
@@ -252,6 +244,11 @@ public final class CapabilityRequestService {
         if (request.need() == null || request.need().isBlank()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INVALID_PATH, AgentNextAction.RETRY, Map.of("reason", "CONTRACT_CHANGE_NEED_REQUIRED"));
         }
+        if (request.need().trim().length() > ContractChangeRequest.MAX_NEED_CHARACTERS) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, Map.of("reason", "CONTRACT_CHANGE_NEED_TOO_LONG",
+                    "characters", request.need().trim().length(), "limit", ContractChangeRequest.MAX_NEED_CHARACTERS,
+                    "instruction", "State what you need from the file in at most " + ContractChangeRequest.MAX_NEED_CHARACTERS + " characters."));
+        }
         String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
         Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
         if (requesterIntent.isEmpty()) {
@@ -259,7 +256,7 @@ public final class CapabilityRequestService {
         }
         Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
-            Optional<ContractRecord> finished = finishedOwnerContract(store, request.ownerPath());
+            Optional<ContractRecord> finished = store.contractProjection().frozenCovering(request.ownerPath());
             if (finished.isPresent()) {
                 // Nobody is left to change the contract, so a need cannot be put to anyone.
                 Map<String, Object> result = new LinkedHashMap<>(CollaborationResponseMapper.contractMap(finished.get()));
@@ -336,13 +333,7 @@ public final class CapabilityRequestService {
             ProviderSessionBindingService.Binding binding) {
         List<CapabilityRequestRecord> own = projection.findAllForRequester(requesterNodeId).stream()
                 .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId())).toList();
-        java.util.Set<String> requested = own.stream()
-                .filter(record -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record))
-                .map(CapabilityRequestRecord::capability)
-                .collect(java.util.stream.Collectors.toSet());
-        java.util.Set<String> satisfied = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, requested));
-        satisfied.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), own));
-        return satisfied;
+        return PeerDependencyPolicy.satisfied(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, own);
     }
 
     private static Optional<WorkIntent> currentIntent(PredictionEventStore store, String participant) {

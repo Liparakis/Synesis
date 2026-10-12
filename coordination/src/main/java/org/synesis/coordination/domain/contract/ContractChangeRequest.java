@@ -31,7 +31,7 @@ public record ContractChangeRequest(UUID id, UUID ownerLineageId, ResourceSelect
     /** Reason of a request withdrawn because the lane that filed it ended. */
     public static final String FILER_LANE_ENDED = "FILER_LANE_ENDED";
 
-    static final int MAX_NEED_CHARACTERS = 4000;
+    public static final int MAX_NEED_CHARACTERS = 4000;
 
     /**
      * Validates the request.

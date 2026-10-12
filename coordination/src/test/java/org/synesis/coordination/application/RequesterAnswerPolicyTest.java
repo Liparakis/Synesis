@@ -64,13 +64,12 @@ final class RequesterAnswerPolicyTest {
 
         assertTrue(RequesterAnswerPolicy.awaitsRequesterAnswer(proposal));
         assertEquals(PROPOSED_AT + 60_000L, RequesterAnswerPolicy.answerDeadlineEpochMillis(proposal));
-        assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 59_999L));
-        assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 60_000L), "the deadline no longer frees the owner: an absent consumer goes to the operator");
-        assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 24L * 3_600_000L));
+        assertEquals(PROPOSED_AT + 60_000L, RequesterAnswerPolicy.absentAtEpochMillis(proposal, 0L), "a consumer that never called counts from the record's last change");
+        assertEquals(PROPOSED_AT + 90_000L, RequesterAnswerPolicy.absentAtEpochMillis(proposal, PROPOSED_AT + 30_000L), "a consumer that called since counts from that call");
 
         for (CapabilityLifecycleState other : List.of(CapabilityLifecycleState.AWAITING_OWNER, CapabilityLifecycleState.ACCEPTED, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
                 CapabilityLifecycleState.VALIDATED, CapabilityLifecycleState.SUPERSEDED)) {
-            assertFalse(RequesterAnswerPolicy.ownerMustWait(request(other, null), PROPOSED_AT), "this wait is only for a proposal the requester has not answered: " + other);
+            assertFalse(RequesterAnswerPolicy.awaitsRequesterAnswer(request(other, null)), "this wait is only for a proposal the requester has not answered: " + other);
         }
     }
 

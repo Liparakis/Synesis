@@ -36,7 +36,7 @@ import org.synesis.workspace.infrastructure.diagnostics.LocalDiagnostics;
  * <p>Absent is judged from what is recorded: the consumer owes an action, and neither the record
  * nor any verified call of the consumer's participant is newer than the stated wait.</p>
  */
-final class ConsumerAbsenceGuard {
+public final class ConsumerAbsenceGuard {
 
     private ConsumerAbsenceGuard() {
     }
@@ -54,7 +54,7 @@ final class ConsumerAbsenceGuard {
         Optional<OperatorRequest> open = store.operatorRequestProjection().open(OperatorRequest.BOUND_CONSUMER_ABSENT);
         List<String> absent;
         try {
-            absent = absentConsumers(controlRoot, store, nowMillis);
+            absent = owed(controlRoot, store).stream().filter(owed -> nowMillis >= owed.absentAtEpochMillis()).map(Owed::described).toList();
         } catch (Exception unreadable) {
             // Who holds which lane could not be read, so nothing new is known. Raising on a
             // guess would stop a run that can continue.
@@ -70,7 +70,7 @@ final class ConsumerAbsenceGuard {
             } else if (open.isEmpty()) {
                 OperatorRequest request = OperatorRequest.raised("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), OperatorRequest.BOUND_CONSUMER_ABSENT,
                         "A lane that builds on another lane's work has not checked that work, or has not bound again to its revised contract, and its agent has not returned. "
-                                + "The owner's work is not integrated until every bound lane has. Start the agents again so that one continues the lane named here, or cancel that lane. "
+                                + "The owner's work is not integrated until every bound lane has. Start the agents again so that one continues the lane named here. "
                                 + "This request closes when each such lane has acted or has ended.",
                         String.join("\n", absent));
                 store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), request.encodeRaised(), identity);
@@ -80,21 +80,30 @@ final class ConsumerAbsenceGuard {
         }
     }
 
-    /** Lists each binding whose consumer owes an action and has been silent past the stated wait, one line each. */
-    private static List<String> absentConsumers(Path controlRoot, PredictionEventStore store, long nowMillis) throws Exception {
-        List<CapabilityRequestRecord> owed = store.capabilityRequestProjection().records().values().stream()
-                .filter(RequesterAnswerPolicy::consumerOwesAction)
-                .filter(record -> nowMillis >= RequesterAnswerPolicy.answerDeadlineEpochMillis(record))
-                .toList();
-        List<String> absent = new ArrayList<>();
-        if (owed.isEmpty()) {
-            return absent;
+    /**
+     * Returns the bindings whose consumer owes an action and whose consumer's lane is open, each
+     * with the moment that consumer counts as absent.
+     *
+     * <p>This is the one account of absence. The guard raises the operator request from it, the
+     * run controller resumes the owner at the moment it gives, and the owner's next action is
+     * held on it. Read separately they disagreed: the owner was resumed before the guard would
+     * raise anything, and was not resumed again.</p>
+     *
+     * @param controlRoot project root
+     * @param store       coordination store
+     * @return the owed bindings; a binding with no open lane behind it is not one
+     * @throws Exception when the sessions holding the lanes cannot be read
+     */
+    public static List<Owed> owed(Path controlRoot, PredictionEventStore store) throws Exception {
+        List<CapabilityRequestRecord> owing = store.capabilityRequestProjection().records().values().stream().filter(RequesterAnswerPolicy::consumerOwesAction).toList();
+        List<Owed> owed = new ArrayList<>();
+        if (owing.isEmpty()) {
+            return owed;
         }
         ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
         List<Participant> participants = store.collaborationProjection().participants();
-        for (CapabilityRequestRecord record : owed) {
-            long wait = RequesterAnswerPolicy.answerDeadlineEpochMillis(record) - record.updatedAtEpochMillis();
+        for (CapabilityRequestRecord record : owing) {
             Optional<String> consumer = participants.stream().map(Participant::provider).distinct()
                     .flatMap(provider -> bindingsOf(bindings, location, provider).stream())
                     .filter(binding -> binding.workerId().equals(record.requesterWorkerId()) && binding.supervisorId().equals(record.requesterSupervisorId()))
@@ -106,12 +115,28 @@ final class ConsumerAbsenceGuard {
                 continue;
             }
             long lastCall = participants.stream().filter(participant -> participant.id().equals(consumer.get())).mapToLong(Participant::lastVerifiedActivity).max().orElse(0L);
-            if (nowMillis < lastCall + wait) {
-                continue;
-            }
-            absent.add(record.capability() + " binding=" + record.handle().value() + " state=" + record.state().value() + " lane=\"" + lane.get().goal() + "\"");
+            owed.add(new Owed(record, lane.get(), RequesterAnswerPolicy.absentAtEpochMillis(record, lastCall)));
         }
-        return absent;
+        return owed;
+    }
+
+    /**
+     * A binding whose consumer owes an action.
+     *
+     * @param binding             the binding
+     * @param consumerLane        the open lane of the consumer
+     * @param absentAtEpochMillis the moment the consumer counts as absent
+     */
+    public record Owed(CapabilityRequestRecord binding, WorkIntent consumerLane, long absentAtEpochMillis) {
+
+        /**
+         * Returns the line the operator and the waiting owner are shown for this binding.
+         *
+         * @return the dependency, the binding, its state and the consumer's goal
+         */
+        public String described() {
+            return binding.capability() + " binding=" + binding.handle().value() + " state=" + binding.state().value() + " lane=\"" + consumerLane.goal() + "\"";
+        }
     }
 
     private static List<ProviderSessionBindingService.Binding> bindingsOf(ProviderSessionBindingService bindings, ProjectLocation location, String provider) {

@@ -114,8 +114,14 @@ with condition `bound_consumer_absent`, and the waiting owner is answered
 `blocked` / `operator_required`. It closes when that lane acts or ends.
 
 Cancelling a lane withdraws its bindings in every state. When an owner's lane
-ends, its contracts are frozen, the change requests still open against them are
-declined, and the bindings it can no longer serve are closed.
+ends, the change requests still open against its contracts are declined and the
+bindings it can no longer serve are closed. Its contracts become `FROZEN` when
+its work was integrated, and `WITHDRAWN` when the lane was cancelled or finished
+without a change: nothing was built to a withdrawn contract, it cannot be bound
+to, and a lane that depended on it is shown the dependency as unbound again. A
+lane that has published its work can no longer revise its contract
+(`CONTRACT_OWNER_COMPLETING`). `collaboration_status` lists every change
+request beside the contracts.
 
 After the requester validates a published implementation, the owner's ordinary
 `get_next_action` returns `implementationValidated: true` and recommends

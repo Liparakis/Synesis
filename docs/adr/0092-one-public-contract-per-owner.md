@@ -310,3 +310,46 @@ answered is gone. An owner waits while a bound consumer's lane is open. A
 consumer that owes an action and has made no verified call for the stated time
 is put to the operator (`bound_consumer_absent`), the owner is told so, and the
 request closes when the consumer acts or its lane ends.
+
+## The quality review of the build
+
+A strict review of the two commits that built this record, by one reviewer that
+read the code and ran nothing, found two paths that left a lane with no lawful
+next action and six further defects. Each was checked against the code before
+it was acted on, and each was real.
+
+- A binding closed while its consumer was validating left the validation
+  standing. Finishing is refused while any validation runs, so no lane of the
+  project could finish again. Closing a binding now ends its validation.
+- A lane told that one of its dependencies was already integrated was told only
+  that, on every poll. With a second, live binding it was never shown that
+  binding, and as an owner it was never shown its consumers. The note is now put
+  beside what the lane owes.
+- A cancelled owner's contract was frozen like a finished owner's. A consumer
+  was told to bind to it and, binding, told that no lane claims the file. A
+  contract whose owner ended with nothing integrated is now `WITHDRAWN`: it stays
+  readable, cannot be bound to, and its consumers hold a record closed as "the
+  owner's lane ended without work", which does not satisfy the dependency. A lane
+  that finishes without a change withdraws its contracts too; before, they stayed
+  active with no lane behind them.
+- A publish that recorded the revision and failed before telling every consumer
+  told nobody when it was made again. Which bindings are stale is now read from
+  the bindings.
+- An absent consumer's own agent was held as if the checkout were refusing work,
+  so the request about it could not close. Only a request that stops integration
+  holds a lane.
+- An owner was told to stop for any absent consumer, its own or not, and the run
+  controller resumed the owner at a moment the guard did not yet call absence.
+  There is one account of who is absent and since when, and all three read it.
+- The change requests an owner must answer were hidden while integration waited
+  on something else.
+- A contract over a directory was shown without the trailing slash it is named
+  by; published again as read, it gained a file of that name and a revision.
+
+A lane that has published its work can no longer revise its contract: nobody
+would serve the bindings a revision makes stale.
+
+Not done: `CapabilityRequestService` is now the consumer half of this record
+and still carries its old name, and the replay handlers for a request that
+waits for its owner, is rejected or is cancelled remain although nothing
+produces those events any more.

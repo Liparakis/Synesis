@@ -648,7 +648,7 @@ class AgentNextActionServiceTest {
         assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction());
         Map<String, Object> result = (Map<String, Object>) response.result();
         assertEquals("tasktracker.domain", result.get("capability"));
-        assertEquals(List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests"), result.get("requiredFields"));
+        assertEquals(List.of("capability", "ownerPath", "revision"), result.get("requiredFields"), "what contract_bind takes: the lane accepts the owner's contract and writes none");
         Map<String, Object> currentIntent = (Map<String, Object>) result.get("currentIntent");
         assertEquals(List.of("tasktracker.domain"), currentIntent.get("knownDependencies"));
         // The requester is shown who claims what, so it can name the file it builds on.

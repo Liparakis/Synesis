@@ -587,34 +587,47 @@ public final class AgentNextActionService {
         if (operatorHolds(integrationPump, action, store, binding)) {
             return integrationPump;
         }
-        return absentConsumerHold(location, action).orElse(action);
+        return absentConsumerHold(location, action, binding).orElse(action);
     }
 
     /**
-     * Tells an owner that waits for a bound consumer that the consumer has been put to the
-     * operator (ADR-0092). Told only to keep waiting, it polled to its limit for an agent that
-     * was not coming back.
+     * Tells an owner that is told to wait, and one of whose bound consumers counts as absent,
+     * that the consumer has been put to the operator (ADR-0092). Told only to keep waiting, it
+     * polled to its limit for an agent that was not coming back. An owner whose own consumers
+     * are all present keeps its wait: another owner's absent consumer is not its concern.
      */
-    private Optional<AgentResponse> absentConsumerHold(ProjectLocation location, AgentResponse action) throws Exception {
-        boolean waitsForConsumer = action != null && action.nextAction() == AgentNextAction.WAIT
-                && (action.reason() == AgentReason.VALIDATION_REQUIRED || action.reason() == AgentReason.REQUESTER_RESPONSE_PENDING);
-        if (!waitsForConsumer) {
+    private Optional<AgentResponse> absentConsumerHold(ProjectLocation location, AgentResponse action, ProviderSessionBindingService.Binding binding) throws Exception {
+        if (action == null || action.nextAction() != AgentNextAction.WAIT) {
             return Optional.empty();
         }
         // Read after the pump: the pass that has just run is the one that raises the request,
         // and the projection opened before it would tell the owner to wait one poll longer.
-        return newEventStore(location).operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.BOUND_CONSUMER_ABSENT).map(request -> {
-            Map<String, Object> shown = new LinkedHashMap<>();
-            shown.put("id", request.id());
-            shown.put("condition", request.condition());
-            shown.put("summary", request.summary());
-            shown.put("evidence", request.evidence().lines().toList());
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("operatorRequest", shown);
-            result.put("instruction", "A lane bound to your contract has not acted and its agent has not returned, so Synesis has asked the operator to start one or to cancel that lane. "
-                    + "Your work is kept and is integrated when that lane has checked it or has ended. Stop here and do not poll.");
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OPERATOR_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, result);
-        });
+        PredictionEventStore current = newEventStore(location);
+        Optional<org.synesis.coordination.domain.operator.OperatorRequest> request = current.operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.BOUND_CONSUMER_ABSENT);
+        if (request.isEmpty()) {
+            return Optional.empty();
+        }
+        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+        java.util.Set<java.util.UUID> ownLineages = current.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant))
+                .map(WorkIntent::authorityLineageId).collect(java.util.stream.Collectors.toSet());
+        long now = System.currentTimeMillis();
+        // What is shown is who is absent now, not who was when the request was raised.
+        List<String> absent = org.synesis.workspace.application.integration.ConsumerAbsenceGuard.owed(location.root(), current).stream()
+                .filter(owed -> now >= owed.absentAtEpochMillis() && ownLineages.contains(owed.binding().authorityLineageId()))
+                .map(org.synesis.workspace.application.integration.ConsumerAbsenceGuard.Owed::described).toList();
+        if (absent.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, Object> shown = new LinkedHashMap<>();
+        shown.put("id", request.get().id());
+        shown.put("condition", request.get().condition());
+        shown.put("summary", request.get().summary());
+        shown.put("evidence", absent);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("operatorRequest", shown);
+        result.put("instruction", "A lane bound to your contract has not acted and its agent has not returned, so Synesis has asked the operator to start one. "
+                + "Your work is kept and is integrated when that lane has checked it or has ended. Stop here and do not poll.");
+        return Optional.of(new AgentResponse(AgentStatus.BLOCKED, AgentReason.OPERATOR_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, result));
     }
 
     /**
@@ -664,7 +677,7 @@ public final class AgentNextActionService {
             if (awaitedVerdict != null) {
                 return awaitedVerdict;
             }
-            AgentResponse awaitedAnswer = LaneCompletionProjection.awaitedRequesterAnswer(store, lane, actor, System.currentTimeMillis());
+            AgentResponse awaitedAnswer = LaneCompletionProjection.awaitedRequesterAnswer(store, lane, actor);
             if (awaitedAnswer != null) {
                 return awaitedAnswer;
             }
@@ -690,7 +703,10 @@ public final class AgentNextActionService {
             // validate or a request to answer or publish for, is the one who can end that wait.
             // Shown only the wait, five agents waited on each other.
             AgentResponse owed = CapabilityActionProjection.capabilityAction(store, actor, callerIntent.get(), coordinationActivated);
-            if (owed != null && owed.status() != AgentStatus.WAITING && owed.result() instanceof Map<?, ?> owedResult && owedResult.containsKey(NextActionKeys.CAPABILITY_REQUEST_HANDLE)) {
+            // A step is the caller's own when it names something to do. A wait is not, and
+            // neither is a note that a dependency is satisfied. Asking for a binding handle
+            // here hid the change requests an owner has to answer, which carry none.
+            if (owed != null && owed.nextAction() != null && owed.nextAction() != AgentNextAction.WAIT) {
                 return owed;
             }
         }
