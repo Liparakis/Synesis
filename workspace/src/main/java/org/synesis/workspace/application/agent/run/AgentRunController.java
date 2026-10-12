@@ -167,7 +167,7 @@ public final class AgentRunController {
                         }
                         OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
-                        OptionalLong message = observation.newestMessageFor(agent.spec.provider(), agent.connectionId);
+                        OptionalLong message = observation.newestUnreadMessageFor(agent.spec.provider(), agent.connectionId);
                         boolean messageWaiting = message.isPresent() && message.getAsLong() > Math.max(agent.stoppedAtSequence, agent.resumedForMessage);
                         if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
@@ -478,15 +478,17 @@ public final class AgentRunController {
         }
 
         /**
-         * Returns the log position of the newest message addressed to a lane that the session
-         * behind one connection holds (ADR-0093). The controller resumes a stopped agent for a
-         * message it has not seen, and for that message only once.
+         * Returns the log position of the newest message addressed to the lane that the session
+         * behind one connection holds and not yet marked as handed to it (ADR-0093). The
+         * controller resumes a stopped agent for such a message, and for that message only once.
+         * A message the agent read before it stopped is not one: resumed for it, an agent found
+         * nothing and had spent a resume.
          *
          * @param provider             provider identifier
          * @param connectionInstanceId connection of the agent's last process
-         * @return that position, or empty when the connection holds no lane or nothing was addressed to it
+         * @return that position, or empty when the connection holds no lane or its lane has nothing unread
          */
-        default OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
+        default OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
             return OptionalLong.empty();
         }
     }

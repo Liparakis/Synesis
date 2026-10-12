@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -73,6 +75,20 @@ public record ConversationMessage(UUID id, UUID senderLineageId, List<UUID> memb
     public static UUID conversationOf(Collection<UUID> members) {
         String canonical = new TreeSet<>(members).stream().map(UUID::toString).collect(Collectors.joining(","));
         return UUID.nameUUIDFromBytes(("synesis-conversation:" + canonical).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Groups messages into their conversations, in the order each conversation began.
+     *
+     * @param messages messages, oldest first
+     * @return each conversation's messages, oldest first, by conversation identifier
+     */
+    public static Map<UUID, List<ConversationMessage>> byConversation(Collection<ConversationMessage> messages) {
+        Map<UUID, List<ConversationMessage>> grouped = new LinkedHashMap<>();
+        for (ConversationMessage message : messages) {
+            grouped.computeIfAbsent(message.conversationId(), id -> new ArrayList<>()).add(message);
+        }
+        return grouped;
     }
 
     /**

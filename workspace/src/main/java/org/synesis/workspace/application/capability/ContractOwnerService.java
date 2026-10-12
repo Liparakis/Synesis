@@ -205,8 +205,7 @@ public final class ContractOwnerService {
     }
 
     private static Optional<WorkIntent> callerIntent(PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
-        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst();
+        return WorkspaceCollaborationService.laneOf(store, WorkspaceCollaborationService.participantHandle(binding.sessionId()));
     }
 
     /** Tells whether a path lies inside what a lane claims: the claimed file itself, or anything under a claimed subtree. */

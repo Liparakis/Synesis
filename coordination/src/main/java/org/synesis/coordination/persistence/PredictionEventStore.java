@@ -393,12 +393,12 @@ public final class PredictionEventStore {
      * <p>Completion envelopes are fenced by the revision at which they were projected. Every MCP
      * call from every participant appends a {@link PredictionEventType#PARTICIPANT_HEARTBEAT}, so
      * requiring that revision to equal the head lets one participant's liveness invalidate another
-     * participant's envelope. A heartbeat records activity only and changes no claim, grant,
-     * snapshot, or capability state, so it does not make the envelope stale; any other event
-     * appended after {@code revision} does.</p>
+     * participant's envelope. A heartbeat, a message between lanes and a mark of delivery
+     * change no claim, grant, snapshot, or capability state, so they do not make the envelope
+     * stale; any other event appended after {@code revision} does.</p>
      *
      * @param revision head sequence observed when the envelope was projected
-     * @return true when no event other than a heartbeat has been appended since that revision
+     * @return true when no event that changes state has been appended since that revision
      */
     public synchronized boolean unchangedSince(long revision) {
         if (revision < 0L || revision > events.size()) {
@@ -406,7 +406,7 @@ public final class PredictionEventStore {
         }
         // The event with sequence n is stored at index n - 1.
         for (int index = (int) revision; index < events.size(); index++) {
-            if (events.get(index).type() != PredictionEventType.PARTICIPANT_HEARTBEAT) {
+            if (!events.get(index).type().recordsNoStateChange()) {
                 return false;
             }
         }

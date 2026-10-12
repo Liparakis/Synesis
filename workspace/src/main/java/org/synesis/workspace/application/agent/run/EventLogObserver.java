@@ -121,6 +121,8 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 .filter(provider -> store.collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals(provider))
                         .allMatch(intent -> waitingLineages.contains(intent.authorityLineageId())))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
+                .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         return new AgentRunController.Observation() {
 
             @Override
@@ -134,11 +136,13 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
-            public OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
+            public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
                 String participant = participantOf(provider, connectionInstanceId);
-                return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant))
-                        .map(intent -> store.conversationProjection().newestAddressedTo(intent.authorityLineageId()))
-                        .filter(OptionalLong::isPresent).mapToLong(OptionalLong::getAsLong).max();
+                // The lane is the one the service hands messages for, so nobody is woken for a
+                // message that would not be shown to it.
+                return participant == null ? OptionalLong.empty() : WorkspaceCollaborationService.laneOf(store, participant)
+                        .map(lane -> store.conversationProjection().unread(lane.authorityLineageId()).stream().mapToLong(message -> message.sequence()).max())
+                        .orElse(OptionalLong.empty());
             }
 
             @Override
@@ -190,7 +194,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                     return !events.isEmpty();
                 }
                 for (int index = (int) Math.min(sequence, events.size()); index < events.size(); index++) {
-                    if (AgentRunController.isProgress(events.get(index).type()) && !askedByALane(events.get(index))) {
+                    if (AgentRunController.isProgress(events.get(index).type()) && !betweenALaneAndTheOperator(events.get(index), laneRequests)) {
                         return true;
                     }
                 }
@@ -199,13 +203,17 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         };
     }
 
-    /** A lane putting something to the operator is a message, not work: it resumes nobody (ADR-0093). */
-    private static boolean askedByALane(PredictionEvent event) {
-        if (event.type() != org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_RAISED) {
-            return false;
-        }
+    /**
+     * A lane putting something to the operator, and the operator closing it, are messages and
+     * not work: neither resumes anybody (ADR-0093).
+     */
+    private static boolean betweenALaneAndTheOperator(PredictionEvent event, java.util.Set<String> laneRequests) {
         try {
-            return !org.synesis.coordination.domain.operator.OperatorRequest.decodeRaised(event.payload()).raisedBySynesis();
+            return switch (event.type()) {
+                case OPERATOR_REQUEST_RAISED -> !org.synesis.coordination.domain.operator.OperatorRequest.decodeRaised(event.payload()).raisedBySynesis();
+                case OPERATOR_REQUEST_CLOSED -> laneRequests.contains(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
+                default -> false;
+            };
         } catch (IOException malformed) {
             return false;
         }

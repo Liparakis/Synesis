@@ -72,11 +72,12 @@ final class McpCoordinationTools {
      */
     private final ConversationService conversationService;
     /**
-     * Log position of the newest message this connection has been handed. The next call from
-     * this connection is what shows the answer carrying it arrived, so it is kept here and not in
-     * the log: a connection that ends first leaves the batch to whoever continues the lane.
+     * How far this connection has been handed the messages of the lane it holds. The next call
+     * from this connection is what shows the answer carrying a batch arrived, so the cursor is
+     * kept here and not in the log: a connection that ends first leaves the batch to whoever
+     * continues the lane.
      */
-    private long messagesHandedThrough;
+    private ConversationService.Cursor messagesHanded = ConversationService.Cursor.START;
     /**
      * Service that publishes capability implementations.
      */
@@ -201,8 +202,8 @@ final class McpCoordinationTools {
         if (response.result() != null && !(response.result() instanceof Map<?, ?>)) {
             return response;
         }
-        ConversationService.Unread unread = conversationService.unread(activeProjectRoot, provider, connectionInstanceId, messagesHandedThrough);
-        messagesHandedThrough = unread.through();
+        ConversationService.Unread unread = conversationService.unread(activeProjectRoot, provider, connectionInstanceId, messagesHanded);
+        messagesHanded = unread.cursor();
         if (unread.messages().isEmpty()) {
             return response;
         }
@@ -234,7 +235,7 @@ final class McpCoordinationTools {
         } catch (IllegalArgumentException invalid) {
             return McpRefusalGuidance.malformed(AgentNextAction.RETRY, "reason", "INVALID_SEND_MESSAGE_ARGUMENTS", invalid);
         }
-        return conversationService.send(new ConversationService.SendRequest(activeProjectRoot, provider, connectionInstanceId, to, conversation, text, messagesHandedThrough));
+        return conversationService.send(new ConversationService.SendRequest(activeProjectRoot, provider, connectionInstanceId, to, conversation, text, messagesHanded));
     }
 
     /**

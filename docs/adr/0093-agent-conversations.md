@@ -181,24 +181,63 @@ The decision above is built as written, with these choices where it left room.
   connection that was handed a batch calls again, which is what shows the
   answer carrying the batch arrived. A connection that ends first leaves the
   batch for whoever continues the lane.
+  What a connection has been handed is remembered for the lane it was handed
+  in, so a connection that goes on to hold another lane starts that lane's
+  messages from the lane's own mark.
 - `collaboration_status` shows the newest twenty messages of each of the
   caller's conversations and counts the earlier ones.
 - A lane that addresses the operator may have one such request open at a time.
   A second is refused until the operator closes the first with
   `synesis operator close`. A request Synesis raised cannot be closed that way.
 - A lane putting something to the operator resumes nobody, like any other
-  message. A request Synesis raises still does.
-- A message resumes the stopped agent whose lane it is addressed to when it is
-  newer than what that agent had seen and newer than the last message it was
-  resumed for. An agent resumed for any reason reads its messages then.
+  message, and neither does the operator closing it. A request Synesis raises
+  still does.
+- A message resumes the stopped agent whose lane it is addressed to when the
+  lane's mark does not cover it, it is newer than what that agent had seen, and
+  it is newer than the last message the agent was resumed for. An agent resumed
+  for any reason reads its messages then.
 - The operator reads conversations with `synesis conversations` and in the
   dashboard, which gained two read-only tabs: conversations and operator
   requests.
 - A conversation of other lanes is answered as one that does not exist.
 
-Not built: nothing ends a conversation or removes a message, and an operator
+Not built: nothing ends a conversation or removes a message, an operator
 request raised by a lane whose run has since completed stays open until the
-operator closes it.
+operator closes it, and a lane is not told that its request was closed.
+
+## The quality review of the build
+
+A strict review of the two commits that built this record, by one reviewer that
+read the code and ran nothing, confirmed the authority side: the caller's lane,
+the sender, the members and the delivery mark all come from the verified
+session, a non-member is answered as if the conversation did not exist, and no
+gate reads a request a lane raised. It found these defects, each checked
+against the code before it was acted on.
+
+- A message, and the mark of its delivery, made a finish without changes stale.
+  The rule that a message cannot disturb a finish had been given to the finish
+  that publishes a snapshot and not to the other. A lane handed a batch had its
+  own next finish refused once, every time. One statement of which events
+  change no state now serves both.
+- A lane's text reached the operator's command line as it was written. With a
+  line break in it, a message to the operator could print lines that read as a
+  request Synesis had raised. Text written by an agent or a tool is printed one
+  keyed line per line, without control characters.
+- What a connection had been handed was a bare position in the log. A
+  connection that finished one lane and continued another marked the second
+  lane's older unread messages as delivered without showing them.
+- An agent was resumed for a message it had already read, and had spent a
+  resume to find nothing. The rule reads what is unread.
+- The operator closing a lane's request resumed every stopped agent.
+- A lane that finished without changes was still shown only as an ended lane.
+- More lanes than a conversation holds were refused as a member not found.
+
+Not changed, and why. The lane that asked the operator is not told that its
+request was closed or with what words: the operator cannot post in this step,
+and the closing text would be a post. A provider client that gives up on a
+slow call and calls again would acknowledge a batch its agent never read; the
+messages stay in the history `collaboration_status` shows. Closing a lane's
+request lives in the service that raises it and not in a service of its own.
 
 ## Open questions
 

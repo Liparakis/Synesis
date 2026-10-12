@@ -67,7 +67,7 @@ final class NextActionSupport {
      * @return the participant's active intent, if any
      */
     static Optional<WorkIntent> activeIntentOf(PredictionEventStore store, String participantId) {
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantId)).findFirst();
+        return org.synesis.workspace.application.collaboration.WorkspaceCollaborationService.laneOf(store, participantId);
     }
 
     /**

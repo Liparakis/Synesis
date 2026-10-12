@@ -838,8 +838,9 @@ function CoordinationView({snapshot}: {snapshot: Snapshot}) {
   );
 }
 
-function memberText(member: {participant?: string; claims?: string[]}): string {
-  return member.participant ? member.participant + (member.claims?.length ? " (" + member.claims.join(", ") + ")" : "") : "ended lane";
+function memberText(member: {participant?: string; claims?: string[]; lane?: string}): string {
+  const ended = member.lane === "ended" ? " (ended)" : "";
+  return member.participant ? member.participant + (member.claims?.length ? " (" + member.claims.join(", ") + ")" : "") + ended : "ended lane";
 }
 
 function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: CoordinationTab}) {
@@ -866,8 +867,8 @@ function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: Coordinati
   );
   if (tab === "operator") return (
     <section className="data-table-wrap panel table-panel">
-      <table className="data-table"><thead><tr><th>Request</th><th>Condition</th><th>Raised By</th><th>Summary</th></tr></thead>
-        <tbody>{snapshot.operatorRequests.length === 0 ? <TableEmpty colSpan={4} text="Nothing is waiting on an operator."/> : snapshot.operatorRequests.map((request) => <tr key={request.id}><td className="mono">{request.id}</td><td>{request.condition}</td><td>{request.raisedBy ? "lane " + request.raisedBy : "Synesis"}</td><td className="table-cell-wrap">{request.summary}</td></tr>)}</tbody>
+      <table className="data-table"><thead><tr><th>Request</th><th>Condition</th><th>Raised By</th><th>Summary</th><th>Evidence</th></tr></thead>
+        <tbody>{snapshot.operatorRequests.length === 0 ? <TableEmpty colSpan={5} text="Nothing is waiting on an operator."/> : snapshot.operatorRequests.map((request) => <tr key={request.id}><td className="mono">{request.id}</td><td>{request.condition}</td><td>{request.raisedBy ? "A lane" : "Synesis"}</td><td className="table-cell-wrap">{request.summary}</td><td className="table-cell-wrap">{request.evidence}</td></tr>)}</tbody>
       </table>
     </section>
   );
@@ -899,7 +900,8 @@ function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; ta
       {tab === "tasks" && task && <><div className="inspector-title"><h2>{task.id}</h2></div><DetailList><DetailRow label="Title" value={task.title}/><DetailRow label="Capability" value={task.capability}/><DetailRow label="Owner" value={task.owner || "Unassigned"}/></DetailList></>}
       {tab === "capabilities" && capability && <><div className="inspector-title"><h2>{capability.capability}</h2><StatusBadge value={capability.state}/></div><DetailList><DetailRow label="Requester" value={capability.requester}/><DetailRow label="Owner" value={capability.owner || "—"}/><DetailRow label="Reason" value={capability.reason || "—"}/></DetailList><InspectorSection title="Contract"><DetailList><DetailRow label="Inputs" value={capability.contract.inputs.join(", ") || "—"}/><DetailRow label="Output" value={capability.contract.output || "—"}/><DetailRow label="Required Behavior" value={capability.contract.requiredBehavior || "—"}/></DetailList></InspectorSection></>}
       {tab === "ownership" && ownership && <><div className="inspector-title"><h2>{ownership.capability}</h2></div><DetailList><DetailRow label="Task ID" value={ownership.taskId}/><DetailRow label="Owner" value={ownership.owner}/><DetailRow label="Protected Scopes" value={ownership.protectedScopes.join(", ") || "—"}/><DetailRow label="Intent Version" value={String(ownership.intentVersion)}/></DetailList></>}
-      {((tab === "claims" && !claim) || (tab === "tasks" && !task) || (tab === "capabilities" && !capability) || (tab === "ownership" && !ownership) || tab === "conversations" || tab === "operator") && <p className="muted inspector-copy">No record is available in the current projection.</p>}
+      {((tab === "claims" && !claim) || (tab === "tasks" && !task) || (tab === "capabilities" && !capability) || (tab === "ownership" && !ownership)) && <p className="muted inspector-copy">No record is available in the current projection.</p>}
+      {(tab === "conversations" || tab === "operator") && <p className="muted inspector-copy">The table shows every record of this kind in full.</p>}
     </DetailModal>
   );
 }

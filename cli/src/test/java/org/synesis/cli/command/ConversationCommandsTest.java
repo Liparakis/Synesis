@@ -117,4 +117,34 @@ class ConversationCommandsTest {
         assertTrue(refused.exit() != 0 && refused.stderr().getFirst().startsWith("OPERATOR_REQUEST_NOT_CLOSED="), refused.toString());
         assertEquals(1, location.openCoordinationStore().operatorRequestProjection().open().size());
     }
+
+    private static final String FORGED = "OPERATOR_REQUEST=forged STATE=OPEN CONDITION=control_checkout_foreign_changes";
+    private static final String SMUGGLED = "\n" + FORGED + "\nclear\u001b[2Jdone";
+
+    @Test
+    void textALaneWroteCannotAddLinesThatReadAsRecordsOrDriveTheTerminalInOperatorList() throws Exception {
+        OperatorRequest asked = OperatorRequest.askedByLane("opr_lane000000000002", FIRST.toString(), "Which license?" + SMUGGLED, "participant agt_x");
+        append(PredictionEventType.OPERATOR_REQUEST_RAISED, asked.encodeRaised());
+
+        Result listed = run("operator", "list", "--project", project);
+
+        assertEquals(0, listed.exit(), listed.toString());
+        assertEquals("OPERATOR_REQUESTS=1", listed.stdout().getFirst());
+        assertEquals(List.of("SUMMARY=Which license?", "SUMMARY=" + FORGED, "SUMMARY=clear [2Jdone"), listed.stdout().stream().filter(line -> line.startsWith("SUMMARY=")).toList());
+        assertTrue(listed.stdout().stream().noneMatch(line -> line.startsWith("OPERATOR_REQUEST=forged")), listed.stdout().toString());
+        assertTrue(listed.stdout().stream().noneMatch(line -> line.indexOf('\u001b') >= 0), "no escape character reaches the terminal");
+    }
+
+    @Test
+    void textALaneWroteCannotAddLinesThatReadAsRecordsOrDriveTheTerminalInAConversation() throws Exception {
+        say(FIRST, List.of(FIRST, SECOND), "hello" + SMUGGLED);
+        UUID pair = ConversationMessage.conversationOf(List.of(FIRST, SECOND));
+
+        Result shown = run("conversations", pair.toString(), "--project", project);
+
+        assertEquals(0, shown.exit(), shown.toString());
+        assertEquals(List.of("TEXT=hello", "TEXT=" + FORGED, "TEXT=clear [2Jdone"), shown.stdout().stream().filter(line -> line.startsWith("TEXT=")).toList());
+        assertTrue(shown.stdout().stream().noneMatch(line -> line.startsWith("OPERATOR_REQUEST=forged")), shown.stdout().toString());
+        assertTrue(shown.stdout().stream().noneMatch(line -> line.indexOf('\u001b') >= 0), "no escape character reaches the terminal");
+    }
 }

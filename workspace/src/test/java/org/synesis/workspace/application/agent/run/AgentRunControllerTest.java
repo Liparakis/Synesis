@@ -297,8 +297,8 @@ final class AgentRunControllerTest {
         // without the log moving, and that message must not wake it a second time. A newer one does.
         script.lifetimes(1, 100, 1, 1);
         script.at(0).head(5).announced();
-        script.at(2).head(6).message("claude", 6);
-        script.at(5).head(8).message("claude", 8);
+        script.at(2).head(6).message("claude#1", 6);
+        script.at(5).head(8).message("claude#1", 8);
 
         AgentRunController.Result result = script.run(8, Duration.ofSeconds(10));
 
@@ -312,11 +312,39 @@ final class AgentRunControllerTest {
         Script script = new Script();
         script.lifetimes(1, 2, 100);
         script.at(0).head(5).announced();
-        script.at(1).head(6).message("codex", 6);
+        script.at(1).head(6).message("codex#2", 6);
 
         script.run(8, Duration.ofSeconds(10));
 
         assertEquals(List.of("start claude#1", "start codex#2", "resume codex#2 session-2"), script.launches, "claude stays stopped and no progress was recorded");
+    }
+
+    @Test
+    void aMessageAcknowledgedBeforeTheAgentStoppedDoesNotResumeIt() throws Exception {
+        Script script = new Script();
+        // The message reaches claude at tick 2 and the observation no longer reports it from tick 3
+        // (the lane acknowledged it), before claude stops at tick 4.
+        script.lifetimes(4, 1);
+        script.at(0).head(5).announced();
+        script.at(2).head(6).message("claude#1", 6);
+        script.at(3).head(7);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2"), script.launches);
+    }
+
+    @Test
+    void aMessageToOneOfTwoAgentsOfTheSameProviderResumesOnlyThatOne() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 100);
+        script.at(0).head(5).announced();
+        script.at(1).head(6).message("claude#2", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#2 session-2"), script.launches, "claude#1 stays stopped");
     }
 
     @Test
@@ -344,7 +372,7 @@ final class AgentRunControllerTest {
         Script script = new Script();
         script.lifetimes(1, 2);
         script.at(0).head(5).announced();
-        script.at(1).head(9).message("claude", 9).message("codex", 9).complete();
+        script.at(1).head(9).message("claude#1", 9).message("codex#2", 9).complete();
 
         AgentRunController.Result result = script.run(8);
 
@@ -388,6 +416,8 @@ final class AgentRunControllerTest {
         private final List<Integer> resumedAtTicks = new ArrayList<>();
         private final Map<String, Long> answerDeadlines = new java.util.HashMap<>();
         private final Map<String, Long> lastActivity = new java.util.HashMap<>();
+        private final Map<String, String> agentOf = new java.util.HashMap<>();
+        private List<String> providers = List.of("claude", "codex");
         private final List<Integer> lifetimes = new ArrayList<>();
         private final java.util.TreeMap<Integer, State> states = new java.util.TreeMap<>();
         private boolean endlessProgress;
@@ -426,7 +456,7 @@ final class AgentRunControllerTest {
             AgentRunController controller = new AgentRunController(this::start, this::observe, named, () -> tick * 1_000L, millis -> tick++);
             HeadlessOptions options = new HeadlessOptions(null, null);
             AgentRunController.Request request = new AgentRunController.Request(PROJECT,
-                    List.of(AgentRunController.AgentSpec.of(ProviderRegistry.find("claude"), options), AgentRunController.AgentSpec.of(ProviderRegistry.find("codex"), options)),
+                    providers.stream().map(provider -> AgentRunController.AgentSpec.of(ProviderRegistry.find(provider), options)).toList(),
                     "Read the goal and do your part.",
                     timeout,
                     Duration.ofSeconds(1),
@@ -439,6 +469,9 @@ final class AgentRunControllerTest {
             assertEquals(PROJECT, workingDirectory);
             commands.add(command);
             environments.add(environment);
+            java.util.regex.Matcher connection = java.util.regex.Pattern.compile("conn-\\d+").matcher(environment.values() + " " + command);
+            assertTrue(connection.find(), "the process is told its connection: " + command);
+            agentOf.put(connection.group(), label);
             boolean resume = command.contains("--resume") || command.contains("resume");
             if (resume) {
                 resumedAtTicks.add(tick);
@@ -537,8 +570,8 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
-                public OptionalLong newestMessageFor(String provider, String connectionInstanceId) {
-                    Long sequence = state.messages.get(provider);
+                public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
+                    Long sequence = state.messages.get(agentOf.get(connectionInstanceId));
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
                 }
             };
@@ -556,9 +589,9 @@ final class AgentRunControllerTest {
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
 
-        /** A message addressed to the lane of this provider, at this log position. */
-        private State message(String provider, long sequence) {
-            messages.put(provider, sequence);
+        /** A message addressed to the lane of this agent, by its label, at this log position. */
+        private State message(String agent, long sequence) {
+            messages.put(agent, sequence);
             return this;
         }
 

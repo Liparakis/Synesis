@@ -87,7 +87,7 @@ abstract class RepositoryHygieneTask : DefaultTask() {
         }
 
         require(failures.isEmpty()) { "Repository hygiene failures:\n${failures.joinToString("\n")}" }
-        logger.lifecycle("Repository hygiene: ${files.size} maintained Markdown files checked; script references and 10-tool claims are valid.")
+        logger.lifecycle("Repository hygiene: ${files.size} maintained Markdown files checked; script references and tool-count claims are valid.")
     }
 }
 

@@ -30,6 +30,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
+import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.run.AgentRunController;
 import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
@@ -55,6 +56,7 @@ class ConversationServiceTest {
     private static final String A = "inst-1";
     private static final String B = "inst-2";
     private static final String C = "inst-3";
+    private static final String NO_CHANGE = "Verification succeeds without repository mutation";
 
     @TempDir
     Path tempDir;
@@ -78,11 +80,15 @@ class ConversationServiceTest {
     }
 
     private WorkIntent claim(String instance, String file) throws Exception {
+        return claim(instance, file, "Passes its tests");
+    }
+
+    private WorkIntent claim(String instance, String file, String acceptance) throws Exception {
         session(instance);
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         var claimed = workGroup == null
-                ? collaboration.announce(projectRoot, PROVIDER, instance, "Build " + file, "Passes its tests", List.of(ResourceSelector.pathExact(file)))
-                : collaboration.announce(projectRoot, PROVIDER, instance, "Build " + file, "Passes its tests", List.of(ResourceSelector.pathExact(file)), workGroup);
+                ? collaboration.announce(projectRoot, PROVIDER, instance, "Build " + file, acceptance, List.of(ResourceSelector.pathExact(file)))
+                : collaboration.announce(projectRoot, PROVIDER, instance, "Build " + file, acceptance, List.of(ResourceSelector.pathExact(file)), workGroup);
         workGroup = claimed.intent().workGroupId();
         return claimed.intent();
     }
@@ -133,11 +139,11 @@ class ConversationServiceTest {
     }
 
     private AgentResponse send(String from, List<String> to, String text) {
-        return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, to, null, text, 0));
+        return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, to, null, text, ConversationService.Cursor.START));
     }
 
     private AgentResponse sendTo(String from, UUID conversation, String text) {
-        return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, List.of(), conversation, text, 0));
+        return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, List.of(), conversation, text, ConversationService.Cursor.START));
     }
 
     private UUID conversationOf(AgentResponse sent) {
@@ -145,8 +151,34 @@ class ConversationServiceTest {
         return UUID.fromString((String) result(sent).get("conversation"));
     }
 
-    private ConversationService.Unread unread(String instance, long acknowledged) {
-        return conversations.unread(projectRoot, PROVIDER, instance, acknowledged);
+    private ConversationService.Unread unread(String instance) {
+        return unread(instance, ConversationService.Cursor.START);
+    }
+
+    private ConversationService.Unread unread(String instance, ConversationService.Cursor handed) {
+        return conversations.unread(projectRoot, PROVIDER, instance, handed);
+    }
+
+    private long deliveryMarks() throws Exception {
+        return store().events().stream().filter(event -> event.type() == PredictionEventType.CONVERSATION_MESSAGES_DELIVERED).count();
+    }
+
+    private static List<Object> texts(ConversationService.Unread unread) {
+        return unread.messages().stream().map(message -> message.get("text")).toList();
+    }
+
+    /** The finish a lane with no changes is shown, as the typed arguments of {@code finish_lane}. */
+    private Map<String, Object> projectedNoChangeFinish(String instance) {
+        AgentResponse projection = nextActionService.getNextAction(new NextActionRequest(projectRoot, PROVIDER, instance, true));
+        Map<String, Object> workflow = (Map<String, Object>) result(projection).get("workflow");
+        assertEquals("finish_lane", workflow.get("recommendedTool"), projection.toJson());
+        return (Map<String, Object>) workflow.get("arguments");
+    }
+
+    private AgentResponse finishNoChange(String instance, Map<String, Object> arguments) {
+        return new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(projectRoot, PROVIDER, instance, (String) arguments.get("summary"), CompletionOutcome.NO_CHANGE,
+                UUID.fromString((String) arguments.get("intentId")), UUID.fromString((String) arguments.get("workGroupId")), ((Number) arguments.get("claimEpoch")).longValue(),
+                ((Number) arguments.get("workGroupVersion")).longValue(), ((Number) arguments.get("expectedRevision")).longValue(), (String) arguments.get("participant"), false));
     }
 
     private List<Object> view(String instance) {
@@ -162,7 +194,7 @@ class ConversationServiceTest {
 
         assertEquals(byFile, byHandle);
         assertEquals(ConversationMessage.conversationOf(List.of(lineage(A), lineage(B))), byFile);
-        assertEquals(2, unread(B, 0).messages().size());
+        assertEquals(2, unread(B).messages().size());
     }
 
     @Test
@@ -195,7 +227,7 @@ class ConversationServiceTest {
         assertEquals("CONVERSATION_NOT_FOUND", result(intruder).get("reason"));
         assertEquals(result(nonexistent).get("reason"), result(intruder).get("reason"), "that it exists is not shown to a non-member");
         assertTrue(conversations.history(projectRoot, PROVIDER, C).isEmpty());
-        assertTrue(unread(C, 0).messages().isEmpty());
+        assertTrue(unread(C).messages().isEmpty());
         assertEquals(1, store().conversationProjection().messages().size());
     }
 
@@ -203,26 +235,26 @@ class ConversationServiceTest {
     void aMessageIsHandedOverAgainUntilTheBatchIsAcknowledgedByTheNextCall() throws Exception {
         send(A, List.of("src/B.java"), "first");
 
-        ConversationService.Unread handed = unread(B, 0);
+        ConversationService.Unread handed = unread(B);
         assertEquals(1, handed.messages().size());
         assertEquals("first", handed.messages().getFirst().get("text"));
-        assertEquals(1, unread(B, 0).messages().size(), "a connection that never calls again leaves the batch unread");
+        assertEquals(1, unread(B).messages().size(), "a connection that never calls again leaves the batch unread");
         assertEquals(1, store().conversationProjection().unread(lineage(B)).size());
 
-        ConversationService.Unread acknowledged = unread(B, handed.through());
+        ConversationService.Unread acknowledged = unread(B, handed.cursor());
         assertTrue(acknowledged.messages().isEmpty());
         assertTrue(store().conversationProjection().unread(lineage(B)).isEmpty(), "the durable mark moved");
-        assertTrue(unread(B, 0).messages().isEmpty(), "a connection that knows nothing is handed nothing more");
+        assertTrue(unread(B).messages().isEmpty(), "a connection that knows nothing is handed nothing more");
 
         send(A, List.of("src/B.java"), "second");
-        assertEquals(List.of("second"), unread(B, 0).messages().stream().map(message -> message.get("text")).toList());
+        assertEquals(List.of("second"), unread(B).messages().stream().map(message -> message.get("text")).toList());
     }
 
     @Test
     void aSuccessorLaneReadsItsPredecessorsConversationsAndIsHandedWhatWasUnread() throws Exception {
         UUID conversation = conversationOf(send(A, List.of("src/B.java"), "A asks"));
         send(B, List.of("src/A.java"), "B answers");
-        assertEquals("B answers", unread(A, 0).messages().getFirst().get("text"));
+        assertEquals("B answers", unread(A).messages().getFirst().get("text"));
 
         ProjectLocation location = projectService.locate(projectRoot);
         var binding = bindingService.find(location, PROVIDER, A).orElseThrow();
@@ -240,9 +272,9 @@ class ConversationServiceTest {
         assertEquals(1, history.size());
         assertEquals(conversation.toString(), history.getFirst().get("conversation"));
         assertEquals(List.of("A asks", "B answers"), ((List<Map<String, Object>>) history.getFirst().get("messages")).stream().map(message -> message.get("text")).toList());
-        assertEquals(List.of("B answers"), unread(successor, 0).messages().stream().map(message -> message.get("text")).toList(), "what the predecessor never acknowledged");
+        assertEquals(List.of("B answers"), unread(successor).messages().stream().map(message -> message.get("text")).toList(), "what the predecessor never acknowledged");
         assertEquals(conversation, conversationOf(sendTo(successor, conversation, "the successor speaks")));
-        assertEquals(1, unread(B, 0).messages().stream().filter(message -> message.get("text").equals("the successor speaks")).count());
+        assertEquals(1, unread(B).messages().stream().filter(message -> message.get("text").equals("the successor speaks")).count());
     }
 
     @Test
@@ -251,12 +283,12 @@ class ConversationServiceTest {
             send(A, List.of("src/B.java"), "message " + number);
         }
 
-        ConversationService.Unread first = unread(B, 0);
+        ConversationService.Unread first = unread(B);
         assertEquals(10, first.messages().size());
         assertEquals(2, first.moreUnread());
         assertEquals("message 1", first.messages().getFirst().get("text"));
 
-        ConversationService.Unread second = unread(B, first.through());
+        ConversationService.Unread second = unread(B, first.cursor());
         assertEquals(List.of("message 11", "message 12"), second.messages().stream().map(message -> message.get("text")).toList());
         assertEquals(0, second.moreUnread());
     }
@@ -288,7 +320,7 @@ class ConversationServiceTest {
         UUID conversation = conversationOf(send(A, List.of("src/B.java"), "hello"));
 
         assertEquals("MESSAGE_ADDRESS_REQUIRED", result(send(A, List.of(), "to nobody")).get("reason"));
-        assertEquals("MESSAGE_ADDRESS_REQUIRED", result(conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, A, List.of("src/B.java"), conversation, "both", 0))).get("reason"));
+        assertEquals("MESSAGE_ADDRESS_REQUIRED", result(conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, A, List.of("src/B.java"), conversation, "both", ConversationService.Cursor.START))).get("reason"));
         assertEquals("OPERATOR_IS_ADDRESSED_ALONE", result(send(A, List.of("operator", "src/B.java"), "both")).get("reason"));
         assertEquals(1, store().conversationProjection().messages().size());
     }
@@ -340,9 +372,11 @@ class ConversationServiceTest {
         send(A, List.of("src/B.java"), "question");
         send(B, List.of("src/A.java"), "answer");
         send(A, List.of("src/B.java", "src/C.java"), "to all");
-        unread(B, 0);
-        unread(B, 100);
+        ConversationService.Unread handed = unread(B);
+        unread(B, handed.cursor());
 
+        assertEquals(1, deliveryMarks(), "the step acknowledged something real");
+        assertTrue(store().conversationProjection().unread(lineage(B)).isEmpty());
         assertEquals(before, List.of(view(A), view(B), view(C)));
     }
 
@@ -371,7 +405,7 @@ class ConversationServiceTest {
     void theRunObserverSeesTheNewestMessageAddressedToAConnectionsLaneAndNoProgressInIt() throws Exception {
         EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
         AgentRunController.Observation before = observer.observe();
-        assertTrue(before.newestMessageFor(PROVIDER, B).isEmpty());
+        assertTrue(before.newestUnreadMessageFor(PROVIDER, B).isEmpty());
 
         send(A, List.of("src/B.java"), "one");
         send(A, List.of("src/B.java", "src/C.java"), "two");
@@ -380,12 +414,51 @@ class ConversationServiceTest {
         assertFalse(after.progressedSince(before.headSequence()), "messages are not work");
         send(A, List.of("operator"), "a question");
         after = observer.observe();
-        assertEquals(said.get(1).sequence(), after.newestMessageFor(PROVIDER, B).getAsLong());
-        assertEquals(said.get(1).sequence(), after.newestMessageFor(PROVIDER, C).getAsLong());
-        assertTrue(after.newestMessageFor(PROVIDER, A).isEmpty(), "a sender is not sent its own message");
-        assertTrue(after.newestMessageFor(PROVIDER, "inst-unknown").isEmpty());
+        assertEquals(said.get(1).sequence(), after.newestUnreadMessageFor(PROVIDER, B).getAsLong());
+        assertEquals(said.get(1).sequence(), after.newestUnreadMessageFor(PROVIDER, C).getAsLong());
+        assertTrue(after.newestUnreadMessageFor(PROVIDER, A).isEmpty(), "a sender is not sent its own message");
+        assertTrue(after.newestUnreadMessageFor(PROVIDER, "inst-unknown").isEmpty());
         assertEquals(1, after.operatorRequests().size());
         assertTrue(after.operatorRequests().getFirst().endsWith("CONDITION=lane_asks_operator"), after.operatorRequests().toString());
+    }
+
+    @Test
+    void aMessageTheLaneAlreadyAcknowledgedWakesNobody() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        send(A, List.of("src/B.java", "src/C.java"), "one");
+        assertTrue(observer.observe().newestUnreadMessageFor(PROVIDER, B).isPresent());
+
+        ConversationService.Unread handed = unread(B);
+        assertTrue(observer.observe().newestUnreadMessageFor(PROVIDER, B).isPresent(), "handed but not yet acknowledged is still unread");
+        unread(B, handed.cursor());
+
+        assertTrue(observer.observe().newestUnreadMessageFor(PROVIDER, B).isEmpty());
+        assertTrue(observer.observe().newestUnreadMessageFor(PROVIDER, C).isPresent(), "another lane's mark is its own");
+    }
+
+    @Test
+    void aLaneRaisingAnOperatorRequestAndTheOperatorClosingItAreNotProgress() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        long beforeAsking = observer.observe().headSequence();
+
+        String request = (String) result(send(A, List.of("operator"), "Which license?")).get("operatorRequest");
+        AgentRunController.Observation asked = observer.observe();
+        assertFalse(asked.progressedSince(beforeAsking));
+
+        assertEquals(Optional.empty(), conversations.closeOperatorRequest(projectService.locate(projectRoot), request, "answered by phone"));
+        assertFalse(observer.observe().progressedSince(asked.headSequence()), "closing it resumes nobody");
+        assertFalse(observer.observe().progressedSince(beforeAsking));
+    }
+
+    @Test
+    void anOperatorRequestSynesisRaisedIsProgress() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        long before = observer.observe().headSequence();
+        var identity = projectService.locate(projectRoot).loadOrCreateIdentity();
+        OperatorRequest synesis = OperatorRequest.raised("opr_synesis000000001", OperatorRequest.BOUND_CONSUMER_ABSENT, "a consumer is absent", "");
+        store().append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), synesis.encodeRaised(), identity);
+
+        assertTrue(observer.observe().progressedSince(before));
     }
 
     @Test
@@ -409,6 +482,84 @@ class ConversationServiceTest {
     }
 
     @Test
+    void aMessageAndItsDeliveryMarkDoNotMakeANoChangeFinishStale() throws Exception {
+        claim("inst-4", "src/D.java", NO_CHANGE);
+        Map<String, Object> arguments = projectedNoChangeFinish("inst-4");
+
+        send(A, List.of("src/B.java"), "question");
+        unread(B, unread(B).cursor());
+        assertEquals(1, deliveryMarks());
+
+        AgentResponse finished = finishNoChange("inst-4", arguments);
+
+        assertEquals(AgentStatus.COMPLETED, finished.status(), finished.toJson());
+        assertFalse(finished.toJson().toLowerCase().contains("evidence_stale"), finished.toJson());
+    }
+
+    @Test
+    void aLanesOwnPollBeforeItsNoChangeFinishDoesNotMakeItStale() throws Exception {
+        claim("inst-4", "src/D.java", NO_CHANGE);
+        send(A, List.of("src/D.java"), "ping");
+        ConversationService.Unread handed = unread("inst-4");
+        assertEquals(List.of("ping"), texts(handed));
+        Map<String, Object> arguments = projectedNoChangeFinish("inst-4");
+
+        unread("inst-4", handed.cursor());
+        assertEquals(1, deliveryMarks(), "the poll appended the lane's own mark");
+
+        AgentResponse finished = finishNoChange("inst-4", arguments);
+
+        assertEquals(AgentStatus.COMPLETED, finished.status(), finished.toJson());
+        assertFalse(finished.toJson().toLowerCase().contains("evidence_stale"), finished.toJson());
+    }
+
+    @Test
+    void aLaneThatFinishedWithNoChangeIsStillNamedAsItWasInWhatItSaid() throws Exception {
+        WorkIntent lane = claim("inst-4", "src/D.java", NO_CHANGE);
+        send("inst-4", List.of("src/A.java"), "nothing to change here");
+        AgentResponse finished = finishNoChange("inst-4", projectedNoChangeFinish("inst-4"));
+        assertEquals(AgentStatus.COMPLETED, finished.status(), finished.toJson());
+
+        Map<String, Object> ended = ConversationService.memberMap(store().collaborationProjection(), lane.authorityLineageId());
+
+        assertEquals(lane.participant(), ended.get("participant"));
+        assertEquals(List.of("src/D.java"), ended.get("claims"));
+        assertEquals("ended", ended.get("lane"));
+    }
+
+    @Test
+    void aCursorReachedInAnotherLaneDoesNotMarkThisLanesOlderMessagesDelivered() throws Exception {
+        send(B, List.of("src/A.java"), "older, for A");
+        send(A, List.of("src/B.java"), "newer, for B");
+        ConversationService.Cursor elsewhere = unread(B).cursor();
+        assertEquals(lineage(B), elsewhere.lineageId());
+        assertEquals(store().conversationProjection().messages().getLast().sequence(), elsewhere.through());
+
+        ConversationService.Unread own = unread(A, elsewhere);
+
+        assertEquals(List.of("older, for A"), texts(own), "a position reached in lane B says nothing of lane A");
+        assertEquals(lineage(A), own.cursor().lineageId());
+        assertEquals(0, deliveryMarks());
+        assertEquals(1, store().conversationProjection().unread(lineage(A)).size());
+    }
+
+    @Test
+    void moreThanFifteenOtherLanesInOneAddressAreRefusedAsTooMany() throws Exception {
+        List<String> others = new java.util.ArrayList<>(List.of("src/B.java", "src/C.java"));
+        for (int number = 1; number <= 14; number++) {
+            claim("inst-" + (10 + number), "src/Extra" + number + ".java");
+            others.add("src/Extra" + number + ".java");
+        }
+
+        assertEquals(AgentStatus.COMPLETED, send(A, others.subList(0, 15), "fifteen others and the caller are sixteen").status());
+        AgentResponse tooMany = send(A, others, "sixteen others");
+
+        assertEquals(AgentStatus.BLOCKED, tooMany.status(), tooMany.toJson());
+        assertEquals("CONVERSATION_HAS_TOO_MANY_MEMBERS", result(tooMany).get("reason"), tooMany.toJson());
+        assertEquals(1, store().conversationProjection().messages().size());
+    }
+
+    @Test
     void aSessionWithoutAnOpenLaneIsRefusedAndHandedNothing() throws Exception {
         session("inst-5");
 
@@ -416,7 +567,7 @@ class ConversationServiceTest {
 
         assertEquals(AgentStatus.BLOCKED, refused.status(), refused.toJson());
         assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, refused.reason());
-        assertTrue(unread("inst-5", 0).messages().isEmpty());
+        assertTrue(unread("inst-5").messages().isEmpty());
         assertTrue(conversations.history(projectRoot, PROVIDER, "inst-5").isEmpty());
     }
 }

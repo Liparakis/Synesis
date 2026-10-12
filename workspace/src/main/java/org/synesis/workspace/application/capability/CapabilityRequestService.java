@@ -118,7 +118,7 @@ public final class CapabilityRequestService {
         }
         String requesterNodeId = identity.nodeId();
         String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
+        Optional<WorkIntent> requesterIntent = WorkspaceCollaborationService.laneOf(store, requesterParticipant);
         if (requesterIntent.isEmpty()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
@@ -250,7 +250,7 @@ public final class CapabilityRequestService {
                     "instruction", "State what you need from the file in at most " + ContractChangeRequest.MAX_NEED_CHARACTERS + " characters."));
         }
         String requesterParticipant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        Optional<WorkIntent> requesterIntent = currentIntent(store, requesterParticipant);
+        Optional<WorkIntent> requesterIntent = WorkspaceCollaborationService.laneOf(store, requesterParticipant);
         if (requesterIntent.isEmpty()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
@@ -339,10 +339,6 @@ public final class CapabilityRequestService {
         List<CapabilityRequestRecord> own = projection.findAllForRequester(requesterNodeId).stream()
                 .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId())).toList();
         return PeerDependencyPolicy.satisfied(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, own);
-    }
-
-    private static Optional<WorkIntent> currentIntent(PredictionEventStore store, String participant) {
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst();
     }
 
     /**

@@ -368,6 +368,17 @@ public enum PredictionEventType {
     }
 
     /**
+     * Tells whether this event records activity or speech only. Such an event changes no claim,
+     * grant, snapshot or capability state, so nothing projected before it is made stale by it:
+     * a heartbeat, a message between lanes, a mark of delivery.
+     *
+     * @return true when no lane state can differ because of this event
+     */
+    public boolean recordsNoStateChange() {
+        return this == PARTICIPANT_HEARTBEAT || this == CONVERSATION_MESSAGE_SENT || this == CONVERSATION_MESSAGES_DELIVERED;
+    }
+
+    /**
      * Tells whether this event advances a prediction's own lifecycle, as opposed to belonging to another
      * projection of the shared event sequence.
      *

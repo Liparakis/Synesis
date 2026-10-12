@@ -102,6 +102,20 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
+     * Finds the open lane a participant holds: the first of its active intents. This is the one
+     * answer to "which lane is the caller's" for everything that acts for a lane or shows it
+     * something, so that what a lane is handed and what it is woken for cannot name different
+     * lanes.
+     *
+     * @param store       current project projection
+     * @param participant participant handle
+     * @return the participant's open lane, when it holds one
+     */
+    public static java.util.Optional<WorkIntent> laneOf(PredictionEventStore store, String participant) {
+        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst();
+    }
+
+    /**
      * Returns the stable opaque participant handle for a connection.
      *
      * @param connectionInstanceId connection ID

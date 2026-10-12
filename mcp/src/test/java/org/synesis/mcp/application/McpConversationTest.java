@@ -33,12 +33,13 @@ class McpConversationTest {
     private McpProtocolHandler first;
     private McpProtocolHandler second;
     private McpProtocolHandler third;
+    private Path root;
 
     @BeforeEach
     void setUp() throws Exception {
         previousUserHome = System.getProperty("user.home");
         System.setProperty("user.home", Files.createTempDirectory("synesis-mcp-conversation-home-").toString());
-        Path root = Files.createTempDirectory("synesis-mcp-conversation-");
+        root = Files.createTempDirectory("synesis-mcp-conversation-");
         GitProcessRunner.run(root, "init");
         GitProcessRunner.run(root, "config", "user.name", "Test User");
         GitProcessRunner.run(root, "config", "user.email", "test@example.com");
@@ -103,6 +104,19 @@ class McpConversationTest {
         Map<String, Object> read = call(second, "get_next_action", Map.of());
         assertFalse(result(read).containsKey("messages"), "the call after the batch arrived is the acknowledgement: " + read);
         assertFalse(result(call(third, "get_next_action", Map.of())).containsKey("messages"), "a lane outside the conversation is handed nothing");
+    }
+
+    @Test
+    void sendingAMessageAcknowledgesTheBatchTheLaneWasHanded() {
+        call(first, "send_message", Map.of("to", List.of("second.py"), "text", "question"));
+        Map<String, Object> handed = call(second, "get_next_action", Map.of());
+        assertNotNull(result(handed).get("messages"), handed.toString());
+
+        assertEquals("completed", call(second, "send_message", Map.of("to", List.of("first.py"), "text", "answer")).get("status"));
+
+        McpProtocolHandler fresh = new McpProtocolHandler(new AgentSessionService(), root, "codex", "conn-second");
+        Map<String, Object> afterwards = call(fresh, "get_next_action", Map.of());
+        assertFalse(result(afterwards).containsKey("messages"), "the durable mark moved, so whoever asks for the lane next is handed nothing: " + afterwards);
     }
 
     @Test

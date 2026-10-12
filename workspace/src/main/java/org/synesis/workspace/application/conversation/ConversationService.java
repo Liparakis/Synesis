@@ -105,36 +105,39 @@ public final class ConversationService {
      * @param projectRoot          project root
      * @param provider             provider of the calling session
      * @param connectionInstanceId connection of the calling session
-     * @param acknowledgedThrough  log position of the newest message this connection was handed before, or zero
+     * @param handed               what this connection was handed before, as the last answer gave it
      * @return the next batch; empty when the caller holds no open lane or nothing is unread
      */
-    public Unread unread(Path projectRoot, String provider, String connectionInstanceId, long acknowledgedThrough) {
+    public Unread unread(Path projectRoot, String provider, String connectionInstanceId, Cursor handed) {
         try {
             CallerAdmission admitted = CallerAdmission.admit(projectRoot, projectService, authorityResolver, provider, connectionInstanceId, false);
             if (admitted.refused()) {
-                return Unread.none(acknowledgedThrough);
+                return Unread.none(handed);
             }
             PredictionEventStore store = admitted.location().openCoordinationStore();
             Optional<WorkIntent> lane = callerLane(store, admitted.binding());
             if (lane.isEmpty()) {
-                return Unread.none(acknowledgedThrough);
+                return Unread.none(handed);
             }
             UUID lineage = lane.get().authorityLineageId();
-            List<ConversationMessage> waiting = store.conversationProjection().unread(lineage);
-            if (waiting.stream().anyMatch(message -> message.sequence() <= acknowledgedThrough)) {
+            long acknowledged = handed.through(lineage);
+            if (owesAcknowledgement(store, lineage, acknowledged)) {
                 try (ProjectAppendLock lock = ProjectAppendLock.acquire(admitted.location().coordinationDirectory())) {
                     if (lock.isHeld()) {
-                        acknowledge(store, admitted.identity(), lineage, acknowledgedThrough);
+                        acknowledge(admitted.location().openCoordinationStore(), admitted.identity(), lineage, acknowledged);
                     }
+                } catch (IOException | GeneralSecurityException busy) {
+                    // The log could not take the mark now. It stays where it was, so the batch
+                    // is handed again to whoever asks for this lane next: at least once.
                 }
             }
-            List<ConversationMessage> fresh = waiting.stream().filter(message -> message.sequence() > acknowledgedThrough).toList();
+            List<ConversationMessage> fresh = store.conversationProjection().unread(lineage).stream().filter(message -> message.sequence() > acknowledged).toList();
             List<ConversationMessage> batch = fresh.subList(0, Math.min(MAX_UNREAD_DELIVERED, fresh.size()));
-            return new Unread(batch.stream().map(message -> messageMap(store.collaborationProjection(), message)).toList(), batch.isEmpty() ? acknowledgedThrough : batch.getLast().sequence(),
-                    fresh.size() - batch.size());
+            return new Unread(batch.stream().map(message -> messageMap(store.collaborationProjection(), message)).toList(),
+                    new Cursor(lineage, batch.isEmpty() ? acknowledged : batch.getLast().sequence()), fresh.size() - batch.size());
         } catch (Exception unavailable) {
             // Messages come beside the next action. Failing to read them must not take the action away.
-            return Unread.none(acknowledgedThrough);
+            return Unread.none(handed);
         }
     }
 
@@ -167,12 +170,8 @@ public final class ConversationService {
      *         how many earlier ones were left out
      */
     public static List<Map<String, Object>> conversations(CollaborationProjection lanes, List<ConversationMessage> messages, int shown) {
-        Map<UUID, List<ConversationMessage>> grouped = new LinkedHashMap<>();
-        for (ConversationMessage message : messages) {
-            grouped.computeIfAbsent(message.conversationId(), id -> new ArrayList<>()).add(message);
-        }
         List<Map<String, Object>> result = new ArrayList<>();
-        grouped.forEach((id, said) -> {
+        ConversationMessage.byConversation(messages).forEach((id, said) -> {
             List<ConversationMessage> newest = said.subList(Math.max(0, said.size() - shown), said.size());
             Map<String, Object> conversation = new LinkedHashMap<>();
             conversation.put("conversation", id.toString());
@@ -221,7 +220,9 @@ public final class ConversationService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, Map.of("reason", "COORDINATION_INTENT_REQUIRED"));
         }
         UUID lineage = lane.get().authorityLineageId();
-        acknowledge(store, identity, lineage, request.acknowledgedThrough());
+        if (owesAcknowledgement(store, lineage, request.handed().through(lineage))) {
+            acknowledge(store, identity, lineage, request.handed().through(lineage));
+        }
         String text = request.text() == null ? "" : request.text().strip();
         if (text.isEmpty() || text.length() > MAX_MESSAGE_CHARS) {
             return refused("MESSAGE_TEXT_OUT_OF_BOUNDS", Map.of("characters", text.length(), "limit", MAX_MESSAGE_CHARS),
@@ -250,10 +251,13 @@ public final class ConversationService {
             for (String name : request.to()) {
                 named(store, name, lane.get()).ifPresentOrElse(member -> members.add(member.authorityLineageId()), () -> notFound.add(name));
             }
-            if (!notFound.isEmpty() || members.size() + 1 > ConversationMessage.MAX_MEMBERS) {
+            if (notFound.isEmpty() && members.size() + 1 > ConversationMessage.MAX_MEMBERS) {
+                return refused("CONVERSATION_HAS_TOO_MANY_MEMBERS", Map.of("named", members.size(), "mostMembers", ConversationMessage.MAX_MEMBERS),
+                        "A conversation holds at most " + ConversationMessage.MAX_MEMBERS + " lanes, yours among them. Write to fewer lanes at once.");
+            }
+            if (!notFound.isEmpty()) {
                 Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("notFound", notFound);
-                detail.put("mostMembers", ConversationMessage.MAX_MEMBERS);
                 detail.put("openLanes", store.collaborationProjection().activeIntents().stream().filter(other -> !other.authorityLineageId().equals(lineage))
                         .map(other -> memberMap(store.collaborationProjection(), other.authorityLineageId())).toList());
                 return refused("MESSAGE_MEMBER_NOT_FOUND", detail,
@@ -298,11 +302,14 @@ public final class ConversationService {
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
     }
 
+    /** Tells whether an earlier answer carried messages the lane's durable mark does not cover yet. */
+    private static boolean owesAcknowledgement(PredictionEventStore store, UUID lineage, long through) {
+        return store.conversationProjection().unread(lineage).stream().anyMatch(message -> message.sequence() <= through);
+    }
+
     /** Moves the lane's durable mark over what an earlier answer to this connection carried. */
     private static void acknowledge(PredictionEventStore store, NodeIdentity identity, UUID lineage, long through) throws IOException, GeneralSecurityException {
-        if (store.conversationProjection().unread(lineage).stream().anyMatch(message -> message.sequence() <= through)) {
-            store.append(UUID.randomUUID(), PredictionEventType.CONVERSATION_MESSAGES_DELIVERED, identity.nodeId(), ConversationMessage.encodeDelivered(lineage, through), identity);
-        }
+        store.append(UUID.randomUUID(), PredictionEventType.CONVERSATION_MESSAGES_DELIVERED, identity.nodeId(), ConversationMessage.encodeDelivered(lineage, through), identity);
     }
 
     /** Finds the open lane a name stands for: the participant handle of its agent, or a file it claims. */
@@ -320,8 +327,7 @@ public final class ConversationService {
     }
 
     private static Optional<WorkIntent> callerLane(PredictionEventStore store, ProviderSessionBindingService.Binding binding) {
-        String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
-        return store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst();
+        return WorkspaceCollaborationService.laneOf(store, WorkspaceCollaborationService.participantHandle(binding.sessionId()));
     }
 
     private static Optional<WorkIntent> openLane(CollaborationProjection lanes, UUID lineage) {
@@ -375,9 +381,9 @@ public final class ConversationService {
      * @param to                   members named by participant handle or by a claimed file, or the operator alone; empty when a conversation is named
      * @param conversation         a conversation the caller's lane belongs to, or {@code null} when members are named
      * @param text                 what is said
-     * @param acknowledgedThrough  log position of the newest message this connection was handed before, or zero
+     * @param handed               what this connection was handed before; sending shows the answer carrying it arrived
      */
-    public record SendRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> to, UUID conversation, String text, long acknowledgedThrough) {
+    public record SendRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> to, UUID conversation, String text, Cursor handed) {
 
         /**
          * Validates the request.
@@ -386,7 +392,34 @@ public final class ConversationService {
             Objects.requireNonNull(projectRoot, "projectRoot");
             Objects.requireNonNull(provider, "provider");
             Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+            Objects.requireNonNull(handed, "handed");
             to = to == null ? List.of() : List.copyOf(to);
+        }
+    }
+
+    /**
+     * How far one connection has been handed the messages of the lane it holds.
+     *
+     * <p>The position belongs to a lane. A connection that finishes one lane and continues
+     * another must not carry it over: read as a bare position it marked the other lane's older
+     * unread messages as delivered, and they were never shown to anyone.</p>
+     *
+     * @param lineageId lineage of the lane the position was reached in, or {@code null} before any
+     * @param through   log position of the newest message handed over
+     */
+    public record Cursor(UUID lineageId, long through) {
+
+        /** The cursor of a connection that has been handed nothing. */
+        public static final Cursor START = new Cursor(null, 0L);
+
+        /**
+         * Returns the position reached in one lane.
+         *
+         * @param lineage lineage of the lane now held
+         * @return the position, or zero when this cursor was reached in another lane
+         */
+        long through(UUID lineage) {
+            return lineage.equals(lineageId) ? through : 0L;
         }
     }
 
@@ -394,13 +427,13 @@ public final class ConversationService {
      * A batch of unread messages for one lane.
      *
      * @param messages   the messages, oldest first, shown as they are handed to the agent
-     * @param through    log position of the newest message in the batch, or what was acknowledged when it is empty
+     * @param cursor     how far the connection has now been handed its lane's messages
      * @param moreUnread how many further messages wait for a later batch
      */
-    public record Unread(List<Map<String, Object>> messages, long through, int moreUnread) {
+    public record Unread(List<Map<String, Object>> messages, Cursor cursor, int moreUnread) {
 
-        static Unread none(long through) {
-            return new Unread(List.of(), through, 0);
+        static Unread none(Cursor handed) {
+            return new Unread(List.of(), handed, 0);
         }
 
         /**

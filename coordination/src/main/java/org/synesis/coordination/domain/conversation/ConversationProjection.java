@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.UUID;
 
 import org.synesis.coordination.domain.prediction.PredictionEvent;
@@ -90,16 +89,6 @@ public final class ConversationProjection {
     public synchronized List<ConversationMessage> unread(UUID lineageId) {
         long through = delivered.getOrDefault(lineageId, 0L);
         return messages.stream().filter(message -> message.sequence() > through && message.addressedTo(lineageId)).toList();
-    }
-
-    /**
-     * Returns the log position of the newest message addressed to a lane.
-     *
-     * @param lineageId lineage of the lane
-     * @return that position, or empty when nothing was ever addressed to it
-     */
-    public synchronized OptionalLong newestAddressedTo(UUID lineageId) {
-        return messages.stream().filter(message -> message.addressedTo(lineageId)).mapToLong(ConversationMessage::sequence).max();
     }
 
     /**

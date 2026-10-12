@@ -48,7 +48,20 @@ public final class OperatorListCommand implements Callable<Integer> {
         }
     }
 
-    /** Prints each request as stable lines: the request, what it says, and its evidence unchanged. */
+    /**
+     * Prints text that an agent or a tool wrote, one {@code KEY=} line for each of its lines and
+     * without control or formatting characters. Printed as it came, a lane's message could add
+     * lines that read as records of this output, or drive the operator's terminal.
+     *
+     * @param runtime CLI runtime
+     * @param key     key each line is printed under
+     * @param text    the text; nothing is printed for empty text
+     */
+    public static void printText(CliRuntime runtime, String key, String text) {
+        text.lines().forEach(line -> runtime.terminal().stdout(key + "=" + line.replaceAll("[\\p{Cc}\\p{Cf}\\u2028\\u2029]", " ")));
+    }
+
+    /** Prints each request as stable lines: the request, what it says, and its evidence line by line. */
     static void print(CliRuntime runtime, List<OperatorRequest> requests) {
         runtime.terminal().stdout("OPERATOR_REQUESTS=" + requests.size());
         for (OperatorRequest request : requests) {
@@ -56,11 +69,9 @@ public final class OperatorListCommand implements Callable<Integer> {
             if (!request.raisedBySynesis()) {
                 runtime.terminal().stdout("RAISED_BY_LANE=" + request.raisedBy());
             }
-            runtime.terminal().stdout("SUMMARY=" + request.summary());
-            request.evidence().lines().forEach(line -> runtime.terminal().stdout("EVIDENCE=" + line));
-            if (!request.closedBecause().isEmpty()) {
-                runtime.terminal().stdout("CLOSED_BECAUSE=" + request.closedBecause());
-            }
+            printText(runtime, "SUMMARY", request.summary());
+            printText(runtime, "EVIDENCE", request.evidence());
+            printText(runtime, "CLOSED_BECAUSE", request.closedBecause());
         }
     }
 }

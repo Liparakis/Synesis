@@ -63,16 +63,24 @@ not answered and their runs completed. No agent addressed the operator. Reading 
 that a finished run named every speaker only as an ended lane; a lane that has ended now keeps the
 participant and claims it ended with.
 
+A strict quality review of step 3 followed, as for steps 1 and 2, and was acted on before the
+branch was pushed. Authority held. The defects it found are listed in ADR-0093 under "The quality
+review of the build"; the two that mattered most were that a message made a finish without changes
+stale, the finishing lane's own included, and that a lane's text was printed as written into the
+operator's command line, where a line break let it forge a record.
+
 Not done. Tokens per run were not measured, so the cost of the channel is stated in time and
 resumes only. With five messages in eleven runs the bounds were never approached, so whether they
 hold is not shown. No real run exercised a message waking a stopped agent, a successor inheriting a
-conversation, or an agent addressing the operator; those are proven by source-level tests only. From
+conversation, or an agent addressing the operator; those are proven by source-level tests only. The
+real runs were made on the build before the review of step 3 was acted on, and were not repeated
+after it. From
 the review of step 2: `CapabilityRequestService` still carries the name of the flow it replaced, and
 the replay handlers for a request that waits for its owner, is rejected or is cancelled remain
 although nothing produces those events.
 
-Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 646
-(1 skipped), MCP 175, CLI 118, 0 failures, with the documentation, format, architecture, dashboard
+Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 656
+(1 skipped), MCP 176, CLI 120, 0 failures, with the documentation, format, architecture, dashboard
 and hygiene gates. Run from Git Bash, two CLI help tests fail because the CLI colours its output
 there; the gate is run from PowerShell. One gate run died of memory exhaustion in the Java process
 and was run again with four workers. Not run on Linux. Test subagents: Sonnet 5.5 at medium effort

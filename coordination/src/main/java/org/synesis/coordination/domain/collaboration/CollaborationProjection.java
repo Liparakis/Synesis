@@ -151,7 +151,7 @@ public final class CollaborationProjection {
             default -> {
             }
         }
-        if (event.type() != PredictionEventType.PARTICIPANT_HEARTBEAT) {
+        if (!event.type().recordsNoStateChange()) {
             lastStateChangeSequence = event.sequence();
         }
     }
@@ -923,6 +923,7 @@ public final class CollaborationProjection {
             throw new CoordinationException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
         }
         intents.remove(completion.intentIdentity());
+        endedLanes.put(current.authorityLineageId(), current);
         noChangeCompletions.put(completion.intentIdentity(), completion);
         refreshParticipant(current.participantIdentity(), Participant.State.COMPLETED, null);
     }

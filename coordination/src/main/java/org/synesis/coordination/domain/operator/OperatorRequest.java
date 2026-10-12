@@ -180,6 +180,17 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
     }
 
     /**
+     * Reads which request a closing event closes.
+     *
+     * @param encoded payload of the closing event
+     * @return the identifier of the request it closes
+     * @throws IOException when the payload is malformed
+     */
+    public static String closedRequestId(byte[] encoded) throws IOException {
+        return decodeClosed(encoded).id();
+    }
+
+    /**
      * Returns this request showing other evidence. The condition is the same; what proves it has
      * changed since the request was raised.
      *
