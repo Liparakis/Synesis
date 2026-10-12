@@ -825,38 +825,24 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
-     * The owner publishes a revision and the requester does not bind again. The owner is held
-     * for a stated time and no longer; when it finishes, the requester learns that the owner went
-     * ahead and builds against the integrated work instead of waiting on a lane that is gone.
+     * The owner publishes a revision and the requester does not bind again. The owner is held for
+     * as long as the requester's lane is open; once the stated time has passed the operator is
+     * asked to start the requester's agent or cancel its lane, and the owner is told to stop
+     * polling. The requester's binding again releases it.
      */
     @Test
     @SuppressWarnings("unchecked")
-    void ownerWaitsABoundedTimeForTheAnswerToItsProposalThenFinishesAndTheRequesterIsToldItWentAhead() throws Exception {
+    void ownerIsHeldWhileARequesterHasNotBoundAgainAndTheOperatorIsAskedOnceTheTimeHasPassed() throws Exception {
         String configuredGrace = System.getProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
         try {
-            // 1. The requester declares the dependency and binds; the owner then publishes a revision it must answer.
-            String declared = toolCall(requesterHandler,
-                    "ensure_session",
-                    Map.of("task", Map.of("goal", "Implement the product CLI",
-                            "acceptance", "Publish the CLI implementation",
-                            "claims", List.of(Map.of("kind", "path_exact", "path", "ProductCli.java")),
-                            "knownDependencies", List.of("catalog.product-query"))));
-            if ("blocked".equals(extractResponseStatus(declared))) {
-                Map<String, Object> exactExtension = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(declared).get("nextProtocolPayload")).get("arguments");
-                declared = toolCall(requesterHandler, "ensure_session", exactExtension);
-            }
-            assertEquals("ready", extractResponseStatus(declared), declared);
+            // 1. The requester binds; the owner then publishes a revision the requester must bind to again.
             ownerPublishesContract("Return product when found");
             String reqHandle = bind(requesterHandler, 1);
             ownerPublishesContract("Return product when found; reject null ids");
             Map<String, Object> lateAccept = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(toolCall(requesterHandler, "get_next_action", Map.of())).get("bindAgain")).get("arguments");
 
-            // 2. The owner's work is done. Inside the answer period it is told to wait until a
-            //    stated time, and finish_lane refuses for the same reason.
-            Path ownerWt = Path.of(b2.worktreePath());
-            Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
-            git(ownerWt, "add", ".");
-            git(ownerWt, "commit", "-m", "Implement ProductQuery");
+            // 2. Inside the stated time the owner is told to wait until it, and finish_lane refuses.
+            ownerCommits("public class ProductQuery {}\n");
             System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "3600");
             String held = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
             assertEquals("waiting", extractResponseStatus(held), held);
@@ -865,68 +851,141 @@ class SyntheticTwoProcessCollaborationTest {
             assertEquals("CONTRACT_PROPOSAL_AWAITING_REQUESTER", heldResult.get("reason"), held);
             long deadline = ((Number) heldResult.get("requesterAnswerDeadlineEpochMillis")).longValue();
             assertTrue(deadline > System.currentTimeMillis(), held);
-            Map<String, Object> heldWorkflow = (Map<String, Object>) heldResult.get("workflow");
-            assertEquals(deadline, ((Number) heldWorkflow.get("requesterAnswerDeadlineEpochMillis")).longValue(), held);
-            assertEquals(Map.of("completionRequested", true), heldWorkflow.get("arguments"), "polling again must ask for completion again: " + held);
-            String refused = toolCall(ownerHandler, "finish_lane", Map.of("summary", "Product query complete"));
-            assertEquals("blocked", extractResponseStatus(refused), refused);
-            assertEquals("requester_response_pending", extractResponseReason(refused), refused);
-            assertEquals("REVISION_REQUESTED", replayedStore().capabilityRequestProjection().findByHandle(reqHandle).orElseThrow().state().name());
+            assertEquals(Map.of("completionRequested", true), ((Map<String, Object>) heldResult.get("workflow")).get("arguments"), "polling again must ask for completion again: " + held);
+            assertTrue(replayedStore().operatorRequestProjection().open().isEmpty(), "nobody is asked before the time has passed");
             // The controller reads the same deadline, for the owner's provider only: the log does
             // not move when it passes, so this is how a stopped owner is woken for it.
             var observer = new org.synesis.workspace.application.agent.run.EventLogObserver(new ProjectApplicationService().locate(projectRoot));
             assertEquals(java.util.OptionalLong.of(deadline), observer.observe().answerDeadline("codex"));
             assertEquals(java.util.OptionalLong.empty(), observer.observe().answerDeadline("claude"));
 
-            // 3. The answer period is over. The owner is offered its finish, and finishing records
-            //    the proposal as superseded by the owner's work.
+            // 3. The time has passed. The owner is not offered its finish: the operator is asked
+            //    for the requester's lane, and the owner is told to stop and not to poll.
             System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+            toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            String stopped = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            assertEquals("blocked", extractResponseStatus(stopped), stopped);
+            assertEquals("operator_required", extractResponseReason(stopped), stopped);
+            Map<String, Object> shown = (Map<String, Object>) extractInnerResult(stopped).get("operatorRequest");
+            assertEquals("bound_consumer_absent", shown.get("condition"), stopped);
+            assertTrue(String.valueOf(shown.get("evidence")).contains(reqHandle), stopped);
+            String refused = toolCall(ownerHandler, "finish_lane", Map.of("summary", "Product query complete"));
+            assertEquals("blocked", extractResponseStatus(refused), refused);
+            assertEquals("REVISION_REQUESTED", requestOf(reqHandle).state().name(), "the requester is not dropped");
+            assertEquals(0, replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count());
+
+            // 4. The requester's agent comes back and binds again: the request closes and the owner goes on.
+            String accepted = toolCall(requesterHandler, "request_coordination", lateAccept);
+            assertEquals("ready", extractResponseStatus(accepted), accepted);
+            assertEquals(reqHandle, extractResultField(accepted), "binding again keeps the binding");
+            // With no wait at all a requester that has just been given the implementation would count as absent at once.
+            System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "3600");
+            ownerPublishes(reqHandle);
+            String waiting = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            assertEquals("waiting", extractResponseStatus(waiting), "the requester has still to check the implementation: " + waiting);
+            assertEquals("completed", extractResponseStatus(requesterJudges(requesterHandler, reqHandle, 1, "accepted")));
+            toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            assertTrue(replayedStore().operatorRequestProjection().open("bound_consumer_absent").isEmpty(), "the requester acted, so the request closes");
             String ownerProjection = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
             assertEquals("finish_lane", extractInnerResponse(ownerProjection).get("nextAction"), ownerProjection);
             String ownerFinished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(ownerProjection));
             assertEquals("integrated", ((Map<String, Object>) extractInnerResult(ownerFinished).get("completion")).get("task"), ownerFinished);
-            var settled = replayedStore().capabilityRequestProjection().findByHandle(reqHandle).orElseThrow();
-            assertEquals("SUPERSEDED", settled.state().name(), ownerFinished);
-            assertEquals(RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER, settled.reason(), ownerFinished);
-            assertEquals(java.util.OptionalLong.empty(), observer.observe().answerDeadline("codex"), "a settled proposal leaves no deadline to wake anyone for");
-
-            // 4. An answer that arrives now is told what happened, not called stale, and the
-            //    requester's inbox says the owner went ahead and what it last proposed.
-            String answeredLate = toolCall(requesterHandler, "request_coordination", lateAccept);
-            assertEquals("ready", extractResponseStatus(answeredLate), answeredLate);
-            // The owner is integrated, so binding is satisfied by its work and waits for no validation.
-            assertEquals("CAPABILITY_OWNER_INTEGRATED", extractInnerResult(answeredLate).get("reason"), answeredLate);
-            String afterIntegration = toolCall(requesterHandler, "get_next_action", Map.of());
-            if ("retry_required".equals(extractResponseStatus(afterIntegration))) {
-                toolCall(requesterHandler, "ensure_session", Map.of());
-                afterIntegration = toolCall(requesterHandler, "get_next_action", Map.of());
+        } finally {
+            if (configuredGrace == null) {
+                System.clearProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
+            } else {
+                System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, configuredGrace);
             }
-            assertEquals("ready", extractResponseStatus(afterIntegration), afterIntegration);
-            Map<String, Object> integrated = extractInnerResult(afterIntegration);
-            assertEquals(List.of("catalog.product-query"), integrated.get("dependenciesIntegrated"), afterIntegration);
-            List<Map<String, Object>> wentAhead = (List<Map<String, Object>>) integrated.get("ownerProceededWithoutAnswer");
-            assertEquals(1, wentAhead.size(), afterIntegration);
-            assertEquals(reqHandle, wentAhead.getFirst().get("capabilityRequestHandle"), afterIntegration);
-            assertEquals(List.of("Return product when found; reject null ids"), ((Map<String, Object>) wentAhead.getFirst().get("proposedContract")).get("requiredBehavior"),
-                    "the requester is shown what the owner proposed, not its own draft: " + afterIntegration);
-            assertNotNull(integrated.get("ownerProceededGuidance"), afterIntegration);
+        }
+    }
 
-            // 5. The requester builds on the integrated work and finishes; nothing waits on the
-            //    superseded request, and the work group completes.
-            String refreshed = toolCall(requesterHandler, "ensure_session", Map.of());
-            assertEquals("ready", extractResponseStatus(refreshed), refreshed);
-            Path reqWt = Path.of(String.valueOf(extractInnerResult(refreshed).get("worktree")));
-            Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
-            git(reqWt, "add", ".");
-            git(reqWt, "commit", "-m", "Implement ProductCli");
-            String requesterProjection = toolCall(requesterHandler, "get_next_action", Map.of("completionRequested", true));
-            assertEquals("finish_lane", extractInnerResponse(requesterProjection).get("nextAction"), requesterProjection);
-            String requesterFinished = toolCall(requesterHandler, "finish_lane", extractWorkflowArguments(requesterProjection));
-            assertEquals("completed", extractResponseStatus(requesterFinished), requesterFinished);
-            PredictionEventStore done = replayedStore();
-            assertEquals(2, done.events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count(), requesterFinished);
-            assertTrue(done.collaborationProjection().activeIntents().isEmpty(), requesterFinished);
-            assertEquals("COMPLETED", done.workGroupProjection().groups().getFirst().status().name(), requesterFinished);
+    /**
+     * A consumer that arrives after the owner's work was integrated, with another lane still
+     * open, is let through: it is shown the frozen contract, binding to it is answered as
+     * satisfied by the integrated work, and the dependency stops holding it.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aConsumerArrivingAfterTheOwnerWasIntegratedBindsToItsFrozenContractAndFinishesWhileAnotherLaneIsOpen() throws Exception {
+        McpProtocolHandler thirdLane = secondRequester();
+        String declared = toolCall(requesterHandler,
+                "ensure_session",
+                Map.of("task", Map.of("goal", "Implement the product CLI",
+                        "acceptance", "Publish the CLI implementation",
+                        "claims", List.of(Map.of("kind", "path_exact", "path", "ProductCli.java")),
+                        "knownDependencies", List.of("catalog.product-query"))));
+        if ("blocked".equals(extractResponseStatus(declared))) {
+            Map<String, Object> exactExtension = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(declared).get("nextProtocolPayload")).get("arguments");
+            declared = toolCall(requesterHandler, "ensure_session", exactExtension);
+        }
+        assertEquals("ready", extractResponseStatus(declared), declared);
+        ownerPublishesContract("Return product when found");
+        ownerCommits("public class ProductQuery {}\n");
+        String ownerProjection = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        String ownerFinished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(ownerProjection));
+        assertEquals("integrated", ((Map<String, Object>) extractInnerResult(ownerFinished).get("completion")).get("task"), ownerFinished);
+        assertEquals(2, replayedStore().collaborationProjection().activeIntents().size(), "the late consumer and the third lane are open");
+
+        String listed = toolCall(requesterHandler, "get_next_action", Map.of());
+        if ("retry_required".equals(extractResponseStatus(listed))) {
+            toolCall(requesterHandler, "ensure_session", Map.of());
+            listed = toolCall(requesterHandler, "get_next_action", Map.of());
+        }
+        assertEquals("needs_capability", extractResponseStatus(listed), listed);
+        List<Map<String, Object>> contracts = (List<Map<String, Object>>) extractInnerResult(listed).get("contracts");
+        assertEquals(1, contracts.size(), listed);
+        assertEquals("FROZEN", contracts.getFirst().get("state"), listed);
+
+        String stale = toolCall(requesterHandler, "request_coordination", bindArguments(2));
+        assertEquals("stale_request", extractResponseReason(stale), stale);
+        assertEquals(1L, ((Number) extractInnerResult(stale).get("revision")).longValue(), stale);
+        String change = toolCall(requesterHandler, "request_coordination",
+                Map.of("kind", "contract_change_request", "payload", Map.of("ownerPath", "ProductQuery.java", "need", "Return the newest product first")));
+        assertEquals("blocked", extractResponseStatus(change), change);
+        assertEquals("policy_denied", extractResponseReason(change), change);
+        assertEquals("CONTRACT_OWNER_FINISHED", extractInnerResult(change).get("reason"), change);
+
+        String bound = toolCall(requesterHandler, "request_coordination", bindArguments(1));
+        assertEquals("ready", extractResponseStatus(bound), bound);
+        assertEquals("CAPABILITY_OWNER_INTEGRATED", extractInnerResult(bound).get("reason"), bound);
+        String after = toolCall(requesterHandler, "get_next_action", Map.of());
+        assertFalse("needs_capability".equals(extractResponseStatus(after)) || "owner_required".equals(extractResponseReason(after)), "the dependency is satisfied: " + after);
+
+        String refreshed = toolCall(requesterHandler, "ensure_session", Map.of());
+        Path reqWt = Path.of(String.valueOf(extractInnerResult(refreshed).get("worktree")));
+        Files.writeString(reqWt.resolve("ProductCli.java"), "public class ProductCli {}\n");
+        git(reqWt, "add", ".");
+        git(reqWt, "commit", "-m", "Implement ProductCli");
+        String requesterProjection = toolCall(requesterHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("finish_lane", extractInnerResponse(requesterProjection).get("nextAction"), requesterProjection);
+        String requesterFinished = toolCall(requesterHandler, "finish_lane", extractWorkflowArguments(requesterProjection));
+        assertEquals("integrated", ((Map<String, Object>) extractInnerResult(requesterFinished).get("completion")).get("task"), requesterFinished);
+        assertEquals(1, replayedStore().collaborationProjection().activeIntents().size(), "only the third lane is left");
+        thirdLane.close();
+    }
+
+    /** A bound consumer that does not check the published implementation is put to the operator, and the owner is told so. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aBoundConsumerThatDoesNotCheckThePublishedImplementationIsPutToTheOperatorUntilItDoes() throws Exception {
+        String configuredGrace = System.getProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
+        try {
+            ownerPublishesContract("Return product when found");
+            String reqHandle = bind(requesterHandler, 1);
+            ownerCommits("public class ProductQuery {}\n");
+            ownerPublishes(reqHandle);
+            System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+
+            toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            String stopped = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+
+            assertEquals("blocked", extractResponseStatus(stopped), stopped);
+            assertEquals("operator_required", extractResponseReason(stopped), stopped);
+            assertEquals("bound_consumer_absent", ((Map<String, Object>) extractInnerResult(stopped).get("operatorRequest")).get("condition"), stopped);
+
+            assertEquals("completed", extractResponseStatus(requesterJudges(requesterHandler, reqHandle, 1, "accepted")));
+            toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+            assertTrue(replayedStore().operatorRequestProjection().open("bound_consumer_absent").isEmpty(), "the consumer acted, so the request closes");
         } finally {
             if (configuredGrace == null) {
                 System.clearProperty(RequesterAnswerPolicy.GRACE_PROPERTY);

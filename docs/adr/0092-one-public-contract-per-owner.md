@@ -4,7 +4,8 @@
 
 Accepted on 2026-10-12 by the repository owner, and revised the same day after
 an independent design review whose four decisions the owner took. This is the
-revised record. Being built.
+revised record. Built on 2026-10-12; "What the real runs changed" at the end
+says what building it added.
 
 Step 2 of three, after ADR-0091 (operator requests) and before ADR-0093 (agent
 conversations). It removes kinds from the MCP tool catalog, which is a breaking
@@ -283,3 +284,29 @@ requests it answers; the build order would have run two flows behind one set of
 gates. The first version described the path on which every agent stays and
 agrees. This version is what the review and the owner's four decisions made of
 it.
+
+## What the real runs changed
+
+The first build of this record completed 13 of 14 real runs. The one that did
+not showed something the record had described and the code had not done.
+
+With a public contract the owner no longer waits for its consumers before it
+can finish: it publishes the contract, builds, and is integrated. A consumer
+then regularly arrives after the owner's work is in, with other lanes still
+open. The existing rule that lets a dependency be satisfied by integrated work
+asks that no peer be open, because a dependency never bound names no owner.
+The late consumer was told that no lane claims the file yet, and looked for an
+owner until the run ended.
+
+So a consumer that binds to a file whose owner has finished and been integrated
+binds to the frozen contract: a record is created already closed as "the owner
+finished", the answer says the work is integrated, and from then on that
+dependency is satisfied whatever other lanes are open. The record names the
+owner, which is what the older rule could not know. A change request against
+such a file is refused: nobody is left to change the contract.
+
+The two-minute rule that let an owner finish past a consumer that had not
+answered is gone. An owner waits while a bound consumer's lane is open. A
+consumer that owes an action and has made no verified call for the stated time
+is put to the operator (`bound_consumer_absent`), the owner is told so, and the
+request closes when the consumer acts or its lane ends.

@@ -125,6 +125,10 @@ public final class CapabilityRequestService {
         CapabilityRequestProjection projection = store.capabilityRequestProjection();
         Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
+            Optional<ContractRecord> finished = finishedOwnerContract(store, request.ownerPath());
+            if (finished.isPresent()) {
+                return bindToIntegratedWork(request, store, projection, binding, identity, finished.get());
+            }
             if (integratedDependencies(store, projection, requesterIntent.get(), requesterNodeId, binding).contains(capability)) {
                 // Nobody is left to bind to, and what this lane depends on is already in its
                 // base. Answering "find an owner" again would send it in a circle.
@@ -193,6 +197,48 @@ public final class CapabilityRequestService {
         return boundAnswer(handle, capability, current, owner.get());
     }
 
+    /** Finds the frozen contract over a file whose owner's work is in the control branch. */
+    private static Optional<ContractRecord> finishedOwnerContract(PredictionEventStore store, ResourceSelector path) {
+        var completion = store.taskCompletionProjection();
+        return store.contractProjection().frozenCovering(path).filter(contract -> completion.allSnapshots().stream()
+                .anyMatch(snapshot -> snapshot.provenance().authorityLineageId().equals(contract.ownerLineageId())
+                        && completion.snapshotState(snapshot.snapshotId()).orElse(null) == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED));
+    }
+
+    /**
+     * Records that the caller builds on a file whose owner has finished and been integrated
+     * (ADR-0092).
+     *
+     * <p>Nobody is left to serve a binding or to answer for the file, and nothing is left to
+     * validate: the work is in the control branch. The record is created already closed as "the
+     * owner finished", which is what makes the dependency count as satisfied from then on. Without
+     * it the consumer was told that no lane claims the file yet, and waited for one.</p>
+     */
+    private AgentResponse bindToIntegratedWork(BindRequest request, PredictionEventStore store, CapabilityRequestProjection projection, ProviderSessionBindingService.Binding binding,
+            NodeIdentity identity, ContractRecord finished) throws Exception {
+        if (request.revision() != finished.revision()) {
+            Map<String, Object> result = new LinkedHashMap<>(CollaborationResponseMapper.contractMap(finished));
+            result.put("reason", "CONTRACT_REVISION_STALE");
+            result.put("instruction", "The lane that owned this file has finished and its work is integrated; this is its contract as it stands. Bind to revision " + finished.revision() + ".");
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, result);
+        }
+        String requesterNodeId = identity.nodeId();
+        boolean recorded = projection.findAllForRequester(requesterNodeId).stream()
+                .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
+                .anyMatch(record -> record.capability().equals(request.capability()) && record.ownerFinishedWithoutAnswer() && record.authorityLineageId().equals(finished.ownerLineageId()));
+        if (!recorded) {
+            CapabilityRequestPayload closed = new CapabilityRequestPayload(handleGenerator.generate(), request.capability(), requesterNodeId, binding.supervisorId(), binding.workerId(), requesterNodeId, "", "",
+                    finished.ownerLineageId(), finished.terms(), CapabilityLifecycleState.SUPERSEDED, CapabilityRequestRecord.OWNER_FINISHED_WITHOUT_ANSWER, 0);
+            store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CREATED, requesterNodeId, closed.encode(), identity);
+        }
+        Map<String, Object> result = new LinkedHashMap<>(CollaborationResponseMapper.contractMap(finished));
+        result.put("capability", request.capability());
+        result.put("reason", "CAPABILITY_OWNER_INTEGRATED");
+        result.put("instruction", "The lane that owned " + request.ownerPath().value() + " has finished and its work is integrated, so there is nothing to wait for and nothing to validate. "
+                + "Build against the file as it is in your workspace; if your workspace is stale, refresh it with ensure_session first. The contract shown is what the file was built to.");
+        return new AgentResponse(AgentStatus.READY, null, null, result);
+    }
+
     private static AgentResponse boundAnswer(CapabilityRequestHandle handle, String capability, ContractRecord contract, WorkIntent owner) {
         Map<String, Object> result = new LinkedHashMap<>(CollaborationResponseMapper.contractMap(contract));
         result.put("capabilityRequestHandle", handle.value());
@@ -213,6 +259,15 @@ public final class CapabilityRequestService {
         }
         Optional<WorkIntent> owner = ownerOf(store, request.ownerPath(), requesterParticipant);
         if (owner.isEmpty()) {
+            Optional<ContractRecord> finished = finishedOwnerContract(store, request.ownerPath());
+            if (finished.isPresent()) {
+                // Nobody is left to change the contract, so a need cannot be put to anyone.
+                Map<String, Object> result = new LinkedHashMap<>(CollaborationResponseMapper.contractMap(finished.get()));
+                result.put("reason", "CONTRACT_OWNER_FINISHED");
+                result.put("instruction", "The lane that owned " + request.ownerPath().value() + " has finished and its work is integrated; its contract is frozen and nobody can change it. "
+                        + "Bind to it as it stands with contract_bind and build against the integrated file. If the file itself must change, claim it in your own lane.");
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_COORDINATION, result);
+            }
             return ownerRequired(store, null, request.ownerPath(), requesterParticipant);
         }
         if (PeerDependencyPolicy.closing(store.taskCompletionProjection(), owner.get())) {
@@ -279,12 +334,15 @@ public final class CapabilityRequestService {
 
     private static java.util.Set<String> integratedDependencies(PredictionEventStore store, CapabilityRequestProjection projection, WorkIntent requesterIntent, String requesterNodeId,
             ProviderSessionBindingService.Binding binding) {
-        java.util.Set<String> requested = projection.findAllForRequester(requesterNodeId).stream()
-                .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId()))
+        List<CapabilityRequestRecord> own = projection.findAllForRequester(requesterNodeId).stream()
+                .filter(record -> record.matchesRequester(requesterNodeId, binding.supervisorId(), binding.workerId())).toList();
+        java.util.Set<String> requested = own.stream()
                 .filter(record -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(record))
                 .map(CapabilityRequestRecord::capability)
                 .collect(java.util.stream.Collectors.toSet());
-        return PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, requested);
+        java.util.Set<String> satisfied = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), requesterIntent, requested));
+        satisfied.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), own));
+        return satisfied;
     }
 
     private static Optional<WorkIntent> currentIntent(PredictionEventStore store, String participant) {

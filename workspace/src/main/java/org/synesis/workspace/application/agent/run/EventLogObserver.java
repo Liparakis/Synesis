@@ -101,7 +101,9 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         // is the one whose agent has to come back when the answer period ends.
         Map<String, Long> answerDeadlines = new HashMap<>();
         for (CapabilityRequestRecord request : store.capabilityRequestProjection().records().values()) {
-            if (!RequesterAnswerPolicy.awaitsRequesterAnswer(request)) {
+            // The moment a silent consumer counts as absent is not an event. The owner is resumed
+            // once then, and its next read is what raises the operator request (ADR-0092).
+            if (!RequesterAnswerPolicy.consumerOwesAction(request)) {
                 continue;
             }
             long deadline = RequesterAnswerPolicy.answerDeadlineEpochMillis(request);

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
@@ -71,6 +72,35 @@ public final class PeerDependencyPolicy {
     public static boolean awaitingPeerIntegration(CollaborationProjection collaboration, TaskCompletionProjection completion, WorkIntent intent) {
         List<WorkIntent> peers = openPeers(collaboration, intent);
         return !peers.isEmpty() && peers.stream().allMatch(peer -> closing(completion, peer));
+    }
+
+    /**
+     * Returns the dependencies of a lane whose owner is known and has finished with its work
+     * integrated: the lane holds a record for the dependency that was closed because the owner
+     * finished, and a snapshot of that owner's lineage is in the control branch.
+     *
+     * <p>Unlike {@link #satisfiedByIntegration}, this does not ask that no peer be open. That rule
+     * exists because a dependency never bound names no owner, so any open peer might still be it.
+     * Here the record names the owner. With a public contract the owner no longer waits for its
+     * consumers before it can finish, so a consumer regularly arrives after the owner's work is
+     * in, with other lanes still open; told to find an owner, it looked for one that no longer
+     * existed until the run ended.</p>
+     *
+     * @param completion  task-completion projection
+     * @param ownRequests every record the lane holds as requester, in any state
+     * @return the dependency names those records carry
+     */
+    public static Set<String> satisfiedByIntegratedOwner(TaskCompletionProjection completion, java.util.Collection<CapabilityRequestRecord> ownRequests) {
+        Set<java.util.UUID> integratedLineages = completion.allSnapshots().stream()
+                .filter(snapshot -> completion.snapshotState(snapshot.snapshotId()).orElse(null) == TaskCompletionState.INTEGRATED)
+                .map(snapshot -> snapshot.provenance().authorityLineageId()).collect(java.util.stream.Collectors.toSet());
+        Set<String> satisfied = new LinkedHashSet<>();
+        for (CapabilityRequestRecord request : ownRequests) {
+            if (request.ownerFinishedWithoutAnswer() && integratedLineages.contains(request.authorityLineageId())) {
+                satisfied.add(request.capability());
+            }
+        }
+        return satisfied;
     }
 
     /**

@@ -208,6 +208,22 @@ final class ContractProjectionTest {
     }
 
     @Test
+    void aFrozenContractStaysFindableByItsFilesAndTheLatestFrozenOneWins(@TempDir Path temp) throws Exception {
+        PredictionEventStore store = new PredictionEventStore(temp, UUID.randomUUID());
+        publish(store, contract(CONTRACT, OWNER, 1, STORE));
+        assertFalse(store.contractProjection().frozenCovering(STORE).isPresent(), "an active contract is not frozen");
+        endLane(store, OWNER);
+        assertEquals(CONTRACT, store.contractProjection().frozenCovering(STORE).orElseThrow().contractId());
+        assertFalse(store.contractProjection().frozenCovering(OTHER_FILE).isPresent());
+
+        UUID next = UUID.randomUUID();
+        publish(store, contract(next, OTHER, 1, STORE));
+        assertEquals(CONTRACT, store.contractProjection().frozenCovering(STORE).orElseThrow().contractId(), "the new contract is active, not frozen");
+        endLane(store, OTHER);
+        assertEquals(next, store.contractProjection().frozenCovering(STORE).orElseThrow().contractId());
+    }
+
+    @Test
     void aReplayFromDiskReadsTheSameState(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         PredictionEventStore store = new PredictionEventStore(temp, project);

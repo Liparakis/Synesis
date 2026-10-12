@@ -478,7 +478,8 @@ final class LaneCompletionProjection {
         result.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, unanswered.getFirst().handle().value());
         result.put(NextActionKeys.REASON, CONTRACT_PROPOSAL_AWAITING_REQUESTER);
         result.put(REQUESTER_ANSWER_DEADLINE, unanswered.stream().mapToLong(RequesterAnswerPolicy::answerDeadlineEpochMillis).max().orElseThrow());
-        result.put("guidance", "Your proposed contract has not been answered yet. Poll until the deadline; after it you may finish without the answer.");
+        result.put("guidance", "A lane bound to your contract has not bound again to its new revision. Your work is integrated only when every bound lane has checked it, so this lane waits. "
+                + "If that lane's agent has not returned by the deadline, Synesis asks the operator to start one or to cancel the lane.");
         result.put(NextActionKeys.PENDING, unanswered.size());
         return new AgentResponse(AgentStatus.WAITING, AgentReason.REQUESTER_RESPONSE_PENDING, AgentNextAction.WAIT, result);
     }

@@ -161,7 +161,9 @@ final class CapabilityActionProjection {
         // lane holds no agreement, so the dependency is judged like one never requested.
         var requestedCapabilities = ownRequests.stream().filter(candidate -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(candidate))
                 .map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
+        Set<String> integrated = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities));
+        integrated.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), ownRequests));
+        integrated.removeAll(requestedCapabilities);
         String missingDependency = intent.knownDependencies().stream()
                 .filter(dependency -> !requestedCapabilities.contains(dependency) && !locallyResolved.containsKey(dependency)
                         && !locallyOwned.contains(dependency) && !integrated.contains(dependency))
@@ -186,14 +188,17 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
         result.put("coordinationKind", "contract_bind");
         result.put("lanes", CollaborationResponseMapper.otherLanes(store.collaborationProjection(), intent.participant()));
-        result.put("contracts", store.contractProjection().contracts().stream().filter(contract -> contract.state() == ContractRecord.State.ACTIVE).map(CollaborationResponseMapper::contractMap).toList());
+        // Frozen contracts are listed too: a lane that has finished is the usual owner of what a
+        // late consumer builds on, and binding to its contract is how the consumer is let through.
+        result.put("contracts", store.contractProjection().contracts().stream().map(CollaborationResponseMapper::contractMap).toList());
         List<ContractChangeRequest> filed = store.contractProjection().changeRequestsFiledBy(intent.authorityLineageId());
         if (!filed.isEmpty()) {
             result.put("yourChangeRequests", filed.stream().map(CollaborationResponseMapper::changeRequestMap).toList());
         }
         result.put("instruction", "Your lane depends on " + missingDependency + " and is not bound to a contract for it. contracts lists the public contract of each file; lanes lists what each open lane claims. "
                 + "To accept a contract, call request_coordination kind contract_bind with capability " + missingDependency + ", ownerPath set to the file you build on, and the revision you read. "
-                + "If the file has no contract yet, or its contract does not cover what you need, call request_coordination kind contract_change_request with ownerPath and need: "
+                + "A contract whose state is FROZEN belongs to a lane that has finished: bind to it the same way, and you build on its integrated work with nothing to wait for. "
+                + "If the file has no contract yet, or an ACTIVE contract does not cover what you need, call request_coordination kind contract_change_request with ownerPath and need: "
                 + "the lane claiming the file answers, and a declined request can still be bound to as the contract stands.");
         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
@@ -290,7 +295,7 @@ final class CapabilityActionProjection {
             // The requester must not assume its own draft was built. What the owner last proposed
             // is the closest statement of what it did; the integrated code is the authority.
             result.put("ownerProceededWithoutAnswer", wentAhead);
-            result.put("ownerProceededGuidance", "The owner did not receive your answer to its proposed contract in time and finished. It may have built a different design than you asked for: its last proposal is included, and the integrated code is what counts. The owner's files are released, so you can claim them if you need a change.");
+            result.put("ownerProceededGuidance", "The owner of this dependency finished before a binding of yours could be served. It may have built a different design than you asked for: its last proposal is included, and the integrated code is what counts. The owner's files are released, so you can claim them if you need a change.");
         }
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         return new AgentResponse(AgentStatus.READY, null, null, result);
@@ -601,10 +606,11 @@ final class CapabilityActionProjection {
         var projection = store.capabilityRequestProjection();
         // A request its owner superseded by finishing is no obligation of the requester: nothing
         // was agreed, and the dependency is judged like one that was never requested.
-        List<CapabilityRequestRecord> requesterRequests = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId))
-                .filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
+        List<CapabilityRequestRecord> everyOwnRequest = projection.findAllForRequester(nodeId).stream().filter(request -> request.matchesRequester(nodeId, supervisorId, workerId)).toList();
+        List<CapabilityRequestRecord> requesterRequests = everyOwnRequest.stream().filter(request -> !RequesterAnswerPolicy.ownerFinishedWithoutAnswer(request)).toList();
         Set<String> requestedCapabilities = requesterRequests.stream().map(CapabilityRequestRecord::capability).collect(Collectors.toSet());
-        Set<String> integrated = PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities);
+        Set<String> integrated = new java.util.LinkedHashSet<>(PeerDependencyPolicy.satisfiedByIntegration(store.collaborationProjection(), store.taskCompletionProjection(), intent, requestedCapabilities));
+        integrated.addAll(PeerDependencyPolicy.satisfiedByIntegratedOwner(store.taskCompletionProjection(), everyOwnRequest));
         if (intent.knownDependencies().stream().anyMatch(dependency -> !requestedCapabilities.contains(dependency) && !integrated.contains(dependency))) {
             return true;
         }

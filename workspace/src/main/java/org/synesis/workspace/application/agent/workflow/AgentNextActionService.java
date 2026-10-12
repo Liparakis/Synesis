@@ -584,7 +584,37 @@ public final class AgentNextActionService {
         }
 
         AgentResponse action = stagedAction(request, binding, worktree, store, callerIdentity, integrationPump);
-        return operatorHolds(integrationPump, action, store, binding) ? integrationPump : action;
+        if (operatorHolds(integrationPump, action, store, binding)) {
+            return integrationPump;
+        }
+        return absentConsumerHold(location, action).orElse(action);
+    }
+
+    /**
+     * Tells an owner that waits for a bound consumer that the consumer has been put to the
+     * operator (ADR-0092). Told only to keep waiting, it polled to its limit for an agent that
+     * was not coming back.
+     */
+    private Optional<AgentResponse> absentConsumerHold(ProjectLocation location, AgentResponse action) throws Exception {
+        boolean waitsForConsumer = action != null && action.nextAction() == AgentNextAction.WAIT
+                && (action.reason() == AgentReason.VALIDATION_REQUIRED || action.reason() == AgentReason.REQUESTER_RESPONSE_PENDING);
+        if (!waitsForConsumer) {
+            return Optional.empty();
+        }
+        // Read after the pump: the pass that has just run is the one that raises the request,
+        // and the projection opened before it would tell the owner to wait one poll longer.
+        return newEventStore(location).operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.BOUND_CONSUMER_ABSENT).map(request -> {
+            Map<String, Object> shown = new LinkedHashMap<>();
+            shown.put("id", request.id());
+            shown.put("condition", request.condition());
+            shown.put("summary", request.summary());
+            shown.put("evidence", request.evidence().lines().toList());
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("operatorRequest", shown);
+            result.put("instruction", "A lane bound to your contract has not acted and its agent has not returned, so Synesis has asked the operator to start one or to cancel that lane. "
+                    + "Your work is kept and is integrated when that lane has checked it or has ended. Stop here and do not poll.");
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OPERATOR_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, result);
+        });
     }
 
     /**

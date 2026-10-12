@@ -99,6 +99,17 @@ public final class ContractProjection {
     }
 
     /**
+     * Finds the contract over a file whose owner's lane has ended. The text stays readable, and
+     * a consumer that arrives late still learns what the file was built to.
+     *
+     * @param path file or subtree
+     * @return the most recently published frozen contract covering it, or empty
+     */
+    public synchronized Optional<ContractRecord> frozenCovering(ResourceSelector path) {
+        return contracts.values().stream().filter(contract -> contract.state() == ContractRecord.State.FROZEN && contract.covers(path)).reduce((earlier, later) -> later);
+    }
+
+    /**
      * Returns the contracts a lineage owns.
      *
      * @param lineageId authority lineage

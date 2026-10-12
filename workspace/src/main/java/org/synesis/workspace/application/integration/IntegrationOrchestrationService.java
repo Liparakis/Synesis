@@ -286,6 +286,7 @@ public final class IntegrationOrchestrationService {
             if (operator.isPresent()) {
                 return ControlCheckoutGuard.blocked(operator.get());
             }
+            ConsumerAbsenceGuard.reconcile(controlRoot, store, identity, System.currentTimeMillis());
             List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
             if (snapshots.isEmpty()) {
                 List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();

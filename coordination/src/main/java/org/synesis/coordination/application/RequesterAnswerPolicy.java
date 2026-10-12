@@ -7,17 +7,15 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 
 /**
- * Bounds how long a capability owner waits for a requester to answer a contract the owner
- * proposed, and names what the request becomes when the owner finishes without that answer.
+ * States how long a bound consumer may stay silent before it counts as absent, and names what a
+ * binding becomes when its owner's lane ends first.
  *
- * <p>The dependency runs one way: the requester needs the owner's work, the owner needs nothing
- * from the requester. An owner made to wait without limit for an acceptance keeps an agent
- * reserved for a peer that may be late or gone, and the two can end up waiting on each other. So
- * the owner waits a bounded time. If the answer has not come by then, it may finish; its request
- * is superseded by the work it integrates, and the requester is told that the owner went ahead,
- * possibly with a different design than the requester asked for, and that the owner's files are
- * free to claim if a change is needed. Reworking a released file later costs less than holding an
- * agent idle now.</p>
+ * <p>The dependency runs one way: the consumer needs the owner's work. An owner used to be let
+ * go after this time, its unanswered consumer dropped and told to build on whatever was
+ * integrated. With one public contract that every bound consumer checks (ADR-0092), a consumer
+ * is not dropped: the owner waits while the consumer's lane is open, and a consumer silent for
+ * this long is put to the operator, who starts an agent for its lane or cancels it. The time
+ * therefore no longer ends the owner's wait. It marks the moment the run asks for help.</p>
  *
  * <p>The rule grants no authority. It reads one request record and a clock.</p>
  */
@@ -89,14 +87,27 @@ public final class RequesterAnswerPolicy {
     }
 
     /**
-     * Reports whether the owner must still wait for the requester's answer.
+     * Reports whether the owner must still wait for the requester's answer. It must for as long
+     * as the answer is owed: the wait no longer ends at a time.
      *
      * @param request   capability request
-     * @param nowMillis current time in epoch milliseconds
-     * @return {@code true} while the proposal is unanswered and its deadline has not passed
+     * @param nowMillis current time in epoch milliseconds; kept for callers, no longer consulted
+     * @return {@code true} while the proposal is unanswered
      */
     public static boolean ownerMustWait(CapabilityRequestRecord request, long nowMillis) {
-        return awaitsRequesterAnswer(request) && nowMillis < answerDeadlineEpochMillis(request);
+        return awaitsRequesterAnswer(request);
+    }
+
+    /**
+     * Reports whether the next move on a binding belongs to its consumer: binding again after a
+     * contract revision, or checking a published implementation.
+     *
+     * @param request capability request
+     * @return {@code true} while the consumer owes that action
+     */
+    public static boolean consumerOwesAction(CapabilityRequestRecord request) {
+        CapabilityLifecycleState state = Objects.requireNonNull(request, "request").state();
+        return state == CapabilityLifecycleState.REVISION_REQUESTED || state == CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE || state == CapabilityLifecycleState.VALIDATING;
     }
 
     /**

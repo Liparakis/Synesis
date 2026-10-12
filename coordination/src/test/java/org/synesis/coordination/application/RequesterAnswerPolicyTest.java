@@ -58,18 +58,30 @@ final class RequesterAnswerPolicyTest {
     }
 
     @Test
-    void ownerWaitsOnlyForAnUnansweredProposalAndOnlyUntilItsDeadline() {
+    void ownerWaitsForAnUnansweredRevisionForAsLongAsItIsOwedWhateverTheClock() {
         System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "60");
         CapabilityRequestRecord proposal = request(CapabilityLifecycleState.REVISION_REQUESTED, "Null ids must be rejected");
 
         assertTrue(RequesterAnswerPolicy.awaitsRequesterAnswer(proposal));
         assertEquals(PROPOSED_AT + 60_000L, RequesterAnswerPolicy.answerDeadlineEpochMillis(proposal));
         assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 59_999L));
-        assertFalse(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 60_000L), "at the deadline the owner is free");
+        assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 60_000L), "the deadline no longer frees the owner: an absent consumer goes to the operator");
+        assertTrue(RequesterAnswerPolicy.ownerMustWait(proposal, PROPOSED_AT + 24L * 3_600_000L));
 
         for (CapabilityLifecycleState other : List.of(CapabilityLifecycleState.AWAITING_OWNER, CapabilityLifecycleState.ACCEPTED, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
                 CapabilityLifecycleState.VALIDATED, CapabilityLifecycleState.SUPERSEDED)) {
             assertFalse(RequesterAnswerPolicy.ownerMustWait(request(other, null), PROPOSED_AT), "this wait is only for a proposal the requester has not answered: " + other);
+        }
+    }
+
+    @Test
+    void aConsumerOwesAnActionWhileItMustBindAgainOrCheckAPublishedImplementation() {
+        for (CapabilityLifecycleState owing : List.of(CapabilityLifecycleState.REVISION_REQUESTED, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, CapabilityLifecycleState.VALIDATING)) {
+            assertTrue(RequesterAnswerPolicy.consumerOwesAction(request(owing, null)), "the consumer's move: " + owing);
+        }
+        for (CapabilityLifecycleState settled : List.of(CapabilityLifecycleState.AWAITING_OWNER, CapabilityLifecycleState.ACCEPTED, CapabilityLifecycleState.VALIDATED,
+                CapabilityLifecycleState.SUPERSEDED, CapabilityLifecycleState.CANCELLED)) {
+            assertFalse(RequesterAnswerPolicy.consumerOwesAction(request(settled, null)), "nothing owed: " + settled);
         }
     }
 

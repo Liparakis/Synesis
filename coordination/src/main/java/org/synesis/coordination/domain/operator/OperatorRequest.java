@@ -35,6 +35,12 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public static final String CONTROL_CHECKOUT_FOREIGN_CHANGES = "control_checkout_foreign_changes";
 
+    /**
+     * A lane bound to another lane's contract owes an action, its lane is open, and its agent
+     * has not returned. The owner's work is not integrated without it (ADR-0092).
+     */
+    public static final String BOUND_CONSUMER_ABSENT = "bound_consumer_absent";
+
     private static final int MAGIC_RAISED = 0x534f5231;
     private static final int MAGIC_CLOSED = 0x534f5232;
     private static final int MAX_TEXT_BYTES = 8 * 1024;

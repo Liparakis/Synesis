@@ -76,12 +76,13 @@ each process it starts its own connection identity and, when the process exits,
 records that connection as closed in the project's session leases. It can do
 this only for processes it started.
 
-A capability owner that proposed a contract waits a bounded time for the
-requester's answer (two minutes by default; `SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS`
-or the system property `synesis.requesterAnswerGraceSeconds` changes it). The log
-does not change when that time passes, so the command also resumes a stopped
-agent once when such a deadline of its provider has passed, and does not end the
-run while one is still pending.
+A lane bound to another lane's contract that owes an action counts as absent
+after a stated time without a verified call (two minutes by default;
+`SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS` or the system property
+`synesis.requesterAnswerGraceSeconds` changes it). The log does not change when
+that time passes, so the command also resumes a stopped owner once when such a
+deadline of its provider has passed, and does not end the run while one is
+still pending. The owner's next read is what raises the operator request.
 
 The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when no lane is open and
 every work group that ever had a lane is closed (a group created ahead of its
@@ -103,9 +104,11 @@ outside the project.
 ## Operator requests
 
 When only someone with authority over the project can clear what blocks it,
-Synesis records an operator request (ADR-0091). The first condition it raises
-one for is a project checkout holding changes Synesis did not make: nothing is
-integrated into such a checkout, and the work that is finished waits.
+Synesis records an operator request (ADR-0091). It raises one for a project
+checkout holding changes Synesis did not make (nothing is integrated into such
+a checkout, and the work that is finished waits), and for a lane bound to
+another lane's contract that owes an action while its agent has not returned
+(ADR-0092): start the agents again so one continues that lane, or cancel it.
 
 `synesis operator list` prints the open requests, each with a `SUMMARY` and its
 `EVIDENCE` lines exactly as the refusing tool reported them (`--all` adds the

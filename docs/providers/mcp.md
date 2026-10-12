@@ -99,6 +99,20 @@ commit again for the new revision.
 A verdict of `revision_required` in `implementation_validation` needs `reason`
 and `contractField`, the field of the contract the implementation breaks.
 
+A consumer that binds to a file whose owner has finished and been integrated is
+answered `ready` with `reason: CAPABILITY_OWNER_INTEGRATED` and the frozen
+contract: nothing is left to wait for or to validate, and the dependency is
+satisfied from then on. `get_next_action` lists frozen contracts beside active
+ones for that reason. A `contract_change_request` against such a file is
+refused with `CONTRACT_OWNER_FINISHED`.
+
+An owner waits while a lane bound to its contract is open. When a bound lane
+owes an action (binding again, or checking a published implementation) and has
+made no verified call for the stated time (two minutes by default,
+`SYNESIS_REQUESTER_ANSWER_GRACE_SECONDS`), Synesis raises an operator request
+with condition `bound_consumer_absent`, and the waiting owner is answered
+`blocked` / `operator_required`. It closes when that lane acts or ends.
+
 Cancelling a lane withdraws its bindings in every state. When an owner's lane
 ends, its contracts are frozen, the change requests still open against them are
 declined, and the bindings it can no longer serve are closed.

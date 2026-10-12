@@ -4,6 +4,7 @@ package org.synesis.workspace;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -22,17 +24,21 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
+import org.synesis.coordination.application.RequesterAnswerPolicy;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.contract.ContractChangeRequest;
+import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.workspace.agent.AgentNextAction;
@@ -68,6 +74,7 @@ class CapabilityNegotiationTest {
     Path tempDir;
 
     private Path projectRoot;
+    private String configuredGrace;
     private ProjectApplicationService projectService;
     private ProviderSessionBindingService bindingService;
     private CapabilityRequestService requestService;
@@ -185,6 +192,20 @@ class CapabilityNegotiationTest {
 
     private AgentResponse cancel(String provider, String instance) {
         return new AgentTaskCancellationService().cancelTask(new AgentTaskCancellationService.CancelTaskRequest(projectRoot, provider, instance, "No longer needed."));
+    }
+
+    @BeforeEach
+    void rememberGrace() {
+        configuredGrace = System.getProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
+    }
+
+    @AfterEach
+    void restoreGrace() {
+        if (configuredGrace == null) {
+            System.clearProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
+        } else {
+            System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, configuredGrace);
+        }
     }
 
     @BeforeEach
@@ -586,5 +607,186 @@ class CapabilityNegotiationTest {
         assertEquals(result(first).get("changeRequest"), result(again).get("changeRequest"), "the same need from the same lane is one request");
         long events = replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CONTRACT_CHANGE_REQUESTED).count();
         assertEquals(1, events);
+    }
+
+    /** The owner (codex, inst-2) writes its file and asks to finish; with nothing outstanding this integrates it. */
+    private AgentResponse ownerFinishes() throws Exception {
+        Path ownerWorktree = Path.of(bindingService.find(projectService.locate(projectRoot), "codex", "inst-2").orElseThrow().worktreePath());
+        Files.createDirectories(ownerWorktree.resolve("src"));
+        Files.writeString(ownerWorktree.resolve("src/ProductQuery.java"), "final class ProductQuery {}\n");
+        return new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(projectRoot, "codex", "inst-2", "Implement the product query API"));
+    }
+
+    /** The control branch moved when the owner was integrated, so the consumer's session is refreshed first, as an agent is told to. */
+    private AgentResponse nextAfterRefresh(String provider, String instance) throws Exception {
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(projectRoot, provider, instance, null, false));
+        return next(provider, instance);
+    }
+
+    private AgentResponse ownerAsksToFinish() {
+        return nextActionService.getNextAction(new NextActionRequest(projectRoot, "codex", "inst-2", true));
+    }
+
+    private Optional<OperatorRequest> absentConsumerRequest() throws Exception {
+        return replayedStore().operatorRequestProjection().open(OperatorRequest.BOUND_CONSUMER_ABSENT);
+    }
+
+    /** A consumer bound to a published implementation it has not checked, with the owner waiting for it. */
+    private String boundConsumerOwingAVerdict() throws Exception {
+        announceBoth();
+        publish(contract("Return exact matching product"));
+        String handle = boundHandle(bind("claude", "inst-1", 1));
+        publishImplementation();
+        assertEquals(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, replayedRequest(handle).state());
+        return handle;
+    }
+
+    @Test
+    void aConsumerArrivingAfterTheOwnersWorkWasIntegratedIsLetThroughWhileAnotherLaneIsStillOpen() throws Exception {
+        WorkIntent consumer = announceBoth();
+        announceSecondConsumer(consumer.workGroupId());
+        publish(contract("Return exact matching product"));
+        AgentResponse finished = ownerFinishes();
+        assertEquals("integrated", ((Map<?, ?>) result(finished).get("completion")).get("task"), "the other lanes are still open, so the answer waits: " + finished.toJson());
+        PredictionEventStore afterOwner = replayedStore();
+        assertTrue(afterOwner.taskCompletionProjection().allSnapshots().stream()
+                .anyMatch(snapshot -> afterOwner.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(null) == TaskCompletionState.INTEGRATED), "the owner's work is in");
+        assertEquals("FROZEN", afterOwner.contractProjection().contracts().getFirst().state().name());
+        assertEquals(2, afterOwner.collaborationProjection().activeIntents().size(), "the consumer and the third lane are still open");
+
+        AgentResponse before = nextAfterRefresh("claude", "inst-1");
+        assertEquals(AgentStatus.NEEDS_CAPABILITY, before.status(), before.toJson());
+        List<?> listed = (List<?>) result(before).get("contracts");
+        assertEquals(1, listed.size(), before.toJson());
+        assertEquals("FROZEN", ((Map<?, ?>) listed.getFirst()).get("state"), "a frozen contract is listed to a late consumer");
+
+        AgentResponse stale = bind("claude", "inst-1", 2);
+        assertEquals(AgentStatus.BLOCKED, stale.status(), stale.toJson());
+        assertEquals(AgentReason.STALE_REQUEST, stale.reason(), stale.toJson());
+        assertEquals(1L, ((Number) result(stale).get("revision")).longValue(), "the refusal shows the frozen contract");
+        assertTrue(replayedStore().capabilityRequestProjection().records().isEmpty(), "a stale bind records nothing");
+
+        AgentResponse change = requestChange("claude", "inst-1", "Reject null input");
+        assertEquals(AgentStatus.BLOCKED, change.status(), change.toJson());
+        assertEquals(AgentReason.POLICY_DENIED, change.reason(), change.toJson());
+        assertEquals("CONTRACT_OWNER_FINISHED", result(change).get("reason"), change.toJson());
+        assertEquals(1L, ((Number) result(change).get("revision")).longValue(), change.toJson());
+        assertTrue(replayedStore().events().stream().noneMatch(event -> event.type() == PredictionEventType.CONTRACT_CHANGE_REQUESTED), "nobody is left to answer it");
+
+        AgentResponse bound = bind("claude", "inst-1", 1);
+        assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
+        assertEquals("CAPABILITY_OWNER_INTEGRATED", result(bound).get("reason"), bound.toJson());
+        assertNotNull(result(bound).get("instruction"));
+        List<CapabilityRequestRecord> records = List.copyOf(replayedStore().capabilityRequestProjection().records().values());
+        assertEquals(1, records.size());
+        assertEquals(CapabilityLifecycleState.SUPERSEDED, records.getFirst().state());
+        assertTrue(records.getFirst().ownerFinishedWithoutAnswer(), "the dependency is closed as the owner finishing without an answer");
+
+        assertEquals(AgentStatus.READY, bind("claude", "inst-1", 1).status());
+        assertEquals(1, replayedStore().capabilityRequestProjection().records().size(), "a second identical bind records nothing new");
+
+        AgentResponse after = next("claude", "inst-1");
+        assertNotEquals(AgentStatus.NEEDS_CAPABILITY, after.status(), after.toJson());
+        assertNotEquals(AgentReason.OWNER_REQUIRED, after.reason(), after.toJson());
+
+        Path consumerWorktree = Path.of(bindingService.find(projectService.locate(projectRoot), "claude", "inst-1").orElseThrow().worktreePath());
+        Files.createDirectories(consumerWorktree.resolve("src"));
+        Files.writeString(consumerWorktree.resolve("src/ProductCli.java"), "final class ProductCli {}\n");
+        AgentResponse consumerFinished = new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(projectRoot, "claude", "inst-1", "Implement the product CLI"));
+        assertEquals("integrated", ((Map<?, ?>) result(consumerFinished).get("completion")).get("task"), "the dependency no longer holds the finish: " + consumerFinished.toJson());
+        PredictionEventStore done = replayedStore();
+        assertEquals(2, done.events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count());
+        assertEquals(1, done.collaborationProjection().activeIntents().size(), "only the third lane is left");
+    }
+
+    @Test
+    void anAbsentBoundConsumerIsPutToTheOperatorAndHoldsTheOwnerUntilItActs() throws Exception {
+        String handle = boundConsumerOwingAVerdict();
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+
+        AgentResponse raising = ownerAsksToFinish();
+        OperatorRequest raised = absentConsumerRequest().orElseThrow(() -> new AssertionError("no operator request was raised: " + raising.toJson()));
+        AgentResponse owner = ownerAsksToFinish();
+        assertTrue(raised.evidence().contains(handle), raised.evidence());
+        assertTrue(raised.evidence().contains(CAPABILITY), raised.evidence());
+        assertEquals(1, raised.evidence().lines().count(), "one line per binding");
+        assertEquals(AgentStatus.BLOCKED, owner.status(), owner.toJson());
+        assertEquals(AgentReason.OPERATOR_REQUIRED, owner.reason(), owner.toJson());
+        assertEquals(raised.id(), ((Map<?, ?>) result(owner).get("operatorRequest")).get("id"), owner.toJson());
+
+        AgentResponse again = ownerAsksToFinish();
+        assertEquals(AgentReason.OPERATOR_REQUIRED, again.reason(), again.toJson());
+        assertEquals(1, replayedStore().operatorRequestProjection().all().stream().filter(request -> request.condition().equals(OperatorRequest.BOUND_CONSUMER_ABSENT)).count(),
+                "one request however often the pump runs");
+
+        assertEquals(AgentStatus.READY, validate("claude", "inst-1", handle, "inspect", 1).status());
+        assertEquals(AgentStatus.COMPLETED, validate("claude", "inst-1", handle, "accepted", 1).status());
+        AgentResponse afterVerdict = ownerAsksToFinish();
+
+        assertTrue(absentConsumerRequest().isEmpty(), "the consumer acted, so the request closes");
+        assertNotEquals(AgentReason.OPERATOR_REQUIRED, afterVerdict.reason(), afterVerdict.toJson());
+    }
+
+    /** The pass that raises the request is the pass whose answer must already tell the owner to stop polling. */
+    @Test
+    void theOwnerIsToldToStopInTheSamePollThatRaisesTheRequest() throws Exception {
+        boundConsumerOwingAVerdict();
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+
+        AgentResponse owner = ownerAsksToFinish();
+
+        assertTrue(absentConsumerRequest().isPresent());
+        assertEquals(AgentStatus.BLOCKED, owner.status(), owner.toJson());
+        assertEquals(AgentReason.OPERATOR_REQUIRED, owner.reason(), owner.toJson());
+    }
+
+    @Test
+    void cancellingTheAbsentConsumersLaneClosesTheOperatorRequest() throws Exception {
+        boundConsumerOwingAVerdict();
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+        ownerAsksToFinish();
+        assertTrue(absentConsumerRequest().isPresent());
+
+        assertEquals(AgentStatus.COMPLETED, cancel("claude", "inst-1").status());
+        ownerAsksToFinish();
+
+        assertTrue(absentConsumerRequest().isEmpty(), "no binding is left to wait for");
+    }
+
+    @Test
+    void withTheDefaultGraceNoOperatorRequestIsRaisedForAConsumerThatJustReceivedAnImplementation() throws Exception {
+        boundConsumerOwingAVerdict();
+        System.clearProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
+
+        AgentResponse owner = ownerAsksToFinish();
+
+        assertTrue(absentConsumerRequest().isEmpty());
+        assertEquals(AgentStatus.WAITING, owner.status(), owner.toJson());
+        assertEquals(AgentReason.VALIDATION_REQUIRED, owner.reason(), owner.toJson());
+    }
+
+    @Test
+    void thePassingOfTheDeadlineDoesNotLetTheOwnerFinishWhileAConsumerHasNotBoundAgain() throws Exception {
+        announceBoth();
+        publish(contract("Return exact matching product"));
+        String handle = boundHandle(bind("claude", "inst-1", 1));
+        publish(contract("Return exact matching product", "Reject null input"));
+        assertEquals(CapabilityLifecycleState.REVISION_REQUESTED, replayedRequest(handle).state());
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "0");
+
+        AgentResponse finished = ownerFinishes();
+
+        assertNotEquals(AgentStatus.COMPLETED, finished.status(), finished.toJson());
+        ownerAsksToFinish();
+        AgentResponse owner = ownerAsksToFinish();
+        assertEquals(AgentStatus.BLOCKED, owner.status(), owner.toJson());
+        assertEquals(AgentReason.OPERATOR_REQUIRED, owner.reason(), owner.toJson());
+        assertTrue(absentConsumerRequest().orElseThrow().evidence().contains(handle));
+        assertTrue(replayedStore().events().stream().noneMatch(event -> event.type() == PredictionEventType.TASK_INTEGRATED), "nothing was integrated past the consumer");
+        assertEquals(CapabilityLifecycleState.REVISION_REQUESTED, replayedRequest(handle).state(), "the consumer is not skipped or dropped");
+
+        assertEquals(AgentStatus.READY, bind("claude", "inst-1", 2).status());
+        ownerAsksToFinish();
+        assertTrue(absentConsumerRequest().isEmpty(), "the consumer acted by binding again");
     }
 }
