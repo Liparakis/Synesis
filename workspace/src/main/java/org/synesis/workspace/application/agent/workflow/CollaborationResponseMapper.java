@@ -3,6 +3,7 @@ package org.synesis.workspace.application.agent.workflow;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -10,6 +11,8 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.contract.ContractChangeRequest;
+import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 
@@ -64,6 +67,65 @@ public final class CollaborationResponseMapper {
      */
     public static List<Map<String, Object>> otherLanes(CollaborationProjection collaboration, String participant) {
         return collaboration.activeIntents().stream().filter(intent -> !intent.participant().equals(participant)).map(CollaborationResponseMapper::laneMap).toList();
+    }
+
+    /**
+     * Shows a public contract: its files, its revision and what its owner promises.
+     *
+     * @param contract the contract at its current revision
+     * @return JSON-safe contract fields
+     */
+    public static Map<String, Object> contractMap(ContractRecord contract) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("contractId", contract.contractId().toString());
+        map.put("revision", contract.revision());
+        map.put("state", contract.state().name());
+        map.put("paths", contract.paths().stream().map(ResourceSelector::value).toList());
+        map.put("contract", termsMap(contract.terms()));
+        return map;
+    }
+
+    /**
+     * Shows the eleven fields of a contract under the names an agent sends them by.
+     *
+     * @param terms what the owner promises
+     * @return JSON-safe contract terms
+     */
+    public static Map<String, Object> termsMap(CapabilityContract terms) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("purpose", terms.purpose());
+        map.put("inputs", terms.inputs());
+        map.put("output", terms.output());
+        map.put("requiredBehavior", terms.requiredBehavior());
+        map.put("errorSemantics", terms.errorSemantics());
+        map.put("sideEffects", terms.sideEffects());
+        map.put("invariants", terms.invariants());
+        map.put("compatibility", terms.compatibility());
+        map.put("performance", terms.performance());
+        map.put("concurrency", terms.concurrency());
+        map.put("acceptanceTests", terms.acceptanceTests());
+        return map;
+    }
+
+    /**
+     * Shows one change request with how it stands.
+     *
+     * @param request the change request
+     * @return JSON-safe change request fields
+     */
+    public static Map<String, Object> changeRequestMap(ContractChangeRequest request) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("changeRequest", request.id().toString());
+        map.put("path", request.path().value());
+        map.put("need", request.need());
+        map.put("state", request.state().name());
+        if (request.answeredByRevision() > 0) {
+            map.put("answeredByRevision", request.answeredByRevision());
+        }
+        if (!request.reason().isEmpty()) {
+            map.put("reason", request.reason());
+        }
+        return map;
     }
 
     static Map<String, Object> participantMap(Participant participant) {

@@ -12,8 +12,6 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.contract.ContractDependency;
-import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.collaboration.CollaborationSnapshot;
@@ -30,45 +28,6 @@ final class McpCollaborationProjection {
      * Utility class; projections are exposed as static mappers.
      */
     private McpCollaborationProjection() {
-    }
-
-    /**
-     * Converts a typed contract record into the JSON object used by MCP discovery results.
-     *
-     * @param contract authoritative contract projection
-     * @return JSON-safe contract fields; {@code supersedes} is {@code null} for a first revision
-     */
-    static Map<String, Object> contractMap(ContractRecord contract) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("contractId", contract.contractId().toString());
-        map.put("projectId", contract.projectId().toString());
-        map.put("revision", contract.revision());
-        map.put("owner", contract.owner());
-        map.put("contentHash", contract.contentHash());
-        map.put("body", contract.body());
-        map.put("status", contract.status().name());
-        map.put("supersedes", contract.supersedes() == null ? null : contract.supersedes().toString());
-        map.put("selectorRefs", contract.selectorRefs());
-        return map;
-    }
-
-    /**
-     * Converts a typed contract dependency into its JSON representation.
-     *
-     * @param dependency authoritative dependency projection
-     * @return JSON-safe dependency fields
-     */
-    static Map<String, Object> dependencyMap(ContractDependency dependency) {
-        return object("intentId",
-                dependency.intentId().toString(),
-                "participant",
-                dependency.participant(),
-                "contractId",
-                dependency.contractId().toString(),
-                "revision",
-                dependency.revision(),
-                "state",
-                dependency.state().name());
     }
 
     /**

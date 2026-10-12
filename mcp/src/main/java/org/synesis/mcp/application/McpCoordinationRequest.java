@@ -17,38 +17,36 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 sealed interface McpCoordinationRequest {
 
     /**
-     * Describes a capability the caller needs from another participant, or answers a revision of one.
+     * Publishes the public contract over files the caller claims, or its next revision.
      *
-     * @param capability               nonblank capability name
-     * @param contract                 decoded capability contract
-     * @param capabilityRequestHandle  handle of the request being revised, or {@code null}
-     * @param revisionResponse         {@code accept}, {@code counter} or {@code cancel}, or {@code null}
-     * @param ownerAuthorityLineageId  owner lineage as sent, or {@code null}; parsed by the service call because a
-     *                                 malformed value is reported as a retryable dispatch failure
-     * @param contractRevision         contract revision being answered, or {@code -1} when none
-     * @param ownerPath                file whose claimant owns the capability, or {@code null}
+     * @param paths   claimed files or subtrees the contract covers
+     * @param terms   what the owner promises about them
+     * @param answers change requests this revision covers
      */
-    record DescribeCapability(String capability,
-            CapabilityContract contract,
-            String capabilityRequestHandle,
-            String revisionResponse,
-            String ownerAuthorityLineageId,
-            long contractRevision,
-            ResourceSelector ownerPath) implements McpCoordinationRequest {
+    record PublishContract(List<ResourceSelector> paths, CapabilityContract terms, List<UUID> answers) implements McpCoordinationRequest {
+    }
+
+    /**
+     * Binds the caller's lane to one revision of the contract over a file it builds on.
+     *
+     * @param capability the caller's own name for what it depends on
+     * @param ownerPath  the file; the lane claiming it is the owner
+     * @param revision   the revision the caller read and accepts
+     */
+    record BindContract(String capability, ResourceSelector ownerPath, long revision) implements McpCoordinationRequest {
+    }
+
+    /**
+     * Says what the caller needs from a file that its contract does not.
+     *
+     * @param ownerPath the file the caller builds on
+     * @param need      what it needs, in its own words
+     */
+    record RequestChange(ResourceSelector ownerPath, String need) implements McpCoordinationRequest {
     }
 
     /** Reads the collaboration status together with the published contracts and dependencies. */
     record Status() implements McpCoordinationRequest {
-    }
-
-    /**
-     * Publishes a collaboration contract.
-     *
-     * @param contractId contract ID
-     * @param body       contract text
-     * @param selectors  selectors the contract covers
-     */
-    record PublishContract(UUID contractId, String body, List<String> selectors) implements McpCoordinationRequest {
     }
 
     /**

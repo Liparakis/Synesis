@@ -231,21 +231,6 @@ public final class IntegrationOrchestrationService {
                 } catch (Exception missing) {
                     failures.add("MISSING_SNAPSHOT_REF:" + snapshot.snapshotId());
                 }
-                for (String reference : snapshot.provenance().contractRevisions()) {
-                    int split = reference.lastIndexOf(':');
-                    if (split > 0 && reference.substring(0, split).matches("[0-9a-fA-F-]{36}") && reference.substring(split + 1).matches("[0-9]+")) {
-                        try {
-                            UUID contractId = UUID.fromString(reference.substring(0, split));
-                            long revision = Long.parseLong(reference.substring(split + 1));
-                            var contract = store.contractProjection().contract(contractId);
-                            if (contract == null || contract.revision() != revision || contract.status() != org.synesis.coordination.domain.contract.ContractRecord.Status.ACTIVE) {
-                                failures.add("STALE_CONTRACT:" + snapshot.snapshotId());
-                            }
-                        } catch (RuntimeException invalid) {
-                            failures.add("INVALID_CONTRACT_PROVENANCE:" + snapshot.snapshotId());
-                        }
-                    }
-                }
             } else {
                 failures.add("INVALID_SNAPSHOT_REF:" + snapshot.snapshotId());
             }

@@ -12,193 +12,206 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.synesis.coordination.domain.capability.CapabilityContract;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationException;
 
 /**
- * Bounded canonical encoding for contract events.
+ * Canonical payloads of the contract events. Magic values prevent one payload from being decoded
+ * as another.
  */
 public final class ContractCodec {
 
-    private static final int MAGIC_PUBLISH = 0x53435031;
-    private static final int MAGIC_DEPEND = 0x53434431;
-    private static final int MAGIC_SUPERSEDE = 0x53435331;
+    private static final int MAGIC_PUBLISHED = 0x53435032;
+    private static final int MAGIC_BOUND = 0x53434232;
+    private static final int MAGIC_CHANGE_REQUESTED = 0x53435132;
+    private static final int MAGIC_CHANGE_ANSWERED = 0x53434132;
+    private static final int MAGIC_LANE_ENDED = 0x53434532;
 
-    private static final WireFormat TEXT = WireFormat.bounded(ContractRecord.MAX_TEXT_BYTES,
-            false,
-            "text bound",
-            "truncated text").checkingWrites(ContractRecord.MAX_TEXT_BYTES, "text bound");
+    private static final int MAX_TEXT_BYTES = 16 * 1024;
+    private static final int MAX_LIST_ITEMS = 64;
+    private static final WireFormat TEXT = WireFormat.bounded(MAX_TEXT_BYTES, true, "contract text bound", "truncated contract text").checkingWrites(MAX_TEXT_BYTES, "contract text bound");
 
-    /**
-     * Validates and initializes this contract codec.
-     */
     private ContractCodec() {
     }
 
     /**
-     * Encodes a contract publication.
+     * Encodes the publication of a contract revision.
      *
-     * @param record contract record
+     * @param record the revision as published
      * @return canonical event payload
      */
-    public static byte[] encodePublish(ContractRecord record) {
-        return encode(MAGIC_PUBLISH, out -> {
+    public static byte[] encodePublished(ContractRecord record) {
+        return encode(MAGIC_PUBLISHED, out -> {
             writeUuid(out, record.contractId());
-            writeUuid(out, record.projectId());
+            writeUuid(out, record.ownerLineageId());
             out.writeLong(record.revision());
-            TEXT.writeText(out, record.owner());
-            TEXT.writeText(out, record.contentHash());
-            TEXT.writeText(out, record.body());
-            uuidNullable(out, record.supersedes());
-            out.writeInt(record.selectorRefs().size());
-            for (String ref : record.selectorRefs()) {
-                TEXT.writeText(out, ref);
+            writeList(out, record.paths().stream().map(ResourceSelector::encode).toList());
+            CapabilityContract terms = record.terms();
+            TEXT.writeText(out, terms.purpose());
+            TEXT.writeText(out, terms.inputs());
+            TEXT.writeText(out, terms.output());
+            writeList(out, terms.requiredBehavior());
+            TEXT.writeText(out, terms.errorSemantics());
+            TEXT.writeText(out, terms.sideEffects());
+            TEXT.writeText(out, terms.invariants());
+            TEXT.writeText(out, terms.compatibility());
+            TEXT.writeText(out, terms.performance());
+            TEXT.writeText(out, terms.concurrency());
+            writeList(out, terms.acceptanceTests());
+        });
+    }
+
+    static ContractRecord decodePublished(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_PUBLISHED, in -> {
+            UUID contractId = readUuid(in);
+            UUID ownerLineageId = readUuid(in);
+            long revision = in.readLong();
+            List<ResourceSelector> paths = new ArrayList<>();
+            for (String path : readList(in)) {
+                paths.add(ResourceSelector.parse(path).orElseThrow(() -> new CoordinationException("contract path")));
             }
+            String purpose = TEXT.readText(in), inputs = TEXT.readText(in), output = TEXT.readText(in);
+            List<String> requiredBehavior = readList(in);
+            String errorSemantics = TEXT.readText(in), sideEffects = TEXT.readText(in), invariants = TEXT.readText(in);
+            String compatibility = TEXT.readText(in), performance = TEXT.readText(in), concurrency = TEXT.readText(in);
+            List<String> acceptanceTests = readList(in);
+            return new ContractRecord(contractId, ownerLineageId, revision, paths,
+                    new CapabilityContract(purpose, inputs, output, requiredBehavior, errorSemantics, sideEffects, invariants, compatibility, performance, concurrency, acceptanceTests),
+                    ContractRecord.State.ACTIVE);
         });
     }
 
     /**
-     * Decodes a contract publication.
+     * Encodes a consumer's binding to one revision of a contract.
      *
-     * @param encoded event payload
-     * @return decoded record
-     * @throws IOException if malformed
-     */
-    static ContractRecord decodePublish(byte[] encoded) throws IOException {
-        try {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC_PUBLISH) {
-                throw new CoordinationException("contract format");
-            }
-            UUID id = readUuid(in), project = readUuid(in);
-            long revision = in.readLong();
-            String owner = TEXT.readText(in), hash = TEXT.readText(in), body = TEXT.readText(in);
-            UUID supersedes = uuidNullable(in);
-            int count = in.readInt();
-            if (count < 0 || count > 128) {
-                throw new CoordinationException("selector bound");
-            }
-            List<String> refs = new ArrayList<>();
-            for (int i = 0; i < count; i++) {
-                refs.add(TEXT.readText(in));
-            }
-            if (in.available() != 0) {
-                throw new CoordinationException("trailing contract bytes");
-            }
-            return new ContractRecord(id,
-                    project,
-                    revision,
-                    owner,
-                    hash,
-                    body,
-                    ContractRecord.Status.ACTIVE,
-                    supersedes,
-                    refs);
-        } catch (RuntimeException | EOFException failure) {
-            throw new CoordinationException("malformed contract", failure);
-        }
-    }
-
-    /**
-     * Encodes an explicit contract dependency.
-     *
-     * @param dependency dependency
+     * @param binding the binding
      * @return canonical event payload
      */
-    public static byte[] encodeDependency(ContractDependency dependency) {
-        return encode(MAGIC_DEPEND, out -> {
-            writeUuid(out, dependency.intentId());
-            TEXT.writeText(out, dependency.participant());
-            writeUuid(out, dependency.contractId());
-            out.writeLong(dependency.revision());
+    public static byte[] encodeBound(ContractBinding binding) {
+        return encode(MAGIC_BOUND, out -> {
+            TEXT.writeText(out, binding.handle());
+            writeUuid(out, binding.contractId());
+            out.writeLong(binding.revision());
         });
     }
 
-    /**
-     * Decodes an explicit contract dependency.
-     *
-     * @param encoded event payload
-     * @return decoded dependency
-     * @throws IOException if malformed
-     */
-    static ContractDependency decodeDependency(byte[] encoded) throws IOException {
-        try {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC_DEPEND) {
-                throw new CoordinationException("dependency format");
-            }
-            UUID intent = readUuid(in);
-            String participant = TEXT.readText(in);
-            UUID contract = readUuid(in);
-            long revision = in.readLong();
-            if (in.available() != 0) {
-                throw new CoordinationException("trailing dependency bytes");
-            }
-            return new ContractDependency(intent, participant, contract, revision, ContractDependency.State.ACCEPTED);
-        } catch (RuntimeException | EOFException failure) {
-            throw new CoordinationException("malformed dependency", failure);
-        }
+    static ContractBinding decodeBound(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_BOUND, in -> new ContractBinding(TEXT.readText(in), readUuid(in), in.readLong()));
     }
 
     /**
-     * Encodes a contract supersession.
+     * Encodes the filing of a change request.
      *
-     * @param contractId  contract identifier
-     * @param oldRevision replaced revision
-     * @param newRevision replacement revision
+     * @param request the open request
      * @return canonical event payload
      */
-    public static byte[] encodeSupersede(UUID contractId, long oldRevision, long newRevision) {
-        return encode(MAGIC_SUPERSEDE, out -> {
-            writeUuid(out, contractId);
-            out.writeLong(oldRevision);
-            out.writeLong(newRevision);
+    public static byte[] encodeChangeRequested(ContractChangeRequest request) {
+        return encode(MAGIC_CHANGE_REQUESTED, out -> {
+            writeUuid(out, request.id());
+            writeUuid(out, request.ownerLineageId());
+            TEXT.writeText(out, request.path().encode());
+            writeUuid(out, request.filerLineageId());
+            TEXT.writeText(out, request.need());
+            out.writeLong(request.baseRevision());
         });
     }
 
-    /**
-     * Decodes a supersession.
-     *
-     * @param encoded event payload
-     * @return decoded supersession
-     * @throws IOException if malformed
-     */
-    static ContractSupersede decodeSupersede(byte[] encoded) throws IOException {
-        try {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
-            if (in.readInt() != MAGIC_SUPERSEDE) {
-                throw new CoordinationException("supersession format");
-            }
+    static ContractChangeRequest decodeChangeRequested(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_CHANGE_REQUESTED, in -> {
             UUID id = readUuid(in);
-            long oldRevision = in.readLong(), newRevision = in.readLong();
-            if (in.available() != 0) {
-                throw new CoordinationException("trailing supersession bytes");
-            }
-            return new ContractSupersede(id, oldRevision, newRevision);
-        } catch (RuntimeException | EOFException failure) {
-            throw new CoordinationException("malformed supersession", failure);
-        }
+            UUID ownerLineageId = readUuid(in);
+            ResourceSelector path = ResourceSelector.parse(TEXT.readText(in)).orElseThrow(() -> new CoordinationException("change request path"));
+            return ContractChangeRequest.open(id, ownerLineageId, path, readUuid(in), TEXT.readText(in), in.readLong());
+        });
     }
 
     /**
-     * Encodes a nullable UUID with a presence marker followed by its two 64-bit halves.
+     * Encodes the owner's answer to one change request.
      *
-     * @throws IOException when payload validation or durable I/O fails
+     * @param id       change request identifier
+     * @param answer   {@code ACCEPTED} or {@code DECLINED}
+     * @param revision revision that covers the need, or zero when declined
+     * @param reason   why it was declined, or empty
+     * @return canonical event payload
      */
-    private static void uuidNullable(DataOutputStream out, UUID id) throws IOException {
-        out.writeBoolean(id != null);
-        if (id != null) {
+    public static byte[] encodeChangeAnswered(UUID id, ContractChangeRequest.State answer, long revision, String reason) {
+        return encode(MAGIC_CHANGE_ANSWERED, out -> {
             writeUuid(out, id);
-        }
+            TEXT.writeText(out, answer.name());
+            out.writeLong(revision);
+            TEXT.writeText(out, reason == null ? "" : reason);
+        });
+    }
+
+    static ChangeAnswer decodeChangeAnswered(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_CHANGE_ANSWERED, in -> new ChangeAnswer(readUuid(in), ContractChangeRequest.State.valueOf(TEXT.readText(in)), in.readLong(), TEXT.readText(in)));
     }
 
     /**
-     * Decodes a nullable UUID from its presence marker and two 64-bit halves.
+     * Encodes the end of a lane, for the contracts it owned and the change requests it filed.
      *
-     * @throws IOException when payload validation or durable I/O fails
+     * @param lineageId authority lineage of the lane that ended
+     * @return canonical event payload
      */
-    private static UUID uuidNullable(DataInputStream in) throws IOException {
-        return in.readBoolean() ? readUuid(in) : null;
+    public static byte[] encodeLaneEnded(UUID lineageId) {
+        return encode(MAGIC_LANE_ENDED, out -> writeUuid(out, lineageId));
     }
 
+    static UUID decodeLaneEnded(byte[] encoded) throws IOException {
+        return decode(encoded, MAGIC_LANE_ENDED, WireFormat::readUuid);
+    }
+
+    private static void writeList(DataOutputStream out, List<String> values) throws IOException {
+        out.writeInt(values.size());
+        for (String value : values) {
+            TEXT.writeText(out, value);
+        }
+    }
+
+    private static List<String> readList(DataInputStream in) throws IOException {
+        int count = in.readInt();
+        if (count < 0 || count > MAX_LIST_ITEMS) {
+            throw new CoordinationException("contract list bound");
+        }
+        List<String> values = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            values.add(TEXT.readText(in));
+        }
+        return values;
+    }
+
+    private static <T> T decode(byte[] encoded, int magic, Fields<T> fields) throws IOException {
+        try {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
+            if (in.readInt() != magic) {
+                throw new CoordinationException("contract payload format");
+            }
+            T value = fields.read(in);
+            if (in.available() != 0) {
+                throw new CoordinationException("trailing contract payload bytes");
+            }
+            return value;
+        } catch (RuntimeException | EOFException failure) {
+            throw new CoordinationException("malformed contract payload", failure);
+        }
+    }
+
+    @FunctionalInterface
+    private interface Fields<T> {
+        T read(DataInputStream in) throws IOException;
+    }
+
+    /**
+     * The owner's answer to one change request.
+     *
+     * @param id       change request identifier
+     * @param answer   how it was answered
+     * @param revision revision that covers the need, or zero
+     * @param reason   why it was declined, or empty
+     */
+    record ChangeAnswer(UUID id, ContractChangeRequest.State answer, long revision, String reason) {
+    }
 }

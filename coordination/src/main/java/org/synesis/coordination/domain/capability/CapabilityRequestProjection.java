@@ -418,12 +418,16 @@ public final class CapabilityRequestProjection {
      */
     private void processRevised(PredictionEvent event) throws IOException {
         CapabilityRequestPayload payload = CapabilityRequestPayload.decode(event.payload());
+        // The owner's contract can be revised while a consumer is bound to it in any live state
+        // (ADR-0092): the binding then waits to be made again, and what was being validated or
+        // had been validated under the earlier revision no longer counts.
         CapabilityRequestRecord current = requireRequest(payload,
-                CapabilityLifecycleState::isUnderNegotiation,
+                CapabilityLifecycleState::bindsLanes,
                 "TERMINAL_CAPABILITY_REQUEST_CANNOT_BE_REVISED");
         if (!payload.state().isUnderNegotiation()) {
             throw new CoordinationException("INVALID_CAPABILITY_CONTRACT_REVISION_STATE");
         }
+        validationContexts.remove(payload.handle());
         records.put(payload.handle(),
                 current.withUpdate(payload.state(),
                         payload.contract(),

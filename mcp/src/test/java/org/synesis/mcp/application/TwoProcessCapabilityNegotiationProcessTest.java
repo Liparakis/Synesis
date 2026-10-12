@@ -125,60 +125,50 @@ class TwoProcessCapabilityNegotiationProcessTest {
     }
 
     @Test
-    void twoIndependentProcessesNegotiateCapability() {
-        // 1. Requester calls ensure_session
-        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Test goal\",\"acceptance\":\"Test acceptance\"}}}}";
+    void twoIndependentProcessesAgreeOneContract() {
+        // 1. Each process announces the file it builds
+        String ensureReq = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"Test goal\",\"acceptance\":\"Test acceptance\","
+                + "\"claims\":[{\"kind\":\"path_exact\",\"path\":\"ProductCli.java\"}]}}}}";
         String ensureResp = requesterHandler.handleMessage(ensureReq);
         assertNotNull(ensureResp);
         assertTrue(ensureResp.contains("ready"), "Expected ready but got: " + ensureResp);
 
-        // 2. Owner calls ensure_session
-        String ensureOwnerResp = ownerHandler.handleMessage(ensureReq);
+        String ensureOwnerResp = ownerHandler.handleMessage(ensureReq.replace("ProductCli.java", "ProductQuery.java"));
         assertNotNull(ensureOwnerResp);
         assertTrue(ensureOwnerResp.contains("ready"), "Expected ready but got: " + ensureOwnerResp);
 
-        // 3. Requester describes required capability
-        String descReq = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
+        // 2. The owner publishes the one contract over its file
+        String publishReq = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
+                + "      \"kind\": \"contract_publish\",\n" + "      \"payload\": {\n" + "      \"paths\": [\"ProductQuery.java\"],\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
                 + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return exact matching product\", \"Return empty when missing\", \"Reject null input\"],\n"
                 + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"existing product returned\", \"missing product returns empty\", \"null input rejected\"]\n" + "      }\n" + "      }\n" + "    }\n" + "  }\n" + "}";
+        String publishResp = ownerHandler.handleMessage(publishReq);
+        assertNotNull(publishResp);
+        assertTrue(publishResp.contains("contractId"), "Expected the published contract but got: " + publishResp);
 
-        String descRespStr = requesterHandler.handleMessage(descReq);
-        assertNotNull(descRespStr);
-        assertTrue(descRespStr.contains("owner_response_pending"), "Expected owner_response_pending but got: " + descRespStr);
-        assertTrue(descRespStr.contains("req_"));
-
-        // Extract public handle locator
-        String handle = extractHandleFromMcpResponse(descRespStr);
+        // 3. The requester binds to the exact revision it read
+        String bindReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_bind\","
+                + "\"payload\":{\"capability\":\"catalog.product-query\",\"ownerPath\":\"ProductQuery.java\",\"revision\":1}}}}";
+        String bindResp = requesterHandler.handleMessage(bindReq);
+        assertNotNull(bindResp);
+        assertTrue(bindResp.contains("contractAccepted"), "Expected the binding to be accepted but got: " + bindResp);
+        String handle = extractHandleFromMcpResponse(bindResp);
         assertNotNull(handle);
+        assertTrue(handle.startsWith("req_"));
 
-        // 4. Owner calls get_next_action -> receives respond_coordination
-        String ownerNextReq = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
+        // 4. The owner is told whom its implementation is for; the requester can build against the contract
+        String ownerNextReq = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
         String ownerNextResp = ownerHandler.handleMessage(ownerNextReq);
-        assertNotNull(ownerNextResp);
-        assertTrue(ownerNextResp.contains("respond_coordination"), "Expected respond_coordination but got: " + ownerNextResp);
-        assertTrue(ownerNextResp.contains(handle));
-        long contractRevision = extractContractRevision(ownerNextResp);
-
-        // 5. Owner accepts the request
-        String acceptReq = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 5,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + handle + "\", \"response\": \"accept\", \"contractRevision\": " + contractRevision + "}\n" + "    }\n" + "  }\n" + "}";
-
-        String acceptRespStr = ownerHandler.handleMessage(acceptReq);
-        assertNotNull(acceptRespStr);
-        assertTrue(acceptRespStr.contains("ready"), "Expected ready but got: " + acceptRespStr);
-
-        // 6. Requester can implement against the accepted contract while the owner works
-        String reqNextReq = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
-        String reqNextResp = requesterHandler.handleMessage(reqNextReq);
-        assertNotNull(reqNextResp);
+        assertTrue(ownerNextResp.contains(handle), "Expected the binding in the owner's next action but got: " + ownerNextResp);
+        String reqNextResp = requesterHandler.handleMessage(ownerNextReq.replace("\"id\":5", "\"id\":6"));
         assertTrue(reqNextResp.contains("contractAccepted"), "Expected the accepted contract to be available for implementation: " + reqNextResp);
 
-        // 7. Verify no internal IDs or absolute paths leak in responses
-        assertFalse(descRespStr.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(ownerNextResp.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(acceptRespStr.contains(projectRoot.toString().replace('\\', '/')));
-        assertFalse(reqNextResp.contains(projectRoot.toString().replace('\\', '/')));
+        // 5. Verify no absolute paths leak in responses
+        String root = projectRoot.toString().replace('\\', '/');
+        assertFalse(publishResp.contains(root));
+        assertFalse(bindResp.contains(root));
+        assertFalse(ownerNextResp.contains(root));
+        assertFalse(reqNextResp.contains(root));
     }
 
     @Test
@@ -204,16 +194,5 @@ class TwoProcessCapabilityNegotiationProcessTest {
         Map<String, Object> agentResp = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerRes = (Map<String, Object>) agentResp.get("result");
         return (String) innerRes.get("capabilityRequestHandle");
-    }
-
-    @SuppressWarnings("unchecked")
-    private long extractContractRevision(String mcpResponseJson) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(mcpResponseJson);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.getFirst().get("text");
-        Map<String, Object> agentResponse = (Map<String, Object>) ProviderJson.parse(text);
-        Map<String, Object> response = (Map<String, Object>) agentResponse.get("result");
-        return ((Number) response.get("contractRevision")).longValue();
     }
 }

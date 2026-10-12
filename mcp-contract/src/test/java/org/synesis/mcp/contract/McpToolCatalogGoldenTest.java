@@ -20,8 +20,8 @@ class McpToolCatalogGoldenTest {
 
     static final String GOLDEN_RESOURCE = "tools-list.golden.json";
 
-    private static final String WIRE_DIGEST = "4c463066e70dc49de06f8166282f971d88dfb9d8834ad83de64b3ef9c0d8363b";
-    private static final String CONTENT_DIGEST = "b2a6950b2e659dcd05ce504d2dd34fec493f54dc772d34a914930ce86dadfb3a";
+    private static final String WIRE_DIGEST = "d2d7a1993b698734c5966ef957f3f5d662b5838b5f8a7315480c4c82403eeb97";
+    private static final String CONTENT_DIGEST = "fa064e32a8e6845ef2b2d4cdf5dc97711cc8d46efb08c3eb7503a3f806eea48b";
     private static final String GUIDANCE_DIGEST = "2f4b9e216d6afa33812086f2d5c83c715cab778c1a781d9cb9ece3c2ec766e45";
 
     /**

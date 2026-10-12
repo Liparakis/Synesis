@@ -85,7 +85,11 @@ public final class ProjectionValidation {
                     ContractProjection::new,
                     ContractProjection::apply,
                     ContractProjection::validate,
-                    projection -> Arrays.asList(projection.contracts(), projection.dependencies())));
+                    projection -> Arrays.asList(projection.contracts(),
+                            projection.contracts().stream()
+                                    .map(contract -> Arrays.asList(projection.bindings(contract.contractId()),
+                                            projection.openChangeRequestsFor(contract.ownerLineageId()),
+                                            projection.changeRequestsFiledBy(contract.ownerLineageId()))).toList())));
 
     private ProjectionValidation() {
     }

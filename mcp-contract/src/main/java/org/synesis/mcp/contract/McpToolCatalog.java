@@ -315,22 +315,18 @@ public final class McpToolCatalog {
 
     private static Descriptor requestCoordination() {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("conflictingIntentId", uuid());
         payload.put("intentId", uuid());
-        payload.put("contractId", uuid());
-        payload.put("body", property("string"));
         payload.put("selectors", stringArray());
-        payload.put("revision", positiveInteger());
+        payload.put("revision", positiveInteger("Contract revision the caller read and accepts"));
         payload.put("targetParticipant", property("string"));
         payload.put("proposal", property("string"));
         payload.put("artifact", property("string"));
-        payload.put("capability", property("string"));
+        payload.put("capability", text("The caller's own name for what it depends on, as listed in its task.knownDependencies"));
         payload.put("contract", contractSchema());
-        payload.put("capabilityRequestHandle", requestHandle());
-        payload.put("revisionResponse", enumOf(List.of("accept", "counter", "cancel")));
-        payload.put("contractRevision", positiveInteger("Exact contract revision shown in the current request projection"));
-        payload.put("ownerAuthorityLineageId", uuid("Durable authority lineage of the intended capability publisher"));
-        payload.put("ownerPath", text("Repository-relative file that implements the capability; the lane claiming it receives the request. Prefer this to ownerAuthorityLineageId"));
+        payload.put("paths", stringArray("Repository-relative files the contract covers, all claimed by the caller; a path ending in / names a subtree"));
+        payload.put("answers", stringArray("changeRequest identifiers this revision covers"));
+        payload.put("ownerPath", text("Repository-relative file the caller builds on; the lane claiming it is the owner"));
+        payload.put("need", text("What the caller needs from that file that its contract does not say"));
         payload.put("workGroupId", uuid());
         payload.put("goal", property("string"));
         payload.put("acceptance", property("string"));
@@ -339,12 +335,13 @@ public final class McpToolCatalog {
         payload.put("grantId", uuid());
         payload.put("claimEpoch", positiveInteger());
         Map<String, Object> schema = kindDiscriminatedSchema(
-                List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join", "continuation", "work_group_create"),
+                List.of("contract_publish", "contract_bind", "contract_change_request", "collaboration_status", "scope_revision", "handoff", "work_group_join", "continuation", "work_group_create"),
                 payload,
-                List.of(new PayloadKind("capability_request", List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId", "ownerPath"), List.of("capability", "contract")),
-                        new PayloadKind("contract_request", List.of("conflictingIntentId", "proposal", "contractId", "revision"), List.of("conflictingIntentId", "proposal"))));
+                List.of(new PayloadKind("contract_publish", List.of("paths", "contract", "answers"), List.of("paths", "contract")),
+                        new PayloadKind("contract_bind", List.of("capability", "ownerPath", "revision"), List.of("capability", "ownerPath", "revision")),
+                        new PayloadKind("contract_change_request", List.of("ownerPath", "need"), List.of("ownerPath", "need"))));
         return descriptor(REQUEST_COORDINATION,
-                "Submits one strict capability or collaboration request. A capability_request includes the complete API contract and names its owner by ownerPath, the repository file that implements the capability. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
+                "Submits one strict contract or collaboration request. One public contract covers a claimed file: every agent can read it, and only the lane that claims the file publishes it. contract_publish publishes the complete contract over paths the caller claims, or its next revision, and may list in answers the change requests it covers. contract_bind accepts the exact revision of the contract over ownerPath for the dependency the caller names in capability; after the owner publishes a new revision, bind again. contract_change_request tells the lane claiming ownerPath what the caller needs, and asks for a contract where none exists yet. Only fields declared for the selected kind are allowed.",
                 schema,
                 "request-coordination",
                 "MUTATING",
@@ -355,9 +352,10 @@ public final class McpToolCatalog {
     private static Descriptor respondCoordination() {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("capabilityRequestHandle", requestHandle());
-        payload.put("response", enumOf(List.of("accept", "revise", "reject")));
-        payload.put("contractRevision", positiveInteger("Exact contract revision shown in the owner inbox"));
-        payload.put("revision", contractSchema());
+        payload.put("changeRequest", uuid("Identifier of the contract change request being answered"));
+        payload.put("decision", enumOf(List.of("accepted", "declined")));
+        payload.put("contractField", enumOf(List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency", "acceptanceTests"),
+                "The field of the contract that the implementation breaks; required with result revision_required"));
         payload.put("reason", property("string"));
         payload.put("coordinationRequest", uuid());
         payload.put("coordinationStatus", enumOf(List.of("ACCEPTED", "REVISED", "REJECTED", "CANCELLED", "COMPLETED")));
@@ -372,15 +370,15 @@ public final class McpToolCatalog {
         payload.put("implementationRevision", positiveInteger());
         payload.put("failedAcceptanceTests", stringArray());
         Map<String, Object> schema = kindDiscriminatedSchema(
-                List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation"),
+                List.of("contract_change_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation"),
                 payload,
-                List.of(new PayloadKind("capability_response", List.of("capabilityRequestHandle", "response", "contractRevision", "revision", "reason"), List.of("capabilityRequestHandle", "response", "contractRevision")),
+                List.of(new PayloadKind("contract_change_response", List.of("changeRequest", "decision", "reason"), List.of("changeRequest", "decision")),
                         new PayloadKind("coordination_response", List.of("coordinationRequest", "coordinationStatus", "proposal"), List.of("coordinationRequest", "coordinationStatus")),
                         new PayloadKind("implementation_validation",
-                                List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "failedAcceptanceTests"),
+                                List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "contractField", "failedAcceptanceTests"),
                                 List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result"))));
         return descriptor(RESPOND_COORDINATION,
-                "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required. capability_response is fenced to the exact contractRevision shown in the owner inbox; revise also requires a complete replacement contract. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
+                "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required; revision_required needs a reason and contractField, the field of the contract you bound to that the implementation breaks. contract_change_response answers one change request against a contract of the caller's lane: accepted when the current revision covers it, or declined with a reason. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
                 schema,
                 "respond-coordination",
                 "MUTATING",

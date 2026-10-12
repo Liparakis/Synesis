@@ -17,9 +17,7 @@ import org.synesis.cli.command.VersionCommand;
 import org.synesis.cli.command.collaboration.CollaborationAcknowledgeCommand;
 import org.synesis.cli.command.collaboration.CollaborationAnnounceCommand;
 import org.synesis.cli.command.collaboration.CollaborationCommand;
-import org.synesis.cli.command.collaboration.CollaborationContractBindCommand;
 import org.synesis.cli.command.collaboration.CollaborationContractCommand;
-import org.synesis.cli.command.collaboration.CollaborationContractPublishCommand;
 import org.synesis.cli.command.collaboration.CollaborationContractStatusCommand;
 import org.synesis.cli.command.collaboration.CollaborationHandoffCommand;
 import org.synesis.cli.command.collaboration.CollaborationReadinessCommand;
@@ -155,8 +153,7 @@ public final class SynesisCli {
                 .addSubcommand("acknowledge", new CollaborationAcknowledgeCommand(runtime)).addSubcommand("status", new CollaborationStatusCommand(runtime))
                 .addSubcommand("release", new CollaborationReleaseCommand(runtime)).addSubcommand("request", new CollaborationRequestCommand(runtime)).addSubcommand("respond", new CollaborationRespondCommand(runtime))
                 .addSubcommand("handoff", new CollaborationHandoffCommand(runtime))
-                .addSubcommand("contract", new CommandLine(new CollaborationContractCommand(runtime)).addSubcommand("publish", new CollaborationContractPublishCommand(runtime))
-                        .addSubcommand("bind", new CollaborationContractBindCommand(runtime)).addSubcommand("status", new CollaborationContractStatusCommand(runtime)))
+                .addSubcommand("contract", new CommandLine(new CollaborationContractCommand(runtime)).addSubcommand("status", new CollaborationContractStatusCommand(runtime)))
                 .addSubcommand("readiness", new CollaborationReadinessCommand(runtime));
         command.addSubcommand("collaboration", collaboration);
         command.addSubcommand("sync", new SyncCommand());

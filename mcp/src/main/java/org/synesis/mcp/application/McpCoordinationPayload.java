@@ -8,6 +8,7 @@ import static org.synesis.mcp.application.McpToolArguments.strings;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
@@ -26,11 +27,11 @@ import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 final class McpCoordinationPayload {
 
     /** The request kinds, as a refusal of an unknown kind names them. Each has a case in {@link #normalizeStrictCoordination}. */
-    private static final List<String> REQUEST_KINDS = List.of("capability_request", "collaboration_status", "contract_proposal", "contract_request", "scope_revision", "handoff", "work_group_join",
+    private static final List<String> REQUEST_KINDS = List.of("contract_publish", "contract_bind", "contract_change_request", "collaboration_status", "scope_revision", "handoff", "work_group_join",
             "work_group_create", "continuation");
 
     /** The response kinds, as a refusal of an unknown kind names them. Each has a case in {@link #normalizeStrictResponse}. */
-    private static final List<String> RESPONSE_KINDS = List.of("capability_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation");
+    private static final List<String> RESPONSE_KINDS = List.of("contract_change_response", "coordination_response", "inbox_acknowledge", "inbox_resolve", "implementation_validation", "review_validation");
 
     /** The fields a capability contract has, all of them required and no others allowed. */
     private static final List<String> CONTRACT_FIELDS = List.of("purpose", "inputs", "output", "requiredBehavior", "errorSemantics", "sideEffects", "invariants", "compatibility", "performance", "concurrency",
@@ -56,10 +57,10 @@ final class McpCoordinationPayload {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_request" -> List.of("capability", "contract", "capabilityRequestHandle", "revisionResponse", "contractRevision", "ownerAuthorityLineageId", "ownerPath");
+            case "contract_publish" -> List.of("paths", "contract", "answers");
+            case "contract_bind" -> List.of("capability", "ownerPath", "revision");
+            case "contract_change_request" -> List.of("ownerPath", "need");
             case "collaboration_status" -> List.of();
-            case "contract_proposal" -> List.of("contractId", "body", "selectors", "revision");
-            case "contract_request" -> List.of("conflictingIntentId", "proposal", "contractId", "revision");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal", "artifact");
             case "work_group_join" -> List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant", "proposal", "snapshotId", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
@@ -73,9 +74,9 @@ final class McpCoordinationPayload {
             }
         }
         List<String> required = switch (kind) {
-            case "capability_request" -> List.of("capability", "contract");
-            case "contract_proposal" -> List.of("contractId", "body");
-            case "contract_request" -> List.of("conflictingIntentId", "proposal");
+            case "contract_publish" -> List.of("paths", "contract");
+            case "contract_bind" -> List.of("capability", "ownerPath", "revision");
+            case "contract_change_request" -> List.of("ownerPath", "need");
             case "scope_revision" -> List.of("intentId", "selectors", "proposal");
             case "handoff" -> List.of("intentId", "targetParticipant", "proposal");
             case "work_group_join" -> payload.containsKey("grantId") ? List.of("workGroupId", "grantId", "intentId", "claimEpoch", "targetParticipant") : List.of("workGroupId", "intentId", "proposal");
@@ -84,21 +85,8 @@ final class McpCoordinationPayload {
             default -> List.of();
         };
         requireFields(payload, required, "COORDINATION_FIELD_REQUIRED:");
-        if ("capability_request".equals(kind)) {
-            boolean hasHandle = payload.containsKey("capabilityRequestHandle");
-            boolean hasResponse = payload.containsKey("revisionResponse");
-            if (hasHandle != hasResponse) {
-                throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_REQUIRES_HANDLE_AND_RESPONSE");
-            }
-            if (hasResponse) {
-                Object response = payload.get("revisionResponse");
-                if (!(response instanceof String value) || !List.of("accept", "counter", "cancel").contains(value)) {
-                    throw new IllegalArgumentException("CAPABILITY_REVISION_RESPONSE_INVALID");
-                }
-                requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
-            } else if (payload.containsKey("contractRevision")) {
-                throw new IllegalArgumentException("CONTRACT_REVISION_REQUIRES_CAPABILITY_HANDLE");
-            }
+        if ("contract_bind".equals(kind)) {
+            requirePositiveRevision(payload.get("revision"), "revision");
         }
         if ("work_group_join".equals(kind)) {
             requireMatchingAlias(payload, "intentId", "reviewedIntentId");
@@ -106,8 +94,11 @@ final class McpCoordinationPayload {
             requireOptionalText(payload, "reviewedParticipantId");
             requireOptionalText(payload, "reviewerParticipant");
         }
-        if ("capability_request".equals(kind) && (!(payload.get("capability") instanceof String capability) || capability.isBlank())) {
+        if ("contract_bind".equals(kind) && (!(payload.get("capability") instanceof String capability) || capability.isBlank())) {
             throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:capability");
+        }
+        if ("contract_change_request".equals(kind) && (!(payload.get("need") instanceof String need) || need.isBlank())) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:need");
         }
         if ("work_group_create".equals(kind)) {
             validateReviewPolicyPayload(payload.get("reviewPolicy"));
@@ -126,27 +117,17 @@ final class McpCoordinationPayload {
      */
     private static McpCoordinationRequest requestOf(String kind, Map<String, Object> payload) {
         return switch (kind) {
-            case "capability_request" -> {
+            case "contract_publish" -> {
                 CapabilityContract contract = parseContract(payload.get("contract"));
                 if (contract == null) {
                     throw new RefusedPayloadException("CAPABILITY_CONTRACT_INVALID", "contractFields", CONTRACT_FIELDS, contractDefect(payload.get("contract")));
                 }
-                yield new McpCoordinationRequest.DescribeCapability(String.valueOf(payload.get("capability")),
-                        contract,
-                        payload.get("capabilityRequestHandle") instanceof String value ? value : null,
-                        payload.get("revisionResponse") instanceof String value ? value : null,
-                        payload.get("ownerAuthorityLineageId") instanceof String value ? value : null,
-                        payload.get("contractRevision") instanceof Number value ? value.longValue() : -1,
-                        ownerPath(payload.get("ownerPath")));
+                yield new McpCoordinationRequest.PublishContract(contractPaths(payload.get("paths")), contract, uuids(payload.get("answers"), "answers"));
             }
+            case "contract_bind" -> new McpCoordinationRequest.BindContract(String.valueOf(payload.get("capability")), ownerPath(payload.get("ownerPath")),
+                    ((Number) payload.get("revision")).longValue());
+            case "contract_change_request" -> new McpCoordinationRequest.RequestChange(ownerPath(payload.get("ownerPath")), String.valueOf(payload.get("need")));
             case "collaboration_status" -> new McpCoordinationRequest.Status();
-            case "contract_proposal" -> new McpCoordinationRequest.PublishContract(optionalUuidArgument(payload, "contractId"),
-                    String.valueOf(payload.get("body")),
-                    strings(payload.get("selectors")));
-            case "contract_request" -> new McpCoordinationRequest.OpenRequest(optionalUuidArgument(payload, "conflictingIntentId"),
-                    CoordinationRequest.Kind.CONTRACT,
-                    String.valueOf(payload.get("proposal")),
-                    null);
             case "scope_revision" -> new McpCoordinationRequest.OpenRequest(optionalUuidArgument(payload, "intentId"),
                     CoordinationRequest.Kind.CONTRACT,
                     String.valueOf(payload.get("proposal")),
@@ -190,11 +171,11 @@ final class McpCoordinationPayload {
         }
         Map<String, Object> payload = (Map<String, Object>) rawPayload;
         List<String> allowed = switch (kind) {
-            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision", "revision", "reason");
+            case "contract_change_response" -> List.of("changeRequest", "decision", "reason");
             case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus", "proposal");
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution", "proposal");
-            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "failedAcceptanceTests");
+            case "implementation_validation" -> List.of("inboxItemId", "capabilityRequestHandle", "implementationRevision", "result", "reason", "contractField", "failedAcceptanceTests");
             case "review_validation" -> List.of("grantId", "snapshotId", "intentId", "claimEpoch", "result", "reason", "reviewedIntentId", "reviewedParticipantId", "reviewerParticipant");
             default -> throw new RefusedPayloadException("UNKNOWN_COORDINATION_RESPONSE_KIND", "allowedKinds", RESPONSE_KINDS);
         };
@@ -204,7 +185,7 @@ final class McpCoordinationPayload {
             }
         }
         List<String> required = switch (kind) {
-            case "capability_response" -> List.of("capabilityRequestHandle", "response", "contractRevision");
+            case "contract_change_response" -> List.of("changeRequest", "decision");
             case "coordination_response" -> List.of("coordinationRequest", "coordinationStatus");
             case "inbox_acknowledge" -> List.of("inboxItemId");
             case "inbox_resolve" -> List.of("inboxItemId", "resolution");
@@ -218,14 +199,13 @@ final class McpCoordinationPayload {
             requireOptionalText(payload, "reviewedParticipantId");
             requireOptionalText(payload, "reviewerParticipant");
         }
-        if ("capability_response".equals(kind)) {
-            Object response = payload.get("response");
-            if (!(response instanceof String value) || !("accept".equals(value) || "revise".equals(value) || "reject".equals(value))) {
-                throw new IllegalArgumentException("COORDINATION_RESPONSE_INVALID_RESPONSE");
+        if ("contract_change_response".equals(kind)) {
+            Object decision = payload.get("decision");
+            if (!(decision instanceof String value) || !("accepted".equals(value) || "declined".equals(value))) {
+                throw new RefusedPayloadException("COORDINATION_RESPONSE_FIELD_INVALID:decision", "allowedValues", List.of("accepted", "declined"));
             }
-            requirePositiveRevision(payload.get("contractRevision"), "contractRevision");
-            if ("revise".equals(response) && !(payload.get("revision") instanceof Map<?, ?>)) {
-                throw new IllegalArgumentException("COORDINATION_RESPONSE_REVISION_REQUIRED");
+            if ("declined".equals(decision) && (!(payload.get("reason") instanceof String reasonText) || reasonText.isBlank())) {
+                throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
             }
         }
         if ("implementation_validation".equals(kind)) {
@@ -237,6 +217,13 @@ final class McpCoordinationPayload {
                 Object reason = payload.get("reason");
                 if (!(reason instanceof String reasonText) || reasonText.isBlank()) {
                     throw new IllegalArgumentException("COORDINATION_RESPONSE_REASON_REQUIRED");
+                }
+                // A verdict that sends the work back rests on the contract the consumer bound
+                // to, and says on which of its fields (ADR-0092). A point the owner declined
+                // to put into the contract is not grounds.
+                if (!(payload.get("contractField") instanceof String field) || !CONTRACT_FIELDS.contains(field)) {
+                    throw new RefusedPayloadException("COORDINATION_RESPONSE_FIELD_REQUIRED:contractField", "contractFields", CONTRACT_FIELDS,
+                            "name the field of the contract that the implementation breaks");
                 }
             }
         }
@@ -264,10 +251,14 @@ final class McpCoordinationPayload {
      */
     private static McpCoordinationResponse responseOf(String kind, Map<String, Object> payload) {
         String reason = payload.get("reason") == null ? null : String.valueOf(payload.get("reason"));
+        if ("implementation_validation".equals(kind) && payload.get("contractField") instanceof String field && reason != null) {
+            reason = field + ": " + reason;
+        }
+        String verdictReason = reason;
         return switch (kind) {
             case "implementation_validation" -> new McpCoordinationResponse.ImplementationValidation(String.valueOf(payload.get("capabilityRequestHandle")),
                     String.valueOf(payload.get("result")),
-                    reason,
+                    verdictReason,
                     optionalLongArgument(payload, "implementationRevision", 1).intValue(),
                     strings(payload.get("failedAcceptanceTests")));
             case "review_validation" -> new McpCoordinationResponse.ReviewValidation(optionalUuidArgument(payload, "grantId"),
@@ -276,11 +267,7 @@ final class McpCoordinationPayload {
                     optionalLongArgument(payload, "claimEpoch", 1),
                     String.valueOf(payload.get("result")),
                     reason);
-            case "capability_response" -> new McpCoordinationResponse.RespondToCapability(String.valueOf(payload.get("capabilityRequestHandle")),
-                    String.valueOf(payload.get("response")),
-                    parseContract(payload.get("revision")),
-                    reason,
-                    optionalLongArgument(payload, "contractRevision", 1));
+            case "contract_change_response" -> new McpCoordinationResponse.AnswerChange(optionalUuidArgument(payload, "changeRequest"), "accepted".equals(payload.get("decision")), verdictReason);
             case "coordination_response" -> new McpCoordinationResponse.RespondToRequest(optionalUuidArgument(payload, "coordinationRequest"),
                     (String) payload.get("coordinationRequest"),
                     status(payload, "coordinationStatus"),
@@ -318,8 +305,6 @@ final class McpCoordinationPayload {
      */
     private static void requireTypedRequestFields(String kind, Map<String, Object> payload) {
         switch (kind) {
-            case "contract_proposal" -> requireUuid(payload, "contractId");
-            case "contract_request" -> requireUuid(payload, "conflictingIntentId");
             case "scope_revision", "handoff" -> requireUuid(payload, "intentId");
             case "work_group_create" -> requireUuid(payload, "workGroupId");
             case "work_group_join" -> {
@@ -352,6 +337,7 @@ final class McpCoordinationPayload {
     private static void requireTypedResponseFields(String kind, Map<String, Object> payload) {
         switch (kind) {
             case "coordination_response" -> requireUuid(payload, "coordinationRequest");
+            case "contract_change_response" -> requireUuid(payload, "changeRequest");
             case "inbox_acknowledge", "inbox_resolve" -> requireUuid(payload, "inboxItemId");
             case "implementation_validation" -> requireInteger(payload, "implementationRevision");
             case "review_validation" -> {
@@ -459,10 +445,39 @@ final class McpCoordinationPayload {
         }
     }
 
-    /** Reads the file whose claimant owns the capability; {@code null} when the request names none. */
+    /** Reads the files or subtrees a contract covers. A path ending in a slash names a subtree. */
+    private static List<ResourceSelector> contractPaths(Object value) {
+        if (!(value instanceof List<?> items) || items.isEmpty()) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:paths");
+        }
+        List<ResourceSelector> paths = new java.util.ArrayList<>();
+        for (Object item : items) {
+            try {
+                String path = (String) item;
+                paths.add(path.endsWith("/") ? ResourceSelector.pathSubtree(path) : ResourceSelector.pathExact(path));
+            } catch (ClassCastException | IllegalArgumentException notARepositoryPath) {
+                throw new IllegalArgumentException("CONTRACT_PATH_MUST_BE_REPOSITORY_RELATIVE");
+            }
+        }
+        return paths;
+    }
+
+    /** Reads an optional list of identifiers. */
+    private static List<UUID> uuids(Object value, String field) {
+        if (value == null) {
+            return List.of();
+        }
+        try {
+            return ((List<?>) value).stream().map(item -> UUID.fromString((String) item)).toList();
+        } catch (ClassCastException | IllegalArgumentException notIdentifiers) {
+            throw new IllegalArgumentException("COORDINATION_FIELD_INVALID:" + field);
+        }
+    }
+
+    /** Reads the file a consumer builds on, whose claimant is the owner. */
     private static ResourceSelector ownerPath(Object value) {
         if (value == null) {
-            return null;
+            throw new IllegalArgumentException("COORDINATION_FIELD_REQUIRED:ownerPath");
         }
         try {
             // The cast fails for a non-string as the selector fails for an escaping path: one refusal for both.

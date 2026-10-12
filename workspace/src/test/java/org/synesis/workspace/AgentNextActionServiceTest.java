@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,7 +45,7 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
-import org.synesis.workspace.application.capability.CapabilityResponseService;
+import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -54,10 +53,6 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.task.TaskSnapshotService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.recovery.RecoverySnapshotService;
-import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
-import org.synesis.workspace.lifecycle.lease.SessionLeaseState;
-import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
-import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
 import org.synesis.workspace.test.ProviderTestSupport;
 
 /**
@@ -99,6 +94,17 @@ class AgentNextActionServiceTest {
         var bindings = bindingService.list(location, provider);
         var binding = bindings.getLast();
         bindingService.verifyWorkspaceTrust(location, provider, binding.sessionId(), Path.of(binding.worktreePath()));
+    }
+
+    /** The owner lane publishes a contract over one file it claims and the consumer lane binds to it; returns the binding's request handle. */
+    private String agreeContract(String ownerProvider, String ownerConnection, String consumerProvider, String consumerConnection, String capability, String ownerFile, CapabilityContract contract) {
+        AgentResponse published = new ContractOwnerService().publish(new ContractOwnerService.PublishRequest(controlRoot, ownerProvider, ownerConnection,
+                List.of(ResourceSelector.pathExact(ownerFile)), contract, List.of()));
+        assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
+        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, consumerProvider, consumerConnection, capability,
+                ResourceSelector.pathExact(ownerFile), ((Number) ((Map<?, ?>) published.result()).get("revision")).longValue()));
+        assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
+        return (String) ((Map<?, ?>) bound.result()).get("capabilityRequestHandle");
     }
 
     @Test
@@ -648,6 +654,8 @@ class AgentNextActionServiceTest {
         // The requester is shown who claims what, so it can name the file it builds on.
         assertEquals(List.of(List.of("src/domain")), ((List<Map<String, Object>>) result.get("lanes")).stream().map(lane -> lane.get("claims")).toList());
         assertTrue(String.valueOf(result.get("instruction")).contains("ownerPath"), response.toJson());
+        assertEquals("contract_bind", result.get("coordinationKind"));
+        assertEquals(List.of(), result.get("contracts"));
 
         Map<String, Object> workflow = (Map<String, Object>) result.get("workflow");
         assertEquals("REVISE_SCOPE", workflow.get("type"));
@@ -683,37 +691,9 @@ class AgentNextActionServiceTest {
                 "A non-empty title",
                 List.of("Create a task with a generated ID"),
                 List.of("Task defaults to the accepted status"));
-        AgentResponse requested = new CapabilityRequestService().describeRequiredCapability(
-                new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
-                        "codex",
-                        "local-capability-requester",
-                        "tasktracker.domain",
-                        contract,
-                        null,
-                        null,
-                        owner.intent().authorityLineageId(),
-                        -1));
-        assertEquals(AgentStatus.WAITING, requested.status(), requested.toJson());
+        String handle = agreeContract("claude", "local-capability-owner", "codex", "local-capability-requester", "tasktracker.domain", "src/Domain.java", contract);
 
         AgentNextActionService nextActions = new AgentNextActionService();
-        AgentResponse ownerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot,
-                "claude",
-                "local-capability-owner"));
-        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerInbox.nextAction(), ownerInbox.toJson());
-        Map<?, ?> inbox = (Map<?, ?>) ownerInbox.result();
-        String handle = (String) inbox.get("capabilityRequestHandle");
-        long revision = ((Number) inbox.get("contractRevision")).longValue();
-        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(
-                new CapabilityResponseService.OwnerResponseRequest(controlRoot,
-                        "claude",
-                        "local-capability-owner",
-                        handle,
-                        "accept",
-                        null,
-                        null,
-                        revision));
-        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
-
         var extension = collaboration.announce(controlRoot,
                 "claude",
                 "local-capability-owner",
@@ -744,6 +724,7 @@ class AgentNextActionServiceTest {
                 location.projectId());
         assertEquals(1, store.capabilityRequestProjection().records().size());
 
+        // A second consumer binds to the same text, so the owner cannot be handed two contracts for one file.
         prepareSessionAndTrust("codex", "local-capability-requester-two");
         var secondRequester = collaboration.announce(controlRoot,
                 "codex",
@@ -753,44 +734,16 @@ class AgentNextActionServiceTest {
                 List.of(ResourceSelector.pathExact("src/SecondConsumer.java")),
                 owner.intent().workGroupId());
         assertTrue(secondRequester.acquired());
-        CapabilityContract conflictingContract = new CapabilityContract("Task creation API",
-                "A non-empty title",
-                List.of("Create a task with caller-supplied IDs"),
-                List.of("Task defaults to the accepted status"));
-        AgentResponse secondRequest = new CapabilityRequestService().describeRequiredCapability(
-                new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
-                        "codex",
-                        "local-capability-requester-two",
-                        "tasktracker.domain",
-                        conflictingContract,
-                        null,
-                        null,
-                        owner.intent().authorityLineageId(),
-                        -1));
-        assertEquals(AgentStatus.WAITING, secondRequest.status(), secondRequest.toJson());
-        AgentResponse secondOwnerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot,
+        AgentResponse secondBound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, "codex", "local-capability-requester-two",
+                "tasktracker.domain", ResourceSelector.pathExact("src/Domain.java"), 1));
+        assertEquals(AgentStatus.READY, secondBound.status(), secondBound.toJson());
+        AgentResponse afterSecond = nextActions.getNextAction(new NextActionRequest(controlRoot,
                 "claude",
                 "local-capability-owner"));
-        assertEquals(AgentNextAction.RESPOND_COORDINATION, secondOwnerInbox.nextAction(), secondOwnerInbox.toJson());
-        Map<?, ?> secondInbox = (Map<?, ?>) secondOwnerInbox.result();
-        AgentResponse secondAccepted = new CapabilityResponseService().respondToOwnerRequest(
-                new CapabilityResponseService.OwnerResponseRequest(controlRoot,
-                        "claude",
-                        "local-capability-owner",
-                        (String) secondInbox.get("capabilityRequestHandle"),
-                        "accept",
-                        null,
-                        null,
-                        ((Number) secondInbox.get("contractRevision")).longValue()));
-        assertEquals(AgentStatus.READY, secondAccepted.status(), secondAccepted.toJson());
-        AgentResponse ambiguity = nextActions.getNextAction(new NextActionRequest(controlRoot,
-                "claude",
-                "local-capability-owner"));
-        assertEquals(AgentStatus.BLOCKED, ambiguity.status(), ambiguity.toJson());
-        assertEquals("CAPABILITY_CONTRACT_AMBIGUOUS", ((Map<?, ?>) ambiguity.result()).get("reason"));
-        PredictionEventStore finalStore = new PredictionEventStore(location.root().resolve(".synesis/coordination"),
-                location.projectId());
-        assertEquals(2, finalStore.capabilityRequestProjection().records().size());
+        assertEquals(AgentStatus.READY, afterSecond.status(), afterSecond.toJson());
+        assertFalse(afterSecond.toJson().contains("CAPABILITY_CONTRACT_AMBIGUOUS"), afterSecond.toJson());
+        assertEquals(contract.purpose(), ((Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) afterSecond.result()).get("resolvedDependencies")).get("tasktracker.domain")).get("contract")).get("purpose"));
+        assertEquals(2, new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).capabilityRequestProjection().records().size());
     }
 
     @Test
@@ -820,121 +773,21 @@ class AgentNextActionServiceTest {
                 List.of(),
                 List.of());
 
-        CapabilityContract contract = new CapabilityContract("Task title and description",
-                "Task and repository contract",
-                List.of("Create TODO tasks", "Enforce valid status transitions"),
-                List.of("Invalid input is rejected"));
-        AgentResponse requestResponse = new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
+        AgentResponse requestResponse = new CapabilityRequestService().requestChange(new CapabilityRequestService.ChangeRequest(controlRoot,
                 "codex",
                 "requester-owner-filter",
-                "tasktracker.domain",
-                contract,
-                null,
-                null));
+                ResourceSelector.pathExact("src/domain"),
+                "Create TODO tasks and enforce valid status transitions"));
         assertEquals(AgentStatus.WAITING, requestResponse.status(), requestResponse.toJson());
+        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, requestResponse.reason(), requestResponse.toJson());
 
         AgentResponse requesterNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "requester-owner-filter"));
-        assertEquals(AgentNextAction.WAIT, requesterNext.nextAction(), requesterNext.toJson());
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, requesterNext.reason());
+        assertNotEquals(AgentNextAction.RESPOND_COORDINATION, requesterNext.nextAction(), requesterNext.toJson());
+        assertEquals(1, ((List<?>) ((Map<?, ?>) requesterNext.result()).get("yourChangeRequests")).size(), requesterNext.toJson());
 
         AgentResponse ownerNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "claude", "requester-owner-filter-owner"));
         assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void unrelatedFutureLeaseDoesNotAnnotateCapabilityOwnerWait() throws Exception {
-        String requester = "recovery-deadline-unrelated-requester";
-        String unrelated = "recovery-deadline-unrelated-lane";
-        createCapabilityOwnerWait(requester, "recovery-deadline-owner");
-        prepareSessionAndTrust("claude", unrelated);
-        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
-        var unrelatedBinding = new ProviderSessionBindingService().find(location, "claude", unrelated).orElseThrow();
-        saveFutureDeadLease(unrelatedBinding, unrelated);
-
-        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
-
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason(), response.toJson());
-        Map<String, Object> result = (Map<String, Object>) response.result();
-        assertFalse(result.containsKey("recoveryDeadlineEpochMillis"), response.toJson());
-        assertFalse(result.containsKey("intentionalRecoveryWait"), response.toJson());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void capabilityOwnerWaitUsesOnlyItsMatchingRecoveryDeadline() throws Exception {
-        String requester = "recovery-deadline-matching-requester";
-        String owner = "recovery-deadline-matching-owner";
-        var ownerBinding = createCapabilityOwnerWait(requester, owner);
-        long expectedDeadline = saveFutureDeadLease(ownerBinding, owner);
-
-        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
-
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, response.reason(), response.toJson());
-        Map<String, Object> result = (Map<String, Object>) response.result();
-        assertEquals(expectedDeadline, ((Number) result.get("recoveryDeadlineEpochMillis")).longValue(), response.toJson());
-        assertEquals(Boolean.TRUE, result.get("intentionalRecoveryWait"), response.toJson());
-    }
-
-    private ProviderSessionBindingService.Binding createCapabilityOwnerWait(String requester, String owner) throws Exception {
-        prepareSessionAndTrust("codex", requester);
-        prepareSessionAndTrust("claude", owner);
-        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        var requesterIntent = collaboration.announce(controlRoot,
-                "codex",
-                requester,
-                "Implement the consumer lane",
-                "Use the capability owner API",
-                List.of(ResourceSelector.pathExact("src/consumer")),
-                null,
-                WorkIntent.Role.PRODUCER,
-                List.of(),
-                List.of("tasktracker.domain"));
-        collaboration.announce(controlRoot,
-                "claude",
-                owner,
-                "Implement the capability owner lane",
-                "Publish the capability API",
-                List.of(ResourceSelector.pathExact("src/owner")),
-                requesterIntent.intent().workGroupId());
-        CapabilityContract contract = new CapabilityContract("Task inputs",
-                "Task record",
-                List.of("Create valid tasks"),
-                List.of("Invalid tasks are rejected"));
-        new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
-                "codex",
-                requester,
-                "tasktracker.domain",
-                contract,
-                null,
-                null));
-        AgentResponse waiting = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", requester));
-        assertEquals(AgentStatus.WAITING, waiting.status(), waiting.toJson());
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, waiting.reason(), waiting.toJson());
-        return new ProviderSessionBindingService().find(new ProjectApplicationService().locate(controlRoot), "claude", owner).orElseThrow();
-    }
-
-    private long saveFutureDeadLease(ProviderSessionBindingService.Binding binding, String connectionInstanceId) throws Exception {
-        long heartbeat = System.currentTimeMillis();
-        long deadline = heartbeat + Duration.ofMinutes(5).toMillis();
-        long absentPid = (long) Integer.MAX_VALUE + 10_000;
-        new SessionLeaseStore().save(controlRoot,
-                new SessionLeaseRecord(1,
-                        locationProjectId(),
-                        binding.provider(),
-                        connectionInstanceId,
-                        binding.nodeId(),
-                        binding.sessionId(),
-                        new SessionProcessIdentity(absentPid, "missing-test-process", "missing-test-process", heartbeat, "probe-nonce"),
-                        "test",
-                        heartbeat,
-                        heartbeat,
-                        SessionLeaseState.ACTIVE));
-        return deadline;
-    }
-
-    private String locationProjectId() throws Exception {
-        return new ProjectApplicationService().locate(controlRoot).projectId().toString();
+        assertEquals(1, ((List<?>) ((Map<?, ?>) ownerNext.result()).get("changeRequests")).size(), ownerNext.toJson());
     }
 
     @Test
@@ -964,37 +817,31 @@ class AgentNextActionServiceTest {
                 List.of(),
                 List.of());
 
+        AgentResponse requestResponse = new CapabilityRequestService().requestChange(new CapabilityRequestService.ChangeRequest(controlRoot,
+                "codex",
+                "same-provider-requester",
+                ResourceSelector.pathExact("src/domain"),
+                "Create TODO tasks and enforce valid status transitions"));
+        assertEquals(AgentStatus.WAITING, requestResponse.status(), requestResponse.toJson());
+
+        AgentResponse requesterNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-requester"));
+        assertNotEquals(AgentNextAction.RESPOND_COORDINATION, requesterNext.nextAction(), requesterNext.toJson());
+
+        AgentResponse ownerNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-owner"));
+        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
+        String changeRequestId = (String) ((Map<?, ?>) ((List<?>) ((Map<?, ?>) ownerNext.result()).get("changeRequests")).getFirst()).get("changeRequest");
+
         CapabilityContract contract = new CapabilityContract("Task title and description",
                 "Task and repository contract",
                 List.of("Create TODO tasks", "Enforce valid status transitions"),
                 List.of("Invalid input is rejected"));
-        AgentResponse requestResponse = new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
-                "codex",
-                "same-provider-requester",
-                "tasktracker.domain",
-                contract,
-                null,
-                null));
-        assertEquals(AgentStatus.WAITING, requestResponse.status(), requestResponse.toJson());
-
-        AgentResponse requesterNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-requester"));
-        assertEquals(AgentNextAction.WAIT, requesterNext.nextAction(), requesterNext.toJson());
-        assertEquals(AgentReason.OWNER_RESPONSE_PENDING, requesterNext.reason());
-
-        AgentResponse ownerNext = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-owner"));
-        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerNext.nextAction(), ownerNext.toJson());
-
-        String handle = (String) ((Map<?, ?>) ownerNext.result()).get("capabilityRequestHandle");
-        long contractRevision = ((Number) ((Map<?, ?>) ownerNext.result()).get("contractRevision")).longValue();
-        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(controlRoot,
-                "codex",
-                "same-provider-owner",
-                handle,
-                "accept",
-                null,
-                null,
-                contractRevision));
-        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
+        AgentResponse published = new ContractOwnerService().publish(new ContractOwnerService.PublishRequest(controlRoot, "codex", "same-provider-owner",
+                List.of(ResourceSelector.pathExact("src/domain")), contract, List.of(UUID.fromString(changeRequestId))));
+        assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
+        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(controlRoot, "codex", "same-provider-requester", "tasktracker.domain",
+                ResourceSelector.pathExact("src/domain"), 1));
+        assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
+        String handle = (String) ((Map<?, ?>) bound.result()).get("capabilityRequestHandle");
 
         AgentResponse ownerAfterAccept = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "same-provider-owner"));
         assertEquals(AgentStatus.READY, ownerAfterAccept.status(), ownerAfterAccept.toJson());
@@ -1031,30 +878,13 @@ class AgentNextActionServiceTest {
                 "Task and repository contract",
                 List.of("Create TODO tasks", "Enforce valid status transitions"),
                 List.of("Invalid input is rejected"));
-        AgentResponse created = new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(controlRoot,
-                "codex",
-                "publication-requester",
-                "tasktracker.domain",
-                contract,
-                null,
-                null));
-        assertEquals(AgentStatus.WAITING, created.status(), created.toJson());
+        String handle = agreeContract("codex", "publication-owner", "codex", "publication-requester", "tasktracker.domain", "src/Product.java", contract);
 
         AgentNextActionService nextActions = new AgentNextActionService();
         AgentResponse ownerInbox = nextActions.getNextAction(new NextActionRequest(controlRoot, "codex", "publication-owner"));
-        assertEquals(AgentNextAction.RESPOND_COORDINATION, ownerInbox.nextAction(), ownerInbox.toJson());
         Map<?, ?> ownerInboxResult = (Map<?, ?>) ownerInbox.result();
-        String handle = (String) ownerInboxResult.get("capabilityRequestHandle");
+        assertEquals(handle, ownerInboxResult.get("capabilityRequestHandle"), ownerInbox.toJson());
         long contractRevision = ((Number) ownerInboxResult.get("contractRevision")).longValue();
-        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(controlRoot,
-                "codex",
-                "publication-owner",
-                handle,
-                "accept",
-                null,
-                null,
-                contractRevision));
-        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
 
         ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();

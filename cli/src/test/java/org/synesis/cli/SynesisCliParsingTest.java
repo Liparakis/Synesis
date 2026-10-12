@@ -74,7 +74,7 @@ final class SynesisCliParsingTest {
 
     @Test
     void contractSubcommandsAreInstantiable() throws Exception {
-        for (String subcommand : new String[]{"publish", "bind", "status"}) {
+        for (String subcommand : new String[]{"status"}) {
             Invocation invocation = invocation();
             assertEquals(0, SynesisCli.execute(new String[]{"collaboration", "contract", subcommand, "--help"}, invocation.runtime()), subcommand);
             assertTrue(invocation.stdout().contains("synesis collaboration contract " + subcommand), subcommand);

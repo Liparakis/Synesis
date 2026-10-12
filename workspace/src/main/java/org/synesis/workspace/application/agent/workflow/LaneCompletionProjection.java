@@ -415,7 +415,7 @@ final class LaneCompletionProjection {
         if (intent == null) {
             return null;
         }
-        AgentResponse owner = CapabilityActionProjection.ownerCapabilityAction(store.capabilityRequestProjection(), actor, CapabilityActionProjection.inCallerLineage(store.collaborationProjection().activated(), intent));
+        AgentResponse owner = CapabilityActionProjection.ownerCapabilityAction(store, actor, intent, CapabilityActionProjection.inCallerLineage(store.collaborationProjection().activated(), intent));
         return owner != null && owner.nextAction() == AgentNextAction.RESPOND_COORDINATION ? owner : null;
     }
 

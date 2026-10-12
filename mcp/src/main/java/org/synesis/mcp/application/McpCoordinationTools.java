@@ -1,7 +1,6 @@
 package org.synesis.mcp.application;
 
 import static org.synesis.mcp.application.McpCollaborationProjection.collaborationStatusMap;
-import static org.synesis.mcp.application.McpCollaborationProjection.contractMap;
 import static org.synesis.mcp.application.McpCollaborationProjection.requestMap;
 import static org.synesis.mcp.application.McpCoordinationPayload.normalizeStrictCoordination;
 import static org.synesis.mcp.application.McpCoordinationPayload.normalizeStrictResponse;
@@ -33,7 +32,7 @@ import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
-import org.synesis.workspace.application.capability.CapabilityResponseService;
+import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
@@ -64,7 +63,7 @@ final class McpCoordinationTools {
     /**
      * Service that processes capability-owner responses.
      */
-    private final CapabilityResponseService capabilityResponseService;
+    private final ContractOwnerService contractOwnerService;
     /**
      * Service that publishes capability implementations.
      */
@@ -111,7 +110,7 @@ final class McpCoordinationTools {
      *
      * @param nextActionService         service that projects the durable next action
      * @param capabilityRequestService  service that creates capability requests
-     * @param capabilityResponseService service that processes capability-owner responses
+     * @param contractOwnerService   service through which a lane publishes its contracts and answers change requests
      * @param publicationService        service that publishes capability implementations
      * @param validationService         service that validates published implementations
      * @param reviewValidationService   service that validates immutable review snapshots
@@ -125,7 +124,7 @@ final class McpCoordinationTools {
      */
     McpCoordinationTools(AgentNextActionService nextActionService,
             CapabilityRequestService capabilityRequestService,
-            CapabilityResponseService capabilityResponseService,
+            ContractOwnerService contractOwnerService,
             ImplementationPublicationService publicationService,
             ImplementationValidationService validationService,
             ReviewValidationService reviewValidationService,
@@ -138,7 +137,7 @@ final class McpCoordinationTools {
             String connectionInstanceId) {
         this.nextActionService = nextActionService;
         this.capabilityRequestService = capabilityRequestService;
-        this.capabilityResponseService = capabilityResponseService;
+        this.contractOwnerService = contractOwnerService;
         this.publicationService = publicationService;
         this.validationService = validationService;
         this.reviewValidationService = reviewValidationService;
@@ -199,26 +198,18 @@ final class McpCoordinationTools {
         }
         try {
             return switch (request) {
-                case McpCoordinationRequest.DescribeCapability describe -> capabilityRequestService.describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(activeProjectRoot,
-                        provider,
-                        connectionInstanceId,
-                        describe.capability(),
-                        describe.contract(),
-                        describe.capabilityRequestHandle(),
-                        describe.revisionResponse(),
-                        describe.ownerAuthorityLineageId() == null ? null : UUID.fromString(describe.ownerAuthorityLineageId()),
-                        describe.contractRevision(),
-                        describe.ownerPath()));
+                case McpCoordinationRequest.PublishContract publish ->
+                        contractOwnerService.publish(new ContractOwnerService.PublishRequest(activeProjectRoot, provider, connectionInstanceId, publish.paths(), publish.terms(), publish.answers()));
+                case McpCoordinationRequest.BindContract bind ->
+                        capabilityRequestService.bind(new CapabilityRequestService.BindRequest(activeProjectRoot, provider, connectionInstanceId, bind.capability(), bind.ownerPath(), bind.revision()));
+                case McpCoordinationRequest.RequestChange change ->
+                        capabilityRequestService.requestChange(new CapabilityRequestService.ChangeRequest(activeProjectRoot, provider, connectionInstanceId, change.ownerPath(), change.need()));
                 case McpCoordinationRequest.Status ignored -> {
-                    var snapshot = collaborationService.contractStatus(activeProjectRoot);
+                    // Every agent may read every contract and every change request (ADR-0092).
+                    var contracts = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot).openCoordinationStore().contractProjection();
                     Map<String, Object> status = new LinkedHashMap<>(collaborationStatusMap(collaborationService.status(activeProjectRoot)));
-                    status.put("contracts", snapshot.contracts().stream().map(McpCollaborationProjection::contractMap).toList());
-                    status.put("dependencies", snapshot.dependencies().stream().map(McpCollaborationProjection::dependencyMap).toList());
+                    status.put("contracts", contracts.contracts().stream().map(org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper::contractMap).toList());
                     yield completed(status);
-                }
-                case McpCoordinationRequest.PublishContract publish -> {
-                    var contract = collaborationService.publishContract(activeProjectRoot, provider, connectionInstanceId, publish.contractId(), publish.body(), publish.selectors());
-                    yield completed(Map.of("contract", contractMap(contract)));
                 }
                 case McpCoordinationRequest.OpenRequest open -> {
                     var opened = collaborationService.request(activeProjectRoot, provider, connectionInstanceId, open.intentId(), open.kind(), open.proposal(), open.snapshotId());
@@ -297,19 +288,8 @@ final class McpCoordinationTools {
                         review.claimEpoch(),
                         review.result(),
                         review.reason()));
-                case McpCoordinationResponse.RespondToCapability capability -> {
-                    if ("revise".equals(capability.response()) && capability.revision() == null) {
-                        yield policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", "CAPABILITY_REVISION_INVALID");
-                    }
-                    yield capabilityResponseService.respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(activeProjectRoot,
-                            provider,
-                            connectionInstanceId,
-                            capability.capabilityRequestHandle(),
-                            capability.response(),
-                            capability.revision(),
-                            capability.reason(),
-                            capability.contractRevision()));
-                }
+                case McpCoordinationResponse.AnswerChange answer ->
+                        contractOwnerService.answerChange(new ContractOwnerService.AnswerRequest(activeProjectRoot, provider, connectionInstanceId, answer.changeRequestId(), answer.accepted(), answer.reason()));
                 case McpCoordinationResponse.RespondToRequest respond -> {
                     collaborationService.respond(activeProjectRoot, provider, connectionInstanceId, respond.requestId(), respond.status(), respond.proposal());
                     yield completed(object("coordinationRequest", respond.requestText(), "status", respond.status().name()));

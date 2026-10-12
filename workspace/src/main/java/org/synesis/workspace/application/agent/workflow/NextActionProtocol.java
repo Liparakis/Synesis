@@ -145,11 +145,6 @@ final class NextActionProtocol {
     static final String KIND_IMPLEMENTATION_VALIDATION = "implementation_validation";
 
     /**
-     * Protocol kind of a capability request.
-     */
-    static final String KIND_CAPABILITY_REQUEST = "capability_request";
-
-    /**
      * Delivery guarantee every workflow envelope declares.
      */
     static final String DELIVERY_AT_LEAST_ONCE = "AT_LEAST_ONCE";

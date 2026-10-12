@@ -91,7 +91,7 @@ class SyntheticTwoProcessCollaborationTest {
         String text = (String) content.getFirst().get("text");
         Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
         Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
-        return ((Number) innerResult.get("contractRevision")).longValue();
+        return ((Number) innerResult.get("revision")).longValue();
     }
 
     @SuppressWarnings("unchecked")
@@ -241,23 +241,9 @@ class SyntheticTwoProcessCollaborationTest {
 
     @Test
     void fullSlice3TaskCompletionAndIntegrationFlow() throws Exception {
-        // 1. Requester describes capability
-        String descJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
-                + "  }\n" + "}";
-        String descRes = requesterHandler.handleMessage(descJson);
-        assertNotNull(descRes);
-        String reqHandle = extractResultField(descRes);
-        assertNotNull(reqHandle);
-
-        // 2. Owner accepts the exact contract revision
-        String ownerNextJson = "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
-        long contractRevision = extractContractRevision(ownerHandler.handleMessage(ownerNextJson));
-        String acceptJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"accept\", \"contractRevision\": " + contractRevision + "}\n" + "    }\n" + "  }\n" + "}";
-        String acceptRes = ownerHandler.handleMessage(acceptJson);
-        assertNotNull(acceptRes);
+        // 1. The owner publishes the one contract over its file and the requester binds to it
+        long contractRevision = extractContractRevision(ownerPublishesContract("Return product when found"));
+        String reqHandle = bind(requesterHandler, contractRevision);
 
         // 3. Owner writes implementation code and publishes
         Path ownerWt = Path.of(b2.worktreePath());
@@ -270,7 +256,7 @@ class SyntheticTwoProcessCollaborationTest {
         assertEquals("ready", extractResponseStatus(publicationReady), publicationReady);
         Map<String, Object> publicationArguments = extractWorkflowArguments(publicationReady);
         assertEquals(reqHandle, publicationArguments.get("capabilityRequestHandle"));
-        assertEquals(contractRevision, ((Number) publicationArguments.get("contractRevision")).longValue());
+        assertEquals(requestOf(reqHandle).contractRevision(), ((Number) publicationArguments.get("contractRevision")).longValue());
         assertNotNull(publicationArguments.get("intentId"));
         assertNotNull(publicationArguments.get("claimEpoch"));
         assertNotNull(publicationArguments.get("expectedTreeHash"));
@@ -352,6 +338,40 @@ class SyntheticTwoProcessCollaborationTest {
         return contract;
     }
 
+    /** The owner publishes, or revises, the one contract over its file. {@code answers} are the change requests the revision covers. */
+    private String ownerPublishesContract(String requiredBehavior, String... answers) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("paths", List.of("ProductQuery.java"));
+        payload.put("contract", productQueryContract(requiredBehavior));
+        if (answers.length > 0) {
+            payload.put("answers", List.of(answers));
+        }
+        String published = toolCall(ownerHandler, "request_coordination", Map.of("kind", "contract_publish", "payload", payload));
+        assertEquals("completed", extractResponseStatus(published), published);
+        return published;
+    }
+
+    private static Map<String, Object> bindArguments(long revision) {
+        return Map.of("kind", "contract_bind", "payload", Map.of("capability", "catalog.product-query", "ownerPath", "ProductQuery.java", "revision", revision));
+    }
+
+    /** The consumer binds to the exact revision it read and is given the handle of its binding. */
+    private String bind(McpProtocolHandler consumer, long revision) {
+        String bound = toolCall(consumer, "request_coordination", bindArguments(revision));
+        assertEquals("ready", extractResponseStatus(bound), bound);
+        assertEquals(Boolean.TRUE, extractInnerResult(bound).get("contractAccepted"), bound);
+        String handle = extractResultField(bound);
+        assertNotNull(handle, bound);
+        return handle;
+    }
+
+    private String fileChangeRequest(McpProtocolHandler consumer, String need) {
+        String filed = toolCall(consumer, "request_coordination", Map.of("kind", "contract_change_request", "payload", Map.of("ownerPath", "ProductQuery.java", "need", need)));
+        assertEquals("waiting", extractResponseStatus(filed), filed);
+        assertEquals("owner_response_pending", extractResponseReason(filed), filed);
+        return String.valueOf(extractInnerResult(filed).get("changeRequest"));
+    }
+
     private PredictionEventStore replayedStore() throws Exception {
         var location = new ProjectApplicationService().locate(projectRoot);
         return new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
@@ -365,43 +385,32 @@ class SyntheticTwoProcessCollaborationTest {
     @Test
     @SuppressWarnings("unchecked")
     void revisedContractIsAcceptedPublishedValidatedAndIntegratedWhileThePeerKeepsPolling() throws Exception {
-        // 1. The requester asks and the owner answers with a replacement contract.
-        String described = toolCall(requesterHandler,
-                "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
-        String reqHandle = extractResultField(described);
-        assertNotNull(reqHandle, described);
-        long requestedRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
-        String revised = toolCall(ownerHandler,
-                "respond_coordination",
-                Map.of("kind", "capability_response",
-                        "payload", Map.of("capabilityRequestHandle", reqHandle,
-                                "response", "revise",
-                                "contractRevision", requestedRevision,
-                                "revision", productQueryContract("Return product when found; reject null ids"),
-                                "reason", "Null ids must be rejected")));
-        assertEquals("ready", extractResponseStatus(revised), revised);
+        // 1. The requester binds to the first revision and the owner then publishes a second.
+        ownerPublishesContract("Return product when found");
+        String reqHandle = bind(requesterHandler, 1);
+        long requestedRevision = 1;
+        ownerPublishesContract("Return product when found; reject null ids");
 
-        // 2. The requester is handed the exact accept call and a mismatch names what differs.
+        // 2. The requester is handed the exact bind call; a bind to the superseded revision is told the current one.
         String revisionNext = toolCall(requesterHandler, "get_next_action", Map.of());
         Map<String, Object> revisionResult = extractInnerResult(revisionNext);
         assertEquals("catalog.product-query", revisionResult.get("capability"), revisionNext);
-        Map<String, Object> acceptRevision = (Map<String, Object>) revisionResult.get("acceptRevision");
-        assertNotNull(acceptRevision, revisionNext);
-        assertEquals("request_coordination", acceptRevision.get("tool"), revisionNext);
-        Map<String, Object> acceptArguments = (Map<String, Object>) acceptRevision.get("arguments");
-        long acceptedRevision = ((Number) ((Map<String, Object>) acceptArguments.get("payload")).get("contractRevision")).longValue();
+        assertFalse(revisionResult.containsKey("acceptRevision"), revisionNext);
+        Map<String, Object> bindAgain = (Map<String, Object>) revisionResult.get("bindAgain");
+        assertNotNull(bindAgain, revisionNext);
+        assertEquals("request_coordination", bindAgain.get("tool"), revisionNext);
+        Map<String, Object> acceptArguments = (Map<String, Object>) bindAgain.get("arguments");
+        long acceptedRevision = ((Number) ((Map<String, Object>) acceptArguments.get("payload")).get("revision")).longValue();
         assertTrue(acceptedRevision > requestedRevision, revisionNext);
 
-        Map<String, Object> misnamedPayload = new LinkedHashMap<>((Map<String, Object>) acceptArguments.get("payload"));
-        misnamedPayload.put("capability", "catalog.product-lookup");
-        String misnamed = toolCall(requesterHandler, "request_coordination", Map.of("kind", "capability_request", "payload", misnamedPayload));
-        assertEquals("stale_request", extractResponseReason(misnamed), misnamed);
-        assertEquals("CAPABILITY_NAME_MISMATCH", extractInnerResult(misnamed).get("reason"), misnamed);
+        String stale = toolCall(requesterHandler, "request_coordination", bindArguments(requestedRevision));
+        assertEquals("stale_request", extractResponseReason(stale), stale);
+        assertEquals("CONTRACT_REVISION_STALE", extractInnerResult(stale).get("reason"), stale);
 
         String accepted = toolCall(requesterHandler, "request_coordination", acceptArguments);
         assertEquals("ready", extractResponseStatus(accepted), accepted);
         assertEquals(Boolean.TRUE, extractInnerResult(accepted).get("contractAccepted"), accepted);
+        assertEquals(reqHandle, extractResultField(accepted), "binding again keeps the binding");
 
         // 3. The owner implements and publishes; the requester inspects, tests, and accepts.
         Path ownerWt = Path.of(b2.worktreePath());
@@ -410,7 +419,7 @@ class SyntheticTwoProcessCollaborationTest {
         git(ownerWt, "commit", "-m", "Implement ProductQuery");
         String publicationReady = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
         Map<String, Object> publicationArguments = new LinkedHashMap<>(extractWorkflowArguments(publicationReady));
-        assertEquals(acceptedRevision, ((Number) publicationArguments.get("contractRevision")).longValue(), publicationReady);
+        assertEquals(requestOf(reqHandle).contractRevision(), ((Number) publicationArguments.get("contractRevision")).longValue(), publicationReady);
         publicationArguments.put("summary", "Implemented product query");
         String published = toolCall(ownerHandler, "publish_capability_implementation", publicationArguments);
         assertEquals("waiting", extractResponseStatus(published), published);
@@ -446,16 +455,13 @@ class SyntheticTwoProcessCollaborationTest {
 
         // The requester's lane is now closing: its completion is prepared and it will not read
         // its inbox again. A request addressed to it is not recorded, and the asker is told to wait.
-        String closingLineage = replayedStore().collaborationProjection().activeIntents().stream()
-                .filter(intent -> intent.provider().equals("claude")).findFirst().orElseThrow().authorityLineageId().toString();
-        long requestsBefore = replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CAPABILITY_REQUEST_CREATED).count();
+        long requestsBefore = replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CONTRACT_CHANGE_REQUESTED).count();
         String lateRequest = toolCall(ownerHandler,
                 "request_coordination",
-                Map.of("kind", "capability_request",
-                        "payload", Map.of("capability", "catalog.cli-output", "ownerAuthorityLineageId", closingLineage, "contract", productQueryContract("Print one line per product"))));
+                Map.of("kind", "contract_change_request", "payload", Map.of("ownerPath", "ProductCli.java", "need", "Print one line per product")));
         assertEquals("waiting", extractResponseStatus(lateRequest), lateRequest);
         assertEquals("CAPABILITY_OWNER_COMPLETING", extractInnerResult(lateRequest).get("reason"), lateRequest);
-        assertEquals(requestsBefore, replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CAPABILITY_REQUEST_CREATED).count(), lateRequest);
+        assertEquals(requestsBefore, replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.CONTRACT_CHANGE_REQUESTED).count(), lateRequest);
 
         // 5. An ordinary owner poll names the completion request instead of the shared wait.
         String ownerPoll = toolCall(ownerHandler, "get_next_action", Map.of());
@@ -525,7 +531,7 @@ class SyntheticTwoProcessCollaborationTest {
 
         String asked = toolCall(requesterHandler,
                 "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-store", "contract", productQueryContract("Persist products"))));
+                Map.of("kind", "contract_bind", "payload", Map.of("capability", "catalog.product-store", "ownerPath", "ProductQuery.java", "revision", 1)));
         assertEquals("ready", extractResponseStatus(asked), asked);
         assertEquals("CAPABILITY_OWNER_INTEGRATED", extractInnerResult(asked).get("reason"), asked);
         assertTrue(replayedStore().capabilityRequestProjection().records().isEmpty(), "no request may be recorded against a lane that is gone");
@@ -626,12 +632,8 @@ class SyntheticTwoProcessCollaborationTest {
     @Test
     @SuppressWarnings("unchecked")
     void ownerCannotFinishWithAValidatedFileChangedAndCanOnceItIsRestored() throws Exception {
-        String reqHandle = extractResultField(toolCall(requesterHandler,
-                "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found")))));
-        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
-        toolCall(ownerHandler, "respond_coordination",
-                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
+        ownerPublishesContract("Return product when found");
+        String reqHandle = bind(requesterHandler, 1);
         Path ownerWt = Path.of(b2.worktreePath());
         String validatedContent = "public class ProductQuery {}\n";
         Files.writeString(ownerWt.resolve("ProductQuery.java"), validatedContent);
@@ -679,20 +681,15 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
-     * An owner that has accepted a request is told who is held up by it. Two real agents stalled
+     * An owner whose contract a consumer bound to is told who is held up by it. Two real agents stalled
      * when the owner waited for the requester's tests before publishing while the requester waited
      * for the publication.
      */
     @Test
     @SuppressWarnings("unchecked")
-    void ownerThatAcceptedARequestIsToldItsRequesterIsWaitingForTheImplementation() throws Exception {
-        String described = toolCall(requesterHandler,
-                "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
-        String reqHandle = extractResultField(described);
-        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
-        toolCall(ownerHandler, "respond_coordination",
-                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
+    void ownerWithABoundConsumerIsToldItsConsumerIsWaitingForTheImplementation() throws Exception {
+        ownerPublishesContract("Return product when found");
+        bind(requesterHandler, 1);
 
         String ownerPoll = toolCall(ownerHandler, "get_next_action", Map.of());
 
@@ -768,48 +765,43 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
-     * A lane that asked for a capability nobody has answered yet is cancelled. Its request is
-     * cancelled with it. Before, the request's cancellation was recorded in a form the log could
-     * not read, so every such cancel failed after it had already recorded the task as cancelled.
+     * A consumer lane is cancelled while it is bound. Its binding is superseded with it, in any
+     * state, and no gate refuses the cancellation (ADR-0092). Before, a binding the owner had
+     * accepted refused the cancel, and the owner waited on a lane that could not leave.
      */
     @Test
-    void cancellingALaneCancelsItsUnansweredCapabilityRequest() throws Exception {
-        String described = toolCall(requesterHandler,
-                "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
-        String reqHandle = extractResultField(described);
-        assertNotNull(reqHandle, described);
+    @SuppressWarnings("unchecked")
+    void cancellingAConsumerLaneSupersedesItsBindingAndReleasesTheOwner() throws Exception {
+        ownerPublishesContract("Return product when found");
+        String reqHandle = bind(requesterHandler, 1);
+        ownerCommits("public class ProductQuery {}\n");
+        String whileBound = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("publish_capability_implementation", extractInnerResponse(whileBound).get("nextAction"), "the owner is held by the binding: " + whileBound);
 
         String cancelled = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
 
         assertEquals("completed", extractResponseStatus(cancelled), cancelled);
-        var request = replayedStore().capabilityRequestProjection().records().values().iterator().next();
-        assertEquals("cancelled", request.state().value());
+        assertEquals("SUPERSEDED", requestOf(reqHandle).state().name());
+        String released = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("finish_lane", extractInnerResponse(released).get("nextAction"), released);
+        String finished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(released));
+        assertFalse("blocked".equals(extractResponseStatus(finished)) || "failed".equals(extractResponseStatus(finished)), finished);
+        assertEquals(1, replayedStore().events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED).count(), finished);
     }
 
-    /**
-     * Once an owner has accepted a request it is building against it, and it will wait for the
-     * requester's verdict. The requester's lane cannot be cancelled from under it, and a refused
-     * cancel records nothing.
-     */
+    /** A binding whose implementation is already published is superseded by a cancel just the same. */
     @Test
-    void laneWhoseCapabilityRequestWasAcceptedCannotBeCancelledFromUnderItsOwner() throws Exception {
-        String described = toolCall(requesterHandler,
-                "request_coordination",
-                Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found"))));
-        String reqHandle = extractResultField(described);
-        long contractRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
-        toolCall(ownerHandler, "respond_coordination",
-                Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", reqHandle, "response", "accept", "contractRevision", contractRevision)));
-        long recorded = replayedStore().headSequence();
+    void cancellingAConsumerLaneSupersedesAPublishedBindingToo() throws Exception {
+        ownerPublishesContract("Return product when found");
+        String reqHandle = bind(requesterHandler, 1);
+        ownerCommits("public class ProductQuery {}\n");
+        ownerPublishes(reqHandle);
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(reqHandle).state().name());
 
-        String refused = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
+        String cancelled = toolCall(requesterHandler, "cancel_lane", Map.of("reason", "The CLI is no longer wanted."));
 
-        assertEquals("blocked", extractResponseStatus(refused), refused);
-        assertEquals("task_not_ready", extractResponseReason(refused), refused);
-        assertEquals("capability_request_open", extractInnerResult(refused).get("reason"), refused);
-        assertEquals(reqHandle, extractInnerResult(refused).get("capabilityRequestHandle"), refused);
-        assertTrue(replayedStore().events().stream().skip(recorded).noneMatch(event -> event.type() == PredictionEventType.TASK_CANCELLED), "a refused cancel records nothing");
+        assertEquals("completed", extractResponseStatus(cancelled), cancelled);
+        assertEquals("SUPERSEDED", requestOf(reqHandle).state().name());
     }
 
     /**
@@ -833,7 +825,7 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     /**
-     * The owner proposes its own contract and the requester does not answer. The owner is held
+     * The owner publishes a revision and the requester does not bind again. The owner is held
      * for a stated time and no longer; when it finishes, the requester learns that the owner went
      * ahead and builds against the integrated work instead of waiting on a lane that is gone.
      */
@@ -842,7 +834,7 @@ class SyntheticTwoProcessCollaborationTest {
     void ownerWaitsABoundedTimeForTheAnswerToItsProposalThenFinishesAndTheRequesterIsToldItWentAhead() throws Exception {
         String configuredGrace = System.getProperty(RequesterAnswerPolicy.GRACE_PROPERTY);
         try {
-            // 1. The requester declares the dependency and asks; the owner proposes another contract.
+            // 1. The requester declares the dependency and binds; the owner then publishes a revision it must answer.
             String declared = toolCall(requesterHandler,
                     "ensure_session",
                     Map.of("task", Map.of("goal", "Implement the product CLI",
@@ -854,21 +846,10 @@ class SyntheticTwoProcessCollaborationTest {
                 declared = toolCall(requesterHandler, "ensure_session", exactExtension);
             }
             assertEquals("ready", extractResponseStatus(declared), declared);
-            String reqHandle = extractResultField(toolCall(requesterHandler,
-                    "request_coordination",
-                    Map.of("kind", "capability_request", "payload", Map.of("capability", "catalog.product-query", "contract", productQueryContract("Return product when found")))));
-            assertNotNull(reqHandle);
-            long requestedRevision = extractContractRevision(toolCall(ownerHandler, "get_next_action", Map.of()));
-            String proposed = toolCall(ownerHandler,
-                    "respond_coordination",
-                    Map.of("kind", "capability_response",
-                            "payload", Map.of("capabilityRequestHandle", reqHandle,
-                                    "response", "revise",
-                                    "contractRevision", requestedRevision,
-                                    "revision", productQueryContract("Return product when found; reject null ids"),
-                                    "reason", "Null ids must be rejected")));
-            assertEquals("ready", extractResponseStatus(proposed), proposed);
-            Map<String, Object> lateAccept = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(toolCall(requesterHandler, "get_next_action", Map.of())).get("acceptRevision")).get("arguments");
+            ownerPublishesContract("Return product when found");
+            String reqHandle = bind(requesterHandler, 1);
+            ownerPublishesContract("Return product when found; reject null ids");
+            Map<String, Object> lateAccept = (Map<String, Object>) ((Map<String, Object>) extractInnerResult(toolCall(requesterHandler, "get_next_action", Map.of())).get("bindAgain")).get("arguments");
 
             // 2. The owner's work is done. Inside the answer period it is told to wait until a
             //    stated time, and finish_lane refuses for the same reason.
@@ -913,7 +894,8 @@ class SyntheticTwoProcessCollaborationTest {
             //    requester's inbox says the owner went ahead and what it last proposed.
             String answeredLate = toolCall(requesterHandler, "request_coordination", lateAccept);
             assertEquals("ready", extractResponseStatus(answeredLate), answeredLate);
-            assertEquals(RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER, extractInnerResult(answeredLate).get("reason"), answeredLate);
+            // The owner is integrated, so binding is satisfied by its work and waits for no validation.
+            assertEquals("CAPABILITY_OWNER_INTEGRATED", extractInnerResult(answeredLate).get("reason"), answeredLate);
             String afterIntegration = toolCall(requesterHandler, "get_next_action", Map.of());
             if ("retry_required".equals(extractResponseStatus(afterIntegration))) {
                 toolCall(requesterHandler, "ensure_session", Map.of());
@@ -973,20 +955,11 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     private String fileRequest(McpProtocolHandler requester) throws Exception {
-        // With more than one open lane the request names the file it builds on; the lane claiming it is the owner.
-        String filed = toolCall(requester, "request_coordination", Map.of("kind", "capability_request",
-                "payload", Map.of("capability", "catalog.product-query", "ownerPath", "ProductQuery.java", "contract", productQueryContract("Return product when found"))));
-        String handle = extractResultField(filed);
-        assertNotNull(handle, filed);
+        // With more than one open lane the bind names the file it builds on; the lane claiming it is the owner.
+        String handle = bind(requester, 1);
         assertEquals(replayedStore().collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals("codex")).findFirst().orElseThrow().authorityLineageId(),
-                replayedStore().capabilityRequestProjection().findByHandle(handle).orElseThrow().authorityLineageId(), filed);
+                replayedStore().capabilityRequestProjection().findByHandle(handle).orElseThrow().authorityLineageId());
         return handle;
-    }
-
-    private void ownerAccepts(String handle) throws Exception {
-        long revision = requestOf(handle).contractRevision();
-        String accepted = toolCall(ownerHandler, "respond_coordination", Map.of("kind", "capability_response", "payload", Map.of("capabilityRequestHandle", handle, "response", "accept", "contractRevision", revision)));
-        assertEquals("ready", extractResponseStatus(accepted), accepted);
     }
 
     private void ownerCommits(String content) throws Exception {
@@ -1035,6 +1008,7 @@ class SyntheticTwoProcessCollaborationTest {
         Map<String, Object> payload = new LinkedHashMap<>(Map.of("inboxItemId", inspectPayload.get("inboxItemId"), "capabilityRequestHandle", handle, "implementationRevision", revision, "result", result));
         if (!"accepted".equals(result)) {
             payload.put("reason", "Needs a change");
+            payload.put("contractField", "requiredBehavior");
         }
         return toolCall(requester, "respond_coordination", Map.of("kind", "implementation_validation", "payload", payload));
     }
@@ -1042,10 +1016,9 @@ class SyntheticTwoProcessCollaborationTest {
     @Test
     void publishingForOneRequesterPublishesTheSameCommitToEveryAcceptedRequest() throws Exception {
         McpProtocolHandler requesterTwo = secondRequester();
+        ownerPublishesContract("Return product when found");
         String first = fileRequest(requesterHandler);
         String second = fileRequest(requesterTwo);
-        ownerAccepts(first);
-        ownerAccepts(second);
         ownerCommits("public class ProductQuery {}\n");
 
         // With two requests accepted the projection may name either; the publication reaches both.
@@ -1062,12 +1035,11 @@ class SyntheticTwoProcessCollaborationTest {
     @Test
     void ownerAskingToFinishIsShownTheRequestWaitingForItsImplementationAheadOfAnotherRequestersVerdict() throws Exception {
         McpProtocolHandler requesterTwo = secondRequester();
+        ownerPublishesContract("Return product when found");
         String first = fileRequest(requesterHandler);
-        ownerAccepts(first);
         ownerCommits("public class ProductQuery {}\n");
         ownerPublishes(first);
         String second = fileRequest(requesterTwo);
-        ownerAccepts(second);
 
         String projected = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
 
@@ -1086,10 +1058,9 @@ class SyntheticTwoProcessCollaborationTest {
     @Test
     void revisionForOneRequesterReturnsAnotherRequestersValidatedRequestToImplementationAvailable() throws Exception {
         McpProtocolHandler requesterTwo = secondRequester();
+        ownerPublishesContract("Return product when found");
         String first = fileRequest(requesterHandler);
         String second = fileRequest(requesterTwo);
-        ownerAccepts(first);
-        ownerAccepts(second);
         ownerCommits("public class ProductQuery { /* v1 */ }\n");
         ownerPublishes(null);
         String firstCommit = latestCommit(second);
@@ -1110,20 +1081,157 @@ class SyntheticTwoProcessCollaborationTest {
     }
 
     @Test
-    void requestTheOwnerNeverAnsweredIsSupersededWhenTheOwnerFinishes() throws Exception {
+    @SuppressWarnings("unchecked")
+    void changeRequestFiledAfterTheFinishWasProjectedHoldsTheFinishUntilTheOwnerAnswersIt() throws Exception {
         ownerCommits("public class ProductQuery {}\n");
-        // The owner has projected its finish; a requester then files a request before the finish lands.
+        // The owner has projected its finish; a consumer then files a need before the finish lands.
         Map<String, Object> finishArguments = new LinkedHashMap<>(extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true))));
-        String handle = fileRequest(requesterHandler);
-        assertEquals("AWAITING_OWNER", requestOf(handle).state().name());
+        String changeRequest = fileChangeRequest(requesterHandler, "Return the newest product first");
         finishArguments.put("expectedRevision", replayedStore().headSequence());
 
-        String finished = toolCall(ownerHandler, "finish_lane", finishArguments);
+        String refused = toolCall(ownerHandler, "finish_lane", finishArguments);
 
-        var settled = requestOf(handle);
-        assertEquals("SUPERSEDED", settled.state().name(), finished);
-        assertEquals(RequesterAnswerPolicy.OWNER_FINISHED_WITHOUT_ANSWER, settled.reason(), finished);
-        String requesterNext = toolCall(requesterHandler, "get_next_action", Map.of());
-        assertFalse("owner_response_pending".equals(extractResponseReason(requesterNext)), requesterNext);
+        assertEquals("blocked", extractResponseStatus(refused), refused);
+        assertEquals("owner_response_pending", extractResponseReason(refused), refused);
+        assertEquals("CONTRACT_CHANGE_REQUEST_OPEN", extractInnerResult(refused).get("reason"), refused);
+        assertTrue(replayedStore().taskCompletionProjection().allSnapshots().isEmpty(), "a refused finish publishes nothing");
+
+        String declined = toolCall(ownerHandler, "respond_coordination",
+                Map.of("kind", "contract_change_response", "payload", Map.of("changeRequest", changeRequest, "decision", "declined", "reason", "The contract fixes the order")));
+        assertEquals("completed", extractResponseStatus(declined), declined);
+        String ownerProjection = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("finish_lane", extractInnerResponse(ownerProjection).get("nextAction"), ownerProjection);
+        String finished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(ownerProjection));
+        assertEquals("integrated", ((Map<String, Object>) extractInnerResult(finished).get("completion")).get("task"), finished);
+    }
+
+    /**
+     * The shape of the failed five-agent run: two consumers need opposite things from one module.
+     * The owner is shown both together, revises for one and declines the other with a reason, and
+     * the declined consumer can still bind to the contract as it stands.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void ownerIsShownTwoOppositeNeedsTogetherAndAnswersOneByRevisionAndTheOtherByDeclining() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        String creates = fileChangeRequest(requesterHandler, "Listing a missing store creates it");
+        String pure = fileChangeRequest(requesterTwo, "Listing has no side effects");
+
+        String ownerNext = toolCall(ownerHandler, "get_next_action", Map.of());
+        assertEquals("ready", extractResponseStatus(ownerNext), ownerNext);
+        assertEquals("owner_response_pending", extractResponseReason(ownerNext), ownerNext);
+        assertEquals("respond_coordination", extractInnerResponse(ownerNext).get("nextAction"), ownerNext);
+        List<Map<String, Object>> shown = (List<Map<String, Object>>) extractInnerResult(ownerNext).get("changeRequests");
+        assertEquals(java.util.Set.of(creates, pure), shown.stream().map(change -> String.valueOf(change.get("changeRequest"))).collect(java.util.stream.Collectors.toSet()), ownerNext);
+
+        String published = ownerPublishesContract("Listing a missing store creates it", creates);
+        assertEquals(List.of(creates), extractInnerResult(published).get("changeRequestsAnswered"), published);
+        String declined = toolCall(ownerHandler, "respond_coordination",
+                Map.of("kind", "contract_change_response", "payload", Map.of("changeRequest", pure, "decision", "declined", "reason", "One contract serves both consumers; listing creates the store")));
+        assertEquals("completed", extractResponseStatus(declined), declined);
+
+        var contracts = replayedStore().contractProjection();
+        assertEquals("ACCEPTED", contracts.changeRequest(UUID.fromString(creates)).orElseThrow().state().name());
+        var refusal = contracts.changeRequest(UUID.fromString(pure)).orElseThrow();
+        assertEquals("DECLINED", refusal.state().name());
+        assertEquals("One contract serves both consumers; listing creates the store", refusal.reason());
+        assertEquals(0, contracts.openChangeRequestsFor(refusal.ownerLineageId()).size());
+
+        assertFalse(bind(requesterTwo, 1).isBlank(), "a declined consumer may bind to the contract as it stands");
+        assertFalse(bind(requesterHandler, 1).isBlank());
+        requesterTwo.close();
+    }
+
+    /**
+     * Each bound consumer is told to bind again after a revision, and what it validated under the
+     * earlier revision no longer counts.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void contractRevisionTellsEveryBoundConsumerToBindAgainAndWhatWasValidatedNoLongerCounts() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        ownerPublishesContract("Return product when found");
+        String first = fileRequest(requesterHandler);
+        String second = fileRequest(requesterTwo);
+        ownerCommits("public class ProductQuery {}\n");
+        ownerPublishes(null);
+        String commit = latestCommit(first);
+        assertEquals("completed", extractResponseStatus(requesterJudges(requesterTwo, second, 1, "accepted")));
+        assertEquals("VALIDATED", requestOf(second).state().name());
+
+        ownerPublishesContract("Return product when found; reject null ids");
+
+        for (String handle : List.of(first, second)) {
+            assertEquals("REVISION_REQUESTED", requestOf(handle).state().name(), "what was validated under the earlier revision no longer counts");
+        }
+        List<Map<String, Object>> bindCalls = new java.util.ArrayList<>();
+        for (McpProtocolHandler consumer : List.of(requesterHandler, requesterTwo)) {
+            String next = toolCall(consumer, "get_next_action", Map.of());
+            Map<String, Object> result = extractInnerResult(next);
+            assertFalse(result.containsKey("acceptRevision"), next);
+            Map<String, Object> bindAgain = (Map<String, Object>) result.get("bindAgain");
+            assertNotNull(bindAgain, next);
+            assertEquals(2, ((Number) ((Map<String, Object>) ((Map<String, Object>) bindAgain.get("arguments")).get("payload")).get("revision")).intValue(), next);
+            bindCalls.add((Map<String, Object>) bindAgain.get("arguments"));
+        }
+        assertEquals("ready", extractResponseStatus(toolCall(requesterHandler, "request_coordination", bindCalls.get(0))));
+        assertEquals("ready", extractResponseStatus(toolCall(requesterTwo, "request_coordination", bindCalls.get(1))));
+        assertEquals("ACCEPTED", requestOf(first).state().name());
+        assertEquals("ACCEPTED", requestOf(second).state().name());
+
+        requesterTwo.close();
+    }
+
+    /**
+     * After a contract revision and a bind again, the owner may publish the commit it already
+     * published. One publication reaches every consumer (ADR-0089), so each bound consumer is
+     * given the new implementation revision and validates it anew.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anUnchangedCommitPublishedAgainForANewContractRevisionReachesEveryReboundConsumer() throws Exception {
+        McpProtocolHandler requesterTwo = secondRequester();
+        ownerPublishesContract("Return product when found");
+        String first = fileRequest(requesterHandler);
+        String second = fileRequest(requesterTwo);
+        ownerCommits("public class ProductQuery {}\n");
+        ownerPublishes(null);
+        String commit = latestCommit(first);
+        ownerPublishesContract("Return product when found; reject null ids");
+        assertEquals("ready", extractResponseStatus(toolCall(requesterHandler, "request_coordination", bindArguments(2))));
+        assertEquals("ready", extractResponseStatus(toolCall(requesterTwo, "request_coordination", bindArguments(2))));
+
+        ownerPublishes(null);
+
+        for (String handle : List.of(first, second)) {
+            assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(handle).state().name(), handle);
+            assertEquals(2, latestRevision(handle), handle);
+            assertEquals(commit, latestCommit(handle), "the owner changed nothing, so it is the same commit");
+        }
+        assertEquals("completed", extractResponseStatus(requesterJudges(requesterHandler, first, 2, "accepted")));
+        assertEquals("completed", extractResponseStatus(requesterJudges(requesterTwo, second, 2, "accepted")));
+        assertEquals("VALIDATED", requestOf(first).state().name());
+        assertEquals("VALIDATED", requestOf(second).state().name());
+
+        String ownerProjection = toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true));
+        assertEquals("finish_lane", extractInnerResponse(ownerProjection).get("nextAction"), ownerProjection);
+        String finished = toolCall(ownerHandler, "finish_lane", extractWorkflowArguments(ownerProjection));
+        assertEquals("integrated", ((Map<String, Object>) extractInnerResult(finished).get("completion")).get("task"), finished);
+        requesterTwo.close();
+    }
+
+    @Test
+    void aVerdictThatAsksForARevisionMustNameTheContractField() throws Exception {
+        ownerPublishesContract("Return product when found");
+        String handle = bind(requesterHandler, 1);
+        ownerCommits("public class ProductQuery {}\n");
+        ownerPublishes(handle);
+
+        String refused = toolCall(requesterHandler, "respond_coordination", Map.of("kind", "implementation_validation",
+                "payload", Map.of("inboxItemId", UUID.randomUUID().toString(), "capabilityRequestHandle", handle, "implementationRevision", 1, "result", "revision_required", "reason", "Needs a change")));
+
+        assertEquals("blocked", extractResponseStatus(refused), refused);
+        assertEquals("COORDINATION_RESPONSE_FIELD_REQUIRED:contractField", extractInnerResult(refused).get("error"), refused);
+        assertEquals("IMPLEMENTATION_AVAILABLE", requestOf(handle).state().name(), "a refused verdict records nothing");
     }
 }

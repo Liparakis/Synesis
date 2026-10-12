@@ -280,11 +280,11 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-json");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/task_tracker_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_proposal\",\"payload\":{\"contractId\":\"2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31\",\"body\":\"Task tracker API v1\",\"selectors\":[\"src/task_tracker.py\"]}}}}";
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_publish\",\"payload\":{\"paths\":[\"tests/task_tracker_contract.md\"],\"contract\":{\"purpose\":\"track tasks\",\"inputs\":\"task id\",\"output\":\"task\",\"requiredBehavior\":[\"return the task\"],\"errorSemantics\":\"unknown id is refused\",\"sideEffects\":\"none\",\"invariants\":\"none\",\"compatibility\":\"additive\",\"performance\":\"one lookup\",\"concurrency\":\"reads are safe\",\"acceptanceTests\":[\"TaskTrackerTest\"]}}}}}";
         String response = handler.handleMessage(publish);
         assertFalse(response.contains("-32603"));
-        assertTrue(response.contains("contentHash"));
-        assertTrue(response.contains("2b9d4d95-f7b7-4d5d-b3c7-8e40b2b6db31"));
+        assertTrue(response.contains("contractId"), response);
+        assertTrue(response.contains("tests/task_tracker_contract.md"), response);
     }
 
     @Test
@@ -292,13 +292,14 @@ class McpServerTest {
         McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "claude", "conn-contract-status");
         String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"contract status json\",\"acceptance\":\"publish\",\"claims\":[{\"kind\":\"path_exact\",\"path\":\"tests/status_contract.md\"}]}}}}";
         assertTrue(handler.handleMessage(ensure).contains("ready"));
-        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_proposal\",\"payload\":{\"contractId\":\"9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18\",\"body\":\"Status contract v1\",\"selectors\":[\"src/task_tracker.py\"]}}}}";
-        assertTrue(handler.handleMessage(publish).contains("contentHash"));
+        String publish = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_publish\",\"payload\":{\"paths\":[\"tests/status_contract.md\"],\"contract\":{\"purpose\":\"track tasks\",\"inputs\":\"task id\",\"output\":\"task\",\"requiredBehavior\":[\"return the task\"],\"errorSemantics\":\"unknown id is refused\",\"sideEffects\":\"none\",\"invariants\":\"none\",\"compatibility\":\"additive\",\"performance\":\"one lookup\",\"concurrency\":\"reads are safe\",\"acceptanceTests\":[\"TaskTrackerTest\"]}}}}}";
+        assertTrue(handler.handleMessage(publish).contains("contractId"));
         String status = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"collaboration_status\",\"payload\":{}}}}";
         String response = handler.handleMessage(status);
         assertFalse(response.contains("-32603"));
         assertTrue(response.contains("contracts"));
-        assertTrue(response.contains("9b3fef3a-6f6e-4b4b-bd14-ae4f36ea4f18"));
+        assertTrue(response.contains("contractId"), response);
+        assertFalse(response.contains("dependencies"), response);
     }
 
     @Test
@@ -335,12 +336,10 @@ class McpServerTest {
         String intentId = markerStart >= 0 ? statusResponse.substring(markerStart + marker.length(), markerStart + marker.length() + 36) : "";
         assertFalse(intentId.isBlank(), statusResponse);
         String request =
-                "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_request\",\"payload\":{\"conflictingIntentId\":\"" + intentId
-                        + "\",\"proposal\":\"agree on API v1\"}}}}";
+                "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"contract_change_request\",\"payload\":{\"ownerPath\":\"tests/mcp-request-owner.txt\",\"need\":\"agree on API v1\"}}}}";
         String requestResponse = requester.handleMessage(request);
         assertFalse(requestResponse.contains("-32603"));
-        assertTrue(requestResponse.contains("CONTRACT"));
-        assertTrue(requestResponse.contains("PENDING"));
+        assertTrue(requestResponse.contains("owner_response_pending"), requestResponse);
         String scopeRevision = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"request_coordination\",\"arguments\":{\"kind\":\"scope_revision\",\"payload\":{\"intentId\":\"" + intentId
                 + "\",\"selectors\":[\"tests/mcp-request-owner.txt\"]," + "\"proposal\":\"narrow ownership to a disjoint slice\"}}}}";
         String scopeRevisionResponse = requester.handleMessage(scopeRevision);

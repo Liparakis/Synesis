@@ -197,13 +197,58 @@ class McpToolCatalogTest {
   }
 
   @Test
-  void contractRequestAdvertisesItsStrictPayloadInsteadOfOtherKindsFields() {
+  void contractBindAdvertisesItsStrictPayloadInsteadOfOtherKindsFields() {
     Map<String, Object> schema = payloadForKind(McpToolCatalog.REQUEST_COORDINATION,
-        "contract_request");
-    assertEquals(List.of("conflictingIntentId", "proposal"), schema.get("required"));
+        "contract_bind");
+    assertEquals(List.of("capability", "ownerPath", "revision"), schema.get("required"));
     assertEquals(Boolean.FALSE, schema.get("additionalProperties"));
-    assertEquals(java.util.Set.of("conflictingIntentId", "proposal", "contractId", "revision"),
+    assertEquals(java.util.Set.of("capability", "ownerPath", "revision"),
         ((Map<?, ?>) schema.get("properties")).keySet());
+  }
+
+  @Test
+  void contractPublishAndChangeRequestAdvertiseTheirStrictPayloads() {
+    Map<String, Object> publish = payloadForKind(McpToolCatalog.REQUEST_COORDINATION,
+        "contract_publish");
+    assertEquals(List.of("paths", "contract"), publish.get("required"));
+    assertEquals(Boolean.FALSE, publish.get("additionalProperties"));
+    assertEquals(java.util.Set.of("paths", "contract", "answers"),
+        ((Map<?, ?>) publish.get("properties")).keySet());
+    Map<String, Object> change = payloadForKind(McpToolCatalog.REQUEST_COORDINATION,
+        "contract_change_request");
+    assertEquals(List.of("ownerPath", "need"), change.get("required"));
+    assertEquals(Boolean.FALSE, change.get("additionalProperties"));
+    assertEquals(java.util.Set.of("ownerPath", "need"),
+        ((Map<?, ?>) change.get("properties")).keySet());
+  }
+
+  @Test
+  void contractChangeResponseAdvertisesTheDecisionAndTheValidationNamesTheContractField() {
+    Map<String, Object> response = payloadForKind(McpToolCatalog.RESPOND_COORDINATION,
+        "contract_change_response");
+    assertEquals(List.of("changeRequest", "decision"), response.get("required"));
+    assertEquals(Boolean.FALSE, response.get("additionalProperties"));
+    assertEquals(java.util.Set.of("changeRequest", "decision", "reason"),
+        ((Map<?, ?>) response.get("properties")).keySet());
+    Map<String, Object> validation = payloadForKind(McpToolCatalog.RESPOND_COORDINATION,
+        "implementation_validation");
+    assertTrue(((Map<?, ?>) validation.get("properties")).containsKey("contractField"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void theRemovedNegotiationKindsAreNotAdvertised() {
+    for (String tool : List.of(McpToolCatalog.REQUEST_COORDINATION, McpToolCatalog.RESPOND_COORDINATION)) {
+      Map<String, Object> input = McpToolCatalog.descriptors().stream()
+          .filter(descriptor -> descriptor.wireName().equals(tool)).findFirst().orElseThrow()
+          .inputSchema();
+      List<String> kinds = (List<String>) ((Map<String, Object>) ((Map<String, Object>) input
+          .get("properties")).get("kind")).get("enum");
+      for (String removed : List.of("capability_request", "contract_proposal", "contract_request",
+          "capability_response")) {
+        assertFalse(kinds.contains(removed), tool + " still advertises " + removed);
+      }
+    }
   }
 
   @Test

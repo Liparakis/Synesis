@@ -27,7 +27,7 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
-import org.synesis.workspace.application.capability.CapabilityResponseService;
+import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.ReviewSnapshotAccessService;
 import org.synesis.workspace.application.collaboration.ReviewValidationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
@@ -235,7 +235,7 @@ public final class McpProtocolHandler {
         ProjectCommandAdmissionService commandAdmissionService = new ProjectCommandAdmissionService(commandService, AdministrativeStateLocator.applicationStateRoot().resolve("commands"));
         AgentNextActionService nextActionService = new AgentNextActionService();
         CapabilityRequestService capabilityRequestService = new CapabilityRequestService();
-        CapabilityResponseService capabilityResponseService = new CapabilityResponseService();
+        ContractOwnerService contractOwnerService = new ContractOwnerService();
         ImplementationPublicationService publicationService = new ImplementationPublicationService();
         ImplementationValidationService validationService = new ImplementationValidationService();
         ReviewValidationService reviewValidationService = new ReviewValidationService();
@@ -267,7 +267,7 @@ public final class McpProtocolHandler {
         this.reconciliation = new McpRecoveryReconciliation(reconciliationService);
         this.coordinationTools = new McpCoordinationTools(nextActionService,
                 capabilityRequestService,
-                capabilityResponseService,
+                contractOwnerService,
                 publicationService,
                 validationService,
                 reviewValidationService,

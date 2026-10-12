@@ -321,13 +321,13 @@ final class McpSessionEstablishment {
                             conflict.selector().kind().name(),
                             "path",
                             conflict.selector().value())).toList());
-            details.put("coordinationKind", "capability_request");
-            details.put("requiredCapabilityFields", List.of("capability", "contract", "ownerPath"));
+            details.put("coordinationKind", "contract_bind");
+            details.put("requiredCapabilityFields", List.of("capability", "ownerPath", "revision"));
             // The lane a caller collides with is the owner of that path only. Telling it to send
             // its capability request to that lane's lineage sent requests to unrelated lanes.
             details.put("claimRule", "These paths belong to the lanes shown; nothing was claimed. Choose work no lane has claimed, or claim only your own disjoint files. "
-                    + "If your work builds on something another lane implements, request it with a capability_request whose ownerPath is the file that implements it: "
-                    + "the lane claiming that file answers, which need not be a lane listed here.");
+                    + "If your work builds on a file another lane claims, bind to that file's public contract with contract_bind, or say what you need with contract_change_request: "
+                    + "ownerPath names the file, and the lane claiming it answers, which need not be a lane listed here.");
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_COORDINATION, details);
         } catch (Exception failure) {
             if ("SESSION_EPOCH_FENCED".equals(failure.getMessage())) {

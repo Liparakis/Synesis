@@ -212,15 +212,17 @@ public enum PredictionEventType {
      */
     PARTICIPANT_ABANDONED(49),
     /**
-     * Publishes a stable contract revision.
+     * Publishes a revision of the public contract over files a lane claims.
      */
     CONTRACT_PUBLISHED(50),
     /**
-     * Binds an intent to an exact contract revision.
+     * Binds a consumer's request record to one revision of a contract.
      */
     CONTRACT_DEPENDENCY_BOUND(51),
     /**
-     * Supersedes the current contract revision.
+     * Retired with the contract store it belonged to: a revision now replaces its predecessor by
+     * being published. Nothing writes it and every projection ignores it; the wire code is kept so
+     * it is never given to another event.
      */
     CONTRACT_SUPERSEDED(52),
     /**
@@ -310,7 +312,19 @@ public enum PredictionEventType {
     /**
      * Records that the condition behind an operator request was observed not to hold.
      */
-    OPERATOR_REQUEST_CLOSED(74);
+    OPERATOR_REQUEST_CLOSED(74),
+    /**
+     * Records what a consumer needs from a claimed file that its contract does not say.
+     */
+    CONTRACT_CHANGE_REQUESTED(75),
+    /**
+     * Records the owner's answer to one contract change request.
+     */
+    CONTRACT_CHANGE_ANSWERED(76),
+    /**
+     * Records that a lane ended: its contracts are frozen and its change requests closed.
+     */
+    CONTRACT_LANE_ENDED(77);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

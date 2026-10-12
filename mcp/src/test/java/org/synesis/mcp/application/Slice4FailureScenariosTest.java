@@ -97,16 +97,34 @@ class Slice4FailureScenariosTest {
         return innerResult != null ? (String) innerResult.get("capabilityRequestHandle") : null;
     }
 
-    @SuppressWarnings("unchecked")
-    private static long extractContractRevision(String jsonRpcRes) {
-        Map<String, Object> map = (Map<String, Object>) ProviderJson.parse(jsonRpcRes);
-        Map<String, Object> result = (Map<String, Object>) map.get("result");
-        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
-        String text = (String) content.getFirst().get("text");
-        Map<String, Object> parsed = (Map<String, Object>) ProviderJson.parse(text);
-        Map<String, Object> innerResult = (Map<String, Object>) parsed.get("result");
-        assertNotNull(innerResult.get("contractRevision"), "get_next_action did not expose the owner contract revision: " + parsed);
-        return ((Number) innerResult.get("contractRevision")).longValue();
+    private static Map<String, Object> productQueryContract(String... behavior) {
+        Map<String, Object> contract = new java.util.LinkedHashMap<>();
+        contract.put("purpose", "Look up a product by id");
+        contract.put("inputs", "UUID id");
+        contract.put("output", "Optional<Product>");
+        contract.put("requiredBehavior", List.of(behavior));
+        contract.put("errorSemantics", "Malformed ids are rejected; unknown products return empty");
+        contract.put("sideEffects", "none");
+        contract.put("invariants", "Does not mutate product records");
+        contract.put("compatibility", "Additive changes only");
+        contract.put("performance", "One lookup per call");
+        contract.put("concurrency", "Concurrent reads are safe");
+        contract.put("acceptanceTests", List.of("ProductQueryTest"));
+        return contract;
+    }
+
+    private void ownerPublishesContract(String... behavior) {
+        String published = toolCall(ownerHandler, "request_coordination",
+                Map.of("kind", "contract_publish", "payload", Map.of("paths", List.of("ProductQuery.java"), "contract", productQueryContract(behavior))));
+        assertEquals("completed", extractResponseStatus(published), published);
+    }
+
+    private String requesterBinds(long revision) {
+        String bound = toolCall(requesterHandler, "request_coordination",
+                Map.of("kind", "contract_bind", "payload", Map.of("capability", "catalog.product-query", "ownerPath", "ProductQuery.java", "revision", revision)));
+        String handle = extractResultField(bound);
+        assertNotNull(handle, bound);
+        return handle;
     }
 
     @SuppressWarnings("unchecked")
@@ -317,13 +335,16 @@ class Slice4FailureScenariosTest {
     }
 
     @Test
-    void testCompleteTaskBeforeValidationReturnsBlockedUnresolvedDependency() {
-        String descJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
-                + "  }\n" + "}";
-        String descRes = requesterHandler.handleMessage(descJson);
-        assertNotNull(descRes);
+    void testCompleteTaskBeforeValidationReturnsBlockedUnresolvedDependency() throws Exception {
+        ownerPublishesContract("Return product when found");
+        requesterBinds(1);
+        Path ownerWt = Path.of(b2.worktreePath());
+        Files.writeString(ownerWt.resolve("ProductQuery.java"), "public class ProductQuery {}\n");
+        git(ownerWt, "add", ".");
+        git(ownerWt, "commit", "-m", "Implement ProductQuery");
+        Map<String, Object> publication = extractWorkflowArguments(toolCall(ownerHandler, "get_next_action", Map.of("completionRequested", true)));
+        publication.put("summary", "Revision 1");
+        assertEquals("waiting", extractResponseStatus(toolCall(ownerHandler, "publish_capability_implementation", publication)));
 
         // Requester attempts completion before validation
         String reqCompJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"finish_lane\",\n" + "    \"arguments\": {\n"
@@ -336,37 +357,21 @@ class Slice4FailureScenariosTest {
 
     @Test
     void testContractRevisionAndValidationRevisionLoop() throws Exception {
-        // 1. Requester describes capability
-        String descJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n"
-                + "  }\n" + "}";
-        String descRes = requesterHandler.handleMessage(descJson);
-        String reqHandle = extractResultField(descRes);
-
-        // 2. Owner revises contract
-        assertEquals(b2.baseCommit(), gitOutput(projectRoot, "rev-parse", "HEAD"), "The capability request must not change the control checkout");
+        // 1. Owner publishes the contract and the requester binds to it
+        ownerPublishesContract("Return product when found");
+        String reqHandle = requesterBinds(1);
+        assertEquals(b2.baseCommit(), gitOutput(projectRoot, "rev-parse", "HEAD"), "Publishing and binding must not change the control checkout");
         var ownerReadiness = new org.synesis.workspace.application.workspace.WorkspaceReadinessService().assess(new ProjectApplicationService().locate(projectRoot), "codex", "inst-owner-1");
         assertEquals(true, ownerReadiness.ready(), "Owner workspace became stale before the request: " + ownerReadiness.internalReason() + " " + ownerReadiness.response());
-        String ownerNextJson = "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
-        long ownerContractRevision = extractContractRevision(ownerHandler.handleMessage(ownerNextJson));
-        String reviseJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 3,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_response\",\n" + "      \"payload\": {\"capabilityRequestHandle\": \"" + reqHandle + "\", \"response\": \"revise\", \"contractRevision\": " + ownerContractRevision + ", \"revision\": {\n"
-                + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n" + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n"
-                + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
-        String reviseRes = ownerHandler.handleMessage(reviseJson);
-        assertNotNull(reviseRes);
-        assertEquals("ready", extractResponseStatus(reviseRes));
 
-        // 2.5 Requester accepts the exact revised contract revision
-        String requesterNextJson = "{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"tools/call\",\"params\":{\"name\":\"get_next_action\",\"arguments\":{}}}";
-        long revisedContractRevision = extractContractRevision(requesterHandler.handleMessage(requesterNextJson));
-        String reDescJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 35,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\"capability\": \"catalog.product-query\", \"capabilityRequestHandle\": \"" + reqHandle + "\", \"revisionResponse\": \"accept\", \"contractRevision\": " + revisedContractRevision + ",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID id\",\n"
-                + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return product when found\", \"Return empty when absent\"],\n"
-                + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"ProductQueryTest\"]\n" + "      }}\n" + "    }\n" + "  }\n" + "}";
-        String reDescRes = requesterHandler.handleMessage(reDescJson);
-        assertNotNull(reDescRes);
+        // 2. Owner publishes revision 2; the requester is handed the exact call that binds to it
+        ownerPublishesContract("Return product when found", "Return empty when absent");
+        String requesterNext = toolCall(requesterHandler, "get_next_action", Map.of());
+        @SuppressWarnings("unchecked") Map<String, Object> bindAgain = (Map<String, Object>) extractInnerResult(requesterNext).get("bindAgain");
+        assertNotNull(bindAgain, requesterNext);
+        @SuppressWarnings("unchecked") String boundAgain = toolCall(requesterHandler, "request_coordination", (Map<String, Object>) bindAgain.get("arguments"));
+        assertEquals("ready", extractResponseStatus(boundAgain), boundAgain);
+        assertEquals(reqHandle, extractResultField(boundAgain), "binding again keeps the same binding");
 
         // 3. Owner implements the accepted contract and publishes revision 1
         Path ownerWt = Path.of(b2.worktreePath());
@@ -378,7 +383,7 @@ class Slice4FailureScenariosTest {
         assertEquals("ready", extractResponseStatus(firstPublicationReady), firstPublicationReady);
         Map<String, Object> firstPublicationArguments = extractWorkflowArguments(firstPublicationReady);
         assertEquals(reqHandle, firstPublicationArguments.get("capabilityRequestHandle"));
-        assertEquals(revisedContractRevision, ((Number) firstPublicationArguments.get("contractRevision")).longValue());
+        assertNotNull(firstPublicationArguments.get("contractRevision"));
         firstPublicationArguments.put("summary", "Revision 1");
         String pub1Json = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"publish_capability_implementation\",\"arguments\":" + ProviderJson.write(firstPublicationArguments) + "}}";
         String pub1Res = ownerHandler.handleMessage(pub1Json);
@@ -393,7 +398,7 @@ class Slice4FailureScenariosTest {
         // 4. Requester rejects revision 1 (revision_required)
         String valReqJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 6,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"respond_coordination\",\n" + "    \"arguments\": {\n"
                 + "      \"kind\": \"implementation_validation\",\n" + "      \"payload\": {\"inboxItemId\": \"" + firstInboxItemId + "\", \"capabilityRequestHandle\": \"" + reqHandle
-                + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"reason\": \"Missing null check\"}\n" + "    }\n" + "  }\n" + "}";
+                + "\", \"implementationRevision\": 1, \"result\": \"revision_required\", \"contractField\": \"errorSemantics\", \"reason\": \"Missing null check\"}\n" + "    }\n" + "  }\n" + "}";
         String valReqRes = requesterHandler.handleMessage(valReqJson);
         assertNotNull(valReqRes);
         assertEquals("waiting", extractResponseStatus(valReqRes), valReqRes);
@@ -408,7 +413,7 @@ class Slice4FailureScenariosTest {
         assertEquals("ready", extractResponseStatus(secondPublicationReady), secondPublicationReady);
         Map<String, Object> secondPublicationArguments = extractWorkflowArguments(secondPublicationReady);
         assertEquals(reqHandle, secondPublicationArguments.get("capabilityRequestHandle"));
-        assertEquals(revisedContractRevision, ((Number) secondPublicationArguments.get("contractRevision")).longValue());
+        assertEquals(firstPublicationArguments.get("contractRevision"), secondPublicationArguments.get("contractRevision"), "a new implementation revision is made under the same contract revision");
         secondPublicationArguments.put("summary", "Revision 2");
         String pub2Json = "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"publish_capability_implementation\",\"arguments\":" + ProviderJson.write(secondPublicationArguments) + "}}";
         String pub2Res = ownerHandler.handleMessage(pub2Json);

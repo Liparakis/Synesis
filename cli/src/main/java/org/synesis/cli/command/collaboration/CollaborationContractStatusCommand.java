@@ -4,12 +4,11 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;
-import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * Inspects replayed shared contracts and dependencies.
+ * Lists the public contracts, the consumers bound to them, and the change requests still open.
  */
 @Command(name = "status", description = "Inspect shared contracts.", mixinStandardHelpOptions = true)
 public final class CollaborationContractStatusCommand implements Callable<Integer> {
@@ -33,9 +32,13 @@ public final class CollaborationContractStatusCommand implements Callable<Intege
     @Override
     public Integer call() {
         try {
-            var snapshot = new WorkspaceCollaborationService().contractStatus(project.toAbsolutePath().normalize());
-            snapshot.contracts().forEach(c -> runtime.terminal().stdout("CONTRACT=" + c.contractId() + " REVISION=" + c.revision() + " STATUS=" + c.status() + " OWNER=" + c.owner()));
-            snapshot.dependencies().forEach(d -> runtime.terminal().stdout("DEPENDENCY=" + d.intentId() + " CONTRACT=" + d.contractId() + " REVISION=" + d.revision() + " STATE=" + d.state()));
+            var contracts = runtime.projectService().require(project.toAbsolutePath().normalize()).openCoordinationStore().contractProjection();
+            contracts.contracts().forEach(c -> runtime.terminal().stdout("CONTRACT=" + c.contractId() + " REVISION=" + c.revision() + " STATE=" + c.state() + " OWNER_LINEAGE=" + c.ownerLineageId()
+                    + " PATHS=" + String.join(",", c.paths().stream().map(path -> path.value()).toList())));
+            contracts.contracts().forEach(c -> contracts.bindings(c.contractId())
+                    .forEach(b -> runtime.terminal().stdout("BINDING=" + b.handle() + " CONTRACT=" + b.contractId() + " REVISION=" + b.revision() + (b.revision() == c.revision() ? "" : " STALE=true"))));
+            contracts.contracts().stream().map(c -> c.ownerLineageId()).distinct().forEach(owner -> contracts.openChangeRequestsFor(owner)
+                    .forEach(r -> runtime.terminal().stdout("CHANGE_REQUEST=" + r.id() + " STATE=" + r.state() + " PATH=" + r.path().value())));
             return ExitCodes.OK;
         } catch (Exception failure) {
             runtime.terminal().stderr("CONTRACT_ERROR=" + failure.getMessage());

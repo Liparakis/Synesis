@@ -179,27 +179,41 @@ class McpToolMalformedArgumentsTest {
         assertTrue(String.valueOf(finish.get("instruction")).contains("changed nothing"), finish.toString());
         assertTrue(String.valueOf(finish.get("detail")).contains("claimEpoch"), "the parser's finding must reach the caller: " + finish);
         Map<String, Object> kind = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'nope','payload':{}}")).get("result");
-        assertTrue(((List<String>) kind.get("allowedKinds")).contains("capability_request"), kind.toString());
+        assertTrue(((List<String>) kind.get("allowedKinds")).contains("contract_publish"), kind.toString());
+        for (String removed : List.of("capability_request", "contract_proposal", "contract_request")) {
+            assertFalse(((List<String>) kind.get("allowedKinds")).contains(removed), removed);
+            assertEquals("UNKNOWN_COORDINATION_KIND", ((Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'" + removed + "','payload':{}}")).get("result")).get("error"), removed);
+        }
         assertTrue(kind.containsKey("instruction"), kind.toString());
         Map<String, Object> responseKind = (Map<String, Object>) innerResponse(call(bound, "respond_coordination", "{'kind':'nope','payload':{}}")).get("result");
         assertTrue(((List<String>) responseKind.get("allowedKinds")).contains("review_validation"), responseKind.toString());
-        Map<String, Object> contract = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'capability_request','payload':{'capability':'c','contract':{'purpose':'p'}}}")).get("result");
+        assertFalse(((List<String>) responseKind.get("allowedKinds")).contains("capability_response"), responseKind.toString());
+        Map<String, Object> contract = (Map<String, Object>) innerResponse(call(bound, "request_coordination", "{'kind':'contract_publish','payload':{'paths':['a.py'],'contract':{'purpose':'p'}}}")).get("result");
         assertEquals("CAPABILITY_CONTRACT_INVALID", contract.get("error"), contract.toString());
         assertEquals(11, ((List<String>) contract.get("contractFields")).size(), contract.toString());
         assertTrue(String.valueOf(contract.get("detail")).contains("contract lacks"), contract.toString());
         String complete = "'purpose':'p','inputs':'i','output':'o','errorSemantics':'e','sideEffects':'s','invariants':'v','compatibility':'c','performance':'f','concurrency':'n'";
         Map<String, Object> wrongType = (Map<String, Object>) innerResponse(call(bound, "request_coordination",
-                "{'kind':'capability_request','payload':{'capability':'c','contract':{" + complete + ",'requiredBehavior':5,'acceptanceTests':['t']}}}")).get("result");
+                "{'kind':'contract_publish','payload':{'paths':['a.py'],'contract':{" + complete + ",'requiredBehavior':5,'acceptanceTests':['t']}}}")).get("result");
         assertEquals("requiredBehavior must be an array of strings", wrongType.get("detail"), wrongType.toString());
         // One sentence where a list is expected is read as a list of one, so this contract is not refused for its shape.
         Map<String, Object> sentence = innerResponse(call(bound, "request_coordination",
-                "{'kind':'capability_request','payload':{'capability':'c','contract':{" + complete + ",'requiredBehavior':'does it','acceptanceTests':'passes'}}}"));
+                "{'kind':'contract_publish','payload':{'paths':['a.py'],'contract':{" + complete + ",'requiredBehavior':'does it','acceptanceTests':'passes'}}}"));
         assertFalse(String.valueOf(sentence).contains("CAPABILITY_CONTRACT_INVALID"), sentence.toString());
         for (String ownerPath : List.of("'../outside.py'", "'C:/abs.py'", "5")) {
             Map<String, Object> owner = (Map<String, Object>) innerResponse(call(bound, "request_coordination",
-                    "{'kind':'capability_request','payload':{'capability':'c','ownerPath':" + ownerPath + ",'contract':{" + complete + ",'requiredBehavior':['b'],'acceptanceTests':['t']}}}")).get("result");
+                    "{'kind':'contract_bind','payload':{'capability':'c','ownerPath':" + ownerPath + ",'revision':1}}")).get("result");
             assertEquals("OWNER_PATH_MUST_BE_A_REPOSITORY_RELATIVE_FILE", owner.get("error"), owner.toString());
         }
+        for (String path : List.of("'../outside.py'", "'C:/abs.py'", "5")) {
+            Map<String, Object> covered = (Map<String, Object>) innerResponse(call(bound, "request_coordination",
+                    "{'kind':'contract_publish','payload':{'paths':[" + path + "],'contract':{" + complete + ",'requiredBehavior':['b'],'acceptanceTests':['t']}}}")).get("result");
+            assertEquals("CONTRACT_PATH_MUST_BE_REPOSITORY_RELATIVE", covered.get("error"), covered.toString());
+        }
+        Map<String, Object> noField = (Map<String, Object>) innerResponse(call(bound, "respond_coordination",
+                "{'kind':'implementation_validation','payload':{'inboxItemId':'i','capabilityRequestHandle':'" + HANDLE + "','implementationRevision':1,'result':'revision_required','reason':'r'}}")).get("result");
+        assertEquals("COORDINATION_RESPONSE_FIELD_REQUIRED:contractField", noField.get("error"), noField.toString());
+        assertEquals(11, ((List<String>) noField.get("contractFields")).size(), noField.toString());
         Map<String, Object> status = (Map<String, Object>) innerResponse(call(bound, "respond_coordination",
                 "{'kind':'coordination_response','payload':{'coordinationRequest':'00000000-0000-0000-0000-000000000001','coordinationStatus':'maybe'}}")).get("result");
         assertEquals("COORDINATION_FIELD_INVALID:coordinationStatus", status.get("error"), status.toString());
@@ -274,10 +288,18 @@ class McpToolMalformedArgumentsTest {
                 call(bound, "request_coordination", "{'kind':'collaboration_status','payload':{'x':1}}"));
         assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:goal','allowedFields':['intentId','selectors','proposal']}}",
                 call(bound, "request_coordination", "{'kind':'scope_revision','payload':{'goal':'g'}}"));
-        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'proposal':'p'}}"));
-        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':null,'proposal':'p'}}"));
-        assertText(denied("error", "COORDINATION_FIELD_INVALID:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':5,'proposal':'p'}}"));
-        assertText(denied("error", "COORDINATION_FIELD_INVALID:conflictingIntentId", help), call(bound, "request_coordination", "{'kind':'contract_request','payload':{'conflictingIntentId':'x','proposal':'p'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:ownerPath", help), call(bound, "request_coordination", "{'kind':'contract_bind','payload':{'capability':'c','revision':1}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:ownerPath", help), call(bound, "request_coordination", "{'kind':'contract_bind','payload':{'capability':'c','ownerPath':null,'revision':1}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:capability", help), call(bound, "request_coordination", "{'kind':'contract_bind','payload':{'capability':' ','ownerPath':'a.py','revision':1}}"));
+        for (String revision : List.of("'x'", "0", "-1", "1.5")) {
+            assertText(denied("error", "COORDINATION_FIELD_INVALID:revision", help),
+                    call(bound, "request_coordination", "{'kind':'contract_bind','payload':{'capability':'c','ownerPath':'a.py','revision':" + revision + "}}"));
+        }
+        assertText("{'status':'blocked','reason':'policy_denied','nextAction':'" + help + "','result':{'error':'COORDINATION_FIELD_NOT_ALLOWED:goal','allowedFields':['capability','ownerPath','revision']}}",
+                call(bound, "request_coordination", "{'kind':'contract_bind','payload':{'goal':'g'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:need", help), call(bound, "request_coordination", "{'kind':'contract_change_request','payload':{'ownerPath':'a.py'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:need", help), call(bound, "request_coordination", "{'kind':'contract_change_request','payload':{'ownerPath':'a.py','need':' '}}"));
+        assertText(denied("error", "COORDINATION_FIELD_REQUIRED:paths", help), call(bound, "request_coordination", "{'kind':'contract_publish','payload':{'contract':{}}}"));
         assertText(denied("error", "COORDINATION_FIELD_INVALID:claimEpoch", help),
                 call(bound, "request_coordination", "{'kind':'continuation','payload':{'intentId':'00000000-0000-0000-0000-000000000001','claimEpoch':'1'}}"));
     }
@@ -285,10 +307,21 @@ class McpToolMalformedArgumentsTest {
     @Test
     void respondCoordinationRejectsAMissingOrNullRequiredKeyAndAWrongTypedField() {
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", "request_human_help"), call(bound, "respond_coordination", "{}"));
-        assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:capabilityRequestHandle", "request_human_help"),
-                call(bound, "respond_coordination", "{'kind':'capability_response','payload':{'response':'accept','contractRevision':1}}"));
-        assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:capabilityRequestHandle", "request_human_help"),
-                call(bound, "respond_coordination", "{'kind':'capability_response','payload':{'capabilityRequestHandle':null,'response':'accept','contractRevision':1}}"));
+        assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:changeRequest", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'contract_change_response','payload':{'decision':'accepted'}}"));
+        assertText(denied("error", "COORDINATION_RESPONSE_FIELD_REQUIRED:changeRequest", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'contract_change_response','payload':{'changeRequest':null,'decision':'accepted'}}"));
+        assertText(denied("error", "COORDINATION_FIELD_INVALID:changeRequest", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'contract_change_response','payload':{'changeRequest':5,'decision':'accepted'}}"));
+        assertText(denied("error", "COORDINATION_RESPONSE_REASON_REQUIRED", "request_human_help"),
+                call(bound, "respond_coordination", "{'kind':'contract_change_response','payload':{'changeRequest':'00000000-0000-0000-0000-000000000001','decision':'declined'}}"));
+        assertEquals("COORDINATION_RESPONSE_FIELD_INVALID:decision", ((Map<?, ?>) innerResponse(call(bound, "respond_coordination",
+                "{'kind':'contract_change_response','payload':{'changeRequest':'00000000-0000-0000-0000-000000000001','decision':'maybe'}}")).get("result")).get("error"));
+        assertEquals("UNKNOWN_COORDINATION_RESPONSE_KIND", ((Map<?, ?>) innerResponse(call(bound, "respond_coordination", "{'kind':'capability_response','payload':{}}")).get("result")).get("error"));
+        for (String field : List.of("", ",'contractField':'nope'")) {
+            assertEquals("COORDINATION_RESPONSE_FIELD_REQUIRED:contractField", ((Map<?, ?>) innerResponse(call(bound, "respond_coordination",
+                    "{'kind':'implementation_validation','payload':{'inboxItemId':'i','capabilityRequestHandle':'" + HANDLE + "','implementationRevision':1,'result':'revision_required','reason':'r'" + field + "}}")).get("result")).get("error"), field);
+        }
         assertText(denied("error", "COORDINATION_FIELD_INVALID:coordinationRequest", "request_human_help"),
                 call(bound, "respond_coordination", "{'kind':'coordination_response','payload':{'coordinationRequest':5,'coordinationStatus':'ACCEPTED'}}"));
         assertText(denied("error", "COORDINATION_FIELD_INVALID:implementationRevision", "request_human_help"),
@@ -463,8 +496,8 @@ class McpToolMalformedArgumentsTest {
 
     @Test
     void thePayloadChecksAgreeWithTheAdvertisedSchemaForTheKindsBothDefine() {
-        checkAgainstSchema(McpToolCatalog.REQUEST_COORDINATION, "COORDINATION_", Set.of("capability_request", "contract_request"));
-        checkAgainstSchema(McpToolCatalog.RESPOND_COORDINATION, "COORDINATION_RESPONSE_", Set.of("capability_response", "coordination_response", "implementation_validation"));
+        checkAgainstSchema(McpToolCatalog.REQUEST_COORDINATION, "COORDINATION_", Set.of("contract_publish", "contract_bind", "contract_change_request"));
+        checkAgainstSchema(McpToolCatalog.RESPOND_COORDINATION, "COORDINATION_RESPONSE_", Set.of("contract_change_response", "coordination_response", "implementation_validation"));
     }
 
     @SuppressWarnings("unchecked")

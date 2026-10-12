@@ -205,7 +205,12 @@ public final class AgentTaskCompletionService {
             PredictionEventType.CAPABILITY_IMPLEMENTATION_VALIDATED,
             PredictionEventType.CAPABILITY_IMPLEMENTATION_REVISION_REQUIRED,
             PredictionEventType.OPERATOR_REQUEST_RAISED,
-            PredictionEventType.OPERATOR_REQUEST_CLOSED);
+            PredictionEventType.OPERATOR_REQUEST_CLOSED,
+            PredictionEventType.CONTRACT_PUBLISHED,
+            PredictionEventType.CONTRACT_DEPENDENCY_BOUND,
+            PredictionEventType.CONTRACT_CHANGE_REQUESTED,
+            PredictionEventType.CONTRACT_CHANGE_ANSWERED,
+            PredictionEventType.CONTRACT_LANE_ENDED);
 
     /**
      * Reports whether a finish projected at {@code revision} still describes the log.
@@ -672,6 +677,14 @@ public final class AgentTaskCompletionService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.UNRESOLVED_DEPENDENCY, AgentNextAction.WAIT, Map.of(NextActionKeys.PENDING, pending.size()));
         }
         WorkIntent callerIntent = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).findFirst().orElse(null);
+        int unansweredChanges = callerIntent == null ? 0 : store.contractProjection().openChangeRequestsFor(callerIntent.authorityLineageId()).size();
+        if (unansweredChanges > 0) {
+            // Only the lane that holds the file can answer what another lane needs from it, and
+            // a lane that finished first would leave that need with nobody to answer (ADR-0092).
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.RESPOND_COORDINATION,
+                    Map.of(NextActionKeys.REASON, "CONTRACT_CHANGE_REQUEST_OPEN", NextActionKeys.PENDING, unansweredChanges,
+                            "instruction", "Lanes that build on your files have change requests you have not answered. Call get_next_action to see them, and answer each before finishing."));
+        }
         List<CapabilityRequestRecord> unjudged = CapabilityActionProjection.ownerImplementationsAwaitingVerdict(store, callerIntent, callerNodeId, callerSupervisorId, callerWorkerId);
         if (!unjudged.isEmpty()) {
             // Same rule the inbox projects: the requester may still send this back, and only an

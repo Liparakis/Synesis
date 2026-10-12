@@ -138,15 +138,18 @@ class McpStage2BSlice1Test {
     }
 
     @Test
-    void describeRequiredCapabilityCallReturnsConciseResponseWithoutPathLeak() {
+    void contractPublishCallReturnsConciseResponseWithoutPathLeak() {
+        String ensure = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"ensure_session\",\"arguments\":{\"task\":{\"goal\":\"query\",\"acceptance\":\"published\","
+                + "\"claims\":[{\"kind\":\"path_exact\",\"path\":\"ProductQuery.java\"}]}}}}";
+        assertTrue(handler.handleMessage(ensure).contains("ready"));
         String callJson = "{\n" + "  \"jsonrpc\": \"2.0\",\n" + "  \"id\": 2,\n" + "  \"method\": \"tools/call\",\n" + "  \"params\": {\n" + "    \"name\": \"request_coordination\",\n" + "    \"arguments\": {\n"
-                + "      \"kind\": \"capability_request\",\n" + "      \"payload\": {\n" + "      \"capability\": \"catalog.product-query\",\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
+                + "      \"kind\": \"contract_publish\",\n" + "      \"payload\": {\n" + "      \"paths\": [\"ProductQuery.java\"],\n" + "      \"contract\": {\n" + "        \"purpose\": \"Look up a product by id\",\n" + "        \"inputs\": \"UUID productId\",\n"
                 + "        \"output\": \"Optional<Product>\",\n" + "        \"requiredBehavior\": [\"Return exact matching product\"],\n" + "        \"errorSemantics\": \"Malformed ids are rejected; unknown products return empty\",\n" + "        \"sideEffects\": \"none\",\n" + "        \"invariants\": \"Does not mutate product records\",\n" + "        \"compatibility\": \"Additive changes only\",\n" + "        \"performance\": \"One lookup per call\",\n" + "        \"concurrency\": \"Concurrent reads are safe\",\n" + "        \"acceptanceTests\": [\"existing product returned\"]\n" + "      }\n"
                 + "      }\n" + "    }\n" + "  }\n" + "}";
 
         String res = handler.handleMessage(callJson);
         assertNotNull(res);
-        assertTrue(res.contains("req_"));
+        assertTrue(res.contains("contractId"), res);
         assertFalse(res.contains(projectRoot.toString().replace('\\', '/')));
         assertFalse(res.contains("eventId"));
     }

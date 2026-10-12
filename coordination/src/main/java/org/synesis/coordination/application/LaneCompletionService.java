@@ -8,6 +8,7 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.contract.ContractCodec;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -92,24 +93,31 @@ final class LaneCompletionService {
                 signer.nodeId(),
                 CollaborationCodec.encodeRelease(intent.intentId()),
                 signer);
-        supersedeRequestsNeverAnswered(current, intent);
+        endOwnedContracts(current, intent.authorityLineageId(), true);
         closeSettledWorkGroup(current, intent.group());
         return true;
     }
 
     /**
-     * Supersedes the capability requests addressed to a lane that is released with them never
-     * answered (ADR-0089).
+     * Ends what a lane held as owner of contracts, under the lock that ends the lane (ADR-0092).
      *
-     * <p>A request can be filed until the moment its owner's lane is released, and one filed after
-     * a fast owner had asked to finish stayed awaiting an owner that no longer existed; its
-     * requester waited for good. Done here, under the lock that releases the lane, no request can
-     * arrive in between. The requester is told the owner finished and builds against the
-     * integrated work.</p>
+     * <p>Its contracts are frozen, the change requests still waiting for it are declined, and the
+     * change requests it filed are withdrawn: one event, read by the contract projection. The
+     * bindings to its contracts that it can no longer serve are closed, so their consumers are
+     * told the owner is gone and judge the dependency afresh. A binding or a request can arrive
+     * until the moment the lane ends; one that arrived after a fast owner had asked to finish
+     * waited for good for an owner that no longer existed. Done here no arrival can fall in
+     * between.</p>
+     *
+     * @param integrated whether the lane's work was integrated. A validated binding then stands:
+     *                   what its consumer checked is in the control branch. A cancelled lane
+     *                   leaves nothing to stand on, and every binding to it is closed.
      */
-    private void supersedeRequestsNeverAnswered(PredictionEventStore current, WorkIntent owner) throws IOException, GeneralSecurityException {
+    private void endOwnedContracts(PredictionEventStore current, UUID lineageId, boolean integrated) throws IOException, GeneralSecurityException {
+        current.append(UUID.randomUUID(), PredictionEventType.CONTRACT_LANE_ENDED, signer.nodeId(), ContractCodec.encodeLaneEnded(lineageId), signer);
         for (CapabilityRequestRecord request : List.copyOf(current.capabilityRequestProjection().records().values())) {
-            if (request.state() != CapabilityLifecycleState.AWAITING_OWNER || !request.authorityLineageId().equals(owner.authorityLineageId())) {
+            boolean stands = integrated && request.state() == CapabilityLifecycleState.VALIDATED;
+            if (!request.state().bindsLanes() || stands || !request.authorityLineageId().equals(lineageId)) {
                 continue;
             }
             CapabilityRequestPayload superseded = new CapabilityRequestPayload(request.handle(),
@@ -186,11 +194,17 @@ final class LaneCompletionService {
             List<WorkGroupId> groups = current.collaborationProjection().activeIntents().stream()
                     .filter(intent -> intent.participantIdentity().equals(durableParticipant))
                     .map(WorkIntent::group).distinct().toList();
+            List<UUID> lineages = current.collaborationProjection().activeIntents().stream()
+                    .filter(intent -> intent.participantIdentity().equals(durableParticipant))
+                    .map(WorkIntent::authorityLineageId).distinct().toList();
             current.append(ParticipantRecoveryService.participantStreamId(durableParticipant),
                     PredictionEventType.PARTICIPANT_CANCELLED,
                     signer.nodeId(),
                     CollaborationCodec.encodeHeartbeat(durableParticipant),
                     signer);
+            for (UUID lineage : lineages) {
+                endOwnedContracts(current, lineage, false);
+            }
             for (WorkGroupId group : groups) {
                 closeSettledWorkGroup(current, group);
             }

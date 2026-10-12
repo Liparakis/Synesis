@@ -8,7 +8,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.synesis.coordination.application.ContinuationResult;
-import org.synesis.coordination.application.ContractService;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentMutationPrecondition;
 import org.synesis.coordination.application.WorkIntentService;
@@ -19,10 +18,7 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
-import org.synesis.coordination.domain.identity.ContractId;
-import org.synesis.coordination.domain.identity.ContractRevision;
 import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.WorkGroupId;
@@ -635,59 +631,6 @@ public final class WorkspaceCollaborationService {
         ProjectLocation location = projectService.locate(projectRoot);
         PredictionEventStore store = location.openCoordinationStore();
         new WorkGroupService(store, location.loadOrCreateIdentity()).close(new WorkGroupId(groupId), status, new WorkGroupVersion(expectedVersion));
-    }
-
-    /**
-     * Publishes a signed shared contract revision for this project.
-     *
-     * @param projectRoot          project root
-     * @param provider             provider ID
-     * @param connectionInstanceId exact connection ID
-     * @param contractId           contract identifier
-     * @param body                 contract body
-     * @param selectors            declared selector references
-     * @return published contract
-     * @throws Exception when session or persistence resolution fails
-     */
-    public ContractRecord publishContract(Path projectRoot, String provider, String connectionInstanceId, UUID contractId, String body, List<String> selectors) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = location.loadOrCreateIdentity();
-        PredictionEventStore store = location.openCoordinationStore();
-        return new ContractService(store, identity).publish(new ContractId(contractId), new ParticipantId(participantHandle(binding.sessionId())), body, selectors);
-    }
-
-    /**
-     * Binds an intent to an exact active contract revision.
-     *
-     * @param projectRoot          project root
-     * @param provider             provider ID
-     * @param connectionInstanceId exact connection ID
-     * @param intentId             intent identifier
-     * @param contractId           contract identifier
-     * @param revision             exact revision
-     * @throws Exception when session or persistence resolution fails
-     */
-    public void bindContract(Path projectRoot, String provider, String connectionInstanceId, UUID intentId, UUID contractId, long revision) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        ProviderSessionBindingService.Binding binding = binding(location, provider, connectionInstanceId);
-        NodeIdentity identity = location.loadOrCreateIdentity();
-        PredictionEventStore store = location.openCoordinationStore();
-        new ContractService(store, identity).bind(new WorkIntentId(intentId), new ParticipantId(participantHandle(binding.sessionId())), new ContractId(contractId), new ContractRevision(revision));
-    }
-
-    /**
-     * Lists replayed contracts and exact consumer dependencies.
-     *
-     * @param projectRoot project root
-     * @return contract snapshot
-     * @throws Exception when project state cannot be read
-     */
-    public ContractSnapshot contractStatus(Path projectRoot) throws Exception {
-        ProjectLocation location = projectService.locate(projectRoot);
-        PredictionEventStore store = location.openCoordinationStore();
-        ContractService service = new ContractService(store, location.loadOrCreateIdentity());
-        return new ContractSnapshot(service.contracts(), service.dependencies());
     }
 
     /**

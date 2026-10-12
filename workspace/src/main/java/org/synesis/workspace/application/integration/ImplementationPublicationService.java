@@ -257,7 +257,7 @@ public final class ImplementationPublicationService {
      * <p>Each request keeps its own revisions and its own validation. Published one request at a
      * time, the owner waited for the first requester's verdict while the others waited for a
      * publication, and a revision made for one requester left another validated at a commit that
-     * was no longer the owner's. A request already at this commit is left as it is.</p>
+     * was no longer the owner's.</p>
      */
     private static void publishToOtherRequests(PredictionEventStore store,
             CapabilityRequestRecord named,
@@ -273,7 +273,11 @@ public final class ImplementationPublicationService {
                 continue;
             }
             Optional<ImplementationRevisionRecord> latest = store.capabilityRequestProjection().findLatestImplementation(other.handle().value());
-            if (latest.isPresent() && latest.get().commitSha().equals(snapshot.commitSha())) {
+            // A request already at this commit is left as it is, unless it is waiting for an
+            // implementation again: a consumer that bound again after a contract revision
+            // (ADR-0092) has to check the work under the new revision, and the commit may be
+            // unchanged. Skipped, the second of two re-bound consumers never received it.
+            if (latest.isPresent() && latest.get().commitSha().equals(snapshot.commitSha()) && !other.state().acceptsImplementation()) {
                 continue;
             }
             ImplementationEventPayload payload = new ImplementationEventPayload(other.handle(),

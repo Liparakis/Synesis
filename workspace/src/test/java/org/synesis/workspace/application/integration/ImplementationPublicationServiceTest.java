@@ -31,7 +31,7 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.CapabilityRequestService;
-import org.synesis.workspace.application.capability.CapabilityResponseService;
+import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
@@ -112,29 +112,24 @@ class ImplementationPublicationServiceTest {
                 "Task and repository contract",
                 List.of("Create TODO tasks", "Enforce valid status transitions"),
                 List.of("Invalid input is rejected"));
-        AgentResponse request = new CapabilityRequestService().describeRequiredCapability(new CapabilityRequestService.DescribeCapabilityRequest(projectRoot,
+        AgentResponse published = new ContractOwnerService().publish(new ContractOwnerService.PublishRequest(projectRoot,
+                "codex",
+                ownerConnection,
+                List.of(ResourceSelector.pathExact("src/Product.java")),
+                contract,
+                List.of()));
+        assertEquals(AgentStatus.COMPLETED, published.status(), published.toJson());
+        AgentResponse bound = new CapabilityRequestService().bind(new CapabilityRequestService.BindRequest(projectRoot,
                 "codex",
                 requesterConnection,
                 "tasktracker.domain",
-                contract,
-                null,
-                null));
-        assertEquals(AgentStatus.WAITING, request.status(), request.toJson());
+                ResourceSelector.pathExact("src/Product.java"),
+                1));
+        assertEquals(AgentStatus.READY, bound.status(), bound.toJson());
+        handle = (String) ((Map<?, ?>) bound.result()).get("capabilityRequestHandle");
 
-        AgentNextActionService nextActions = new AgentNextActionService();
-        AgentResponse ownerInbox = nextActions.getNextAction(new NextActionRequest(projectRoot, "codex", ownerConnection));
-        Map<?, ?> ownerInboxResult = (Map<?, ?>) ownerInbox.result();
-        handle = (String) ownerInboxResult.get("capabilityRequestHandle");
-        contractRevision = ((Number) ownerInboxResult.get("contractRevision")).longValue();
-        AgentResponse accepted = new CapabilityResponseService().respondToOwnerRequest(new CapabilityResponseService.OwnerResponseRequest(projectRoot,
-                "codex",
-                ownerConnection,
-                handle,
-                "accept",
-                null,
-                null,
-                contractRevision));
-        assertEquals(AgentStatus.READY, accepted.status(), accepted.toJson());
+        AgentResponse ownerInbox = new AgentNextActionService().getNextAction(new NextActionRequest(projectRoot, "codex", ownerConnection));
+        contractRevision = ((Number) ((Map<?, ?>) ownerInbox.result()).get("contractRevision")).longValue();
     }
 
     @Test

@@ -20,6 +20,8 @@ import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.contract.ContractChangeRequest;
+import org.synesis.coordination.domain.contract.ContractRecord;
 import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -111,11 +113,11 @@ final class CapabilityActionProjection {
         }
         Predicate<CapabilityRequestRecord> inCallerLineage = inCallerLineage(coordinationActivated, callerIntent);
 
-        AgentResponse ownerResponse = ownerCapabilityAction(capabilities, actor, inCallerLineage);
+        AgentResponse ownerResponse = ownerCapabilityAction(store, actor, callerIntent, inCallerLineage);
         if (ownerResponse != null) {
             return withResolvedDependencies(ownerResponse, localDependencies);
         }
-        AgentResponse requesterResponse = requesterCapabilityAction(capabilities, actor);
+        AgentResponse requesterResponse = requesterCapabilityAction(store, actor);
         if (requesterResponse != null) {
             return withResolvedDependencies(requesterResponse, localDependencies);
         }
@@ -182,10 +184,17 @@ final class CapabilityActionProjection {
         result.put(NextActionKeys.PENDING, intent.knownDependencies().size());
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
         result.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
-        result.put("coordinationKind", NextActionProtocol.KIND_CAPABILITY_REQUEST);
+        result.put("coordinationKind", "contract_bind");
         result.put("lanes", CollaborationResponseMapper.otherLanes(store.collaborationProjection(), intent.participant()));
-        result.put("instruction", "Request " + missingDependency + " with request_coordination kind capability_request: the complete contract, and ownerPath set to the repository file that implements it. "
-                + "The lane that claims that file receives the request; lanes lists what each open lane claims.");
+        result.put("contracts", store.contractProjection().contracts().stream().filter(contract -> contract.state() == ContractRecord.State.ACTIVE).map(CollaborationResponseMapper::contractMap).toList());
+        List<ContractChangeRequest> filed = store.contractProjection().changeRequestsFiledBy(intent.authorityLineageId());
+        if (!filed.isEmpty()) {
+            result.put("yourChangeRequests", filed.stream().map(CollaborationResponseMapper::changeRequestMap).toList());
+        }
+        result.put("instruction", "Your lane depends on " + missingDependency + " and is not bound to a contract for it. contracts lists the public contract of each file; lanes lists what each open lane claims. "
+                + "To accept a contract, call request_coordination kind contract_bind with capability " + missingDependency + ", ownerPath set to the file you build on, and the revision you read. "
+                + "If the file has no contract yet, or its contract does not cover what you need, call request_coordination kind contract_change_request with ownerPath and need: "
+                + "the lane claiming the file answers, and a declined request can still be bound to as the contract stands.");
         return new AgentResponse(AgentStatus.NEEDS_CAPABILITY, AgentReason.OWNER_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 
@@ -318,7 +327,14 @@ final class CapabilityActionProjection {
      * @param inCallerLineage filter restricting requests to the caller's authority lineage
      * @return an owner action, or {@code null} when the caller owes nothing as owner
      */
-    static AgentResponse ownerCapabilityAction(CapabilityRequestProjection capabilities, CapabilityActor actor, Predicate<CapabilityRequestRecord> inCallerLineage) {
+    static AgentResponse ownerCapabilityAction(PredictionEventStore store, CapabilityActor actor, WorkIntent callerIntent, Predicate<CapabilityRequestRecord> inCallerLineage) {
+        CapabilityRequestProjection capabilities = store.capabilityRequestProjection();
+        if (callerIntent != null) {
+            AgentResponse changes = openChangeRequestsAction(store, callerIntent);
+            if (changes != null) {
+                return changes;
+            }
+        }
         // Local sessions share the node identity, so only the stored supervisor and worker scope
         // separates the assigned owner from a sibling. Projecting by node alone would hand a
         // sibling a reply or publication that the owning services then refuse.
@@ -348,6 +364,33 @@ final class CapabilityActionProjection {
     }
 
     /**
+     * Shows the owner every change request it has not answered, together, with the contracts they
+     * are against (ADR-0092).
+     *
+     * <p>Shown one request at a time, an owner agreed two texts for one module that contradicted
+     * each other, and saw it only when both consumers checked its work. Seen side by side, the
+     * needs can be weighed against one text: a revision that covers them, or a reason to decline.</p>
+     *
+     * @param store       current project projection
+     * @param callerIntent the caller's active intent
+     * @return the owner's owed answers, or {@code null} when no change request is open for its lane
+     */
+    private static AgentResponse openChangeRequestsAction(PredictionEventStore store, WorkIntent callerIntent) {
+        List<ContractChangeRequest> open = store.contractProjection().openChangeRequestsFor(callerIntent.authorityLineageId());
+        if (open.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("changeRequests", open.stream().map(CollaborationResponseMapper::changeRequestMap).toList());
+        result.put("yourContracts", store.contractProjection().ownedBy(callerIntent.authorityLineageId()).stream().map(CollaborationResponseMapper::contractMap).toList());
+        result.put(NextActionKeys.PENDING, open.size());
+        result.put("instruction", "Other lanes build on files you claim and have said what they need. Read all of changeRequests together: one contract per file serves every consumer, so what you agree for one must hold for all. "
+                + "To cover needs, call request_coordination kind contract_publish with paths, the complete contract and answers listing the changeRequest ids that revision covers. "
+                + "To refuse one, call respond_coordination kind contract_change_response with changeRequest, decision declined and a reason. Every change request must be answered before this lane can finish.");
+        return new AgentResponse(AgentStatus.READY, AgentReason.OWNER_RESPONSE_PENDING, AgentNextAction.RESPOND_COORDINATION, result);
+    }
+
+    /**
      * Resolves what the caller must do as <em>requester</em> of capability requests.
      *
      * @param capabilities capability-request projection
@@ -355,7 +398,8 @@ final class CapabilityActionProjection {
      * @return a requester action, or {@code null} when none of the caller's requests needs
      *         attention
      */
-    private static AgentResponse requesterCapabilityAction(CapabilityRequestProjection capabilities, CapabilityActor actor) {
+    private static AgentResponse requesterCapabilityAction(PredictionEventStore store, CapabilityActor actor) {
+        CapabilityRequestProjection capabilities = store.capabilityRequestProjection();
         List<CapabilityRequestRecord> pending = capabilities.findPendingForRequester(actor.nodeId()).stream().filter(candidate -> candidate.matchesRequester(actor.nodeId(), actor.supervisorId(), actor.workerId()))
                 .toList();
         CapabilityRequestRecord focus = selectRequesterFocus(pending);
@@ -373,17 +417,22 @@ final class CapabilityActionProjection {
             result.put(NextActionKeys.CAPABILITY, focus.capability());
             result.put(NextActionKeys.CONTRACT, contract);
             result.put(NextActionKeys.PENDING, pending.size());
-            // The reply must repeat the handle, capability, revision, and an equivalent contract.
-            // Accept, counter, or cancel stays the requester's decision, so this is offered as the
-            // exact accept call and not as the recommended tool.
-            Map<String, Object> acceptPayload = new LinkedHashMap<>();
-            acceptPayload.put(NextActionKeys.CAPABILITY_REQUEST_HANDLE, focus.handle().value());
-            acceptPayload.put(NextActionKeys.CAPABILITY, focus.capability());
-            acceptPayload.put(NextActionKeys.CONTRACT_REVISION, focus.contractRevision());
-            acceptPayload.put(NextActionKeys.CONTRACT, contract);
-            acceptPayload.put("revisionResponse", "accept");
-            result.put("revisionDecision", Map.of("required", true, "field", "revisionResponse", "allowedResults", List.of("accept", "counter", "cancel")));
-            result.put("acceptRevision", Map.of(NextActionKeys.TOOL, NextActionProtocol.ACTION_REQUEST_COORDINATION, NextActionKeys.ARGUMENTS, Map.of(NextActionKeys.KIND, NextActionProtocol.KIND_CAPABILITY_REQUEST, NextActionKeys.PAYLOAD, acceptPayload)));
+            // The owner published a new revision of the one public contract (ADR-0092). Binding
+            // again is the consumer's acceptance of it; filing a change request or cancelling the
+            // lane are its other choices, so the bind is offered and not recommended.
+            ContractRecord revised = store.contractProjection().binding(focus.handle().value()).flatMap(bound -> store.contractProjection().contract(bound.contractId())).orElse(null);
+            if (revised != null) {
+                Map<String, Object> bindPayload = new LinkedHashMap<>();
+                bindPayload.put(NextActionKeys.CAPABILITY, focus.capability());
+                bindPayload.put("ownerPath", revised.paths().getFirst().value());
+                bindPayload.put("revision", revised.revision());
+                result.put("revision", revised.revision());
+                result.put("paths", revised.paths().stream().map(org.synesis.coordination.domain.collaboration.ResourceSelector::value).toList());
+                result.put("bindAgain", Map.of(NextActionKeys.TOOL, NextActionProtocol.ACTION_REQUEST_COORDINATION, NextActionKeys.ARGUMENTS, Map.of(NextActionKeys.KIND, "contract_bind", NextActionKeys.PAYLOAD, bindPayload)));
+            }
+            result.put("instruction", "The owner published a new revision of the contract you are bound to; what you validated under the earlier revision no longer counts. "
+                    + "Read contract. To accept it, make the call in bindAgain. If it does not cover what you need, call request_coordination kind contract_change_request with ownerPath and need. "
+                    + "The owner's work is not integrated until every bound lane has bound again and checked it.");
             return new AgentResponse(AgentStatus.READY, AgentReason.REVISION_REQUIRED, AgentNextAction.REVISE_CAPABILITY_REQUEST, result);
         }
         if (state.acceptsImplementation()) {

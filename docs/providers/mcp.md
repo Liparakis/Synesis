@@ -38,18 +38,14 @@ the exact existing binding, thread, generation, and server-issued proof. The
 proof is delivered through the allow-listed process environment and is never
 written to configuration, repository state, prompts, output, or diagnostics.
 
-Capability requests, requester revision replies, and owner replies are decided
+A contract publication, a binding, a change request and its answer are decided
 and appended under the project event-log lock against a freshly replayed
-projection, so concurrent MCP processes cannot record two active requests for
-the same requester and capability or two different replies to one contract
-revision. A reply that loses that race is answered from the recorded state: the
-identical decision is idempotent, and any other reply is `stale_request`. If the
+projection, so concurrent MCP processes cannot record two bindings for the same
+consumer and dependency, or bind to a revision a peer has just replaced. If the
 lock cannot be acquired within its bounded wait, the call returns `blocked` /
 `task_not_ready` with `reason: EVENT_APPEND_LOCK_UNAVAILABLE` and `retry`;
-nothing was appended. Only the session whose supervisor and worker scope is
-stored as the request's owner may answer it or see it in its inbox. Local
-sessions share one node identity, so a sibling session on the same node receives
-`policy_denied`.
+nothing was appended. Only the lane that claims a file publishes its contract and
+answers the change requests against it; another lane receives `policy_denied`.
 
 When only someone with authority over the project can clear what blocks a step,
 the answer is `blocked` / `operator_required` with `operatorRequest` (`id`,
@@ -67,24 +63,45 @@ is answered `failed` with `failurePoint`: the identifier of an entry in
 stack. The answer itself never carries them. A `failed` answer from another
 path does not yet carry one.
 
-A new capability request says whose it is by `ownerPath`, the repository file
-that implements the capability. The open lane of another participant that
-claims that file is the owner (ADR-0090). A lineage sent with it does not
-overrule the claim, and a file no other lane claims leaves the request
-unrecorded. Without `ownerPath`, `ownerAuthorityLineageId` is used, or the only
-other open lane when there is exactly one. When the owner cannot be told the
-answer is `needs_capability` / `owner_required` with `lanes`, the goal and
-claims of each open lane, and an `instruction`. A recorded request answers with
-`owner`, the goal and claims of the lane it went to.
+One public contract covers each claimed file (ADR-0092). Every agent can read
+it, in `collaboration_status` and wherever `get_next_action` lists `contracts`.
 
-When the owner asks for a contract revision, the requester's `get_next_action`
-returns `revise_capability_request` with the capability name, the revised
-contract, its `contractRevision`, and `acceptRevision`: the exact
-`request_coordination` call that accepts it. Accepting, countering, or cancelling
-remains the requester's decision, so that call is offered and not recommended. A
-reply that does not match the recorded request returns `stale_request` with a
-`reason` of `CAPABILITY_CONTRACT_REVISION_STALE`, `CAPABILITY_NAME_MISMATCH`,
-`CAPABILITY_REVISION_NOT_PENDING`, or `CAPABILITY_CONTRACT_MISMATCH`.
+- `contract_publish` (`paths`, `contract`, optional `answers`) publishes the
+  contract over files the caller claims, or its next revision. A path ending in
+  `/` names a subtree. A path outside the caller's claims is refused with
+  `CONTRACT_PATH_NOT_CLAIMED`. A revision can add files and never drops one. The
+  answer carries the revision, `bindingsToMakeAgain`, and the change requests
+  it answered and left open.
+- `contract_bind` (`capability`, `ownerPath`, `revision`) is the consumer's
+  acceptance of one exact revision. `capability` is the consumer's own name for
+  the dependency, as in its `task.knownDependencies`. The lane of another
+  participant that claims `ownerPath` is the owner (ADR-0090). The answer is
+  `ready` with `contractAccepted: true`, the contract and
+  `capabilityRequestHandle`. A revision that is not the current one returns
+  `stale_request` with the current contract; a file with no contract returns
+  `needs_capability` / `owner_required` with `reason: CONTRACT_NOT_PUBLISHED`;
+  a file no other lane claims returns the same with `lanes`.
+- `contract_change_request` (`ownerPath`, `need`) tells the lane claiming the
+  file what the caller needs, and asks for a contract where none exists yet. It
+  returns `waiting` / `owner_response_pending` with `changeRequest`.
+- `contract_change_response` (`changeRequest`, `decision`, `reason`) is the
+  owner's answer: `accepted` when the current revision covers the need, or
+  `declined` with a reason.
+
+An owner with open change requests is shown all of them together in
+`get_next_action`, as `changeRequests` beside `yourContracts`, and cannot finish
+its lane until each is answered (`CONTRACT_CHANGE_REQUEST_OPEN`). A consumer
+whose contract was revised is shown `revise_capability_request` with the new
+contract and `bindAgain`, the exact `contract_bind` call; what it validated
+under the earlier revision no longer counts, and the owner may publish the same
+commit again for the new revision.
+
+A verdict of `revision_required` in `implementation_validation` needs `reason`
+and `contractField`, the field of the contract the implementation breaks.
+
+Cancelling a lane withdraws its bindings in every state. When an owner's lane
+ends, its contracts are frozen, the change requests still open against them are
+declined, and the bindings it can no longer serve are closed.
 
 After the requester validates a published implementation, the owner's ordinary
 `get_next_action` returns `implementationValidated: true` and recommends

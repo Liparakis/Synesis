@@ -44,15 +44,13 @@ sealed interface McpCoordinationResponse {
     }
 
     /**
-     * Answers a capability request as its owner.
+     * The owner's answer to one contract change request.
      *
-     * @param capabilityRequestHandle handle of the capability request
-     * @param response                {@code accept}, {@code revise} or {@code reject}
-     * @param revision                revised contract, or {@code null} unless the owner revises
-     * @param reason                  reason text, or {@code null}
-     * @param contractRevision        contract revision being answered
+     * @param changeRequestId change request being answered
+     * @param accepted        whether the current revision covers the need
+     * @param reason          why it is declined, or {@code null}
      */
-    record RespondToCapability(String capabilityRequestHandle, String response, CapabilityContract revision, String reason, long contractRevision) implements McpCoordinationResponse {
+    record AnswerChange(UUID changeRequestId, boolean accepted, String reason) implements McpCoordinationResponse {
     }
 
     /**

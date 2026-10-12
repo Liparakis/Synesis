@@ -264,26 +264,26 @@
     "name": "get_next_action"
   },
   {
-    "description": "Submits one strict capability or collaboration request. A capability_request includes the complete API contract and names its owner by ownerPath, the repository file that implements the capability. To answer an owner revision, include capabilityRequestHandle, revisionResponse, and the exact contractRevision shown in get_next_action; acceptance must identify the current full contract. For kind contract_request, payload requires conflictingIntentId and proposal. Only fields declared for the selected kind are allowed.",
+    "description": "Submits one strict contract or collaboration request. One public contract covers a claimed file: every agent can read it, and only the lane that claims the file publishes it. contract_publish publishes the complete contract over paths the caller claims, or its next revision, and may list in answers the change requests it covers. contract_bind accepts the exact revision of the contract over ownerPath for the dependency the caller names in capability; after the owner publishes a new revision, bind again. contract_change_request tells the lane claiming ownerPath what the caller needs, and asks for a contract where none exists yet. Only fields declared for the selected kind are allowed.",
     "inputSchema": {
       "oneOf": [
         {
           "properties": {
             "kind": {
               "enum": [
-                "capability_request"
+                "contract_publish"
               ],
               "type": "string"
             },
             "payload": {
               "additionalProperties": false,
               "properties": {
-                "capability": {
-                  "type": "string"
-                },
-                "capabilityRequestHandle": {
-                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
-                  "type": "string"
+                "answers": {
+                  "description": "changeRequest identifiers this revision covers",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "contract": {
                   "properties": {
@@ -377,31 +377,16 @@
                   ],
                   "type": "object"
                 },
-                "contractRevision": {
-                  "description": "Exact contract revision shown in the current request projection",
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "ownerAuthorityLineageId": {
-                  "description": "Durable authority lineage of the intended capability publisher",
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "ownerPath": {
-                  "description": "Repository-relative file that implements the capability; the lane claiming it receives the request. Prefer this to ownerAuthorityLineageId",
-                  "type": "string"
-                },
-                "revisionResponse": {
-                  "enum": [
-                    "accept",
-                    "counter",
-                    "cancel"
-                  ],
-                  "type": "string"
+                "paths": {
+                  "description": "Repository-relative files the contract covers, all claimed by the caller; a path ending in / names a subtree",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               },
               "required": [
-                "capability",
+                "paths",
                 "contract"
               ],
               "type": "object"
@@ -417,32 +402,64 @@
           "properties": {
             "kind": {
               "enum": [
-                "contract_request"
+                "contract_bind"
               ],
               "type": "string"
             },
             "payload": {
               "additionalProperties": false,
               "properties": {
-                "conflictingIntentId": {
-                  "format": "uuid",
+                "capability": {
+                  "description": "The caller's own name for what it depends on, as listed in its task.knownDependencies",
                   "type": "string"
                 },
-                "contractId": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "proposal": {
+                "ownerPath": {
+                  "description": "Repository-relative file the caller builds on; the lane claiming it is the owner",
                   "type": "string"
                 },
                 "revision": {
+                  "description": "Contract revision the caller read and accepts",
                   "minimum": 1,
                   "type": "integer"
                 }
               },
               "required": [
-                "conflictingIntentId",
-                "proposal"
+                "capability",
+                "ownerPath",
+                "revision"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "contract_change_request"
+              ],
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": false,
+              "properties": {
+                "need": {
+                  "description": "What the caller needs from that file that its contract does not say",
+                  "type": "string"
+                },
+                "ownerPath": {
+                  "description": "Repository-relative file the caller builds on; the lane claiming it is the owner",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ownerPath",
+                "need"
               ],
               "type": "object"
             }
@@ -458,7 +475,6 @@
             "kind": {
               "enum": [
                 "collaboration_status",
-                "contract_proposal",
                 "scope_revision",
                 "handoff",
                 "work_group_join",
@@ -472,26 +488,23 @@
                 "acceptance": {
                   "type": "string"
                 },
+                "answers": {
+                  "description": "changeRequest identifiers this revision covers",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
                 "artifact": {
                   "type": "string"
                 },
-                "body": {
-                  "type": "string"
-                },
                 "capability": {
-                  "type": "string"
-                },
-                "capabilityRequestHandle": {
-                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                  "description": "The caller's own name for what it depends on, as listed in its task.knownDependencies",
                   "type": "string"
                 },
                 "claimEpoch": {
                   "minimum": 1,
                   "type": "integer"
-                },
-                "conflictingIntentId": {
-                  "format": "uuid",
-                  "type": "string"
                 },
                 "contract": {
                   "properties": {
@@ -585,15 +598,6 @@
                   ],
                   "type": "object"
                 },
-                "contractId": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "contractRevision": {
-                  "description": "Exact contract revision shown in the current request projection",
-                  "minimum": 1,
-                  "type": "integer"
-                },
                 "goal": {
                   "type": "string"
                 },
@@ -605,14 +609,20 @@
                   "format": "uuid",
                   "type": "string"
                 },
-                "ownerAuthorityLineageId": {
-                  "description": "Durable authority lineage of the intended capability publisher",
-                  "format": "uuid",
+                "need": {
+                  "description": "What the caller needs from that file that its contract does not say",
                   "type": "string"
                 },
                 "ownerPath": {
-                  "description": "Repository-relative file that implements the capability; the lane claiming it receives the request. Prefer this to ownerAuthorityLineageId",
+                  "description": "Repository-relative file the caller builds on; the lane claiming it is the owner",
                   "type": "string"
+                },
+                "paths": {
+                  "description": "Repository-relative files the contract covers, all claimed by the caller; a path ending in / names a subtree",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "proposal": {
                   "type": "string"
@@ -633,16 +643,9 @@
                   "type": "object"
                 },
                 "revision": {
+                  "description": "Contract revision the caller read and accepts",
                   "minimum": 1,
                   "type": "integer"
-                },
-                "revisionResponse": {
-                  "enum": [
-                    "accept",
-                    "counter",
-                    "cancel"
-                  ],
-                  "type": "string"
                 },
                 "selectors": {
                   "items": {
@@ -674,10 +677,10 @@
       "properties": {
         "kind": {
           "enum": [
-            "capability_request",
+            "contract_publish",
+            "contract_bind",
+            "contract_change_request",
             "collaboration_status",
-            "contract_proposal",
-            "contract_request",
             "scope_revision",
             "handoff",
             "work_group_join",
@@ -691,26 +694,23 @@
             "acceptance": {
               "type": "string"
             },
+            "answers": {
+              "description": "changeRequest identifiers this revision covers",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "artifact": {
               "type": "string"
             },
-            "body": {
-              "type": "string"
-            },
             "capability": {
-              "type": "string"
-            },
-            "capabilityRequestHandle": {
-              "pattern": "^req_[A-Za-z0-9]{12,64}$",
+              "description": "The caller's own name for what it depends on, as listed in its task.knownDependencies",
               "type": "string"
             },
             "claimEpoch": {
               "minimum": 1,
               "type": "integer"
-            },
-            "conflictingIntentId": {
-              "format": "uuid",
-              "type": "string"
             },
             "contract": {
               "properties": {
@@ -804,15 +804,6 @@
               ],
               "type": "object"
             },
-            "contractId": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "contractRevision": {
-              "description": "Exact contract revision shown in the current request projection",
-              "minimum": 1,
-              "type": "integer"
-            },
             "goal": {
               "type": "string"
             },
@@ -824,14 +815,20 @@
               "format": "uuid",
               "type": "string"
             },
-            "ownerAuthorityLineageId": {
-              "description": "Durable authority lineage of the intended capability publisher",
-              "format": "uuid",
+            "need": {
+              "description": "What the caller needs from that file that its contract does not say",
               "type": "string"
             },
             "ownerPath": {
-              "description": "Repository-relative file that implements the capability; the lane claiming it receives the request. Prefer this to ownerAuthorityLineageId",
+              "description": "Repository-relative file the caller builds on; the lane claiming it is the owner",
               "type": "string"
+            },
+            "paths": {
+              "description": "Repository-relative files the contract covers, all claimed by the caller; a path ending in / names a subtree",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             "proposal": {
               "type": "string"
@@ -852,16 +849,9 @@
               "type": "object"
             },
             "revision": {
+              "description": "Contract revision the caller read and accepts",
               "minimum": 1,
               "type": "integer"
-            },
-            "revisionResponse": {
-              "enum": [
-                "accept",
-                "counter",
-                "cancel"
-              ],
-              "type": "string"
             },
             "selectors": {
               "items": {
@@ -892,137 +882,39 @@
     "name": "request_coordination"
   },
   {
-    "description": "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required. capability_response is fenced to the exact contractRevision shown in the owner inbox; revise also requires a complete replacement contract. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
+    "description": "Responds to a pending coordination item or validates an implementation. For implementation_validation, get_next_action first projects result=inspect; execute it before reading/running tests with the projected capabilityRequestHandle and implementationRevision. Only after that exact validation workspace is active may you choose accepted or revision_required; revision_required needs a reason and contractField, the field of the contract you bound to that the implementation breaks. contract_change_response answers one change request against a contract of the caller's lane: accepted when the current revision covers it, or declined with a reason. For kind coordination_response, payload requires the owned request UUID and status; proposal is optional. The request target chooses the status; Synesis does not choose a CONTRACT judgment.",
     "inputSchema": {
       "oneOf": [
         {
           "properties": {
             "kind": {
               "enum": [
-                "capability_response"
+                "contract_change_response"
               ],
               "type": "string"
             },
             "payload": {
               "additionalProperties": false,
               "properties": {
-                "capabilityRequestHandle": {
-                  "pattern": "^req_[A-Za-z0-9]{12,64}$",
+                "changeRequest": {
+                  "description": "Identifier of the contract change request being answered",
+                  "format": "uuid",
                   "type": "string"
                 },
-                "contractRevision": {
-                  "description": "Exact contract revision shown in the owner inbox",
-                  "minimum": 1,
-                  "type": "integer"
+                "decision": {
+                  "enum": [
+                    "accepted",
+                    "declined"
+                  ],
+                  "type": "string"
                 },
                 "reason": {
                   "type": "string"
-                },
-                "response": {
-                  "enum": [
-                    "accept",
-                    "revise",
-                    "reject"
-                  ],
-                  "type": "string"
-                },
-                "revision": {
-                  "properties": {
-                    "acceptanceTests": {
-                      "description": "Acceptance criteria for the published implementation",
-                      "items": {
-                        "maxLength": 1000,
-                        "minLength": 1,
-                        "type": "string"
-                      },
-                      "maxItems": 16,
-                      "type": "array"
-                    },
-                    "compatibility": {
-                      "description": "Compatibility and evolution requirements",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "concurrency": {
-                      "description": "Concurrency, ordering, and consistency guarantees",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "errorSemantics": {
-                      "description": "Failure cases and observable results",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "inputs": {
-                      "description": "Input names, types, constraints, and defaults",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "invariants": {
-                      "description": "Conditions that always remain true",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "output": {
-                      "description": "Output type and semantics",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "performance": {
-                      "description": "Latency and resource requirements",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "purpose": {
-                      "description": "What callers use this API for",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "requiredBehavior": {
-                      "description": "Required operational behavior",
-                      "items": {
-                        "maxLength": 1000,
-                        "minLength": 1,
-                        "type": "string"
-                      },
-                      "maxItems": 16,
-                      "type": "array"
-                    },
-                    "sideEffects": {
-                      "description": "Externally visible effects",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "purpose",
-                    "inputs",
-                    "output",
-                    "requiredBehavior",
-                    "errorSemantics",
-                    "sideEffects",
-                    "invariants",
-                    "compatibility",
-                    "performance",
-                    "concurrency",
-                    "acceptanceTests"
-                  ],
-                  "type": "object"
                 }
               },
               "required": [
-                "capabilityRequestHandle",
-                "response",
-                "contractRevision"
+                "changeRequest",
+                "decision"
               ],
               "type": "object"
             }
@@ -1090,6 +982,23 @@
                   "pattern": "^req_[A-Za-z0-9]{12,64}$",
                   "type": "string"
                 },
+                "contractField": {
+                  "description": "The field of the contract that the implementation breaks; required with result revision_required",
+                  "enum": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "string"
+                },
                 "failedAcceptanceTests": {
                   "items": {
                     "type": "string"
@@ -1148,14 +1057,31 @@
                   "pattern": "^req_[A-Za-z0-9]{12,64}$",
                   "type": "string"
                 },
+                "changeRequest": {
+                  "description": "Identifier of the contract change request being answered",
+                  "format": "uuid",
+                  "type": "string"
+                },
                 "claimEpoch": {
                   "minimum": 1,
                   "type": "integer"
                 },
-                "contractRevision": {
-                  "description": "Exact contract revision shown in the owner inbox",
-                  "minimum": 1,
-                  "type": "integer"
+                "contractField": {
+                  "description": "The field of the contract that the implementation breaks; required with result revision_required",
+                  "enum": [
+                    "purpose",
+                    "inputs",
+                    "output",
+                    "requiredBehavior",
+                    "errorSemantics",
+                    "sideEffects",
+                    "invariants",
+                    "compatibility",
+                    "performance",
+                    "concurrency",
+                    "acceptanceTests"
+                  ],
+                  "type": "string"
                 },
                 "coordinationRequest": {
                   "format": "uuid",
@@ -1168,6 +1094,13 @@
                     "REJECTED",
                     "CANCELLED",
                     "COMPLETED"
+                  ],
+                  "type": "string"
+                },
+                "decision": {
+                  "enum": [
+                    "accepted",
+                    "declined"
                   ],
                   "type": "string"
                 },
@@ -1209,14 +1142,6 @@
                   ],
                   "type": "string"
                 },
-                "response": {
-                  "enum": [
-                    "accept",
-                    "revise",
-                    "reject"
-                  ],
-                  "type": "string"
-                },
                 "result": {
                   "enum": [
                     "inspect",
@@ -1225,98 +1150,6 @@
                     "rejected"
                   ],
                   "type": "string"
-                },
-                "revision": {
-                  "properties": {
-                    "acceptanceTests": {
-                      "description": "Acceptance criteria for the published implementation",
-                      "items": {
-                        "maxLength": 1000,
-                        "minLength": 1,
-                        "type": "string"
-                      },
-                      "maxItems": 16,
-                      "type": "array"
-                    },
-                    "compatibility": {
-                      "description": "Compatibility and evolution requirements",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "concurrency": {
-                      "description": "Concurrency, ordering, and consistency guarantees",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "errorSemantics": {
-                      "description": "Failure cases and observable results",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "inputs": {
-                      "description": "Input names, types, constraints, and defaults",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "invariants": {
-                      "description": "Conditions that always remain true",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "output": {
-                      "description": "Output type and semantics",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "performance": {
-                      "description": "Latency and resource requirements",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "purpose": {
-                      "description": "What callers use this API for",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "requiredBehavior": {
-                      "description": "Required operational behavior",
-                      "items": {
-                        "maxLength": 1000,
-                        "minLength": 1,
-                        "type": "string"
-                      },
-                      "maxItems": 16,
-                      "type": "array"
-                    },
-                    "sideEffects": {
-                      "description": "Externally visible effects",
-                      "maxLength": 2000,
-                      "minLength": 1,
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "purpose",
-                    "inputs",
-                    "output",
-                    "requiredBehavior",
-                    "errorSemantics",
-                    "sideEffects",
-                    "invariants",
-                    "compatibility",
-                    "performance",
-                    "concurrency",
-                    "acceptanceTests"
-                  ],
-                  "type": "object"
                 },
                 "snapshotId": {
                   "type": "string"
@@ -1335,7 +1168,7 @@
       "properties": {
         "kind": {
           "enum": [
-            "capability_response",
+            "contract_change_response",
             "coordination_response",
             "inbox_acknowledge",
             "inbox_resolve",
@@ -1350,14 +1183,31 @@
               "pattern": "^req_[A-Za-z0-9]{12,64}$",
               "type": "string"
             },
+            "changeRequest": {
+              "description": "Identifier of the contract change request being answered",
+              "format": "uuid",
+              "type": "string"
+            },
             "claimEpoch": {
               "minimum": 1,
               "type": "integer"
             },
-            "contractRevision": {
-              "description": "Exact contract revision shown in the owner inbox",
-              "minimum": 1,
-              "type": "integer"
+            "contractField": {
+              "description": "The field of the contract that the implementation breaks; required with result revision_required",
+              "enum": [
+                "purpose",
+                "inputs",
+                "output",
+                "requiredBehavior",
+                "errorSemantics",
+                "sideEffects",
+                "invariants",
+                "compatibility",
+                "performance",
+                "concurrency",
+                "acceptanceTests"
+              ],
+              "type": "string"
             },
             "coordinationRequest": {
               "format": "uuid",
@@ -1370,6 +1220,13 @@
                 "REJECTED",
                 "CANCELLED",
                 "COMPLETED"
+              ],
+              "type": "string"
+            },
+            "decision": {
+              "enum": [
+                "accepted",
+                "declined"
               ],
               "type": "string"
             },
@@ -1411,14 +1268,6 @@
               ],
               "type": "string"
             },
-            "response": {
-              "enum": [
-                "accept",
-                "revise",
-                "reject"
-              ],
-              "type": "string"
-            },
             "result": {
               "enum": [
                 "inspect",
@@ -1427,98 +1276,6 @@
                 "rejected"
               ],
               "type": "string"
-            },
-            "revision": {
-              "properties": {
-                "acceptanceTests": {
-                  "description": "Acceptance criteria for the published implementation",
-                  "items": {
-                    "maxLength": 1000,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "maxItems": 16,
-                  "type": "array"
-                },
-                "compatibility": {
-                  "description": "Compatibility and evolution requirements",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "concurrency": {
-                  "description": "Concurrency, ordering, and consistency guarantees",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "errorSemantics": {
-                  "description": "Failure cases and observable results",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "inputs": {
-                  "description": "Input names, types, constraints, and defaults",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "invariants": {
-                  "description": "Conditions that always remain true",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "output": {
-                  "description": "Output type and semantics",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "performance": {
-                  "description": "Latency and resource requirements",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "purpose": {
-                  "description": "What callers use this API for",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "requiredBehavior": {
-                  "description": "Required operational behavior",
-                  "items": {
-                    "maxLength": 1000,
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "maxItems": 16,
-                  "type": "array"
-                },
-                "sideEffects": {
-                  "description": "Externally visible effects",
-                  "maxLength": 2000,
-                  "minLength": 1,
-                  "type": "string"
-                }
-              },
-              "required": [
-                "purpose",
-                "inputs",
-                "output",
-                "requiredBehavior",
-                "errorSemantics",
-                "sideEffects",
-                "invariants",
-                "compatibility",
-                "performance",
-                "concurrency",
-                "acceptanceTests"
-              ],
-              "type": "object"
             },
             "snapshotId": {
               "type": "string"

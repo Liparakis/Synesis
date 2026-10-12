@@ -94,7 +94,10 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.PROVIDER_SESSION_TERMINALIZED, 71),
             entry(PredictionEventType.WORK_INTENT_SCOPE_EXTENDED, 72),
             entry(PredictionEventType.OPERATOR_REQUEST_RAISED, 73),
-            entry(PredictionEventType.OPERATOR_REQUEST_CLOSED, 74)
+            entry(PredictionEventType.OPERATOR_REQUEST_CLOSED, 74),
+            entry(PredictionEventType.CONTRACT_CHANGE_REQUESTED, 75),
+            entry(PredictionEventType.CONTRACT_CHANGE_ANSWERED, 76),
+            entry(PredictionEventType.CONTRACT_LANE_ENDED, 77)
     );
 
     @Test
