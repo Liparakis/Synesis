@@ -3,11 +3,13 @@
 `.github/workflows/release.yml` checks the Java project, caches Gradle's
 dependency and compilation state, and builds and smoke-tests self-contained
 bundles on the six target runners. Each bundle contains the Java runtime, CLI,
-native MCP launcher, and native installer for its target platform. When a
-branch or `v*` tag is pushed, or when started manually, the workflow publishes
-the six runnable files directly as GitHub Release assets, without an
-Actions-artifact ZIP wrapper. Branch pushes use numbered `build-<run-number>`
-prereleases.
+native MCP launcher, and native installer for its target platform. A release is
+made by hand: when a `v*` tag is pushed, or when the workflow is started
+manually, it publishes the six runnable files directly as GitHub Release
+assets, without an Actions-artifact ZIP wrapper. A branch push
+and a pull request build the same six files and keep them with the run, under
+Artifacts on its Actions page for 14 days, where a download is wrapped in a
+ZIP. They publish no release and create no tag.
 
 Tagged releases expose exactly six raw platform assets:
 `synesis-windows-x64.exe`, `synesis-windows-arm64.exe`,

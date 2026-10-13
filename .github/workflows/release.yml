@@ -1,5 +1,8 @@
 name: release-artifacts
 
+# A push or a pull request is checked and its installers are built and kept with the run, under
+# Artifacts on its Actions page. No release is published and no tag is created. A release is made
+# by hand, by running this workflow from the Actions page or by pushing a v* tag.
 on:
   push:
     branches: [ '**' ]
@@ -49,7 +52,7 @@ jobs:
           retention-days: 7
 
   prepare-release:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -58,8 +61,8 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
-          AUTO_PRERELEASE: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && !inputs.release_tag) }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || format('manual-{0}', github.run_number) }}
+          AUTO_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && !inputs.release_tag }}
         run: |
           if [[ ! "${RELEASE_TAG}" =~ ^[A-Za-z0-9._-]+$ ]]; then
               echo "release_tag may contain only letters, numbers, dots, underscores, and hyphens" >&2
@@ -107,11 +110,20 @@ jobs:
         if: runner.os != 'Windows'
         env:
           JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
+      # Actions wraps an artifact download in a ZIP. A release publishes the raw file instead.
+      - name: Keep the installer with this run
+        if: ${{ !(github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.file }}
+          path: cli/build/distributions/${{ matrix.file }}
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish raw runnable release asset (Windows)
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os == 'Windows'
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || format('manual-{0}', github.run_number) }}
         shell: pwsh
         run: |
           for ($attempt = 1; $attempt -le 12; $attempt++) {
@@ -125,10 +137,10 @@ jobs:
           }
           exit $LASTEXITCODE
       - name: Publish raw runnable release asset (Unix)
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && runner.os != 'Windows'
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && runner.os != 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && (inputs.release_tag || format('manual-{0}', github.run_number)) || startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', github.run_number) }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || format('manual-{0}', github.run_number) }}
         shell: bash
         run: |
           for attempt in {1..12}; do
