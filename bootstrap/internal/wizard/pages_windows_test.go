@@ -103,10 +103,20 @@ func TestInstallerPagesShowTheirCopyOnAClearLayout(t *testing.T) {
 		controlCapabilityInstall: "Install Synesis 1.2.0 in this folder",
 		controlCapabilityLink:    "Register the synesis:// link handler",
 		controlCapabilityData:    "Add the Synesis bin folder to your user PATH",
+		controlShortcut:          "Add a Synesis UI shortcut to the desktop",
 		controlBack:              "Back",
 		controlNext:              "Install",
 		controlCancel:            "Cancel",
 	})
+
+	if w.shortcut {
+		t.Fatal("a wizard built without the option starts with the shortcut chosen")
+	}
+	w.handleCommand(uint16(controlShortcut), win32.BnClicked)
+	if !w.shortcut {
+		t.Fatal("the shortcut option could not be chosen")
+	}
+	w.handleCommand(uint16(controlShortcut), win32.BnClicked)
 
 	w.showPage(installerPageUninstall)
 	requireClearLayout(t, w, "uninstall page")

@@ -62,6 +62,7 @@ func (w *installerWizard) startOperation() {
 	root := w.installRoot
 	action := w.action
 	metadata := w.metadata
+	shortcut := w.shortcut && action == installerActionInstall
 	bundle := w.bundle
 	execute := w.executeOperation
 	if execute == nil {
@@ -80,6 +81,14 @@ func (w *installerWizard) startOperation() {
 		}
 		if result.err == nil {
 			result = execute(root, bundle, action, metadata, w.reportProgress)
+		}
+		if result.err == nil && shortcut {
+			if failure := addDesktopShortcut(root); failure != "" {
+				result.warning = strings.TrimSpace(result.warning + " " + failure)
+				w.reportProgress("protocol", "warning", failure)
+			} else {
+				w.reportProgress("protocol", "done", "Synesis UI shortcut added to the desktop")
+			}
 		}
 		if result.err != nil {
 			w.reportProgress("", "failed", result.err.Error())

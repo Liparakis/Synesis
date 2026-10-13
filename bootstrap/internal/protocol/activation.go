@@ -53,6 +53,7 @@ func RunActivation(args []string) error {
 	command.Env = append(os.Environ(), "SYNESIS_LAUNCHER="+
 		filepath.Join(payload, "bin", "synesis.cmd"))
 	if err := command.Run(); err != nil {
+		showFailure("Synesis could not open this link.\n\nRun \"synesis ui\" in a terminal to see the reason.")
 		return fmt.Errorf("activation command failed: %w", err)
 	}
 	return nil

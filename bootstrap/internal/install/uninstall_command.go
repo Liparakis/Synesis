@@ -9,9 +9,12 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"synesis/bootstrap/internal/install/installfs"
+	"synesis/bootstrap/internal/install/daemonstop"
 	"synesis/bootstrap/internal/install/layout"
+	"synesis/bootstrap/internal/install/uishortcut"
 	"synesis/bootstrap/internal/protocol"
 )
 
@@ -19,6 +22,21 @@ import (
 // never mutate or depend on the developer's real per-user registry. Production
 // code retains the ownership-checked implementation by default.
 var unregisterProtocolForUninstall = protocol.Unregister
+
+// stopInstalledProcesses stops the daemon and everything else running from the
+// installation. It is injectable so disposable tests never stop the
+// developer's real processes.
+var stopInstalledProcesses = daemonstop.StopAll
+
+// removeUIShortcutForUninstall removes the desktop shortcut the wizard can add.
+// It is injectable so disposable tests never touch the developer's desktop.
+var removeUIShortcutForUninstall = func() error {
+	desktop, err := uishortcut.Desktop()
+	if err != nil {
+		return nil // no desktop shortcut exists on this platform
+	}
+	return uishortcut.Remove(desktop)
+}
 
 // RunUninstall implements the uninstall command.
 func RunUninstall(args []string, observers ...OperationProgress) error {
@@ -44,8 +62,15 @@ func RunUninstall(args []string, observers ...OperationProgress) error {
 	if err := pathUpdater(paths, false); err != nil {
 		return err
 	}
+	if err := removeUIShortcutForUninstall(); err != nil {
+		return err
+	}
 	ReportOperation(observers, "shell", "done", "Owned shell integration removed")
 	ReportOperation(observers, "runtime", "working", "Removing application files")
+	// A running daemon holds the application files open and would outlive them.
+	if err := stopInstalledProcesses(paths.Root); err != nil {
+		return err
+	}
 	if err := removeInstalledPayload(paths); err != nil {
 		return err
 	}
@@ -96,7 +121,14 @@ func removeInstallerMetadata(paths layout.Paths) error {
 		paths.Admin,
 		filepath.Join(paths.Root, "Link"),
 	} {
-		if err := installfs.RemoveInstallationTree(path); err != nil {
+		// A file can stay open for a moment after its process has gone, or
+		// while a scanner reads it.
+		err := installfs.RemoveInstallationTree(path)
+		for attempt := 0; err != nil && attempt < 20; attempt++ {
+			time.Sleep(150 * time.Millisecond)
+			err = installfs.RemoveInstallationTree(path)
+		}
+		if err != nil {
 			return err
 		}
 	}

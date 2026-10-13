@@ -18,6 +18,7 @@ import (
 	"synesis/bootstrap/internal/install/embedded"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
+	"synesis/bootstrap/internal/install/uishortcut"
 	"synesis/bootstrap/internal/payload"
 	"synesis/bootstrap/internal/protocolreg"
 	"synesis/bootstrap/internal/releasemanifest"
@@ -53,6 +54,7 @@ type installerWizard struct {
 	action           installerAction
 	page             installerPage
 	metadata         bool
+	shortcut         bool
 	result           installerOperationResult
 	hwnd             uintptr
 	instance         uintptr
@@ -180,9 +182,12 @@ func newInstallerWizard(bundle, bundleVersion string) (*installerWizard, error) 
 		installedVersion: installerInstalledVersion(paths),
 		installRoot:      paths.Root,
 		installed:        installfs.FileExists(paths.Root),
-		action:           installerActionInstall,
-		page:             installerPageAction,
-		controls:         make(map[int]uintptr),
+		// Offered by default on a first install; afterwards the choice follows
+		// what is on the desktop.
+		shortcut: !installfs.FileExists(paths.Root) || desktopShortcutExists(),
+		action:   installerActionInstall,
+		page:     installerPageAction,
+		controls: make(map[int]uintptr),
 	}, nil
 }
 
@@ -304,6 +309,27 @@ func (w *installerWizard) readInstallRoot() (string, error) {
 	return paths.Root, nil
 }
 
+func desktopShortcutExists() bool {
+	desktop, err := uishortcut.Desktop()
+	return err == nil && uishortcut.Exists(desktop)
+}
+
+// addDesktopShortcut writes the Synesis UI shortcut for an installation and
+// returns what to tell the user when it could not.
+func addDesktopShortcut(root string) string {
+	paths, err := layout.Resolve(root)
+	if err == nil {
+		var desktop string
+		if desktop, err = uishortcut.Desktop(); err == nil {
+			err = uishortcut.Create(desktop, paths.Activation)
+		}
+	}
+	if err != nil {
+		return "The Synesis UI desktop shortcut could not be created: " + err.Error()
+	}
+	return ""
+}
+
 // installRootOutsideBundle keeps an installation from overwriting, or being
 // built from inside, the bundle it is installed from. A bundle that is still
 // being unpacked is unknown here and is checked again once it is.
@@ -339,6 +365,9 @@ func (w *installerWizard) handleCommand(id uint16, notification uint16) {
 	case controlMetadata:
 		w.metadata = !w.metadata
 		win32.InvalidateRect.Call(w.controls[controlMetadata], 0, 0)
+	case controlShortcut:
+		w.shortcut = !w.shortcut
+		win32.InvalidateRect.Call(w.controls[controlShortcut], 0, 0)
 	case controlBrowse:
 		w.browse()
 	case controlBack:

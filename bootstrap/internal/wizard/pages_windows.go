@@ -62,6 +62,7 @@ func (w *installerWizard) pageLayout(page installerPage) []placement {
 			placement{controlCapabilityInstall, left + 24, 284, width - 24, 20},
 			placement{controlCapabilityData, left + 24, 308, width - 24, 20},
 			placement{controlCapabilityLink, left + 24, 332, width - 24, 20},
+			placement{controlShortcut, left, 372, width, 28},
 			back, next, cancel)
 	case installerPageUninstall:
 		return append(header(0),
@@ -185,7 +186,7 @@ func (w *installerWizard) showPage(page installerPage) {
 			}
 			description = w.resultFailureDescription()
 		} else if w.result.warning != "" {
-			description = "Application installed. Link registration needs attention."
+			description = "Application installed. One step needs attention; see the details."
 		}
 		set(controlResult, w.resultText())
 		set(controlUninstallPath, w.installRoot)

@@ -76,4 +76,5 @@ const (
 	controlBack
 	controlNext
 	controlCancel
+	controlShortcut
 )

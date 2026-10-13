@@ -30,8 +30,14 @@ func (w *installerWizard) drawItem(id int, item win32.DrawItem) {
 		w.drawProgressLog(item)
 	case controlProgressSteps:
 		w.compose(item.Device, control, w.drawProgressSteps)
-	case controlMetadata:
-		w.compose(item.Device, control, func(r *draw.Raster, rect win32.Rect) { w.drawCheckbox(r, rect, focused) })
+	case controlMetadata, controlShortcut:
+		checked := w.metadata
+		if id == controlShortcut {
+			checked = w.shortcut
+		}
+		w.compose(item.Device, control, func(r *draw.Raster, rect win32.Rect) {
+			w.drawCheckbox(r, rect, win32.GetText(control), checked, focused)
+		})
 	case controlActionInstall, controlActionUninstall:
 		w.compose(item.Device, control, func(r *draw.Raster, rect win32.Rect) { w.drawActionCard(r, rect, id, focused) })
 	case controlResultDetailsToggle:
@@ -105,12 +111,12 @@ func (w *installerWizard) drawActionCard(r *draw.Raster, rect win32.Rect, id int
 	w.drawText(r.Device, w.detailFont, text, win32.Rect{Left: left, Top: w.scaled(35), Right: right, Bottom: rect.Bottom - w.scaled(4)}, detail, win32.DtWordBreak|win32.DtEndEllipsis)
 }
 
-func (w *installerWizard) drawCheckbox(r *draw.Raster, rect win32.Rect, focused bool) {
+func (w *installerWizard) drawCheckbox(r *draw.Raster, rect win32.Rect, label string, checked, focused bool) {
 	size := w.scaled(18)
 	top := (rect.Bottom - size) / 2
 	box := win32.Rect{Left: w.scaled(2), Top: top, Right: w.scaled(2) + size, Bottom: top + size}
 	fill, border := draw.Field, draw.LineStrong
-	if w.metadata {
+	if checked {
 		fill, border = draw.Copy, draw.Copy
 	}
 	if focused {
@@ -118,10 +124,10 @@ func (w *installerWizard) drawCheckbox(r *draw.Raster, rect win32.Rect, focused 
 		r.Panel(win32.Rect{Left: box.Left - ring, Top: box.Top - ring, Right: box.Right + ring, Bottom: box.Bottom + ring}, draw.Window, draw.Muted, float64(w.scaled(6)))
 	}
 	r.Panel(box, fill, border, float64(w.scaled(4)))
-	if w.metadata {
+	if checked {
 		w.drawSmoothIcon(r.Device, (box.Left+box.Right)/2, (box.Top+box.Bottom)/2, w.scaled(6), "check", draw.Window)
 	}
-	w.drawText(r.Device, w.bodyFont, win32.GetText(w.controls[controlMetadata]), win32.Rect{Left: w.scaled(30), Right: rect.Right, Bottom: rect.Bottom}, draw.Copy, win32.DtSingleLine|win32.DtVCenter|win32.DtEndEllipsis)
+	w.drawText(r.Device, w.bodyFont, label, win32.Rect{Left: w.scaled(30), Right: rect.Right, Bottom: rect.Bottom}, draw.Copy, win32.DtSingleLine|win32.DtVCenter|win32.DtEndEllipsis)
 }
 
 // drawProgressSteps lists each backend stage with its status mark and, once it

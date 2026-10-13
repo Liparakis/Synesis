@@ -11,6 +11,7 @@ import (
 	"synesis/bootstrap/internal/bundlearchive"
 	"synesis/bootstrap/internal/install/activepointer"
 	"synesis/bootstrap/internal/install/bundlecheck"
+	"synesis/bootstrap/internal/install/daemonstop"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
 	"synesis/bootstrap/internal/install/migration"
@@ -24,6 +25,10 @@ import (
 // pathUpdater is injectable so disposable installation tests never edit the
 // developer's real user PATH.
 var pathUpdater = userpath.Update
+
+// stopDaemon is injectable so disposable installation tests never stop the
+// developer's real daemon.
+var stopDaemon = daemonstop.Stop
 
 func activateVersioned(paths layout.Paths, m releasemanifest.Manifest, manifestData, archive []byte, operation string, migrationPlan *updatePlan, updatePath bool, observers ...OperationProgress) (err error) {
 	ReportOperation(observers, "runtime", "working", "Preparing and verifying runtime files")
@@ -149,6 +154,12 @@ func activateVersioned(paths layout.Paths, m releasemanifest.Manifest, manifestD
 		return err
 	}
 	pointerActivated = true
+	// The daemon of the build just replaced would keep serving it. The next
+	// command starts the new one. A daemon that will not stop does not undo an
+	// activation that succeeded.
+	if stopDaemon(paths.Root) != nil {
+		ReportOperation(observers, "runtime", "warning", "The running Synesis daemon could not be stopped; it keeps the previous version until it exits")
+	}
 	ReportOperation(observers, "runtime", "done", "Verified runtime activated")
 	if migrationPlan != nil {
 		_ = appendUpdateTransactionState(paths, migrationPlan.PlanID, "POINTER_ACTIVATED", "")

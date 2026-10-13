@@ -232,9 +232,14 @@ func withoutPathMutation(t *testing.T) {
 	pathUpdater = func(layout.Paths, bool) error { return nil }
 	previousUnregister := unregisterProtocolForUninstall
 	unregisterProtocolForUninstall = func(layout.Paths) error { return nil }
+	previousStop, previousShortcut, previousStopAll := stopDaemon, removeUIShortcutForUninstall, stopInstalledProcesses
+	stopDaemon = func(string) error { return nil }
+	stopInstalledProcesses = func(string) error { return nil }
+	removeUIShortcutForUninstall = func() error { return nil }
 	t.Cleanup(func() {
 		pathUpdater = previous
 		unregisterProtocolForUninstall = previousUnregister
+		stopDaemon, removeUIShortcutForUninstall, stopInstalledProcesses = previousStop, previousShortcut, previousStopAll
 	})
 }
 

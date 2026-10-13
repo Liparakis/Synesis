@@ -50,6 +50,8 @@ func (w *installerWizard) createControls() {
 		{controlCapabilityLink, "STATIC", "", line, w.detailFont},
 		{controlCapabilityData, "STATIC", "", line, w.detailFont},
 
+		{controlShortcut, "BUTTON", "Add a Synesis UI shortcut to the desktop", button, w.bodyFont},
+
 		{controlUninstallPathLabel, "STATIC", "Installation folder", label, w.detailFont},
 		{controlUninstallPath, "EDIT", "", edit | win32.EsReadOnly, w.bodyFont},
 		{controlMetadata, "BUTTON", "Remove metadata", button, w.bodyFont},
