@@ -228,6 +228,47 @@ the code and acted on.
 Not acted on: one shared raise and close for the three guards did not come out
 smaller.
 
+## What the real runs showed
+
+Two agents, Sonnet 5.5 at medium effort and Luna 6 at high, on the goal of two
+files bound by a public contract. The gate is a script outside the repository
+that the agents cannot read.
+
+- *A gate that fails on a rule the goal does not state* (how `list` prints a
+  task). The lane of the command-line program was refused, was shown what the
+  gate printed, corrected its files, published again and was integrated. 168
+  seconds, no resume; the gate passes on the result.
+- *A gate that cannot pass.* The first run showed two things the design had
+  wrong. The lane's agent would not publish again work it knew to be right, so
+  the two repairs were never used and no request was raised: the run ended
+  stalled. And after the operator had changed the command, the lane was shown
+  only the old failure and told the operator that the old command still failed.
+
+Changed for that:
+
+- A lane refused by validation that asks to finish is let through to the
+  ordinary completion flow with its files as they are. "Revision required"
+  waited for the files to differ from the refused snapshot, which is right
+  after a reviewer's rejection and wrong when the command, or what was
+  integrated before, was at fault. A review rejection is unchanged.
+- The instruction beside a refusal names the command that was run, says when
+  the project's command is no longer that one, and tells a lane that can do
+  nothing about the failure to say so to the operator, which raises the
+  request an agent raises (ADR-0093). A test found that this instruction did
+  not reach a lane whose workspace had become stale, which an operator's change
+  of the command always causes; it is added on that path too.
+
+Run again on the build with those changes: the lane was refused, told the
+operator why, and on a resume published the same work again and was refused a
+second time; the run ended as needing the operator, with the lane's request
+open. The operator declared a gate that can pass and started the agents again:
+both lanes were integrated in 122 seconds with no resume, and the gate passes
+on the result.
+
+NOT REACHED in a real run: the request Synesis itself raises after two repairs,
+and its closing by a recheck. The lane told the operator first. Tests walk that
+path, through the protocol handler, with a lane that changes nothing.
+
 ## Open questions
 
 - Whether the last contributor is the right lane often enough.

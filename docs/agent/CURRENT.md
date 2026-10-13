@@ -1,3 +1,99 @@
+# 2026-10-13 — A project's validation command gates integration, and what it refuses goes back to its lane
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster34-20261013` and `remaster35`. ADR-0094
+is accepted and built. The repository owner decided the three questions the entry below left
+open: an operator sets the command with a CLI command; a failure on the combined work returns to
+the lane that contributed last, two repairs, then the operator; the command runs on the combined
+work by default and in a lane alone only when the project says so.
+
+**What is built.**
+
+- `synesis project validation set -- ARGV...`, `show`, `clear`. `set` and `clear` hold the project
+  lock and, in a Git repository that tracks the project file, commit that one file; a checkout
+  that holds changes Synesis did not make is refused, by the rule integration uses.
+- A non-zero exit of the command on the combined work refuses the snapshot added last to the
+  attempt, as its own recorded fact (`INTEGRATION_VALIDATION_REFUSED`, state
+  `validation_refused`), and reopens its lane by the code a review rejection uses. The lane is
+  shown what the command printed and what was run, corrects its files or not, and publishes
+  again. A refused snapshot never integrates.
+- After two refusals of a lane, or when the command timed out, could not be started, or the pass
+  that ran it died twice, nothing is refused: the operator request
+  `integration_validation_failing` is raised and no attempt is started until
+  `synesis operator recheck`.
+- An attempt that a dead process left started is ended as interrupted by the next pass that
+  holds the project lock, unless the branch already holds its commit.
+- The project lock is no longer dropped when a second thread of the same process fails to take
+  it (Linux and macOS; a defect that was there before).
+
+**Changed meaning, stated.** A project that declares `validation` no longer has it run in each
+lane alone unless it also says `alsoInLane`. `fork` keeps a project's validation command and
+review policy. A finish that changes nothing is validated nowhere unless the lane run is on. A
+command that timed out raises the operator request where it used to answer "retry". An older
+build cannot read a log holding the new event nor a project file holding `alsoInLane`.
+
+**The review.** One reviewer read the uncommitted change and ran nothing. It found the core
+sound and found one defect that could have ended a live attempt, with eight that left an
+operator or an agent without a lawful step; ADR-0094 lists them under "The quality review of the
+build". All were acted on except one structural suggestion that did not come out smaller. The
+tests found two more defects in the fixes themselves: ending the lane did not close the
+operator's request, and the sentence that tells a lane the command has changed did not reach a
+lane whose workspace had become stale, which an operator's change of the command always causes.
+
+**Real runs.** The gate is a script outside the repository, declared by the operator, which the
+agents cannot read: it runs the project's tests and one rule the goal does not state, the form
+in which `list` prints a task. Every result of the earlier runs that was tried against it fails
+that rule.
+
+- *A gate that fails on a rule the goal does not state,* twice. On `remaster34`, Sonnet then
+  Luna: the lane of the command-line program was refused (it printed `[1] [ ] Buy milk`), was
+  shown what the gate printed, corrected its files and was integrated; 168 seconds, no resume.
+  On `remaster35`, Luna then Sonnet: refused (`1 [ ] Buy milk`), corrected, integrated; 124
+  seconds, no resume. The gate passes on both results. Demonstrated: a refusal by the command,
+  the lane reopened with the output, a repair, a second attempt that integrates, work groups
+  completed.
+- *A gate that cannot pass,* on `remaster34`: the storage lane was refused once and its agent
+  would not publish again work it knew to be right. No request was raised and the run ended
+  `STALLED`. After the operator had declared a gate that can pass, the lane was shown only the
+  old failure and told the operator the old command still failed. Both are answered in ADR-0094,
+  "What the real runs showed": a lane refused by validation that asks to finish is let through
+  with its files as they are, and the instruction says when the command has changed and tells
+  a lane that can do nothing to say so to the operator.
+- *The same, on `remaster35`.* The lane was refused, told the operator why
+  (`lane_asks_operator`), and on a resume published the same work and was refused a second
+  time; `NEEDS_OPERATOR`, 313 seconds, 3 resumes. The operator declared the gate that can pass
+  and started the agents again: `COMPLETED` in 122 seconds, no resume, both lanes integrated,
+  the gate passes on the result. Demonstrated: an operator request raised by a refused lane, the
+  operator's change of the command, and integration after it without the lane changing a file.
+  NOT REACHED in a real run: the request Synesis raises itself after two repairs, and its
+  closing by a recheck; the lane told the operator first. Tests walk that path.
+- *Goals without a command,* on `remaster35`, to see that nothing else moved: SL 109 seconds
+  and no resume, review with the policy LS 175 and none, cancel SL 52 and none, SLS 126 and
+  none, SLSLS 174 and two. All completed with their tests passing.
+
+One pass over each. A first pair of runs on `remaster35` is not counted: the machine was out of
+memory, the Codex process ended at start in both, and a Java crash log was left in one project's
+checkout. That log was raised to the operator as a foreign change of the checkout, and
+`project validation set` refused the checkout that held it. No agent ran
+`synesis project validation` itself. The request a lane raises stays open after the run
+completes, until the operator closes it.
+
+**Limits.** The command runs while the project lock is held, so other writers are refused and
+retry while it runs. The lane asked to repair is the last of the attempt, which is not always
+the lane at fault. A non-zero exit that is no verdict on the work, a flaky test, uses a repair.
+The operator has no verb to grant a further repair. The operator's commands are trusted by
+where they are run: an agent with a shell could run `synesis project validation clear`; none
+did in these runs. That the branch is not advanced when the record of the attempt's commit
+cannot be written is read from the code, not tested.
+
+Verification: on the last commit, link 172, coordination 236, project-record 60, relay 12,
+mcp-contract 20, workspace 725, MCP 189, CLI 126, 1,540 tests, 0 failures, with the
+documentation, format, architecture, dashboard and hygiene gates: on Windows from PowerShell with
+four workers in 16 minutes 31 seconds (1 skipped), and on Linux in the container in 2 minutes
+24 seconds (2 skipped). The main code was written by two implementation subagents from a design
+the lead wrote and was read by the lead; the tests were written by test subagents, Sonnet 5.5 at
+medium effort pinned at launch, which reported their model and could not show their effort from
+runtime metadata.
+
 # 2026-10-13 — An agent is woken for its own lane only, a wait is held inside Synesis, and the review of both
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster32-20261013` and `remaster33`. No new
