@@ -22,7 +22,10 @@ const (
 	WsClipChildren = 0x02000000
 	WsExDlgModal   = 0x00000001
 	SsLeft         = 0x00000000
-	SsLeftNoWrap   = 0x0000000c
+	SsRight        = 0x00000002
+	SsCenterImage  = 0x00000200
+	SsEndEllipsis  = 0x00004000
+	SsPathEllipsis = 0x00008000
 	SsOwnerDraw    = 0x0000000d
 	BsOwnerDraw    = 0x0000000b
 	EsAutoHScroll  = 0x00000080
@@ -47,7 +50,6 @@ const (
 	RdwErase         = 0x0004
 	RdwAllChildren   = 0x0080
 	RdwUpdateNow     = 0x0100
-	RdwFrame         = 0x0400
 
 	MbOK              = 0x00000000
 	MbIconError       = 0x00000010
@@ -55,25 +57,27 @@ const (
 
 	Transparent = 1
 	Opaque      = 2
-	NullBrush   = 5
 	IconSmall   = 0
 	IconBig     = 1
+	SrcCopy     = 0x00cc0020
+
+	// Owner-draw item states.
+	OdsSelected = 0x0001
+	OdsFocus    = 0x0010
 
 	DtCenter      = 0x00000001
+	DtRight       = 0x00000002
+	DtWordBreak   = 0x00000010
 	DtVCenter     = 0x00000004
 	DtSingleLine  = 0x00000020
 	DtEndEllipsis = 0x00008000
 
 	FontWeightNormal = 400
-	FontWeightBold   = 700
 
-	DefaultGuiFont             = 17
-	IdiApplication             = 32512
-	IddArrow                   = 32512
-	CbSizeOfInitCommonControls = 8
-	IccProgressClass           = 0x00000020
-	SmCxWorkArea               = 16
-	SmCyWorkArea               = 17
+	IdiApplication = 32512
+	IddArrow       = 32512
+	SmCxWorkArea   = 16
+	SmCyWorkArea   = 17
 )
 
 // The system libraries and the procedures of them that the wizard calls.
@@ -81,7 +85,6 @@ var (
 	User32   = windows.NewLazySystemDLL("user32.dll")
 	Kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 	GDI32    = windows.NewLazySystemDLL("gdi32.dll")
-	Comctl32 = windows.NewLazySystemDLL("comctl32.dll")
 	MSIMG32  = windows.NewLazySystemDLL("msimg32.dll")
 	DWMAPI   = windows.NewLazySystemDLL("dwmapi.dll")
 
@@ -99,9 +102,7 @@ var (
 	GetMessage         = User32.NewProc("GetMessageW")
 	GetModuleHandle    = Kernel32.NewProc("GetModuleHandleW")
 	CopyMemory         = Kernel32.NewProc("RtlMoveMemory")
-	GetStockObject     = GDI32.NewProc("GetStockObject")
 	CreateFont         = GDI32.NewProc("CreateFontW")
-	CreatePen          = GDI32.NewProc("CreatePen")
 	CreateSolidBrush   = GDI32.NewProc("CreateSolidBrush")
 	CreateDIBSection   = GDI32.NewProc("CreateDIBSection")
 	CreateCompatibleDC = GDI32.NewProc("CreateCompatibleDC")
@@ -109,7 +110,6 @@ var (
 	DeleteDC           = GDI32.NewProc("DeleteDC")
 	GetDC              = User32.NewProc("GetDC")
 	ReleaseDC          = User32.NewProc("ReleaseDC")
-	GetFocus           = User32.NewProc("GetFocus")
 	GetSystemMetrics   = User32.NewProc("GetSystemMetrics")
 	BeginPaint         = User32.NewProc("BeginPaint")
 	EndPaint           = User32.NewProc("EndPaint")
@@ -130,16 +130,23 @@ var (
 	SetBkMode          = GDI32.NewProc("SetBkMode")
 	SetTextColor       = GDI32.NewProc("SetTextColor")
 	SelectObject       = GDI32.NewProc("SelectObject")
-	MoveToEx           = GDI32.NewProc("MoveToEx")
-	LineTo             = GDI32.NewProc("LineTo")
-	RoundRect          = GDI32.NewProc("RoundRect")
 	SetFocus           = User32.NewProc("SetFocus")
 	SetWindowText      = User32.NewProc("SetWindowTextW")
 	ShowWindow         = User32.NewProc("ShowWindow")
 	TranslateMessage   = User32.NewProc("TranslateMessage")
 	UpdateWindow       = User32.NewProc("UpdateWindow")
-	InitCommonControls = Comctl32.NewProc("InitCommonControlsEx")
 	AlphaBlend         = MSIMG32.NewProc("AlphaBlend")
+	BitBlt             = GDI32.NewProc("BitBlt")
+	CreatePatternBrush = GDI32.NewProc("CreatePatternBrush")
+	SetBrushOrgEx      = GDI32.NewProc("SetBrushOrgEx")
+	GetTextExtentPoint = GDI32.NewProc("GetTextExtentPoint32W")
+	MapWindowPoints    = User32.NewProc("MapWindowPoints")
+	GetFocus           = User32.NewProc("GetFocus")
+	GdiFlush           = GDI32.NewProc("GdiFlush")
+	IsDialogMessage    = User32.NewProc("IsDialogMessageW")
+	IsWindowEnabled    = User32.NewProc("IsWindowEnabled")
+	SetTimer           = User32.NewProc("SetTimer")
+	KillTimer          = User32.NewProc("KillTimer")
 	DwmSetWindowAttr   = DWMAPI.NewProc("DwmSetWindowAttribute")
 )
 

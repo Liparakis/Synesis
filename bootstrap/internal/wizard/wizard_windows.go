@@ -4,18 +4,18 @@ package wizard
 
 import (
 	"errors"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"synesis/bootstrap/internal/folderpicker"
 	"synesis/bootstrap/internal/install"
 	"synesis/bootstrap/internal/install/activepointer"
 	"synesis/bootstrap/internal/install/bundlecheck"
+	"synesis/bootstrap/internal/install/embedded"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
 	"synesis/bootstrap/internal/payload"
@@ -43,76 +43,91 @@ type installerLogEntry struct {
 }
 
 type installerWizard struct {
-	art               map[string]draw.Art
-	bundle            string
-	bundleVersion     string
-	installedVersion  string
-	installRoot       string
-	installDraft      string
-	scale             float64
-	installed         bool
-	action            installerAction
-	page              installerPage
-	metadata          bool
-	result            installerOperationResult
-	hwnd              uintptr
-	instance          uintptr
-	controls          map[int]uintptr
-	busy              bool
-	mu                sync.Mutex
-	steps             []installerStep
-	logEntries        []installerLogEntry
-	logRendered       int
-	operationStatus   string
-	logFont           uintptr
-	progressMotion    draw.ProgressMotion
-	progressEpoch     time.Time
-	progressComplete  time.Time
-	progressRaster    *draw.Raster
-	progressTimer     uintptr
-	smoothIcons       map[string]*draw.Raster
+	bundle           string
+	bundleVersion    string
+	installedVersion string
+	installRoot      string
+	installDraft     string
+	scale            float64
+	installed        bool
+	action           installerAction
+	page             installerPage
+	metadata         bool
+	result           installerOperationResult
+	hwnd             uintptr
+	instance         uintptr
+	controls         map[int]uintptr
+	busy             bool
+	mu               sync.Mutex
+	steps            []installerStep
+	logEntries       []installerLogEntry
+	logRendered      int
+	operationStatus  string
+	progressMotion   draw.ProgressMotion
+	progressEpoch    time.Time
+	progressComplete time.Time
+	progressRaster   *draw.Raster
+	progressTimer    uintptr
+	smoothIcons      map[string]*draw.Raster
+	logo             *draw.Raster
+	// backdrop holds everything that is not a control: the rail, the panels
+	// and the marks. Controls paint this surface behind their own content.
 	backdrop          *draw.Raster
 	backdropBrush     uintptr
 	resultDetailsOpen bool
-	executeOperation  func(string, string, installerAction, bool, install.OperationProgress) installerOperationResult
-	titleFont         uintptr
-	bodyFont          uintptr
-	detailFont        uintptr
-	productFont       uintptr
-	buttonFont        uintptr
-	cardTitleFont     uintptr
-	cardDetailFont    uintptr
-	stepDetailFont    uintptr
-	iconFont          uintptr
-	wordmarkFont      uintptr
-	windowIconLarge   uintptr
-	windowIconSmall   uintptr
-	logoBitmap        uintptr
-	logoWidth         int32
-	logoHeight        int32
-	darkBrush         uintptr
-	surfaceBrush      uintptr
-	cardBrush         uintptr
-	warningBrush      uintptr
+	// awaitBundle is set by the single-file installer, whose bundle is still
+	// being unpacked while the wizard is already open. It blocks until the
+	// bundle is usable.
+	awaitBundle      func() (string, error)
+	executeOperation func(string, string, installerAction, bool, install.OperationProgress) installerOperationResult
+	titleFont        uintptr
+	strongFont       uintptr
+	bodyFont         uintptr
+	detailFont       uintptr
+	smallFont        uintptr
+	wordmarkFont     uintptr
+	logFont          uintptr
+	windowIconLarge  uintptr
+	windowIconSmall  uintptr
+	windowBrush      uintptr
+	fieldBrush       uintptr
+	lineBrush        uintptr
 }
 
-// Run opens the native Windows setup wizard for a local bundle.
-// The self-extracting wrapper delegates into this same entry point after it
-// has unpacked its verified bundle into a temporary directory.
+// Run opens the native Windows setup wizard. Started from an extracted bundle
+// it installs that bundle. Started as the single-file installer it opens at
+// once and unpacks the appended bundle in the background, so the window never
+// waits for the unpacking.
 func Run() error {
 	// Win32 windows and their child controls are thread-affine. Keep the Go
 	// goroutine on the creating OS thread for the entire message-loop lifetime.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	bundle, err := bundlecheck.RunningRoot()
+	// shortcut: the scale is read once from the primary display, so Windows
+	// stretches the window on a monitor with another scale; handle
+	// WM_DPICHANGED if that blur is reported.
+	win32.User32.NewProc("SetProcessDPIAware").Call()
+	var bundle, version string
+	var unpacking *unpackedBundle
+	if embedded.HasBundle() {
+		version = plainVersion(embedded.BundleVersion())
+		unpacking = startUnpacking(embedded.Extract)
+		defer unpacking.remove()
+	} else {
+		var err error
+		if bundle, err = bundlecheck.RunningRootShape(); err != nil {
+			win32.ShowMessage(0, "Synesis Setup", err.Error(), win32.MbIconError)
+			return nil
+		}
+		version = installerBundleVersion(bundle)
+	}
+	wizard, err := newInstallerWizard(bundle, version)
 	if err != nil {
 		win32.ShowMessage(0, "Synesis Setup", err.Error(), win32.MbIconError)
 		return nil
 	}
-	wizard, err := newInstallerWizard(bundle)
-	if err != nil {
-		win32.ShowMessage(0, "Synesis Setup", err.Error(), win32.MbIconError)
-		return nil
+	if unpacking != nil {
+		wizard.awaitBundle = unpacking.wait
 	}
 	if err := wizard.run(); err != nil {
 		win32.ShowMessage(wizard.hwnd, "Synesis Setup", err.Error(), win32.MbIconError)
@@ -120,7 +135,36 @@ func Run() error {
 	return nil
 }
 
-func newInstallerWizard(bundle string) (*installerWizard, error) {
+// unpackedBundle is a bundle being unpacked on another goroutine.
+type unpackedBundle struct {
+	done    chan struct{}
+	bundle  string
+	cleanup func()
+	err     error
+}
+
+func startUnpacking(extract func() (string, func(), error)) *unpackedBundle {
+	unpacking := &unpackedBundle{done: make(chan struct{})}
+	go func() {
+		defer close(unpacking.done)
+		unpacking.bundle, unpacking.cleanup, unpacking.err = extract()
+	}()
+	return unpacking
+}
+
+func (u *unpackedBundle) wait() (string, error) {
+	<-u.done
+	return u.bundle, u.err
+}
+
+// remove waits for the unpacking to end before deleting what it wrote, so a
+// window closed early leaves nothing half-written behind.
+func (u *unpackedBundle) remove() {
+	<-u.done
+	u.cleanup()
+}
+
+func newInstallerWizard(bundle, bundleVersion string) (*installerWizard, error) {
 	defaultPaths, err := layout.Resolve("")
 	if err != nil {
 		return nil, err
@@ -132,7 +176,7 @@ func newInstallerWizard(bundle string) (*installerWizard, error) {
 	}
 	return &installerWizard{
 		bundle:           bundle,
-		bundleVersion:    installerBundleVersion(bundle),
+		bundleVersion:    bundleVersion,
 		installedVersion: installerInstalledVersion(paths),
 		installRoot:      paths.Root,
 		installed:        installfs.FileExists(paths.Root),
@@ -150,7 +194,13 @@ func installerBundleVersion(bundle string) string {
 	if err != nil {
 		return ""
 	}
-	version := strings.TrimSpace(string(data))
+	return plainVersion(string(data))
+}
+
+// plainVersion keeps a declared version only when it is a plain version: the
+// value is painted into the window.
+func plainVersion(declared string) string {
+	version := strings.TrimSpace(declared)
 	if !releasemanifest.ValidVersion(version) {
 		return ""
 	}
@@ -245,8 +295,8 @@ func (w *installerWizard) readInstallRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if payload.PathWithin(w.bundle, paths.Root) || payload.PathWithin(paths.Root, w.bundle) {
-		return "", errors.New("choose an installation folder outside the installer bundle")
+	if err := installRootOutsideBundle(w.bundle, paths.Root); err != nil {
+		return "", err
 	}
 	if info, statErr := os.Stat(paths.Root); statErr == nil && !info.IsDir() {
 		return "", errors.New("the installation path is not a folder")
@@ -254,24 +304,41 @@ func (w *installerWizard) readInstallRoot() (string, error) {
 	return paths.Root, nil
 }
 
+// installRootOutsideBundle keeps an installation from overwriting, or being
+// built from inside, the bundle it is installed from. A bundle that is still
+// being unpacked is unknown here and is checked again once it is.
+func installRootOutsideBundle(bundle, root string) error {
+	if bundle != "" && (payload.PathWithin(bundle, root) || payload.PathWithin(root, bundle)) {
+		return errors.New("choose an installation folder outside the installer bundle")
+	}
+	return nil
+}
+
 func (w *installerWizard) handleCommand(id uint16, notification uint16) {
 	if notification != win32.BnClicked || w.busy {
 		return
 	}
 	switch int(id) {
+	case idOK:
+		focused, _, _ := win32.GetFocus.Call()
+		if target := w.enterCommand(w.installerControlID(focused)); target != idOK {
+			w.handleCommand(uint16(target), win32.BnClicked)
+		} else if w.page != installerPageUninstall {
+			w.goNext()
+		}
+	case idCancel:
+		w.closeOrWarn()
 	case controlResultDetailsToggle:
 		w.toggleResultDetails()
 	case controlActionInstall:
-		w.action = installerActionInstall
-		w.invalidateActionCards()
+		w.selectAction(installerActionInstall)
 	case controlActionUninstall:
 		if w.installed {
-			w.action = installerActionUninstall
-			w.invalidateActionCards()
+			w.selectAction(installerActionUninstall)
 		}
 	case controlMetadata:
 		w.metadata = !w.metadata
-		win32.InvalidateRect.Call(w.controls[controlMetadata], 0, 1)
+		win32.InvalidateRect.Call(w.controls[controlMetadata], 0, 0)
 	case controlBrowse:
 		w.browse()
 	case controlBack:
@@ -284,8 +351,8 @@ func (w *installerWizard) handleCommand(id uint16, notification uint16) {
 }
 
 func (w *installerWizard) browse() {
-	selected, err := browseInstallerFolder(w.bundle)
-	if errors.Is(err, errInstallerBrowseCancelled) {
+	selected, err := folderpicker.Pick(w.hwnd, "Choose where to install Synesis")
+	if errors.Is(err, folderpicker.ErrCancelled) {
 		return
 	}
 	if err != nil {
@@ -295,26 +362,22 @@ func (w *installerWizard) browse() {
 	win32.SetText(w.controls[controlInstallEdit], selected)
 }
 
-func browseInstallerFolder(bundle string) (string, error) {
-	picker := filepath.Join(bundle, "bin", "synesis-folder-picker.exe")
-	if _, err := os.Stat(picker); err != nil {
-		return "", fmt.Errorf("the native folder picker is unavailable: %w", err)
+// enterCommand is the command Enter stands for while the given control has the
+// focus. The wizard's buttons are owner-drawn, which the dialog keyboard
+// interface does not recognise as push buttons: it reports Enter as idOK
+// wherever the focus is. A focused button must act as itself; anywhere else
+// Enter moves forward, except on the uninstall page, whose destructive button
+// has to be chosen.
+func (w *installerWizard) enterCommand(focused int) int {
+	switch focused {
+	case controlBack, controlNext, controlCancel, controlBrowse, controlResultDetailsToggle:
+		return focused
 	}
-	command := exec.Command(picker)
-	command.Dir = bundle
-	output, err := command.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
-			return "", errInstallerBrowseCancelled
-		}
-		return "", fmt.Errorf("the folder picker failed: %w", err)
-	}
-	selected := strings.TrimSpace(string(output))
-	if selected == "" {
-		return "", errors.New("the folder picker returned no path")
-	}
-	return selected, nil
+	return idOK
 }
 
-var errInstallerBrowseCancelled = errors.New("folder selection cancelled")
+// The identifiers the dialog keyboard interface sends for Enter and Escape.
+const (
+	idOK     = 1
+	idCancel = 2
+)

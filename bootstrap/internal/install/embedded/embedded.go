@@ -3,6 +3,7 @@
 package embedded
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -35,7 +36,7 @@ func HasBundle() bool {
 // requested command to the installer inside it. Install and repair receive an
 // implicit local bundle argument so they never need a network manifest.
 func RunCommand(args []string) error {
-	bundle, cleanup, err := extractEmbeddedBundle()
+	bundle, cleanup, err := Extract()
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,47 @@ func readEmbeddedPayloadBounds(reader io.ReaderAt, fileSize int64) (int64, int64
 	return payloadOffset, payloadSize, nil
 }
 
-func extractEmbeddedBundle() (string, func(), error) {
+// BundleVersion reads the version the appended bundle declares, or "" when it
+// cannot be read without unpacking. It is display text: activation verifies the
+// unpacked bundle, never this value.
+func BundleVersion() string {
+	file, offset, size, err := embeddedPayloadBounds()
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	return archivedVersion(io.NewSectionReader(file, offset, size), size)
+}
+
+func archivedVersion(reader io.ReaderAt, size int64) string {
+	archive, err := zip.NewReader(reader, size)
+	if err != nil {
+		return ""
+	}
+	// The bundle root is the archive root, or its one top-level directory.
+	name, roots := "VERSION", map[string]bool{}
+	for _, entry := range archive.File {
+		root, _, _ := strings.Cut(entry.Name, "/")
+		roots[root] = true
+		if len(roots) == 1 && !roots["VERSION"] {
+			name = root + "/VERSION"
+		}
+	}
+	if len(roots) > 1 || roots["VERSION"] {
+		name = "VERSION"
+	}
+	version, err := archive.Open(name)
+	if err != nil {
+		return ""
+	}
+	defer version.Close()
+	data, _ := io.ReadAll(io.LimitReader(version, 256))
+	return strings.TrimSpace(string(data))
+}
+
+// Extract unpacks and validates the appended bundle in a temporary directory.
+// The returned cleanup removes it.
+func Extract() (string, func(), error) {
 	file, offset, size, err := embeddedPayloadBounds()
 	if err != nil {
 		return "", func() {}, err

@@ -18,195 +18,6 @@ import (
 	"synesis/bootstrap/internal/wizard/win32"
 )
 
-func TestInstallerPageLayoutDoesNotOverlapSharedControls(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`}
-	if err := w.createWindow(); err != nil {
-		t.Fatal(err)
-	}
-	defer win32.DestroyWindow.Call(w.hwnd)
-	windowRect := func(id int) win32.Rect {
-		var rect win32.Rect
-		win32.User32.NewProc("GetWindowRect").Call(w.controls[id], uintptr(unsafe.Pointer(&rect)))
-		return rect
-	}
-	for _, page := range []installerPage{installerPageAction, installerPageUninstall, installerPageInstall, installerPageProgress, installerPageResult, installerPageAction} {
-		w.showPage(page)
-		description := windowRect(controlDescription)
-		if page == installerPageUninstall {
-			copy := map[int]string{
-				controlTitle:              "Uninstall",
-				controlDescription:        "Remove the application from this computer.\r\nYour projects, repositories, and workspace data will be preserved.",
-				controlUninstallGroup:     "Uninstall options",
-				controlUninstallPathLabel: "Installation folder",
-				controlUninstallPath:      "C:\\Example\\Synesis",
-				controlMetadata:           "Remove metadata",
-				controlUninstallWarning:   "Removes local identity and installer state.\r\nProject, repository, and workspace data stay intact.",
-				controlUninstallImpact:    "Application files and the synesis:// handler will be removed.",
-				controlBack:               "Back",
-				controlNext:               "Uninstall",
-				controlCancel:             "Cancel",
-			}
-			for id, want := range copy {
-				if got := win32.GetText(w.controls[id]); got != want {
-					t.Fatalf("uninstall control %d copy = %q, want %q", id, got, want)
-				}
-			}
-			if description.Bottom >= windowRect(controlUninstallGroup).Top {
-				t.Fatal("uninstall description overlaps options")
-			}
-			path := windowRect(controlUninstallPath)
-			label := windowRect(controlUninstallPathLabel)
-			clientOrigin := win32.Point{}
-			win32.ClientToScreen.Call(w.hwnd, uintptr(unsafe.Pointer(&clientOrigin)))
-			if label.Bottom+w.scaled(10) > clientOrigin.Y+w.scaled(436) {
-				t.Fatal("installation label overlaps the painted field border")
-			}
-			if path.Top < clientOrigin.Y+w.scaled(446) || path.Bottom > clientOrigin.Y+w.scaled(504) {
-				t.Fatal("path text is not inset inside its frame")
-			}
-			metadata := windowRect(controlMetadata)
-			metadataDescription := windowRect(controlUninstallWarning)
-			dc, _, _ := win32.GetDC.Call(w.controls[controlUninstallWarning])
-			previous, _, _ := win32.SelectObject.Call(dc, w.detailFont)
-			measured := win32.Rect{Right: metadataDescription.Right - metadataDescription.Left}
-			win32.DrawText.Call(dc, uintptr(unsafe.Pointer(win32.MustUTF16(win32.GetText(w.controls[controlUninstallWarning])))), uintptr(^uint32(0)), uintptr(unsafe.Pointer(&measured)), 0x400|0x10) // DT_CALCRECT | DT_WORDBREAK
-			win32.SelectObject.Call(dc, previous)
-			win32.ReleaseDC.Call(w.controls[controlUninstallWarning], dc)
-			if measured.Bottom > metadataDescription.Bottom-metadataDescription.Top {
-				t.Fatal("metadata explanation text is clipped")
-			}
-			impact := windowRect(controlUninstallImpact)
-			if path.Bottom >= metadata.Top {
-				t.Fatal("path overlaps metadata toggle")
-			}
-			if metadata.Bottom > metadataDescription.Top {
-				t.Fatal("metadata toggle overlaps its helper text")
-			}
-			if metadataDescription.Bottom >= impact.Top {
-				t.Fatal("metadata explanation overlaps removal warning")
-			}
-			back := windowRect(controlBack)
-			next := windowRect(controlNext)
-			cancel := windowRect(controlCancel)
-			if impact.Bottom >= back.Top {
-				t.Fatal("uninstall options overlap the footer")
-			}
-			if back.Top != next.Top || back.Bottom != next.Bottom || next.Top != cancel.Top || next.Bottom != cancel.Bottom {
-				t.Fatal("uninstall footer buttons do not share the main-page row height")
-			}
-			if back.Right-back.Left != next.Right-next.Left {
-				t.Fatal("Back and Uninstall buttons do not share the same width")
-			}
-			if cancel.Right != windowRect(controlActionInstall).Right {
-				t.Fatal("uninstall footer does not share the main-page right edge")
-			}
-			icon, _, _ := win32.SendMessage.Call(w.hwnd, 0x007f, win32.IconSmall, 0)
-			if icon == 0 || icon != w.windowIconSmall {
-				t.Fatal("uninstall page does not retain the Synesis window icon")
-			}
-			continue
-		}
-		if page == installerPageAction {
-			copy := map[int]string{
-				controlTitle:             "Manage installation",
-				controlDescription:       "Choose what you want to do with the current installation.",
-				controlProductDetails:    "",
-				controlCapabilities:      "Setup includes",
-				controlCapabilityInstall: "Local runtime",
-				controlCapabilityLink:    "synesis:// link handler",
-				controlCapabilityData:    "Existing project and workspace data is kept",
-				controlActionGroup:       "Choose an action",
-				controlActionInstall:     "Install or update",
-				controlActionUninstall:   "Uninstall",
-				controlActionPath:        "Installed at C:\\Example\\Synesis",
-				controlNext:              "Install",
-				controlCancel:            "Cancel",
-			}
-			for id, want := range copy {
-				if got := win32.GetText(w.controls[id]); got != want {
-					t.Fatalf("control %d copy = %q, want %q", id, got, want)
-				}
-			}
-			title := windowRect(controlTitle)
-			if title.Bottom > description.Top {
-				t.Fatal("main title overlaps the subtitle")
-			}
-			if title.Bottom-title.Top < w.scaled(80) {
-				t.Fatal("main title control is too short for the display font")
-			}
-			if title.Right > title.Left+w.scaled(1040) {
-				t.Fatal("header intrudes into logo area")
-			}
-			for _, id := range []int{controlCapabilityInstall, controlCapabilityLink, controlCapabilityData} {
-				row := windowRect(id)
-				if row.Bottom-row.Top < w.scaled(40) {
-					t.Fatalf("setup detail control %d is too short for readable body text", id)
-				}
-			}
-			cancelRight := windowRect(controlCancel).Right
-			installRight := windowRect(controlActionInstall).Right
-			uninstallRight := windowRect(controlActionUninstall).Right
-			if cancelRight != installRight || cancelRight != uninstallRight {
-				t.Fatalf("main-page Cancel edge is not aligned with the action cards: cancel=%d install=%d uninstall=%d", cancelRight, installRight, uninstallRight)
-			}
-			actionHeading := windowRect(controlActionGroup)
-			installCard := windowRect(controlActionInstall)
-			uninstallCard := windowRect(controlActionUninstall)
-			if actionHeading.Bottom+w.scaled(16) > installCard.Top {
-				t.Fatal("action heading does not have a clear gap above the first card")
-			}
-			if installCard.Bottom+w.scaled(12) > uninstallCard.Top {
-				t.Fatal("action cards do not have a clear gap")
-			}
-			path := windowRect(controlActionPath)
-			next := windowRect(controlNext)
-			if uninstallCard.Bottom+w.scaled(48) > next.Top {
-				t.Fatal("footer crowds the action cards")
-			}
-			if next.Top-uninstallCard.Bottom > w.scaled(100) {
-				t.Fatal("main page leaves an excessive gap between actions and footer")
-			}
-			pathCenter := (path.Top + path.Bottom) / 2
-			nextCenter := (next.Top + next.Bottom) / 2
-			if pathCenter < nextCenter-1 || pathCenter > nextCenter+1 {
-				t.Fatal("current installation is not vertically aligned with the action buttons")
-			}
-			var client win32.Rect
-			win32.GetClientRect.Call(w.hwnd, uintptr(unsafe.Pointer(&client)))
-			clientOrigin := win32.Point{}
-			win32.ClientToScreen.Call(w.hwnd, uintptr(unsafe.Pointer(&clientOrigin)))
-			for _, id := range []int{controlNext, controlCancel} {
-				rect := windowRect(id)
-				if rect.Bottom > clientOrigin.Y+client.Bottom {
-					t.Fatalf("main-page control %d extends past the client area", id)
-				}
-			}
-		}
-	}
-	w.action = installerActionUninstall
-	w.showPage(installerPageAction)
-	w.goNext()
-	if w.page != installerPageUninstall {
-		t.Fatal("uninstall selection skipped options")
-	}
-	w.handleCommand(uint16(controlMetadata), win32.BnClicked)
-	w.goBack()
-	w.goNext()
-	if !w.metadata {
-		t.Fatal("metadata selection not preserved after Back")
-	}
-	w.handleCommand(uint16(controlMetadata), win32.BnClicked)
-	if w.metadata {
-		t.Fatal("metadata could not be deselected")
-	}
-	w.goBack()
-	if w.page != installerPageAction {
-		t.Fatal("Back did not restore main page")
-	}
-}
-
 func TestInstallerStartsDirectlyAndDisablesUnsafeNavigation(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -224,15 +35,14 @@ func TestInstallerStartsDirectlyAndDisablesUnsafeNavigation(t *testing.T) {
 			return installerOperationResult{err: failure}
 		}
 		w.showPage(installerPageAction)
-		w.updateActionLabel()
+		w.goNext()
 		want := "Install"
 		if action == installerActionUninstall {
 			want = "Uninstall"
 		}
 		if win32.GetText(w.controls[controlNext]) != want {
-			t.Fatal("main action label mismatch")
+			t.Fatal("the button that starts the operation does not name it")
 		}
-		w.goNext()
 		w.goNext()
 		if w.page != installerPageProgress || !w.busy {
 			t.Fatal("options did not immediately start progress")
@@ -326,6 +136,8 @@ func TestInstallerVisualPreview(t *testing.T) {
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	// Preview at the display's own scale, as the installed wizard runs.
+	win32.User32.NewProc("SetProcessDPIAware").Call()
 	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`, bundle: `C:\Example\Bundle`, action: installerActionInstall,
 		bundleVersion: "0.1.0-dev.lifecycle-fixes-20261006", installedVersion: "0.1.0-dev.capability-lock-20261006"}
 	if err := w.createWindow(); err != nil {
@@ -417,7 +229,7 @@ func TestInstallerEditUsesReadableColorsInEveryState(t *testing.T) {
 		brush, _, _ := win32.SendMessage.Call(w.hwnd, state.message, dc, w.controls[state.control])
 		background, _, _ := win32.GDI32.NewProc("GetBkColor").Call(dc)
 		foreground, _, _ := win32.GDI32.NewProc("GetTextColor").Call(dc)
-		if brush != w.surfaceBrush || background != win32.RGB(27, 32, 43) || foreground != win32.RGB(241, 245, 249) {
+		if brush != w.fieldBrush || background != draw.Field.Ref() || foreground != draw.Copy.Ref() {
 			t.Fatalf("edit state %#x colors: brush=%#x background=%#x text=%#x", state.message, brush, background, foreground)
 		}
 	}
@@ -489,13 +301,18 @@ func TestInstallerProgressCountsOnlyCompletedSteps(t *testing.T) {
 	}
 }
 
-func TestInstallerWindowMetricsUseCompactMaintenanceSize(t *testing.T) {
+func TestInstallerWindowKeepsItsProportionsAtTheDisplayScale(t *testing.T) {
 	width, height, scale := installerWindowMetrics()
 	if scale <= 0 {
 		t.Fatalf("installer scale = %v, want positive", scale)
 	}
-	if width < 720 || width > 780 || height < 480 || height > 540 {
-		t.Fatalf("installer window = %dx%d at scale %.2f, want compact 720-780 by 480-540", width, height, scale)
+	if width != int32(installerWindowWidth*scale+0.5) || height != int32(installerWindowHeight*scale+0.5) {
+		t.Fatalf("installer window = %dx%d at scale %.2f", width, height, scale)
+	}
+	workWidth, _, _ := win32.GetSystemMetrics.Call(win32.SmCxWorkArea)
+	workHeight, _, _ := win32.GetSystemMetrics.Call(win32.SmCyWorkArea)
+	if width > int32(workWidth) || height > int32(workHeight) {
+		t.Fatalf("installer window %dx%d does not fit the %dx%d work area", width, height, workWidth, workHeight)
 	}
 }
 
@@ -566,95 +383,6 @@ func TestInstallerDescribesVersionsAndOutcome(t *testing.T) {
 	w.action = installerActionUninstall
 	if w.showsNextSteps() {
 		t.Fatal("an uninstall offers install next steps")
-	}
-}
-
-func TestInstallerInstallAndResultPagesKeepAddedContentClear(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: `C:\Example\Synesis`, action: installerActionInstall,
-		bundleVersion: "1.2.0", installedVersion: "1.1.0", steps: installerOperationSteps(installerActionInstall, false)}
-	if err := w.createWindow(); err != nil {
-		t.Fatal(err)
-	}
-	defer win32.DestroyWindow.Call(w.hwnd)
-	windowRect := func(id int) win32.Rect {
-		var rect win32.Rect
-		win32.User32.NewProc("GetWindowRect").Call(w.controls[id], uintptr(unsafe.Pointer(&rect)))
-		return rect
-	}
-	visible := func(id int) bool {
-		value, _, _ := win32.User32.NewProc("GetWindowLongW").Call(w.controls[id], uintptr(uint32(0xfffffff0)))
-		return value&win32.WsVisible != 0
-	}
-
-	w.showPage(installerPageInstall)
-	if win32.GetText(w.controls[controlTitle]) != "Choose install location" {
-		t.Fatal("install page title is not sentence case like the other pages")
-	}
-	want := map[int]string{
-		controlCapabilities:      "Setup will",
-		controlCapabilityInstall: "Install Synesis 1.2.0 in this folder",
-		controlCapabilityLink:    "Register the synesis:// link handler",
-		controlCapabilityData:    "Add the Synesis bin folder to your user PATH",
-	}
-	for id, text := range want {
-		if !visible(id) || win32.GetText(w.controls[id]) != text {
-			t.Fatalf("install page control %d = %q (visible %v), want %q", id, win32.GetText(w.controls[id]), visible(id), text)
-		}
-	}
-	if windowRect(controlInstallHint).Bottom > windowRect(controlCapabilities).Top {
-		t.Fatal("install hint overlaps the list of changes")
-	}
-	previous := windowRect(controlCapabilities)
-	for _, id := range []int{controlCapabilityInstall, controlCapabilityLink, controlCapabilityData} {
-		row := windowRect(id)
-		if previous.Bottom > row.Top {
-			t.Fatalf("install page row %d overlaps the row above it", id)
-		}
-		previous = row
-	}
-	if previous.Bottom+w.scaled(48) > windowRect(controlBack).Top {
-		t.Fatal("list of changes crowds the footer")
-	}
-
-	w.reportProgress("verify", "done", "Local bundle verified")
-	w.showPage(installerPageResult)
-	if win32.GetText(w.controls[controlDescription]) != "Synesis 1.2.0 is ready to use." {
-		t.Fatalf("result description = %q", win32.GetText(w.controls[controlDescription]))
-	}
-	if !visible(controlResultNextTitle) || !visible(controlResultNext) || !visible(controlResultDetailsToggle) {
-		t.Fatal("a successful install does not show next steps beside its details link")
-	}
-	for _, phrase := range []string{"new terminal", "synesis --version", "synesis init"} {
-		if !strings.Contains(win32.GetText(w.controls[controlResultNext]), phrase) {
-			t.Fatalf("next steps do not mention %q", phrase)
-		}
-	}
-	if windowRect(controlTitle).Left != windowRect(controlDescription).Left || windowRect(controlTitle).Left <= windowRect(controlResult).Left {
-		t.Fatal("result header is not one block clear of the status badge")
-	}
-	if windowRect(controlResultNextTitle).Bottom > windowRect(controlResultNext).Top ||
-		windowRect(controlResultNext).Bottom > windowRect(controlResultDetailsToggle).Top ||
-		windowRect(controlResultDetailsToggle).Bottom > windowRect(controlCancel).Top {
-		t.Fatal("next steps, details link and footer overlap")
-	}
-	w.handleCommand(uint16(controlResultDetailsToggle), win32.BnClicked)
-	if visible(controlResultNextTitle) || visible(controlResultNext) || !visible(controlResultDetails) {
-		t.Fatal("open details do not replace the next steps")
-	}
-	if windowRect(controlResultDetailsToggle).Bottom > windowRect(controlResultDetails).Top {
-		t.Fatal("details link overlaps the open details")
-	}
-	w.handleCommand(uint16(controlResultDetailsToggle), win32.BnClicked)
-	if !visible(controlResultNext) || visible(controlResultDetails) {
-		t.Fatal("closing details did not restore the next steps")
-	}
-
-	w.result.err = errors.New("failed")
-	w.showPage(installerPageResult)
-	if visible(controlResultNextTitle) || visible(controlResultNext) {
-		t.Fatal("a failed install still offers next steps")
 	}
 }
 

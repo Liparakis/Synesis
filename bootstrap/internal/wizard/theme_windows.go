@@ -3,100 +3,70 @@
 package wizard
 
 import (
+	"synesis/bootstrap/internal/wizard/draw"
 	"synesis/bootstrap/internal/wizard/win32"
 )
 
-func (w *installerWizard) disposeFonts() {
-	for _, font := range []uintptr{w.titleFont, w.bodyFont, w.detailFont, w.productFont, w.buttonFont, w.cardTitleFont, w.cardDetailFont, w.stepDetailFont, w.iconFont, w.wordmarkFont, w.logFont} {
-		if font != 0 {
-			win32.DeleteObject.Call(font)
-		}
-	}
-	w.titleFont = 0
-	w.bodyFont = 0
-	w.detailFont = 0
-	w.productFont = 0
-	w.buttonFont = 0
-	w.cardTitleFont = 0
-	w.cardDetailFont = 0
-	w.stepDetailFont = 0
-	w.iconFont = 0
-	w.wordmarkFont = 0
+func (w *installerWizard) createFonts() {
+	const semibold = 600
+	w.titleFont = draw.CreateFont(w.scaled(-26), semibold)
+	w.wordmarkFont = draw.CreateFont(w.scaled(-17), semibold)
+	w.strongFont = draw.CreateFont(w.scaled(-14), semibold)
+	w.bodyFont = draw.CreateFont(w.scaled(-14), win32.FontWeightNormal)
+	w.detailFont = draw.CreateFont(w.scaled(-13), win32.FontWeightNormal)
+	w.smallFont = draw.CreateFont(w.scaled(-12), win32.FontWeightNormal)
+	w.logFont = draw.CreateNamedFont(w.scaled(-12), win32.FontWeightNormal, "Consolas")
 }
 
 func (w *installerWizard) disposeTheme() {
-	if w.backdropBrush != 0 {
-		win32.DeleteObject.Call(w.backdropBrush)
-		w.backdropBrush = 0
+	for _, object := range []*uintptr{&w.titleFont, &w.wordmarkFont, &w.strongFont, &w.bodyFont, &w.detailFont, &w.smallFont, &w.logFont,
+		&w.backdropBrush, &w.windowBrush, &w.fieldBrush, &w.lineBrush} {
+		if *object != 0 {
+			win32.DeleteObject.Call(*object)
+			*object = 0
+		}
 	}
-	w.backdrop.Dispose()
-	w.backdrop = nil
-	w.progressRaster.Dispose()
-	w.progressRaster = nil
+	for _, raster := range []**draw.Raster{&w.backdrop, &w.progressRaster, &w.logo} {
+		(*raster).Dispose()
+		*raster = nil
+	}
 	for _, icon := range w.smoothIcons {
 		icon.Dispose()
 	}
 	w.smoothIcons = nil
-	for _, art := range w.art {
-		win32.DeleteObject.Call(art.Bitmap)
-	}
-	w.art = nil
-	if w.logoBitmap != 0 {
-		win32.DeleteObject.Call(w.logoBitmap)
-		w.logoBitmap = 0
-	}
-	if w.darkBrush != 0 {
-		win32.DeleteObject.Call(w.darkBrush)
-		w.darkBrush = 0
-	}
-	if w.surfaceBrush != 0 {
-		win32.DeleteObject.Call(w.surfaceBrush)
-		w.surfaceBrush = 0
-	}
-	if w.cardBrush != 0 {
-		win32.DeleteObject.Call(w.cardBrush)
-		w.cardBrush = 0
-	}
-	if w.warningBrush != 0 {
-		win32.DeleteObject.Call(w.warningBrush)
-		w.warningBrush = 0
-	}
 }
 
+// colorStatic colors a label and hands back the backdrop as its background,
+// aligned to the window, so a label never punches a flat rectangle through a
+// panel it sits on.
 func (w *installerWizard) colorStatic(device, hwnd uintptr) uintptr {
-	win32.SetBkMode.Call(device, win32.Transparent)
-	red, green, blue := byte(226), byte(232), byte(240)
 	id := w.installerControlID(hwnd)
+	// Read-only and disabled edits ask for their colors as statics.
 	if id == controlUninstallPath || id == controlInstallEdit || id == controlResultDetails {
 		return w.colorEdit(device)
 	}
+	color := draw.Muted
 	switch id {
-	case controlProductName:
-		red, green, blue = 248, 250, 252
-	case controlDescription:
-		red, green, blue = 174, 186, 207
-	case controlProductDetails, controlActionPath, controlInstallHint, controlUninstallWarning,
-		controlCapabilityInstall, controlCapabilityLink, controlCapabilityData, controlResultNext:
-		red, green, blue = 190, 201, 219
-	case controlUninstallImpact:
-		red, green, blue = 238, 241, 247
-	case controlTitle:
-		red, green, blue = 248, 250, 252
+	case controlTitle, controlResult, controlCapabilities, controlResultNextTitle, controlUninstallImpact:
+		color = draw.Copy
+	case controlActionPath, controlInstallGroup, controlInstallHint, controlUninstallPathLabel, controlProgressCount:
+		color = draw.Faint
 	}
-	win32.SetTextColor.Call(device, win32.RGB(red, green, blue))
-	if w.backdropBrush != 0 {
-		origin := w.controlOrigin(hwnd)
-		win32.GDI32.NewProc("SetBrushOrgEx").Call(device, uintptr(-origin.X), uintptr(-origin.Y), 0)
-		return w.backdropBrush
+	win32.SetBkMode.Call(device, win32.Transparent)
+	win32.SetTextColor.Call(device, color.Ref())
+	if w.backdropBrush == 0 {
+		return w.windowBrush
 	}
-	return w.darkBrush
+	origin := w.controlOrigin(hwnd)
+	win32.SetBrushOrgEx.Call(device, uintptr(-origin.X), uintptr(-origin.Y), 0)
+	return w.backdropBrush
 }
 
 func (w *installerWizard) colorEdit(device uintptr) uintptr {
 	// The edit control uses the DC background for text cells and the returned
 	// brush for unused space. Both must match, including while typing/focused.
 	win32.SetBkMode.Call(device, win32.Opaque)
-	win32.SetBkColor.Call(device, win32.RGB(27, 32, 43))
-	win32.SetTextColor.Call(device, win32.RGB(241, 245, 249))
-	return w.surfaceBrush
+	win32.SetBkColor.Call(device, draw.Field.Ref())
+	win32.SetTextColor.Call(device, draw.Copy.Ref())
+	return w.fieldBrush
 }

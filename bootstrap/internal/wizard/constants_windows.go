@@ -4,29 +4,37 @@ package wizard
 
 const (
 	installerWindowClass = "SynesisInstallerWizard"
-	// The reference composition is authored at this generous desktop size. The
-	// wizard scales the client layout down only when the current work area is
-	// smaller, so the presentation remains usable on compact laptops.
-	installerWindowWidth  = 1400
-	installerWindowHeight = 980
-	// The source layout is authored at 1400x980. A compact desktop default
-	// leaves the wizard closer to the supplied reference while the existing
-	// work-area calculation still protects smaller displays.
-	installerDesktopScale = 0.52
+	// The layout is authored in 96-DPI pixels. The window scales it to the
+	// display, and down again when the work area is smaller.
+	installerWindowWidth  = 760
+	installerWindowHeight = 520
 
-	installerActionInstall installerAction = iota
-	installerActionUninstall
-
-	installerPageAction installerPage = iota
-	installerPageInstall
-	installerPageUninstall
-	installerPageProgress
-	installerPageResult
+	// A branded rail on the left carries the steps; the page sits to its right
+	// above one row of buttons.
+	installerSidebarWidth = 208
+	installerContentLeft  = 240
+	installerContentWidth = 488
+	installerFooterTop    = 456
+	installerButtonTop    = 472
+	installerButtonHeight = 32
 
 	installerMessageDone     = 0x8001
 	installerMessageShow     = 0x8002
 	installerMessageRefresh  = 0x8003
 	installerMessageProgress = 0x8004
+)
+
+const (
+	installerActionInstall installerAction = iota
+	installerActionUninstall
+)
+
+const (
+	installerPageAction installerPage = iota
+	installerPageInstall
+	installerPageUninstall
+	installerPageProgress
+	installerPageResult
 )
 
 // The control identifiers keep the values they had when this block was shared

@@ -11,8 +11,6 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
-	"synesis/bootstrap/assets"
 	"synesis/bootstrap/internal/wizard/draw"
 	"synesis/bootstrap/internal/wizard/win32"
 )
@@ -27,85 +25,43 @@ func (w *installerWizard) createWindow() error {
 		return errors.New("unable to locate the setup module")
 	}
 	w.instance = instance
-	w.darkBrush, _, _ = win32.CreateSolidBrush.Call(win32.RGB(15, 18, 24))
-	w.surfaceBrush, _, _ = win32.CreateSolidBrush.Call(win32.RGB(27, 32, 43))
-	w.cardBrush, _, _ = win32.CreateSolidBrush.Call(win32.RGB(24, 29, 36))
-	w.warningBrush, _, _ = win32.CreateSolidBrush.Call(win32.RGB(36, 31, 22))
-	if w.darkBrush == 0 || w.surfaceBrush == 0 || w.cardBrush == 0 || w.warningBrush == 0 {
+	w.windowBrush, _, _ = win32.CreateSolidBrush.Call(draw.Window.Ref())
+	w.fieldBrush, _, _ = win32.CreateSolidBrush.Call(draw.Field.Ref())
+	w.lineBrush, _, _ = win32.CreateSolidBrush.Call(draw.LineStrong.Ref())
+	if w.windowBrush == 0 || w.fieldBrush == 0 || w.lineBrush == 0 {
 		return errors.New("unable to create the setup theme")
-	}
-	className, err := windows.UTF16PtrFromString(installerWindowClass)
-	if err != nil {
-		return err
 	}
 	w.windowIconLarge, w.windowIconSmall = loadInstallerIcons(instance)
 	cursor, _, _ := win32.LoadCursor.Call(0, win32.IddArrow)
 	class := win32.WndClassEx{
-		CbSize:      uint32(unsafe.Sizeof(win32.WndClassEx{})),
-		LpfnWndProc: installerWndProc,
-		HInstance:   instance,
-		// Keep the class icon empty so the uninstall page can genuinely suppress
-		// the product mark via its page-specific WM_SETICON state.
-		HIcon:         0,
+		CbSize:        uint32(unsafe.Sizeof(win32.WndClassEx{})),
+		LpfnWndProc:   installerWndProc,
+		HInstance:     instance,
 		HCursor:       cursor,
-		HbrBackground: w.darkBrush,
-		LpszClassName: className,
-		HIconSm:       0,
+		HbrBackground: w.windowBrush,
+		LpszClassName: win32.MustUTF16(installerWindowClass),
 	}
 	win32.RegisterClassEx.Call(uintptr(unsafe.Pointer(&class)))
 
-	init := struct {
-		dwSize uint32
-		dwICC  uint32
-	}{win32.CbSizeOfInitCommonControls, win32.IccProgressClass}
-	win32.InitCommonControls.Call(uintptr(unsafe.Pointer(&init)))
-
 	style := installerWindowStyle()
-	windowWidth, windowHeight, scale := installerWindowMetrics()
+	clientWidth, clientHeight, scale := installerWindowMetrics()
 	w.scale = scale
-	windowRect := win32.Rect{Right: windowWidth, Bottom: windowHeight}
-	win32.AdjustWindowRectEx.Call(
-		uintptr(unsafe.Pointer(&windowRect)),
-		uintptr(style),
-		0,
-		win32.WsExDlgModal,
-	)
+	windowRect := win32.Rect{Right: clientWidth, Bottom: clientHeight}
+	win32.AdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&windowRect)), uintptr(style), 0, win32.WsExDlgModal)
 	width := windowRect.Right - windowRect.Left
 	height := windowRect.Bottom - windowRect.Top
-	title, err := windows.UTF16PtrFromString("Synesis Setup")
-	if err != nil {
-		return err
-	}
-	w.hwnd = win32.CreateWindow(
-		installerWindowClass,
-		windows.UTF16PtrToString(title),
-		win32.WsExDlgModal,
-		style,
-		int32(-2147483648),
-		int32(-2147483648),
-		width,
-		height,
-		0,
-		0,
-		instance,
-	)
+	workWidth, _, _ := win32.GetSystemMetrics.Call(win32.SmCxWorkArea)
+	workHeight, _, _ := win32.GetSystemMetrics.Call(win32.SmCyWorkArea)
+	w.hwnd = win32.CreateWindow(installerWindowClass, "Synesis Setup", win32.WsExDlgModal, style,
+		max(0, (int32(workWidth)-width)/2), max(0, (int32(workHeight)-height)/2), width, height, 0, 0, instance)
 	if w.hwnd == 0 {
 		return errors.New("unable to create the setup window")
 	}
 	setInstallerDarkTitleBar(w.hwnd)
-	w.logoBitmap, w.logoWidth, w.logoHeight, _ = draw.CreateLogo(w.hwnd)
-	w.art = make(map[string]draw.Art)
-	for _, name := range []string{"brand", "ribbon", "card", "card-selected", "card-disabled", "primary", "secondary", "install", "link", "data"} {
-		data, err := assets.Setup.ReadFile("setup/" + name + ".png")
-		if err != nil {
-			return err
-		}
-		bitmap, width, height, err := draw.CreateBitmap(w.hwnd, data)
-		if err != nil {
-			return err
-		}
-		w.art[name] = draw.Art{Bitmap: bitmap, Width: width, Height: height}
-	}
+	win32.SendMessage.Call(w.hwnd, win32.WmSetIcon, win32.IconBig, w.windowIconLarge)
+	win32.SendMessage.Call(w.hwnd, win32.WmSetIcon, win32.IconSmall, w.windowIconSmall)
+	// A missing mark leaves the wordmark on its own; setup still works.
+	w.logo, _ = draw.NewLogo(w.scaled(installerLogoSize))
 	installerWindows.Store(w.hwnd, w)
 	w.createControls()
 	w.showPage(installerPageAction)
@@ -116,24 +72,22 @@ func installerWindowStyle() uint32 {
 	return uint32(win32.WsCaption | win32.WsSysMenu | win32.WsMinimizeBox | win32.WsClipChildren)
 }
 
-// installerWindowMetrics keeps the reference composition intact on a normal
-// desktop and scales it down to the current work area on smaller displays.
+// installerWindowMetrics sizes the client area for the display's scale, and
+// shrinks it to the work area on a display too small to hold it.
 func installerWindowMetrics() (width, height int32, scale float64) {
-	scale = installerDesktopScale
-	workWidth, _, _ := win32.GetSystemMetrics.Call(win32.SmCxWorkArea)
-	workHeight, _, _ := win32.GetSystemMetrics.Call(win32.SmCyWorkArea)
-	if workWidth > 0 && workHeight > 0 {
-		availableWidth := float64(workWidth) - 48
-		availableHeight := float64(workHeight) - 48
-		if availableWidth > 0 && availableHeight > 0 {
-			scale = math.Min(installerDesktopScale, math.Min(availableWidth/float64(installerWindowWidth), availableHeight/float64(installerWindowHeight)))
+	scale = 1
+	if dpi := win32.User32.NewProc("GetDpiForSystem"); dpi.Find() == nil {
+		if value, _, _ := dpi.Call(); value > 0 {
+			scale = float64(value) / 96
 		}
 	}
-	if scale <= 0 {
-		scale = 1
+	workWidth, _, _ := win32.GetSystemMetrics.Call(win32.SmCxWorkArea)
+	workHeight, _, _ := win32.GetSystemMetrics.Call(win32.SmCyWorkArea)
+	if availableWidth, availableHeight := float64(workWidth)-48, float64(workHeight)-48; availableWidth > 0 && availableHeight > 0 {
+		scale = math.Min(scale, math.Min(availableWidth/installerWindowWidth, availableHeight/installerWindowHeight))
 	}
-	width = int32(math.Round(float64(installerWindowWidth) * scale))
-	height = int32(math.Round(float64(installerWindowHeight) * scale))
+	width = int32(math.Round(installerWindowWidth * scale))
+	height = int32(math.Round(installerWindowHeight * scale))
 	return width, height, scale
 }
 
@@ -161,11 +115,8 @@ func (w *installerWizard) scaled(value int32) int32 {
 	return int32(math.Round(float64(value) * scale))
 }
 
-func scaledPenWidth(scale float64) uintptr {
-	if scale < 0.75 {
-		return 1
-	}
-	return 2
+func (w *installerWizard) scaledRect(x, y, width, height int32) win32.Rect {
+	return win32.Rect{Left: w.scaled(x), Top: w.scaled(y), Right: w.scaled(x + width), Bottom: w.scaled(y + height)}
 }
 
 func setInstallerDarkTitleBar(hwnd uintptr) {
@@ -177,21 +128,15 @@ func setInstallerDarkTitleBar(hwnd uintptr) {
 	if result != 0 {
 		win32.DwmSetWindowAttr.Call(hwnd, 19, uintptr(unsafe.Pointer(&value)), uintptr(unsafe.Sizeof(value)))
 	}
-	caption := uint32(win32.RGB(15, 18, 24))
-	text := uint32(win32.RGB(226, 232, 240))
-	border := uint32(win32.RGB(15, 18, 24))
+	caption := uint32(draw.Window.Ref())
+	text := uint32(draw.Copy.Ref())
+	border := uint32(draw.Line.Ref())
 	// These attributes are ignored on older Windows builds. On current Windows
-	// they prevent the system accent colour from turning the setup title bar
-	// purple while the rest of the installer is deliberately near-black.
+	// they keep the system accent colour off the setup title bar, so the frame
+	// and the page read as one surface.
 	win32.DwmSetWindowAttr.Call(hwnd, 35, uintptr(unsafe.Pointer(&caption)), uintptr(unsafe.Sizeof(caption)))
 	win32.DwmSetWindowAttr.Call(hwnd, 36, uintptr(unsafe.Pointer(&text)), uintptr(unsafe.Sizeof(text)))
 	win32.DwmSetWindowAttr.Call(hwnd, 34, uintptr(unsafe.Pointer(&border)), uintptr(unsafe.Sizeof(border)))
-}
-
-// setPageIcon keeps every wizard page on the same native application shell.
-func (w *installerWizard) setPageIcon(_ installerPage) {
-	win32.SendMessage.Call(w.hwnd, win32.WmSetIcon, win32.IconBig, w.windowIconLarge)
-	win32.SendMessage.Call(w.hwnd, win32.WmSetIcon, win32.IconSmall, w.windowIconSmall)
 }
 
 func (w *installerWizard) messageLoop() error {
@@ -203,6 +148,11 @@ func (w *installerWizard) messageLoop() error {
 		}
 		if result == 0 {
 			return nil
+		}
+		// The dialog keyboard interface gives the wizard Tab, Space, Enter and
+		// Escape without making it a dialog resource.
+		if handled, _, _ := win32.IsDialogMessage.Call(w.hwnd, uintptr(unsafe.Pointer(&message))); handled != 0 {
+			continue
 		}
 		win32.TranslateMessage.Call(uintptr(unsafe.Pointer(&message)))
 		win32.DispatchMessage.Call(uintptr(unsafe.Pointer(&message)))
@@ -217,7 +167,7 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	wizard := value.(*installerWizard)
 	switch uint32(message) {
 	case win32.WmPaint:
-		drawInstallerChrome(wizard)
+		wizard.paintBackdrop()
 		return 0
 	case win32.WmEraseBkgnd:
 		return 1
@@ -226,12 +176,10 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	case win32.WmCtlColorEdit:
 		return wizard.colorEdit(wParam)
 	case win32.WmCtlColorBtn:
-		win32.SetBkMode.Call(wParam, win32.Transparent)
-		win32.SetTextColor.Call(wParam, win32.RGB(226, 232, 240))
-		return wizard.darkBrush
+		return wizard.windowBrush
 	case 0x0134: // WM_CTLCOLORLISTBOX
-		win32.SetBkColor.Call(wParam, win32.RGB(27, 32, 43))
-		return wizard.surfaceBrush
+		win32.SetBkColor.Call(wParam, draw.Field.Ref())
+		return wizard.fieldBrush
 	case win32.WmDrawItem:
 		if lParam == 0 {
 			return 0
@@ -240,21 +188,11 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		// treating an integer callback parameter as a Go pointer.
 		var item win32.DrawItem
 		win32.CopyMemory.Call(uintptr(unsafe.Pointer(&item)), lParam, unsafe.Sizeof(item))
-		if int(wParam) == controlMetadata {
-			wizard.drawMetadataControl(item.Device)
-		} else if int(wParam) == controlProgressSteps {
-			wizard.drawProgressSteps(item.Device)
-		} else if int(wParam) == controlProgressBar {
-			wizard.drawProgressBar(item.Device)
-		} else if int(wParam) == controlProgressLog {
-			wizard.drawProgressLog(item)
-		} else {
-			wizard.drawButton(int(wParam), item.Device)
-		}
+		wizard.drawItem(int(wParam), item)
 		return 1
 	case installerMessageShow:
 		win32.Show(hwnd)
-		wizard.refreshEntireWindow()
+		wizard.refreshPage()
 		return 0
 	case installerMessageRefresh:
 		wizard.refreshPage()
@@ -282,8 +220,7 @@ func installerWindowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		wizard.closeOrWarn()
 		return 0
 	case win32.WmDestroy:
-		win32.User32.NewProc("KillTimer").Call(hwnd, 1)
-		wizard.disposeFonts()
+		win32.KillTimer.Call(hwnd, 1)
 		wizard.disposeTheme()
 		installerWindows.Delete(hwnd)
 		win32.PostQuitMessage.Call(0)

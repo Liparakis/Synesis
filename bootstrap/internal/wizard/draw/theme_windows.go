@@ -9,6 +9,27 @@ import (
 	"synesis/bootstrap/internal/wizard/win32"
 )
 
+// The wizard's colors: the neutral dark palette of the Synesis browser UI.
+var (
+	Window     = PaintColor{10, 10, 11}
+	Sidebar    = PaintColor{16, 16, 18}
+	Field      = PaintColor{21, 21, 24}
+	Raised     = PaintColor{30, 30, 34}
+	Line       = PaintColor{40, 40, 45}
+	LineStrong = PaintColor{66, 66, 74}
+	Copy       = PaintColor{237, 237, 237}
+	Muted      = PaintColor{163, 163, 170}
+	Faint      = PaintColor{116, 116, 124}
+	Green      = PaintColor{131, 201, 155}
+	Amber      = PaintColor{228, 181, 95}
+	Red        = PaintColor{239, 112, 118}
+)
+
+// Ref converts the color to the COLORREF layout GDI expects.
+func (c PaintColor) Ref() uintptr {
+	return win32.RGB(byte(c[0]), byte(c[1]), byte(c[2]))
+}
+
 // CreateFont creates a ClearType Segoe UI font of the given height and weight.
 func CreateFont(height int32, weight int32) uintptr {
 	return CreateNamedFont(height, weight, "Segoe UI")
@@ -47,17 +68,17 @@ func SetFont(hwnd, font uintptr) {
 }
 
 // StatusColor is the accent color of a progress step status.
-func StatusColor(status string) uintptr {
+func StatusColor(status string) PaintColor {
 	switch status {
 	case "done":
-		return win32.RGB(91, 212, 150)
+		return Green
 	case "working":
-		return win32.RGB(81, 178, 250)
+		return Copy
 	case "warning":
-		return win32.RGB(239, 189, 93)
+		return Amber
 	case "failed":
-		return win32.RGB(245, 122, 122)
+		return Red
 	default:
-		return win32.RGB(145, 160, 180)
+		return Faint
 	}
 }

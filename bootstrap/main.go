@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 
 	"synesis/bootstrap/internal/install"
 	"synesis/bootstrap/internal/install/embedded"
@@ -21,7 +22,11 @@ const bootstrapVersion = "0.1.0-dev.local"
 
 func main() {
 	install.SetTrustRoot(ed25519.PublicKey(mustHex(manifestPublicKeyHex)))
-	if embedded.HasBundle() {
+	// The Windows wizard hosts an appended bundle itself, so its window opens
+	// before the bundle is unpacked. Every other start unpacks first and hands
+	// over to the installer inside the bundle.
+	hostsBundle := runtime.GOOS == "windows" && len(os.Args) < 2
+	if embedded.HasBundle() && !hostsBundle {
 		if err := embedded.RunCommand(os.Args[1:]); err != nil {
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {

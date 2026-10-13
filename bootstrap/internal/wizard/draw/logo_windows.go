@@ -6,106 +6,49 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/draw"
 	"image/png"
-	"unsafe"
 
 	"synesis/bootstrap/assets"
-	"synesis/bootstrap/internal/wizard/win32"
 )
 
-// Art is a decoded wizard image ready to be blended.
-type Art struct {
-	Bitmap        uintptr
-	Width, Height int32
-}
-
-// CreateLogo decodes the embedded product mark into a bitmap.
-func CreateLogo(hwnd uintptr) (bitmap uintptr, width, height int32, err error) {
-	return CreateBitmap(hwnd, assets.LogoPNG)
-}
-
-// CreateBitmap decodes PNG data into a 32-bit device independent bitmap.
-func CreateBitmap(hwnd uintptr, dataPNG []byte) (bitmap uintptr, width, height int32, err error) {
-	image, decodeErr := png.Decode(bytes.NewReader(dataPNG))
-	if decodeErr != nil {
-		return 0, 0, 0, fmt.Errorf("decode embedded Synesis logo: %w", decodeErr)
+// NewLogo renders the embedded product mark into a size by size raster. The
+// mark is averaged down from its source pixels and stored premultiplied, so it
+// stays smooth at every display scale and blends onto any background.
+func NewLogo(size int32) (*Raster, error) {
+	decoded, err := png.Decode(bytes.NewReader(assets.LogoPNG))
+	if err != nil {
+		return nil, fmt.Errorf("decode embedded Synesis logo: %w", err)
 	}
-	bounds := image.Bounds()
-	width = int32(bounds.Dx())
-	height = int32(bounds.Dy())
-	if width == 0 || height == 0 {
-		return 0, 0, 0, errors.New("embedded Synesis logo is empty")
+	source, ok := decoded.(*image.NRGBA)
+	if !ok {
+		source = image.NewNRGBA(decoded.Bounds())
+		draw.Draw(source, source.Bounds(), decoded, decoded.Bounds().Min, draw.Src)
 	}
-	info := win32.BitmapInfo{Header: win32.BitmapInfoHeader{
-		Size:        40,
-		Width:       width,
-		Height:      -height,
-		Planes:      1,
-		BitCount:    32,
-		Compression: 0,
-	}}
-	hdc, _, _ := win32.GetDC.Call(hwnd)
-	if hdc == 0 {
-		return 0, 0, 0, errors.New("unable to create a logo device context")
+	width, height := source.Bounds().Dx(), source.Bounds().Dy()
+	raster := NewRaster(size, size)
+	if width == 0 || height == 0 || raster == nil {
+		raster.Dispose()
+		return nil, errors.New("embedded Synesis logo is empty")
 	}
-	defer win32.ReleaseDC.Call(hwnd, hdc)
-	var pixels unsafe.Pointer
-	bitmap, _, callErr := win32.CreateDIBSection.Call(
-		hdc,
-		uintptr(unsafe.Pointer(&info)),
-		0,
-		uintptr(unsafe.Pointer(&pixels)),
-		0,
-		0,
-	)
-	if bitmap == 0 || pixels == nil {
-		if callErr != nil {
-			return 0, 0, 0, fmt.Errorf("create logo bitmap: %w", callErr)
-		}
-		return 0, 0, 0, errors.New("create logo bitmap failed")
-	}
-	data := unsafe.Slice((*byte)(pixels), int(width*height*4))
-	for y := 0; y < int(height); y++ {
-		for x := 0; x < int(width); x++ {
-			red, green, blue, alpha := image.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			index := (y*int(width) + x) * 4
-			data[index] = byte(blue >> 8)
-			data[index+1] = byte(green >> 8)
-			data[index+2] = byte(red >> 8)
-			data[index+3] = byte(alpha >> 8)
+	for y := 0; y < int(size); y++ {
+		top, bottom := y*height/int(size), max((y+1)*height/int(size), y*height/int(size)+1)
+		for x := 0; x < int(size); x++ {
+			left, right := x*width/int(size), max((x+1)*width/int(size), x*width/int(size)+1)
+			var red, green, blue, alpha, count int
+			for sy := top; sy < bottom && sy < height; sy++ {
+				row := source.Pix[sy*source.Stride:]
+				for sx := left; sx < right && sx < width; sx++ {
+					a := int(row[sx*4+3])
+					red, green, blue, alpha = red+int(row[sx*4])*a, green+int(row[sx*4+1])*a, blue+int(row[sx*4+2])*a, alpha+a
+					count++
+				}
+			}
+			i := (y*int(size) + x) * 4
+			raster.Pixels[i], raster.Pixels[i+1], raster.Pixels[i+2], raster.Pixels[i+3] =
+				byte(blue/(count*255)), byte(green/(count*255)), byte(red/(count*255)), byte(alpha/count)
 		}
 	}
-	return bitmap, width, height, nil
-}
-
-// DrawLogo alpha-blends a bitmap onto device, scaled to the destination size.
-func DrawLogo(device, bitmap uintptr, sourceWidth, sourceHeight, x, y, width, height int32) {
-	memory, _, _ := win32.CreateCompatibleDC.Call(device)
-	if memory == 0 {
-		return
-	}
-	defer win32.DeleteDC.Call(memory)
-	oldBitmap, _, _ := win32.SelectObject.Call(memory, bitmap)
-	// AlphaBlend takes BLENDFUNCTION by value, not by pointer. The earlier
-	// pointer form silently turned the alpha fields into address bits and made
-	// the otherwise valid logo bitmap disappear.
-	blend := blendValue()
-	win32.AlphaBlend.Call(
-		device,
-		uintptr(x),
-		uintptr(y),
-		uintptr(width),
-		uintptr(height),
-		memory,
-		0,
-		0,
-		uintptr(sourceWidth),
-		uintptr(sourceHeight),
-		blend,
-	)
-	win32.SelectObject.Call(memory, oldBitmap)
-}
-
-func blendValue() uintptr {
-	return uintptr(255)<<16 | uintptr(1)<<24
+	return raster, nil
 }

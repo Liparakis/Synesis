@@ -84,7 +84,7 @@ func (r *Raster) Dispose() {
 	r.Bitmap, r.Device, r.previous, r.Pixels = 0, 0, 0, nil
 }
 
-// Draw blends the raster onto device at x, y.
+// Draw blends the raster onto device at x, y, using its per-pixel alpha.
 func (r *Raster) Draw(device uintptr, x, y int32) {
 	if r == nil {
 		return
@@ -92,15 +92,41 @@ func (r *Raster) Draw(device uintptr, x, y int32) {
 	win32.AlphaBlend.Call(device, uintptr(x), uintptr(y), uintptr(r.Width), uintptr(r.Height), r.Device, 0, 0, uintptr(r.Width), uintptr(r.Height), blendValue())
 }
 
+// AlphaBlend takes BLENDFUNCTION by value: AC_SRC_OVER, full constant alpha,
+// AC_SRC_ALPHA.
+func blendValue() uintptr {
+	return uintptr(255)<<16 | uintptr(1)<<24
+}
+
+// Copy presents the raster's colors on device at x, y, ignoring alpha. Text
+// drawn into a raster by GDI leaves alpha unset, so opaque surfaces use this.
+func (r *Raster) Copy(device uintptr, x, y int32) {
+	if r == nil {
+		return
+	}
+	win32.BitBlt.Call(device, uintptr(x), uintptr(y), uintptr(r.Width), uintptr(r.Height), r.Device, 0, 0, win32.SrcCopy)
+}
+
+// CopyFrom fills the raster with the region of source that starts at x, y.
+func (r *Raster) CopyFrom(source *Raster, x, y int32) {
+	win32.BitBlt.Call(r.Device, 0, 0, uintptr(r.Width), uintptr(r.Height), source.Device, uintptr(x), uintptr(y), win32.SrcCopy)
+	win32.GdiFlush.Call()
+}
+
+// Fill paints an opaque rectangle, clipped to the raster.
+func (r *Raster) Fill(rect win32.Rect, color PaintColor) {
+	for y := max(int32(0), rect.Top); y < min(r.Height, rect.Bottom); y++ {
+		for x := max(int32(0), rect.Left); x < min(r.Width, rect.Right); x++ {
+			r.PutColor(x, y, color)
+		}
+	}
+}
+
 // PaintColor is an RGB color with floating point channels in 0..255.
 type PaintColor [3]float64
 
-// PaintRGB converts a COLORREF into a PaintColor.
-func PaintRGB(color uintptr) PaintColor {
-	return PaintColor{float64(color & 255), float64((color >> 8) & 255), float64((color >> 16) & 255)}
-}
-
-func mix(a, b PaintColor, coverage float64) PaintColor {
+// Mix moves a toward b by coverage, from 0 (a) to 1 (b).
+func Mix(a, b PaintColor, coverage float64) PaintColor {
 	return PaintColor{a[0] + (b[0]-a[0])*coverage, a[1] + (b[1]-a[1])*coverage, a[2] + (b[2]-a[2])*coverage}
 }
 
@@ -121,30 +147,26 @@ func paintProgress(pixels []byte, width, height int32, fill, phase float64) {
 	PaintProgressOnBackground(pixels, width, height, fill, phase, nil, 0, 0)
 }
 
-// PaintProgressOnBackground paints the progress pill over a region of background.
+// PaintProgressOnBackground paints the progress track and its fill over a
+// region of background. A soft highlight travels along the fill and never
+// leaves it, so motion never suggests more progress than was reported.
 func PaintProgressOnBackground(pixels []byte, width, height int32, fill, phase float64, background *Raster, originX, originY int32) {
 	w, h := float64(width), float64(height)
-	fill = min(1.0, max(0.0, fill))
-	end := 2 + (w-4)*fill
-	band := max(h*2, (end-2)*0.18)
-	sheen := -band + (end-2+2*band)*phase
+	end := w * min(1.0, max(0.0, fill))
+	band := max(h*2, end*0.18)
+	sheen := -band + (end+2*band)*phase
 	for y := 0; y < int(height); y++ {
 		fy := float64(y) + 0.5
-		base := PaintColor{15, 177 - 67*fy/h, 249 - 9*fy/h}
 		for x := 0; x < int(width); x++ {
 			fx := float64(x) + 0.5
-			baseColor := PaintColor{15, 18, 24}
+			color := Window
 			if background != nil {
-				baseColor = background.ColorAt(int32(x)+originX, int32(y)+originY)
+				color = background.ColorAt(int32(x)+originX, int32(y)+originY)
 			}
-			color := mix(baseColor, PaintColor{65, 83, 105}, pillCoverage(fx, fy, 0, 0, w, h))
-			color = mix(color, PaintColor{25, 33, 43}, pillCoverage(fx, fy, 1, 1, w-1, h-1))
-			if fill > 0 {
-				outer := pillCoverage(fx, fy, 2, 2, end, h-2)
-				color = mix(color, PaintColor{62, 194, 251}, outer)
-				gloss := 0.38 * math.Exp(-4*math.Pow((fx-sheen)/band, 2))
-				lit := mix(base, PaintColor{215, 246, 255}, gloss)
-				color = mix(color, lit, pillCoverage(fx, fy, 3, 3, end-1, h-3))
+			color = Mix(color, Line, pillCoverage(fx, fy, 0, 0, w, h))
+			if end > 0 {
+				gloss := math.Exp(-4 * math.Pow((fx-sheen)/band, 2))
+				color = Mix(color, Mix(PaintColor{196, 196, 204}, PaintColor{255, 255, 255}, gloss), pillCoverage(fx, fy, 0, 0, max(end, h), h))
 			}
 			i := (y*int(width) + x) * 4
 			pixels[i], pixels[i+1], pixels[i+2], pixels[i+3] = byte(color[2]+0.5), byte(color[1]+0.5), byte(color[0]+0.5), 255
@@ -176,18 +198,14 @@ func PaintIcon(pixels []byte, size int32, kind string, color PaintColor) {
 					c, visible, weight := color, d <= r && d >= r-1.5, 1.0
 					if kind == "alert" {
 						visible = fy >= -r*0.95 && fy <= r*0.8 && math.Abs(fx) <= (fy+r*0.95)*0.55
-						c = mix(PaintColor{255, 213, 105}, PaintColor{242, 170, 45}, (fy+r)/(2*r))
+						c = Mix(PaintColor{255, 213, 105}, PaintColor{242, 170, 45}, (fy+r)/(2*r))
 						if segmentDistance(fx, fy, 0, -r*0.28, 0, r*0.18) < 0.9 || math.Hypot(fx, fy-r*0.48) < 1.0 {
 							c = PaintColor{47, 35, 16}
 						}
 					} else if kind == "radio-selected" {
-						visible = d <= r
-						if d < r-1 {
-							c = PaintColor{9, 104, 217}
-						}
-						if d < r/3 {
-							c = PaintColor{225, 245, 255}
-						}
+						visible = d <= r && (d >= r-1.5 || d < r*0.45)
+					} else if kind == "check" {
+						visible = min(segmentDistance(fx, fy, -r*0.7, 0, -r*0.2, r*0.5), segmentDistance(fx, fy, -r*0.2, r*0.5, r*0.75, -r*0.5)) < max(0.8, r*0.14)
 					} else if kind == "working" {
 						visible = visible || d < r*0.46
 					} else if kind == "done" {
@@ -226,7 +244,7 @@ func PaintIcon(pixels []byte, size int32, kind string, color PaintColor) {
 // ColorAt returns the color at x, y, or the page background outside the raster.
 func (r *Raster) ColorAt(x, y int32) PaintColor {
 	if x < 0 || y < 0 || x >= r.Width || y >= r.Height {
-		return PaintColor{15, 18, 24}
+		return Window
 	}
 	i := (int(y)*int(r.Width) + int(x)) * 4
 	return PaintColor{float64(r.Pixels[i+2]), float64(r.Pixels[i+1]), float64(r.Pixels[i])}
@@ -246,16 +264,14 @@ func roundedCoverage(x, y, left, top, right, bottom, radius float64) float64 {
 	return min(1.0, max(0.0, r-math.Hypot(dx, dy)+0.5))
 }
 
-// GradientPanel paints a rounded, bordered, vertically graded panel.
-func (r *Raster) GradientPanel(rect win32.Rect, top, bottom, border PaintColor, radius float64) {
+// Panel paints a rounded, bordered panel, blended into what is behind it.
+func (r *Raster) Panel(rect win32.Rect, fill, border PaintColor, radius float64) {
+	left, right, top, bottom := float64(rect.Left), float64(rect.Right), float64(rect.Top), float64(rect.Bottom)
 	for y := max(int32(0), rect.Top); y < min(r.Height, rect.Bottom); y++ {
-		fill := mix(top, bottom, float64(y-rect.Top)/float64(rect.Bottom-rect.Top))
 		for x := max(int32(0), rect.Left); x < min(r.Width, rect.Right); x++ {
 			fx, fy := float64(x)+0.5, float64(y)+0.5
-			left, right, t, b := float64(rect.Left), float64(rect.Right), float64(rect.Top), float64(rect.Bottom)
-			color := mix(r.ColorAt(x, y), border, roundedCoverage(fx, fy, left, t, right, b, radius))
-			color = mix(color, fill, roundedCoverage(fx, fy, left+1, t+1, right-1, b-1, max(1.0, radius-1)))
-			r.PutColor(x, y, color)
+			color := Mix(r.ColorAt(x, y), border, roundedCoverage(fx, fy, left, top, right, bottom, radius))
+			r.PutColor(x, y, Mix(color, fill, roundedCoverage(fx, fy, left+1, top+1, right-1, bottom-1, max(1.0, radius-1))))
 		}
 	}
 }

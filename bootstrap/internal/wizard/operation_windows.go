@@ -8,7 +8,6 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
 	"synesis/bootstrap/internal/install"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
@@ -43,14 +42,22 @@ func (w *installerWizard) startOperation() {
 		return
 	}
 	w.busy = true
+	unpack := w.awaitBundle
+	if w.action == installerActionUninstall {
+		unpack = nil
+	}
+	steps := installerOperationSteps(w.action, w.metadata)
+	if unpack != nil {
+		steps = append([]installerStep{{id: "unpack", title: "Unpack the installer", status: "pending"}}, steps...)
+	}
 	w.mu.Lock()
-	w.steps = installerOperationSteps(w.action, w.metadata)
+	w.steps = steps
 	w.logEntries = nil
 	w.operationStatus = "Preparing the operation..."
 	w.result = installerOperationResult{}
 	w.mu.Unlock()
 	w.logRendered = 0
-	win32.SendMessage.Call(w.controls[controlProgressLog], 0x0184, 0, 0) // LB_RESETCONTENT
+	win32.SendMessage.Call(w.controls[controlProgressLog], lbResetContent, 0, 0)
 	w.showPage(installerPageProgress)
 	root := w.installRoot
 	action := w.action
@@ -61,7 +68,19 @@ func (w *installerWizard) startOperation() {
 		execute = executeInstallerOperation
 	}
 	go func() {
-		result := execute(root, bundle, action, metadata, w.reportProgress)
+		var result installerOperationResult
+		if unpack != nil {
+			w.reportProgress("unpack", "working", "Unpacking the installer")
+			if bundle, result.err = unpack(); result.err == nil {
+				result.err = installRootOutsideBundle(bundle, root)
+			}
+			if result.err == nil {
+				w.reportProgress("unpack", "done", "Installer unpacked")
+			}
+		}
+		if result.err == nil {
+			result = execute(root, bundle, action, metadata, w.reportProgress)
+		}
 		if result.err != nil {
 			w.reportProgress("", "failed", result.err.Error())
 		}
@@ -139,12 +158,12 @@ func (w *installerWizard) refreshProgress() {
 	steps := append([]installerStep(nil), w.steps...)
 	w.mu.Unlock()
 	win32.SetText(w.controls[controlProgressStatus], status)
-	count := fmt.Sprintf("%d / %d steps", completedInstallerSteps(steps), len(steps))
+	count := fmt.Sprintf("%d of %d", completedInstallerSteps(steps), len(steps))
 	if len(steps) > 0 {
 		w.progressMotion.SetTarget(float64(completedInstallerSteps(steps))/float64(len(steps)), time.Now())
 	}
 	win32.SetText(w.controls[controlProgressCount], count)
-	win32.SetText(w.controls[controlProgressBar], count+" complete")
+	win32.SetText(w.controls[controlProgressBar], count+" steps complete")
 	win32.InvalidateRect.Call(w.controls[controlProgressBar], 0, 0)
 	var accessible []string
 	for _, step := range steps {
@@ -152,35 +171,33 @@ func (w *installerWizard) refreshProgress() {
 	}
 	win32.SetText(w.controls[controlProgressSteps], strings.Join(accessible, "; "))
 	list := w.controls[controlProgressLog]
-	dc, _, _ := win32.GetDC.Call(list)
-	previous, _, _ := win32.SelectObject.Call(dc, w.logFont)
-	var extent int32
-	for _, entry := range entries {
-		value, _ := windows.UTF16FromString("[" + entry.status + "] " + entry.detail)
-		var size win32.Point
-		win32.GDI32.NewProc("GetTextExtentPoint32W").Call(dc, uintptr(unsafe.Pointer(&value[0])), uintptr(len(value)-1), uintptr(unsafe.Pointer(&size)))
-		if size.X+w.scaled(28) > extent {
-			extent = size.X + w.scaled(28)
-		}
-	}
-	win32.SelectObject.Call(dc, previous)
-	win32.ReleaseDC.Call(list, dc)
-	win32.SendMessage.Call(list, 0x0194, uintptr(extent), 0) // horizontal scroll only if needed
-	top, _, _ := win32.SendMessage.Call(list, 0x018e, 0, 0)  // LB_GETTOPINDEX
-	followTail := int(top)+4 >= w.logRendered
-	win32.SendMessage.Call(list, 0x0184, 0, 0)
+	top, _, _ := win32.SendMessage.Call(list, lbGetTopIndex, 0, 0)
+	followTail := int(top)+installerLogRows >= w.logRendered
+	win32.SendMessage.Call(list, lbResetContent, 0, 0)
 	for _, entry := range entries {
 		text := "[" + entry.status + "] " + entry.detail
-		win32.SendMessage.Call(list, 0x0180, 0, uintptr(unsafe.Pointer(win32.MustUTF16(text)))) // LB_ADDSTRING
+		win32.SendMessage.Call(list, lbAddString, 0, uintptr(unsafe.Pointer(win32.MustUTF16(text))))
 	}
 	w.logRendered = len(entries)
-	if followTail && len(entries) > 4 {
-		top = uintptr(len(entries) - 4)
+	if followTail && len(entries) > installerLogRows {
+		top = uintptr(len(entries) - installerLogRows)
 	}
-	win32.SendMessage.Call(list, 0x0197, top, 0) // LB_SETTOPINDEX
-	win32.InvalidateRect.Call(w.controls[controlProgressSteps], 0, 1)
+	win32.SendMessage.Call(list, lbSetTopIndex, top, 0)
+	win32.InvalidateRect.Call(w.controls[controlProgressSteps], 0, 0)
 	win32.InvalidateRect.Call(list, 0, 1)
 }
+
+// installerLogRows is how many log lines the progress page shows at once.
+const installerLogRows = 4
+
+// List box messages.
+const (
+	lbAddString     = 0x0180
+	lbResetContent  = 0x0184
+	lbGetTopIndex   = 0x018e
+	lbSetTopIndex   = 0x0197
+	lbSetItemHeight = 0x01a0
+)
 
 func (w *installerWizard) handleDone() {
 	w.mu.Lock()

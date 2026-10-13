@@ -10,110 +10,166 @@ import (
 	"synesis/bootstrap/internal/wizard/win32"
 )
 
+// placement is where one control sits on a page, in layout pixels.
+type placement struct {
+	id                  int
+	x, y, width, height int32
+}
+
+const (
+	installerLogoSize       = 42
+	installerFieldHeight    = 40
+	installerStepRowHeight  = 34
+	installerLogRowHeight   = 17
+	installerHeaderTop      = 32
+	installerBodyTop        = 128
+	installerResultHeaderIn = 60 // the outcome badge sits left of the result header
+)
+
+// pageLayout lists the controls a page shows and where. A control that is not
+// listed is hidden, so a page cannot inherit a stray control from another.
+func (w *installerWizard) pageLayout(page installerPage) []placement {
+	const left, width = installerContentLeft, installerContentWidth
+	right := int32(left + width)
+	button := func(id int, slot, buttonWidth int32) placement {
+		return placement{id, right - slot, installerButtonTop, buttonWidth, installerButtonHeight}
+	}
+	header := func(indent int32) []placement {
+		return []placement{
+			{controlTitle, left + indent, installerHeaderTop, width - indent, 36},
+			{controlDescription, left + indent, 72, width - indent, 40},
+		}
+	}
+	back, next, cancel := button(controlBack, 296, 88), button(controlNext, 200, 104), button(controlCancel, 88, 88)
+	switch page {
+	case installerPageAction:
+		controls := append(header(0),
+			placement{controlActionInstall, left, 132, width, 72},
+			placement{controlActionUninstall, left, 216, width, 72},
+			placement{controlInstallHint, left, 306, width, 36},
+			next, cancel)
+		if w.installed {
+			controls = append(controls, placement{controlActionPath, left, installerButtonTop, 272, installerButtonHeight})
+		}
+		return controls
+	case installerPageInstall:
+		return append(header(0),
+			placement{controlInstallGroup, left, installerBodyTop, width, 20},
+			placement{controlInstallEdit, left + 12, 162, 356, 20},
+			placement{controlBrowse, right - 96, 152, 96, installerFieldHeight},
+			placement{controlInstallHint, left, 202, width, 36},
+			placement{controlCapabilities, left, 258, width, 20},
+			placement{controlCapabilityInstall, left + 24, 284, width - 24, 20},
+			placement{controlCapabilityData, left + 24, 308, width - 24, 20},
+			placement{controlCapabilityLink, left + 24, 332, width - 24, 20},
+			back, next, cancel)
+	case installerPageUninstall:
+		return append(header(0),
+			placement{controlUninstallPathLabel, left, installerBodyTop, width, 20},
+			placement{controlUninstallPath, left + 12, 162, width - 24, 20},
+			placement{controlMetadata, left, 212, width, 28},
+			placement{controlUninstallWarning, left + 28, 242, width - 28, 40},
+			placement{controlUninstallImpact, left + 44, 304, width - 60, 44},
+			back, next, cancel)
+	case installerPageProgress:
+		return append(header(0),
+			placement{controlProgressBar, left, 132, width, 6},
+			placement{controlProgressStatus, left, 146, width - 100, 20},
+			placement{controlProgressCount, right - 100, 146, 100, 20},
+			placement{controlProgressSteps, left, 184, width, 5 * installerStepRowHeight},
+			placement{controlProgressLog, left + 8, 372, width - 16, installerLogRows * installerLogRowHeight},
+			cancel)
+	case installerPageResult:
+		controls := append(header(installerResultHeaderIn),
+			placement{controlResult, left + 16, 142, width - 32, 40},
+			placement{controlUninstallPathLabel, left + 16, 190, width - 32, 18},
+			placement{controlUninstallPath, left + 16, 212, width - 32, 20},
+			cancel)
+		if w.showsNextSteps() {
+			controls = append(controls,
+				placement{controlResultNextTitle, left, 264, width, 20},
+				placement{controlResultNext, left, 290, width, 66})
+		}
+		if w.resultDetailsOpen {
+			controls = append(controls, placement{controlResultDetails, left + 10, 272, width - 20, 160})
+		}
+		if win32.GetText(w.controls[controlResultDetails]) != "" {
+			controls = append(controls, placement{controlResultDetailsToggle, left, installerButtonTop, 120, installerButtonHeight})
+		}
+		return controls
+	}
+	return nil
+}
+
+// applyLayout hides every control, then places and shows the page's own.
+func (w *installerWizard) applyLayout() {
+	for _, control := range w.controls {
+		win32.SetVisible(control, false)
+	}
+	for _, place := range w.pageLayout(w.page) {
+		win32.MoveWindow.Call(w.controls[place.id], uintptr(w.scaled(place.x)), uintptr(w.scaled(place.y)),
+			uintptr(w.scaled(place.width)), uintptr(w.scaled(place.height)), 0)
+		win32.SetVisible(w.controls[place.id], true)
+	}
+}
+
 func (w *installerWizard) showPage(page installerPage) {
 	w.page = page
 	w.resultDetailsOpen = false
 	if page != installerPageProgress {
-		win32.User32.NewProc("KillTimer").Call(w.hwnd, 1)
+		win32.KillTimer.Call(w.hwnd, 1)
 		w.progressTimer = 0
 		w.progressComplete = time.Time{}
 	}
-	w.setPageIcon(page)
-	for _, control := range w.controls {
-		win32.SetVisible(control, false)
-	}
-	w.layoutPage(page)
-	w.rebuildBackdrop()
-	win32.SetVisible(w.controls[controlTitle], true)
-	win32.SetVisible(w.controls[controlDescription], true)
-
-	title := "Synesis Setup"
-	description := "Choose an action to continue."
+	set := func(id int, text string) { win32.SetText(w.controls[id], text) }
+	var title, description string
 	switch page {
 	case installerPageAction:
-		title = "Manage installation"
-		description = "Choose what you want to do with the current installation."
-		win32.SetVisible(w.controls[controlCapabilities], true)
-		win32.SetVisible(w.controls[controlCapabilityInstall], true)
-		win32.SetVisible(w.controls[controlCapabilityLink], true)
-		win32.SetVisible(w.controls[controlCapabilityData], true)
-		win32.SetVisible(w.controls[controlActionGroup], true)
-		win32.SetVisible(w.controls[controlActionInstall], true)
-		win32.SetVisible(w.controls[controlActionUninstall], true)
-		win32.SetVisible(w.controls[controlActionPath], true)
-		win32.SetText(w.controls[controlProductName], "")
-		win32.SetText(w.controls[controlProductDetails], "")
-		win32.SetText(w.controls[controlCapabilities], "Setup includes")
-		win32.SetText(w.controls[controlCapabilityInstall], "Local runtime")
-		win32.SetText(w.controls[controlCapabilityLink], "synesis:// link handler")
-		win32.SetText(w.controls[controlCapabilityData], "Existing project and workspace data is kept")
-		win32.SetText(w.controls[controlActionPath], "Installed at "+w.installRoot)
+		title = "Install Synesis"
+		description = "Set up the Synesis runtime, its command-line tools and the synesis:// link handler for your user account."
+		if w.installed {
+			title = "Manage Synesis"
+			description = "Synesis is installed for your user account. Bring it up to date, or remove it."
+		}
+		set(controlActionInstall, w.installActionTitle())
+		set(controlInstallHint, "Setup only changes application files. Your projects, repositories and workspace data are never touched.")
+		set(controlActionPath, "Installed at "+w.installRoot)
 	case installerPageInstall:
-		title = "Choose install location"
-		description = "Choose the folder where Synesis will be installed.\r\nThis is where the application files will be placed."
-		win32.SetVisible(w.controls[controlInstallGroup], true)
-		win32.SetVisible(w.controls[controlInstallEdit], true)
-		win32.SetVisible(w.controls[controlBrowse], true)
-		win32.SetVisible(w.controls[controlInstallHint], true)
-		// Say what will change on this machine before the user commits to it.
-		win32.SetVisible(w.controls[controlCapabilities], true)
-		win32.SetVisible(w.controls[controlCapabilityInstall], true)
-		win32.SetVisible(w.controls[controlCapabilityLink], true)
-		win32.SetVisible(w.controls[controlCapabilityData], true)
+		title = "Choose a location"
+		description = "Synesis installs for your user account only, so it needs no administrator rights."
 		runtimeLine := "Install the Synesis runtime in this folder"
 		if w.bundleVersion != "" {
 			runtimeLine = "Install Synesis " + w.bundleVersion + " in this folder"
 		}
-		win32.SetText(w.controls[controlCapabilities], "Setup will")
-		win32.SetText(w.controls[controlCapabilityInstall], runtimeLine)
-		win32.SetText(w.controls[controlCapabilityLink], "Register the synesis:// link handler")
-		win32.SetText(w.controls[controlCapabilityData], "Add the Synesis bin folder to your user PATH")
-		win32.SetText(w.controls[controlInstallGroup], "Destination folder")
+		// Say what will change on this machine before the user commits to it.
+		set(controlCapabilities, "Setup will")
+		set(controlCapabilityInstall, runtimeLine)
+		set(controlCapabilityData, "Add the Synesis bin folder to your user PATH")
+		set(controlCapabilityLink, "Register the synesis:// link handler")
 		if w.installDraft == "" {
 			w.installDraft = w.installRoot
 		}
-		win32.SetText(w.controls[controlInstallEdit], w.installDraft)
-		win32.SetText(w.controls[controlInstallHint], "Projects, repositories, workspaces, and provider configuration are not installed or removed here.")
+		set(controlInstallEdit, w.installDraft)
+		set(controlInstallHint, "Projects, repositories, workspaces, and provider configuration are not installed or removed here.")
 	case installerPageUninstall:
-		title = "Uninstall"
+		title = "Uninstall Synesis"
 		description = "Remove the application from this computer.\r\nYour projects, repositories, and workspace data will be preserved."
-		win32.SetVisible(w.controls[controlUninstallGroup], true)
-		win32.SetVisible(w.controls[controlUninstallPathLabel], true)
-		win32.SetVisible(w.controls[controlUninstallPath], true)
-		win32.SetVisible(w.controls[controlMetadata], true)
-		win32.SetVisible(w.controls[controlUninstallWarning], true)
-		win32.SetVisible(w.controls[controlUninstallImpact], true)
-		win32.SetText(w.controls[controlUninstallPath], w.installRoot)
-		win32.SetText(w.controls[controlMetadata], "Remove metadata")
-		win32.SetText(w.controls[controlUninstallWarning], "Removes local identity and installer state.\r\nProject, repository, and workspace data stay intact.")
-		win32.SetText(w.controls[controlUninstallImpact], "Application files and the synesis:// handler will be removed.")
+		set(controlUninstallPath, w.installRoot)
+		set(controlUninstallWarning, "Removes local identity and installer state.\r\nProject, repository, and workspace data stay intact.")
+		set(controlUninstallImpact, "Application files and the synesis:// handler will be removed.")
 	case installerPageProgress:
 		w.progressEpoch = time.Now()
 		w.progressMotion = draw.ProgressMotion{}
 		w.progressComplete = time.Time{}
-		if w.action == installerActionUninstall {
-			title = "Uninstalling"
-		} else {
-			title = "Installing"
-		}
+		title = "Installing Synesis"
 		description = "Setting up the local runtime and shell integration. This may take a minute."
 		if w.action == installerActionUninstall {
+			title = "Removing Synesis"
 			description = "Removing the application and shell integration. Your project data is preserved."
 		}
-		win32.SetVisible(w.controls[controlProgressStatus], true)
-		win32.SetVisible(w.controls[controlProgressBar], true)
-		win32.SetVisible(w.controls[controlProgressCount], true)
-		win32.SetVisible(w.controls[controlProgressSteps], true)
-		win32.SetVisible(w.controls[controlProgressLogTitle], true)
-		win32.SetVisible(w.controls[controlProgressLog], true)
-		if w.action == installerActionUninstall {
-			win32.SetText(w.controls[controlProgressLogTitle], "Uninstallation log")
-		} else {
-			win32.SetText(w.controls[controlProgressLogTitle], "Installation log")
-		}
-		win32.SetText(w.controls[controlProgressStatus], "Preparing the operation...")
+		set(controlProgressStatus, "Preparing the operation...")
 		w.refreshProgress()
-		w.progressTimer, _, _ = win32.User32.NewProc("SetTimer").Call(w.hwnd, 1, 16, 0)
+		w.progressTimer, _, _ = win32.SetTimer.Call(w.hwnd, 1, 16, 0)
 	case installerPageResult:
 		title, description = "Installed", "Synesis is ready to use."
 		if w.bundleVersion != "" {
@@ -131,157 +187,85 @@ func (w *installerWizard) showPage(page installerPage) {
 		} else if w.result.warning != "" {
 			description = "Application installed. Link registration needs attention."
 		}
-		win32.SetVisible(w.controls[controlResult], true)
-		win32.SetText(w.controls[controlResult], w.resultText())
-		win32.SetVisible(w.controls[controlUninstallPathLabel], true)
-		win32.SetVisible(w.controls[controlUninstallPath], true)
-		win32.SetText(w.controls[controlUninstallPath], w.installRoot)
-		details := w.resultDetailsText()
-		win32.SetText(w.controls[controlResultDetails], details)
-		win32.SetText(w.controls[controlResultDetailsToggle], "Show details")
-		win32.SetVisible(w.controls[controlResultDetailsToggle], details != "")
-		win32.SetText(w.controls[controlResultNext], "1.  Open a new terminal so the updated PATH is picked up.\r\n"+
+		set(controlResult, w.resultText())
+		set(controlUninstallPath, w.installRoot)
+		set(controlResultDetails, w.resultDetailsText())
+		set(controlResultDetailsToggle, "Show details")
+		set(controlResultNext, "1.  Open a new terminal so the updated PATH is picked up.\r\n"+
 			"2.  Run  synesis --version  to confirm the installation.\r\n"+
 			"3.  In a project folder, run  synesis init  to get started.")
-		win32.SetVisible(w.controls[controlResultNextTitle], w.showsNextSteps())
-		win32.SetVisible(w.controls[controlResultNext], w.showsNextSteps())
 	}
-	win32.SetText(w.controls[controlTitle], title)
-	win32.SetText(w.controls[controlDescription], description)
-
-	showBack := page == installerPageInstall || page == installerPageUninstall || page == installerPageProgress
-	showNext := page == installerPageAction || page == installerPageInstall || page == installerPageUninstall || page == installerPageProgress
-	win32.SetVisible(w.controls[controlBack], showBack)
-	win32.SetVisible(w.controls[controlNext], showNext)
-	win32.SetVisible(w.controls[controlCancel], true)
-	win32.SetEnabled(w.controls[controlBack], !w.busy)
-	win32.SetEnabled(w.controls[controlNext], !w.busy)
-	win32.SetEnabled(w.controls[controlCancel], !w.busy)
+	set(controlTitle, title)
+	set(controlDescription, description)
+	set(controlCancel, "Cancel")
 	if page == installerPageResult {
-		win32.SetText(w.controls[controlCancel], "Close")
-	} else {
-		win32.SetText(w.controls[controlCancel], "Cancel")
+		set(controlCancel, "Close")
 	}
-	if showNext {
-		w.updateActionLabel()
+	w.updateActionLabel()
+	w.applyLayout()
+	w.rebuildBackdrop()
+	for _, id := range []int{controlBack, controlNext, controlCancel} {
+		win32.SetEnabled(w.controls[id], !w.busy)
 	}
-	if page == installerPageAction {
+	switch page {
+	case installerPageAction:
 		win32.SetFocus.Call(w.controls[controlActionInstall])
-	} else if page == installerPageInstall {
+	case installerPageInstall:
 		win32.SetFocus.Call(w.controls[controlInstallEdit])
+	case installerPageUninstall:
+		// Next keeps the focus across the page change and is now the destructive
+		// button: move the focus so no stray key press confirms the uninstall.
+		win32.SetFocus.Call(w.controls[controlBack])
+	case installerPageResult:
+		win32.SetFocus.Call(w.controls[controlCancel])
 	}
 	// Paint the new parent surface before refreshing its child controls. The
 	// posted second pass runs after the current navigation message has unwound;
-	// this keeps the branded chrome and unchanged footer controls from retaining
-	// stale pixels across page transitions.
+	// this keeps controls that stay in place from retaining stale pixels across
+	// page transitions.
 	w.refreshPage()
 	win32.PostMessage.Call(w.hwnd, installerMessageRefresh, 0, 0)
 }
 
 func (w *installerWizard) refreshPage() {
-	// Controls move between page layouts. Repaint their former bounds as well as
-	// their new bounds, including the entire right-hand footer and brand area.
-	win32.InvalidateRect.Call(w.hwnd, 0, 1)
-	win32.UpdateWindow.Call(w.hwnd)
-	for _, control := range w.controls {
-		win32.RedrawWindow.Call(control, 0, 0, win32.RdwInvalidate|win32.RdwErase|win32.RdwUpdateNow)
+	win32.RedrawWindow.Call(w.hwnd, 0, 0, win32.RdwInvalidate|win32.RdwErase|win32.RdwAllChildren|win32.RdwUpdateNow)
+}
+
+// installerRailSteps names the four stops the rail shows for an action.
+func installerRailSteps(action installerAction) [4]string {
+	if action == installerActionUninstall {
+		return [4]string{"Welcome", "Options", "Remove", "Finish"}
+	}
+	return [4]string{"Welcome", "Location", "Install", "Finish"}
+}
+
+// railStep is the stop of the rail a page belongs to.
+func (page installerPage) railStep() int {
+	switch page {
+	case installerPageAction:
+		return 0
+	case installerPageInstall, installerPageUninstall:
+		return 1
+	case installerPageProgress:
+		return 2
+	default:
+		return 3
 	}
 }
 
-func (w *installerWizard) refreshEntireWindow() {
-	win32.RedrawWindow.Call(w.hwnd, 0, 0, win32.RdwInvalidate|win32.RdwErase|win32.RdwAllChildren|win32.RdwUpdateNow|win32.RdwFrame)
-	for _, control := range w.controls {
-		win32.RedrawWindow.Call(control, 0, 0, win32.RdwInvalidate|win32.RdwErase|win32.RdwUpdateNow)
+// installActionTitle names the primary action for the version already on this
+// machine, when both versions are known.
+func (w *installerWizard) installActionTitle() string {
+	switch {
+	case !w.installed:
+		return "Install"
+	case w.bundleVersion == "" || w.installedVersion == "":
+		return "Install or update"
+	case w.installedVersion == w.bundleVersion:
+		return "Repair"
+	default:
+		return "Update"
 	}
-}
-
-// layoutPage confines shared controls to the space actually available on each
-// page while keeping the compact maintenance layout aligned to the footer.
-func (w *installerWizard) layoutPage(page installerPage) {
-	move := func(id int, x, y, width, height int32) {
-		win32.MoveWindow.Call(w.controls[id], uintptr(w.scaled(x)), uintptr(w.scaled(y)),
-			uintptr(w.scaled(width)), uintptr(w.scaled(height)), 0)
-	}
-	headerWidth := int32(1040)
-	move(controlTitle, 60, 48, headerWidth, 84)
-	descriptionHeight := int32(60)
-	move(controlDescription, 60, 132, headerWidth, descriptionHeight)
-	move(controlNext, 980, 894, 175, 64)
-	move(controlCancel, 1175, 894, 165, 64)
-	move(controlBack, 785, 894, 175, 64)
-	if page == installerPageInstall {
-		move(controlDescription, 60, 132, headerWidth, 96)
-		move(controlInstallGroup, 60, 330, 1280, 42)
-		move(controlInstallEdit, 74, 405, 1008, 54)
-		move(controlBrowse, 1120, 390, 220, 82)
-		move(controlInstallHint, 60, 496, 1260, 44)
-		move(controlCapabilities, 60, 566, 880, 38)
-		move(controlCapabilityInstall, 120, 610, 1100, 42)
-		move(controlCapabilityLink, 120, 652, 1100, 42)
-		move(controlCapabilityData, 120, 694, 1100, 42)
-		move(controlBack, 785, 825, 175, 72)
-		move(controlNext, 980, 825, 175, 72)
-		move(controlCancel, 1175, 825, 165, 72)
-	}
-	if page == installerPageProgress || page == installerPageResult {
-		move(controlDescription, 60, 132, headerWidth, 90)
-		move(controlProgressStatus, 60, 280, 1280, 40)
-		move(controlProgressBar, 60, 328, 1050, 36)
-		move(controlProgressCount, 1140, 324, 200, 44)
-		move(controlProgressSteps, 60, 384, 1280, 272)
-		move(controlProgressLogTitle, 60, 660, 1280, 50)
-		move(controlProgressLog, 60, 718, 1280, 145)
-		move(controlResult, 60, 300, 1250, 310)
-	}
-	if page == installerPageResult {
-		move(controlResult, 88, 320, 1224, 96)
-		move(controlUninstallPathLabel, 88, 432, 1224, 38)
-		move(controlUninstallPath, 102, 494, 1196, 40)
-		// The status badge sits in the header's left margin, so the header copy
-		// moves right to stay one aligned block.
-		move(controlTitle, 148, 48, headerWidth-88, 84)
-		move(controlDescription, 148, 132, headerWidth-88, 90)
-		toggleY := int32(596)
-		if w.showsNextSteps() {
-			move(controlResultNextTitle, 60, 598, 1280, 40)
-			move(controlResultNext, 60, 644, 1280, 126)
-			toggleY = 790
-		}
-		move(controlResultDetailsToggle, 60, toggleY, 300, 52)
-		move(controlResultDetails, 74, 668, 1252, 182)
-	}
-	if page == installerPageAction {
-		move(controlCapabilities, 60, 220, 880, 38)
-		move(controlCapabilityInstall, 120, 268, 950, 42)
-		move(controlCapabilityLink, 120, 312, 950, 42)
-		move(controlCapabilityData, 120, 356, 950, 42)
-		move(controlActionGroup, 60, 430, 1280, 40)
-		move(controlActionInstall, 60, 490, 1280, 120)
-		move(controlActionUninstall, 60, 626, 1280, 120)
-		move(controlActionPath, 60, 840, 900, 42)
-		move(controlNext, 980, 825, 175, 72)
-		move(controlCancel, 1175, 825, 165, 72)
-	}
-	if page == installerPageUninstall {
-		move(controlDescription, 60, 132, headerWidth, 96)
-		move(controlUninstallGroup, 88, 328, 1190, 44)
-		move(controlUninstallPathLabel, 88, 384, 1190, 40)
-		move(controlUninstallPath, 104, 454, 1192, 42)
-		move(controlMetadata, 88, 528, 1220, 48)
-		move(controlUninstallWarning, 136, 584, 1172, 80)
-		move(controlUninstallImpact, 164, 721, 1144, 42)
-		move(controlBack, 785, 825, 175, 72)
-		move(controlNext, 980, 825, 175, 72)
-		move(controlCancel, 1175, 825, 165, 72)
-	}
-}
-
-// headerDividerY is the design-space row of the rule under the page header.
-func (w *installerWizard) headerDividerY() int32 {
-	if w.page == installerPageAction {
-		return 192
-	}
-	return 250
 }
 
 // installActionDetail describes what the primary action will do to the version
@@ -302,6 +286,13 @@ func (w *installerWizard) installActionDetail() string {
 	}
 }
 
+func (w *installerWizard) uninstallActionDetail() string {
+	if !w.installed {
+		return "Synesis is not installed for this account."
+	}
+	return "Remove the application; metadata stays unless you choose otherwise."
+}
+
 // showsNextSteps reports whether the result page has room for, and reason to
 // show, what to do after a successful install. Open details take that space.
 func (w *installerWizard) showsNextSteps() bool {
@@ -309,7 +300,7 @@ func (w *installerWizard) showsNextSteps() bool {
 }
 
 // resultBadge selects the status mark painted beside the result title.
-func (w *installerWizard) resultBadge() (kind string, color uintptr) {
+func (w *installerWizard) resultBadge() (kind string, color draw.PaintColor) {
 	switch {
 	case w.result.err != nil:
 		return "badge-failed", draw.StatusColor("failed")
@@ -363,6 +354,8 @@ func (w *installerWizard) resultFailureDescription() string {
 		return "Synesis could not be fully removed."
 	}
 	switch stage {
+	case "unpack":
+		return "The installer could not be unpacked."
 	case "verify":
 		return "The local installation bundle could not be verified."
 	case "runtime":
@@ -407,10 +400,7 @@ func (w *installerWizard) toggleResultDetails() {
 		label = "Hide details"
 	}
 	win32.SetText(w.controls[controlResultDetailsToggle], label)
-	win32.SetVisible(w.controls[controlResultDetails], w.resultDetailsOpen)
-	w.layoutPage(w.page)
-	win32.SetVisible(w.controls[controlResultNextTitle], w.showsNextSteps())
-	win32.SetVisible(w.controls[controlResultNext], w.showsNextSteps())
+	w.applyLayout()
 	if w.resultDetailsOpen {
 		// Start with the error summary, even after earlier diagnostic scrolling.
 		win32.SendMessage.Call(w.controls[controlResultDetails], 0x00b1, 0, 0) // EM_SETSEL
@@ -420,22 +410,21 @@ func (w *installerWizard) toggleResultDetails() {
 	w.refreshPage()
 }
 
-func (w *installerWizard) invalidateActionCards() {
-	w.updateActionLabel()
-	for _, controlID := range []int{controlActionInstall, controlActionUninstall} {
-		if control := w.controls[controlID]; control != 0 {
-			win32.InvalidateRect.Call(control, 0, 1)
-		}
-	}
+// selectAction switches the chosen action. The rail names the steps of that
+// action, so it is repainted with the cards.
+func (w *installerWizard) selectAction(action installerAction) {
+	w.action = action
+	w.rebuildBackdrop()
+	w.refreshPage()
 }
 
 func (w *installerWizard) updateActionLabel() {
-	label := "Install"
-	if w.page == installerPageUninstall || (w.page == installerPageAction && w.action == installerActionUninstall) {
+	label := "Next"
+	switch w.page {
+	case installerPageInstall:
+		label = "Install"
+	case installerPageUninstall:
 		label = "Uninstall"
-	}
-	if w.page == installerPageProgress {
-		label = "Next"
 	}
 	win32.SetText(w.controls[controlNext], label)
 }

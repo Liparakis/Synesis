@@ -35,7 +35,7 @@ func TestInstallerProgressMotionIsContinuousAndBounded(t *testing.T) {
 }
 
 func TestInstallerIconsHavePremultipliedAntialiasedEdges(t *testing.T) {
-	for _, kind := range []string{"radio-selected", "radio-unselected", "pending", "working", "done", "warning", "failed", "alert"} {
+	for _, kind := range []string{"radio-selected", "radio-unselected", "pending", "working", "done", "warning", "failed", "alert", "check"} {
 		pixels := make([]byte, 20*20*4)
 		PaintIcon(pixels, 20, kind, PaintColor{115, 198, 255})
 		partial, opaque := 0, 0
@@ -99,15 +99,25 @@ func TestInstallerSelectsRequestedTypeface(t *testing.T) {
 	}
 }
 
-func TestEmbeddedInstallerLogoCreatesBitmap(t *testing.T) {
-	bitmap, width, height, err := CreateLogo(0)
+func TestEmbeddedInstallerLogoScalesToAPremultipliedMark(t *testing.T) {
+	logo, err := NewLogo(48)
 	if err != nil {
 		t.Fatalf("create embedded installer logo: %v", err)
 	}
-	if bitmap == 0 || width <= 0 || height <= 0 {
-		t.Fatalf("invalid embedded installer logo: bitmap=%d width=%d height=%d", bitmap, width, height)
+	defer logo.Dispose()
+	solid := 0
+	for i := 0; i < len(logo.Pixels); i += 4 {
+		alpha := logo.Pixels[i+3]
+		if logo.Pixels[i] > alpha || logo.Pixels[i+1] > alpha || logo.Pixels[i+2] > alpha {
+			t.Fatalf("logo is not premultiplied at byte %d", i)
+		}
+		if alpha == 255 {
+			solid++
+		}
 	}
-	win32.DeleteObject.Call(bitmap)
+	if logo.Width != 48 || logo.Height != 48 || solid < 48 || logo.Pixels[3] != 0 {
+		t.Fatalf("logo %dx%d has %d solid pixels and corner alpha %d", logo.Width, logo.Height, solid, logo.Pixels[3])
+	}
 }
 
 func TestInstallerBlendValueUsesPerPixelAlpha(t *testing.T) {
