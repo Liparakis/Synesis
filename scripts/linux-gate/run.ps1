@@ -13,7 +13,9 @@ uncommitted and untracked work as one patch, and the container clones onto its o
 cloning through a Windows folder mount was slow and dropped the engine's connection.
 
 .PARAMETER GradleArguments
-Arguments for Gradle. With none, the whole gate runs (check --continue).
+Arguments for Gradle. With none, the whole gate runs (check --continue). Quote an argument that
+starts with a single dash, such as '-PsynesisTestForks=1', so PowerShell does not read it as a
+parameter of this script.
 
 .PARAMETER WorkDirectory
 Where the bundle, the patch, the log and the copied test results are kept. Defaults to the
@@ -29,6 +31,8 @@ scripts\linux-gate\run.ps1
 .EXAMPLE
 scripts\linux-gate\run.ps1 :workspace:test --tests '*ConversationServiceTest'
 #>
+# Only the Gradle arguments are taken by position; otherwise the first of them was read as the work directory.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$GradleArguments,
     [string]$WorkDirectory = $(if ($env:SYNESIS_LINUX_GATE_DIR) { $env:SYNESIS_LINUX_GATE_DIR } else { Join-Path $env:LOCALAPPDATA 'Synesis\linux-gate' }),
