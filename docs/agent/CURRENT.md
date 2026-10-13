@@ -1,6 +1,6 @@
 # 2026-10-13 — The UI opens on an installation that knows no project
 
-Uncommitted on `master`. ADR-0073's 2026-10-13 follow-up holds the decision.
+ADR-0073's 2026-10-13 follow-up holds the decision.
 
 **Why.** After every project could be removed from the registry, the repository owner removed
 them all and `synesis ui`, `synesis://ui` and the desktop shortcut stopped opening anything
@@ -24,8 +24,6 @@ the home page is listed as inactive there: the page still opens only the project
 serves it, so it becomes openable when the UI is next opened and that project serves it.
 
 # 2026-10-13 — Removing projects works reliably, any project can be removed, and a reload keeps the page
-
-Uncommitted on `master`.
 
 **Root cause of the unreliable removal.** `KnownProjectRegistry` guarded its file with a file lock
 only. A file lock belongs to the process, so a second thread of one runtime asking for it was
@@ -67,7 +65,7 @@ returns as soon as one of their commands runs, which can look like a failed remo
 
 # 2026-10-13 — `synesis://ui` opens the UI, the installer stops the daemon, and can add a desktop shortcut
 
-Uncommitted on `master`. ADR-0073 and ADR-0080 hold the decisions under their 2026-10-13
+ADR-0073 and ADR-0080 hold the decisions under their 2026-10-13
 follow-ups.
 
 **What changed.**
@@ -106,7 +104,7 @@ MCP server processes started from the installation are not stopped by the instal
 
 # 2026-10-13 — `synesis ui` opens again on a running project, and opens outside a project
 
-Uncommitted on `master`. ADR-0073 holds the decisions under its 2026-10-13 follow-up.
+ADR-0073 holds the decisions under its 2026-10-13 follow-up.
 
 **Root causes.** The daemon built every UI link from the one bootstrap token a runtime issued at
 start, so a second opening carried a spent token ("bootstrap token is invalid or expired"). And
@@ -138,7 +136,7 @@ owns, which ADR-0073 rejected.
 
 # 2026-10-13 — The browser UI is redrawn around a navigation rail
 
-Uncommitted on `master`. Only `web-ui/src/app/App.tsx`, its test and `web-ui/src/styles.css`
+Only `web-ui/src/app/App.tsx`, its test and `web-ui/src/styles.css`
 changed: no endpoint, DTO, route path or client call did. The repository owner asked for a free
 redesign, which supersedes the SYN-055 brief where they differ (that brief ruled out extra
 navigation and fixed the content widths).
