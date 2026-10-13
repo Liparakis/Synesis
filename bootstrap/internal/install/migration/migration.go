@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"synesis/bootstrap/internal/childproc"
 	"synesis/bootstrap/internal/install/layout"
 	"synesis/bootstrap/internal/payload"
 )
@@ -358,6 +359,7 @@ func runStableMigrationCommand(launcher string, args []string, projectRoot strin
 		command = exec.CommandContext(ctx, "cmd.exe", append([]string{"/d", "/s", "/c", launcher}, args...)...)
 		command.Dir = projectRoot
 	}
+	childproc.Hide(command)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("migration command failed: %w", err)

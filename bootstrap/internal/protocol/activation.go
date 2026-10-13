@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"synesis/bootstrap/internal/childproc"
 	"synesis/bootstrap/internal/install/activepointer"
 	"synesis/bootstrap/internal/install/layout"
 )
@@ -48,6 +49,7 @@ func RunActivation(args []string) error {
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	command.Stdin = os.Stdin
+	childproc.Hide(command)
 	command.Env = append(os.Environ(), "SYNESIS_LAUNCHER="+
 		filepath.Join(payload, "bin", "synesis.cmd"))
 	if err := command.Run(); err != nil {

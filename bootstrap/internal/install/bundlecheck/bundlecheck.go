@@ -12,12 +12,20 @@ import (
 	"runtime"
 	"strings"
 
+	"synesis/bootstrap/internal/childproc"
 	"synesis/bootstrap/internal/install/layout"
 )
 
 // Validate checks that an extracted bundle has the expected shape
 // and that its embedded launcher actually runs before it's ever activated.
 func Validate(bundle string) error {
+	if err := validateShape(bundle); err != nil {
+		return err
+	}
+	return runBundleVersion(bundle)
+}
+
+func validateShape(bundle string) error {
 	for _, relative := range []string{"bin", "runtime"} {
 		info, err := os.Stat(filepath.Join(bundle, relative))
 		if err != nil || !info.IsDir() {
@@ -42,7 +50,7 @@ func Validate(bundle string) error {
 			return errors.New("bundle missing native activation helper")
 		}
 	}
-	return runBundleVersion(bundle)
+	return nil
 }
 
 func runBundleVersion(bundle string) error {
@@ -81,11 +89,24 @@ func runBundleCommand(bundle string, args ...string) ([]byte, error) {
 		command = []string{"cmd.exe", "/d", "/c", "call", launcher}
 	}
 	command = append(command, args...)
-	return exec.Command(command[0], command[1:]...).CombinedOutput()
+	process := exec.Command(command[0], command[1:]...)
+	childproc.Hide(process)
+	return process.CombinedOutput()
 }
 
 // RunningRoot returns the validated bundle that contains the running installer.
 func RunningRoot() (string, error) {
+	return runningRoot(Validate)
+}
+
+// RunningRootShape is RunningRoot without starting the bundled launcher, which
+// costs a runtime start. It is for a caller that only offers the bundle to an
+// operation: install and repair validate the bundle in full before activating it.
+func RunningRootShape() (string, error) {
+	return runningRoot(validateShape)
+}
+
+func runningRoot(validate func(string) error) (string, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return "", errors.New("unable to locate installer bundle")
@@ -95,7 +116,7 @@ func RunningRoot() (string, error) {
 		return "", errors.New("unable to resolve installer bundle")
 	}
 	bundle := filepath.Dir(filepath.Dir(executable))
-	if err := Validate(bundle); err != nil {
+	if err := validate(bundle); err != nil {
 		return "", fmt.Errorf("installer is not inside a valid Synesis bundle: %w", err)
 	}
 	return bundle, nil

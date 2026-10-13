@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"synesis/bootstrap/internal/childproc"
 	"synesis/bootstrap/internal/install/layout"
 )
 
@@ -154,7 +155,9 @@ func readWindowsUserPathImpl() (string, string, error) {
 	if runtime.GOOS != "windows" {
 		return os.Getenv("PATH"), "", nil
 	}
-	output, err := exec.Command("reg.exe", "query", `HKCU\Environment`, "/v", "Path").CombinedOutput()
+	query := exec.Command("reg.exe", "query", `HKCU\Environment`, "/v", "Path")
+	childproc.Hide(query)
+	output, err := query.CombinedOutput()
 	if err != nil {
 		return "", "REG_EXPAND_SZ", nil
 	}
@@ -173,7 +176,9 @@ func writeWindowsUserPathImpl(value, valueType string) error {
 	if valueType != "REG_SZ" && valueType != "REG_EXPAND_SZ" {
 		valueType = "REG_EXPAND_SZ"
 	}
-	return exec.Command("reg.exe", "add", `HKCU\Environment`, "/v", "Path", "/t", valueType, "/d", value, "/f").Run()
+	add := exec.Command("reg.exe", "add", `HKCU\Environment`, "/v", "Path", "/t", valueType, "/d", value, "/f")
+	childproc.Hide(add)
+	return add.Run()
 }
 
 func mergePath(value, entry string, windows, add bool) string {
