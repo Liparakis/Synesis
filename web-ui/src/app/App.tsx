@@ -9,6 +9,8 @@ import {
   Copy,
   FolderOpen,
   GitBranch,
+  LayoutDashboard,
+  LayoutGrid,
   Link2,
   Network,
   Plus,
@@ -38,7 +40,7 @@ import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "
 export type View = ProjectView | "projects";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
 type CoordinationTab = "claims" | "tasks" | "capabilities" | "ownership" | "conversations" | "operator";
-type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProject">;
+type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProjects">;
 
 function asLiveRegistryProject(project: NonNullable<Snapshot["project"]>): KnownProjectSnapshot {
   return {
@@ -57,7 +59,7 @@ function registryStateNote(status: KnownProjectSnapshot["status"]) {
 }
 
 function registryProjects(snapshot: Snapshot) {
-  return snapshot.knownProjects?.length ? snapshot.knownProjects : snapshot.project ? [asLiveRegistryProject(snapshot.project)] : [];
+  return snapshot.knownProjects ?? (snapshot.project ? [asLiveRegistryProject(snapshot.project)] : []);
 }
 
 function projectSelectionMessage(error: unknown): string {
@@ -74,7 +76,6 @@ function projectRegistryMessage(error: unknown): string {
     ? error.code : "";
   if (code === "NOT_FOUND") return "That folder could not be found.";
   if (code === "IDENTITY_MISMATCH") return "That project identity is already registered at another path.";
-  if (code === "CURRENT_PROJECT_PROTECTED") return "The project serving this page cannot be removed from its own registry.";
   if (code === "PROJECT_NOT_FOUND") return "That project is no longer in the registry.";
   if (code === "REGISTRY_FULL") return "The installation project registry is full.";
   if (code === "GIT_INIT_FAILED") return "Git could not be initialized in that folder.";
@@ -117,10 +118,10 @@ export function App() {
       });
       return {state: "REGISTERED"};
     },
-    removeProject: async (projectId: string): Promise<Record<string, unknown>> => {
+    removeProjects: async (projectIds: string[]): Promise<Record<string, unknown>> => {
       setSnapshot((current) => current ? {
         ...current,
-        knownProjects: current.knownProjects.filter((project) => project.id !== projectId),
+        knownProjects: current.knownProjects.filter((project) => !projectIds.includes(project.id)),
       } : current);
       return {state: "REMOVED"};
     },
@@ -154,18 +155,14 @@ export function App() {
     const start = async () => {
       try {
         const bootstrap = consumeBootstrapToken();
-        if (!bootstrap) {
-          if (typeof window !== "undefined" && window.location.pathname === "/") {
-            window.history.replaceState(null, "", "/projects");
-          }
-          throw new Error("Open Synesis with the supported synesis ui command.");
-        }
         const pendingSelectionId = selectionIdFromLocation();
         if (typeof window !== "undefined" && window.location.pathname === "/") {
           const suffix = pendingSelectionId ? `#selectionId=${encodeURIComponent(pendingSelectionId)}` : "";
           window.history.replaceState(null, "", `/projects${suffix}`);
         }
-        const initial = await client.startSession(bootstrap);
+        // A reloaded tab has no bootstrap token left; it carries on with the session it had.
+        const initial = bootstrap ? await client.startSession(bootstrap) : await client.resumeSession();
+        if (!initial) throw new Error("Open Synesis with the supported synesis ui command.");
         if (disposed) return;
         setSnapshot(initial);
         if (pendingSelectionId) {
@@ -235,22 +232,32 @@ export function App() {
     && currentProject !== null
     && (registryProject === null || registryProject.status === "LIVE");
 
+  const openProjectView = (view: ProjectView) => navigate({kind: "project", projectId: snapshot.project!.id, view});
+
   return (
-    <div className={cx("app-shell", route.kind === "projects" && "projects-page")}>
+    <div className="app-shell">
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <header className="site-header">
-        <div className="site-header-left">
-          <button className="brand-button" type="button" onClick={() => navigate({kind: "projects"})} aria-label="Open Projects registry">
-            <img className="brand-logo" src="/synesis-logo.png" alt="" aria-hidden="true" />
-            <span className="brand-name">Synesis</span>
-          </button>
-          <span className="site-header-spacer" aria-hidden="true"/>
+      <aside className="sidebar">
+        <button className="brand-button" type="button" onClick={() => navigate({kind: "projects"})} aria-label="Open Projects registry">
+          <img className="brand-logo" src="/synesis-logo.png" alt="" aria-hidden="true" />
+          <span className="brand-name">Synesis</span>
+        </button>
+        <nav className="sidebar-nav" aria-label="Workspace">
+          <NavItem icon={LayoutGrid} label="Projects" count={registryProjects(snapshot).length} active={route.kind === "projects"} onClick={() => navigate({kind: "projects"})}/>
+        </nav>
+        {route.kind === "project" && liveProjectAvailable && <>
+          <p className="sidebar-heading" title={snapshot.project?.path}>{snapshot.project?.name ?? "Project"}</p>
+          <ProjectTabs snapshot={snapshot} view={route.view} onNavigate={openProjectView}/>
+        </>}
+        <div className="sidebar-footer">
+          <span className={cx("connection-status", connection === "LIVE" ? "is-connected" : "is-unreachable")} role="status"><span className="status-dot"/>{message}</span>
+          {snapshot.runtime.version && <span className="mono sidebar-version">v{snapshot.runtime.version}</span>}
         </div>
-      </header>
+      </aside>
 
       <main id="main-content" className="main-content">
         {route.kind === "projects" ? (
-          <div className="page-frame registry-frame">
+          <div className="page-frame is-wide">
             <ProjectsView
               snapshot={snapshot}
               client={registryClient}
@@ -270,12 +277,9 @@ export function App() {
             <RegistryProjectView project={registryProject} onBack={() => navigate({kind: "projects"})}/>
           </div>
         ) : (
-          <div className="page-frame">
-            <div className="project-resource-header">
+          <div className={cx("page-frame", (route.view === "coordination" || route.view === "network") && "is-wide")}>
             <ProjectHeader snapshot={snapshot} title={snapshot.project?.name ?? "Project"} onBack={() => navigate({kind: "projects"})}/>
-            <ProjectTabs view={route.view} onNavigate={(view) => navigate({kind: "project", projectId: snapshot.project!.id, view})}/>
-            </div>
-            {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={(view) => navigate({kind: "project", projectId: snapshot.project!.id, view})}/>}
+            {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={openProjectView}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
             {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} client={clientRef.current}/>}
@@ -348,7 +352,8 @@ export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject
   const [addOpen, setAddOpen] = useState(false);
   const [addPath, setAddPath] = useState("");
   const [addProjectName, setAddProjectName] = useState("");
-  const [removeTarget, setRemoveTarget] = useState<KnownProjectSnapshot | null>(null);
+  const [removeTargets, setRemoveTargets] = useState<KnownProjectSnapshot[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pendingRemovalIds, setPendingRemovalIds] = useState<string[]>([]);
   const [mutationError, setMutationError] = useState("");
   const [removalError, setRemovalError] = useState("");
@@ -406,116 +411,111 @@ export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject
     }
   };
 
-  const removeProject = async () => {
-    if (!client || !removeTarget || mutationBusy) return;
-    const target = removeTarget;
-    setRemoveTarget(null);
+  // Every entry can go, the project serving this page included: only the registry forgets it.
+  const selectableProjects = client ? filteredProjects : [];
+  const selectedProjects = selectableProjects.filter((project) => selectedIds.includes(project.id));
+  const allSelected = selectableProjects.length > 0 && selectedProjects.length === selectableProjects.length;
+  const askToRemove = (targets: KnownProjectSnapshot[]) => {
     setMutationError("");
-    setPendingRemovalIds((current) => current.includes(target.id) ? current : [...current, target.id]);
+    setRemovalError("");
+    setRemoveTargets(targets);
+  };
+
+  const removeProjects = () => {
+    if (!client || removeTargets.length === 0 || mutationBusy) return;
+    const targets = removeTargets;
+    const targetIds = targets.map((project) => project.id);
+    setRemoveTargets([]);
+    setMutationError("");
+    setSelectedIds((current) => current.filter((id) => !targetIds.includes(id)));
+    setPendingRemovalIds((current) => [...current, ...targetIds.filter((id) => !current.includes(id))]);
     void (async () => {
+      // The registry drops the whole selection in one durable write, so the rows can go at once
+      // and a reload agrees. They come back only when that write is refused.
       try {
-        await client.removeProject(target.id);
+        await client.removeProjects(targetIds);
         await refreshRegistry();
-        setPendingRemovalIds((current) => current.filter((id) => id !== target.id));
       } catch (error) {
-        setPendingRemovalIds((current) => current.filter((id) => id !== target.id));
         setRemovalError(projectRegistryMessage(error));
+      } finally {
+        setPendingRemovalIds((current) => current.filter((id) => !targetIds.includes(id)));
       }
     })();
   };
 
   return (
-    <div className="registry-page-layout">
-      <section className="registry-hero panel" aria-labelledby="registry-title">
-        <div className="registry-hero-copy">
-          <p className="registry-kicker"><Activity size={14} aria-hidden="true"/>Local workspace registry</p>
+    <div className="view-stack">
+      <header className="page-header">
+        <div>
           <h1 id="registry-title">Projects</h1>
           <p>Open a workspace, inspect its runtime, or bring another local folder into Synesis.</p>
         </div>
-        {client && <button className="button button-primary registry-add-button" type="button" onClick={() => { setMutationError(""); setRemovalError(""); setAddPath(""); setAddProjectName(""); setAddOpen(true); }}><Plus size={17} aria-hidden="true"/>Add project</button>}
-        <div className="registry-overview" aria-label={projects.length + " known projects, " + liveCount + " live"}>
-          <div className="registry-overview-item">
-            <span>Known projects</span>
-            <strong>{projects.length}</strong>
-          </div>
-          <div className="registry-overview-item">
-            <span>Live runtimes</span>
-            <strong>{liveCount}</strong>
-          </div>
-          <div className="registry-overview-item">
-            <span>Peer connections</span>
-            <strong>{connectionCount}</strong>
-          </div>
-        </div>
-      </section>
+        {client && <button className="button button-primary" type="button" onClick={() => { setMutationError(""); setRemovalError(""); setAddPath(""); setAddProjectName(""); setAddOpen(true); }}><Plus size={16} aria-hidden="true"/>Add project</button>}
+      </header>
+      <div className="stat-strip" aria-label={projects.length + " known projects, " + liveCount + " live"}>
+        <Stat label="Known projects" value={projects.length}/>
+        <Stat label="Live runtimes" value={liveCount} tone="good"/>
+        <Stat label="Peer connections" value={connectionCount}/>
+      </div>
 
-      <section className="registry-section" aria-labelledby="registry-list-title">
-        <div className="registry-heading">
-          <div className="registry-heading-copy">
-            <p className="registry-kicker">Workspace registry</p>
-            <h2 id="registry-list-title">Choose where to work</h2>
+      <div className="registry-columns">
+        <section className="registry-section" aria-labelledby="registry-list-title">
+          <div className="toolbar">
+            <h2 id="registry-list-title">All projects</h2>
+            {selectableProjects.length > 1 && <label className="select-all"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds(allSelected ? [] : selectableProjects.map((project) => project.id))}/>Select all</label>}
+            {projects.length > 0 && <p className="toolbar-count" aria-live="polite">Showing <strong>{filteredProjects.length}</strong> of <strong>{visibleProjects.length}</strong> {visibleProjects.length === 1 ? "project" : "projects"}</p>}
+            <label className="search-field"><Search size={15} aria-hidden="true"/><input aria-label="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, path, or identity" type="search" /></label>
+            <select className="select-field" aria-label="Filter projects by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+              <option value="ALL">All statuses</option>
+              <option value="LIVE">Live</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="UNAVAILABLE">Unavailable</option>
+              <option value="IDENTITY_MISMATCH">Identity mismatch</option>
+            </select>
           </div>
-          <div className="registry-heading-actions">
-            <label className="project-search">
-              <span className="registry-control-label">Search</span>
-              <span className="project-search-field"><Search size={16} aria-hidden="true"/><input aria-label="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, path, or identity" type="search" /></span>
-            </label>
-            <label className="project-status-filter">
-              <span className="registry-control-label">Status</span>
-              <select aria-label="Filter projects by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
-                <option value="ALL">All statuses</option>
-                <option value="LIVE">Live</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="UNAVAILABLE">Unavailable</option>
-                <option value="IDENTITY_MISMATCH">Identity mismatch</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        {projects.length > 0 && <p className="registry-results" aria-live="polite">Showing <strong>{filteredProjects.length}</strong> of <strong>{visibleProjects.length}</strong> {visibleProjects.length === 1 ? "project" : "projects"}</p>}
-        {visibleProjects.length === 0 && pendingRemovalIds.length > 0 ? (
-          <EmptyState icon={Trash2} title="Removal in progress" detail="The project is hidden while the registry confirms the removal."/>
-        ) : projects.length === 0 ? (
-          <EmptyState icon={FolderOpen} title="No projects yet" detail="Projects appear after legitimate Synesis discovery through init, runtime startup, or MCP attachment."/>
-        ) : filteredProjects.length === 0 ? (
-          <EmptyState icon={Search} title="No matching projects" detail="Try a different project name, identity, path, or status."/>
-        ) : (
-          <div className="project-list panel" role="list" aria-label="Known projects">
-            {filteredProjects.map((project) => (
-              <div className="project-row" key={project.id + project.path} role="listitem">
-                <div className="project-row-heading">
-                  <span className="project-folder-mark" aria-hidden="true"><FolderOpen size={18}/></span>
+          {visibleProjects.length === 0 && pendingRemovalIds.length > 0 ? (
+            <EmptyState icon={Trash2} title="Removal in progress" detail="The project is hidden while the registry confirms the removal."/>
+          ) : projects.length === 0 ? (
+            <EmptyState icon={FolderOpen} title="No projects yet" detail="Projects appear after legitimate Synesis discovery through init, runtime startup, or MCP attachment."/>
+          ) : filteredProjects.length === 0 ? (
+            <EmptyState icon={Search} title="No matching projects" detail="Try a different project name, identity, path, or status."/>
+          ) : (
+            <div className={cx("project-list", "panel", selectableProjects.length > 1 && "is-selectable")} role="list" aria-label="Known projects">
+              {selectedProjects.length > 0 && <div className="selection-bar" role="status">
+                <span><strong>{selectedProjects.length}</strong> selected</span>
+                <button className="text-action" type="button" onClick={() => setSelectedIds([])}>Clear</button>
+                <button className="button button-danger" type="button" onClick={() => askToRemove(selectedProjects)}><Trash2 size={15} aria-hidden="true"/>Remove selected</button>
+              </div>}
+              {filteredProjects.map((project) => (
+                <div className={cx("project-row", selectableProjects.length > 1 && selectedIds.includes(project.id) && "is-selected")} key={project.id + project.path} role="listitem">
+                  {selectableProjects.length > 1 && <input type="checkbox" aria-label={`Select ${project.name}`} checked={selectedIds.includes(project.id)} onChange={() => setSelectedIds((current) => current.includes(project.id) ? current.filter((id) => id !== project.id) : [...current, project.id])}/>}
+                  <span className={cx("project-mark", "tone-" + statusTone(project.status))} aria-hidden="true"><FolderOpen size={17}/></span>
                   <div className="project-row-main">
-                    {onOpenProject ? <button className="registry-project-link" type="button" onClick={() => onOpenProject(project)}>{project.name}</button> : <strong className="registry-project-name">{project.name}</strong>}
+                    {onOpenProject ? <button className="project-name" type="button" onClick={() => onOpenProject(project)}>{project.name}</button> : <strong className="project-name">{project.name}</strong>}
                     <span className="mono project-path" title={project.path}>{project.path}</span>
+                    {project.status !== "LIVE" && <span className="project-row-note">{registryStateNote(project.status)}</span>}
                   </div>
-                  <div className="project-row-state"><StatusBadge value={project.status}/></div>
-                </div>
-                <div className="project-row-identity">
-                  <span>Project identity</span>
-                  <span className="mono">{project.id}</span>
-                </div>
-                {project.status !== "LIVE" && <p className="project-row-note">{registryStateNote(project.status)}</p>}
-                <div className="project-row-action">
+                  <span className="mono project-id" title="Project identity">{project.id}</span>
+                  <StatusBadge value={project.status}/>
                   <div className="project-row-actions">
                     {onOpenProject && project.status === "LIVE" && project.id === snapshot.project?.id
                       ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>Open project <ChevronRight size={14}/></button>
                       : onOpenProject && project.status !== "LIVE"
                         ? <button className="text-action" type="button" onClick={() => onOpenProject(project)}>View details <ChevronRight size={14}/></button>
                         : <span className="muted">{project.status === "LIVE" ? "Runtime not attached" : "Registry detail"}</span>}
-                    {client && project.id !== snapshot.project?.id && <button className="button button-secondary project-remove-button" type="button" aria-label={`Remove ${project.name} from registry`} onClick={() => { setMutationError(""); setRemovalError(""); setRemoveTarget(project); }}><Trash2 size={15} aria-hidden="true"/><span>Remove</span></button>}
+                    {client && <button className="icon-button is-danger" type="button" aria-label={`Remove ${project.name} from registry`} title="Remove from registry" onClick={() => askToRemove([project])}><Trash2 size={15} aria-hidden="true"/></button>}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-      <ConnectionsRail snapshot={snapshot} onOpenNetwork={onOpenNetwork}/>
+              ))}
+            </div>
+          )}
+        </section>
+        <ConnectionsRail snapshot={snapshot} onOpenNetwork={onOpenNetwork}/>
+      </div>
       {addOpen && <DetailModal title="Add project to registry" onClose={() => { if (!mutationBusy) setAddOpen(false); }}>
         <form className="registry-form" onSubmit={(event) => { event.preventDefault(); void addProject(); }}>
           <p className="muted">Choose a folder to add. Existing state is preserved.</p>
-          {mutationError && <div className="registry-folder-error" role="alert"><p>{mutationError}</p><button className="icon-button registry-folder-error-close" type="button" aria-label="Dismiss project folder error" onClick={() => setMutationError("")}><X size={15} aria-hidden="true"/></button></div>}
+          {mutationError && <div className="registry-folder-error" role="alert"><p>{mutationError}</p><button className="icon-button" type="button" aria-label="Dismiss project folder error" onClick={() => setMutationError("")}><X size={15} aria-hidden="true"/></button></div>}
           <button className="registry-folder-picker" type="button" aria-label={addProjectName ? `Selected project folder ${addProjectName}` : "Choose project folder"} onClick={() => void chooseProjectFolder()} disabled={mutationBusy}>
             <FolderOpen size={20} aria-hidden="true"/>
             <span className="registry-folder-picker-copy">
@@ -527,14 +527,17 @@ export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject
           <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setAddOpen(false)} disabled={mutationBusy}>Cancel</button><button className="button button-primary" type="submit" disabled={!addPath || mutationBusy}>{mutationBusy ? "Adding…" : "Add project"}</button></div>
         </form>
       </DetailModal>}
-      {removeTarget && <DetailModal title="Remove project from registry" onClose={() => { if (!mutationBusy) setRemoveTarget(null); }}>
+      {removeTargets.length > 0 && <DetailModal title={removeTargets.length === 1 ? "Remove project from registry" : "Remove projects from registry"} onClose={() => { if (!mutationBusy) setRemoveTargets([]); }}>
         <div className="registry-form">
-          <p>Remove <strong>{removeTarget.name}</strong> from the local project registry?</p>
-          <p className="muted">Only the registry entry is removed. The project folder, `.synesis` state, and Link identity stay untouched.</p>
-          <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setRemoveTarget(null)} disabled={mutationBusy}>Cancel</button><button className="button button-danger" type="button" onClick={() => void removeProject()} disabled={mutationBusy}>{mutationBusy ? "Removing…" : "Remove from registry"}</button></div>
+          {removeTargets.length === 1
+            ? <p>Remove <strong>{removeTargets[0].name}</strong> from the local project registry?</p>
+            : <><p>Remove these <strong>{removeTargets.length} projects</strong> from the local project registry?</p><ul className="value-list removal-list">{removeTargets.map((project) => <li key={project.id + project.path}>{project.name}</li>)}</ul></>}
+          {removeTargets.some((project) => project.id === snapshot.project?.id) && <p className="muted"><strong>{snapshot.project?.name}</strong> is serving this page. It keeps running, and is remembered again the next time a Synesis command runs in it.</p>}
+          <p className="muted">Only the registry {removeTargets.length === 1 ? "entry is" : "entries are"} removed. The project {removeTargets.length === 1 ? "folder" : "folders"}, `.synesis` state, and Link identity stay untouched.</p>
+          <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setRemoveTargets([])} disabled={mutationBusy}>Cancel</button><button className="button button-danger" type="button" onClick={removeProjects} disabled={mutationBusy}>{removeTargets.length === 1 ? "Remove from registry" : `Remove ${removeTargets.length} projects`}</button></div>
         </div>
       </DetailModal>}
-      {removalError && <div className="selection-toast registry-operation-toast" role="alert">{removalError}</div>}
+      {removalError && <div className="selection-toast" role="alert">{removalError}</div>}
     </div>
   );
 }
@@ -545,13 +548,13 @@ function ConnectionsRail({snapshot, onOpenNetwork}: {snapshot: Snapshot; onOpenN
   const [connectionTarget, setConnectionTarget] = useState<{peer: NetworkPeerSnapshot; route: NetworkSnapshot["routes"][number] | null; memberStatus: string} | null>(null);
   return (
     <aside className="connections-rail" aria-label="Connections">
-      <section className="connections-panel panel">
-        <div className="rail-section-heading">
-          <div className="rail-heading-copy"><span className="rail-heading-icon" aria-hidden="true"><Network size={17}/></span><div><p>Runtime network</p><h2>Connections</h2></div></div>
-          <span className="rail-count">{peers.length}</span>
-        </div>
+      <div className="toolbar">
+        <h2>Connections</h2>
+        <span className="count-badge">{peers.length}</span>
+      </div>
+      <section className="panel">
         <p className="rail-caption">Current runtime connections</p>
-        {peers.length === 0 ? <div className="rail-empty"><span className="rail-empty-icon" aria-hidden="true"><Network size={20}/></span><h3>No active peers</h3><p className="rail-empty-copy">No peer connections are currently projected.</p>{onOpenNetwork && <button className="text-action" type="button" onClick={onOpenNetwork}>Open network <ChevronRight size={14}/></button>}</div> : (
+        {peers.length === 0 ? <div className="rail-empty"><Network size={20} aria-hidden="true"/><h3>No active peers</h3><p>No peer connections are currently projected.</p>{onOpenNetwork && <button className="text-action" type="button" onClick={onOpenNetwork}>Open network <ChevronRight size={14}/></button>}</div> : (
           <div className="connection-list">
             {peers.map((peer) => {
               const route = snapshot.network.routes.find((item) => item.destinationNodeId === peer.nodeId);
@@ -559,15 +562,13 @@ function ConnectionsRail({snapshot, onOpenNetwork}: {snapshot: Snapshot; onOpenN
               return (
                 <div className="connection-row" key={peer.nodeId + peer.sessionId}>
                   <button className="connection-detail-button" type="button" aria-label={`View connection details for ${peer.nodeId}`} onClick={() => setConnectionTarget({peer, route: route ?? null, memberStatus: snapshot.network.overlay.members.find((item) => item.nodeId === peer.nodeId)?.status ?? "UNKNOWN"})}>
-                  <span className="connection-peer">
-                    <strong>{peer.nodeId}</strong>
-                    <span className="mono">{route?.kind ?? "No route projected"}</span>
-                  </span>
-                  <span className={cx("connection-status", connected ? "is-connected" : "is-unreachable")}><span className="status-dot"/>{peer.liveness || (connected ? "CONNECTED" : "UNREACHABLE")}</span>
+                    <strong className="mono">{peer.nodeId}</strong>
+                    <span className={cx("connection-status", connected ? "is-connected" : "is-unreachable")}><span className="status-dot"/>{peer.liveness || (connected ? "CONNECTED" : "UNREACHABLE")}</span>
+                    <span className="connection-route">{route?.kind ?? "No route projected"}</span>
                   </button>
                   <div className="connection-actions">
-                    {onOpenNetwork && <button className="text-action" type="button" onClick={(event) => { event.stopPropagation(); onOpenNetwork(); }}>View network <ChevronRight size={14}/></button>}
-                    <button className="icon-button connection-delete-button" type="button" aria-label={`Terminate connection to ${peer.nodeId}`} title="Terminate connection" onClick={(event) => { event.stopPropagation(); setTerminationTarget({peer, routeKind: route?.kind ?? "UNKNOWN"}); }}><Trash2 size={15}/></button>
+                    {onOpenNetwork && <button className="text-action" type="button" onClick={onOpenNetwork}>View network <ChevronRight size={14}/></button>}
+                    <button className="icon-button is-danger" type="button" aria-label={`Terminate connection to ${peer.nodeId}`} title="Terminate connection" onClick={() => setTerminationTarget({peer, routeKind: route?.kind ?? "UNKNOWN"})}><Trash2 size={15}/></button>
                   </div>
                 </div>
               );
@@ -584,26 +585,16 @@ function ConnectionsRail({snapshot, onOpenNetwork}: {snapshot: Snapshot; onOpenN
 export function ProjectHeader({snapshot, title, onBack}: {snapshot: Snapshot; title: string; onBack(): void}) {
   const project = snapshot.project;
   return (
-    <section className="project-header project-overview-header" aria-label="Project identity">
-      <button className="project-back-link" type="button" aria-label="Back to projects" onClick={onBack}><ArrowLeft size={15} aria-hidden="true"/>Projects</button>
-      <div className="project-overview-grid">
-        <div className="project-header-title">
-          <h1>{title}</h1>
-          <StatusBadge value={project ? snapshot.runtime.status : "UNAVAILABLE"}/>
-        </div>
-        <div className="project-overview-meta">
-          <div className="project-overview-meta-item">
-            <Copy size={16} aria-hidden="true"/>
-            <span className="project-overview-meta-label">Project ID</span>
-            <strong className="mono" title={project?.id}>{project?.id ?? "—"}</strong>
-          </div>
-          <div className="project-overview-meta-item">
-            <FolderOpen size={16} aria-hidden="true"/>
-            <span className="project-overview-meta-label">Local path</span>
-            <strong className="mono" title={project?.path}>{project?.path ?? "—"}</strong>
-          </div>
-        </div>
+    <section className="project-header" aria-label="Project identity">
+      <button className="back-link" type="button" aria-label="Back to projects" onClick={onBack}><ArrowLeft size={14} aria-hidden="true"/>Projects</button>
+      <div className="project-header-title">
+        <h1>{title}</h1>
+        <StatusBadge value={project ? snapshot.runtime.status : "UNAVAILABLE"}/>
       </div>
+      <dl className="project-header-meta">
+        <div><dt>Project ID</dt><dd className="mono" title={project?.id}>{project?.id ?? "—"}</dd></div>
+        <div><dt>Local path</dt><dd className="mono" title={project?.path}>{project?.path ?? "—"}</dd></div>
+      </dl>
     </section>
   );
 }
@@ -621,84 +612,88 @@ export function RegistryProjectView({project, onBack}: {project: KnownProjectSna
           ? "Live state for this project is not available in the current control-plane session."
           : "The selected project is not present in the current known-project registry.";
   return (
-    <section className="registry-detail-stack">
-      <nav className="breadcrumb-bar" aria-label="Breadcrumb">
-        <button className="breadcrumb-link" type="button" onClick={onBack}>Projects</button>
-        <ChevronRight size={14} aria-hidden="true"/>
-        <strong aria-current="page">{title}</strong>
-      </nav>
-      <section className="registry-project panel">
-        <div className="registry-project-heading">
-          <div className="registry-project-title">
-            <button className="button button-secondary project-header-back registry-project-back" type="button" onClick={onBack}>
-              <ArrowLeft size={16} aria-hidden="true"/>
-              <span className="sr-only">Back to projects</span>
-            </button>
-            <div>
-            <p className="eyebrow">Known project</p>
-            <h1>{title}</h1>
-            </div>
-          </div>
+    <section className="view-stack">
+      <div className="project-header">
+        <button className="back-link" type="button" aria-label="Back to projects" onClick={onBack}><ArrowLeft size={14} aria-hidden="true"/>Projects</button>
+        <div className="project-header-title">
+          <h1>{title}</h1>
           <StatusBadge value={status}/>
         </div>
-        {project && (
-          <div className="registry-project-meta">
-            <DetailRow label="Project Identity" value={<span className="mono">{project.id}</span>}/>
-            <DetailRow label="Local Path" value={<span className="mono">{project.path}</span>}/>
-          </div>
-        )}
-        <div className="registry-project-message">
-          <h2>{status === "IDENTITY_MISMATCH" ? "Identity mismatch" : status === "UNAVAILABLE" ? "Project location unavailable" : status === "INACTIVE" ? "Runtime unavailable" : "Live state unavailable"}</h2>
-          <p>{detail}</p>
-        </div>
-      </section>
+        {project && <dl className="project-header-meta">
+          <div><dt>Project ID</dt><dd className="mono">{project.id}</dd></div>
+          <div><dt>Local path</dt><dd className="mono">{project.path}</dd></div>
+        </dl>}
+      </div>
+      <div className={cx("notice", "panel", "tone-" + statusTone(status))}>
+        <h2>{status === "IDENTITY_MISMATCH" ? "Identity mismatch" : status === "UNAVAILABLE" ? "Project location unavailable" : status === "INACTIVE" ? "Runtime unavailable" : "Live state unavailable"}</h2>
+        <p>{detail}</p>
+      </div>
     </section>
   );
 }
 
-function ProjectTabs({view, onNavigate}: {view: Exclude<View, "projects">; onNavigate(view: Exclude<View, "projects">): void}) {
+const projectTabIcons: Record<ProjectView, LucideIcon> = {
+  overview: LayoutDashboard,
+  agents: Users,
+  coordination: GitBranch,
+  network: Network,
+  diagnostics: ShieldCheck,
+};
+
+function ProjectTabs({snapshot, view, onNavigate}: {snapshot: Snapshot; view: ProjectView; onNavigate(view: ProjectView): void}) {
+  const findings = snapshot.diagnostics.criticalCount + snapshot.diagnostics.errorCount + snapshot.diagnostics.warningCount;
+  const counts: Partial<Record<ProjectView, number>> = {
+    agents: snapshot.agents.length,
+    coordination: snapshot.workgroups.length,
+    network: snapshot.network.peers.length,
+    diagnostics: findings,
+  };
   return (
-    <nav className="project-tabs" aria-label="Project views">
+    <nav className="sidebar-nav" aria-label="Project views">
       {projectTabs.map((tab) => (
-        <button key={tab.id} className={cx("project-tab", view === tab.id && "is-active")} type="button" onClick={() => onNavigate(tab.id)} aria-current={view === tab.id ? "page" : undefined}>{tab.label}</button>
+        <NavItem key={tab.id} icon={projectTabIcons[tab.id]} label={tab.label} count={counts[tab.id]} warn={tab.id === "diagnostics" && findings > 0} active={view === tab.id} onClick={() => onNavigate(tab.id)}/>
       ))}
     </nav>
   );
+}
+
+function NavItem({icon: Icon, label, count, warn, active, onClick}: {icon: LucideIcon; label: string; count?: number; warn?: boolean; active: boolean; onClick(): void}) {
+  return (
+    <button className={cx("nav-item", active && "is-active")} type="button" onClick={onClick} aria-current={active ? "page" : undefined}>
+      <Icon size={16} aria-hidden="true"/>
+      <span>{label}</span>
+      {count !== undefined && count > 0 && <span className={cx("nav-count", warn && "tone-warn")} aria-hidden="true">{count}</span>}
+    </button>
+  );
+}
+
+function Stat({label, value, tone}: {label: string; value: ReactNode; tone?: StatusTone}) {
+  return <div className="stat"><span>{label}</span><strong className={cx(tone && "tone-" + tone)}>{value}</strong></div>;
 }
 
 function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavigate(view: Exclude<View, "projects">): void}) {
   const authenticatedPeers = snapshot.network.peers.filter((peer) => peer.authenticated).length;
   return (
     <div className="view-stack">
-      <section className="project-status-panel panel" aria-labelledby="project-status-title">
-        <div className="project-status-heading">
-          <div className="project-status-icon"><Activity size={21} aria-hidden="true"/></div>
-          <div>
-            <h2 id="project-status-title">Project status</h2>
-            <p>Key components and health at a glance.</p>
-          </div>
-        </div>
-        <div className="project-status-metrics">
-          <OverviewMetric icon={Activity} label="Providers">
-            {snapshot.providers.length === 0 ? <span className="muted">No provider records</span> : <div className="metric-provider-list">{snapshot.providers.map((provider) => <div className="metric-provider" key={provider.id}><span>{provider.id}</span><StatusBadge value={provider.status}/></div>)}</div>}
-          </OverviewMetric>
-          <OverviewMetric icon={Users} label="Participants" value={snapshot.runtime.activeAgentCount} detail="Active agents in the current runtime"/>
-          <OverviewMetric icon={GitBranch} label="Active WorkGroups" value={snapshot.workgroups.length} detail="WorkGroups in this project"/>
-          <OverviewMetric icon={Network} label="Authenticated Peers" value={authenticatedPeers} detail="Peers with authenticated access"/>
-          <OverviewMetric icon={ShieldCheck} label="Doctor" value={<StatusBadge value={snapshot.diagnostics.overallStatus || "UNKNOWN"}/>} detail="Current diagnostic projection"/>
-        </div>
+      <section className="metric-grid" aria-label="Project status">
+        <OverviewMetric icon={Activity} label="Providers">
+          {snapshot.providers.length === 0 ? <span className="muted">No provider records</span> : <div className="metric-provider-list">{snapshot.providers.map((provider) => <div className="metric-provider" key={provider.id}><span>{provider.id}</span><StatusBadge value={provider.status}/></div>)}</div>}
+        </OverviewMetric>
+        <OverviewMetric icon={Users} label="Participants" value={snapshot.runtime.activeAgentCount} detail="Active agents in the current runtime"/>
+        <OverviewMetric icon={GitBranch} label="Active WorkGroups" value={snapshot.workgroups.length} detail="WorkGroups in this project"/>
+        <OverviewMetric icon={Network} label="Authenticated Peers" value={authenticatedPeers} detail="Peers with authenticated access"/>
+        <OverviewMetric icon={ShieldCheck} label="Doctor" value={<StatusBadge value={snapshot.diagnostics.overallStatus || "UNKNOWN"}/>} detail="Current diagnostic projection"/>
       </section>
 
       <div className="overview-grid">
         <OverviewSection title="Coordination" icon={GitBranch} action={<TextAction onClick={() => onNavigate("coordination")}>Open coordination</TextAction>}>
           <div className="overview-two-column">
-            <div className="overview-empty-block">
-              <div className="overview-panel-icon"><Users size={20} aria-hidden="true"/></div>
-              {snapshot.workgroups.length === 0 ? <><h3>No workgroups in this project</h3><p className="muted">Create workgroups to enable distributed agents, tasks, and shared capabilities.</p></> : <><h3>WorkGroups</h3><div className="overview-list">{snapshot.workgroups.slice(0, 4).map((group) => <div className="overview-list-row" key={group.id}><span><Check size={14}/>{group.id}</span><StatusBadge value={group.status}/></div>)}</div></>}
+            <div>
+              {snapshot.workgroups.length === 0 ? <><h3>No workgroups in this project</h3><p className="muted">Create workgroups to enable distributed agents, tasks, and shared capabilities.</p></> : <><h3>WorkGroups</h3><div className="overview-list">{snapshot.workgroups.slice(0, 4).map((group) => <div className="overview-list-row" key={group.id}><span className="mono">{group.id}</span><StatusBadge value={group.status}/></div>)}</div></>}
             </div>
             <div>
               <h3>Projection</h3>
-              <div className="overview-stat-list">
+              <div className="overview-list">
                 <OverviewStat label="Claims" value={snapshot.claims.length}/>
                 <OverviewStat label="Tasks" value={snapshot.tasks.length}/>
                 <OverviewStat label="Capabilities" value={snapshot.capabilities.length}/>
@@ -710,15 +705,15 @@ function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavi
           <div className="overview-two-column">
             <div>
               <h3>Connection boundary</h3>
-              <div className="boundary-list">
-                <BoundaryLine label="Physical peers" value={snapshot.network.peers.length} tone="physical"/>
-                <BoundaryLine label="Signed membership" value={snapshot.network.overlay.memberCount} tone="membership"/>
-                <BoundaryLine label="Server-selected routes" value={snapshot.network.routes.length} tone="routes"/>
+              <div className="overview-list">
+                <OverviewStat label="Physical peers" value={snapshot.network.peers.length}/>
+                <OverviewStat label="Signed membership" value={snapshot.network.overlay.memberCount}/>
+                <OverviewStat label="Server-selected routes" value={snapshot.network.routes.length}/>
               </div>
             </div>
             <div className="network-overview-copy">
               <StatusBadge value={snapshot.network.status}/>
-              <p>{networkDetail(snapshot.network)}</p>
+              <p className="muted">{networkDetail(snapshot.network)}</p>
             </div>
           </div>
         </OverviewSection>
@@ -729,13 +724,10 @@ function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavi
 
 function OverviewMetric({icon: Icon, label, value, detail, children}: {icon: LucideIcon; label: string; value?: ReactNode; detail?: string; children?: ReactNode}) {
   return (
-    <div className="project-status-metric">
-      <div className="metric-icon"><Icon size={20} aria-hidden="true"/></div>
-      <div className="metric-content">
-        <span className="metric-label">{label}</span>
-        {children ?? <strong className="metric-value">{value}</strong>}
-        {detail && <span className="metric-detail">{detail}</span>}
-      </div>
+    <div className="metric panel">
+      <span className="metric-label"><Icon size={15} aria-hidden="true"/>{label}</span>
+      {children ?? <strong className="metric-value">{value}</strong>}
+      {detail && <span className="metric-detail">{detail}</span>}
     </div>
   );
 }
@@ -751,16 +743,16 @@ export function AgentsView({agents}: {agents: AgentSnapshot[]}) {
     <div className="view-stack">
       <div className="view-intro">
         <div><p className="eyebrow">Project participants</p><h2>Agents</h2><p>Verified participant state projected by the local control plane.</p></div>
-        <div className="view-intro-meta"><span>{agents.length} participants</span><button className="icon-button" type="button" aria-label="Filter agents"><Search size={17}/></button></div>
+        <span className="count-badge">{agents.length} participants</span>
       </div>
       {agents.length === 0 ? <EmptyState icon={Users} title="No agents yet" detail="Agent state will appear after a provider session is attached to this project."/> : (
-        <section className="data-table-wrap panel table-panel" aria-label="Agents table">
-          <table className="data-table agents-table">
+        <section className="data-table-wrap panel" aria-label="Agents table">
+          <table className="data-table">
             <thead><tr><th>Participant Identity</th><th>Provider</th><th>Goal</th><th>Coordination State</th><th>Current Work</th><th>Claims</th><th>Last Verified Activity</th></tr></thead>
             <tbody>{agents.map((agent) => (
               <tr key={agent.id} className={cx(selected?.id === agent.id && "is-selected")} tabIndex={0} aria-selected={selected?.id === agent.id} onClick={() => setSelectedId(agent.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(agent.id); } }}>
                 <td><strong>{agent.id}</strong></td>
-                <td><span className="provider-token provider-token-compact"><span className="provider-mark">{agent.provider.slice(0, 2).toUpperCase()}</span>{agent.provider}</span></td>
+                <td><span className="provider-token"><span className="provider-mark" aria-hidden="true">{agent.provider.slice(0, 2).toUpperCase()}</span>{agent.provider}</span></td>
                 <td className="table-cell-wrap">{agent.goal || "—"}</td>
                 <td><StatusBadge value={agent.state}/></td>
                 <td className="table-cell-wrap">{agent.currentWork?.goal || "Idle"}</td>
@@ -810,18 +802,18 @@ function CoordinationView({snapshot}: {snapshot: Snapshot}) {
   return (
     <div className="view-stack">
       <div className="coordination-layout">
-        <aside className="workgroup-rail panel" aria-label="WorkGroups">
-          <div className="rail-heading"><span>WorkGroups</span><span className="count-badge">{snapshot.workgroups.length}</span></div>
-          <div className="workgroup-list">
-            {snapshot.workgroups.length === 0 ? <p className="muted rail-empty">No workgroups.</p> : snapshot.workgroups.map((item) => (
+        <aside className="workgroup-rail" aria-label="WorkGroups">
+          <div className="toolbar"><h2>WorkGroups</h2><span className="count-badge">{snapshot.workgroups.length}</span></div>
+          <div className="workgroup-list panel">
+            {snapshot.workgroups.length === 0 ? <p className="muted">No workgroups.</p> : snapshot.workgroups.map((item) => (
               <button key={item.id} type="button" className={cx("workgroup-item", group?.id === item.id && "is-selected")} onClick={() => setSelectedGroupId(item.id)}>
-                <strong>{item.id}</strong><span><StatusBadge value={item.status}/><span>{item.participants.length} participants</span></span>
+                <strong className="mono">{item.id}</strong><span><StatusBadge value={item.status}/><span>{item.participants.length} participants</span></span>
               </button>
             ))}
           </div>
         </aside>
         <section className="coordination-main">
-          <div className="coordination-header panel">
+          <div className="view-intro">
             <div><p className="eyebrow">Coordination state</p><h2>{group?.id ?? "No WorkGroup selected"}</h2>{group && <p>{group.goal || "No goal recorded."}</p>}</div>
             {group && <div className="coordination-header-actions"><StatusBadge value={group.status}/><button className="button button-secondary" type="button" onClick={() => setDetailOpen(true)}>View details</button></div>}
           </div>
@@ -845,42 +837,42 @@ function memberText(member: {participant?: string; claims?: string[]; lane?: str
 
 function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: CoordinationTab}) {
   if (tab === "claims") return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Claim ID</th><th>Claim Owner</th><th>Role</th><th>State</th><th>Selectors</th><th>Conflicts</th></tr></thead>
         <tbody>{snapshot.claims.length === 0 ? <TableEmpty colSpan={6} text="No claims in the projection."/> : snapshot.claims.map((claim) => <tr key={claim.intentId}><td className="mono">{claim.intentId}</td><td>{claim.participant}</td><td>{claim.role}</td><td><StatusBadge value={claim.state}/></td><td className="table-cell-wrap">{claim.selectors.map(selectorText).join(", ") || "—"}</td><td>{claim.conflicts.length}</td></tr>)}</tbody>
       </table>
     </section>
   );
   if (tab === "tasks") return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Task ID</th><th>Title</th><th>Capability Requested</th><th>Owner</th></tr></thead>
         <tbody>{snapshot.tasks.length === 0 ? <TableEmpty colSpan={4} text="No tasks in the projection."/> : snapshot.tasks.map((task) => <tr key={task.id}><td className="mono">{task.id}</td><td>{task.title}</td><td className="mono">{task.capability}</td><td>{task.owner || "Unassigned"}</td></tr>)}</tbody>
       </table>
     </section>
   );
   if (tab === "conversations") return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Members</th><th>From</th><th>Sent</th><th>Message</th></tr></thead>
         <tbody>{snapshot.conversations.length === 0 ? <TableEmpty colSpan={4} text="No agent has sent a message."/> : snapshot.conversations.flatMap((conversation) => conversation.messages.map((message, index) => <tr key={conversation.conversation + index}><td className="table-cell-wrap">{index === 0 ? conversation.members.map(memberText).join(", ") : ""}</td><td>{memberText(message.from)}</td><td>{new Date(message.sentAtEpochMillis).toLocaleTimeString()}</td><td className="table-cell-wrap">{message.text}</td></tr>))}</tbody>
       </table>
     </section>
   );
   if (tab === "operator") return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Request</th><th>Condition</th><th>Raised By</th><th>Summary</th><th>Evidence</th></tr></thead>
         <tbody>{snapshot.operatorRequests.length === 0 ? <TableEmpty colSpan={5} text="Nothing is waiting on an operator."/> : snapshot.operatorRequests.map((request) => <tr key={request.id}><td className="mono">{request.id}</td><td>{request.condition}</td><td>{request.raisedBy ? "A lane" : "Synesis"}</td><td className="table-cell-wrap">{request.summary}</td><td className="table-cell-wrap">{request.evidence}</td></tr>)}</tbody>
       </table>
     </section>
   );
   if (tab === "capabilities") return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Capability</th><th>Requester</th><th>Owner</th><th>State</th><th>Reason</th></tr></thead>
         <tbody>{snapshot.capabilities.length === 0 ? <TableEmpty colSpan={5} text="No capability requests in the projection."/> : snapshot.capabilities.map((capability) => <tr key={capability.handle}><td className="mono">{capability.capability}</td><td>{capability.requester}</td><td>{capability.owner || "—"}</td><td><StatusBadge value={capability.state}/></td><td className="table-cell-wrap">{capability.reason || "—"}</td></tr>)}</tbody>
       </table>
     </section>
   );
   return (
-    <section className="data-table-wrap panel table-panel">
+    <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Capability</th><th>Task ID</th><th>Owner</th><th>Protected Scopes</th><th>Intent Version</th></tr></thead>
         <tbody>{snapshot.ownerships.length === 0 ? <TableEmpty colSpan={5} text="No ownership records in the projection."/> : snapshot.ownerships.map((ownership) => <tr key={ownership.capability + ownership.taskId}><td className="mono">{ownership.capability}</td><td className="mono">{ownership.taskId}</td><td>{ownership.owner}</td><td className="table-cell-wrap">{ownership.protectedScopes.join(", ") || "—"}</td><td>{ownership.intentVersion}</td></tr>)}</tbody>
       </table>
@@ -952,38 +944,36 @@ export function NetworkView({network, onboarding = {pendingJoins: []}, client}: 
 
   return (
     <div className="view-stack">
-      <section className="network-toolbar">
-        <div><p className="eyebrow">Project connectivity</p><h2>Link Onboarding</h2></div>
-        <div className="toolbar-actions"><button className="button button-secondary" type="button" onClick={() => setDetail("membership")}><Network size={16}/> Membership</button><button className="button button-secondary" type="button" onClick={() => setDetail("relay")}><Link2 size={16}/> Relay detail</button><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={16}/> Create Invitation</button><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={16}/> Join from Invitation</button>{pendingJoin && <button className="button button-primary" type="button" disabled={busy || !client} onClick={() => void connectJoin()}><Check size={16}/> Complete Join</button>}</div>
-      </section>
-      <section className="onboarding-panel panel">
+      <div className="view-intro">
+        <div><p className="eyebrow">Project connectivity</p><h2>Network</h2><p>Physical peers, signed membership, and server-selected routes.</p></div>
+        <div className="view-intro-actions">
+          <span className="state-pair">Network <StatusBadge value={network.status}/></span>
+          <span className="state-pair">Overlay <StatusBadge value={network.overlay.status}/></span>
+          <span className="state-pair">Relay <StatusBadge value={network.relay.status}/></span>
+          <button className="button button-secondary" type="button" onClick={() => setDetail("membership")}><Network size={15}/> Membership</button>
+          <button className="button button-secondary" type="button" onClick={() => setDetail("relay")}><Link2 size={15}/> Relay detail</button>
+        </div>
+      </div>
+      <section className="onboarding panel" aria-label="Link onboarding">
         <div className="onboarding-grid">
-          <div className="form-block"><label htmlFor="join-uri">Invitation URI</label><div className="inline-form"><input id="join-uri" value={joinUri} onChange={(event) => setJoinUri(event.target.value)} placeholder="Paste an invitation URI" /><button className="button button-primary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}>Join</button></div></div>
-          <div className="form-block"><span className="form-label">Create Invitation</span><p className="muted">The URI is created by the local runtime and expires according to its response.</p><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Link2 size={16}/> Create Invitation</button></div>
+          <div className="form-block"><label className="form-label" htmlFor="join-uri">Join from an invitation</label><p className="muted">Paste the URI another node created for you.</p><div className="inline-form"><input className="text-field" id="join-uri" value={joinUri} onChange={(event) => setJoinUri(event.target.value)} placeholder="Paste an invitation URI" /><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={15}/> Join</button></div></div>
+          <div className="form-block"><span className="form-label">Invite another node</span><p className="muted">The URI is created by the local runtime and expires according to its response.</p><div className="inline-form"><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={15}/> Create Invitation</button>{pendingJoin && <button className="button button-primary" type="button" disabled={busy || !client} onClick={() => void connectJoin()}><Check size={15}/> Complete Join</button>}</div></div>
         </div>
         {invite && <CopyField label="Invitation URI" value={invite}/>}
         {joinResult && <CopyField label="Answer URI" value={joinResult}/>}
         {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
       </section>
-      <div className="network-layout">
-        <section className="network-main">
-          <section className="panel network-status-panel">
-            <div className="section-bar"><div><h2>Network</h2><p>Physical peers, signed membership, and server-selected routes.</p></div><StatusBadge value={network.status}/></div>
-            <div className="network-state-row"><span>Overlay State <StatusBadge value={network.overlay.status}/></span><span className="header-meta-divider"/><span>Relay State <StatusBadge value={network.relay.status}/></span></div>
-          </section>
-          <section className="data-table-wrap panel table-panel">
+                <section className="data-table-wrap panel">
             <table className="data-table"><thead><tr><th>Peer ID</th><th>Route</th><th>Membership State</th><th>Connection Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>{network.peers.length === 0 ? <TableEmpty colSpan={5} text="No physical peers are projected."/> : network.peers.map((peer) => {
                 const route = network.routes.find((item) => item.destinationNodeId === peer.nodeId);
                 const member = network.overlay.members.find((item) => item.nodeId === peer.nodeId);
                 const reachable = peer.usable && peer.authenticated;
                 const openDetails = () => setConnectionTarget({peer, route: route ?? null, memberStatus: member?.status || "UNKNOWN"});
-                return <tr key={peer.nodeId + peer.sessionId} tabIndex={0} aria-label={`View connection details for ${peer.nodeId}`} onClick={openDetails} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetails(); } }}><td className="mono">{peer.nodeId}</td><td className="mono table-cell-wrap">{route ? route.kind + (route.nextHop ? " · " + route.nextHop : "") : "—"}</td><td><StatusBadge value={member?.status || "UNKNOWN"}/></td><td><span className={cx("connection-status", reachable ? "is-connected" : "is-unreachable")}><span className="status-dot"/>{peer.liveness || (reachable ? "CONNECTED" : "UNREACHABLE")}</span></td><td className="table-action-cell"><button className="icon-button connection-delete-button" type="button" aria-label={`Terminate connection to ${peer.nodeId}`} title="Terminate connection" onClick={(event) => { event.stopPropagation(); setTerminationTarget({peer, routeKind: route?.kind ?? "UNKNOWN"}); }}><Trash2 size={15}/></button></td></tr>;
+                return <tr key={peer.nodeId + peer.sessionId} tabIndex={0} aria-label={`View connection details for ${peer.nodeId}`} onClick={openDetails} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetails(); } }}><td className="mono">{peer.nodeId}</td><td className="mono table-cell-wrap">{route ? route.kind + (route.nextHop ? " · " + route.nextHop : "") : "—"}</td><td><StatusBadge value={member?.status || "UNKNOWN"}/></td><td><span className={cx("connection-status", reachable ? "is-connected" : "is-unreachable")}><span className="status-dot"/>{peer.liveness || (reachable ? "CONNECTED" : "UNREACHABLE")}</span></td><td className="table-action-cell"><button className="icon-button" type="button" aria-label={`Terminate connection to ${peer.nodeId}`} title="Terminate connection" onClick={(event) => { event.stopPropagation(); setTerminationTarget({peer, routeKind: route?.kind ?? "UNKNOWN"}); }}><Trash2 size={15}/></button></td></tr>;
               })}</tbody>
             </table>
           </section>
-        </section>
-      </div>
       {detail === "membership" && <NetworkMembershipModal network={network} onClose={() => setDetail(null)}/>}
       {detail === "relay" && <NetworkRelayModal network={network} onClose={() => setDetail(null)}/>}
       {connectionTarget && <ConnectionDetailModal peer={connectionTarget.peer} route={connectionTarget.route} memberStatus={connectionTarget.memberStatus} onClose={() => setConnectionTarget(null)}/>}
@@ -1048,24 +1038,22 @@ export function DiagnosticsView({diagnostics}: {diagnostics: Snapshot["diagnosti
   };
   return (
     <div className="view-stack">
-      <section className={cx("diagnostics-summary", "panel", hasIssues ? "has-issues" : "is-quiet")} aria-labelledby="diagnostics-title">
-        <div className="diagnostics-summary-main">
-          <div className="diagnostics-title-row"><h2 id="diagnostics-title">Diagnostics</h2><StatusBadge value={overallStatus} label={formatDiagnosticValue(overallStatus)}/></div>
-          <p className="diagnostics-summary-copy">{hasIssues ? "Issues require attention." : "No issues require attention."}</p>
+      <section className="view-intro" aria-labelledby="diagnostics-title">
+        <div>
+          <p className="eyebrow">Report <code>{diagnostics.reportId || "—"}</code> · {formatDiagnosticDate(diagnostics.timestampEpochMillis)}</p>
+          <h2 id="diagnostics-title">Diagnostics</h2>
+          <p>{hasIssues ? "Issues require attention." : "No issues require attention."}</p>
         </div>
-        <div className="diagnostics-report-meta">
-          <span><span className="diagnostics-report-label">Report</span><code>{diagnostics.reportId || "—"}</code></span>
-          <span>{formatDiagnosticDate(diagnostics.timestampEpochMillis)}</span>
-        </div>
-        <div className="diagnostics-counts" aria-label="Diagnostic severity counts">
-          <span>Critical <strong className={cx(diagnostics.criticalCount > 0 && "tone-bad")}>{diagnostics.criticalCount}</strong></span>
-          <span>Errors <strong className={cx(diagnostics.errorCount > 0 && "tone-bad")}>{diagnostics.errorCount}</strong></span>
-          <span>Warnings <strong className={cx(diagnostics.warningCount > 0 && "tone-warn")}>{diagnostics.warningCount}</strong></span>
-          <span>Info <strong>{diagnostics.infoCount}</strong></span>
-        </div>
+        <StatusBadge value={overallStatus} label={formatDiagnosticValue(overallStatus)} large/>
       </section>
-      <section className="data-table-wrap panel table-panel">
-        <table className="data-table diagnostics-table"><thead><tr><th>Severity</th><th>Finding</th><th>Confidence</th><th>Component</th><th>Recommendation</th></tr></thead>
+      <div className="stat-strip" aria-label="Diagnostic severity counts">
+        <Stat label="Critical" value={diagnostics.criticalCount} tone={diagnostics.criticalCount > 0 ? "bad" : undefined}/>
+        <Stat label="Errors" value={diagnostics.errorCount} tone={diagnostics.errorCount > 0 ? "bad" : undefined}/>
+        <Stat label="Warnings" value={diagnostics.warningCount} tone={diagnostics.warningCount > 0 ? "warn" : undefined}/>
+        <Stat label="Info" value={diagnostics.infoCount}/>
+      </div>
+      <section className="data-table-wrap panel">
+        <table className="data-table"><thead><tr><th>Severity</th><th>Finding</th><th>Confidence</th><th>Component</th><th>Recommendation</th></tr></thead>
           <tbody>{diagnostics.findings.length === 0 ? <TableEmpty colSpan={5} text="No findings require attention."/> : diagnostics.findings.map((finding) => <tr key={finding.code} className={cx(selected?.code === finding.code && "is-selected")} tabIndex={0} aria-selected={selected?.code === finding.code} onClick={() => setSelectedCode(finding.code)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedCode(finding.code); } }}><td><StatusBadge value={finding.severity} label={formatDiagnosticValue(finding.severity)}/></td><td>{finding.summary}</td><td className="mono">{formatDiagnosticValue(finding.confidence)}</td><td>{finding.affectedResourceType}</td><td className="table-cell-wrap">{formatDiagnosticValue(finding.recommendation)}</td></tr>)}</tbody>
         </table>
       </section>
@@ -1099,14 +1087,14 @@ function FindingInspector({finding, index, total, onClose, onNavigate}: {finding
 
   return (
     <div className="diagnostics-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="inspector panel diagnostics-modal-card" role="dialog" aria-modal="true" aria-labelledby="finding-detail-title" aria-describedby="finding-detail-explanation" onClick={(event) => event.stopPropagation()}>
-        <div className="inspector-heading diagnostics-modal-heading">
+      <section className="panel diagnostics-modal-card" role="dialog" aria-modal="true" aria-labelledby="finding-detail-title" aria-describedby="finding-detail-explanation" onClick={(event) => event.stopPropagation()}>
+        <div className="inspector-heading">
           <span>Finding Detail</span>
           <div className="diagnostics-modal-actions">
-            <button className="icon-button diagnostics-modal-button" type="button" aria-label="Previous finding" disabled={index <= 0} onClick={() => onNavigate(-1)}><ChevronLeft size={18}/></button>
+            <button className="icon-button" type="button" aria-label="Previous finding" disabled={index <= 0} onClick={() => onNavigate(-1)}><ChevronLeft size={18}/></button>
             <span className="diagnostics-modal-index" aria-live="polite">{index + 1} of {total}</span>
-            <button className="icon-button diagnostics-modal-button" type="button" aria-label="Next finding" disabled={index >= total - 1} onClick={() => onNavigate(1)}><ChevronRight size={18}/></button>
-            <button ref={closeButtonRef} className="icon-button diagnostics-modal-button" type="button" aria-label="Close finding detail" onClick={onClose}><X size={17}/></button>
+            <button className="icon-button" type="button" aria-label="Next finding" disabled={index >= total - 1} onClick={() => onNavigate(1)}><ChevronRight size={18}/></button>
+            <button ref={closeButtonRef} className="icon-button" type="button" aria-label="Close finding detail" onClick={onClose}><X size={17}/></button>
           </div>
         </div>
         <div className="inspector-title"><StatusBadge value={finding.severity} label={formatDiagnosticValue(finding.severity)}/><h2 id="finding-detail-title">{finding.summary}</h2></div>
@@ -1119,7 +1107,7 @@ function FindingInspector({finding, index, total, onClose, onNavigate}: {finding
 }
 
 function ConnectionScreen({state, message}: {state: string; message: string}) {
-  return <main className="connection-screen"><section className="connection-card panel"><img className="brand-logo brand-logo-large" src="/synesis-logo.png" alt="" aria-hidden="true"/><p className="eyebrow">Synesis local control plane</p><h1>Connecting to project state</h1><StatusBadge value={state}/><p>{message}</p><div className="loading-line" aria-hidden="true"/></section></main>;
+  return <main className="connection-screen"><section className="connection-card"><img className="brand-logo brand-logo-large" src="/synesis-logo.png" alt="" aria-hidden="true"/><p className="eyebrow">Synesis local control plane</p><h1>Connecting to project state</h1><StatusBadge value={state}/><p>{message}</p><div className="loading-line" aria-hidden="true"/></section></main>;
 }
 
 function StatusBadge({value, large, label}: {value: string; large?: boolean; label?: string}) {
@@ -1127,15 +1115,11 @@ function StatusBadge({value, large, label}: {value: string; large?: boolean; lab
 }
 
 function OverviewSection({title, icon: Icon, action, children}: {title: string; icon: LucideIcon; action?: ReactNode; children: ReactNode}) {
-  return <section className="panel overview-section"><div className="section-bar"><h2><Icon size={17} aria-hidden="true"/>{title}</h2>{action}</div>{children}</section>;
+  return <section className="panel overview-section"><div className="toolbar"><h2><Icon size={16} aria-hidden="true"/>{title}</h2>{action}</div>{children}</section>;
 }
 
 function OverviewStat({label, value}: {label: string; value: number}) {
-  return <div className="overview-stat"><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function BoundaryLine({label, value, tone}: {label: string; value: number; tone: string}) {
-  return <div className="boundary-line"><span><span className={cx("boundary-dot", tone)}/>{label}</span><strong>{value}</strong></div>;
+  return <div className="overview-list-row"><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function TextAction({children, onClick}: {children: ReactNode; onClick(): void}) {
@@ -1171,8 +1155,8 @@ function DetailModal({title, onClose, children}: {title: string; onClose(): void
 
   return (
     <div className="detail-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="inspector panel detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title" onClick={(event) => event.stopPropagation()}>
-        <div className="inspector-heading"><span id="detail-modal-title">{title}</span><button ref={closeButtonRef} className="icon-button detail-modal-close" type="button" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose}><X size={16}/></button></div>
+      <section className="panel detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title" onClick={(event) => event.stopPropagation()}>
+        <div className="inspector-heading"><span id="detail-modal-title">{title}</span><button ref={closeButtonRef} className="icon-button" type="button" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose}><X size={16}/></button></div>
         {children}
       </section>
     </div>

@@ -414,6 +414,29 @@ async function readError(response: Response): Promise<ControlPlaneError> {
   return new ControlPlaneError(response.status, code, message);
 }
 
+// The session survives a reload of its own tab and nothing else: session storage is per tab and
+// is gone when the tab closes. The bootstrap token in the address is already spent by then.
+const SESSION_KEY = "synesis.control.session";
+
+function storedSession(): {sessionToken: string; csrfToken: string} | null {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(SESSION_KEY) ?? "null") as {sessionToken?: unknown; csrfToken?: unknown} | null;
+    return stored && typeof stored.sessionToken === "string" && typeof stored.csrfToken === "string"
+      ? {sessionToken: stored.sessionToken, csrfToken: stored.csrfToken} : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeSession(session: {sessionToken: string; csrfToken: string} | null): void {
+  try {
+    if (session) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else window.sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Without session storage a reload asks for the synesis ui command again, as before.
+  }
+}
+
 export class ControlPlaneClient {
   private sessionToken = "";
   private csrfToken = "";
@@ -428,7 +451,27 @@ export class ControlPlaneClient {
     const credentials = (await response.json()) as { sessionToken: string; csrfToken: string };
     this.sessionToken = credentials.sessionToken;
     this.csrfToken = credentials.csrfToken;
+    storeSession({sessionToken: this.sessionToken, csrfToken: this.csrfToken});
     return this.snapshot();
+  }
+
+  /**
+   * Picks up the session this tab already had, after a reload. Returns null when there is none or
+   * the runtime no longer accepts it.
+   */
+  async resumeSession(): Promise<Snapshot | null> {
+    const stored = storedSession();
+    if (!stored) return null;
+    this.sessionToken = stored.sessionToken;
+    this.csrfToken = stored.csrfToken;
+    try {
+      return await this.snapshot();
+    } catch (error) {
+      if (error instanceof ControlPlaneError && error.status === 401) storeSession(null);
+      this.sessionToken = "";
+      this.csrfToken = "";
+      return null;
+    }
   }
 
   async snapshot(): Promise<Snapshot> {
@@ -469,8 +512,9 @@ export class ControlPlaneClient {
     return this.command<ProjectFolderChoice>("choose-project", {});
   }
 
-  async removeProject(projectId: string): Promise<Record<string, unknown>> {
-    return this.command<Record<string, unknown>>("remove-project", {projectId});
+  /** Removes any number of projects from the registry in one durable step. */
+  async removeProjects(projectIds: string[]): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("remove-project", {projectIds});
   }
 
   startEvents(handlers: {
@@ -517,7 +561,7 @@ export class ControlPlaneClient {
     };
   }
 
-  private async command<T>(name: string, body: Record<string, string>): Promise<T> {
+  private async command<T>(name: string, body: Record<string, string | string[]>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},

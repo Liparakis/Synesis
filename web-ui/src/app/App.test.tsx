@@ -105,13 +105,13 @@ describe("truthful product states", () => {
     expect(screen.queryByText("Project Alpha")).not.toBeInTheDocument();
   });
 
-  it("keeps add and non-current remove actions visible in the development preview", async () => {
+  it("keeps add and remove actions visible in the development preview", async () => {
     window.history.replaceState(null, "", "/projects?mock=1");
     render(<App/>);
 
     expect(await screen.findByRole("button", {name: "Add project"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Remove Vector mesh from registry"})).toBeInTheDocument();
-    expect(screen.queryByRole("button", {name: "Remove Test from registry"})).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Remove Test from registry"})).toBeInTheDocument();
   });
 
   it("supports an empty agents state", () => {
@@ -225,26 +225,30 @@ describe("truthful product states", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("removes only an inactive registry entry and protects the current project", async () => {
+  it("removes one registry entry after a confirmation, the current project included", async () => {
     const user = userEvent.setup();
-    const removeProject = vi.fn().mockResolvedValue({state: "REMOVED"});
-    const client = {removeProject} as unknown as ControlPlaneClient;
+    const removeProjects = vi.fn().mockResolvedValue({state: "REMOVED"});
+    const client = {removeProjects} as unknown as ControlPlaneClient;
     render(<ProjectsView snapshot={registrySnapshot} client={client}/>);
 
-    expect(screen.queryByRole("button", {name: "Remove Live project from registry"})).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).not.toHaveTextContent("serving this page");
     await user.click(screen.getByRole("button", {name: "Remove from registry"}));
-    expect(removeProject).toHaveBeenCalledWith("proj_idle");
+    expect(removeProjects).toHaveBeenCalledWith(["proj_idle"]);
+
+    await user.click(screen.getByRole("button", {name: "Remove Live project from registry"}));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Live project is serving this page");
+    await user.click(screen.getByRole("button", {name: "Remove from registry"}));
+    await waitFor(() => expect(removeProjects).toHaveBeenCalledWith(["proj_live"]));
   });
 
   it("hides a project immediately while registry removal is pending", async () => {
     const user = userEvent.setup();
     let resolveRemoval: (value: Record<string, unknown>) => void = () => undefined;
-    const removeProject = vi.fn(() => new Promise<Record<string, unknown>>((resolve) => {
+    const removeProjects = vi.fn(() => new Promise<Record<string, unknown>>((resolve) => {
       resolveRemoval = resolve;
     }));
-    render(<ProjectsView snapshot={registrySnapshot} client={{removeProject} as unknown as ControlPlaneClient}/>);
+    render(<ProjectsView snapshot={registrySnapshot} client={{removeProjects} as unknown as ControlPlaneClient}/>);
 
     await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
     await user.click(screen.getByRole("button", {name: "Remove from registry"}));
@@ -253,16 +257,16 @@ describe("truthful product states", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     resolveRemoval({state: "REMOVED"});
-    await waitFor(() => expect(removeProject).toHaveBeenCalledWith("proj_idle"));
+    await waitFor(() => expect(removeProjects).toHaveBeenCalledWith(["proj_idle"]));
   });
 
   it("restores an optimistically removed project when registry removal fails", async () => {
     const user = userEvent.setup();
     let rejectRemoval: (reason?: unknown) => void = () => undefined;
-    const removeProject = vi.fn(() => new Promise<Record<string, unknown>>((_, reject) => {
+    const removeProjects = vi.fn(() => new Promise<Record<string, unknown>>((_, reject) => {
       rejectRemoval = reject;
     }));
-    render(<ProjectsView snapshot={registrySnapshot} client={{removeProject} as unknown as ControlPlaneClient}/>);
+    render(<ProjectsView snapshot={registrySnapshot} client={{removeProjects} as unknown as ControlPlaneClient}/>);
 
     await user.click(screen.getByRole("button", {name: "Remove Idle project from registry"}));
     await user.click(screen.getByRole("button", {name: "Remove from registry"}));
@@ -271,6 +275,54 @@ describe("truthful product states", () => {
     rejectRemoval({code: "PROJECT_NOT_FOUND"});
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("no longer in the registry"));
     expect(screen.getByText("Idle project")).toBeInTheDocument();
+  });
+
+  it("removes several selected projects, of any status, after one confirmation", async () => {
+    const user = userEvent.setup();
+    const many = {
+      ...registrySnapshot,
+      knownProjects: [
+        ...registrySnapshot.knownProjects,
+        {id: "proj_old", name: "Old project", path: "C:\\projects\\old", createdAt: "2026-09-07T00:00:00Z", firstObservedAt: "2026-09-07T00:00:00Z", lastObservedAt: "2026-09-07T00:00:00Z", status: "UNAVAILABLE"},
+        {id: "proj_kept", name: "Kept project", path: "C:\\projects\\kept", createdAt: "2026-09-06T00:00:00Z", firstObservedAt: "2026-09-06T00:00:00Z", lastObservedAt: "2026-09-06T00:00:00Z", status: "INACTIVE"},
+      ],
+    } as unknown as Snapshot;
+    let refuse: (reason?: unknown) => void = () => undefined;
+    const removeProjects = vi.fn().mockImplementationOnce(() => new Promise<Record<string, unknown>>(() => undefined)).mockImplementationOnce(() => new Promise<Record<string, unknown>>((_, reject) => {
+      refuse = reject;
+    }));
+    render(<ProjectsView snapshot={many} client={{removeProjects} as unknown as ControlPlaneClient}/>);
+
+    expect(screen.queryByRole("button", {name: "Remove selected"})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", {name: "Select all"}));
+    expect(screen.getByRole("checkbox", {name: "Select Live project"})).toBeChecked();
+    await user.click(screen.getByRole("checkbox", {name: "Select Kept project"}));
+    expect(screen.getByRole("status")).toHaveTextContent("3 selected");
+    expect(removeProjects).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", {name: "Remove selected"}));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Live project", {selector: "li"})).toBeInTheDocument();
+    expect(within(dialog).getByText("Old project")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Kept project")).not.toBeInTheDocument();
+    expect(removeProjects).not.toHaveBeenCalled();
+
+    // One request names the whole selection, and the rows are gone before it answers.
+    await user.click(within(dialog).getByRole("button", {name: "Remove 3 projects"}));
+    expect(removeProjects).toHaveBeenCalledTimes(1);
+    expect(removeProjects).toHaveBeenCalledWith(["proj_live", "proj_idle", "proj_old"]);
+    expect(screen.queryByText("Idle project")).not.toBeInTheDocument();
+    expect(screen.getByText("Kept project")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    // A refused removal brings its rows back and says why.
+    await user.click(screen.getByRole("button", {name: "Remove Kept project from registry"}));
+    await user.click(screen.getByRole("button", {name: "Remove from registry"}));
+    expect(screen.queryByText("Kept project")).not.toBeInTheDocument();
+    refuse({code: "REGISTRY_LOCK_FAILED", message: "could not access known project registry"});
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByText("Kept project")).toBeInTheDocument();
   });
 
   it("shows network and termination controls for each projected connection", async () => {
@@ -385,5 +437,27 @@ describe("truthful product states", () => {
     expect(back).toBeInTheDocument();
     await user.click(back);
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves the project views into the rail once a live project is open", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/projects?mock=1");
+    render(<App/>);
+
+    await screen.findByRole("button", {name: "Add project"});
+    expect(screen.queryByRole("navigation", {name: "Project views"})).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Mock local state");
+
+    await user.click(screen.getByRole("button", {name: "Open project"}));
+    const views = screen.getByRole("navigation", {name: "Project views"});
+    expect(within(views).getByRole("button", {name: "Overview"})).toHaveAttribute("aria-current", "page");
+
+    await user.click(within(views).getByRole("button", {name: "Diagnostics"}));
+    expect(screen.getByRole("heading", {name: "Diagnostics"})).toBeInTheDocument();
+    expect(within(views).getByRole("button", {name: "Diagnostics"})).toHaveAttribute("aria-current", "page");
+    expect(within(views).getByRole("button", {name: "Overview"})).not.toHaveAttribute("aria-current");
+
+    await user.click(screen.getByRole("button", {name: "Back to projects"}));
+    expect(screen.queryByRole("navigation", {name: "Project views"})).not.toBeInTheDocument();
   });
 });
