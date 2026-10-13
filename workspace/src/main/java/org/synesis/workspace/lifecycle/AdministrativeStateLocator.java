@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Objects;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
+import org.synesis.workspace.lifecycle.process.GitRepositoryLayout;
 
 /**
  * Resolves Synesis administrative state from the canonical Git common directory rather than from a
@@ -111,13 +112,23 @@ public final class AdministrativeStateLocator {
      */
     public Path resolveGitCommonDirectory(Path repositoryRoot) throws IOException {
         Path root = normalize(repositoryRoot, "repositoryRoot");
-        try {
-            GitProcessRunner.Result result = GitProcessRunner.runResult(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
-            if (result.exitCode() == 0 && !result.output().isBlank()) {
-                return canonicalPath(root.resolve(result.output()));
+        // Read from the checkout when its layout is a plain one: this is asked on every tool
+        // call, and a Git process each time was most of what a call cost.
+        java.util.Optional<Path> onDisk = GitRepositoryLayout.commonDirectory(root);
+        if (onDisk.isPresent()) {
+            return canonicalPath(onDisk.get());
+        }
+        // A directory with no .git in it or above it is in no repository. Synesis checks a
+        // provider in such a directory on every admission, and asked Git about it each time.
+        if (GitRepositoryLayout.mayBeInsideARepository(root)) {
+            try {
+                GitProcessRunner.Result result = GitProcessRunner.runResult(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
+                if (result.exitCode() == 0 && !result.output().isBlank()) {
+                    return canonicalPath(root.resolve(result.output()));
+                }
+            } catch (IOException unavailable) {
+                // Fall through to the conservative .git fallback below.
             }
-        } catch (IOException unavailable) {
-            // Fall through to the conservative .git fallback below.
         }
         Path dotGit = root.resolve(".git");
         if (Files.isDirectory(dotGit)) {

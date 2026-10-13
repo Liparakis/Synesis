@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
+import org.synesis.workspace.lifecycle.process.GitRepositoryLayout;
 
 
 /**
@@ -87,6 +88,10 @@ final class ProviderWorktreeGitFacts {
     }
 
     private static String canonicalGitCommon(Path root) throws Exception {
+        java.util.Optional<Path> onDisk = GitRepositoryLayout.commonDirectory(root);
+        if (onDisk.isPresent()) {
+            return onDisk.get().toRealPath().toString();
+        }
         Path common = Path.of(git(root, "rev-parse", "--git-common-dir"));
         return (common.isAbsolute() ? common : root.resolve(common)).toRealPath().toString();
     }
