@@ -137,7 +137,7 @@ public final class ReviewValidationService {
                 var snapshotState = store.taskCompletionProjection().snapshotState(snapshot.snapshotId());
                 if (snapshotState.isPresent() && (snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.INTEGRATED
                         || snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_ACCEPTED
-                        || snapshotState.get() == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_REJECTED) && existing.isEmpty()) {
+                        || snapshotState.get().refused()) && existing.isEmpty()) {
                     return blocked("REVIEW_SNAPSHOT_ALREADY_RESOLVED", AgentNextAction.RETRY);
                 }
                 if (existing.isEmpty()) {

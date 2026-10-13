@@ -27,9 +27,12 @@ import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
  * @param createdAt        project creation time
  * @param validation       optional project-owned validation command
  * @param review           review policy the project gives every work group announced in it; never {@code null}
+ * @param validationAlsoInLane whether the validation command also runs in a lane alone before its finish is
+ *                         published; it always runs on the combined tree before integration. A lane whose tests need
+ *                         a sibling's code cannot pass the command alone, so a project opts in
  */
 public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
-                              ReviewPolicy review) {
+                              ReviewPolicy review, boolean validationAlsoInLane) {
 
     /**
      * Constructs a project location without a project-owned validation command.
@@ -43,6 +46,22 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt) {
         this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, null, ReviewPolicy.none());
+    }
+
+    /**
+     * Constructs a project location whose validation command runs only before integration.
+     *
+     * @param root             project root
+     * @param synesisDirectory Synesis directory
+     * @param metadataFile     project metadata file
+     * @param profile          local profile directory
+     * @param projectId        project identifier
+     * @param createdAt        creation timestamp
+     * @param validation       optional project-owned validation command
+     * @param review           review policy of the project
+     */
+    public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation, ReviewPolicy review) {
+        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, validation, review, false);
     }
 
     /**

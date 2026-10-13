@@ -22,6 +22,32 @@ is never repaired or overwritten automatically.
 
 `project.json` contains `schemaVersion`, `projectId`, and `createdAt`. It must
 not contain private keys, absolute paths, provider metadata, or runtime state.
+It may also hold the project's policy. Any other field is refused.
+
+- `validation` is the command that must pass before work is integrated:
+  `argv` (the executable and its arguments, run without a shell),
+  `workingDirectory` (relative to the project root, default `.`),
+  `timeoutSeconds` (default 120, at most 3600) and `alsoInLane`. The command
+  always runs on the combined work before the project's branch moves. With
+  `alsoInLane` true it also runs in each lane alone before that lane's finish
+  is published; absent or false, it does not. Set it with
+  `synesis project validation set`, not by hand.
+- `review` with `mandatory` true makes every work group announced in the
+  project subject to mandatory independent review.
+
+```json
+{
+  "schemaVersion": 2,
+  "projectId": "<uuid>",
+  "createdAt": "<instant>",
+  "validation": {"argv":["python","-m","unittest"],"workingDirectory":".","timeoutSeconds":120,"alsoInLane":true}
+}
+```
+
+`synesis init` commits `project.json`. A later change to it is an uncommitted
+change in the project checkout until it is committed, and nothing is integrated
+into a checkout holding one.
+
 The recommended ignore entry is:
 
 ```gitignore

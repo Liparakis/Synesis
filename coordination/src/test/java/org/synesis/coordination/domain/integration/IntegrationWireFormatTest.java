@@ -44,4 +44,25 @@ class IntegrationWireFormatTest {
         pin("integrationAttempt", "494e5447000000010000000a617474656d70742dc3a9123456789abcdef00fedcba9876543010000000200000006736e61702d3100000007736e61702dce940000000868656164303132330000000a636f6d6d697434353637000000064641494c45440000000c636f6e666c69637420e29c93", "trailing=CoordinationException: Trailing integration attempt payload bytes | truncated=CoordinationException: Truncated payload", payload, IntegrationAttemptPayload::encode,
                 IntegrationAttemptPayload::decode);
     }
+
+    @Test
+    void validationRefusal() throws Exception {
+        ValidationRefusalPayload payload = new ValidationRefusalPayload("attempt-é",
+                "snap-Δ",
+                id(1),
+                id(2),
+                id(3),
+                2,
+                id(4),
+                3,
+                "agt-é",
+                "commit4567",
+                "[\"git\"]",
+                ".",
+                "non_zero_exit",
+                1,
+                "output ✓");
+        pin("validationRefusal", "49565246000000010000000a617474656d70742dc3a900000007736e61702dce94123456789abcdef00fedcba987654301123456789abcdef00fedcba987654302123456789abcdef00fedcba9876543030000000000000002123456789abcdef00fedcba9876543040000000000000003000000066167742dc3a90000000a636f6d6d697434353637000000075b22676974225d000000012e0000000d6e6f6e5f7a65726f5f65786974000000010000000a6f757470757420e29c93", "trailing=CoordinationException: Trailing validation refusal payload bytes | truncated=CoordinationException: Truncated payload", payload, ValidationRefusalPayload::encode,
+                ValidationRefusalPayload::decode);
+    }
 }

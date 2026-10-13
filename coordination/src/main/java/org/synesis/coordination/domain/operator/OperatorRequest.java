@@ -48,6 +48,15 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public static final String LANE_ASKS_OPERATOR = "lane_asks_operator";
 
+    /**
+     * The project's validation command fails on the work waiting to be integrated and no lane is
+     * left to answer for it: the command timed out or could not be started, or the pass that ran
+     * it died twice, which says nothing about anybody's work, or a lane with a snapshot in the
+     * attempt has used its repairs. Nothing integrates while it is open, and the command is not
+     * run again on every poll.
+     */
+    public static final String INTEGRATION_VALIDATION_FAILING = "integration_validation_failing";
+
     private static final int MAGIC_RAISED = 0x534f5231;
     private static final int MAGIC_CLOSED = 0x534f5232;
     private static final int MAX_TEXT_BYTES = 8 * 1024;
@@ -199,6 +208,16 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public OperatorRequest withEvidence(String current) {
         return new OperatorRequest(id, condition, raisedBy, summary, bounded(current), failurePoint, state, closedBecause);
+    }
+
+    /**
+     * Returns this request naming where the failure it reports was recorded.
+     *
+     * @param point identifier of the local diagnostics entry, or empty when none was written
+     * @return the request with that failure point
+     */
+    public OperatorRequest withFailurePoint(String point) {
+        return new OperatorRequest(id, condition, raisedBy, summary, evidence, point, state, closedBecause);
     }
 
     OperatorRequest closed(String because) {

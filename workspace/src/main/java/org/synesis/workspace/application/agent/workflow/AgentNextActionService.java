@@ -301,8 +301,14 @@ public final class AgentNextActionService {
             Map<String, Object> result = new LinkedHashMap<>();
             putResult(result, response.result(), null);
             result.putIfAbsent("rejectedSnapshot", rejected);
-            result.putIfAbsent("instruction", "The reviewer rejected your last snapshot; rejectedSnapshot.reviewDecision.reason says what to correct. Make that correction in your claimed files, "
-                    + "then ask to finish again with get_next_action and completionRequested.");
+            // Worded by who refused it. Told that a reviewer had rejected it, a lane refused by
+            // the validation command would look for a review decision that does not exist.
+            result.putIfAbsent("instruction", rejected.containsKey("validationFailure")
+                    ? "The project's validation command failed on your last snapshot combined with the work integrated before it; rejectedSnapshot.validationFailure.output is what it printed. "
+                            + "Correct it in your claimed files. Another lane's files are not yours to change: ask that lane with send_message or a contract change request. "
+                            + "Then ask to finish again with get_next_action and completionRequested."
+                    : "The reviewer rejected your last snapshot; rejectedSnapshot.reviewDecision.reason says what to correct. Make that correction in your claimed files, "
+                            + "then ask to finish again with get_next_action and completionRequested.");
             return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
         } catch (Exception failure) {
             logSuppressed("rejection projection", failure);

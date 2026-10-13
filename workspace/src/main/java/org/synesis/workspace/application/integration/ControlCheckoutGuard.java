@@ -88,6 +88,20 @@ final class ControlCheckoutGuard {
      * @return a {@code BLOCKED} response carrying the request
      */
     static AgentResponse blocked(OperatorRequest request) {
+        return blocked(request, "Integration is stopped until an operator clears this request. Do not change, move or delete the files it names: they are in the project checkout and may be the user's own work. "
+                + "Work you have published is kept and is integrated when the request closes. If this lane has nothing else to do, stop here and do not poll.");
+    }
+
+    /**
+     * Answers a caller whose step needs integration while a request that stops integration is
+     * open. Every such request is shown in this one shape, so a lane is held the same way
+     * whatever stopped integration.
+     *
+     * @param request     the open request
+     * @param instruction what the caller is to do, and not to do, while it is open
+     * @return a {@code BLOCKED} response carrying the request
+     */
+    static AgentResponse blocked(OperatorRequest request, String instruction) {
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("id", request.id());
         shown.put("condition", request.condition());
@@ -95,8 +109,7 @@ final class ControlCheckoutGuard {
         shown.put("evidence", request.evidence().lines().toList());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("operatorRequest", shown);
-        result.put("instruction", "Integration is stopped until an operator clears this request. Do not change, move or delete the files it names: they are in the project checkout and may be the user's own work. "
-                + "Work you have published is kept and is integrated when the request closes. If this lane has nothing else to do, stop here and do not poll.");
+        result.put("instruction", instruction);
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OPERATOR_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, result);
     }
 }

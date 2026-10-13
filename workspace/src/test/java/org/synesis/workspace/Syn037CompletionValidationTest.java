@@ -43,15 +43,22 @@ class Syn037CompletionValidationTest {
     private String previousHome;
 
     private static void configureValidation(Path metadata, java.util.UUID projectId, java.time.Instant createdAt) throws Exception {
-        configureValidation(metadata, projectId, createdAt, PortableTestCommand.validation());
+        configureValidation(metadata, projectId, createdAt, PortableTestCommand.validation(), true);
     }
 
-    private static void configureValidation(Path metadata, java.util.UUID projectId, java.time.Instant createdAt, List<String> argv) throws Exception {
+    private static void configureValidation(Path metadata, java.util.UUID projectId, java.time.Instant createdAt, List<String> argv, boolean alsoInLane) throws Exception {
         Map<String, Object> value = new java.util.LinkedHashMap<>();
         value.put("schemaVersion", 2);
         value.put("projectId", projectId.toString());
         value.put("createdAt", createdAt.toString());
-        value.put("validation", Map.of("argv", argv, "workingDirectory", ".", "timeoutSeconds", 120));
+        Map<String, Object> validation = new java.util.LinkedHashMap<>();
+        validation.put("argv", argv);
+        validation.put("workingDirectory", ".");
+        validation.put("timeoutSeconds", 120);
+        if (alsoInLane) {
+            validation.put("alsoInLane", true);
+        }
+        value.put("validation", validation);
         Files.writeString(metadata, ProviderJson.write(value) + System.lineSeparator());
     }
 
@@ -114,7 +121,7 @@ class Syn037CompletionValidationTest {
         ProjectApplicationService projectService = new ProjectApplicationService();
         ProjectInitResult initialized = projectService.init(root, false);
         configureValidation(initialized.location().metadataFile(), initialized.location().projectId(), initialized.location().createdAt(),
-                List.of("git", "rev-parse", "--verify", "refs/heads/branch-that-does-not-exist"));
+                List.of("git", "rev-parse", "--verify", "refs/heads/branch-that-does-not-exist"), true);
         git(root, "add", ".synesis/project.json");
         git(root, "commit", "-m", "configure validation");
         RepositoryPrivateStateService.ensure(root);
@@ -134,6 +141,41 @@ class Syn037CompletionValidationTest {
         PredictionEventStore store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
         assertTrue(store.taskCompletionProjection().allSnapshots().isEmpty(), "a refused finish publishes nothing");
         assertEquals(List.of("pending"), Files.readAllLines(root.resolve("src/task_tracker.txt")), "nothing was integrated");
+    }
+
+    /**
+     * By default the command runs on the combined tree at integration only: a lane whose tests need
+     * a sibling's code could never finish if it had to pass alone.
+     */
+    @Test
+    void validationDoesNotRunInTheLaneAloneUnlessTheProjectAsksForIt(@TempDir Path root) throws Exception {
+        git(root, "init");
+        git(root, "config", "user.name", "Synesis Test");
+        git(root, "config", "user.email", "synesis-test@example.invalid");
+        Files.createDirectories(root.resolve("src"));
+        Files.writeString(root.resolve("src/task_tracker.txt"), "pending");
+        git(root, "add", ".");
+        git(root, "commit", "-m", "baseline");
+        ProjectApplicationService projectService = new ProjectApplicationService();
+        ProjectInitResult initialized = projectService.init(root, false);
+        configureValidation(initialized.location().metadataFile(), initialized.location().projectId(), initialized.location().createdAt(),
+                List.of("git", "rev-parse", "--verify", "refs/heads/branch-that-does-not-exist"), false);
+        git(root, "add", ".synesis/project.json");
+        git(root, "commit", "-m", "configure validation");
+        RepositoryPrivateStateService.ensure(root);
+        ProviderTestSupport.install(projectService.locate(root), "codex");
+        AgentResponse session = new AgentSessionService().ensureSession(new SessionResolutionRequest(root, "codex", "syn037-alone", null, false));
+        assertEquals(AgentStatus.READY, session.status(), session.toJson());
+        ProjectLocation location = projectService.locate(root);
+        new WorkspaceCollaborationService().announce(root, "codex", "syn037-alone", "Implement task tracker", "src/task_tracker.txt becomes implemented", List.of(ResourceSelector.pathExact("src/task_tracker.txt")));
+        Path lane = Path.of(new ProviderSessionBindingService().find(location, "codex", "syn037-alone").orElseThrow().worktreePath());
+        Files.writeString(lane.resolve("src/task_tracker.txt"), "implemented");
+
+        AgentResponse response = new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(root, "codex", "syn037-alone", "Implement task tracker"));
+
+        assertTrue(!resultMap(response).containsKey("prePublicationValidation"), "the command did not run in the lane: " + response.toJson());
+        PredictionEventStore store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+        assertEquals(1, store.taskCompletionProjection().allSnapshots().size(), "the finish was published: " + response.toJson());
     }
 
     @Test

@@ -57,6 +57,10 @@ import org.synesis.cli.command.prediction.PredictionShowCommand;
 import org.synesis.cli.command.project.InitCommand;
 import org.synesis.cli.command.project.ProjectCommand;
 import org.synesis.cli.command.project.ProjectCreateCommand;
+import org.synesis.cli.command.project.ProjectValidationClearCommand;
+import org.synesis.cli.command.project.ProjectValidationCommand;
+import org.synesis.cli.command.project.ProjectValidationSetCommand;
+import org.synesis.cli.command.project.ProjectValidationShowCommand;
 import org.synesis.cli.command.provider.ProviderCommand;
 import org.synesis.cli.command.provider.ProviderInstallCommand;
 import org.synesis.cli.command.provider.ProviderListCommand;
@@ -147,6 +151,8 @@ public final class SynesisCli {
         command.addSubcommand("init", new InitCommand(runtime));
         command.addSubcommand("project", new ProjectCommand());
         command.getSubcommands().get("project").addSubcommand("create", new ProjectCreateCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("validation", new CommandLine(new ProjectValidationCommand()).addSubcommand("set", new ProjectValidationSetCommand(runtime))
+                .addSubcommand("show", new ProjectValidationShowCommand(runtime)).addSubcommand("clear", new ProjectValidationClearCommand(runtime)));
         command.addSubcommand("constraint", new ConstraintCommand());
         command.getSubcommands().get("constraint").addSubcommand("create", new ConstraintCreateCommand(runtime));
         CommandLine collaboration = new CommandLine(new CollaborationCommand()).addSubcommand("announce", new CollaborationAnnounceCommand(runtime))

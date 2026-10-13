@@ -14,7 +14,9 @@ import picocli.CommandLine.Option;
  *
  * <p>There is no command that declares a request resolved. A request closes when its condition is
  * observed not to hold; this runs that observation now, and integrates the work that was waiting
- * on it, without an agent having to be running.</p>
+ * on it, without an agent having to be running. It is also the one pass that runs the project's
+ * validation command again while that command is what the operator was asked about: an agent's
+ * pass does not, since nothing has changed for it to find.</p>
  */
 @Command(name = "recheck", description = "Check again whether the open operator requests still hold, and integrate what was waiting.", mixinStandardHelpOptions = true)
 public final class OperatorRecheckCommand implements Callable<Integer> {
@@ -40,7 +42,7 @@ public final class OperatorRecheckCommand implements Callable<Integer> {
     public Integer call() {
         try {
             var location = ProjectOptions.locate(runtime, project);
-            var pass = new IntegrationOrchestrationService().orchestrateIntegration(location.root(), location.openCoordinationStore(), location.loadOrCreateIdentity());
+            var pass = new IntegrationOrchestrationService().orchestrateIntegration(location.root(), location.openCoordinationStore(), location.loadOrCreateIdentity(), true);
             runtime.terminal().stdout("RECHECK=" + pass.status().value() + (pass.reason() == null ? "" : " REASON=" + pass.reason().value()));
             var open = location.openCoordinationStore().operatorRequestProjection().open();
             OperatorListCommand.print(runtime, open);

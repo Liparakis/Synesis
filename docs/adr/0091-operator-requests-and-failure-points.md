@@ -243,6 +243,8 @@ Not built:
   conflicts through the repair lane, so a request for each would end runs that
   can continue. It would belong to a conflict nobody is left to repair, which
   has not been observed.
+- (Built since, ADR-0094: an operator request for a project validation command
+  that fails with no lane left to answer for it.)
 - A failure point on every `failed` answer. The paths that swallowed a cause in
   the recorded runs are covered; others are not.
 - Operator requests in the web UI.

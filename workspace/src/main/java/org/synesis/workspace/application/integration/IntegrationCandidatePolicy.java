@@ -119,7 +119,7 @@ final class IntegrationCandidatePolicy {
                 structuralFailures.add("CAPABILITY_LINEAGE_MISMATCH:" + dependencyHandle);
                 continue;
             }
-            TaskSnapshotRecord ownerSnapshot = ownerSnapshotCarrying(implementation, allSnapshots, carriesContent);
+            TaskSnapshotRecord ownerSnapshot = ownerSnapshotCarrying(implementation, allSnapshots, completion, carriesContent);
             if (ownerSnapshot == null) {
                 // Validation alone does not put the implementation in the
                 // integration history. Keep the consumer pending until the
@@ -144,12 +144,17 @@ final class IntegrationCandidatePolicy {
      * rebuilt from recovery evidence, so its later snapshot is a different commit even when nothing
      * in it changed; requiring the same commit would leave every consumer of a recovered owner
      * waiting forever. Such a snapshot qualifies only when {@code carriesContent} accepts it.</p>
+     *
+     * <p>A refused snapshot is passed over. It never integrates, so a consumer bound to it waited
+     * for ever, also after the owner's correction carried the same validated content.</p>
      */
     private static TaskSnapshotRecord ownerSnapshotCarrying(ImplementationRevisionRecord implementation,
             List<TaskSnapshotRecord> allSnapshots,
+            TaskCompletionProjection completion,
             BiPredicate<ImplementationRevisionRecord, TaskSnapshotRecord> carriesContent) {
         List<TaskSnapshotRecord> ownerSnapshots = allSnapshots.stream()
                 .filter(snapshot -> snapshot.provenance().authorityLineageId().equals(implementation.authorityLineageId()))
+                .filter(snapshot -> !completion.snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE).refused())
                 .sorted(Comparator.comparingLong(TaskSnapshotRecord::createdAtMillis).thenComparing(TaskSnapshotRecord::snapshotId))
                 .toList();
         for (TaskSnapshotRecord snapshot : ownerSnapshots) {

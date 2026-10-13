@@ -15,6 +15,7 @@ import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotReference;
 import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
+import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
@@ -145,6 +146,7 @@ public final class CollaborationProjection {
             case PARTICIPANT_DETACHED ->
                     detached(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
             case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
+            case INTEGRATION_VALIDATION_REFUSED -> validationRefused(ValidationRefusalPayload.decode(event.payload()));
             case PROVIDER_SESSION_TERMINALIZED ->
                     sessionFences.terminalize(ProviderSessionTerminalPayload.decode(event.payload()),
                             event.sequence());
@@ -677,19 +679,73 @@ public final class CollaborationProjection {
         if (current == null) {
             return;
         }
-        if (!current.workGroupId().equals(validation.workGroupId()) || !current.participant()
-                .equals(validation.sourceParticipant()) || !current.taskId().equals(validation.taskId())
-                || current.version() != validation.claimEpoch() || current.status() != WorkIntent.Status.ANNOUNCED) {
-            throw new CoordinationException("REVIEW_TARGET_STALE");
+        requireLaneAsRefused(current, validation.workGroupId(), validation.sourceParticipant(), validation.taskId(),
+                validation.claimEpoch(), "REVIEW_TARGET_STALE");
+        reopenForCorrection(current, false);
+    }
+
+    /**
+     * Reopens the lane named by a refusal of the project's validation command at integration.
+     *
+     * <p>Unlike a historical review record, a refusal is never taken for a lane that is gone: it is
+     * recorded under the project lock for the lane as it stands, so a missing or changed lane means
+     * the refusal is stale and the append fails. The lane that published the refused snapshot is
+     * advanced to the next version, as a review rejection advances it. A lane that continued it
+     * already stands at a later version with no snapshot of its own, so it is left as it is.</p>
+     *
+     * <p>The command refuses whenever an attempt runs, which may be while the lane's holder is
+     * suspended or held for recovery. Such a holder stays fenced: a refusal is no proof that its
+     * session is alive, and a continuation is admitted only for a holder still held for recovery.</p>
+     *
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private void validationRefused(ValidationRefusalPayload refusal) throws IOException {
+        WorkIntent current = intents.get(new WorkIntentId(refusal.targetIntentId()));
+        if (current == null) {
+            throw new CoordinationException("VALIDATION_REFUSAL_TARGET_STALE");
         }
+        requireLaneAsRefused(current, refusal.workGroupId(), refusal.participant(), refusal.taskId(),
+                refusal.targetIntentVersion(), "VALIDATION_REFUSAL_TARGET_STALE");
+        if (refusal.targetIntentVersion() == refusal.claimEpoch()) {
+            reopenForCorrection(current, true);
+        }
+    }
+
+    /**
+     * Rejects a refusal decided against a lane that has changed since: another group, holder, task
+     * or version, or a lane no longer announced.
+     *
+     * @throws CoordinationException with {@code staleCode} when the lane is not the one the refusal names
+     */
+    private static void requireLaneAsRefused(WorkIntent current, UUID workGroupId, String holder, UUID taskId,
+            long version, String staleCode) throws CoordinationException {
+        if (!current.workGroupId().equals(workGroupId) || !current.participant().equals(holder)
+                || !current.taskId().equals(taskId) || current.version() != version
+                || current.status() != WorkIntent.Status.ANNOUNCED) {
+            throw new CoordinationException(staleCode);
+        }
+    }
+
+    /**
+     * Gives a lane whose snapshot was refused its next version, so that it may change its files
+     * and publish again. This is the one way a refused snapshot is answered, whoever refused it.
+     *
+     * @param keepFence whether a holder that is suspended or held for recovery stays so; otherwise
+     *                  the holder becomes active, as a review rejection has always left it
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private void reopenForCorrection(WorkIntent current, boolean keepFence) throws IOException {
         WorkIntent correction = current.nextVersion();
         intents.put(correction.identity(), correction);
         Participant participant = participantHistory.get(current.participantIdentity());
         if (participant == null) {
             throw new CoordinationException("PARTICIPANT_NOT_FOUND");
         }
+        boolean fenced = participant.state() == Participant.State.SUSPENDED
+                || participant.state() == Participant.State.RECOVERY_HELD;
         participantHistory.put(current.participantIdentity(),
-                participant.withGoal(correction.goal()).withState(Participant.State.ACTIVE)
+                participant.withGoal(correction.goal())
+                        .withState(keepFence && fenced ? participant.state() : Participant.State.ACTIVE)
                         .withClaims(correction.selectors()));
     }
 

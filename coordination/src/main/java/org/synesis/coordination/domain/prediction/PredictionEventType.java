@@ -335,7 +335,12 @@ public enum PredictionEventType {
     /**
      * Records how far a lane has been handed the messages addressed to it.
      */
-    CONVERSATION_MESSAGES_DELIVERED(79);
+    CONVERSATION_MESSAGES_DELIVERED(79),
+    /**
+     * Records that the project's validation command failed on an integration candidate and which
+     * snapshot is refused for it. The refused snapshot never integrates; its lane publishes again.
+     */
+    INTEGRATION_VALIDATION_REFUSED(80);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

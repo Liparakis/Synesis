@@ -218,6 +218,24 @@ public final class CollaborationResponseMapper {
     }
 
     static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot, PredictionEventStore store) {
+        return snapshotMap(snapshot, store, false);
+    }
+
+    /**
+     * Projects a refused snapshot for the lane that owes its correction, with what the project's
+     * validation command printed. Every other view of a snapshot leaves the output out: a view of
+     * the whole collaboration lists every snapshot, and carried up to 8 KiB for each refused one
+     * on every call of every lane.
+     *
+     * @param snapshot the refused snapshot
+     * @param store    current project projection
+     * @return the snapshot as its producer is shown it
+     */
+    static Map<String, Object> rejectedSnapshotMap(TaskSnapshotRecord snapshot, PredictionEventStore store) {
+        return snapshotMap(snapshot, store, true);
+    }
+
+    private static Map<String, Object> snapshotMap(TaskSnapshotRecord snapshot, PredictionEventStore store, boolean withValidationOutput) {
         Map<String, Object> map = new LinkedHashMap<>();
         appendSnapshotIdentityFields(map, snapshot);
         map.put(NextActionKeys.WORK_GROUP_ID, snapshot.provenance().workGroupId().toString());
@@ -235,6 +253,26 @@ public final class CollaborationResponseMapper {
                 shown.put("reason", decision.reason());
             }
             map.put(NextActionKeys.REVIEW_DECISION, shown);
+        });
+        store.taskCompletionProjection().validationRefusal(snapshot.snapshotId()).ifPresent(refusal -> {
+            Map<String, Object> shown = new LinkedHashMap<>();
+            shown.put("outcome", refusal.outcome());
+            shown.put("exitCode", refusal.exitCode());
+            if (withValidationOutput) {
+                // What the command printed is the correction the lane has to make. Only whoever
+                // pumped the attempt was shown it.
+                shown.put("output", refusal.output());
+            }
+            // The lane is told what was run and where, so that it can run the same thing itself.
+            shown.put("command", refusal.command());
+            shown.put("workingDirectory", refusal.workingDirectory());
+            shown.put("attemptId", refusal.attemptId());
+            shown.put("candidateCommit", refusal.candidateCommit());
+            // Counts the repair now owed with the refusals still open to the lane. After the last
+            // one a further failure refuses nobody and goes to the operator, so the lane is told
+            // when this is its last.
+            shown.put("repairsLeft", 1 + store.taskCompletionProjection().validationRepairsLeft(snapshot.taskId(), snapshot.provenance().authorityLineageId()));
+            map.put("validationFailure", shown);
         });
         return map;
     }

@@ -57,6 +57,45 @@ It is shown to a lane that waits on integration, including the `finish_lane`
 that published its snapshot, and not to a lane that still has work of its own.
 The published work is kept and is integrated when the request closes.
 
+A project may declare a validation command (`synesis project validation`). It
+runs on the combined work of an integration attempt before the project's branch
+moves. When it exits non-zero, the snapshot added last to the attempt is refused
+and never integrates: its state is `VALIDATION_REFUSED`, its lane is reopened at
+the next claim epoch with its claims (a lane that had already continued it
+stands past that epoch and is left as it is; a holder that is suspended or held
+for recovery stays so), and the call that ran the attempt is
+answered `blocked` / `integration_failed` / `retry` with `phase: integration`,
+`validation` and `refusedSnapshotId`. The lane's next `get_next_action` is
+`REVISION_REQUIRED`, as after a rejected review, and every answer carries
+`rejectedSnapshot` until the lane publishes again. A refused snapshot has
+`validationFailure` wherever it is shown: `outcome`, `exitCode`, `command`
+(the argument vector that was run, as the text of a JSON array),
+`workingDirectory` (relative to the project root), `attemptId`,
+`candidateCommit` and `repairsLeft`. `command` and `workingDirectory` are cut
+to 8 KiB. `repairsLeft` counts the repair now owed: 2 after the first refusal,
+1 after the second. `output` (the end of what the command printed, standard
+output then standard error, at most 8 KiB) is added only in the
+`rejectedSnapshot` shown to the lane that owes the correction, not in the
+`snapshots` list of the collaboration details or any other view of the
+snapshot. The lane
+corrects its own claimed files; another lane's files are asked for with
+`send_message` or a contract change request. A validation refusal makes no
+later revision review-required; a project with mandatory review reviews the
+repaired snapshot by its ordinary rules.
+
+When the command fails while a lane with a snapshot in the attempt has used its
+two repairs, when it timed out or could not be started, or when the pass that
+ran it died twice in a row, nothing is refused and Synesis raises an operator
+request with condition `integration_validation_failing`. Its `evidence` is the
+end of what the command printed. While it is open no integration attempt is
+started by an agent's call, so the command is not run again on every poll, and
+a call that would start one is answered `blocked` / `operator_required`.
+It closes when `synesis operator recheck` runs the command and it passes or
+refuses a snapshot, when the project declares no command, or when no snapshot
+is waiting to be integrated. A recheck that fails with another summary or
+output closes it and raises a new request, so the open one shows the latest
+output.
+
 An internal failure while binding a session, announcing, finishing or
 cancelling a lane, publishing or validating an implementation, or integrating
 is answered `failed` with `failurePoint`: the identifier of an entry in

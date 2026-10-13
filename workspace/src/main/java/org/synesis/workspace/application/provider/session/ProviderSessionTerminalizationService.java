@@ -167,7 +167,7 @@ public final class ProviderSessionTerminalizationService {
             TaskCompletionState state = store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE);
             if (state == TaskCompletionState.REVIEW_PENDING) {
                 blockers.add("PENDING_REVIEW");
-            } else if (state == TaskCompletionState.REVIEW_REJECTED) {
+            } else if (state.refused()) {
                 blockers.add("REJECTED_SNAPSHOT_CONTINUATION");
             } else if (state != TaskCompletionState.INTEGRATED) {
                 blockers.add("UNRESOLVED_SNAPSHOT");

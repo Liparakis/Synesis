@@ -298,16 +298,17 @@ final class LaneCompletionProjection {
     }
 
     /**
-     * Returns whether this lane corrects a snapshot of an earlier epoch that review rejected.
+     * Returns whether this lane corrects a snapshot of an earlier epoch that was refused, by
+     * review or by the project's validation command.
      *
      * @param store  current project projection
      * @param intent the lane's intent
-     * @return {@code true} if a rejected predecessor snapshot exists for the same lane and lineage
+     * @return {@code true} if a refused predecessor snapshot exists for the same lane and lineage
      */
     private static boolean hasRejectedPredecessor(PredictionEventStore store, WorkIntent intent) {
         return store.taskCompletionProjection().allSnapshots().stream()
                 .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().laneId().equals(intent.intentId()) && snapshot.provenance().authorityLineageId()
-                        .equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version() && snapshotStateOf(store, snapshot) == TaskCompletionState.REVIEW_REJECTED);
+                        .equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version() && snapshotStateOf(store, snapshot).refused());
     }
 
     /**

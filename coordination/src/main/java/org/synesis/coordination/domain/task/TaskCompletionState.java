@@ -11,7 +11,8 @@ package org.synesis.coordination.domain.task;
  * {@code WAITING_FOR_DEPENDENCIES}
  * &rarr; {@code READY_FOR_INTEGRATION} &rarr; {@code INTEGRATING} &rarr; {@code INTEGRATED}. A rejected snapshot is
  * immutable history; a
- * later same-lineage correction publishes a distinct snapshot for the next lane revision. Failure/terminal states:
+ * later same-lineage correction publishes a distinct snapshot for the next lane revision. The same holds for a snapshot
+ * the project's validation command refused at integration ({@code VALIDATION_REFUSED}). Failure/terminal states:
  * {@code INTEGRATION_FAILED}, {@code CANCELLED}, {@code ABANDONED}.
  *
  * @since 1.0
@@ -69,6 +70,13 @@ public enum TaskCompletionState {
     REVIEW_REJECTED("review_rejected"),
 
     /**
+     * The project's validation command failed on an integration candidate that ended with this
+     * snapshot. Like a rejected snapshot it is permanently ineligible for integration and its
+     * lane publishes a correction, but no reviewer decided it and it makes nothing review-required.
+     */
+    VALIDATION_REFUSED("validation_refused"),
+
+    /**
      * Immutable snapshot received the exact durable acceptance required for integration.
      */
     REVIEW_ACCEPTED("review_accepted"),
@@ -120,6 +128,16 @@ public enum TaskCompletionState {
      */
     public boolean awaitsIntegration() {
         return this == SNAPSHOT_READY || this == WAITING_FOR_DEPENDENCIES || this == READY_FOR_INTEGRATION || this == INTEGRATING || this == INTEGRATION_PENDING || this == REVIEW_ACCEPTED;
+    }
+
+    /**
+     * Tells whether this snapshot was refused for good and its lane owes a correction, whoever
+     * refused it: a reviewer, or the project's validation command at integration.
+     *
+     * @return true for a snapshot that never integrates and is answered by a later revision
+     */
+    public boolean refused() {
+        return this == REVIEW_REJECTED || this == VALIDATION_REFUSED;
     }
 
     /**

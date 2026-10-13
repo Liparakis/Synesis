@@ -6,15 +6,19 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+
+import org.synesis.coordination.persistence.ProjectAppendLock;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.projectrecord.domain.ProjectConfig;
 
+import org.synesis.workspace.application.control.ControlBranchAdvancementService;
 import org.synesis.workspace.application.project.GitRepositoryFacts;
 import org.synesis.workspace.application.project.ManagedAgentsSection;
 import org.synesis.workspace.application.project.ProjectCreateResult;
@@ -23,6 +27,8 @@ import org.synesis.workspace.application.project.ProjectInitResult;
 import org.synesis.workspace.application.project.ProjectInitStatus;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.ProjectMetadataCodec;
+import org.synesis.workspace.application.project.ProjectValidationChange;
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.filesystem.ProjectMetadataStorage;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
@@ -395,18 +401,103 @@ public final class ProjectApplicationService {
             if (!Files.exists(metadata)) {
                 throw new ProjectApplicationException("NOT_FOUND", "An initialized project copy is required for an explicit fork");
             }
-            readLocation(root, synesis, metadata);
+            ProjectLocation copied = readLocation(root, synesis, metadata);
             if (hasReplicaPrivateState(synesis)) {
                 throw new ProjectApplicationException("PRIVATE_STATE_PRESENT", "Fork input contains private Synesis state");
             }
             ProjectIdentity forkIdentity = new ProjectIdentity(UUID.randomUUID(), Instant.now());
-            ProjectMetadataCodec.write(metadata, forkIdentity, true);
+            // A fork is a new project with the policy of the one it was copied from. Written with
+            // the identity alone, it lost its validation command and its review policy unnoticed.
+            ProjectMetadataCodec.rewrite(copied, forkIdentity, copied.validation(), copied.validationAlsoInLane());
             ensureMetadataStorage(root);
             return initReplica(root, forkIdentity, configureProviderMcp);
         } catch (ProjectApplicationException failure) {
             throw failure;
         } catch (Exception failure) {
             throw new ProjectApplicationException("CONFLICT", "Could not create project fork", failure);
+        }
+    }
+
+    /**
+     * Declares the validation command of an initialized project, replacing any it declared.
+     *
+     * <p>Only the metadata file is rewritten; the project's identity and review policy are kept.
+     * Declaring what the project already declares changes nothing. The whole operation holds the
+     * project append lock, which integration holds for a whole attempt, so the command an attempt
+     * runs and the head it advances are never changed under it.</p>
+     *
+     * <p>Where Git tracks the file, the rewrite is committed, that one path alone: integration
+     * refuses a checkout that holds an uncommitted change (ADR-0091), so a rewrite left for the
+     * owner to commit stopped every integration until it was. For the same reason a checkout that
+     * already holds changes Synesis did not make is refused with
+     * {@code CONTROL_CHECKOUT_FOREIGN_CHANGES}, by the rule integration uses, and when the commit
+     * fails the file is put back as it was. Untracked files a provider installs do not count.
+     * Outside Git, or where Git does not track the file, the file is rewritten and nothing is
+     * committed.</p>
+     *
+     * @param projectRoot initialized project directory
+     * @param validation  command that must pass before work is integrated
+     * @param alsoInLane  whether the command also runs in a lane alone before its finish is published
+     * @return what was done, with the project as its metadata now reads
+     * @throws ProjectApplicationException if the project is not initialized, the checkout holds foreign changes, or
+     *                                     the command cannot be written or committed
+     * @throws IOException                 if repository-private exclusions cannot be maintained
+     */
+    public ProjectValidationChange setValidation(Path projectRoot, ProjectCommandSpec validation, boolean alsoInLane) throws ProjectApplicationException, IOException {
+        return rewriteValidation(projectRoot, Objects.requireNonNull(validation, "validation"), alsoInLane);
+    }
+
+    /**
+     * Removes the validation command of an initialized project, keeping its identity and review
+     * policy, under the conditions {@link #setValidation} states.
+     *
+     * @param projectRoot initialized project directory
+     * @return what was done, with the project as its metadata now reads
+     * @throws ProjectApplicationException if the project is not initialized, the checkout holds foreign changes, or
+     *                                     its metadata cannot be written or committed
+     * @throws IOException                 if repository-private exclusions cannot be maintained
+     */
+    public ProjectValidationChange clearValidation(Path projectRoot) throws ProjectApplicationException, IOException {
+        return rewriteValidation(projectRoot, null, false);
+    }
+
+    private ProjectValidationChange rewriteValidation(Path projectRoot, ProjectCommandSpec validation, boolean alsoInLane) throws ProjectApplicationException, IOException {
+        Path coordination = require(projectRoot).coordinationDirectory();
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(coordination)) {
+            if (!lock.isHeld()) {
+                throw new ProjectApplicationException("PROJECT_WRITE_FAILED", "The project lock was lost before the project file was written");
+            }
+            // Read under the lock: what is declared is compared, not the text of the file, which
+            // another writer or a hand may have laid out differently.
+            ProjectLocation current = require(projectRoot);
+            if (Objects.equals(current.validation(), validation) && current.validationAlsoInLane() == alsoInLane) {
+                return new ProjectValidationChange(current, false, "");
+            }
+            String file = SYNESIS_DIRECTORY + "/" + PROJECT_FILE;
+            if (!GitRepositoryFacts.hasGitMetadata(current.root()) || GitProcessRunner.runResult(current.root(), "ls-files", "--error-unmatch", "--", file).exitCode() != 0) {
+                return new ProjectValidationChange(ProjectMetadataCodec.rewrite(current, current.identity(), validation, alsoInLane), true, "");
+            }
+            List<String> foreign = ControlBranchAdvancementService.foreignChanges(current.root());
+            if (!foreign.isEmpty()) {
+                throw new ProjectApplicationException("CONTROL_CHECKOUT_FOREIGN_CHANGES",
+                        "The project checkout holds changes Synesis did not make, so the project file cannot be committed. Commit them or remove them first: " + String.join("; ", foreign));
+            }
+            byte[] previous = Files.readAllBytes(current.metadataFile());
+            ProjectLocation written;
+            try {
+                written = ProjectMetadataCodec.rewrite(current, current.identity(), validation, alsoInLane);
+                GitProcessRunner.run(current.root(), "commit", "--no-verify", "--only", "-m", "Synesis project validation policy", "--", file);
+            } catch (IOException notCommitted) {
+                // Left rewritten and uncommitted, the file is a foreign change of the checkout:
+                // nothing would be integrated, and this command would refuse to run again.
+                Files.write(current.metadataFile(), previous);
+                throw new ProjectApplicationException("PROJECT_COMMIT_FAILED", "The project file could not be committed and was put back as it was", notCommitted);
+            }
+            return new ProjectValidationChange(written, true, GitProcessRunner.run(current.root(), "rev-parse", "--short", "HEAD"));
+        } catch (ProjectApplicationException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new ProjectApplicationException("PROJECT_WRITE_FAILED", "Project validation could not be written", failure);
         }
     }
 

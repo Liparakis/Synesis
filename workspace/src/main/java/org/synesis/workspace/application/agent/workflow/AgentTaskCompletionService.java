@@ -234,7 +234,7 @@ public final class AgentTaskCompletionService {
     private static AgentResponse validateSnapshotEvidence(CompleteTaskRequest request, WorkIntent intent, PredictionEventStore store, String participantHandle) {
         boolean correctionRequired = store.taskCompletionProjection().allSnapshots().stream()
                 .anyMatch(snapshot -> snapshot.taskId().equals(intent.taskId()) && snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId()) && snapshot.provenance().claimEpoch() < intent.version()
-                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE) == TaskCompletionState.REVIEW_REJECTED);
+                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(TaskCompletionState.ACTIVE).refused());
         if (!request.hasAnyEvidence() && !correctionRequired) {
             return null;
         }
@@ -435,8 +435,11 @@ public final class AgentTaskCompletionService {
             // Project-owned validation is a server gate. It runs through the
             // same direct argv primitive exposed by run_command, against the
             // authenticated lane worktree, before any snapshot can become
-            // prepared or visible to integration.
-            if (location.validation() != null) {
+            // prepared or visible to integration. A lane whose tests need a
+            // sibling's code cannot pass it alone, so it runs here only when
+            // the project asks for it; it always runs on the combined tree
+            // before the control branch moves.
+            if (location.validation() != null && location.validationAlsoInLane()) {
                 prePublicationValidation = processExecutor.execute(ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
                 if (!prePublicationValidation.succeeded()) {
                     Map<String, Object> result = new LinkedHashMap<>();
@@ -751,7 +754,7 @@ public final class AgentTaskCompletionService {
         }
 
         ExecutionResult validation = null;
-        if (location.validation() != null) {
+        if (location.validation() != null && location.validationAlsoInLane()) {
             try {
                 validation = processExecutor.execute(ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
             } catch (Exception failure) {

@@ -69,6 +69,20 @@ final class IntegrationAttemptLedger {
         return activeAttemptId == null ? Optional.empty() : Optional.ofNullable(attempts.get(activeAttemptId));
     }
 
+    /**
+     * Returns the attempt begun just before the given one, as it ended.
+     */
+    Optional<IntegrationAttemptRecord> before(IntegrationAttemptId id) {
+        IntegrationAttemptRecord previous = null;
+        for (Map.Entry<IntegrationAttemptId, IntegrationAttemptRecord> attempt : attempts.entrySet()) {
+            if (attempt.getKey().equals(id)) {
+                return Optional.ofNullable(previous);
+            }
+            previous = attempt.getValue();
+        }
+        return Optional.empty();
+    }
+
     String lastControlHeadAdvanced() {
         return lastControlHeadAdvanced == null ? null : lastControlHeadAdvanced.value();
     }

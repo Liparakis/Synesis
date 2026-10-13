@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.CommitId;
+import org.synesis.coordination.domain.identity.IntegrationAttemptId;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.TaskId;
@@ -18,6 +19,7 @@ import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.integration.IntegrationAttemptRecord;
+import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -26,6 +28,12 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * Deterministic task completion and integration projection over the shared event sequence.
  */
 public final class TaskCompletionProjection {
+
+    /**
+     * How many times one lane is asked to repair a snapshot the project's validation command
+     * refused. A lane that still fails after them is not asked again: the operator is.
+     */
+    public static final int VALIDATION_REPAIRS = 2;
 
     private static final String REVIEW_ACCEPTANCE_REQUIRED = "REVIEW_ACCEPTANCE_REQUIRED";
 
@@ -37,6 +45,8 @@ public final class TaskCompletionProjection {
     private final Map<TaskId, CompletionPreparedPayload> prepared = new LinkedHashMap<>();
     private final Map<PreparedRevisionKey, CompletionPreparedPayload> preparedByRevision = new LinkedHashMap<>();
     private final Map<SnapshotId, TaskCompletionState> integrationPriorStates = new LinkedHashMap<>();
+    /** Why each snapshot the project's validation command refused was refused, in the order recorded. */
+    private final Map<SnapshotId, ValidationRefusalPayload> validationRefusals = new LinkedHashMap<>();
 
     /**
      * Creates an empty task completion projection.
@@ -59,6 +69,7 @@ public final class TaskCompletionProjection {
         prepared.putAll(source.prepared);
         preparedByRevision.putAll(source.preparedByRevision);
         integrationPriorStates.putAll(source.integrationPriorStates);
+        validationRefusals.putAll(source.validationRefusals);
     }
 
     /**
@@ -70,13 +81,14 @@ public final class TaskCompletionProjection {
     }
 
     /**
-     * Gate every path into the integrated state passes. A rejected snapshot never integrates and fails with the
-     * caller's {@code rejectedCode}; otherwise {@code reviewSatisfied}, computed by the caller because each path
-     * accepts a different set of prior states, must hold.
+     * Gate every path into the integrated state passes. A refused snapshot, rejected by review or by the project's
+     * validation command, never integrates and fails with the caller's {@code rejectedCode}; otherwise
+     * {@code reviewSatisfied}, computed by the caller because each path accepts a different set of prior states,
+     * must hold.
      */
     private static void requireIntegrable(TaskCompletionState current, boolean reviewSatisfied, String rejectedCode)
             throws CoordinationException {
-        if (current == TaskCompletionState.REVIEW_REJECTED) {
+        if (current.refused()) {
             throw new CoordinationException(rejectedCode);
         }
         if (!reviewSatisfied) {
@@ -118,6 +130,7 @@ public final class TaskCompletionProjection {
             case TASK_WAITING_FOR_DEPENDENCIES -> processWaitingForDependencies(event);
             case INTEGRATION_ATTEMPT_STARTED -> processAttemptStarted(event);
             case INTEGRATION_ATTEMPT_FAILED -> processAttemptFailed(event);
+            case INTEGRATION_VALIDATION_REFUSED -> processValidationRefused(event);
             case INTEGRATION_CONFLICTED -> processAttemptConflicted(event);
             case INTEGRATION_BLOCKED -> processIntegrationBlocked(event);
             case REPAIR_REQUIRED -> processRepairRequired(event);
@@ -432,12 +445,60 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Returns why the project's validation command refused a snapshot.
+     *
+     * @param snapshotId snapshot identity
+     * @return the recorded refusal, or empty when the command did not refuse this snapshot
+     */
+    public synchronized Optional<ValidationRefusalPayload> validationRefusal(String snapshotId) {
+        return snapshotId == null ? Optional.empty() : Optional.ofNullable(validationRefusals.get(new SnapshotId(snapshotId)));
+    }
+
+    /**
+     * Counts the snapshots of one task and authority lineage that the project's validation command
+     * refused. A lane continued by a successor keeps its lineage, so its refusals are counted
+     * whichever session holds it now.
+     *
+     * @param taskId             task identity
+     * @param authorityLineageId authority lineage of the lane
+     * @return the number of recorded refusals
+     */
+    public synchronized int validationRefusals(UUID taskId, UUID authorityLineageId) {
+        return (int) validationRefusals.values().stream()
+                .filter(refusal -> refusal.taskId().equals(taskId) && refusal.authorityLineageId().equals(authorityLineageId))
+                .count();
+    }
+
+    /**
+     * Tells how many more times the project's validation command may refuse a snapshot of one task
+     * and authority lineage. Each refusal asks the lane for one repair, {@link #VALIDATION_REPAIRS}
+     * in all; at zero a further failure refuses nothing and is the operator's.
+     *
+     * @param taskId             task identity
+     * @param authorityLineageId authority lineage of the lane
+     * @return the refusals still open to the lane, never negative
+     */
+    public synchronized int validationRepairsLeft(UUID taskId, UUID authorityLineageId) {
+        return Math.max(0, VALIDATION_REPAIRS - validationRefusals(taskId, authorityLineageId));
+    }
+
+    /**
      * Returns the active integration attempt, if any.
      *
      * @return active attempt when present
      */
     public synchronized Optional<IntegrationAttemptRecord> activeIntegrationAttempt() {
         return attempts.active();
+    }
+
+    /**
+     * Returns the integration attempt begun just before the given one, as it ended.
+     *
+     * @param attemptId attempt whose predecessor is asked for
+     * @return the preceding attempt, or empty when the attempt is unknown or was the first
+     */
+    public synchronized Optional<IntegrationAttemptRecord> integrationAttemptBefore(String attemptId) {
+        return attemptId == null ? Optional.empty() : attempts.before(new IntegrationAttemptId(attemptId));
     }
 
     /**
@@ -564,7 +625,7 @@ public final class TaskCompletionProjection {
             throw new CoordinationException("REVIEW_SNAPSHOT_BINDING_MISMATCH");
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-        if (current == TaskCompletionState.REVIEW_ACCEPTED || current == TaskCompletionState.REVIEW_REJECTED
+        if (current == TaskCompletionState.REVIEW_ACCEPTED || current.refused()
                 || current == TaskCompletionState.INTEGRATED) {
             throw new CoordinationException("REVIEW_DECISION_ALREADY_RECORDED");
         }
@@ -631,6 +692,34 @@ public final class TaskCompletionProjection {
             }
             setSnapshotState(snapshot, state);
         }
+    }
+
+    /**
+     * Applies the refusal of one snapshot by the project's validation command.
+     *
+     * <p>The refusal is taken only for a snapshot that could still have integrated. The attempt that failed has
+     * ended by then and returned its snapshots to the state they had, so an eligible state is what a lawful
+     * refusal finds; a snapshot refused twice, or one that has integrated meanwhile, is not refused again.</p>
+     *
+     * @param event event to apply
+     * @throws IOException when payload validation or durable I/O fails
+     */
+    private void processValidationRefused(PredictionEvent event) throws IOException {
+        ValidationRefusalPayload payload = ValidationRefusalPayload.decode(event.payload());
+        TaskSnapshotRecord snapshot = snapshotsById.get(payload.snapshotIdentity());
+        if (snapshot == null) {
+            throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_UNKNOWN");
+        }
+        if (!snapshot.taskId().equals(payload.taskId()) || !snapshot.provenance().workGroupId()
+                .equals(payload.workGroupId()) || !snapshot.provenance().authorityLineageId()
+                .equals(payload.authorityLineageId()) || snapshot.provenance().claimEpoch() != payload.claimEpoch()) {
+            throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_BINDING_MISMATCH");
+        }
+        if (!isIntegrationEligibleState(snapshotStates.get(snapshot.snapshotIdentity()))) {
+            throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_NOT_ELIGIBLE");
+        }
+        setSnapshotState(snapshot, TaskCompletionState.VALIDATION_REFUSED);
+        validationRefusals.put(snapshot.snapshotIdentity(), payload);
     }
 
     /**
@@ -764,8 +853,15 @@ public final class TaskCompletionProjection {
 
     /**
      * Updates the lifecycle state of the identified snapshot.
+     *
+     * <p>A refused snapshot keeps its state whatever comes later. An attempt that ends, or a block
+     * or conflict that names it, would otherwise return it to a state that integrates, and the
+     * content that was refused would reach the control branch.</p>
      */
     private void setSnapshotState(TaskSnapshotRecord snapshot, TaskCompletionState state) {
+        if (snapshotStates.get(snapshot.snapshotIdentity()).refused()) {
+            return;
+        }
         snapshotStates.put(snapshot.snapshotIdentity(), state);
         if (latestSnapshot(snapshot.taskIdentity()).map(latest -> latest.snapshotIdentity()
                 .equals(snapshot.snapshotIdentity())).orElse(false)) {

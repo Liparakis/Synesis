@@ -122,7 +122,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<java.util.UUID> waitingLineages = store.taskCompletionProjection().lineagesAwaitingIntegration();
         // Only a request that stops integration holds a lane. An absent consumer's own lane is
         // the one that has to come back for that request to close, and must not be held by it.
-        boolean integrationStopped = store.operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.CONTROL_CHECKOUT_FOREIGN_CHANGES).isPresent();
+        // A validation command that fails with no lane left to answer for it stops integration
+        // as a dirty checkout does: nothing integrates until the operator has acted.
+        boolean integrationStopped = store.operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.CONTROL_CHECKOUT_FOREIGN_CHANGES).isPresent()
+                || store.operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.INTEGRATION_VALIDATION_FAILING).isPresent();
         java.util.Set<String> heldProviders = !integrationStopped ? java.util.Set.of() : openLaneProviders.stream()
                 .filter(provider -> store.collaborationProjection().activeIntents().stream().filter(intent -> intent.provider().equals(provider))
                         .allMatch(intent -> waitingLineages.contains(intent.authorityLineageId())))

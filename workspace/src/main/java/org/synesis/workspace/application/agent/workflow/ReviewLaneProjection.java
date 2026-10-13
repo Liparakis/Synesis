@@ -160,7 +160,7 @@ final class ReviewLaneProjection {
             }
             TaskSnapshotRecord rejected = latestRejectedSnapshot(store, intent);
             if (rejected != null) {
-                return CollaborationResponseMapper.snapshotMap(rejected, store);
+                return CollaborationResponseMapper.rejectedSnapshotMap(rejected, store);
             }
         }
         return null;
@@ -179,8 +179,9 @@ final class ReviewLaneProjection {
     }
 
     /**
-     * Finds the most recent rejected snapshot of an earlier claim epoch in the same authority
-     * lineage.
+     * Finds the most recent refused snapshot of an earlier claim epoch in the same authority
+     * lineage: one a reviewer rejected, or one the project's validation command refused at
+     * integration. Either way the lane owes a correction and is shown what was refused.
      *
      * @param store  current project projection
      * @param intent the producer intent being corrected
@@ -189,7 +190,7 @@ final class ReviewLaneProjection {
     private static TaskSnapshotRecord latestRejectedSnapshot(PredictionEventStore store, WorkIntent intent) {
         return store.taskCompletionProjection().allSnapshots().stream().filter(snapshot -> snapshot.taskId().equals(intent.taskId()))
                 .filter(snapshot -> snapshot.provenance().authorityLineageId().equals(intent.authorityLineageId())).filter(snapshot -> snapshot.provenance().claimEpoch() < intent.version())
-                .filter(snapshot -> snapshotStateOf(store, snapshot) == TaskCompletionState.REVIEW_REJECTED).max(Comparator.comparingLong(snapshot -> snapshot.provenance().claimEpoch())).orElse(null);
+                .filter(snapshot -> snapshotStateOf(store, snapshot).refused()).max(Comparator.comparingLong(snapshot -> snapshot.provenance().claimEpoch())).orElse(null);
     }
 
     /**
@@ -229,7 +230,7 @@ final class ReviewLaneProjection {
         result.put(NextActionKeys.STATE, NextActionProtocol.STATE_REVISION_REQUIRED);
         result.put("revisionRequired", true);
         result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
-        result.put("rejectedSnapshot", CollaborationResponseMapper.snapshotMap(rejected, store));
+        result.put("rejectedSnapshot", CollaborationResponseMapper.rejectedSnapshotMap(rejected, store));
         result.put(NextActionKeys.LATEST_REJECTED_SNAPSHOT_ID, rejected.snapshotId());
         result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
         result.put(NextActionKeys.CLAIM_EPOCH, intent.version());

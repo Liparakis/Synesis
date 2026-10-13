@@ -11,6 +11,7 @@ synesis
   provider list|install|status|uninstall|migrate <provider>
   provider uninstall codex --global
   project create
+  project validation set|show|clear
   constraint create
   sync host|join
   check-action
@@ -101,6 +102,56 @@ command out of the project checkout (ADR-0091). Neither provider's policy is
 ever loosened outside the Synesis tools. Agent output is kept as log files under the Synesis state directory,
 outside the project.
 
+## Project validation
+
+A project can declare one command that must pass before its work is integrated.
+It is project policy, kept as `validation` in `.synesis/project.json`, and it is
+set here by whoever has authority over the project, never by an agent.
+
+- `synesis project validation set [--timeout <seconds>] [--directory <dir>] [--also-in-lane] -- <argv>...`
+  declares the command, replacing any the project declared. Everything after
+  `--` is the executable and its arguments; no shell is used. `--timeout`
+  defaults to 120 seconds and may be at most 3600. `--directory` is relative to
+  the project root and defaults to `.`.
+- `synesis project validation show` prints the declared command.
+- `synesis project validation clear` removes it.
+
+Each prints `VALIDATION=DECLARED` with `VALIDATION_ARGV` (a JSON array),
+`VALIDATION_DIRECTORY`, `VALIDATION_TIMEOUT_SECONDS` and
+`VALIDATION_ALSO_IN_LANE`, or `VALIDATION=NONE`. `set` and `clear` rewrite the
+project file, keep its identity and review policy, and print
+`PROJECT_FILE_CHANGED=.synesis/project.json`. When the project already declares
+what was asked they change nothing and do not print that line.
+
+Where Git tracks the project file, `set` and `clear` also commit it, that one
+file alone, and print `PROJECT_FILE_COMMITTED=<short commit>`: nothing is
+integrated into a checkout that holds an uncommitted change. They are refused
+with `ERROR=CONTROL_CHECKOUT_FOREIGN_CHANGES` when the checkout already holds
+changes Synesis did not make, by the rule integration itself uses, so the
+untracked files a provider installs (`.claude/`, `.codex/`, `.mcp.json`,
+`AGENTS.md`) do not count. When the commit fails, the file is put back as it
+was and the command reports `ERROR=PROJECT_COMMIT_FAILED`. Outside a Git
+repository, or where Git does not track the file, the file is rewritten and
+nothing is committed. Both commands wait for an integration attempt that is
+running, for at most two seconds, and are refused when it runs longer: run them
+again when it has ended.
+
+The command runs on the combined work: the snapshots of an integration attempt
+applied to the project's head in a separate worktree, before the project's
+branch moves. With `--also-in-lane` it also runs in each lane alone before that
+lane's finish is published. That is off by default, because a lane whose tests
+need another lane's code cannot pass the command alone.
+
+When the command exits non-zero on the combined work, the snapshot added last
+to the attempt is refused. Its lane is reopened and shown what the command
+printed, corrects its own files and publishes again; the other snapshots are
+tried without it. A lane is asked to repair twice. When the command fails while
+a lane with a snapshot in the attempt has used its two repairs, when it timed
+out or could not be started, or when the pass that ran it died twice in a row,
+nothing is refused and Synesis raises an operator request with condition
+`integration_validation_failing`. The command runs while the project's event
+log is locked, so other writers wait or are refused for as long as it runs.
+
 ## Operator requests
 
 When only someone with authority over the project can clear what blocks it,
@@ -108,7 +159,18 @@ Synesis records an operator request (ADR-0091). It raises one for a project
 checkout holding changes Synesis did not make (nothing is integrated into such
 a checkout, and the work that is finished waits), and for a lane bound to
 another lane's contract that owes an action while its agent has not returned
-(ADR-0092): start the agents again so one continues that lane.
+(ADR-0092): start the agents again so one continues that lane. It raises one
+with condition `integration_validation_failing` when the project's validation
+command fails on the work waiting to be integrated and no lane is asked to
+repair it. Nothing is integrated while that request is open and the command is
+not run again by the agents' own calls. Change the command, change the project
+or end the lane, then run `synesis operator recheck`: it is the one pass that
+runs the command again. The request closes when the command then passes or
+refuses a snapshot, when the project declares no command, or when no snapshot
+is waiting; after a lane is ended, the pass that blocks its snapshot is
+followed by the pass that closes the request. A recheck that fails in another
+way, or prints something else, closes the request and raises a new one, so the
+open request always shows the latest output.
 
 `synesis operator list` prints the open requests, each with a `SUMMARY` and its
 `EVIDENCE` lines exactly as the refusing tool reported them (`--all` adds the
