@@ -27,7 +27,6 @@ import static org.synesis.workspace.application.provider.ProviderWorktreeGitFact
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.sameFilesystemObject;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.sameGitCommonDirectory;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.sameOrDescendant;
-import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.validCommit;
 
 /**
  * Checks that a provider event is running in exactly the worktree its binding was assigned, and
@@ -94,13 +93,14 @@ final class ProviderWorkspaceVerification {
             if (!sameGitCommonDirectory(root, assigned, binding)) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
-            if (!binding.branch().equals(git(assigned, "symbolic-ref", "--short", "HEAD"))) {
+            ProviderWorktreeGitFacts.Head head = ProviderWorktreeGitFacts.head(assigned);
+            if (!binding.branch().equals(head.branch())) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
-            if (!isBaseAncestor(assigned, binding.baseCommit())) {
+            if (!isBaseAncestor(assigned, binding.baseCommit(), head.commit())) {
                 return new WorkspaceCheck(false, "WORKSPACE_BINDING_MISMATCH");
             }
-            String currentWorkerHead = git(assigned, "rev-parse", "HEAD");
+            String currentWorkerHead = head.commit();
             if (!binding.baseCommit().equals(currentWorkerHead) && (!allowCommittedGeneration || !isWorktreeClean(binding))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }
@@ -176,14 +176,14 @@ final class ProviderWorkspaceVerification {
             }
 
             // 7. Branch matches recorded session branch
-            String currentBranch = git(assigned, "symbolic-ref", "--short", "HEAD");
-            if (!binding.branch().equals(currentBranch)) {
+            ProviderWorktreeGitFacts.Head head = ProviderWorktreeGitFacts.head(assigned);
+            if (!binding.branch().equals(head.branch())) {
                 return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, binding);
             }
 
             // 8. HEAD is valid commit derived from base commit
-            String headCommit = git(assigned, "rev-parse", "HEAD");
-            if (!validCommit(headCommit) || !isBaseAncestor(assigned, binding.baseCommit())) {
+            String headCommit = head.commit();
+            if (!isBaseAncestor(assigned, binding.baseCommit(), headCommit)) {
                 return new WorkspaceVerificationResult(false, "WORKSPACE_BINDING_MISMATCH", null, binding);
             }
 
