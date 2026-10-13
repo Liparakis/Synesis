@@ -156,7 +156,11 @@ public final class AgentRunController {
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
-                        if (!agent.resumable(request.maxResumesPerAgent()) || !observation.hasOpenLane(agent.spec.provider())) {
+                        // Only an agent whose own lane is open has something to come back to. Resumed
+                        // for another lane's progress, an agent with nothing left looked for work,
+                        // announced lanes to verify what was already integrated, and each of those
+                        // woke the others: 38 resumes in a run whose work was done.
+                        if (!agent.resumable(request.maxResumesPerAgent()) || !observation.holdsOpenLane(agent.spec.provider(), agent.connectionId)) {
                             continue;
                         }
                         if (observation.heldByOperator(agent.spec.provider())) {
@@ -225,7 +229,8 @@ public final class AgentRunController {
             // stall or a resume limit would send the reader to the agents for the cause.
             return Outcome.NEEDS_OPERATOR;
         }
-        boolean limitReached = agents.stream().anyMatch(agent -> agent.resumes >= maxResumes && observation.hasOpenLane(agent.spec.provider()) && observation.progressedSince(agent.stoppedAtSequence));
+        boolean limitReached = agents.stream()
+                .anyMatch(agent -> agent.resumes >= maxResumes && observation.holdsOpenLane(agent.spec.provider(), agent.connectionId) && observation.progressedSince(agent.stoppedAtSequence));
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
     }
 
@@ -475,6 +480,19 @@ public final class AgentRunController {
          */
         default boolean heldByOperator(String provider) {
             return false;
+        }
+
+        /**
+         * Reports whether the session behind one connection holds a lane that is still open. An
+         * agent is resumed for its own lane only: one that never held a lane, or whose lane has
+         * ended or was taken over, has nothing to continue.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's last process
+         * @return {@code true} while that session's lane is open
+         */
+        default boolean holdsOpenLane(String provider, String connectionInstanceId) {
+            return hasOpenLane(provider);
         }
 
         /**

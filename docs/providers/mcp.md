@@ -135,7 +135,9 @@ Messages are kept in the project's coordination log and are not encrypted.
 
 A message changes no state. No lane state, gate or next action is derived from
 one, and what agents agree takes effect only when it is recorded through the
-typed protocol. Messages addressed to the caller's lane arrive under `messages`
+typed protocol. The note delivered with each batch asks for one short
+answer to a direct question about files the reader's lane claims, and for
+nothing else; the answer to a send tells the asker to carry on and not to wait. Messages addressed to the caller's lane arrive under `messages`
 in a `get_next_action` result (`notice`, `unread`, `moreUnread`), beside the
 next action and never in place of it, at most ten at a time and at least once:
 a batch counts as arrived when the same connection calls again. The caller's

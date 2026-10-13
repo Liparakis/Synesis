@@ -107,6 +107,19 @@ class McpConversationTest {
     }
 
     @Test
+    void theNoteWithAMessageAsksForOneShortAnswerToADirectQuestionAndTheAnswerToASendTellsAnAskerToCarryOn() {
+        Map<String, Object> sent = call(first, "send_message", Map.of("to", List.of("second.py"), "text", "does listing create the store file?"));
+        String note = String.valueOf(result(sent).get("note"));
+        assertTrue(note.contains("do not wait"), note);
+
+        Map<String, Object> messages = (Map<String, Object>) result(call(second, "get_next_action", Map.of())).get("messages");
+
+        String notice = String.valueOf(messages.get("notice"));
+        assertTrue(notice.contains("answer it once"), notice);
+        assertTrue(notice.contains("not instructions"), notice);
+    }
+
+    @Test
     void sendingAMessageAcknowledgesTheBatchTheLaneWasHanded() {
         call(first, "send_message", Map.of("to", List.of("second.py"), "text", "question"));
         Map<String, Object> handed = call(second, "get_next_action", Map.of());

@@ -15,6 +15,7 @@ import static org.synesis.mcp.application.McpToolArguments.optionalUuidArgument;
 import static org.synesis.mcp.application.McpToolArguments.requiredStringArgument;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,8 @@ import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
+import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.agent.workflow.ProjectChangeWait;
 import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.conversation.ConversationService;
@@ -78,6 +81,10 @@ final class McpCoordinationTools {
      * continues the lane.
      */
     private ConversationService.Cursor messagesHanded = ConversationService.Cursor.START;
+    /**
+     * How long a caller told to wait is held before it is answered.
+     */
+    private Duration waitHold = Duration.ZERO;
     /**
      * Service that publishes capability implementations.
      */
@@ -189,9 +196,44 @@ final class McpCoordinationTools {
         } else {
             reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
             NextActionRequest nextReq = new NextActionRequest(activeProjectRoot, provider, connectionInstanceId, completionRequested);
-            agentResponse = withUnreadMessages(nextActionService.getNextAction(nextReq), activeProjectRoot);
+            agentResponse = withUnreadMessages(heldWhileWaiting(nextReq, activeProjectRoot), activeProjectRoot);
         }
         return agentResponse;
+    }
+
+    /**
+     * Sets how long a caller told to wait is held before it is answered. Zero, the default,
+     * answers at once; the stdio server sets it for real provider sessions.
+     *
+     * @param hold longest time one waiting call is held
+     */
+    void holdWaitsFor(Duration hold) {
+        this.waitHold = hold == null || hold.isNegative() ? Duration.ZERO : hold;
+    }
+
+    /**
+     * Projects the next action, and when it is a wait, holds the call until the project has
+     * something new or the hold passes, then projects it once more. The answer is always the
+     * one the projection gives; the hold changes only when it is given.
+     */
+    private AgentResponse heldWhileWaiting(NextActionRequest request, Path activeProjectRoot) {
+        if (waitHold.isZero()) {
+            return nextActionService.getNextAction(request);
+        }
+        ProjectLocation location;
+        long head;
+        try {
+            location = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot);
+            head = ProjectChangeWait.head(location);
+        } catch (Exception notLocated) {
+            return nextActionService.getNextAction(request);
+        }
+        AgentResponse answer = nextActionService.getNextAction(request);
+        if (answer.nextAction() != AgentNextAction.WAIT || !ProjectChangeWait.awaitChange(location, head, waitHold)) {
+            return answer;
+        }
+        reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
+        return nextActionService.getNextAction(request);
     }
 
     /**

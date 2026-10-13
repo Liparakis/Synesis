@@ -224,6 +224,70 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void ofTwoAgentsOfOneProviderOnlyTheOneWhoseOwnLaneIsOpenIsResumedHoweverMuchTheLogMoves() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 1, 1, 1, 1);
+        script.withoutOwnLane.add("claude#2");
+        script.at(0).head(1).announced();
+        script.endlessProgress = true;
+
+        AgentRunController.Result result = script.run(3, Duration.ofSeconds(40));
+
+        assertEquals(3, result.resumes());
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#1 session-1", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches,
+                "the provider's lane is open, but claude#2's own lane ended");
+    }
+
+    @Test
+    void anAgentThatNeverHeldALaneIsNotResumedForAnotherAgentsProgress() throws Exception {
+        Script script = new Script();
+        // claude announces its lane and keeps working; codex never held one and stops at tick 1.
+        script.lifetimes(40, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(1).announced();
+        script.at(3).head(6).progressAfter(1);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2"), script.launches);
+        assertEquals(0, result.resumes());
+    }
+
+    @Test
+    void theResumeLimitIsReachedOnlyByAnAgentThatStillHoldsAnOpenLaneWithProgressUnseen() throws Exception {
+        Script holding = new Script();
+        // A limit of zero makes every agent be at its limit when it stops.
+        holding.lifetimes(1, 40);
+        holding.at(0).head(1).announced();
+        holding.at(3).head(6).progressAfter(1);
+        assertEquals(AgentRunController.Outcome.RESUME_LIMIT_REACHED, holding.run(0).outcome());
+
+        Script ended = new Script();
+        ended.lifetimes(1, 40);
+        ended.withoutOwnLane.add("claude#1");
+        ended.at(0).head(1).announced();
+        ended.at(3).head(6).progressAfter(1);
+        assertEquals(AgentRunController.Outcome.STALLED, ended.run(0).outcome(), "its lane ended, so it has nothing to continue however much it missed");
+    }
+
+    @Test
+    void anAgentWhoseOwnLaneIsOpenIsStillResumedForAMessageAndForAPassedDeadlineBesideASiblingWhoseLaneEnded() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 1, 1);
+        script.withoutOwnLane.add("claude#2");
+        script.answerDeadlines.put("claude", 5_000L);
+        script.at(0).head(5).announced();
+        script.at(2).head(6).message("claude#1", 6).message("claude#2", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(2, 5), script.resumedAtTicks, "once for the message, once when the answer period ended");
+    }
+
+    @Test
     void agentIsResumedForWorkRecordedShortlyBeforeItsProcessEnded() throws Exception {
         Script script = new Script();
         // codex records work at tick 2. claude's process is still running then and ends at tick
@@ -409,6 +473,7 @@ final class AgentRunControllerTest {
         private final List<String> stopped = new ArrayList<>();
         private final List<String> withoutSessionId = new ArrayList<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
+        private final List<String> withoutOwnLane = new ArrayList<>();
         private final List<String> heldByOperator = new ArrayList<>();
         private final List<String> connections = new ArrayList<>();
         private final List<Map<String, String>> environments = new ArrayList<>();
@@ -550,6 +615,11 @@ final class AgentRunControllerTest {
                 @Override
                 public boolean hasOpenLane(String provider) {
                     return !closedLaneProviders.contains(provider);
+                }
+
+                @Override
+                public boolean holdsOpenLane(String provider, String connectionInstanceId) {
+                    return hasOpenLane(provider) && !withoutOwnLane.contains(agentOf.get(connectionInstanceId));
                 }
 
                 @Override

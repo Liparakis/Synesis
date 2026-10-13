@@ -423,6 +423,24 @@ class ConversationServiceTest {
     }
 
     @Test
+    void theRunObserverSaysOfEachConnectionWhetherItsOwnLaneIsStillOpen() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        assertTrue(observer.observe().holdsOpenLane(PROVIDER, A));
+        assertTrue(observer.observe().holdsOpenLane(PROVIDER, B));
+
+        AgentResponse cancelled = new org.synesis.workspace.application.agent.completion.AgentTaskCancellationService()
+                .cancelTask(new org.synesis.workspace.application.agent.completion.AgentTaskCancellationService.CancelTaskRequest(projectRoot, PROVIDER, A, "Not needed after all"));
+        assertEquals(AgentStatus.COMPLETED, cancelled.status(), cancelled.toJson());
+
+        AgentRunController.Observation after = observer.observe();
+        assertFalse(after.holdsOpenLane(PROVIDER, A), "its own lane ended");
+        assertTrue(after.hasOpenLane(PROVIDER), "the provider still has open lanes, which is no reason to resume the one whose lane ended");
+        assertTrue(after.holdsOpenLane(PROVIDER, B), "another connection of the provider keeps its lane");
+        assertFalse(after.holdsOpenLane(PROVIDER, "inst-unknown"), "a connection nobody used holds no lane");
+        assertFalse(after.holdsOpenLane(PROVIDER, null));
+    }
+
+    @Test
     void aMessageTheLaneAlreadyAcknowledgedWakesNobody() throws Exception {
         EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
         send(A, List.of("src/B.java", "src/C.java"), "one");

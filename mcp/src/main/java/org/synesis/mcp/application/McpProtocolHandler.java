@@ -307,6 +307,17 @@ public final class McpProtocolHandler {
     }
 
     /**
+     * Sets how long a caller told to wait is held before it is answered (see
+     * {@code ProjectChangeWait}). Zero answers at once, which is what a handler does unless told
+     * otherwise.
+     *
+     * @param hold longest time one waiting call is held
+     */
+    public void holdWaitsFor(java.time.Duration hold) {
+        coordinationTools.holdWaitsFor(hold);
+    }
+
+    /**
      * What a tool call must satisfy before dispatch, one row per catalog tool.
      *
      * @param attestation       whether these arguments, possibly {@code null}, can increase authority and so need a

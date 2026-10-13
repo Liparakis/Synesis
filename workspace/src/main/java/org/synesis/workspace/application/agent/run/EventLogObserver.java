@@ -68,6 +68,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     };
 
     private final ProjectLocation location;
+    private final Map<String, String> participants = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Creates an observer for one initialized project.
@@ -133,6 +134,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public boolean heldByOperator(String provider) {
                 return heldProviders.contains(provider);
+            }
+
+            @Override
+            public boolean holdsOpenLane(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && WorkspaceCollaborationService.laneOf(store, participant).isPresent();
             }
 
             @Override
@@ -219,11 +226,27 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         }
     }
 
-    /** Returns the participant of the session behind one connection, or {@code null} when it has none. */
+    /**
+     * Returns the participant of the session behind one connection, or {@code null} when it has
+     * none. A connection belongs to one session for good, so an answer is kept: asked on every
+     * observation for every stopped agent, the lookup listed and verified every binding each time.
+     */
     private String participantOf(String provider, String connectionInstanceId) {
         if (provider == null || connectionInstanceId == null) {
             return null;
         }
+        String known = participants.get(provider + '|' + connectionInstanceId);
+        if (known != null) {
+            return known;
+        }
+        String found = lookUpParticipant(provider, connectionInstanceId);
+        if (found != null) {
+            participants.put(provider + '|' + connectionInstanceId, found);
+        }
+        return found;
+    }
+
+    private String lookUpParticipant(String provider, String connectionInstanceId) {
         try {
             String fingerprint = Sha256.hex(connectionInstanceId);
             return new ProviderSessionBindingService().list(location, provider).stream()
