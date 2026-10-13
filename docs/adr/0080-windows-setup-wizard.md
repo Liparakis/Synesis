@@ -66,6 +66,47 @@ visual language as the rest of the window. The embedded PNG is composited with
 the Win32 `BLENDFUNCTION` value form required by `AlphaBlend`; this keeps the
 product mark visible without adding an external asset or GUI framework.
 
+### Redesign follow-up (2026-10-13)
+
+The wizard was redrawn and its start was reordered. Installation, registration,
+metadata ownership, and user-data preservation semantics remain those defined
+above.
+
+- **Look.** The window uses the neutral dark palette of the browser UI. A rail
+  on the left carries the product mark and the four steps of the chosen action;
+  the page sits to its right above one row of buttons. Buttons, cards, the
+  checkbox and the progress bar are drawn in code, so the stretched PNG artwork
+  under `bootstrap/assets/setup/` and its generator are gone. The layout is
+  authored in 96-DPI pixels and the process declares itself DPI aware, so text
+  is sharp on a scaled display instead of being stretched by Windows. The scale
+  is read once from the primary display; a monitor with another scale is still
+  stretched.
+- **No console windows.** The installer is a windowless program, so Windows
+  gave every console helper it started a visible console: the bundled launcher
+  for the version and doctor checks, `reg.exe` for the user PATH, the migration
+  command, and the Java runtime behind a `synesis://` link. All of them are now
+  started without a console window (`internal/childproc`). Their output still
+  reaches the installer.
+- **The window opens first.** The single-file installer used to unpack its
+  bundle, start the bundled runtime to check it, start the installer inside the
+  bundle, and check the bundle again before any window appeared. It now opens
+  the wizard itself and unpacks in the background from the moment it starts.
+  Install waits for the unpacking as its own first step; uninstall never waits.
+  A wizard started from an extracted bundle no longer starts the runtime before
+  showing its window either. Nothing is activated on a weaker check: install
+  and repair still validate the bundle in full, launcher run included, before
+  activation. A command-line start of the single-file installer is unchanged.
+- **Browse.** The folder picker runs inside the wizard, modal to its window,
+  instead of as a second process from the bundle. `synesis-folder-picker.exe`
+  is still shipped for the browser UI and shares the same code
+  (`internal/folderpicker`).
+- **Keyboard.** Tab, Space, Enter and Escape work. Enter presses the focused
+  button; anywhere else it moves forward, except on the uninstall options page,
+  where the destructive button must be chosen. That page opens with the focus
+  on Back.
+- **Progress log.** The log on the progress page shows four rows and cuts long
+  lines; the full text is under "Show details" on the result page.
+
 ## Consequences
 
 The double-click Windows experience becomes familiar and responsive without

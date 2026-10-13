@@ -1,4 +1,48 @@
-# 2026-10-13 — A project's validation command gates integration, and what it refuses goes back to its lane
+# 2026-10-13 — The Windows setup wizard is redrawn, opens at once, and no longer flashes console windows
+
+Build `0.1.0-dev.remaster36-20261013`. ADR-0080 holds the decisions under "Redesign follow-up
+(2026-10-13)".
+
+**What changed.**
+
+- The wizard has a new look: the browser UI's neutral dark palette, a rail with the mark and the
+  steps, pages drawn in code. The PNG artwork under `bootstrap/assets/setup/` is deleted. The
+  process is DPI aware.
+- Console helpers the windowless installer starts no longer open console windows
+  (`bootstrap/internal/childproc`): the launcher checks, `reg.exe`, the migration command, and
+  the Java runtime behind a `synesis://` link.
+- The single-file installer opens the wizard itself and unpacks its bundle in the background;
+  install waits for it as a first step, "Unpack the installer". The wizard no longer starts the
+  bundled runtime before it shows a window.
+- Browse runs the folder picker inside the wizard (`bootstrap/internal/folderpicker`, shared with
+  `synesis-folder-picker.exe`).
+
+**Changed meaning, stated.** The wizard's start checks the bundle's shape only; the launcher run
+that used to precede the window now happens only where it already happened a second time, in
+install and repair before activation. The progress log cuts long lines instead of scrolling
+sideways. The first page's button reads "Next" for both actions. Enter and Escape now act.
+
+**Measured on this machine, 96 DPI, build `remaster35` bundle.** Old single-file installer: window
+after about 2.5 s, 4 console windows on opening (two runs; a third opened no window and exited 1,
+cause not investigated). New: window after about 150 ms, no console window (three runs). A
+command-line install into a throwaway folder with `--skip-path-update`: 6 console windows with
+the old installer, none with the new, both exit 0. The Gradle-built `remaster36` installer: window
+after 89 to 141 ms, no console window (three runs); Tab reaches Cancel and Enter there closes the
+wizard.
+
+**The review.** One reviewer read the uncommitted change and ran nothing. It found one defect:
+Enter with the focus on Back, Cancel or Browse moved forward, because owner-drawn buttons are not
+push buttons to the dialog keyboard interface. It was reproduced on the first build and fixed.
+Also acted on: the uninstall page opens with the focus on Back, the shown version is read only
+from the bundle root, and the panel painter lost its unused second colour. Left as they were: the
+bundled launcher check has no timeout, so a hung launcher would keep a closed installer alive; and
+a single-file install validates the bundle once after unpacking and again before activation.
+
+**Not shown.** No install, repair or uninstall was run through the new wizard against a real
+installation, so the PATH step and link registration were not exercised from it. No display with
+a scale above 100% was available, so the scaled layout is covered only by the layout test at 96
+DPI. `go test ./...` passes in `bootstrap`; `GOOS=linux go build ./...` and `go vet ./...` pass.
+
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster34-20261013` and `remaster35`. ADR-0094
 is accepted and built. The repository owner decided the three questions the entry below left
