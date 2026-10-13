@@ -22,6 +22,109 @@ import org.synesis.workspace.application.ProjectApplicationService;
  */
 final class KnownProjectRegistryTest {
 
+    /**
+     * One runtime reads the registry for every snapshot while the browser removes entries from it.
+     * The file lock is held per process, so two threads of one process must queue for it.
+     */
+    @Test
+    void threadsOfOneProcessShareTheRegistryWithoutRefusingEachOther() throws Exception {
+        Path root = Files.createTempDirectory("synesis-known-project-threads-");
+        try {
+            ProjectApplicationService service = new ProjectApplicationService();
+            Path registryPath = root.resolve("state/registry.json");
+            List<java.util.UUID> ids = new java.util.ArrayList<>();
+            for (int index = 0; index < 4; index++) {
+                ProjectLocation location = service.init(Files.createDirectories(root.resolve("project-" + index)), false).location();
+                new KnownProjectRegistry(registryPath).observe(location);
+                ids.add(location.projectId());
+            }
+            java.util.concurrent.ConcurrentLinkedQueue<Throwable> failures = new java.util.concurrent.ConcurrentLinkedQueue<>();
+            java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+            List<Thread> threads = new java.util.ArrayList<>();
+            for (int reader = 0; reader < 3; reader++) {
+                threads.add(new Thread(() -> {
+                    try {
+                        start.await();
+                        // Each thread uses its own registry object, as the snapshot and a command do.
+                        KnownProjectRegistry registry = new KnownProjectRegistry(registryPath);
+                        for (int round = 0; round < 25; round++) {
+                            registry.projects();
+                        }
+                    } catch (Throwable failure) {
+                        failures.add(failure);
+                    }
+                }));
+            }
+            threads.add(new Thread(() -> {
+                try {
+                    start.await();
+                    KnownProjectRegistry registry = new KnownProjectRegistry(registryPath);
+                    for (java.util.UUID id : ids) {
+                        assertTrue(registry.remove(id));
+                    }
+                } catch (Throwable failure) {
+                    failures.add(failure);
+                }
+            }));
+            threads.forEach(Thread::start);
+            start.countDown();
+            for (Thread thread : threads) {
+                thread.join(30_000);
+            }
+            assertEquals(List.of(), List.copyOf(failures));
+            assertEquals(List.of(), new KnownProjectRegistry(registryPath).projects());
+        } finally {
+            delete(root);
+        }
+    }
+
+    /** The workspace that serves the page of an installation without projects is not one of them. */
+    @Test
+    void theInstallationHomeIsInitializedOnceAndNeverBecomesAKnownProject() throws Exception {
+        Path root = Files.createTempDirectory("synesis-known-project-home-");
+        try {
+            Path home = InstallationHome.ensure();
+            assertEquals(InstallationHome.root(), home);
+            ProjectLocation location = new ProjectApplicationService().require(home);
+            assertEquals(location.projectId(), new ProjectApplicationService().require(InstallationHome.ensure()).projectId(), "the home workspace was initialized twice");
+            assertTrue(InstallationHome.is(home.resolve("..").resolve(home.getFileName())));
+            assertFalse(InstallationHome.is(root));
+
+            KnownProjectRegistry registry = new KnownProjectRegistry(root.resolve("state/registry.json"));
+            registry.observe(location);
+            assertEquals(List.of(), registry.projects());
+        } finally {
+            delete(root);
+        }
+    }
+
+    @Test
+    void severalProjectsAreRemovedInOneWriteAndAbsentOnesAreIgnored() throws Exception {
+        Path root = Files.createTempDirectory("synesis-known-project-batch-");
+        try {
+            ProjectApplicationService service = new ProjectApplicationService();
+            KnownProjectRegistry registry = new KnownProjectRegistry(root.resolve("state/registry.json"));
+            List<ProjectLocation> projects = new java.util.ArrayList<>();
+            for (int index = 0; index < 3; index++) {
+                ProjectLocation location = service.init(Files.createDirectories(root.resolve("project-" + index)), false).location();
+                registry.observe(location);
+                projects.add(location);
+            }
+            java.util.UUID unknown = java.util.UUID.randomUUID();
+
+            java.util.Set<java.util.UUID> removed = registry.removeAll(java.util.Set.of(projects.get(0).projectId(), projects.get(2).projectId(), unknown));
+
+            assertEquals(java.util.Set.of(projects.get(0).projectId(), projects.get(2).projectId()), removed);
+            // A second registry object reads the file: the removal is durable, and the rest is intact.
+            List<KnownProjectRegistry.ProjectView> remaining = new KnownProjectRegistry(root.resolve("state/registry.json")).projects();
+            assertEquals(List.of(projects.get(1).projectId()), remaining.stream().map(KnownProjectRegistry.ProjectView::projectId).toList());
+            assertEquals(java.util.Set.of(), registry.removeAll(java.util.Set.of(unknown)));
+            assertTrue(Files.isDirectory(projects.get(0).root()), "removing a registry entry touched the project directory");
+        } finally {
+            delete(root);
+        }
+    }
+
     @Test
     void observationIsIdempotentAndSurvivesRegistryRestart() throws Exception {
         Path root = Files.createTempDirectory("synesis-known-project-");

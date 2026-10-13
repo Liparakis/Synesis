@@ -21,8 +21,13 @@ import java.util.Base64;
 import java.util.Map;
 
 /**
- * Credentials and authentication for the control plane: the one-time bootstrap token, the single
- * browser session it can be exchanged for, and the runtime-owned command token.
+ * Credentials and authentication for the control plane: the one-time bootstrap tokens, the single
+ * browser session one of them can be exchanged for, and the runtime-owned command token.
+ *
+ * <p>A bootstrap token opens the UI once. The runtime prints the first one when it starts; the
+ * holder of the runtime command token asks for another each time it opens the UI again, because
+ * the runtime outlives the browser tab. Only the newest unredeemed token is redeemable, and a new
+ * session replaces the one before it.
  *
  * <p>Owns every secret and the mutable session state so none of it is reachable from routing code;
  * the handler holds one instance and reaches the secrets only through the two accessors it already
@@ -36,7 +41,7 @@ final class ControlPlaneSessions {
     private static final int MAX_TOKEN_LENGTH = 256;
 
     /**
-     * How long the one-time bootstrap token stays redeemable after construction.
+     * How long a one-time bootstrap token stays redeemable after it is issued.
      */
     private static final Duration BOOTSTRAP_LIFETIME = Duration.ofMinutes(5);
 
@@ -51,37 +56,33 @@ final class ControlPlaneSessions {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /**
-     * One-time secret exchanged for a browser session; delivered out of band by the caller.
+     * The bootstrap token issued at construction; delivered out of band by the caller.
      */
-    private final String bootstrapToken = token();
+    private final String initialBootstrapToken = token();
 
     /**
-     * Secret accepted only by the runtime-owned deep-link route.
+     * Secret accepted only by the runtime-owned routes.
      */
     private final String runtimeCommandToken = token();
 
     /**
-     * Instant after which {@link #bootstrapToken} can no longer be redeemed.
+     * The one bootstrap token that can still be redeemed, or {@code null} once it has been.
+     * Guarded by this object's monitor.
      */
-    private final Instant bootstrapExpiresAt = Instant.now().plus(BOOTSTRAP_LIFETIME);
+    private Bootstrap pendingBootstrap = new Bootstrap(initialBootstrapToken, Instant.now().plus(BOOTSTRAP_LIFETIME));
 
     /**
-     * The current browser session, or {@code null} until the bootstrap token has been redeemed.
+     * The current browser session, or {@code null} until a bootstrap token has been redeemed.
      */
     private volatile Session session;
 
     /**
-     * Whether the bootstrap token has already been redeemed.
-     */
-    private volatile boolean bootstrapConsumed;
-
-    /**
-     * Returns the one-time bootstrap token.
+     * Returns the bootstrap token issued at construction.
      *
      * @return high-entropy bootstrap token
      */
     String bootstrapToken() {
-        return bootstrapToken;
+        return initialBootstrapToken;
     }
 
     /**
@@ -94,7 +95,28 @@ final class ControlPlaneSessions {
     }
 
     /**
-     * Redeems the one-time bootstrap token for a browser session.
+     * Issues a fresh one-time bootstrap token to the holder of the runtime command token, so the
+     * UI can be opened again on a runtime whose earlier token is spent or expired. An earlier
+     * unredeemed token stops working.
+     *
+     * @param exchange HTTP exchange
+     * @throws IOException when the response cannot be written
+     * @throws ApiFailure  401 when the runtime command token is missing or wrong
+     */
+    void issueBootstrap(HttpExchange exchange) throws IOException, ApiFailure {
+        authenticateRuntimeCommand(exchange);
+        Bootstrap issued = new Bootstrap(token(), Instant.now().plus(BOOTSTRAP_LIFETIME));
+        synchronized (this) {
+            pendingBootstrap = issued;
+        }
+        Map<String, Object> response = newResponse();
+        response.put("bootstrapToken", issued.token());
+        response.put("expiresAt", issued.expiresAt().toString());
+        sendJson(exchange, 201, response);
+    }
+
+    /**
+     * Redeems a one-time bootstrap token for a browser session.
      *
      * @param exchange HTTP exchange
      * @throws IOException when the response cannot be written
@@ -103,19 +125,22 @@ final class ControlPlaneSessions {
     void createSession(HttpExchange exchange) throws IOException, ApiFailure {
         requireJson(exchange);
         String supplied = requiredText(readObject(exchange), "bootstrapToken", MAX_TOKEN_LENGTH);
-        if (bootstrapConsumed || Instant.now().isAfter(bootstrapExpiresAt) || tokenMismatch(bootstrapToken, supplied)) {
+        Session created = redeem(supplied);
+        Map<String, Object> response = newResponse();
+        response.put("sessionToken", created.sessionToken());
+        response.put("csrfToken", created.csrfToken());
+        response.put("expiresAt", created.expiresAt().toString());
+        sendJson(exchange, 201, response);
+    }
+
+    private synchronized Session redeem(String supplied) throws ApiFailure {
+        Bootstrap pending = pendingBootstrap;
+        if (pending == null || Instant.now().isAfter(pending.expiresAt()) || tokenMismatch(pending.token(), supplied)) {
             throw failure(401, "BOOTSTRAP_INVALID", "bootstrap token is invalid or expired");
         }
-        String sessionToken = token();
-        String csrfToken = token();
-        Instant expiresAt = Instant.now().plus(SESSION_LIFETIME);
-        session = new Session(sessionToken, csrfToken, expiresAt);
-        bootstrapConsumed = true;
-        Map<String, Object> response = newResponse();
-        response.put("sessionToken", sessionToken);
-        response.put("csrfToken", csrfToken);
-        response.put("expiresAt", expiresAt.toString());
-        sendJson(exchange, 201, response);
+        pendingBootstrap = null;
+        session = new Session(token(), token(), Instant.now().plus(SESSION_LIFETIME));
+        return session;
     }
 
     /**
@@ -167,6 +192,16 @@ final class ControlPlaneSessions {
      */
     private static boolean tokenMismatch(String expected, String actual) {
         return actual == null || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * An issued bootstrap token.
+     *
+     * @param token     the one-time secret
+     * @param expiresAt instant after which it can no longer be redeemed
+     */
+    private record Bootstrap(String token, Instant expiresAt) {
+
     }
 
     /**

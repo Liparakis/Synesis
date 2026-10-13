@@ -420,6 +420,47 @@ class ControlPlaneHttpHandlerTest {
         }
     }
 
+    /** The runtime outlives the browser tab, so its owner can open the UI again and again. */
+    @Test
+    void runtimeOwnerGetsAFreshOneTimeBootstrapForEachOpening() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            HttpResponse<String> stranger = fixture.client.send(jsonRequest(fixture, "/api/v1/commands/bootstrap").header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, "wrong")
+                    .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(401, stranger.statusCode());
+            HttpResponse<String> browser = fixture.client.send(jsonRequest(fixture, "/api/v1/commands/bootstrap").POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(401, browser.statusCode());
+
+            Map<String, Object> first = login(fixture);
+            String second = issueBootstrap(fixture);
+            String third = issueBootstrap(fixture);
+            assertFalse(second.equals(third));
+            assertFalse(third.equals(fixture.handler.bootstrapToken()));
+
+            assertEquals(401, session(fixture, fixture.handler.bootstrapToken()).statusCode(), "the spent first token opened the UI again");
+            assertEquals(401, session(fixture, second).statusCode(), "a token superseded by a newer one was still redeemable");
+            HttpResponse<String> reopened = session(fixture, third);
+            assertEquals(201, reopened.statusCode());
+            assertEquals(401, session(fixture, third).statusCode(), "a fresh token was redeemable twice");
+
+            String reopenedSession = (String) object(reopened.body()).get("sessionToken");
+            assertEquals(200, fixture.client.send(request(fixture, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, reopenedSession).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+            assertEquals(401, fixture.client.send(request(fixture, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) first.get("sessionToken")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode(), "the earlier tab's session outlived its replacement");
+        }
+    }
+
+    private String issueBootstrap(Fixture fixture) throws Exception {
+        HttpResponse<String> issued = fixture.client.send(jsonRequest(fixture, "/api/v1/commands/bootstrap").header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, fixture.handler.runtimeCommandToken())
+                .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(201, issued.statusCode());
+        return (String) object(issued.body()).get("bootstrapToken");
+    }
+
+    private HttpResponse<String> session(Fixture fixture, String bootstrapToken) throws Exception {
+        return fixture.client.send(jsonRequest(fixture, "/api/v1/session").POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of("bootstrapToken", bootstrapToken)))).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpRequest.Builder request(Fixture fixture, String path) {
         return HttpRequest.newBuilder(fixture.baseUri.resolve(path));
     }

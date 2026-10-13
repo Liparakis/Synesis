@@ -48,11 +48,11 @@ public final class RuntimeReadyLine {
      * Reads the fields the daemon needs from a ready line.
      *
      * @param line a line for which {@link #isReady(String)} holds
-     * @return endpoint and tokens
+     * @return endpoint and command token
      * @throws IOException when a required key is missing
      */
     static Parsed parse(String line) throws IOException {
-        return new Parsed(URI.create(field(line, ENDPOINT)), field(line, CONTROL_BOOTSTRAP), field(line, CONTROL_COMMAND));
+        return new Parsed(URI.create(field(line, ENDPOINT)), field(line, CONTROL_COMMAND));
     }
 
     private static String field(String line, String name) throws IOException {
@@ -69,10 +69,9 @@ public final class RuntimeReadyLine {
      * Fields of a ready line the daemon uses.
      *
      * @param endpoint     runtime endpoint as printed
-     * @param bootstrap    one-time UI bootstrap token
      * @param commandToken runtime command token
      */
-    record Parsed(URI endpoint, String bootstrap, String commandToken) {
+    record Parsed(URI endpoint, String commandToken) {
 
     }
 }

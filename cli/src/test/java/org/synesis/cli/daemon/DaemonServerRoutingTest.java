@@ -138,13 +138,13 @@ final class DaemonServerRoutingTest {
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
             String routed = v2Answer(first.projectId());
-            Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", routed)));
+            Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", routed, "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(result.get("ok")));
             assertEquals(List.of(routed), starter.runtime(first.root()).uris);
             assertTrue(starter.runtime(second.root()).uris.isEmpty());
 
             String unknown = v2Answer(UUID.randomUUID());
-            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", unknown)));
+            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", unknown, "openBrowser", false)));
             assertEquals("URI_UNRESOLVED", unresolved.get("state"));
             assertTrue(starter.runtime(second.root()).uris.isEmpty());
         } finally {
@@ -167,7 +167,7 @@ final class DaemonServerRoutingTest {
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
             String invitation = validSlo1();
-            Map<String, Object> required = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation)));
+            Map<String, Object> required = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation, "openBrowser", false)));
             assertEquals("PROJECT_SELECTION_REQUIRED", required.get("state"));
             assertTrue(starter.allUris().isEmpty());
 
@@ -197,7 +197,7 @@ final class DaemonServerRoutingTest {
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
             String invitation = validSlo1();
-            Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation)));
+            Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation, "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(result.get("ok")));
             assertEquals(List.of(invitation), starter.runtime(project.root()).uris);
         } finally {
@@ -226,6 +226,125 @@ final class DaemonServerRoutingTest {
 
             assertEquals(0L, ((Number) status.get("runtimeCount")).longValue());
             assertEquals(1, runtime.closeCount);
+        } finally {
+            server.close();
+            serving.join(TimeUnit.SECONDS.toMillis(3));
+        }
+    }
+
+    /** {@code synesis ui} run outside a project opens on a project the installation knows. */
+    @Test
+    @Timeout(15)
+    void openingTheUiWithoutAProjectUsesAKnownProjectAndTheHomeWorkspaceWhenThereIsNone() throws Exception {
+        ProjectApplicationService service = new ProjectApplicationService();
+        KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("ui-registry.json"));
+        FakeStarter starter = new FakeStarter();
+        Path home = temp.resolve("ui-home-workspace");
+        boolean[] homeAvailable = {false};
+        DaemonServer server = DaemonServer.start(temp.resolve("ui-daemon"), registry, starter, new LocalProjectSelectionStore(), () -> {
+            if (!homeAvailable[0]) {
+                throw new IOException("home workspace fixture is unavailable");
+            }
+            return home;
+        });
+        Thread serving = serve(server);
+        try {
+            DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("ui-daemon/endpoint.json"));
+            Map<String, Object> openUi = Map.of("token", endpoint.token(), "operation", "OPEN_UI", "openBrowser", false);
+
+            Map<String, Object> none = object(exchange(endpoint, openUi));
+            assertEquals(false, none.get("ok"));
+            assertEquals("NO_KNOWN_PROJECT", none.get("error"));
+
+            // With no project known, the page is served from the installation's own workspace.
+            homeAvailable[0] = true;
+            Map<String, Object> fromHome = object(exchange(endpoint, openUi));
+            assertEquals("READY", fromHome.get("state"));
+            assertEquals(java.util.Set.of(home.toAbsolutePath().normalize()), starter.runtimes.keySet());
+            assertEquals(List.of(), registry.projects(), "the home workspace was recorded as a known project");
+
+            var first = service.init(Files.createDirectories(temp.resolve("ui-one")), false).location();
+            var second = service.init(Files.createDirectories(temp.resolve("ui-two")), false).location();
+            registry.observe(first);
+            registry.observe(second);
+            // Once a project is known it serves the page, even while the home runtime is still up.
+            Map<String, Object> opened = object(exchange(endpoint, openUi));
+            assertEquals("READY", opened.get("state"));
+            assertEquals(2, starter.runtimes.size(), "more than one project runtime was started to serve one UI");
+            Object served = opened.get("endpoint");
+            assertTrue(!served.equals(fromHome.get("endpoint")), "the home workspace kept serving after a project became known");
+
+            // A runtime that is already up keeps serving; a named project still gets its own.
+            Map<String, Object> other = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_UI", "openBrowser", false, "project",
+                    (starter.runtimes.containsKey(first.root()) ? second : first).root().toString())));
+            assertEquals("READY", other.get("state"));
+            assertEquals(3, starter.runtimes.size());
+            assertEquals(served, object(exchange(endpoint, openUi)).get("endpoint"));
+        } finally {
+            server.close();
+            serving.join(TimeUnit.SECONDS.toMillis(3));
+        }
+    }
+
+    /** {@code synesis://ui} typed into a browser opens the UI; it is never treated as an invitation. */
+    @Test
+    @Timeout(15)
+    void aUiAddressOpensTheUiOnAKnownProject() throws Exception {
+        for (String address : List.of("synesis://ui", "synesis://ui/", "SYNESIS://UI", "synesis://open", "synesis://", "synesis:")) {
+            assertTrue(DaemonServer.isUiUri(address), address);
+        }
+        for (String other : List.of("synesis://join/SLO1-x", "synesis://ui/extra", "synesis://ui?x=1", "https://ui", "synesis://uix")) {
+            assertTrue(!DaemonServer.isUiUri(other), other);
+        }
+        KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("address-registry.json"));
+        FakeStarter starter = new FakeStarter();
+        DaemonServer server = DaemonServer.start(temp.resolve("address-daemon"), registry, starter, new LocalProjectSelectionStore(), () -> {
+            throw new IOException("home workspace fixture is unavailable");
+        });
+        Thread serving = serve(server);
+        try {
+            DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("address-daemon/endpoint.json"));
+            Map<String, Object> open = Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "synesis://ui", "openBrowser", false);
+
+            Map<String, Object> none = object(exchange(endpoint, open));
+            assertEquals("URI_UNRESOLVED", none.get("state"));
+            assertEquals("NO_KNOWN_PROJECT", none.get("reason"));
+
+            registry.observe(new ProjectApplicationService().init(Files.createDirectories(temp.resolve("address-project")), false).location());
+            assertEquals("READY", object(exchange(endpoint, open)).get("state"));
+            assertEquals(List.of(), starter.allUris(), "a UI address was handed to a runtime as a deep link");
+        } finally {
+            server.close();
+            serving.join(TimeUnit.SECONDS.toMillis(3));
+        }
+    }
+
+    /** The installer stops the daemon before it replaces or removes the files it runs from. */
+    @Test
+    @Timeout(15)
+    void shutdownAnswersThenStopsTheDaemonAndItsRuntimes() throws Exception {
+        Path project = Files.createDirectories(temp.resolve("stop-project"));
+        FakeStarter starter = new FakeStarter();
+        DaemonServer server = DaemonServer.start(temp.resolve("stop-daemon"), new KnownProjectRegistry(temp.resolve("stop-registry.json")), starter, new LocalProjectSelectionStore());
+        Thread serving = serve(server);
+        try {
+            Path endpointFile = temp.resolve("stop-daemon/endpoint.json");
+            DaemonEndpoint.Record endpoint = awaitEndpoint(endpointFile);
+            exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_PROJECT", "project", project.toString(), "openBrowser", false));
+
+            Map<String, Object> refused = object(exchange(endpoint, Map.of("token", "wrong", "operation", "SHUTDOWN")));
+            assertEquals("AUTH_REQUIRED", refused.get("error"));
+            assertEquals(0, starter.runtime(project).closeCount);
+
+            assertEquals("STOPPING", object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "SHUTDOWN"))).get("state"));
+            serving.join(TimeUnit.SECONDS.toMillis(5));
+            assertTrue(!serving.isAlive(), "the daemon kept serving after shutdown");
+            // Serving ends when the listener closes; the rest of the shutdown follows on the worker.
+            for (long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3); Files.exists(endpointFile) && System.nanoTime() < deadline; ) {
+                Thread.sleep(20L);
+            }
+            assertTrue(!Files.exists(endpointFile), "a stopped daemon left its endpoint file behind");
+            assertEquals(1, starter.runtime(project).closeCount);
         } finally {
             server.close();
             serving.join(TimeUnit.SECONDS.toMillis(3));

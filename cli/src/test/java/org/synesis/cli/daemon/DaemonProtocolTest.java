@@ -25,6 +25,12 @@ final class DaemonProtocolTest {
     }
 
     @Test
+    void onlyOpeningANamedProjectRequiresAProject() throws Exception {
+        assertEquals(null, DaemonProtocol.parse(DaemonProtocol.writeRequest(Map.of("token", "secret", "operation", "OPEN_UI"))).project());
+        assertThrows(IOException.class, () -> DaemonProtocol.parse(DaemonProtocol.writeRequest(Map.of("token", "secret", "operation", "OPEN_PROJECT"))));
+    }
+
+    @Test
     void rejectsMalformedUnknownAndOversizedRequests() {
         assertThrows(IOException.class, () -> DaemonProtocol.parse("not-json"));
         assertThrows(IOException.class, () -> DaemonProtocol.parse(DaemonProtocol.writeRequest(Map.of("token", "secret", "operation", "SHELL"))));

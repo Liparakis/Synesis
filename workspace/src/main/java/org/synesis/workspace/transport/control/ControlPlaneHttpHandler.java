@@ -260,6 +260,11 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
                 sessions.createSession(exchange);
                 return;
             }
+            case API_PREFIX + "/commands/bootstrap" -> {
+                requireMethod(exchange, "POST");
+                sessions.issueBootstrap(exchange);
+                return;
+            }
             case API_PREFIX + "/commands/deep-link" -> {
                 requireMethod(exchange, "POST");
                 sessions.authenticateRuntimeCommand(exchange);

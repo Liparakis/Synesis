@@ -28,6 +28,7 @@ import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
+import org.synesis.workspace.discovery.InstallationHome;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorRenderer;
@@ -120,7 +121,8 @@ public final class ControlPlaneReadModel {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("apiVersion", API_VERSION);
         result.put("runtime", runtime(networkSnapshot));
-        result.put("project", project());
+        // Served from the installation's own workspace, the page has no current project.
+        result.put("project", InstallationHome.is(location.root()) ? null : project());
         result.put("knownProjects", knownProjects());
         result.put("providers", providers());
         result.put("agents", agents());

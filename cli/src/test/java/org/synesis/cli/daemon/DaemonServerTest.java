@@ -139,19 +139,19 @@ final class DaemonServerTest {
             assertEquals("RUNNING", object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"))).get("state"));
             assertEquals("AUTH_REQUIRED", object(exchange(endpoint, Map.of("token", "wrong", "operation", "STATUS"))).get("error"));
 
-            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", validSlo1())));
+            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", validSlo1(), "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(unresolved.get("ok")));
             assertEquals("URI_UNRESOLVED", unresolved.get("state"));
 
-            Map<String, Object> compactUnresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", validCompact())));
+            Map<String, Object> compactUnresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", validCompact(), "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(compactUnresolved.get("ok")));
             assertEquals("URI_UNRESOLVED", compactUnresolved.get("state"));
 
-            Map<String, Object> retiredSlb1 = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "synesis://join/SLB1-AAAA")));
+            Map<String, Object> retiredSlb1 = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "synesis://join/SLB1-AAAA", "openBrowser", false)));
             assertFalse(Boolean.TRUE.equals(retiredSlb1.get("ok")));
             assertEquals("REQUEST_REJECTED", retiredSlb1.get("error"));
 
-            Map<String, Object> rejected = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "https://example.test/SLO1-test")));
+            Map<String, Object> rejected = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", "https://example.test/SLO1-test", "openBrowser", false)));
             assertFalse(Boolean.TRUE.equals(rejected.get("ok")));
             assertEquals("REQUEST_REJECTED", rejected.get("error"));
         } finally {

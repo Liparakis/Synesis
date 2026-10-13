@@ -10,7 +10,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * Starts the local Synesis runtime and opens the installed browser UI.
+ * Starts the local Synesis runtime and opens the installed browser UI. Run inside a project, or
+ * with {@code --project}, it opens on that project. Run anywhere else it opens on a project the
+ * installation already knows, since the UI lists them all.
  */
 @Command(name = "ui", description = "Start Synesis locally and open the browser UI.", mixinStandardHelpOptions = true)
 public final class UiCommand implements Callable<Integer> {
@@ -49,7 +51,7 @@ public final class UiCommand implements Callable<Integer> {
     public Integer call() {
         if (durationSeconds <= 0) {
             try {
-                Map<String, Object> response = DaemonClient.request("OPEN_UI", project, null, !noBrowser);
+                Map<String, Object> response = DaemonClient.request("OPEN_UI", project != null ? project : currentProject(), null, !noBrowser);
                 if (Boolean.TRUE.equals(response.get("browserOpened"))) {
                     runtime.terminal().stdout("SYNESIS_UI_OPENED");
                 } else if ("BROWSER_OPEN_FAILED".equals(response.get("state"))) {
@@ -58,9 +60,23 @@ public final class UiCommand implements Callable<Integer> {
                 return ExitCodes.OK;
             } catch (java.io.IOException failure) {
                 runtime.terminal().stderr("SYNESIS_DAEMON_ERROR=" + failure.getMessage());
+                if ("NO_KNOWN_PROJECT".equals(failure.getMessage())) {
+                    runtime.terminal().stderr("Synesis knows no project yet. Run `synesis init` in a project folder, or pass --project.");
+                }
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
         }
         return CoordinationServerLauncher.run(runtime, project, data, identity, host, port, durationSeconds, true, !noBrowser);
+    }
+
+    /**
+     * Returns the working directory when it is an initialized project, and {@code null} otherwise.
+     */
+    private Path currentProject() {
+        try {
+            return runtime.projectService().require(Path.of(".")).root();
+        } catch (Exception notAProject) {
+            return null;
+        }
     }
 }

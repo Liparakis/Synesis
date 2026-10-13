@@ -58,6 +58,12 @@ public final class KnownProjectRegistry {
     private static final String PROJECTS_DIRECTORY = "projects";
     private static final String REGISTRY_FILE = "registry.json";
     private static final String LOCK_FILE = "registry.lock";
+    /**
+     * One lock per registry lock file for the threads of this process. A file lock belongs to the
+     * whole process: a second thread asking for it is refused outright instead of made to wait, so
+     * threads queue here first and only one of them ever asks for the file lock.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Path, java.util.concurrent.locks.ReentrantLock> PROCESS_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
     private final Path registryFile;
     private final Path lockFile;
     private final ProjectApplicationService projectService;
@@ -111,6 +117,9 @@ public final class KnownProjectRegistry {
      */
     public void observe(ProjectLocation location) throws RegistryException {
         Objects.requireNonNull(location, "location");
+        if (InstallationHome.is(location.root())) {
+            return; // the installation's own workspace is not a project the user knows
+        }
         ProjectLocation validated = validate(location.root());
         if (!validated.identity().matches(location.identity())) {
             throw new RegistryException("IDENTITY_MISMATCH", "observed project identity does not match the supplied location");
@@ -175,14 +184,34 @@ public final class KnownProjectRegistry {
      * @throws RegistryException if the registry cannot be read or persisted
      */
     public boolean remove(UUID projectId) throws RegistryException {
-        Objects.requireNonNull(projectId, "project ID");
+        return !removeAll(Set.of(Objects.requireNonNull(projectId, "project ID"))).isEmpty();
+    }
+
+    /**
+     * Removes several projects from this installation's discovery registry in one durable write:
+     * either every named project that was present is gone, or the registry is unchanged.
+     *
+     * <p>This operation never touches a project directory or its local Synesis state.</p>
+     *
+     * @param projectIds stable project identities to remove
+     * @return the identities that were present and are now removed
+     * @throws RegistryException if the registry cannot be read or persisted
+     */
+    public Set<UUID> removeAll(Set<UUID> projectIds) throws RegistryException {
+        Set<UUID> requested = Set.copyOf(Objects.requireNonNull(projectIds, "project IDs"));
         return locked(() -> {
             List<Entry> entries = readEntries();
-            boolean removed = entries.removeIf(entry -> entry.projectId().equals(projectId));
-            if (removed) {
+            Set<UUID> removed = new LinkedHashSet<>();
+            for (Entry entry : entries) {
+                if (requested.contains(entry.projectId())) {
+                    removed.add(entry.projectId());
+                }
+            }
+            entries.removeIf(entry -> removed.contains(entry.projectId()));
+            if (!removed.isEmpty()) {
                 writeEntries(entries);
             }
-            return removed;
+            return Set.copyOf(removed);
         });
     }
 
@@ -357,6 +386,16 @@ public final class KnownProjectRegistry {
     }
 
     private <T> T locked(IoOperation<T> operation) throws RegistryException {
+        java.util.concurrent.locks.ReentrantLock processLock = PROCESS_LOCKS.computeIfAbsent(lockFile, ignored -> new java.util.concurrent.locks.ReentrantLock());
+        processLock.lock();
+        try {
+            return lockedAcrossProcesses(operation);
+        } finally {
+            processLock.unlock();
+        }
+    }
+
+    private <T> T lockedAcrossProcesses(IoOperation<T> operation) throws RegistryException {
         try {
             Path parent = lockFile.getParent();
             if (parent != null) {

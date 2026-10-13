@@ -32,6 +32,7 @@ import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.TraversalAnswer;
 import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.discovery.InstallationHome;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 /**
@@ -51,6 +52,7 @@ final class DaemonServer implements AutoCloseable {
     private final KnownProjectRegistry projectRegistry;
     private final RuntimeStarter runtimeStarter;
     private final LocalProjectSelectionStore selections;
+    private final HomeWorkspace home;
     private final Set<Socket> openSockets = ConcurrentHashMap.newKeySet();
     private final ThreadPoolExecutor workers = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(MAX_QUEUED_CONNECTIONS), runnable -> {
         Thread thread = new Thread(runnable, "synesis-daemon-ipc");
@@ -58,9 +60,14 @@ final class DaemonServer implements AutoCloseable {
         return thread;
     }, new ThreadPoolExecutor.AbortPolicy());
     private final Map<Path, RuntimeHandle> runtimes = new LinkedHashMap<>();
+    /**
+     * Where the home workspace is, once it has been needed. Guarded by this object's monitor.
+     */
+    private Path homeRoot;
     private volatile boolean closed;
 
-    private DaemonServer(DaemonLock lock, ServerSocket server, String token, Path endpointFile, KnownProjectRegistry projectRegistry, RuntimeStarter runtimeStarter, LocalProjectSelectionStore selections) {
+    private DaemonServer(DaemonLock lock, ServerSocket server, String token, Path endpointFile, KnownProjectRegistry projectRegistry, RuntimeStarter runtimeStarter, LocalProjectSelectionStore selections,
+            HomeWorkspace home) {
         this.lock = lock;
         this.server = server;
         this.token = token;
@@ -68,6 +75,7 @@ final class DaemonServer implements AutoCloseable {
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "project registry");
         this.runtimeStarter = Objects.requireNonNull(runtimeStarter, "runtime starter");
         this.selections = Objects.requireNonNull(selections, "selection store");
+        this.home = Objects.requireNonNull(home, "home workspace");
     }
 
     static DaemonServer start() throws IOException {
@@ -83,6 +91,10 @@ final class DaemonServer implements AutoCloseable {
     }
 
     static DaemonServer start(Path endpointDirectory, KnownProjectRegistry projectRegistry, RuntimeStarter runtimeStarter, LocalProjectSelectionStore selections) throws IOException {
+        return start(endpointDirectory, projectRegistry, runtimeStarter, selections, InstallationHome::ensure);
+    }
+
+    static DaemonServer start(Path endpointDirectory, KnownProjectRegistry projectRegistry, RuntimeStarter runtimeStarter, LocalProjectSelectionStore selections, HomeWorkspace home) throws IOException {
         Path normalizedDirectory = Objects.requireNonNull(endpointDirectory, "endpoint directory").toAbsolutePath().normalize();
         Path endpointFile = DaemonEndpoint.endpointFile(normalizedDirectory);
         DaemonLock lock = DaemonLock.acquire(DaemonEndpoint.lockFile(normalizedDirectory));
@@ -92,7 +104,7 @@ final class DaemonServer implements AutoCloseable {
             server = new ServerSocket(0, ACCEPT_BACKLOG, InetAddress.getLoopbackAddress());
             token = randomToken();
             DaemonEndpoint.write(endpointFile, server.getLocalPort(), token, ProcessHandle.current().pid());
-            return new DaemonServer(lock, server, token, endpointFile, projectRegistry, runtimeStarter, selections);
+            return new DaemonServer(lock, server, token, endpointFile, projectRegistry, runtimeStarter, selections, home);
         } catch (IOException | RuntimeException failure) {
             if (token != null) {
                 DaemonEndpoint.clearIfOwned(endpointFile, token);
@@ -166,6 +178,10 @@ final class DaemonServer implements AutoCloseable {
                     return;
                 }
                 write(writer, dispatch(request));
+                if (request.operation() == DaemonProtocol.Operation.SHUTDOWN) {
+                    // The caller has its answer; closing ends serve() and with it the process.
+                    close();
+                }
             } catch (Exception failure) {
                 write(writer, error(failure instanceof IOException ? "REQUEST_REJECTED" : "REQUEST_FAILED"));
             }
@@ -182,6 +198,7 @@ final class DaemonServer implements AutoCloseable {
         }
         return switch (request.operation()) {
             case STATUS -> status();
+            case SHUTDOWN -> response("STOPPING", Map.of());
             case OPEN_UI, OPEN_PROJECT -> openProject(request);
             case OPEN_URI -> openUri(request.uri(), request.openBrowser());
             case GET_SELECTION -> describeSelection(UUID.fromString(request.selectionId()));
@@ -207,14 +224,37 @@ final class DaemonServer implements AutoCloseable {
     }
 
     private synchronized Map<String, Object> openProject(DaemonProtocol.Request request) throws IOException {
-        Path project = Path.of(Objects.requireNonNull(request.project(), "project")).toAbsolutePath().normalize();
-        RuntimeHandle runtime = reachableOrStarted(project);
-        boolean browserOpened = request.openBrowser() && BrowserLauncher.open(runtime.uiUri());
-        boolean ready = !request.openBrowser() || browserOpened;
+        RuntimeHandle runtime = request.project() == null ? knownProjectRuntime() : reachableOrStarted(Path.of(request.project()).toAbsolutePath().normalize());
+        if (runtime == null) {
+            return error("NO_KNOWN_PROJECT");
+        }
+        return openUi(runtime, request.openBrowser());
+    }
+
+    private static Map<String, Object> openUi(RuntimeHandle runtime, boolean openBrowser) throws IOException {
+        boolean browserOpened = openBrowser && BrowserLauncher.open(runtime.uiUri());
+        boolean ready = !openBrowser || browserOpened;
         return response(ready ? "READY" : "BROWSER_OPEN_FAILED", Map.of("endpoint", runtime.endpoint().toString(), "browserOpened", browserOpened));
     }
 
+    /**
+     * Reports whether a URI only asks for the UI: the bare scheme, or the {@code ui} or
+     * {@code open} address. It carries nothing to verify, so it is matched as text and never
+     * reaches a project runtime as a deep link.
+     */
+    static boolean isUiUri(String uriValue) {
+        String address = uriValue.strip().toLowerCase(java.util.Locale.ROOT);
+        while (address.endsWith("/")) {
+            address = address.substring(0, address.length() - 1);
+        }
+        return Set.of("synesis:", "synesis://ui", "synesis://open").contains(address);
+    }
+
     private synchronized Map<String, Object> openUri(String uriValue, boolean openBrowser) throws IOException {
+        if (isUiUri(uriValue)) {
+            RuntimeHandle runtime = knownProjectRuntime();
+            return runtime == null ? response("URI_UNRESOLVED", Map.of("reason", "NO_KNOWN_PROJECT")) : openUi(runtime, openBrowser);
+        }
         validateUriShape(uriValue);
         if (isAnswer(uriValue)) {
             TraversalAnswer answer = TraversalAnswer.fromShareLink(uriValue);
@@ -415,6 +455,40 @@ final class DaemonServer implements AutoCloseable {
         return runtime;
     }
 
+    /**
+     * Picks the runtime that serves the UI when the caller names no project. The UI lists every
+     * known project whichever runtime serves it, so a project runtime that is already up is
+     * preferred, then the first known project that starts. An installation that knows no project
+     * is served from its own home workspace, so the page on which a project is added always opens.
+     *
+     * @return a reachable runtime, or {@code null} when not even the home workspace can serve
+     */
+    private RuntimeHandle knownProjectRuntime() {
+        closeUnreachableRuntimes();
+        for (Map.Entry<Path, RuntimeHandle> running : runtimes.entrySet()) {
+            if (!running.getKey().equals(homeRoot)) {
+                return running.getValue();
+            }
+        }
+        try {
+            for (KnownProjectRegistry.ProjectView project : eligibleProjects()) {
+                try {
+                    return runtimeFor(project);
+                } catch (IOException unavailable) {
+                    // The next known project may still start.
+                }
+            }
+        } catch (IOException registryUnavailable) {
+            // Without a registry no project is known.
+        }
+        try {
+            homeRoot = home.ensure().toAbsolutePath().normalize();
+            return reachableOrStarted(homeRoot);
+        } catch (IOException | RuntimeException unavailable) {
+            return null;
+        }
+    }
+
     private RuntimeHandle runtimeFor(KnownProjectRegistry.ProjectView project) throws IOException {
         Path path = project.path();
         RuntimeHandle runtime = reachableOrStarted(path);
@@ -568,6 +642,18 @@ final class DaemonServer implements AutoCloseable {
     }
 
     @FunctionalInterface
+    interface HomeWorkspace {
+
+        /**
+         * Makes sure the installation's own workspace exists.
+         *
+         * @return its root directory
+         * @throws IOException when it cannot be created or initialized
+         */
+        Path ensure() throws IOException;
+    }
+
+    @FunctionalInterface
     interface RuntimeStarter {
 
         /**
@@ -590,11 +676,12 @@ final class DaemonServer implements AutoCloseable {
         boolean reachable();
 
         /**
-         * Returns the runtime UI URI.
+         * Returns a URI that opens the runtime UI once.
          *
-         * @return local UI URI
+         * @return local UI URI carrying a fresh one-time bootstrap token
+         * @throws IOException when the runtime cannot issue one
          */
-        URI uiUri();
+        URI uiUri() throws IOException;
 
         /**
          * Dispatches an untouched deep-link URI to the runtime.

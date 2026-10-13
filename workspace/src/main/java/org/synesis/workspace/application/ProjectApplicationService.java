@@ -243,6 +243,19 @@ public final class ProjectApplicationService {
      * @throws ProjectApplicationException if Git or Synesis initialization fails
      */
     public ProjectInitResult initForRegistration(Path projectRoot) throws ProjectApplicationException {
+        return initForRegistration(projectRoot, true);
+    }
+
+    /**
+     * Initializes a directory as {@link #initForRegistration(Path)} does, optionally without
+     * provider MCP configuration.
+     *
+     * @param projectRoot          target directory
+     * @param configureProviderMcp whether provider MCP configuration should be ensured
+     * @return structured initialization result
+     * @throws ProjectApplicationException if Git or Synesis initialization fails
+     */
+    public ProjectInitResult initForRegistration(Path projectRoot, boolean configureProviderMcp) throws ProjectApplicationException {
         Path root = directory(projectRoot, "project directory");
         if (!GitRepositoryFacts.hasGitMetadata(root)) {
             try {
@@ -251,7 +264,7 @@ public final class ProjectApplicationService {
                 throw new ProjectApplicationException("GIT_INIT_FAILED", "Could not initialize Git in the selected folder", failure);
             }
         }
-        return init(root);
+        return init(root, configureProviderMcp);
     }
 
     /**

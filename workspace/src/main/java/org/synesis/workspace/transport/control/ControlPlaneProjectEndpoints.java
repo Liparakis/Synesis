@@ -16,9 +16,12 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -40,6 +43,11 @@ final class ControlPlaneProjectEndpoints {
      * Maximum accepted length of a textual UUID field.
      */
     private static final int MAX_UUID_LENGTH = 64;
+
+    /**
+     * Maximum projects one removal names; the registry holds no more than this.
+     */
+    private static final int MAX_REMOVALS = 256;
 
     /**
      * Maximum accepted length of a project path.
@@ -240,21 +248,40 @@ final class ControlPlaneProjectEndpoints {
     }
 
     /**
-     * Removes a known project from the registry.
+     * Removes known projects from the registry. {@code projectIds} names any number of them and
+     * they go in one durable write, so the page can drop them at once and a reload agrees; an
+     * identity that is no longer present is not an error. {@code projectId} names exactly one and
+     * is refused when it is not present.
      *
      * @param exchange HTTP exchange
-     * @param body     request body containing {@code projectId}
+     * @param body     request body containing {@code projectIds} or {@code projectId}
      * @throws IOException when the response cannot be written
-     * @throws ApiFailure  when the id is invalid or the registry rejects the removal
+     * @throws ApiFailure  when an id is invalid or the registry rejects the removal
      */
     void removeProject(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
-        UUID projectId = uuid(requiredText(body, "projectId", MAX_UUID_LENGTH), "projectId");
+        Set<UUID> removed;
         try {
-            removeKnownProject(projectId);
+            if (body.get("projectIds") instanceof List<?> requested) {
+                if (requested.size() > MAX_REMOVALS) {
+                    throw failure(400, "INVALID_REQUEST", "too many projects in one removal");
+                }
+                Set<UUID> projectIds = new LinkedHashSet<>();
+                for (Object value : requested) {
+                    if (!(value instanceof String text) || text.length() > MAX_UUID_LENGTH) {
+                        throw failure(400, "INVALID_REQUEST", "projectIds must hold project identities");
+                    }
+                    projectIds.add(uuid(text, "projectIds"));
+                }
+                removed = requireRegistry().removeAll(projectIds);
+            } else {
+                UUID projectId = uuid(requiredText(body, "projectId", MAX_UUID_LENGTH), "projectId");
+                removeKnownProject(projectId);
+                removed = Set.of(projectId);
+            }
         } catch (KnownProjectRegistry.RegistryException rejected) {
             throw registryFailure(rejected);
         }
-        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "REMOVED", "projectId", projectId.toString(), "projects", readModel.knownProjects()));
+        sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "REMOVED", "projectIds", removed.stream().map(UUID::toString).toList(), "projects", readModel.knownProjects()));
     }
 
     /**
@@ -284,17 +311,16 @@ final class ControlPlaneProjectEndpoints {
     }
 
     /**
-     * Removes a non-current project from the installation-local discovery index.
+     * Removes a project from the installation-local discovery index. The project this runtime
+     * serves can be removed like any other: only the registry entry goes, the runtime keeps
+     * running, and the project is remembered again the next time a command runs in it.
      *
      * @param projectId stable project identity to remove
-     * @throws KnownProjectRegistry.RegistryException when removal is not allowed, no registry is
-     *                                                configured, or the project is not present
+     * @throws KnownProjectRegistry.RegistryException when no registry is configured or the
+     *                                                project is not present
      */
     private void removeKnownProject(UUID projectId) throws KnownProjectRegistry.RegistryException {
         Objects.requireNonNull(projectId, "project ID");
-        if (projectId.equals(readModel.projectId())) {
-            throw new KnownProjectRegistry.RegistryException("CURRENT_PROJECT_PROTECTED", "the current runtime project cannot be removed");
-        }
         if (!requireRegistry().remove(projectId)) {
             throw new KnownProjectRegistry.RegistryException("PROJECT_NOT_FOUND", "project is not present in the registry");
         }
@@ -321,7 +347,7 @@ final class ControlPlaneProjectEndpoints {
      */
     private static ApiFailure registryFailure(KnownProjectRegistry.RegistryException failure) {
         int status = switch (failure.code()) {
-            case "CURRENT_PROJECT_PROTECTED", "PROJECT_NOT_FOUND", "IDENTITY_MISMATCH", "REGISTRY_FULL" -> 409;
+            case "PROJECT_NOT_FOUND", "IDENTITY_MISMATCH", "REGISTRY_FULL" -> 409;
             case "NOT_FOUND", "CONFLICT", "MALFORMED", "PROJECT_INVALID", "GIT_INIT_FAILED", "PROJECT_INITIALIZATION_FAILED" -> 400;
             default -> 503;
         };

@@ -74,7 +74,7 @@ final class DaemonProtocol {
         if (openBrowserValue != null && !(openBrowserValue instanceof Boolean)) {
             throw new IOException("openBrowser is invalid");
         }
-        if ((operation == Operation.OPEN_UI || operation == Operation.OPEN_PROJECT) && project == null) {
+        if (operation == Operation.OPEN_PROJECT && project == null) {
             throw new IOException("project is required for " + operation);
         }
         if (operation == Operation.OPEN_URI && uri == null) {
@@ -132,7 +132,8 @@ final class DaemonProtocol {
      */
     enum Operation {
         /**
-         * Open the current project's browser UI through the daemon.
+         * Open the browser UI through the daemon: on the named project, or, without one, on a
+         * project the installation already knows.
          */
         OPEN_UI,
         /**
@@ -147,6 +148,11 @@ final class DaemonProtocol {
          * Return non-secret daemon status.
          */
         STATUS,
+        /**
+         * Stop the daemon and the project runtimes it started. The installer sends this before it
+         * replaces or removes the files the daemon runs from.
+         */
+        SHUTDOWN,
         /**
          * Read the safe projection of a pending local project selection.
          */
