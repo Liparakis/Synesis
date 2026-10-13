@@ -280,6 +280,20 @@ public final class AgentNextActionService {
     }
 
     /**
+     * Says that the project's command is no longer the one that failed. A lane that was shown only
+     * the old failure, after an operator had changed the command, told the operator the old
+     * command still failed and never tried the new one.
+     */
+    private static String commandChangedSince(ProjectLocation location, Object failedCommand) {
+        String now = location.validation() == null ? null : org.synesis.workspace.infrastructure.json.ProviderJson.write(location.validation().argv());
+        if (failedCommand == null || failedCommand.equals(now)) {
+            return "";
+        }
+        return now == null ? " The project declares no validation command any more: ask to finish again."
+                : " The project's validation command has been changed since that failure and is now " + now + ": your work has not been tried against it, so ask to finish again.";
+    }
+
+    /**
      * Tells a producer whose last snapshot was rejected that it was, and why, in whatever answer
      * it is given until it submits a new one.
      *
@@ -303,10 +317,12 @@ public final class AgentNextActionService {
             result.putIfAbsent("rejectedSnapshot", rejected);
             // Worded by who refused it. Told that a reviewer had rejected it, a lane refused by
             // the validation command would look for a review decision that does not exist.
-            result.putIfAbsent("instruction", rejected.containsKey("validationFailure")
-                    ? "The project's validation command failed on your last snapshot combined with the work integrated before it; rejectedSnapshot.validationFailure.output is what it printed. "
-                            + "Correct it in your claimed files. Another lane's files are not yours to change: ask that lane with send_message or a contract change request. "
-                            + "Then ask to finish again with get_next_action and completionRequested."
+            result.putIfAbsent("instruction", rejected.get("validationFailure") instanceof Map<?, ?> failure
+                    ? "The project's validation command failed on your last snapshot combined with the work integrated before it; rejectedSnapshot.validationFailure.output is what it printed "
+                            + "and .command is what was run. Correct it in your claimed files. Another lane's files are not yours to change: ask that lane with send_message or a contract change request. "
+                            + "If nothing in your claimed files can make the command pass, tell the operator why with send_message to [\"operator\"] and stop. "
+                            + "Otherwise ask to finish again with get_next_action and completionRequested; that publishes your files as they are, changed or not."
+                            + commandChangedSince(location, failure.get("command"))
                     : "The reviewer rejected your last snapshot; rejectedSnapshot.reviewDecision.reason says what to correct. Make that correction in your claimed files, "
                             + "then ask to finish again with get_next_action and completionRequested.");
             return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
@@ -416,7 +432,10 @@ public final class AgentNextActionService {
                 || hasActiveIntent(inspection.location(), exactBinding))) {
             AgentResponse staleAction = staleCoordinationAction(inspection.location(), exactBinding, request.completionRequested());
             if (staleAction != null) {
-                return staleAction;
+                // The refusal is explained here too. An operator's change of the validation
+                // command moves the control head, so the lane that most needs to be told the
+                // command changed is the one whose workspace has just become stale.
+                return notingRejection(staleAction, inspection.location(), exactBinding);
             }
         }
         return readiness.response();
@@ -507,7 +526,7 @@ public final class AgentNextActionService {
             Path worktree = binding.worktreePath() == null ? null : Path.of(binding.worktreePath());
             LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
 
-            AgentResponse reviewLane = ReviewLaneProjection.reviewLaneAction(snapshotService, store, collaboration, lane, true);
+            AgentResponse reviewLane = ReviewLaneProjection.reviewLaneAction(snapshotService, store, collaboration, lane, true, completionRequested);
             if (reviewLane != null) {
                 return reviewLane;
             }
@@ -661,7 +680,7 @@ public final class AgentNextActionService {
         LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
         CapabilityActor actor = new CapabilityActor(callerIdentity.nodeId(), binding.supervisorId(), binding.workerId(), binding.sessionId());
 
-        AgentResponse reviewLane = ReviewLaneProjection.reviewLaneAction(snapshotService, store, collaboration, lane, false);
+        AgentResponse reviewLane = ReviewLaneProjection.reviewLaneAction(snapshotService, store, collaboration, lane, false, request.completionRequested());
         if (reviewLane != null) {
             return reviewLane;
         }

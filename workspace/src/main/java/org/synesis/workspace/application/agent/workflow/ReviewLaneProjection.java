@@ -59,9 +59,10 @@ final class ReviewLaneProjection {
      * @param lane          the caller's lane
      * @param reviewOnly    {@code true} to restrict coordination and review actions to review
      *                      matters, as required while the workspace is stale
+     * @param finishAsked   whether the caller asked to finish its lane
      * @return the first applicable action, or {@code null} when the lane has no review matters
      */
-    static AgentResponse reviewLaneAction(TaskSnapshotService snapshotService, PredictionEventStore store, Map<String, Object> collaboration, LaneScope lane, boolean reviewOnly) {
+    static AgentResponse reviewLaneAction(TaskSnapshotService snapshotService, PredictionEventStore store, Map<String, Object> collaboration, LaneScope lane, boolean reviewOnly, boolean finishAsked) {
         String participant = lane.participantId();
         AgentResponse response = AgentReviewActionProjection.pendingReviewRequestResponse(collaboration, store, participant);
         if (response != null) {
@@ -75,7 +76,7 @@ final class ReviewLaneProjection {
         if (response != null) {
             return response;
         }
-        response = revisionRequiredAction(snapshotService, store, participant, lane.worktree());
+        response = revisionRequiredAction(snapshotService, store, participant, lane.worktree(), finishAsked);
         if (response != null) {
             return response;
         }
@@ -116,9 +117,10 @@ final class ReviewLaneProjection {
      * @param store            current project projection
      * @param participantId    exact caller participant
      * @param assignedWorktree verified assigned worktree, or {@code null} when unknown
+     * @param finishAsked      whether the caller asked to finish its lane
      * @return a {@code REVISION_REQUIRED} response, or {@code null} when no revision is owed
      */
-    private static AgentResponse revisionRequiredAction(TaskSnapshotService snapshotService, PredictionEventStore store, String participantId, Path assignedWorktree) {
+    private static AgentResponse revisionRequiredAction(TaskSnapshotService snapshotService, PredictionEventStore store, String participantId, Path assignedWorktree, boolean finishAsked) {
         if (isNullOrBlank(participantId)) {
             return null;
         }
@@ -135,6 +137,13 @@ final class ReviewLaneProjection {
                 continue;
             }
             if (hasRevisionPublishableChanges(snapshotService, assignedWorktree, intent, rejected)) {
+                continue;
+            }
+            // A reviewer's rejection asks for a change, so the same content is not offered again.
+            // The validation command may have failed for what was never the lane's: the command
+            // itself, or what was integrated before. After an operator had changed the command,
+            // a lane with nothing to correct was shown this for ever and could not finish.
+            if (finishAsked && snapshotStateOf(store, rejected) == TaskCompletionState.VALIDATION_REFUSED) {
                 continue;
             }
             return revisionRequiredResponse(store, participantId, intent, rejected);

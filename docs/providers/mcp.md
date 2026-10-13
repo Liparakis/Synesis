@@ -79,9 +79,15 @@ output then standard error, at most 8 KiB) is added only in the
 `snapshots` list of the collaboration details or any other view of the
 snapshot. The lane
 corrects its own claimed files; another lane's files are asked for with
-`send_message` or a contract change request. A validation refusal makes no
-later revision review-required; a project with mandatory review reviews the
-repaired snapshot by its ordinary rules.
+`send_message` or a contract change request. A lane that asks to finish again
+(`completionRequested`) is not held at `REVISION_REQUIRED` for having changed
+nothing: the command may have failed for what was never the lane's, and it
+publishes its files as they are. A lane that can do nothing about the failure
+tells the operator with `send_message` to `["operator"]`. When the project's
+command is no longer the one that failed, the `instruction` says so and names
+the command it is now. A validation refusal makes no later revision
+review-required; a project with mandatory review reviews the repaired snapshot
+by its ordinary rules.
 
 When the command fails while a lane with a snapshot in the attempt has used its
 two repairs, when it timed out or could not be started, or when the pass that

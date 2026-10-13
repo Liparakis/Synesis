@@ -248,6 +248,8 @@ final class McpSyn039RejectedContinuationTest {
         assertEquals("IMPLEMENT", correctionWorkflow.get("type"), correction.toString());
         assertEquals(firstSnapshot.snapshotId(), correctionResult.get("latestRejectedSnapshotId"));
         assertFalse(correctionWorkflow.containsKey("recommendedTool"));
+        Map<String, Object> askedToFinish = innerResult(owner.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
+        assertEquals("revision_required", askedToFinish.get("reason"), "a reviewer's rejection asks for a change: unchanged files are not offered again; " + askedToFinish);
 
         Map<String, Object> secondAdmission = innerResult(reviewer.handleMessage(toolCall("get_next_action", "{}")));
         Map<String, Object> secondAdmissionArgs = map(map(map(secondAdmission.get("result")).get("workflow")).get("arguments"));
