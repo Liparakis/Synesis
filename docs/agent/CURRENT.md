@@ -1,3 +1,169 @@
+# 2026-10-13 — The UI opens on an installation that knows no project
+
+Uncommitted on `master`. ADR-0073's 2026-10-13 follow-up holds the decision.
+
+**Why.** After every project could be removed from the registry, the repository owner removed
+them all and `synesis ui`, `synesis://ui` and the desktop shortcut stopped opening anything
+(`NO_KNOWN_PROJECT`; the link and the shortcut said nothing at all).
+
+**What changed.** With no project known, the daemon serves the page from the installation's own
+workspace (`InstallationHome`, `ui-home` under the application state root). The registry refuses
+to record it, the snapshot reports `project: null` when served from it, and a project runtime is
+preferred whenever one is up or can start. The Windows activation helper shows a message box when
+a link could not be opened.
+
+**Shown with the source-built CLI and an empty isolated installation.** `synesis ui --no-browser`
+exits 0 and `synesis open synesis://ui` answers `READY`; the home workspace is initialized and no
+registry file is written. In a browser against the home runtime: the Projects page with no rows,
+the Add project button, no project navigation, the name `ui-home` nowhere, no console error; a
+folder registered through the control plane is listed after a reload. The registry, control-plane
+and daemon tests pass.
+
+**Not shown.** The message box of the activation helper. An installed build. A project added from
+the home page is listed as inactive there: the page still opens only the project whose runtime
+serves it, so it becomes openable when the UI is next opened and that project serves it.
+
+# 2026-10-13 — Removing projects works reliably, any project can be removed, and a reload keeps the page
+
+Uncommitted on `master`.
+
+**Root cause of the unreliable removal.** `KnownProjectRegistry` guarded its file with a file lock
+only. A file lock belongs to the process, so a second thread of one runtime asking for it was
+refused (`OverlappingFileLockException`, reported as `REGISTRY_LOCK_FAILED`, "could not access
+known project registry") instead of made to wait. The runtime reads the registry for every
+snapshot it sends the page while a removal writes it, so some removals were refused and a
+snapshot built at that moment listed no known project. A new test runs three reading threads
+against one removing thread and failed with exactly that message before the change. Threads of
+one process now queue on a per-file lock before asking for the file lock.
+
+**What else changed.**
+
+- Any project can be removed from the registry, the one serving the page included
+  (`CURRENT_PROJECT_PROTECTED` is gone). Only the entry goes; the runtime keeps running and the
+  project is remembered again when a command next runs in it. The confirmation says so.
+- The page keeps its session in the tab's session storage, so a reload carries on instead of
+  asking for `synesis ui`. A session the runtime refuses is dropped. Sessions still end after
+  thirty minutes and are not renewed.
+- An empty registry is shown as empty; the page no longer puts the current project back into the
+  list when the registry lists nothing.
+
+- A selection is removed in one request and one registry write (`projectIds` on the existing
+  `remove-project` command; `projectId` still names exactly one). The page used to send one
+  request per project. The repository owner asked for a persistent removal queue in the daemon;
+  it was not built, because the single write already gives what the queue was for: the whole
+  selection is durable before the request answers, so there is nothing left to work off in the
+  background and a reload agrees at once. Measured on a real runtime with thirty throwaway
+  projects: one request, 10 ms, rows gone from the page 7 ms after the click, none listed after a
+  reload.
+
+**Shown.** Against a real runtime from the source build, isolated application state and eight
+throwaway projects, in a browser: the page loaded from its bootstrap link, loaded again by address
+alone, removed all eight projects (seven inactive and the live one) after one confirmation with no
+error, and still listed none after another reload. Registry and control-plane tests and the 29
+web UI tests pass.
+
+**Not shown.** The same against an installed build. A project removed while agents work in it
+returns as soon as one of their commands runs, which can look like a failed removal.
+
+# 2026-10-13 — `synesis://ui` opens the UI, the installer stops the daemon, and can add a desktop shortcut
+
+Uncommitted on `master`. ADR-0073 and ADR-0080 hold the decisions under their 2026-10-13
+follow-ups.
+
+**What changed.**
+
+- The daemon answers `synesis://ui`, `synesis://open` and the bare `synesis://` by opening the UI
+  on a known project, the way `synesis ui` does outside a project. They are matched as text and
+  never reach a runtime as a deep link. Any other address is validated as before.
+- The daemon protocol has `SHUTDOWN`: the daemon answers, then closes itself and the runtimes it
+  started. The installer sends it after an install, repair or update has activated the new build,
+  and before an uninstall removes files (`bootstrap/internal/install/daemonstop`). A daemon too old
+  to know the request is ended directly, only when its program file lies inside the installation
+  root. Uninstall fails when the daemon cannot be stopped; an update reports it and still succeeds.
+- The wizard's install page has a checkbox, "Add a Synesis UI shortcut to the desktop". It writes
+  an internet shortcut to `synesis://ui` with the installation's icon
+  (`bootstrap/internal/install/uishortcut`). It is ticked on a first install and afterwards
+  follows whether the shortcut exists. Unticking it does not remove an existing shortcut;
+  uninstall does, and only a file that points at `synesis://ui`.
+- Uninstall also ends every other process whose program file lies inside the installation root
+  (project runtimes still exiting, MCP servers) and retries a refused file removal for about three
+  seconds. The first real uninstall with build `remaster38`, over an installed `remaster37`,
+  failed with "being used by another process" on a jar: the old daemon had been ended directly and
+  its runtimes were still exiting. No process ran from the installation when it was inspected
+  afterwards and the file was no longer held.
+- The eight daemon tests that opened a real browser no longer do.
+
+**Shown.** `go test ./...` in `bootstrap` and `:cli:test` (130 tests) pass, with new tests for each
+part, including one that ends a stand-in older daemon only when it runs from the installation.
+With the source-built CLI and isolated application state: `synesis open synesis://ui` and
+`synesis open synesis://` answered `READY`, `synesis open synesis://nonsense` was refused, and
+the installer's stop request ended a live daemon, its two runtime processes and its endpoint file.
+
+**Not shown.** No install, update or uninstall was run through the new installer, so the stop was
+not seen from the wizard, nor against a daemon of an installed older build. The address was not
+typed into a browser, and the desktop shortcut was not created by a real run or double-clicked.
+MCP server processes started from the installation are not stopped by the installer.
+
+# 2026-10-13 — `synesis ui` opens again on a running project, and opens outside a project
+
+Uncommitted on `master`. ADR-0073 holds the decisions under its 2026-10-13 follow-up.
+
+**Root causes.** The daemon built every UI link from the one bootstrap token a runtime issued at
+start, so a second opening carried a spent token ("bootstrap token is invalid or expired"). And
+`synesis ui` sent no project unless `--project` was given, which the daemon refused
+(`REQUEST_REJECTED`), inside a project as well as outside one.
+
+**What changed.** The runtime issues a fresh one-time bootstrap token to the holder of its command
+token (`POST /api/v1/commands/bootstrap`), and the daemon asks for one at every opening. The command
+sends the working directory when it is a project; without one the daemon serves the UI from a
+runtime already up, or from the first known project that starts, and answers `NO_KNOWN_PROJECT`
+when there is none.
+
+**Changed meaning, stated.** An unredeemed bootstrap token stops working when a newer one is
+issued. A second opening replaces the first tab's session, as a second redemption always would
+have. `OPEN_UI` no longer requires a project on the daemon protocol; `OPEN_PROJECT` still does.
+
+**Shown with the source-built CLI, isolated application state, throwaway projects.** Outside a
+project with nothing known: exit 10 and the sentence naming `synesis init`. After `synesis init`
+in a folder: `synesis ui --no-browser` exits 0 there and from an unrelated folder. Against a real
+runtime over HTTP: the start-up token opens a session (201), the same token again is refused (401,
+the reported message), a fresh token is refused without the command token (401) and issued with it
+(201), and it opens a session that reads the snapshot (200). `synesis ui` twice in a row with a
+browser answered `SYNESIS_UI_OPENED` both times.
+
+**Not shown.** What the two browser tabs displayed was not read back. The installed build was not
+replaced, so the installed `synesis ui` still has both defects until a new build is installed.
+With no known project at all the UI still cannot open; that needs a control plane no project
+owns, which ADR-0073 rejected.
+
+# 2026-10-13 — The browser UI is redrawn around a navigation rail
+
+Uncommitted on `master`. Only `web-ui/src/app/App.tsx`, its test and `web-ui/src/styles.css`
+changed: no endpoint, DTO, route path or client call did. The repository owner asked for a free
+redesign, which supersedes the SYN-055 brief where they differ (that brief ruled out extra
+navigation and fixed the content widths).
+
+**What changed.**
+
+- A rail on the left, like the setup wizard's, holds the brand, the Projects link, the five
+  project views with a count each, and the connection state with the runtime version. The
+  project views were tabs under the project header. The connection message after the first
+  snapshot was shown nowhere; a degraded stream is now visible in the rail.
+- Projects is a dense list with aligned columns in place of cards. Overview, Agents,
+  Coordination, Network and Diagnostics keep their content and are restyled.
+- The stylesheet was rewritten: 3473 lines to about 1560, same palette as the wizard.
+- Projects can be removed from the registry several at a time: a checkbox on each removable row,
+  "Select all" over the filtered list, and one confirmation that names them. The registry still
+  removes one entry per request, so the page sends them in turn; a refused one comes back into the
+  list with its reason and does not stop the others. The project serving the page has no checkbox.
+- Removed controls that did nothing or were doubled: the Agents "Filter" button, and the second
+  "Create Invitation" and "Join" buttons on Network.
+
+**Checked.** Typecheck, lint, 27 tests and the production build pass. Every view and the finding
+dialog were looked at in a browser against the development fixture at about 1376 px wide; the
+Projects columns align and no page scrolls sideways there or at 375 px. Not checked: the packaged
+UI behind the real control plane, a browser other than Chromium, and an accessibility scan.
+
 # 2026-10-13 — The Windows setup wizard is redrawn, opens at once, and no longer flashes console windows
 
 Build `0.1.0-dev.remaster36-20261013`. ADR-0080 holds the decisions under "Redesign follow-up

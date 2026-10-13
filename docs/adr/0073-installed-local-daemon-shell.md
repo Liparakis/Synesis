@@ -82,3 +82,66 @@ here. Acceptance must include malformed/oversized IPC, duplicate launch, crash
 and stale endpoint recovery, runtime disappearance, secure browser bootstrap,
 installed disposable-artifact smoke coverage, and resource measurements from
 the daemon process.
+
+## Follow-up (2026-10-13): reopening the UI, and opening it outside a project
+
+Two defects of `synesis ui` came from this slice and are corrected.
+
+* **A reopened UI was refused.** A project runtime issued one bootstrap token
+  when it started, and the daemon built every UI link from it. The runtime
+  outlives the browser tab, so the second `synesis ui`, and any deep link that
+  opened the browser after the first, carried a spent or expired token and the
+  page answered "bootstrap token is invalid or expired". The runtime now has
+  `POST /api/v1/commands/bootstrap`, authenticated by the runtime command token
+  the daemon already holds for deep links. It returns a fresh one-time token
+  with the same five-minute life. The daemon asks for one each time it opens a
+  browser. Only the newest unredeemed token is redeemable, and a new session
+  still replaces the one before it, so an earlier tab stops being served. The
+  ready line keeps its `controlBootstrap` field for the foreground command and
+  for scripts. No new authority is created: the daemon could already open the
+  UI once with the token it was handed.
+* **`synesis ui` needed `--project`.** The command sent no project unless the
+  option was given, and the daemon refused an `OPEN_UI` without one. The
+  command now sends the working directory when it is an initialized project.
+  Without one, the daemon serves the UI from a runtime that is already up, or
+  from the first known project whose runtime starts; the UI lists every known
+  project whichever runtime serves it. With no known project it answers
+  `NO_KNOWN_PROJECT` and the command says to run `synesis init` or pass
+  `--project`. A UI with no project at all would need a control plane that no
+  project runtime owns, which this ADR rejected above and which stays out of
+  scope.
+* **A home workspace serves an installation without projects (supersedes the
+  limit in the item above).** Once the page could remove every registry entry,
+  the current project included, an emptied registry locked the user out: no
+  runtime was left to serve the page on which a project is added, and a link or
+  shortcut failed without a word. The daemon now falls back to the
+  installation's own workspace, a private Synesis project under the
+  application state root (`ui-home`), initialized on first need without provider
+  configuration. It is not a user project: the registry refuses to record it,
+  the control plane reports no current project when it serves from it, and
+  deep links are never routed to it. A project runtime that is up, or a known
+  project that starts, is always preferred. This keeps the rule that a project
+  runtime owns the control plane; it does not add the second control plane
+  rejected above. The activation helper also shows a message box when a link
+  could not be opened, since it has no console to print to.
+* **An address for the UI.** `synesis://ui`, `synesis://open` and the bare
+  `synesis://` open the UI on a known project, as `synesis ui` does outside a
+  project. They carry nothing to verify, so the daemon matches them as text
+  before deep-link validation and never hands them to a runtime.
+* **The daemon can be told to stop.** The daemon outlives every command, so an
+  updated installation kept being served by the old build and an uninstalled
+  one left a process behind. The protocol gains `SHUTDOWN`, authenticated like
+  every other operation: the daemon answers `STOPPING`, then closes itself and
+  the runtimes it started. The installer sends it once a new build is active
+  and before an uninstall removes files. A daemon from a build without the
+  operation is ended directly, but only when its program file lies inside the
+  installation root; the process identifier in the endpoint file is not taken
+  as proof of what runs there. An older client is unaffected: it never sends
+  the operation.
+* **Uninstall ends what runs from the installation.** A daemon ended directly
+  leaves its project runtimes to notice and exit on their own, and agents may
+  have MCP servers running from the installation. Either held application
+  files open, and a first real uninstall failed on a file in use. Uninstall
+  now, after stopping the daemon, waits a moment and then ends every process
+  whose program file lies inside the installation root, and retries a removal
+  that is refused for about three seconds. An update ends only the daemon.

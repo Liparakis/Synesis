@@ -107,6 +107,17 @@ above.
 - **Progress log.** The log on the progress page shows four rows and cuts long
   lines; the full text is under "Show details" on the result page.
 
+- **Desktop shortcut (added later the same day).** The install page offers
+  "Add a Synesis UI shortcut to the desktop". The shortcut is an internet
+  shortcut to `synesis://ui`, so it works through the link handler the wizard
+  registers and needs no path to a runtime. It is ticked on a first install
+  and afterwards follows whether the shortcut exists. Uninstall removes it,
+  and only when the file still points at `synesis://ui`.
+- **The daemon is stopped.** Install, repair and update stop the running
+  Synesis daemon once the new build is active, and uninstall stops it before
+  removing files; ADR-0073 holds the mechanism. Uninstall fails rather than
+  remove files a daemon still runs from.
+
 ## Consequences
 
 The double-click Windows experience becomes familiar and responsive without
