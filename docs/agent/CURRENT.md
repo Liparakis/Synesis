@@ -1,3 +1,124 @@
+# 2026-10-13 — An agent is woken for its own lane only, a wait is held inside Synesis, and the review of both
+
+Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster32-20261013` and `remaster33`. No new
+record. Three changes answer what the runs of `remaster30` showed, and the strict quality review of
+them and of the two changes to Git lookups was run and acted on.
+
+**What changed.**
+
+- *A stopped agent is resumed only for a lane of its own.* Progress used to resume every stopped
+  agent of a provider that held any open lane, also one whose own lane had ended; such an agent
+  looked for work, announced lanes to verify what was integrated, and each announcement woke the
+  others. The run controller now asks whether a lane taken through one of the agent's own
+  connections is still open. The provider manual and the managed `AGENTS.md` section say that a
+  lane exists to produce something the goal names, and that an agent with nothing left unclaimed
+  stops.
+- *A caller told to wait is held by the server.* An agent told to wait asked again every few
+  seconds and gave up after about a minute, was stopped, and was started again as a new session
+  that had to take its lane back; a reviewer was once left waiting for good on that path. A
+  `get_next_action` whose answer is a wait with no message to hand over is now held until the
+  project log has something new for the caller or twenty seconds pass
+  (`SYNESIS_WAIT_HOLD_SECONDS`, zero to thirty, zero turns it off), and when something is new the
+  whole call is made again, through every gate, and that answer returned. The hold changes when
+  an answer is given, never which.
+- *The note beside a message asks for an answer.* It asks the reader for one short answer to a
+  direct question about its own files, and tells a sender to carry on and not wait.
+
+**The eleven real runs, repeated on `remaster32`, and again on `remaster33` with the review fixes.**
+
+| Run | remaster28 | remaster30 | remaster32 | remaster33 |
+| --- | --- | --- | --- | --- |
+| Two agents, SL | 170 s, 0 resumes | 66 s, 0 | 93 s, 0 | 126 s, 0 |
+| Two agents, LL | 194 s, 0 | 137 s, 0 | 183 s, 0 | 227 s, 0 |
+| Three agents, SLS | 147 s, 1 | 239 s, 1, one test of the result fails | 137 s, 0 | 151 s, 0 |
+| Three agents, LLL | 577 s, 3 | 509 s, 1 | 203 s, 0 | 485 s, 1 |
+| Five agents, SSSSS | 157 s, 11 | 211 s, 7 | 105 s, 1 | 122 s, 1 |
+| Five agents, LLLLL | 422 s, 2 | TIMED_OUT, 1,801 s, 38 | 282 s, 0 | 343 s, 0 |
+| Five agents, SLSLS | 316 s, 10 | 227 s, 5 | 320 s, 0 | 475 s, 0 |
+| Five agents, SLSLS again | 271 s, 13 | 248 s, 2 | 271 s, 0 | 222 s, 0 |
+| Five agents, LSLSL | 249 s, 0 | 384 s, 7 | 378 s, 0 | 178 s, 0 |
+| Review with the policy, LS | 412 s, 0 | STALLED, 510 s, 3 | 165 s, 0 | 185 s, 0 |
+| Cancel, SL | 82 s, 0 | 80 s, 0 | 44 s, 0 | 64 s, 0 |
+| All eleven | 2,997 s, 40 | 4,412 s, 64, nine completed | 2,181 s, 1 | 2,578 s, 2 |
+
+Eleven of eleven completed on both builds, and the tests of every integrated result pass. One
+resume in eleven runs, and two, against 64 and 40. One pass over each goal on each build: it shows
+the restarts are gone, not how often a run of each kind completes, and the times of one goal
+differ between two passes on near-identical code by more than they differ between builds. The
+last two runs on `remaster32` overlapped with a build on the same machine. The power of the
+machine failed during the runs on `remaster33`: the five-Luna run was cut off with its five goals
+integrated and its tests passing but no result recorded, and it and the run after it were made
+again; the table holds those.
+
+The cycle with a file Synesis did not put in the project's checkout was repeated: the request to
+the operator was raised with the file as evidence, closed when the operator removed the file and
+asked for a recheck, and the run started again completed in 109 seconds.
+
+**Messages were hardly used.** Three messages in all the runs on the two builds. On `remaster32`,
+one: the usage document's lane asking the command-line lane to say when its work was ready,
+unanswered. On `remaster33`, in the run the power cut off, the usage document's lane said which
+command syntax it had assumed and asked to be told if the program differed, and the command-line
+lane answered eleven seconds later that it had not written the program yet and was waiting for
+the storage contract; the document was left as assumed and matches the program that was then
+written. One question answered of two: too few to say the new wording makes an answer more
+likely. These goals need no conversation: the public contract carries what one lane needs from
+another. A message waking a stopped agent, a successor inheriting a conversation and an agent
+addressing the operator remain NOT REACHED in a real run.
+
+**The review.** One reviewer read the three commits (`2c39c551`, `696069a3`, `a73237c1`) and ran
+nothing. It found the two changes to Git lookups sound for honest layouts and found one defect
+that mattered in the third, with eleven smaller findings. Each was checked against the code; all
+were real and all are acted on or stated below.
+
+- *An agent resumed once could be left for good.* Each start of an agent's process has a
+  connection of its own, and only the last was asked whether it held an open lane. A resumed
+  process that ended before it took its lane back held nothing; the lane stayed open under the
+  first connection, and the agent was never resumed again. Every connection an agent has had is
+  now asked.
+- *A message already waiting was handed over only after the hold.* It is now handed over at once;
+  a caller with a message is not held.
+- *The answer after a hold was projected outside the gates of a call.* The root, the admission,
+  the lease and the recovery fence were checked once, before up to fifty seconds of hold. The
+  hold now sits in the protocol handler around the whole gated call, and the upper bound is
+  thirty seconds.
+- *The Git layout was resolved textually where Git resolves it physically.* A `..` in a pointer
+  file read from behind a symbolic link named a different directory than the one Git uses.
+  Real paths are used throughout.
+- *Smaller.* A directory that is itself a Git directory counts as possibly inside a repository.
+  The last-resort guess of a repository's identity from a bare look at `.git` is removed: where
+  neither the layout nor Git names a common directory there is none, and the caller is refused.
+  What ends a hold is now stated once, from the event type's own "records no state change". A
+  lookup of a connection's session that failed is no longer remembered as "no session".
+
+**Semantic changes, stated.** Reading a session's branch and commit in one Git question differs
+from the two questions before in three cases: a branch that shares its name with a tag is now
+accepted (the short name used to come back as `heads/x` and fail); a branch that is a symbolic
+reference is resolved to its target; and a reference named `HEAD` makes the question ambiguous
+and fails every worktree of that repository, closed. A directory with a hollow `.git` no longer
+has a repository identity.
+
+**Corrected.** The entry below says Synesis does not run a project's combined tests before it
+integrates. That is wrong. A project that declares `validation` in `.synesis/project.json` has
+that command run in the lane before a finish is published and again on the integration worktree
+before the control branch moves (ADR-0042). The acceptance projects never declared one, which is
+why a failing test was integrated. What is missing is a way for an operator to set it, and a
+lawful next action when the combined run fails; neither is built.
+
+Not done: the resume gate asks per connection while the answer deadline and the operator's hold
+are still asked per provider; whether a participant with no active intent can be offered a review
+it is then never woken for (a suspicion of the review, not reproduced); the combined test run
+above.
+
+Verification: on the commit that holds the review fixes, link 172, coordination 211,
+project-record 60, relay 12, mcp-contract 20, workspace 691, MCP 183, CLI 120, 1,469 tests,
+0 failures, with the documentation, format, architecture, dashboard and hygiene gates: on Windows
+from PowerShell with four workers in 15 minutes 30 seconds (1 skipped), and on Linux in the
+container in 1 minute 53 seconds (2 skipped). The two tests of the agent left for good fail with
+the old rule put back, both together and the message one alone. The Linux runner now stops when
+a Git step of its preparation fails: a stale lock once left the patch of an earlier run in place
+and the gate ran on that tree without saying so. The test subagent: Sonnet 5.5 at medium effort
+pinned at launch; it reported its model and could not show its effort from runtime metadata.
+
 # 2026-10-13 — The real runs repeated after the reviews, and a reviewer left waiting
 
 Branch `remaster/2026-10-10`, builds `0.1.0-dev.remaster30-20261013` and `remaster31`. No new
