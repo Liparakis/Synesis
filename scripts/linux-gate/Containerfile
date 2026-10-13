@@ -1,0 +1,10 @@
+# Linux image for running the Synesis gate: Java 25, git, and Node for the dashboard build.
+FROM docker.io/library/eclipse-temurin:25-jdk
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq git curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.gz -o /tmp/node.tar.gz \
+    && mkdir -p /opt/node && tar -xzf /tmp/node.tar.gz -C /opt/node --strip-components=1 && rm /tmp/node.tar.gz
+ENV PATH="/opt/node/bin:${PATH}"
+# The tests create repositories and commit in them; the clone is owned by another user than the mount.
+RUN git config --system --add safe.directory '*' \
+    && git config --system user.name "Linux Gate" && git config --system user.email "gate@example.com"

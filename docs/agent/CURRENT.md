@@ -50,6 +50,24 @@ and that wording was in no contract. The work group completed; the project's own
 failure. Synesis does not run a project's combined tests before it integrates. The run repeated on
 `remaster31` completed with its tests passing.
 
+**Where test time went, and the gate on Linux.** One test class run alone started 6,187 `git`
+processes for 24 tests; starting one costs about 30 to 40 ms on Windows. 2,654 of them asked only
+which repository a directory belongs to. That is now read from the two files Git itself reads
+(`GitRepositoryLayout`), afresh each time and only for the plain layouts, and Git is not asked about a
+directory that is in no repository. A session's branch and commit are asked in one process, and the
+ancestor check is skipped when the worktree is still at its base commit. The class went from 531
+seconds to 257 and from 6,187 processes to 2,836; the Windows gate went from about 32 minutes to
+about 18 with four workers. Twelve workers had not helped (25.5 minutes for the two slow modules):
+the cost is starting processes.
+
+On Linux a `git` process starts in about 1.2 ms. The whole gate, run in a container from a clone on
+the container's own filesystem, passed in 2 minutes 25 seconds with nothing reused: link 172,
+coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 667 (2 skipped), MCP 176,
+CLI 120, with the dashboard build and every static gate. This is the first time the suite has run
+on Linux. `scripts/linux-gate/run.ps1` does it for the current branch with uncommitted work
+(`docs/development/build-and-test.md`). It does not test Windows behaviour, so the Windows gate is
+still run before a push. Agents with real models on Linux remain NOT REACHED.
+
 Messages: three in two of these runs, each again the usage document's lane asking for the
 command-line syntax; one answered. A Synesis-raised `bound_consumer_absent` request was raised and
 closed by itself in the three-Luna run.
@@ -61,9 +79,11 @@ inheriting a conversation, or an agent addressing the operator.
 
 Verification: link 172, coordination 210, project-record 60, relay 12, mcp-contract 20, workspace 658
 (1 skipped), MCP 176, CLI 120, 0 failures, with the documentation, format, architecture, dashboard
-and hygiene gates, run from PowerShell with four workers. The test subagent that wrote the regression test: Sonnet 5.5 at
+and hygiene gates, run from PowerShell with four workers; after the two changes to Git lookups the
+same gate passed again with workspace 667 (1 skipped), 1,437 tests in all, in 18 minutes 14 seconds.
+The test subagent that wrote the regression test: Sonnet 5.5 at
 medium effort pinned at launch; it reported its model and could not show its effort from runtime
-metadata. Not run on Linux.
+metadata.
 
 # 2026-10-12 — Step 3 of three: agents can talk to each other, and the review of step 2
 
