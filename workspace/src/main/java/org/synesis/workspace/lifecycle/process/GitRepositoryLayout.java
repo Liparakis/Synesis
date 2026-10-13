@@ -35,8 +35,8 @@ public final class GitRepositoryLayout {
      * a main checkout and all its linked worktrees share.
      *
      * @param checkoutRoot top directory of a main checkout or of a linked worktree
-     * @return the common directory as the layout names it, not yet made canonical; empty when the
-     *         layout is not one of the plain ones and Git has to be asked
+     * @return the common directory as a real path; empty when the layout is not one of the plain
+     *         ones and Git has to be asked
      */
     public static Optional<Path> commonDirectory(Path checkoutRoot) {
         // Git would answer from these instead of from the checkout.
@@ -44,17 +44,19 @@ public final class GitRepositoryLayout {
             return Optional.empty();
         }
         try {
-            Path root = checkoutRoot.toAbsolutePath().normalize();
+            // Real paths throughout, as Git walks them: resolved textually, a ".." in a pointer
+            // read from behind a symbolic link named a different directory than the one Git uses.
+            Path root = checkoutRoot.toRealPath();
             Path dotGit = root.resolve(".git");
             Path gitDirectory;
             if (Files.isDirectory(dotGit)) {
-                gitDirectory = dotGit;
+                gitDirectory = dotGit.toRealPath();
             } else {
                 Optional<String> named = pointer(dotGit).filter(line -> line.startsWith(GIT_DIR_PREFIX)).map(line -> line.substring(GIT_DIR_PREFIX.length()).strip());
                 if (named.isEmpty() || named.get().isEmpty()) {
                     return Optional.empty();
                 }
-                gitDirectory = root.resolve(named.get()).normalize();
+                gitDirectory = root.resolve(named.get()).toRealPath();
             }
             if (!Files.isRegularFile(gitDirectory.resolve("HEAD"))) {
                 return Optional.empty();
@@ -65,10 +67,9 @@ public final class GitRepositoryLayout {
                 if (shared.isEmpty() || shared.get().isEmpty()) {
                     return Optional.empty();
                 }
-                common = gitDirectory.resolve(shared.get()).normalize();
+                common = gitDirectory.resolve(shared.get()).toRealPath();
             }
-            // What makes a directory the shared one: it holds the objects and the references.
-            return Files.isDirectory(common.resolve("objects")) && Files.isDirectory(common.resolve("refs")) ? Optional.of(common) : Optional.empty();
+            return holdsARepository(common) ? Optional.of(common) : Optional.empty();
         } catch (IOException | RuntimeException unreadable) {
             return Optional.empty();
         }
@@ -76,8 +77,9 @@ public final class GitRepositoryLayout {
 
     /**
      * Tells whether Git could find a repository from a directory: the directory or one above it
-     * holds a {@code .git}, or this process's environment names a repository. Where neither is
-     * so, Git answers "not a git repository" and there is no need to start it to hear that.
+     * holds a {@code .git} or is itself a Git directory, or this process's environment names a
+     * repository. Where none is so, Git answers "not a git repository" and there is no need to
+     * start it to hear that.
      *
      * @param directory directory Git would be started in
      * @return false only when Git is certain to find no repository there
@@ -88,7 +90,7 @@ public final class GitRepositoryLayout {
         }
         try {
             for (Path current = directory.toAbsolutePath().normalize(); current != null; current = current.getParent()) {
-                if (Files.exists(current.resolve(".git"))) {
+                if (Files.exists(current.resolve(".git")) || Files.isRegularFile(current.resolve("HEAD")) && holdsARepository(current)) {
                     return true;
                 }
             }
@@ -96,6 +98,11 @@ public final class GitRepositoryLayout {
         } catch (RuntimeException unreadable) {
             return true;
         }
+    }
+
+    /** What makes a directory a repository's own: it holds the objects and the references. */
+    private static boolean holdsARepository(Path gitDirectory) {
+        return Files.isDirectory(gitDirectory.resolve("objects")) && Files.isDirectory(gitDirectory.resolve("refs"));
     }
 
     /** Reads a one-line pointer file; empty when it is missing, not a regular file, or too large to be one. */

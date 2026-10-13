@@ -124,6 +124,16 @@ lane that has published its work can no longer revise its contract
 (`CONTRACT_OWNER_COMPLETING`). `collaboration_status` lists every change
 request beside the contracts.
 
+## Waiting
+
+A `get_next_action` whose answer is a wait with nothing to hand over is held by
+the server until the project log has something new for the caller or twenty
+seconds pass, and when something is new the call is made again from the start
+and its answer returned. An agent can therefore sit through a peer's work
+without a model turn every few seconds. The hold changes when an answer is
+given, never which. `SYNESIS_WAIT_HOLD_SECONDS` sets it for a server process
+(zero to thirty; zero turns it off).
+
 ## Messages
 
 `send_message` sends text from the caller's lane (ADR-0093). `to` names each

@@ -68,6 +68,24 @@ class ProviderWorktreeGitFactsTest {
     }
 
     @Test
+    void aBranchThatSharesItsNameWithATagStillYieldsTheBranchName(@TempDir Path temp) throws Exception {
+        Path main = repository(temp.resolve("repo"));
+        run(main, "tag", "release");
+        run(main, "checkout", "-b", "release");
+
+        assertEquals("release", ProviderWorktreeGitFacts.head(main).branch());
+    }
+
+    @Test
+    void aDetachedHeadIsRefusedAsWorkspaceHeadUnavailable(@TempDir Path temp) throws Exception {
+        Path detached = repository(temp.resolve("detached"));
+        run(detached, "checkout", "--detach");
+
+        java.io.IOException refused = assertThrows(java.io.IOException.class, () -> ProviderWorktreeGitFacts.head(detached));
+        assertEquals("WORKSPACE_HEAD_UNAVAILABLE", refused.getMessage());
+    }
+
+    @Test
     void theAncestorCheckAgreesWithGitWhetherOrNotGitIsAsked(@TempDir Path temp) throws Exception {
         Path main = repository(temp.resolve("repo"));
         String base = GitProcessRunner.run(main, "rev-parse", "HEAD").trim();

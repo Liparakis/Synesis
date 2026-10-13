@@ -2,9 +2,12 @@ package org.synesis.workspace.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.synesis.workspace.test.TestGit.run;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -53,6 +56,21 @@ class AdministrativeStateLocatorTest {
             .repositoryIdentity(),
         locator.resolve(second)
             .repositoryIdentity());
+  }
+
+  @Test
+  void aDirectoryWithAnEmptyGitDirectoryIsNoRepositoryAndIsRefused(@TempDir Path temp) throws Exception {
+    // Git would otherwise find a repository above the temporary directory.
+    for (Path above = temp.toAbsolutePath().normalize(); above != null; above = above.getParent()) {
+      assumeTrue(!Files.exists(above.resolve(".git")), "a repository lies above the temporary directory: " + above);
+    }
+    Path hollow = Files.createDirectories(temp.resolve("hollow"));
+    Files.createDirectories(hollow.resolve(".git"));
+
+    AdministrativeStateLocator locator = new AdministrativeStateLocator();
+    IOException refused = assertThrows(IOException.class, () -> locator.resolveGitCommonDirectory(hollow));
+    assertEquals("GIT_COMMON_DIRECTORY_UNAVAILABLE", refused.getMessage());
+    assertThrows(IOException.class, () -> locator.resolve(hollow));
   }
 
   @Test

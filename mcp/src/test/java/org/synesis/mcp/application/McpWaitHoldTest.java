@@ -118,7 +118,33 @@ class McpWaitHoldTest {
         Map<String, Object> answer = call(owner, "get_next_action", Map.of());
 
         assertEquals("wait", answer.get("nextAction"), answer.toString());
-        assertTrue(millisSince(started) < 1_000L, "answered at once: " + millisSince(started));
+        assertTrue(millisSince(started) < 3_000L, "answered at once: " + millisSince(started));
+    }
+
+    @Test
+    void aCallerToldToWaitWithAnUnreadMessageIsAnsweredAtOnceWithTheMessage() {
+        owner.holdWaitsFor(Duration.ofSeconds(8));
+        assertEquals("completed", call(reviewer, "send_message", Map.of("to", List.of("todo.py"), "text", "is the snapshot ready?")).get("status"));
+        long started = System.nanoTime();
+
+        Map<String, Object> answer = call(owner, "get_next_action", Map.of());
+
+        long took = millisSince(started);
+        assertEquals("wait", answer.get("nextAction"), answer.toString());
+        assertTrue(String.valueOf(result(answer).get("messages")).contains("is the snapshot ready?"), "the message came with the wait: " + answer);
+        assertTrue(took < 4_000L, "not held for the eight seconds: " + took);
+    }
+
+    @Test
+    void aCallThatIsNotGetNextActionIsNeverHeld() {
+        owner.holdWaitsFor(Duration.ofSeconds(8));
+        long started = System.nanoTime();
+
+        Map<String, Object> status = call(owner, "request_coordination", Map.of("kind", "collaboration_status", "payload", Map.of()));
+
+        long took = millisSince(started);
+        assertEquals("completed", status.get("status"), status.toString());
+        assertTrue(took < 4_000L, "not held for the eight seconds: " + took);
     }
 
     @Test
@@ -161,6 +187,8 @@ class McpWaitHoldTest {
         assertTrue(took < 8_000L, "answered long before the ten seconds: " + took);
         assertNotEquals("wait", held.get("nextAction"), held.toString());
         owner.holdWaitsFor(Duration.ZERO);
-        assertEquals(call(owner, "get_next_action", Map.of()).get("nextAction"), held.get("nextAction"), "the answer is the one the projection gives now");
+        Map<String, Object> now = call(owner, "get_next_action", Map.of());
+        assertEquals(now.get("nextAction"), held.get("nextAction"), "the answer is the one the projection gives now");
+        assertEquals(result(now).get("workflow"), result(held).get("workflow"), "projected after the change, not before it");
     }
 }

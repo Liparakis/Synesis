@@ -86,6 +86,10 @@ final class McpCoordinationTools {
      */
     private Duration waitHold = Duration.ZERO;
     /**
+     * The wait the last next-action call answered, when it is to be held.
+     */
+    private PendingWait pendingWait;
+    /**
      * Service that publishes capability implementations.
      */
     private final ImplementationPublicationService publicationService;
@@ -185,6 +189,7 @@ final class McpCoordinationTools {
     AgentResponse getNextAction(Map<String, Object> arguments, Path activeProjectRoot) {
         AgentResponse agentResponse;
         boolean completionRequested;
+        pendingWait = null;
         try {
             completionRequested = optionalBooleanArgument(arguments, "completionRequested");
         } catch (IllegalArgumentException invalidCompletionRequest) {
@@ -196,7 +201,21 @@ final class McpCoordinationTools {
         } else {
             reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
             NextActionRequest nextReq = new NextActionRequest(activeProjectRoot, provider, connectionInstanceId, completionRequested);
-            agentResponse = withUnreadMessages(heldWhileWaiting(nextReq, activeProjectRoot), activeProjectRoot);
+            ProjectLocation location = null;
+            long head = 0L;
+            if (!waitHold.isZero()) {
+                try {
+                    location = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot);
+                    head = ProjectChangeWait.head(location);
+                } catch (Exception notLocated) {
+                    location = null;
+                }
+            }
+            AgentResponse answer = nextActionService.getNextAction(nextReq);
+            agentResponse = withUnreadMessages(answer, activeProjectRoot);
+            // Held only when told to wait with nothing to hand over: a message that was already
+            // waiting is handed over now, not after the hold.
+            pendingWait = location != null && answer.nextAction() == AgentNextAction.WAIT && agentResponse == answer ? new PendingWait(location, head) : null;
         }
         return agentResponse;
     }
@@ -212,28 +231,28 @@ final class McpCoordinationTools {
     }
 
     /**
-     * Projects the next action, and when it is a wait, holds the call until the project has
-     * something new or the hold passes, then projects it once more. The answer is always the
-     * one the projection gives; the hold changes only when it is given.
+     * Holds the caller whose last next action was a wait with nothing to hand over, until the
+     * project has something new for it or the hold passes.
+     *
+     * <p>The protocol handler calls this after it has answered such a call, and when it returns
+     * true runs the whole call again, through every gate a call passes. Nothing is projected
+     * here: the hold changes when an answer is given, never which.</p>
+     *
+     * @return {@code true} when the project changed and the call should be made again
      */
-    private AgentResponse heldWhileWaiting(NextActionRequest request, Path activeProjectRoot) {
-        if (waitHold.isZero()) {
-            return nextActionService.getNextAction(request);
-        }
-        ProjectLocation location;
-        long head;
-        try {
-            location = new org.synesis.workspace.application.ProjectApplicationService().locate(activeProjectRoot);
-            head = ProjectChangeWait.head(location);
-        } catch (Exception notLocated) {
-            return nextActionService.getNextAction(request);
-        }
-        AgentResponse answer = nextActionService.getNextAction(request);
-        if (answer.nextAction() != AgentNextAction.WAIT || !ProjectChangeWait.awaitChange(location, head, waitHold)) {
-            return answer;
-        }
-        reconciliation.reconcileRecoveryBeforeInboxPoll(activeProjectRoot);
-        return nextActionService.getNextAction(request);
+    boolean heldUntilTheProjectChanges() {
+        PendingWait held = pendingWait;
+        pendingWait = null;
+        return held != null && ProjectChangeWait.awaitChange(held.location(), held.head(), waitHold);
+    }
+
+    /** Forgets the wait the call made again after a hold recorded: that call is answered at once. */
+    void endHold() {
+        pendingWait = null;
+    }
+
+    /** A wait that was just answered: where to watch, and the log head the answer was projected from. */
+    private record PendingWait(ProjectLocation location, long head) {
     }
 
     /**

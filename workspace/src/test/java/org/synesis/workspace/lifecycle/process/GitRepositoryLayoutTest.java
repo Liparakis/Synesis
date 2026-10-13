@@ -1,9 +1,13 @@
 package org.synesis.workspace.lifecycle.process;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.synesis.workspace.test.TestGit.run;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -34,6 +38,15 @@ class GitRepositoryLayoutTest {
 
     private static Path readFromDisk(Path root) throws Exception {
         return GitRepositoryLayout.commonDirectory(root).orElseThrow().toRealPath();
+    }
+
+    private static Path symbolicLink(Path link, Path target) {
+        try {
+            return Files.createSymbolicLink(link, target);
+        } catch (UnsupportedOperationException | IOException | SecurityException cannotLink) {
+            assumeTrue(false, "this machine cannot create symbolic links: " + cannotLink);
+            return link;
+        }
     }
 
     @Test
@@ -90,17 +103,71 @@ class GitRepositoryLayoutTest {
     }
 
     @Test
-    void onlyADirectoryWithNoGitInItOrAboveItIsKnownToBeInNoRepository(@TempDir Path temp) throws Exception {
+    void aCheckoutAndTheDirectoriesBelowItMayBeInsideARepository(@TempDir Path temp) throws Exception {
         Path main = repository(temp.resolve("repo"));
         Path inside = Files.createDirectories(main.resolve("src").resolve("deep"));
-        Path outside = Files.createDirectories(temp.resolve("plain").resolve("deep"));
 
         assertTrue(GitRepositoryLayout.mayBeInsideARepository(main));
         assertTrue(GitRepositoryLayout.mayBeInsideARepository(inside), "Git finds the repository above");
-        // The answer for the plain directory depends on what lies above the test's temporary
-        // directory, so it is held to Git's own: where Git finds a repository, this must not say no.
-        boolean gitFindsOne = GitProcessRunner.runResult(outside, "rev-parse", "--git-dir").exitCode() == 0;
-        assertTrue(!gitFindsOne || GitRepositoryLayout.mayBeInsideARepository(outside));
+    }
+
+    @Test
+    void aDirectoryWithNoGitInItOrAboveItIsKnownToBeInNoRepository(@TempDir Path temp) throws Exception {
+        assumeTrue(System.getenv("GIT_DIR") == null && System.getenv("GIT_COMMON_DIR") == null, "the environment redirects Git");
+        // Only where the temporary directory lies outside every repository can "no" be known here.
+        for (Path above = temp.toAbsolutePath().normalize(); above != null; above = above.getParent()) {
+            assumeTrue(!Files.exists(above.resolve(".git")) && !Files.exists(above.resolve("HEAD")), "a repository lies above the temporary directory: " + above);
+        }
+        Path outside = Files.createDirectories(temp.resolve("plain").resolve("deep"));
+
+        assertFalse(GitRepositoryLayout.mayBeInsideARepository(outside));
+    }
+
+    @Test
+    void aBareRepositoryAndTheDirectoriesInsideItMayBeInsideARepositoryButHaveNoCheckoutCommonDirectory(@TempDir Path temp) throws Exception {
+        Path bare = Files.createDirectories(temp.resolve("bare.git"));
+        run(bare, "init", "--bare");
+
+        assertTrue(GitRepositoryLayout.mayBeInsideARepository(bare), "it is a Git directory itself");
+        assertTrue(GitRepositoryLayout.mayBeInsideARepository(bare.resolve("refs").resolve("heads")), "and below it Git finds it");
+        assertEquals(Optional.empty(), GitRepositoryLayout.commonDirectory(bare), "it has no .git to read");
+    }
+
+    @Test
+    void aLinkedWorktreeWhoseGitFileNamesItsGitDirectoryRelativelyAnswersTheMainRepositoryAsARealPath(@TempDir Path temp) throws Exception {
+        Path main = repository(temp.resolve("repo"));
+        Path linked = temp.resolve("linked");
+        run(main, "worktree", "add", "-b", "feature", linked.toString());
+        Files.writeString(linked.resolve(".git"), "gitdir: ../repo/.git/worktrees/linked\n");
+
+        assertEquals(main.resolve(".git").toRealPath(), GitRepositoryLayout.commonDirectory(linked).orElseThrow());
+        assertEquals(askedOfGit(linked), readFromDisk(linked));
+    }
+
+    @Test
+    void aCheckoutReachedThroughASymbolicLinkAnswersWhatGitAnswersThere(@TempDir Path temp) throws Exception {
+        Path main = repository(temp.resolve("repo"));
+        Path link = symbolicLink(temp.resolve("link"), main);
+
+        assertEquals(askedOfGit(link), readFromDisk(link));
+        assertEquals(readFromDisk(main), GitRepositoryLayout.commonDirectory(link).orElseThrow(), "a real path, whichever way the checkout was reached");
+    }
+
+    @Test
+    void aRelativePointerBehindASymbolicLinkIsResolvedFromTheRealDirectoryAsGitDoesNotFromTheLinksParent(@TempDir Path temp) throws Exception {
+        // real/sub/wt names its Git directory as ../x/.git: real/sub/x/.git. Resolved against the
+        // link's own parent it would name decoy/x/.git, another repository.
+        Path real = Files.createDirectories(temp.resolve("real").resolve("sub"));
+        repository(real.resolve("x"));
+        Path wt = Files.createDirectories(real.resolve("wt"));
+        Files.writeString(wt.resolve(".git"), "gitdir: ../x/.git\n");
+        Path decoy = repository(temp.resolve("x"));
+        Path w = symbolicLink(temp.resolve("w"), wt);
+
+        Path gitsAnswer = askedOfGit(w);
+        assertEquals(real.resolve("x").resolve(".git").toRealPath(), gitsAnswer);
+        assertNotEquals(decoy.resolve(".git").toRealPath(), gitsAnswer);
+        assertEquals(gitsAnswer, readFromDisk(w));
     }
 
     @Test

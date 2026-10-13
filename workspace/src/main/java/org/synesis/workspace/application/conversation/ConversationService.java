@@ -73,7 +73,7 @@ public final class ConversationService {
             + "answer it once, briefly, with send_message, and carry on. Nothing else needs a reply.";
 
     private static final String RECORDED = "Recorded. A message binds nothing: what you agree takes effect only when it is recorded through the typed protocol, "
-            + "such as a contract revision or a change of claims. Carry on with your best assumption and do not wait or poll for an answer; "
+            + "such as a contract revision or a change of claims. Carry on with your work and do not wait or poll for an answer; "
             + "if one comes, it arrives with a later get_next_action.";
 
     private final ProjectApplicationService projectService = new ProjectApplicationService();

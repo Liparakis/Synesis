@@ -1,15 +1,13 @@
 package org.synesis.workspace.application.agent.workflow;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.application.project.ProjectLocation;
 
 /**
@@ -21,8 +19,8 @@ import org.synesis.workspace.application.project.ProjectLocation;
  * reviewer was once left waiting for good. Holding the answer here lets one call wait as long
  * as a dozen did, without a model turn for each, so an agent can sit through a peer's work.</p>
  *
- * <p>Nothing is decided here. The hold ends on any recorded event that is not liveness
- * bookkeeping, and the caller's next action is then projected afresh by the code that always
+ * <p>Nothing is decided here. The hold ends on any recorded event that changes state, or on a
+ * message, and the caller's next action is then projected afresh by the code that always
  * projects it. A hold that ends early or late changes when an answer is given, never which.</p>
  */
 public final class ProjectChangeWait {
@@ -39,15 +37,7 @@ public final class ProjectChangeWait {
      * @return the number of recorded events; zero when nothing is recorded yet
      */
     public static long head(ProjectLocation location) {
-        Path events = location.coordinationDirectory().resolve("events");
-        if (!Files.isDirectory(events)) {
-            return 0L;
-        }
-        try (Stream<Path> files = Files.list(events)) {
-            return files.filter(file -> file.getFileName().toString().endsWith(".sce")).count();
-        } catch (IOException unreadable) {
-            return 0L;
-        }
+        return PredictionEventStore.recordedEvents(location.coordinationDirectory());
     }
 
     /**
@@ -81,12 +71,11 @@ public final class ProjectChangeWait {
         return false;
     }
 
-    /** A heartbeat and a mark of delivery give a waiting caller nothing new; anything else may, a message included. */
+    /** What changes no state gives a waiting caller nothing new, except a message, which it is waiting to be handed. */
     private static boolean changedSince(ProjectLocation location, long sequence) {
         try {
             List<PredictionEvent> events = location.openCoordinationStore().events();
-            return events.stream().skip(Math.max(0L, sequence))
-                    .anyMatch(event -> event.type() != PredictionEventType.PARTICIPANT_HEARTBEAT && event.type() != PredictionEventType.CONVERSATION_MESSAGES_DELIVERED);
+            return events.stream().skip(Math.max(0L, sequence)).anyMatch(event -> !event.type().recordsNoStateChange() || event.type() == PredictionEventType.CONVERSATION_MESSAGE_SENT);
         } catch (IOException | GeneralSecurityException unreadable) {
             // The log could not be read just now. Ending the hold lets the ordinary projection say so.
             return true;

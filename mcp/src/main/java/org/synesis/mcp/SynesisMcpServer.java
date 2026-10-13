@@ -204,17 +204,21 @@ public final class SynesisMcpServer {
     }
 
     /**
-     * Returns how long one waiting call is held: twenty seconds, well inside the tool-call limits
-     * of the providers, unless {@code SYNESIS_WAIT_HOLD_SECONDS} says otherwise (zero turns the
-     * hold off; anything outside zero to fifty is ignored).
+     * Returns how long one waiting call is held: twenty seconds unless
+     * {@code SYNESIS_WAIT_HOLD_SECONDS} says otherwise. Zero turns the hold off. Anything outside
+     * zero to thirty is ignored: a provider gives a tool call about a minute, and the answer
+     * after the hold needs part of it.
      *
      * @return the hold
      */
     private static java.time.Duration waitHold() {
-        String configured = System.getenv("SYNESIS_WAIT_HOLD_SECONDS");
+        return waitHold(System.getenv("SYNESIS_WAIT_HOLD_SECONDS"));
+    }
+
+    static java.time.Duration waitHold(String configured) {
         try {
             long seconds = configured == null || configured.isBlank() ? 20L : Long.parseLong(configured.trim());
-            return java.time.Duration.ofSeconds(seconds < 0 || seconds > 50 ? 20L : seconds);
+            return java.time.Duration.ofSeconds(seconds < 0 || seconds > 30 ? 20L : seconds);
         } catch (NumberFormatException notANumber) {
             return java.time.Duration.ofSeconds(20L);
         }

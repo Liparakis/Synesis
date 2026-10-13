@@ -127,20 +127,12 @@ public final class AdministrativeStateLocator {
                     return canonicalPath(root.resolve(result.output()));
                 }
             } catch (IOException unavailable) {
-                // Fall through to the conservative .git fallback below.
+                // Git could not be asked; there is no answer.
             }
         }
-        Path dotGit = root.resolve(".git");
-        if (Files.isDirectory(dotGit)) {
-            return canonicalPath(dotGit);
-        }
-        if (Files.isRegularFile(dotGit)) {
-            String content = Files.readString(dotGit, StandardCharsets.UTF_8).trim();
-            if (content.startsWith("gitdir:")) {
-                Path gitDir = root.resolve(content.substring("gitdir:".length()).trim());
-                return canonicalPath(gitDir);
-            }
-        }
+        // Neither the layout nor Git names a common directory. Guessing one from a bare look at
+        // .git gave a repository identity to a directory that held no repository, and to a
+        // linked worktree the identity of its own Git directory instead of the shared one.
         throw new IOException("GIT_COMMON_DIRECTORY_UNAVAILABLE");
     }
 

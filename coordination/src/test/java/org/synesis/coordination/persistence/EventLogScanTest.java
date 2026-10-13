@@ -84,6 +84,23 @@ class EventLogScanTest {
         assertFalse(Files.exists(abandoned));
     }
 
+    @Test
+    void recordedEventsCountsTheEventsAStoreWouldReplayAndIsZeroWhereNothingIsRecorded(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        NodeIdentity requester = NodeIdentity.generate();
+        NodeIdentity owner = NodeIdentity.generate();
+        assertEquals(0L, PredictionEventStore.recordedEvents(temp.resolve("never-created")));
+        PredictionEventStore store = new PredictionEventStore(temp, project);
+        assertEquals(0L, PredictionEventStore.recordedEvents(temp), "a store with nothing recorded");
+
+        appendRequest(store, requester, owner, "req_TEST1234567890ABCDR1");
+        appendRequest(store, requester, owner, "req_TEST1234567890ABCDR2");
+        appendRequest(store, requester, owner, "req_TEST1234567890ABCDR3");
+
+        assertEquals(3L, PredictionEventStore.recordedEvents(temp));
+        assertEquals(store.events().size(), PredictionEventStore.recordedEvents(temp));
+    }
+
     private static void appendRequest(PredictionEventStore store, NodeIdentity requester, NodeIdentity owner, String handle) throws Exception {
         CapabilityRequestPayload payload = new CapabilityRequestPayload(CapabilityRequestHandle.parse(handle),
                 "catalog.product-query",

@@ -513,6 +513,25 @@ public final class PredictionEventStore {
     }
 
     /**
+     * Counts the events recorded under a coordination directory without replaying them. It is the
+     * head a store opened there would report.
+     *
+     * @param root coordination directory
+     * @return the number of recorded events; zero when nothing is recorded or the directory cannot be read
+     */
+    public static long recordedEvents(Path root) {
+        Path events = CoordinationNullException.requireNonNull(root, "root").resolve("events");
+        if (!Files.isDirectory(events)) {
+            return 0L;
+        }
+        try (java.util.stream.Stream<Path> files = Files.list(events)) {
+            return files.filter(path -> path.getFileName().toString().endsWith(".sce")).count();
+        } catch (IOException unreadable) {
+            return 0L;
+        }
+    }
+
+    /**
      * Returns the replayed conversation projection.
      *
      * @return conversation projection

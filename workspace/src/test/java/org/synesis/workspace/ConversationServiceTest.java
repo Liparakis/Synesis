@@ -441,6 +441,27 @@ class ConversationServiceTest {
     }
 
     @Test
+    void aSuspendedHolderStillHoldsItsOpenLaneAndALaneContinuedByAnotherSessionIsNoLongerItsOwn() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        ProjectLocation location = projectService.locate(projectRoot);
+        WorkIntent claim = laneOf(A);
+        RecoverySnapshotService.Snapshot snapshot = new RecoverySnapshotService().materialize(location, bindingService.find(location, PROVIDER, A).orElseThrow().sessionId());
+        WorkIntentService intents = new WorkIntentService(store(), new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        intents.suspend(claim.participant());
+        intents.holdRecovery(claim.participant(), snapshot.root().toString() + "#" + snapshot.contentHash());
+
+        assertTrue(observer.observe().holdsOpenLane(PROVIDER, A), "a suspended holder's lane is still open under its connection");
+
+        String successor = "inst-4";
+        session(successor);
+        new WorkspaceCollaborationService().continueLane(projectRoot, PROVIDER, successor, null, claim.intentId(), claim.version());
+
+        AgentRunController.Observation after = observer.observe();
+        assertFalse(after.holdsOpenLane(PROVIDER, A), "another session continued it");
+        assertTrue(after.holdsOpenLane(PROVIDER, successor));
+    }
+
+    @Test
     void aMessageTheLaneAlreadyAcknowledgedWakesNobody() throws Exception {
         EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
         send(A, List.of("src/B.java", "src/C.java"), "one");

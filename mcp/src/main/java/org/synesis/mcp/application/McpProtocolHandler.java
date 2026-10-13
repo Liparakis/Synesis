@@ -565,7 +565,27 @@ public final class McpProtocolHandler {
         String tool = call.name();
         Map<String, Object> arguments = call.arguments().orElse(null);
         ToolPolicy policy = TOOL_POLICIES.getOrDefault(tool, ToolPolicy.UNRESTRICTED);
+        String reply = admittedCall(id, tool, arguments, policy);
+        // A caller told to wait is held here, outside every gate, and when the project has
+        // something new the whole call is made again and passes each gate again: the root,
+        // the admission, the lease and the recovery fence may all have changed in the meantime.
+        if (McpToolCatalog.GET_NEXT_ACTION.equals(tool) && coordinationTools.heldUntilTheProjectChanges()) {
+            reply = admittedCall(id, tool, arguments, policy);
+            coordinationTools.endHold();
+        }
+        return reply;
+    }
 
+    /**
+     * Passes one tool call through every gate and runs it.
+     *
+     * @param id        JSON-RPC request identifier
+     * @param tool      raw tool name
+     * @param arguments tool arguments, possibly {@code null}
+     * @param policy    policy of the called tool
+     * @return the tool's reply frame, or the refusal of the first gate that stopped it
+     */
+    private String admittedCall(Object id, String tool, Map<String, Object> arguments, ToolPolicy policy) {
         String refusal = refuseProjectRootAuthorityFailure(id);
         if (refusal != null) {
             return refusal;

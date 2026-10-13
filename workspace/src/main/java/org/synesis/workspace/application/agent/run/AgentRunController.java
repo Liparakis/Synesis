@@ -160,7 +160,7 @@ public final class AgentRunController {
                         // for another lane's progress, an agent with nothing left looked for work,
                         // announced lanes to verify what was already integrated, and each of those
                         // woke the others: 38 resumes in a run whose work was done.
-                        if (!agent.resumable(request.maxResumesPerAgent()) || !observation.holdsOpenLane(agent.spec.provider(), agent.connectionId)) {
+                        if (!agent.resumable(request.maxResumesPerAgent()) || !agent.holdsOpenLane(observation)) {
                             continue;
                         }
                         if (observation.heldByOperator(agent.spec.provider())) {
@@ -171,7 +171,7 @@ public final class AgentRunController {
                         }
                         OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
-                        OptionalLong message = observation.newestUnreadMessageFor(agent.spec.provider(), agent.connectionId);
+                        OptionalLong message = agent.newestUnreadMessage(observation);
                         boolean messageWaiting = message.isPresent() && message.getAsLong() > Math.max(agent.stoppedAtSequence, agent.resumedForMessage);
                         if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
@@ -230,7 +230,7 @@ public final class AgentRunController {
             return Outcome.NEEDS_OPERATOR;
         }
         boolean limitReached = agents.stream()
-                .anyMatch(agent -> agent.resumes >= maxResumes && observation.holdsOpenLane(agent.spec.provider(), agent.connectionId) && observation.progressedSince(agent.stoppedAtSequence));
+                .anyMatch(agent -> agent.resumes >= maxResumes && agent.holdsOpenLane(observation) && observation.progressedSince(agent.stoppedAtSequence));
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
     }
 
@@ -257,7 +257,8 @@ public final class AgentRunController {
          */
         ALL_WORK_CANCELLED,
         /**
-         * Every agent has stopped and nothing has progressed since, so resuming any would change nothing.
+         * Every agent has stopped and resuming any would change nothing: nothing has progressed
+         * since it stopped, or no lane it took is still open.
          */
         STALLED,
         /**
@@ -420,9 +421,9 @@ public final class AgentRunController {
         /**
          * Reports whether a lane announced through this provider is still open.
          *
-         * <p>A session can only act on a lane of its own provider: its own, or one it may continue.
-         * When none is open, an agent of that provider has finished its part, and resuming it for
-         * another provider's progress would only spend a turn finding that out.</p>
+         * <p>This no longer decides whether an agent is resumed: two agents of one provider each
+         * kept the other awake through it. {@link #holdsOpenLane} asks about the agent's own
+         * lane and decides.</p>
          *
          * @param provider provider identifier
          * @return {@code true} while such a lane is open
@@ -488,12 +489,10 @@ public final class AgentRunController {
          * ended or was taken over, has nothing to continue.
          *
          * @param provider             provider identifier
-         * @param connectionInstanceId connection of the agent's last process
+         * @param connectionInstanceId connection of one of the agent's processes
          * @return {@code true} while that session's lane is open
          */
-        default boolean holdsOpenLane(String provider, String connectionInstanceId) {
-            return hasOpenLane(provider);
-        }
+        boolean holdsOpenLane(String provider, String connectionInstanceId);
 
         /**
          * Returns the log position of the newest message addressed to the lane that the session
@@ -596,6 +595,8 @@ public final class AgentRunController {
         private long stoppedAtSequence;
         private long resumedForDeadline = Long.MIN_VALUE;
         private long resumedForMessage;
+        /** Every connection this agent's processes have had, oldest first. */
+        private final List<String> connectionIds = new ArrayList<>();
         private int exitCode;
         private int resumes;
 
@@ -611,6 +612,7 @@ public final class AgentRunController {
         /** Gives the next process of this agent its own connection identity. */
         private HeadlessOptions connect(String identity) {
             connectionId = identity;
+            connectionIds.add(identity);
             return spec.options().withConnection(identity);
         }
 
@@ -634,6 +636,22 @@ public final class AgentRunController {
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
             process = null;
+        }
+
+        /**
+         * Reports whether a lane this agent took is still open. The lane stays under the
+         * connection that took it until a later connection continues it, so every connection
+         * the agent has had is asked: a resume that ended before it took the lane back must not
+         * leave the agent looking as if it had none, or that lane is never continued.
+         */
+        private boolean holdsOpenLane(Observation observation) {
+            return connectionIds.stream().anyMatch(identity -> observation.holdsOpenLane(spec.provider(), identity));
+        }
+
+        /** The newest unread message addressed to a lane any of this agent's connections holds. */
+        private OptionalLong newestUnreadMessage(Observation observation) {
+            return connectionIds.stream().map(identity -> observation.newestUnreadMessageFor(spec.provider(), identity)).filter(OptionalLong::isPresent)
+                    .mapToLong(OptionalLong::getAsLong).max();
         }
 
         private boolean resumable(int maxResumes) {

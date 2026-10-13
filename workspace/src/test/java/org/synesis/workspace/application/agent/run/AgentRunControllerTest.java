@@ -288,6 +288,43 @@ final class AgentRunControllerTest {
     }
 
     @Test
+    void anAgentWhoseResumedProcessEndedWithoutTakingItsLaneBackIsResumedAgainForLaterProgress() throws Exception {
+        Script script = new Script();
+        // claude takes the lane under its first connection and stops. Resumed, its second process
+        // exits without taking the lane back: it is still open under the first connection. codex
+        // keeps the run going and progress follows.
+        script.lifetimes(1, 100, 1, 1);
+        script.laneHeldUnderConnection.put("claude#1", 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(1).announced();
+        script.at(3).head(6).progressAfter(1);
+        script.at(6).head(12).progressAfter(11);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(3, 6), script.resumedAtTicks);
+        assertEquals(2, result.resumes());
+    }
+
+    @Test
+    void aMessageForTheLaneHeldUnderTheFirstConnectionWakesTheAgentAfterASecondConnectionThatHeldNothing() throws Exception {
+        Script script = new Script();
+        script.lifetimes(1, 100, 1, 1);
+        script.laneHeldUnderConnection.put("claude#1", 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(1).announced();
+        script.at(3).head(6).progressAfter(1);
+        script.at(6).head(7).message("claude#1", 7);
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(3, 6), script.resumedAtTicks);
+        assertEquals(2, result.resumes());
+    }
+
+    @Test
     void agentIsResumedForWorkRecordedShortlyBeforeItsProcessEnded() throws Exception {
         Script script = new Script();
         // codex records work at tick 2. claude's process is still running then and ends at tick
@@ -474,6 +511,8 @@ final class AgentRunControllerTest {
         private final List<String> withoutSessionId = new ArrayList<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
         private final List<String> withoutOwnLane = new ArrayList<>();
+        /** An agent, by label, whose lane is held only under its nth connection (1 is its first). */
+        private final Map<String, Integer> laneHeldUnderConnection = new java.util.HashMap<>();
         private final List<String> heldByOperator = new ArrayList<>();
         private final List<String> connections = new ArrayList<>();
         private final List<Map<String, String>> environments = new ArrayList<>();
@@ -482,6 +521,7 @@ final class AgentRunControllerTest {
         private final Map<String, Long> answerDeadlines = new java.util.HashMap<>();
         private final Map<String, Long> lastActivity = new java.util.HashMap<>();
         private final Map<String, String> agentOf = new java.util.HashMap<>();
+        private final Map<String, Integer> ordinalOf = new java.util.HashMap<>();
         private List<String> providers = List.of("claude", "codex");
         private final List<Integer> lifetimes = new ArrayList<>();
         private final java.util.TreeMap<Integer, State> states = new java.util.TreeMap<>();
@@ -536,6 +576,7 @@ final class AgentRunControllerTest {
             environments.add(environment);
             java.util.regex.Matcher connection = java.util.regex.Pattern.compile("conn-\\d+").matcher(environment.values() + " " + command);
             assertTrue(connection.find(), "the process is told its connection: " + command);
+            ordinalOf.put(connection.group(), (int) agentOf.values().stream().filter(label::equals).count() + 1);
             agentOf.put(connection.group(), label);
             boolean resume = command.contains("--resume") || command.contains("resume");
             if (resume) {
@@ -574,6 +615,11 @@ final class AgentRunControllerTest {
                     stopped.add(label);
                 }
             };
+        }
+
+        private boolean laneHeldUnder(String connectionInstanceId) {
+            Integer only = laneHeldUnderConnection.get(agentOf.get(connectionInstanceId));
+            return only == null || only.equals(ordinalOf.get(connectionInstanceId));
         }
 
         private AgentRunController.Observation observe() {
@@ -619,7 +665,7 @@ final class AgentRunControllerTest {
 
                 @Override
                 public boolean holdsOpenLane(String provider, String connectionInstanceId) {
-                    return hasOpenLane(provider) && !withoutOwnLane.contains(agentOf.get(connectionInstanceId));
+                    return hasOpenLane(provider) && !withoutOwnLane.contains(agentOf.get(connectionInstanceId)) && laneHeldUnder(connectionInstanceId);
                 }
 
                 @Override
@@ -641,7 +687,7 @@ final class AgentRunControllerTest {
 
                 @Override
                 public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
-                    Long sequence = state.messages.get(agentOf.get(connectionInstanceId));
+                    Long sequence = laneHeldUnder(connectionInstanceId) ? state.messages.get(agentOf.get(connectionInstanceId)) : null;
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
                 }
             };
