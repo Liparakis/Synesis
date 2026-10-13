@@ -47,13 +47,20 @@ Push-Location $repository
 try {
     $branch = (git rev-parse --abbrev-ref HEAD).Trim()
     if ($branch -eq 'HEAD') { throw 'The checkout is on no branch; the gate clones a branch.' }
+    # A step of Git that fails leaves the bundle or the patch of an earlier run in place, and the
+    # gate would pass or fail on a tree that is not this one.
+    function Assert-Git([string]$step) { if ($LASTEXITCODE -ne 0) { throw "git $step failed; nothing was tested." } }
     git bundle create (Join-Path $WorkDirectory 'synesis.bundle') $branch 2>&1 | Out-Null
+    Assert-Git 'bundle'
     # Uncommitted and untracked work, through a throwaway index so the real one is not touched.
     $env:GIT_INDEX_FILE = Join-Path $WorkDirectory 'wip.index'
     git read-tree HEAD
+    Assert-Git 'read-tree'
     git add -A 2>&1 | Out-Null
+    Assert-Git 'add'
     $patch = Join-Path $WorkDirectory 'wip.patch'
     cmd /c "git diff --cached --binary HEAD > `"$patch`""
+    Assert-Git 'diff'
 } finally {
     $env:GIT_INDEX_FILE = $null
     Pop-Location
