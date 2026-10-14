@@ -1,3 +1,77 @@
+# 2026-10-14 — Two machines connect over Link in both directions
+
+ADR-0095 and ADR-0096 hold the decisions.
+
+**Why.** `synesis host` on one computer and `synesis join` on another had never connected with the
+installed product. Run between Windows and Linux virtual machines, it failed four ways.
+
+**Root causes.**
+
+- `LocalInterfaceCandidateProvider` skipped loopback addresses but not the loopback interface. WSL
+  binds `10.255.255.254` there, and a host on a WSL machine invited its peer to it.
+- It offered every IPv6 address of an interface. The listener is bound to the wildcard address, so
+  the operating system chooses the source of each reply; with a stable and a temporary address in
+  one prefix, the Windows default, it chooses the temporary one. The invitation carried the stable
+  one. A capture on the joiner showed each 1200-byte initial packet answered by 100 bytes from the
+  other address, which the joiner dropped until it gave up.
+- The compact invitation carried one endpoint, and the order ranks a global IPv6 address above
+  every LAN address. A joiner without IPv6 on the same private network had nothing to dial.
+- Windows Firewall drops the session when Windows hosts. No rule named the installed runtime and
+  Windows showed no prompt.
+
+**What changed.**
+
+- The provider skips the loopback interface, and offers an IPv6 address only when the machine sends
+  from it to a neighbour in the same prefix, found by connecting a datagram socket, which sends
+  nothing. An address that cannot be probed is kept.
+- The invitation carries one to eight endpoints, one of every kind of candidate before a second of
+  any. This is a format change: the revision is `SLB3`, and `SLB2` is no longer read or written.
+  The joiner dials every endpoint of a family it has at once and keeps the first authenticated
+  session. `PATH_SELECTED` reports the pair that won; it reported the first pair tried.
+- The Windows installer can add the firewall rule: a checkbox in the wizard, `--allow-link` on
+  `install` and `repair`, removal on uninstall. It starts itself elevated for that one command, and
+  a declined prompt is a warning. It is never chosen by default on a first install.
+
+**Shown with the installed build `0.1.0-dev.remaster45-20261014` on Windows.** It was installed with
+`install --allow-link`; the repository owner approved the prompt, the command printed
+`LINK_FIREWALL=ADDED`, and the rule named that version's `runtime\bin\java.exe` in place of the rule
+made by hand for the previous version. The other machines ran the Linux CLI built from the same
+tree. In each arrangement both sides reported the other's node ID, `CONTROL_READY=true` and
+`LIVENESS=LIVE`, and the join `WORK_RESULT=OK`:
+
+| Host | Joiner | Path |
+| --- | --- | --- |
+| VirtualBox machine bridged to the home network | Windows | `IPV6/IPV6` |
+| Windows | that machine | `IPV6/IPV6` |
+| Windows | a machine without IPv6 (Podman container with host networking on the WSL machine) | `LAN/MANUAL` |
+| that machine | Windows | `LAN/MANUAL` |
+
+Before the changes the first worked, the second and the fourth ended `CONNECTION_FAILED`, and the
+third `NO_USABLE_CANDIDATE`.
+
+Tests: `LocalInterfaceCandidateProviderTest` has one test that fails on the WSL machine and one that
+fails on this Windows machine without the provider changes. The Linux gate on the tree before the
+review fixes: link 180, coordination 236, project-record 60, relay 12, mcp-contract 20, workspace
+729 (2 skipped), MCP 189, CLI 130, 0 failures. The installer's Go tests pass. The Windows gate
+(`check repositoryHygieneCheck`) on the final code: link 180, coordination 236, project-record 60,
+relay 12, mcp-contract 20, workspace 729 (1 skipped), MCP 189, CLI 130, 0 failures.
+Scripts and output: `D:\SynesisAcceptance\link-vm`.
+
+**Still wrong.**
+
+- The firewall rule names a path that holds the version. An unattended `update` cannot refresh it;
+  a repair with the option, or the wizard, is needed before the machine can host again.
+- A build from before this change and one from after it cannot join each other.
+- One multi-process Link test failed once on each platform on an earlier run and passed on the next
+  (`NettyQuicLoopbackTest.reportsAbruptProcessLossWithDocumentedTerminalCategory` on Windows,
+  `OverlayGraphQuicTest.sixMemberOverlayConvergesRoutesTransitRecoversAndRejoins` on Linux), with
+  two virtual machines running. The cause was not established.
+
+**NOT REACHED.** Two physical computers. Two networks: every run was on one router or one virtual
+switch. The wizard checkbox with a real prompt, a declined prompt, and removal of the rule on
+uninstall; those rest on tests that replace the elevation. The Linux installer; the Linux side ran
+the portable launcher, and `:cli:nativeMcpLauncher` failed in the container for want of Go.
+
 # 2026-10-13 — The UI opens on an installation that knows no project
 
 ADR-0073's 2026-10-13 follow-up holds the decision.
