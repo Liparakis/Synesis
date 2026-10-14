@@ -43,6 +43,7 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 	execute := flags.Bool("execute", false, "execute a prepared update plan")
 	acceptance := flags.Bool("acceptance", false, "use the explicitly configured local acceptance trust root")
 	skipPathUpdate := flags.Bool("skip-path-update", false, "do not modify the user PATH (disposable acceptance only)")
+	allowLink := flags.Bool("allow-link", false, "add the Windows Firewall rule that lets other computers connect (asks for administrator approval)")
 	planID := flags.String("plan", "", "prepared update plan ID")
 	rollback := flags.Bool("rollback", false, "roll back the last successful update")
 	if err := flags.Parse(args); err != nil {
@@ -86,6 +87,9 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 			return err
 		}
 		fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
+		if *allowLink {
+			reportAllowLink(paths.Root)
+		}
 		return nil
 	}
 	if *manifestURL == "" {
@@ -125,6 +129,9 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 		return err
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
+	if *allowLink {
+		reportAllowLink(paths.Root)
+	}
 	return nil
 }
 
@@ -137,6 +144,7 @@ func RunRepair(args []string, observers ...OperationProgress) error {
 	bundlePath := flags.String("bundle", "", "local bundle directory or archive")
 	installDir := flags.String("install-dir", "", "installation root")
 	skipPathUpdate := flags.Bool("skip-path-update", false, "do not modify the user PATH (disposable acceptance only)")
+	allowLink := flags.Bool("allow-link", false, "add the Windows Firewall rule that lets other computers connect (asks for administrator approval)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -164,6 +172,9 @@ func RunRepair(args []string, observers ...OperationProgress) error {
 		return err
 	}
 	fmt.Printf("REPAIR_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
+	if *allowLink {
+		reportAllowLink(paths.Root)
+	}
 	return nil
 }
 

@@ -63,6 +63,7 @@ func (w *installerWizard) pageLayout(page installerPage) []placement {
 			placement{controlCapabilityData, left + 24, 308, width - 24, 20},
 			placement{controlCapabilityLink, left + 24, 332, width - 24, 20},
 			placement{controlShortcut, left, 372, width, 28},
+			placement{controlAllowLink, left, 404, width, 28},
 			back, next, cancel)
 	case installerPageUninstall:
 		return append(header(0),

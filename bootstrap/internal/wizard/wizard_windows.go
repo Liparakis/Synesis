@@ -18,6 +18,7 @@ import (
 	"synesis/bootstrap/internal/install/embedded"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
+	"synesis/bootstrap/internal/install/linkfirewall"
 	"synesis/bootstrap/internal/install/uishortcut"
 	"synesis/bootstrap/internal/payload"
 	"synesis/bootstrap/internal/protocolreg"
@@ -55,6 +56,7 @@ type installerWizard struct {
 	page             installerPage
 	metadata         bool
 	shortcut         bool
+	allowLink        bool
 	result           installerOperationResult
 	hwnd             uintptr
 	instance         uintptr
@@ -185,6 +187,10 @@ func newInstallerWizard(bundle, bundleVersion string) (*installerWizard, error) 
 		// Offered by default on a first install; afterwards the choice follows
 		// what is on the desktop.
 		shortcut: !installfs.FileExists(paths.Root) || desktopShortcutExists(),
+		// Never offered by default on a first install, because it ends in an
+		// administrator prompt. Once the rule exists it is kept current: it names
+		// the runtime of one version and every install replaces that runtime.
+		allowLink: linkRuleExists(),
 		action:   installerActionInstall,
 		page:     installerPageAction,
 		controls: make(map[int]uintptr),
@@ -309,6 +315,13 @@ func (w *installerWizard) readInstallRoot() (string, error) {
 	return paths.Root, nil
 }
 
+// linkRuleExists and allowLinkSessions are injectable so wizard tests never
+// read or change the real firewall or ask for elevation.
+var (
+	linkRuleExists    = linkfirewall.Exists
+	allowLinkSessions = install.AllowLink
+)
+
 func desktopShortcutExists() bool {
 	desktop, err := uishortcut.Desktop()
 	return err == nil && uishortcut.Exists(desktop)
@@ -368,6 +381,9 @@ func (w *installerWizard) handleCommand(id uint16, notification uint16) {
 	case controlShortcut:
 		w.shortcut = !w.shortcut
 		win32.InvalidateRect.Call(w.controls[controlShortcut], 0, 0)
+	case controlAllowLink:
+		w.allowLink = !w.allowLink
+		win32.InvalidateRect.Call(w.controls[controlAllowLink], 0, 0)
 	case controlBrowse:
 		w.browse()
 	case controlBack:

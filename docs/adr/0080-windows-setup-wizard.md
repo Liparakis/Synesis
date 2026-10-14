@@ -1,6 +1,7 @@
 # ADR-0080: Native Windows Setup Wizard for the Bootstrap Installer
 
-- Status: Accepted; SYN-067 complete for current scope
+- Status: Accepted; SYN-067 complete for current scope. ADR-0096 adds one
+  optional step that asks for elevation.
 - Date: 2026-09-13
 - Decision owners: Synesis local product boundary
 

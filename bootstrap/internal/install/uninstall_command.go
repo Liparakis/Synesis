@@ -65,6 +65,12 @@ func RunUninstall(args []string, observers ...OperationProgress) error {
 	if err := removeUIShortcutForUninstall(); err != nil {
 		return err
 	}
+	// Removing the rule needs the user's approval, which they may withhold: the
+	// rule then outlives the program it names and the uninstall goes on.
+	if err := removeLinkRuleForUninstall(); err != nil {
+		ReportOperation(observers, "shell", "warning", "The Synesis Link firewall rule was left in place: "+err.Error())
+		fmt.Println("LINK_FIREWALL=LEFT_IN_PLACE")
+	}
 	ReportOperation(observers, "shell", "done", "Owned shell integration removed")
 	ReportOperation(observers, "runtime", "working", "Removing application files")
 	// A running daemon holds the application files open and would outlive them.

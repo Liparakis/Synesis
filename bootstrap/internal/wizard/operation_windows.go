@@ -63,6 +63,7 @@ func (w *installerWizard) startOperation() {
 	action := w.action
 	metadata := w.metadata
 	shortcut := w.shortcut && action == installerActionInstall
+	allowLink := w.allowLink && action == installerActionInstall
 	bundle := w.bundle
 	execute := w.executeOperation
 	if execute == nil {
@@ -88,6 +89,16 @@ func (w *installerWizard) startOperation() {
 				w.reportProgress("protocol", "warning", failure)
 			} else {
 				w.reportProgress("protocol", "done", "Synesis UI shortcut added to the desktop")
+			}
+		}
+		if result.err == nil && allowLink {
+			w.reportProgress("protocol", "working", "Waiting for administrator approval of the firewall rule")
+			if err := allowLinkSessions(root); err != nil {
+				failure := "Other computers cannot connect yet; the firewall rule was not added: " + err.Error()
+				result.warning = strings.TrimSpace(result.warning + " " + failure)
+				w.reportProgress("protocol", "warning", failure)
+			} else {
+				w.reportProgress("protocol", "done", "Other computers can connect to this one")
 			}
 		}
 		if result.err != nil {

@@ -14,6 +14,7 @@ import (
 
 	"synesis/bootstrap/internal/install"
 	"synesis/bootstrap/internal/install/embedded"
+	"synesis/bootstrap/internal/install/linkfirewall"
 	"synesis/bootstrap/internal/protocol"
 	"synesis/bootstrap/internal/wizard"
 )
@@ -26,6 +27,15 @@ func main() {
 	// before the bundle is unpacked. Every other start unpacks first and hands
 	// over to the installer inside the bundle.
 	hostsBundle := runtime.GOOS == "windows" && len(os.Args) < 2
+	// The installer starts itself elevated with this command. It needs nothing
+	// from the bundle, so it runs here and not after an unpacking hand-over.
+	if len(os.Args) >= 2 && os.Args[1] == "link-firewall" {
+		if err := linkfirewall.RunElevated(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR="+err.Error())
+			os.Exit(1)
+		}
+		return
+	}
 	if embedded.HasBundle() && !hostsBundle {
 		if err := embedded.RunCommand(os.Args[1:]); err != nil {
 			var exitError *exec.ExitError

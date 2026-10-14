@@ -77,4 +77,5 @@ const (
 	controlNext
 	controlCancel
 	controlShortcut
+	controlAllowLink
 )

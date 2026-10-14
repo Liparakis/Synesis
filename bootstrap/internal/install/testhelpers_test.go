@@ -221,6 +221,13 @@ func assertNoLegacyLayout(t *testing.T, paths layout.Paths) {
 	}
 }
 
+// No test in this package may ask for elevation or change the real firewall,
+// whichever helpers it uses.
+func init() {
+	allowLinkProgram = func(string) error { return nil }
+	removeLinkRuleForUninstall = func() error { return nil }
+}
+
 func withoutPathMutation(t *testing.T) {
 	t.Helper()
 	// Migration planning must not inspect the developer's real provider

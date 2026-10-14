@@ -104,6 +104,7 @@ func TestInstallerPagesShowTheirCopyOnAClearLayout(t *testing.T) {
 		controlCapabilityLink:    "Register the synesis:// link handler",
 		controlCapabilityData:    "Add the Synesis bin folder to your user PATH",
 		controlShortcut:          "Add a Synesis UI shortcut to the desktop",
+		controlAllowLink:         "Let other computers connect to this one (asks for administrator approval)",
 		controlBack:              "Back",
 		controlNext:              "Install",
 		controlCancel:            "Cancel",
@@ -117,6 +118,14 @@ func TestInstallerPagesShowTheirCopyOnAClearLayout(t *testing.T) {
 		t.Fatal("the shortcut option could not be chosen")
 	}
 	w.handleCommand(uint16(controlShortcut), win32.BnClicked)
+	if w.allowLink {
+		t.Fatal("a wizard built without the option starts with the firewall rule chosen")
+	}
+	w.handleCommand(uint16(controlAllowLink), win32.BnClicked)
+	if !w.allowLink {
+		t.Fatal("the firewall rule option could not be chosen")
+	}
+	w.handleCommand(uint16(controlAllowLink), win32.BnClicked)
 
 	w.showPage(installerPageUninstall)
 	requireClearLayout(t, w, "uninstall page")
@@ -355,6 +364,66 @@ func TestInstallerWaitsForAnUnpackingBundleOnlyToInstall(t *testing.T) {
 		}
 		if failed && w.resultFailureDescription() != "The installer could not be unpacked." {
 			t.Fatalf("%s: failure is described as %q", test.name, w.resultFailureDescription())
+		}
+		win32.DestroyWindow.Call(w.hwnd)
+	}
+}
+
+// No wizard test may read or change the real firewall or ask for elevation.
+func init() {
+	linkRuleExists = func() bool { return false }
+	allowLinkSessions = func(string) error { return nil }
+}
+
+func TestTheFirewallRuleIsAddedOnlyForAChosenInstallAndItsFailureIsAWarning(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	root := filepath.Join(t.TempDir(), "Synesis")
+	for _, test := range []struct {
+		name        string
+		action      installerAction
+		chosen      bool
+		failure     error
+		wantAsked   bool
+		wantWarning string
+	}{
+		{"chosen install", installerActionInstall, true, nil, true, ""},
+		{"declined approval", installerActionInstall, true, errors.New("administrator approval was declined"), true, "administrator approval was declined"},
+		{"not chosen", installerActionInstall, false, nil, false, ""},
+		{"uninstall", installerActionUninstall, true, nil, false, ""},
+	} {
+		w := &installerWizard{controls: make(map[int]uintptr), installed: true, installRoot: root, action: test.action, allowLink: test.chosen}
+		if err := w.createWindow(); err != nil {
+			t.Fatal(err)
+		}
+		w.executeOperation = func(string, string, installerAction, bool, install.OperationProgress) installerOperationResult {
+			return installerOperationResult{}
+		}
+		asked := ""
+		previous := allowLinkSessions
+		allowLinkSessions = func(installDir string) error {
+			asked = installDir
+			return test.failure
+		}
+		w.startOperation()
+		deadline := time.Now().Add(3 * time.Second)
+		for finished := false; !finished; time.Sleep(time.Millisecond) {
+			var message win32.Message
+			got, _, _ := win32.User32.NewProc("PeekMessageW").Call(uintptr(unsafe.Pointer(&message)), w.hwnd, installerMessageDone, installerMessageDone, 1)
+			finished = got != 0
+			if !finished && time.Now().After(deadline) {
+				t.Fatalf("%s: operation did not finish", test.name)
+			}
+		}
+		allowLinkSessions = previous
+		if (asked == root) != test.wantAsked {
+			t.Fatalf("%s: firewall rule requested for %q", test.name, asked)
+		}
+		w.mu.Lock()
+		result := w.result
+		w.mu.Unlock()
+		if result.err != nil || !strings.Contains(result.warning, test.wantWarning) || (test.wantWarning == "") != (result.warning == "") {
+			t.Fatalf("%s: result = %+v", test.name, result)
 		}
 		win32.DestroyWindow.Call(w.hwnd)
 	}

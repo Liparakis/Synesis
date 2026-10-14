@@ -26,6 +26,16 @@ configure any provider. On Windows, a successful wizard install or repair also
 registers the owned per-user `synesis://` handler. While the installation is
 present, a custom installation root is retained in that owned registration for
 later repair/uninstall discovery.
+
+Another computer can open a Link session to a Windows machine only if Windows
+Firewall has a rule for the installed runtime. The wizard's "Let other
+computers connect to this one" checkbox, or `--allow-link` on `install` and
+`repair`, adds it; Windows asks for administrator approval, which is the only
+elevation the installer ever requests. The rule names the installed version, so
+it is added again by the next install or repair that has the option, and it is
+removed on uninstall. Declining the prompt leaves the installation complete
+(ADR-0096).
+
 Repair reinstalls the verified application payload and preserves project
 workspaces, project `.synesis` directories, and provider metadata. Uninstall
 removes application files, the owned URI registration, and PATH state by

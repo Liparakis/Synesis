@@ -30,11 +30,8 @@ func (w *installerWizard) drawItem(id int, item win32.DrawItem) {
 		w.drawProgressLog(item)
 	case controlProgressSteps:
 		w.compose(item.Device, control, w.drawProgressSteps)
-	case controlMetadata, controlShortcut:
-		checked := w.metadata
-		if id == controlShortcut {
-			checked = w.shortcut
-		}
+	case controlMetadata, controlShortcut, controlAllowLink:
+		checked := map[int]bool{controlMetadata: w.metadata, controlShortcut: w.shortcut, controlAllowLink: w.allowLink}[id]
 		w.compose(item.Device, control, func(r *draw.Raster, rect win32.Rect) {
 			w.drawCheckbox(r, rect, win32.GetText(control), checked, focused)
 		})
