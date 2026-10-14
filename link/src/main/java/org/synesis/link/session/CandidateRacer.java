@@ -151,7 +151,7 @@ public final class CandidateRacer implements AutoCloseable {
         return false;
       }
       cancelAttempts();
-      complete(new DirectConnectionResult(null, ConnectionFailureCategory.CANCELLED,
+      complete(new DirectConnectionResult(null, null, ConnectionFailureCategory.CANCELLED,
           snapshotDiagnostics()));
       active.remove(this);
       return true;
@@ -238,7 +238,7 @@ public final class CandidateRacer implements AutoCloseable {
             deadline.cancel(false);
           }
           cancelOtherAttempts(attempt);
-          complete(new DirectConnectionResult(session, null, snapshotDiagnostics()));
+          complete(new DirectConnectionResult(session, pair, null, snapshotDiagnostics()));
           active.remove(this);
           return;
         }
@@ -266,7 +266,7 @@ public final class CandidateRacer implements AutoCloseable {
         deadline.cancel(false);
       }
       cancelAttempts();
-      complete(new DirectConnectionResult(null, category, snapshotDiagnostics()));
+      complete(new DirectConnectionResult(null, null, category, snapshotDiagnostics()));
       active.remove(this);
     }
 

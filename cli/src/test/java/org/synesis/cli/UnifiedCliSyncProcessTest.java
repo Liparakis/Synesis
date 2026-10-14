@@ -78,7 +78,7 @@ final class UnifiedCliSyncProcessTest {
     private static SyncRun sync(ProjectState state, String record) throws Exception {
         Process host = start(state.host(), "sync", "host", "--project", state.host().toString(), "--record", record);
         HostCapture capture = captureInvitation(host);
-        assertTrue(capture.invitation().startsWith("synesis://join/SLB2-"));
+        assertTrue(capture.invitation().startsWith("synesis://join/SLB3-"));
         Process join = start(state.join(), "sync", "join", "--project", state.join().toString(), "--record", record, "--expect-host", state.hostNodeId(), capture.invitation());
         assertTrue(join.waitFor(60, TimeUnit.SECONDS));
         String joinOutput = output(join);
@@ -270,7 +270,7 @@ final class UnifiedCliSyncProcessTest {
         Process host = start(state.host(), "sync", "host", "--project", state.host().toString(), "--record", state.recordId());
         HostCapture capture = captureInvitation(host);
         String invitation = capture.invitation();
-        assertTrue(invitation.startsWith("synesis://join/SLB2-"));
+        assertTrue(invitation.startsWith("synesis://join/SLB3-"));
         assertTrue(invitation.contains("project=" + state.projectId()));
         assertTrue(invitation.contains("record=" + state.recordId()));
         assertTrue(invitation.contains("host=" + state.hostNodeId()));

@@ -237,11 +237,11 @@ function Bootstrap-Slb2Edges {
     foreach ($edge in $edges) {
         $path = '/invite?peer=' + [Uri]::EscapeDataString($edge.UpperId)
         $link = (Invoke-LabText $edge.Lower 'POST' $path '').Trim()
-        if (-not $link.StartsWith('synesis://join/SLB2-', [StringComparison]::Ordinal)) {
-            throw "Expected SLB2 invitation for $($edge.LowerId)/$($edge.UpperId)."
+        if (-not $link.StartsWith('synesis://join/SLB3-', [StringComparison]::Ordinal)) {
+            throw "Expected SLB3 invitation for $($edge.LowerId)/$($edge.UpperId)."
         }
         Invoke-LabText $edge.Upper 'POST' '/join' $link | Out-Null
-        Wait-Until -Label "SLB2 edge $($edge.LowerId)/$($edge.UpperId)" -TimeoutSeconds 60 `
+        Wait-Until -Label "SLB3 edge $($edge.LowerId)/$($edge.UpperId)" -TimeoutSeconds 60 `
             -Condition {
                 $left = Get-NodeStatus $edge.Lower
                 $right = Get-NodeStatus $edge.Upper
@@ -442,7 +442,7 @@ try {
     Write-TopologySnapshot 'membership-installed'
 
     Bootstrap-Slb2Edges
-    Write-Host 'All twelve SLB2 first-contact edges are authenticated.'
+    Write-Host 'All twelve SLB3 first-contact edges are authenticated.'
     Write-TopologySnapshot 'post-slb2-first-contact'
     Refresh-Descriptors
     Wait-Graph -Label 'initial 12-edge graph' -TimeoutSeconds 180

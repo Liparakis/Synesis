@@ -28,7 +28,7 @@ final class ShareLinksTest {
           TraversalInvitation.MAX_LINK_CHARS, "SLO1", "invalid SLO1 link format"),
       new Format("SLA2", TraversalAnswer::fromShareLink, "answer", "SLA2-",
           TraversalAnswer.MAX_LINK_CHARS, "SLA2", "invalid SLA2 link format"),
-      new Format("SLB2", CompactBootstrapInvitation::fromShareLink, "join", "SLB2-",
+      new Format("SLB3", CompactBootstrapInvitation::fromShareLink, "join", "SLB3-",
           CompactBootstrapInvitation.MAX_LINK_CHARS, "compact invitation",
           "unsupported compact invitation link format"));
 

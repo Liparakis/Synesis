@@ -110,7 +110,7 @@ import org.synesis.link.transport.quic.NettySessionHandshake;
  * Test-only process adapter for the Docker-based SL-D-040 Checkpoint 3A lab.
  *
  * <p>This class is deliberately not part of the shipped CLI. It exposes only a bounded local
- * HTTP control surface around the existing Link identity, SLB2 onboarding, authenticated QUIC
+ * HTTP control surface around the existing Link identity, SLB3 onboarding, authenticated QUIC
  * sessions, signed overlay membership, topology propagation, and {@link OverlayReconciler}.
  * The Docker harness is responsible for lifecycle, membership distribution, descriptor refresh,
  * failure injection, and evidence collection.
@@ -631,9 +631,9 @@ public final class ProcessLabNode {
     CompletableFuture.runAsync(() -> {
       try {
         host.awaitConnectionAndKeepAlive();
-        record("SLB2_HOST_CONNECTED peer=" + expectedPeer);
+        record("SLB3_HOST_CONNECTED peer=" + expectedPeer);
       } catch (OnboardingFailure failure) {
-        record("SLB2_HOST_FAILED peer=" + expectedPeer + " code=" + failure.code());
+        record("SLB3_HOST_FAILED peer=" + expectedPeer + " code=" + failure.code());
       }
     }, controlExecutor);
     sendText(exchange, 200, link);
@@ -653,9 +653,9 @@ public final class ProcessLabNode {
     CompletableFuture.runAsync(() -> {
       try {
         join.connectAndKeepAlive();
-        record("SLB2_JOIN_CONNECTED");
+        record("SLB3_JOIN_CONNECTED");
       } catch (OnboardingFailure failure) {
-        record("SLB2_JOIN_FAILED code=" + failure.code());
+        record("SLB3_JOIN_FAILED code=" + failure.code());
       }
     }, controlExecutor);
     sendText(exchange, 202, "accepted");

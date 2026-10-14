@@ -23,7 +23,7 @@ For launcher validation, build with
 `./gradlew.bat :cli:installDist --dependency-verification=strict` and run the
 generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
 normal flow is `synesis host`, copy its
-`synesis://join/SLB2-...` output to the other machine, and run
+`synesis://join/SLB3-...` output to the other machine, and run
 `synesis join "<link>"`. No answer is printed for the compact one-way path.
 If the selected topology requires coordinated candidate exchange, use the
 legacy SLO1/SLA2 flow documented in [`SYNESIS_LINK_V1.md`](../protocol/SYNESIS_LINK_V1.md).

@@ -78,7 +78,7 @@ final class DaemonServerTest {
                 issued,
                 issued.plusSeconds(600),
                 new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
-                new Candidate(CandidateType.MANUAL, InetAddress.getByName("198.51.100.1"), 4401, 1)).shareLink();
+                java.util.List.of(new Candidate(CandidateType.MANUAL, InetAddress.getByName("198.51.100.1"), 4401, 1))).shareLink();
     }
 
     private static String exchange(DaemonEndpoint.Record endpoint, Map<String, Object> request) throws Exception {

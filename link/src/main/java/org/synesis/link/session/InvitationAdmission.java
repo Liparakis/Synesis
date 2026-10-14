@@ -40,7 +40,7 @@ public final class InvitationAdmission implements AutoCloseable {
    * Creates one single-use admission state for a signed invitation capability.
    *
    * @param sessionId  invited session identifier
-   * @param capability invitation capability bytes; legacy invitations use 32 bytes and SLB2
+   * @param capability invitation capability bytes; legacy invitations use 32 bytes and SLB3
    *                   compact invitations use 12 bytes
    */
   public InvitationAdmission(UUID sessionId, byte[] capability) {

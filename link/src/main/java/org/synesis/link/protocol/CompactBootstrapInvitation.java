@@ -13,12 +13,19 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.UUID;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateType;
@@ -27,9 +34,10 @@ import org.synesis.link.identity.NodeIdentity;
 /**
  * A compact, signed, one-way first-contact invitation.
  *
- * <p>The only wire revision is the minimized {@code SLB2} layout. It intentionally
- * carries one endpoint hint instead of a complete
- * {@link org.synesis.link.candidate.CandidateDescriptor}.
+ * <p>The only wire revision is the minimized {@code SLB3} layout. It intentionally
+ * carries a few endpoint hints instead of a complete
+ * {@link org.synesis.link.candidate.CandidateDescriptor}. One hint is not enough: the inviter
+ * cannot know which of its addresses the joiner's network reaches.
  * The inviter's compact Ed25519 public key and signature remain pre-contact
  * trust material: the existing Link handshake authenticates the key supplied
  * by the invitation, so learning an arbitrary key from the peer would be TOFU.
@@ -37,15 +45,15 @@ import org.synesis.link.identity.NodeIdentity;
  * bounded application stream.
  *
  * <p>The binary representation is canonical and bounded. Its URI is suitable
- * for copy/paste and QR rendering, but its endpoint is only a signed routing
- * hint; it does not prove reachability or promise NAT traversal.
+ * for copy/paste and QR rendering, but its endpoints are only signed routing
+ * hints; they do not prove reachability or promise NAT traversal.
  *
  * @since 1.0
  */
 public final class CompactBootstrapInvitation {
 
-  /** Maximum compact invitation payload in bytes. */
-  static final int MAX_BYTES = 256;
+  /** Maximum number of endpoint hints one invitation carries. */
+  public static final int MAX_ENDPOINTS = 8;
   /** Maximum compact invitation URI length accepted by the parser. */
   public static final int MAX_LINK_CHARS = 512;
   /** Size of the minimized single-use admission capability. */
@@ -58,10 +66,14 @@ public final class CompactBootstrapInvitation {
   private static final int SIGNATURE_BYTES = 64;
   private static final int RAW_PUBLIC_KEY_BYTES = 32;
   private static final int MAX_ADDRESS_BYTES = 16;
+  /** Maximum compact invitation payload in bytes: every endpoint an IPv6 address. */
+  static final int MAX_BYTES = Integer.BYTES + Short.BYTES + MINIMIZED_CAPABILITY_BYTES
+      + RAW_PUBLIC_KEY_BYTES + Byte.BYTES
+      + MAX_ENDPOINTS * (Byte.BYTES + MAX_ADDRESS_BYTES + Short.BYTES) + SIGNATURE_BYTES;
   private static final long MAX_EPOCH_SECONDS = 0xFFFF_FFFFL;
   private static final byte[] ED25519_SPKI_PREFIX = HexFormat.of()
       .parseHex("302a300506032b6570032100");
-  private static final byte[] MINIMIZED_SESSION_DOMAIN = "synesis-link/SLB2/session"
+  private static final byte[] MINIMIZED_SESSION_DOMAIN = "synesis-link/SLB3/session"
       .getBytes(StandardCharsets.US_ASCII);
   private static final Comparator<Candidate> ENDPOINT_ORDER = Comparator
       .comparingInt((Candidate candidate) -> endpointRank(candidate.type()))
@@ -78,72 +90,73 @@ public final class CompactBootstrapInvitation {
   private final Instant expiresAt;
   private final byte[] capability;
   private final byte[] hostPublicKey;
-  private final Candidate endpoint;
+  private final List<Candidate> endpoints;
   private final byte[] unsigned;
   private final byte[] signature;
   private final UUID sessionId;
 
   private CompactBootstrapInvitation(ProtocolVersion protocolVersion,
       Instant issuedAt, Instant expiresAt, byte[] capability, byte[] hostPublicKey,
-      Candidate endpoint, byte[] signature) {
+      List<Candidate> endpoints, byte[] signature) {
     this.protocolVersion = Objects.requireNonNull(protocolVersion, "protocol version");
     this.issuedAt = Objects.requireNonNull(issuedAt, "issued at");
     this.expiresAt = Objects.requireNonNull(expiresAt, "expires at");
     validateInterval(issuedAt, expiresAt);
     this.capability = copyMinimizedCapability(capability);
     this.hostPublicKey = copyCompactPublicKey(hostPublicKey);
-    this.endpoint = validateEndpoint(endpoint);
+    this.endpoints = validateEndpoints(endpoints);
     this.unsigned = encodeUnsigned();
     this.signature = Objects.requireNonNull(signature, "signature").clone();
-    if (this.signature.length != SIGNATURE_BYTES || this.unsigned.length + SIGNATURE_BYTES > MAX_BYTES) {
-      throw new IllegalArgumentException("compact invitation exceeds supported bound");
+    if (this.signature.length != SIGNATURE_BYTES) {
+      throw new IllegalArgumentException("compact invitation signature must contain 64 bytes");
     }
     this.sessionId = sessionIdForMinimizedKey(this.hostPublicKey, this.capability,
         this.issuedAt, this.expiresAt);
   }
 
   /**
-   * Creates and signs the minimized SLB2 invitation.
+   * Creates and signs the minimized SLB3 invitation.
    *
-   * <p>SLB2 is fixed to Link protocol v1. Its URI revision supplies the wire
-   * version, the payload length supplies the IPv4/IPv6 choice, and the
+   * <p>SLB3 is fixed to Link protocol v1. Its URI revision supplies the wire
+   * version, each endpoint states its own address width, and the
    * lifetime is encoded as a bounded unsigned second count. The 96-bit
    * capability remains a random online-admission guard; it is not a project
    * credential or a replacement for the host signature.
    *
    * @param host       durable inviter identity
-   * @param version    Link protocol version; only v1 is representable in SLB2
+   * @param version    Link protocol version; only v1 is representable in SLB3
    * @param issuedAt   inclusive issue instant
    * @param expiresAt  exclusive expiry instant; no later than ten minutes after issue
    * @param capability fresh 96-bit single-use capability
-   * @param endpoint   one non-relay UDP endpoint hint
+   * @param endpoints  one to {@link #MAX_ENDPOINTS} distinct non-relay UDP endpoint hints, in
+   *                   the order the joiner should prefer them
    * @return canonical signed minimized invitation
    * @throws GeneralSecurityException if signing fails
    * @throws IllegalArgumentException if a field exceeds the minimized bounds
    */
   public static CompactBootstrapInvitation createMinimized(NodeIdentity host,
       ProtocolVersion version, Instant issuedAt, Instant expiresAt, byte[] capability,
-      Candidate endpoint) throws GeneralSecurityException {
+      List<Candidate> endpoints) throws GeneralSecurityException {
     Objects.requireNonNull(host, "host identity");
     if (!ProtocolVersion.V1.equals(version)) {
-      throw new IllegalArgumentException("SLB2 supports only Link protocol v1");
+      throw new IllegalArgumentException("SLB3 supports only Link protocol v1");
     }
     byte[] compactKey = compactPublicKey(host.publicKeyEncoded());
     CompactBootstrapInvitation unsigned = new CompactBootstrapInvitation(version,
         issuedAt.truncatedTo(ChronoUnit.SECONDS), expiresAt.truncatedTo(ChronoUnit.SECONDS),
-        capability, compactKey, endpoint, new byte[SIGNATURE_BYTES]);
+        capability, compactKey, endpoints, new byte[SIGNATURE_BYTES]);
     return new CompactBootstrapInvitation(version,
-        unsigned.issuedAt, unsigned.expiresAt, unsigned.capability, compactKey, endpoint,
+        unsigned.issuedAt, unsigned.expiresAt, unsigned.capability, compactKey, endpoints,
         host.sign(unsigned.unsigned));
   }
 
   /**
-   * Decodes a bounded canonical SLB2 invitation without trusting its signature.
+   * Decodes a bounded canonical SLB3 invitation without trusting its signature.
    *
-   * <p>The payload has no inner magic or length field. The URI revision selects
-   * this parser, and the complete bounded payload length selects the IPv4 or
-   * IPv6 address width. A future layout must use another URI revision rather
-   * than changing these lengths in place.
+   * <p>The payload has no inner magic: the URI revision selects this parser. After the fixed
+   * fields come an endpoint count, then for each endpoint its address width (4 or 16), address,
+   * and port, then the signature. A future layout must use another URI revision rather than
+   * changing this one in place.
    *
    * @param encoded complete minimized invitation bytes
    * @return decoded invitation requiring {@link #verifyAt(Instant, Duration)} before use
@@ -151,11 +164,9 @@ public final class CompactBootstrapInvitation {
    */
   static CompactBootstrapInvitation decodeMinimized(byte[] encoded) throws IOException {
     Objects.requireNonNull(encoded, "minimized compact invitation");
-    if (encoded.length != minimizedEncodedLength(4)
-        && encoded.length != minimizedEncodedLength(MAX_ADDRESS_BYTES)) {
+    if (encoded.length > MAX_BYTES) {
       throw new IOException("invalid minimized compact invitation length");
     }
-    int addressLength = encoded.length == minimizedEncodedLength(4) ? 4 : MAX_ADDRESS_BYTES;
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
       Instant issued = readEpoch(input);
       int lifetimeSeconds = input.readUnsignedShort();
@@ -164,22 +175,32 @@ public final class CompactBootstrapInvitation {
       }
       byte[] capability = readFixed(input, MINIMIZED_CAPABILITY_BYTES);
       byte[] publicKey = readFixed(input, RAW_PUBLIC_KEY_BYTES);
-      byte[] address = readFixed(input, addressLength);
-      int port = input.readUnsignedShort();
-      if (port == 0) {
-        throw new IOException("compact endpoint port is zero");
+      int count = input.readUnsignedByte();
+      if (count == 0 || count > MAX_ENDPOINTS) {
+        throw new IOException("invalid compact endpoint count");
+      }
+      List<Candidate> endpoints = new ArrayList<>(count);
+      for (int index = 0; index < count; index++) {
+        int addressLength = input.readUnsignedByte();
+        if (addressLength != 4 && addressLength != MAX_ADDRESS_BYTES) {
+          throw new IOException("compact endpoint must be IPv4 or IPv6");
+        }
+        byte[] address = readFixed(input, addressLength);
+        int port = input.readUnsignedShort();
+        if (port == 0) {
+          throw new IOException("compact endpoint port is zero");
+        }
+        endpoints.add(new Candidate(addressLength == MAX_ADDRESS_BYTES
+            ? CandidateType.IPV6 : CandidateType.MANUAL, InetAddress.getByAddress(address), port,
+            0));
       }
       byte[] signature = readFixed(input, SIGNATURE_BYTES);
       if (input.available() != 0) {
         throw new IOException("trailing minimized compact invitation bytes");
       }
-      Instant expires = issued.plusSeconds(lifetimeSeconds);
-      CandidateType type = addressLength == MAX_ADDRESS_BYTES
-          ? CandidateType.IPV6 : CandidateType.MANUAL;
-      Candidate endpoint = new Candidate(type, InetAddress.getByAddress(address), port, 0);
       CompactBootstrapInvitation value = new CompactBootstrapInvitation(
-          ProtocolVersion.V1, issued, expires, capability, publicKey,
-          endpoint, signature);
+          ProtocolVersion.V1, issued, issued.plusSeconds(lifetimeSeconds), capability, publicKey,
+          endpoints, signature);
       CodecSupport.requireCanonical(encoded, value.encoded(),
           "non-canonical minimized compact invitation");
       return value;
@@ -197,7 +218,7 @@ public final class CompactBootstrapInvitation {
    */
   public static CompactBootstrapInvitation fromShareLink(String link) throws IOException {
     Objects.requireNonNull(link, "compact invitation link");
-    return ShareLinks.parse(link, "join", "SLB2-", MAX_LINK_CHARS, "compact invitation",
+    return ShareLinks.parse(link, "join", "SLB3-", MAX_LINK_CHARS, "compact invitation",
         "unsupported compact invitation link format", CompactBootstrapInvitation::decodeMinimized);
   }
 
@@ -205,30 +226,46 @@ public final class CompactBootstrapInvitation {
    * Checks whether a URI selects the compact bootstrap revision.
    *
    * @param link candidate URI
-   * @return {@code true} for the strict SLB2 join prefix
+   * @return {@code true} for the strict SLB3 join prefix
    */
   public static boolean isShareLink(String link) {
-    return link != null && link.startsWith("synesis://join/SLB2-");
+    return link != null && link.startsWith("synesis://join/SLB3-");
   }
 
   /**
-   * Selects one deterministic non-relay endpoint for compact first contact.
+   * Selects the endpoint hints for compact first contact, most promising first.
+   *
+   * <p>Every kind of candidate is represented before any kind is repeated, so a machine with more
+   * addresses than fit still offers a LAN address beside its public ones: which one works depends
+   * on the joiner's network, which the inviter cannot see.
    *
    * @param candidates complete local candidate collection
-   * @return the preferred endpoint hint
+   * @return one to {@link #MAX_ENDPOINTS} distinct endpoint hints in preference order
    * @throws IllegalArgumentException if no usable endpoint exists
    */
-  public static Candidate selectEndpoint(Collection<Candidate> candidates) {
+  public static List<Candidate> selectEndpoints(Collection<Candidate> candidates) {
     Objects.requireNonNull(candidates, "candidates");
-    return candidates.stream()
+    record Turn(Candidate candidate, int ofItsType) {
+    }
+    Map<CandidateType, Integer> seenOfType = new EnumMap<>(CandidateType.class);
+    List<Candidate> selected = candidates.stream()
         .filter(Objects::nonNull)
         .filter(candidate -> candidate.type() != CandidateType.RELAY)
         .filter(candidate -> candidate.address()
             .getAddress().length == 4 || candidate.address()
             .getAddress().length == MAX_ADDRESS_BYTES)
         .sorted(ENDPOINT_ORDER)
-        .findFirst()
-        .orElseThrow(() -> new IllegalArgumentException("no usable compact endpoint"));
+        .filter(distinctEndpoints())
+        .map(candidate -> new Turn(candidate,
+            seenOfType.merge(candidate.type(), 1, Integer::sum)))
+        .sorted(Comparator.comparingInt(Turn::ofItsType))
+        .map(Turn::candidate)
+        .limit(MAX_ENDPOINTS)
+        .toList();
+    if (selected.isEmpty()) {
+      throw new IllegalArgumentException("no usable compact endpoint");
+    }
+    return selected;
   }
 
   /**
@@ -259,7 +296,7 @@ public final class CompactBootstrapInvitation {
    * @return copyable signed compact invitation
    */
   public String shareLink() {
-    return "synesis://join/SLB2-" + Base64.getUrlEncoder()
+    return "synesis://join/SLB3-" + Base64.getUrlEncoder()
         .withoutPadding()
         .encodeToString(encoded());
   }
@@ -342,12 +379,12 @@ public final class CompactBootstrapInvitation {
   }
 
   /**
-   * Returns the single signed endpoint hint.
+   * Returns the signed endpoint hints in the inviter's preference order.
    *
-   * @return immutable endpoint value
+   * @return immutable list of one to {@link #MAX_ENDPOINTS} endpoints
    */
-  public Candidate endpoint() {
-    return endpoint;
+  public List<Candidate> endpoints() {
+    return endpoints;
   }
 
   /**
@@ -414,6 +451,28 @@ public final class CompactBootstrapInvitation {
     return value.clone();
   }
 
+  private static List<Candidate> validateEndpoints(List<Candidate> values) {
+    Objects.requireNonNull(values, "endpoints");
+    if (values.isEmpty() || values.size() > MAX_ENDPOINTS) {
+      throw new IllegalArgumentException(
+          "compact invitation carries 1 to " + MAX_ENDPOINTS + " endpoints");
+    }
+    List<Candidate> endpoints = values.stream()
+        .map(CompactBootstrapInvitation::validateEndpoint)
+        .toList();
+    if (!endpoints.stream().allMatch(distinctEndpoints())) {
+      throw new IllegalArgumentException("compact endpoints must be distinct");
+    }
+    return endpoints;
+  }
+
+  /** A stateful filter that passes each address and port once. */
+  private static Predicate<Candidate> distinctEndpoints() {
+    Set<String> seen = new HashSet<>();
+    return candidate -> seen.add(HexFormat.of().formatHex(candidate.address().getAddress())
+        + ":" + candidate.port());
+  }
+
   private static Candidate validateEndpoint(Candidate value) {
     Objects.requireNonNull(value, "endpoint");
     if (value.type() == CandidateType.RELAY || value.address()
@@ -447,26 +506,22 @@ public final class CompactBootstrapInvitation {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
-        byte[] address = endpoint.address().getAddress();
         output.writeInt((int) issuedAt.getEpochSecond());
         output.writeShort(Math.toIntExact(Duration.between(issuedAt, expiresAt).getSeconds()));
         output.write(capability);
         output.write(hostPublicKey);
-        output.write(address);
-        output.writeShort(endpoint.port());
-      }
-      if (bytes.size() + SIGNATURE_BYTES > MAX_BYTES) {
-        throw new IllegalArgumentException("compact invitation exceeds supported bound");
+        output.writeByte(endpoints.size());
+        for (Candidate endpoint : endpoints) {
+          byte[] address = endpoint.address().getAddress();
+          output.writeByte(address.length);
+          output.write(address);
+          output.writeShort(endpoint.port());
+        }
       }
       return bytes.toByteArray();
     } catch (IOException impossible) {
       throw new AssertionError("byte array output cannot fail", impossible);
     }
-  }
-
-  private static int minimizedEncodedLength(int addressLength) {
-    return Integer.BYTES + Short.BYTES + MINIMIZED_CAPABILITY_BYTES + RAW_PUBLIC_KEY_BYTES
-        + addressLength + Short.BYTES + SIGNATURE_BYTES;
   }
 
   private static Instant readEpoch(DataInputStream input) throws IOException {

@@ -67,4 +67,21 @@ final class CandidateNormalizationTest {
         .contains("192.0.2.1"));
     assertEquals(pairs, CandidatePairs.generate(List.of(local, ipv6), List.of(remote), 8));
   }
+
+  @Test
+  void onePerRemoteKeepsRemoteOrderAndDropsARemoteOfAFamilyThisMachineLacks() throws Exception {
+    Candidate lan = new Candidate(CandidateType.LAN, InetAddress.getByName("192.0.2.1"), 4433, 0);
+    Candidate otherLan = new Candidate(CandidateType.LAN, InetAddress.getByName("198.51.100.1"),
+        4433, 0);
+    Candidate remoteV6 = new Candidate(CandidateType.IPV6, InetAddress.getByName("2001:db8::2"),
+        4433, 0);
+    Candidate remoteB = new Candidate(CandidateType.MANUAL, InetAddress.getByName("192.0.2.9"),
+        4433, 0);
+    Candidate remoteA = new Candidate(CandidateType.MANUAL, InetAddress.getByName("192.0.2.2"),
+        4433, 0);
+
+    assertEquals(List.of(new CandidatePair(lan, remoteB), new CandidatePair(lan, remoteA)),
+        CandidatePairs.onePerRemote(List.of(lan, otherLan), List.of(remoteV6, remoteB, remoteA)));
+    assertEquals(List.of(), CandidatePairs.onePerRemote(List.of(lan), List.of(remoteV6)));
+  }
 }

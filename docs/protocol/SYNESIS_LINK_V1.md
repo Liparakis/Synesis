@@ -62,29 +62,40 @@ for a bounded settle window and choose one deterministic winner.
 ### Compact first contact
 
 SL-D-032 adds the normal one-way first-contact artifact:
-`synesis://join/SLB2-<base64url>`. Its canonical payload is a signed, bounded
-binary record containing issue epoch seconds, a bounded lifetime, a fresh
-12-byte (96-bit) single-use admission capability, the inviter's compact
-Ed25519 public key, and one signed non-relay UDP endpoint hint. The URI
-revision fixes the Link protocol to v1; exact payload length selects IPv4 or
-IPv6, so the payload does not repeat an inner magic, protocol, candidate-type,
-or address-length field. The expiry is derived from signed issue plus
-lifetime.
+`synesis://join/SLB3-<base64url>` (ADR-0095). Its canonical payload is a
+signed, bounded binary record containing issue epoch seconds, a bounded
+lifetime, a fresh 12-byte (96-bit) single-use admission capability, the
+inviter's compact Ed25519 public key, and one to eight signed non-relay UDP
+endpoint hints in the inviter's order of preference. The URI revision fixes the
+Link protocol to v1, so the payload does not repeat an inner magic, protocol,
+or candidate-type field. The endpoints follow the key as a count byte and, for
+each endpoint, an address-width byte (4 or 16), the address, and a two-byte
+port; a repeated address and port is rejected. The expiry is derived from
+signed issue plus lifetime.
 The public key and detached signature are retained before contact because the
-joiner must authenticate the intended durable node; the endpoint and port are
-retained because a peer needs some destination before it can send the first
-QUIC packet. The capability, validity interval, and deterministic session ID
+joiner must authenticate the intended durable node; endpoints are retained
+because a peer needs some destination before it can send the first QUIC
+packet, and more than one because the inviter cannot see which of its
+addresses the joiner's network reaches. The joiner dials every endpoint of an
+address family it has at once and keeps the first authenticated session; the
+host admits one attempt and refuses the rest. The capability, validity interval, and deterministic session ID
 bind admission and replay handling to that one invitation.
 
 The compact record contains no private key, project membership, provider
-credential, full candidate set, or long-lived reconnect secret. The endpoint is
+credential, full candidate set, or long-lived reconnect secret. An endpoint is
 a signed routing hint, not an identity and not a promise of Internet NAT
 reachability. The local candidate provider omits IPv6 link-local addresses from
 wire candidates because their interface scope cannot be represented safely in
-this artifact. Endpoint selection prefers a server-reflexive candidate when
-configured, then deterministic direct candidates.
+this artifact. It also omits every address of the loopback interface, and an
+IPv6 address the machine does not send from: the listener is bound to the
+wildcard address, the operating system chooses the source of each reply, and a
+peer drops a reply from an address it did not dial. Endpoint selection orders
+candidates server-reflexive, IPv6, manual, mapped, LAN, and takes one of every
+kind present before a second of any kind, up to eight.
 
-The exact SLB2 IPv4/IPv6 sizes are 120/132 raw bytes and 180/196 URI characters. The 32-byte
+An SLB3 record with one IPv4 or one IPv6 endpoint is 122 or 134 raw bytes and
+183 or 199 URI characters; each further endpoint adds 7 or 19 bytes, and a full
+record of eight IPv6 endpoints is 267 bytes and 376 characters. The 32-byte
 Ed25519 public key and 64-byte Ed25519 signature are the irreducible identity
 trust floor for the existing self-contained non-TOFU construction. Removing
 the detached signature would allow endpoint and key substitution; the normal
@@ -99,14 +110,14 @@ signed `CandidateDescriptor`. Each descriptor is still independently verified
 and must match the already-authenticated node identity and invitation expiry.
 This is an explicit descriptor exchange, not a trust-on-first-use key update.
 Project identity and membership remain higher-level authorization decisions;
-possession of an SLB2 endpoint hint does not grant project membership.
+possession of an SLB3 endpoint hint does not grant project membership.
 
 The one-way path is the normal UX for directly reachable or otherwise
 pre-discoverable endpoints. Existing signed SLO1/SLA2 remains available for
 coordinated candidate exchange when a NAT class requires a return target before
 the first transport. That compatibility path is not compressed and remains
 subject to its existing size and validation bounds. Cross-network NAT success
-is not claimed by SLB2 local loopback evidence.
+is not claimed by SLB3 local or LAN evidence.
 
 Human-mediated onboarding uses two copyable links and no Synesis signaling
 service. The host command creates `synesis://join/SLO1-...`, which contains

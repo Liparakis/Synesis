@@ -1,6 +1,7 @@
 # ADR-0078: Compact Link first-contact bootstrap
 
-- Status: ACCEPTED FOR SL-D-032
+- Status: ACCEPTED FOR SL-D-032; the single endpoint hint and the `SLB2` revision are
+  superseded by ADR-0095
 - Date: 2026-09-13
 - Decision scope: Link first-contact invitation, CLI onboarding, and the
   authenticated candidate-descriptor exchange

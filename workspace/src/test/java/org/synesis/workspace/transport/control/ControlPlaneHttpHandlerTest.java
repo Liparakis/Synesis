@@ -362,7 +362,7 @@ class ControlPlaneHttpHandlerTest {
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(201, invitation.statusCode());
             Map<String, Object> invitationBody = object(invitation.body());
-            assertTrue(((String) invitationBody.get("inviteUri")).startsWith("synesis://join/SLB2-"));
+            assertTrue(((String) invitationBody.get("inviteUri")).startsWith("synesis://join/SLB3-"));
             assertEquals("WAITING_FOR_CONNECTION", invitationBody.get("state"));
 
             HttpResponse<String> connection = join.client.send(jsonRequest(join, "/api/v1/commands/join").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) joinCredentials.get("sessionToken"))

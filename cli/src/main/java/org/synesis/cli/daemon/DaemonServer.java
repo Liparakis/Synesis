@@ -534,7 +534,7 @@ final class DaemonServer implements AutoCloseable {
         String path = uri.getPath();
         boolean join = "join".equalsIgnoreCase(host);
         boolean answer = "answer".equalsIgnoreCase(host);
-        boolean payload = join && path != null && (path.startsWith("/SLO1-") || path.startsWith("/SLB2-")) || answer && path != null && path.startsWith("/SLA2-");
+        boolean payload = join && path != null && (path.startsWith("/SLO1-") || path.startsWith("/SLB3-")) || answer && path != null && path.startsWith("/SLA2-");
         if (!"synesis".equalsIgnoreCase(uri.getScheme()) || host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || !payload) {
             throw new IOException("URI_UNSUPPORTED");
         }

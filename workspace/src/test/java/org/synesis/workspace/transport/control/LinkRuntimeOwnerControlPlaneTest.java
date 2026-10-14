@@ -132,7 +132,7 @@ class LinkRuntimeOwnerControlPlaneTest {
             Map<String, Object> hostSession = login(host);
             Map<String, Object> joinSession = login(join);
             Map<String, Object> invitation = command(host, hostSession, "invite", Map.of("expectedPeer", joinIdentity.nodeId()));
-            assertTrue(((String) invitation.get("inviteUri")).startsWith("synesis://join/SLB2-"));
+            assertTrue(((String) invitation.get("inviteUri")).startsWith("synesis://join/SLB3-"));
             assertEquals("WAITING_FOR_CONNECTION", invitation.get("state"));
             Map<String, Object> connection = command(join, joinSession, "join", Map.of("inviteUri", invitation.get("inviteUri")));
             assertEquals("CONNECTED", connection.get("state"));

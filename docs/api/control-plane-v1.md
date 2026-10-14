@@ -113,7 +113,7 @@ They do not duplicate compact or SLO1/SLA2 validation or create a second Link ru
 ```
 
 Delegates to the compact one-way `Onboarding.createCompactInvitation` path.
-The response contains an opaque `operationId`, the exact `synesis://join/SLB2-...`
+The response contains an opaque `operationId`, the exact `synesis://join/SLB3-...`
 `inviteUri` for the operator to copy, the authenticated peer identity, expiry,
 and `WAITING_FOR_CONNECTION` state. The link is returned only to the
 authenticated caller and is never emitted through SSE. Legacy SLO1 creation
@@ -123,11 +123,11 @@ remains available through the Link API for coordinated compatibility flows.
 
 ```json
 {
-    "inviteUri": "synesis://join/SLB2-..."
+    "inviteUri": "synesis://join/SLB3-..."
 }
 ```
 
-Delegates to `Onboarding.importInvitation`. For an SLB2 link, the request
+Delegates to `Onboarding.importInvitation`. For an SLB3 link, the request
 verifies the signed host key and endpoint, performs the direct authenticated
 attempt, exchanges the complete signed candidate descriptors over the
 authenticated application stream, and returns `CONNECTED`. No `answerUri` or
@@ -145,7 +145,7 @@ expiry, and `WAITING_FOR_CONNECT` state.
 ```
 
 Delegates to the stored `PreparedHost.importAnswer` for legacy SLO1/SLA2
-operations. Compact SLB2 operations reject this command because the
+operations. Compact SLB3 operations reject this command because the
 compact flow is one-way. The legacy operation closes its one-shot handle and returns
 `CONNECTED` or a typed redacted onboarding error.
 

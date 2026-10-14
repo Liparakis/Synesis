@@ -55,7 +55,7 @@ final class GeneratedOnboardingTest {
             CompletableFuture<String> linkFuture = new CompletableFuture<>();
             CompletableFuture<CapturedProcess> hostFuture = capture(host, "SHARE_LINK", linkFuture);
             String link = linkFuture.get(45, TimeUnit.SECONDS);
-            assertTrue(link.startsWith("synesis://join/SLB2-"));
+            assertTrue(link.startsWith("synesis://join/SLB3-"));
             join = DistributionLauncherTest.start(DistributionLauncherTest.launcher(), joinProfile, "join", link);
             CompletableFuture<String> workFuture = new CompletableFuture<>();
             CompletableFuture<CapturedProcess> joinFuture = capture(join, "WORK_RESULT", workFuture);

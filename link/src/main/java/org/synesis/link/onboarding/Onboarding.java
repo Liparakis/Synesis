@@ -60,6 +60,14 @@ public final class Onboarding {
   private static final int NONCE_BYTES = 16;
   private static final ConnectionPolicy DIRECT_CONNECTION_POLICY = new ConnectionPolicy(8, 8, 2,
       Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20), 16);
+  /**
+   * Dials every endpoint of a compact invitation at once: the endpoints are alternatives of which
+   * usually one answers, and waiting out a dead one before trying the next would spend the race.
+   */
+  private static final ConnectionPolicy COMPACT_CONNECTION_POLICY = new ConnectionPolicy(
+      CompactBootstrapInvitation.MAX_ENDPOINTS, CompactBootstrapInvitation.MAX_ENDPOINTS,
+      CompactBootstrapInvitation.MAX_ENDPOINTS, Duration.ofMillis(100), Duration.ofSeconds(10),
+      Duration.ofSeconds(20), 16);
   private final Path profileDirectory;
   private final Consumer<OnboardingEvent> events;
   private final InetSocketAddress stunServer;
@@ -300,12 +308,12 @@ public final class Onboarding {
       emit(OnboardingEventType.LISTENER_READY, "");
       List<Candidate> candidates = endpoint.gatherCandidates("host");
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
-      Candidate hostEndpoint = CompactBootstrapInvitation.selectEndpoint(candidates);
       CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued, expires,
           candidates);
       localDescriptor.set(descriptor);
       CompactBootstrapInvitation invitation = CompactBootstrapInvitation.createMinimized(
-          local.identity(), ProtocolVersion.V1, issued, expires, capability, hostEndpoint);
+          local.identity(), ProtocolVersion.V1, issued, expires, capability,
+          CompactBootstrapInvitation.selectEndpoints(candidates));
       emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.INVITE_CREATED, "");
       emit(OnboardingEventType.SHARE_LINK, invitation.shareLink());
@@ -629,8 +637,8 @@ public final class Onboarding {
         HandshakeTranscript transcript = handshakeTranscript(local.identity(),
             invitation.sessionId(), invitation.capability(), host.nodeId(),
             host.publicKeyEncoded());
-        connectAndRun(local.identity(), transcript, pairs, endpoint.udp(), applicationHandler,
-            sessionAction, false, _ -> {
+        connectAndRun(local.identity(), transcript, DIRECT_CONNECTION_POLICY, pairs,
+            endpoint.udp(), applicationHandler, sessionAction, false, _ -> {
             });
       } finally {
         traversal.close();
@@ -655,18 +663,16 @@ public final class Onboarding {
    * Races the candidate pairs, authenticates the host named by the transcript, and runs the
    * session step shared by every join flow.
    *
-   * @param describeRaceFailure whether a race with no session carries its diagnostics as the cause
-   *                            of the failure; the compact flow does, the legacy flows do not
    * @param afterAuthentication step that runs on the verified session before the path is announced
    */
   private PeerSession connectAndRun(NodeIdentity identity, HandshakeTranscript transcript,
-      List<CandidatePair> pairs, Channel udp,
+      ConnectionPolicy policy, List<CandidatePair> pairs, Channel udp,
       PeerSession.ApplicationStreamHandler applicationHandler, Consumer<PeerSession> sessionAction,
       boolean keepAlive, SessionStep afterAuthentication)
       throws Exception {
     String hostNodeId = transcript.nodeId(HandshakeRole.RESPONDER);
     byte[] hostPublicKey = transcript.publicKeyEncoded(HandshakeRole.RESPONDER);
-    try (CandidateRacer racer = new CandidateRacer(DIRECT_CONNECTION_POLICY)) {
+    try (CandidateRacer racer = new CandidateRacer(policy)) {
       DirectConnectionResult result = racer.race(pairs, hostNodeId,
               pair -> ClientQuicConnectionAttempt.attempt(identity, hostNodeId, hostPublicKey,
                   transcript, udp, pair, applicationHandler))
@@ -683,7 +689,7 @@ public final class Onboarding {
         throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
       }
       afterAuthentication.run(session);
-      emit(OnboardingEventType.PATH_SELECTED, pairs.getFirst().identifier());
+      emit(OnboardingEventType.PATH_SELECTED, result.winner().identifier());
       emitSession(session);
       sessionAction.accept(session);
       if (!keepAlive) {
@@ -1031,8 +1037,8 @@ public final class Onboarding {
         HandshakeTranscript transcript = handshakeTranscript(identity, invitation.sessionId(),
             invitation.capability(), host.nodeId(), host.publicKeyEncoded());
         emit(OnboardingEventType.TRAVERSAL_STARTED, "");
-        return connectAndRun(identity, transcript, pairs, endpoint.udp(), applicationHandler,
-            sessionAction, keepAlive, _ -> {
+        return connectAndRun(identity, transcript, DIRECT_CONNECTION_POLICY, pairs,
+            endpoint.udp(), applicationHandler, sessionAction, keepAlive, _ -> {
             });
       } catch (OnboardingFailure failure) {
         throw failure;
@@ -1043,8 +1049,8 @@ public final class Onboarding {
 
     private PeerSession connectCompactPrepared(boolean keepAlive) throws OnboardingFailure {
       try {
-        List<CandidatePair> pairs = CandidatePairs.generate(localDescriptor.candidates(),
-            List.of(compactInvitation.endpoint()), 8);
+        List<CandidatePair> pairs = CandidatePairs.onePerRemote(localDescriptor.candidates(),
+            compactInvitation.endpoints());
         if (pairs.isEmpty()) {
           throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
         }
@@ -1052,8 +1058,8 @@ public final class Onboarding {
             compactInvitation.sessionId(), compactInvitation.capability(),
             compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded());
         emit(OnboardingEventType.TRAVERSAL_STARTED, "");
-        return connectAndRun(identity, transcript, pairs, endpoint.udp(), applicationHandler,
-            sessionAction, keepAlive, session -> {
+        return connectAndRun(identity, transcript, COMPACT_CONNECTION_POLICY, pairs,
+            endpoint.udp(), applicationHandler, sessionAction, keepAlive, session -> {
               CompactDescriptorExchange.exchangeDescriptor(session, localDescriptor,
                   compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded(),
                   compactInvitation.expiresAt());

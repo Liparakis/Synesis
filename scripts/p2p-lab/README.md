@@ -6,7 +6,7 @@ network and uses the existing Link/overlay classes from the source checkout.
 
 The harness is deliberately a lab adapter, not a new product authority. It
 creates one explicitly signed six-member membership snapshot, bootstraps the
-twelve target edges through the normal compact SLB2 host/join path, then feeds
+twelve target edges through the normal compact SLB3 host/join path, then feeds
 the signed candidate descriptors produced by each node into the existing
 bounded reconciler. After a container or network endpoint changes, the harness
 refreshes those signed descriptors explicitly. That step is evidence of a

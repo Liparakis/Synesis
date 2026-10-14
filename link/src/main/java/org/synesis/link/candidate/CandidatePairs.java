@@ -13,6 +13,30 @@ public final class CandidatePairs {
   }
 
   /**
+   * Pairs each remote endpoint, in the order given, with the first local candidate of its address
+   * family, and leaves out a remote endpoint this machine has no address of the family for.
+   *
+   * <p>This is the pairing for a dial from one wildcard-bound socket, where the local candidate
+   * names the family and does not select a route: a pair per local address would attempt the same
+   * destination repeatedly and crowd other destinations out of a bounded race.
+   *
+   * @param local  local candidates
+   * @param remote remote endpoints in the order to try them
+   * @return at most one pair per remote endpoint, in the order of {@code remote}
+   */
+  public static List<CandidatePair> onePerRemote(List<Candidate> local, List<Candidate> remote) {
+    List<CandidatePair> pairs = new ArrayList<>();
+    for (Candidate right : remote) {
+      local.stream()
+          .filter(left -> left.type() != CandidateType.RELAY
+              && left.address().getAddress().length == right.address().getAddress().length)
+          .findFirst()
+          .ifPresent(left -> pairs.add(new CandidatePair(left, right)));
+    }
+    return List.copyOf(pairs);
+  }
+
+  /**
    * Generates only same-family non-relay pairs and ranks them deterministically.
    *
    * @param local   local candidates

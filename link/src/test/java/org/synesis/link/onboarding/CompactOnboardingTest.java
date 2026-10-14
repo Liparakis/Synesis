@@ -82,7 +82,7 @@ final class CompactOnboardingTest {
           .orElse(null);
     }
     assertNotNull(invitation);
-    assertTrue(invitation.startsWith("synesis://join/SLB2-"));
+    assertTrue(invitation.startsWith("synesis://join/SLB3-"));
     assertTrue(invitation.length() < CompactBootstrapInvitation.MAX_LINK_CHARS);
     assertFalse(hostEvents.stream().anyMatch(event -> event.type() == OnboardingEventType.ANSWER_LINK));
 
