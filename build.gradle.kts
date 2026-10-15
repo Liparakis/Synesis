@@ -151,7 +151,12 @@ subprojects {
         // Tests, and the CLI processes they start, must not ask a public STUN server.
         environment("SYNESIS_STUN_SERVER", "off")
         doFirst {
-            testState.deleteRecursively()
+            // Git leaves its object files read-only, and Windows refuses to delete a read-only
+            // file, so File.deleteRecursively would give up silently on a Git repository.
+            testState.walkBottomUp().forEach {
+                it.setWritable(true)
+                check(it.delete() || !it.exists()) { "Unable to delete isolated test state: $it" }
+            }
             check(testHome.mkdirs() && testLocalAppData.mkdirs()) { "Unable to create isolated test state: $testState" }
         }
     }
