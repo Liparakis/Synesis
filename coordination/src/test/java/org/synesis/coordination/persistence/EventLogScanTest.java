@@ -158,6 +158,105 @@ class EventLogScanTest {
         assertEquals(3L, reopened.events().getLast().sequence());
     }
 
+    /** A store opened on a log it already verified reads only what was appended since, and still sees all of it. */
+    @Test
+    void storeOpenedAfterAnotherProcessAppendedSeesTheNewEventsOnTopOfTheRememberedLog(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity actor = NodeIdentity.generate();
+        PredictionEventStore first = new PredictionEventStore(root, projectId);
+        appendRequest(first, actor, actor, "req_TEST1234567890ABC001");
+        appendRequest(first, actor, actor, "req_TEST1234567890ABC002");
+        new PredictionEventStore(root, projectId);
+        appendRequest(new PredictionEventStore(root, projectId), actor, actor, "req_TEST1234567890ABC003");
+
+        PredictionEventStore reopened = new PredictionEventStore(root, projectId);
+
+        assertEquals(3L, reopened.headSequence());
+        assertEquals(3, reopened.capabilityRequestProjection().records().size());
+    }
+
+    @Test
+    void writersOnSeparateStoresKeepOneDenseChain(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity actor = NodeIdentity.generate();
+        PredictionEventStore a = new PredictionEventStore(root, projectId);
+        PredictionEventStore b = new PredictionEventStore(root, projectId);
+        int[] appendedByB = new int[1];
+        Thread other = new Thread(() -> appendedByB[0] = appendMany(b, actor, "B"));
+        other.start();
+        int appendedByA = appendMany(a, actor, "A");
+        other.join();
+
+        PredictionEventStore reopened = new PredictionEventStore(root, projectId);
+
+        // Writers without the project append lock may give up after losing every retry; no event they
+        // reported as appended may be lost, and the reopened, fully verified chain must hold them all.
+        assertEquals(appendedByA + appendedByB[0], reopened.headSequence());
+        assertEquals(appendedByA + appendedByB[0], reopened.capabilityRequestProjection().records().size());
+        assertTrue(appendedByA + appendedByB[0] >= 10);
+    }
+
+    private static int appendMany(PredictionEventStore store, NodeIdentity actor, String writer) {
+        int appended = 0;
+        try {
+            for (int index = 0; index < 10; index++) {
+                appendRequest(store, actor, actor, String.format("req_TEST1234567890ABC%s%02d", writer, index));
+                appended++;
+            }
+        } catch (CoordinationException lostEveryRetry) {
+            assertEquals("event append lost its sequence to other writers", lostEveryRetry.getMessage());
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
+        return appended;
+    }
+
+    @Test
+    void forkedChainAfterAVerifiedLogWasRememberedIsRejectedByLoadAndByAppend(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity actor = NodeIdentity.generate();
+        PredictionEventStore warm = new PredictionEventStore(root, projectId);
+        appendRequest(warm, actor, actor, "req_TEST1234567890ABC001");
+        appendRequest(warm, actor, actor, "req_TEST1234567890ABC002");
+        byte[] wrongPrevious = new byte[32];
+        Arrays.fill(wrongPrevious, (byte) 1);
+        writeEvent(root, projectId, 3L, 3L, wrongPrevious);
+
+        assertEquals(INVALID_LOG, assertThrows(CoordinationException.class, () -> new PredictionEventStore(root, projectId)).getMessage());
+        assertEquals(INVALID_LOG, assertThrows(CoordinationException.class,
+                () -> warm.append(UUID.randomUUID(), PredictionEventType.PARTICIPANT_HEARTBEAT, actor.nodeId(), new byte[0], actor)).getMessage());
+    }
+
+    @Test
+    void remembersNothingItCannotRecheck(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        NodeIdentity actor = NodeIdentity.generate();
+        PredictionEventStore warm = new PredictionEventStore(root, projectId);
+        for (int index = 1; index <= 3; index++) {
+            appendRequest(warm, actor, actor, "req_TEST1234567890ABC00" + index);
+        }
+        Path events = root.resolve("events");
+        Path head = events.resolve(String.format("%020d.sce", 3L));
+        byte[] headBytes = Files.readAllBytes(head);
+
+        byte[] flipped = headBytes.clone();
+        flipped[flipped.length / 2] ^= 1;
+        Files.write(head, flipped);
+        assertThrows(Exception.class, () -> new PredictionEventStore(root, projectId), "the head file changed");
+
+        Files.write(head, headBytes);
+        assertEquals(3L, new PredictionEventStore(root, projectId).headSequence(), "restoring the file restores the log");
+
+        Path middle = events.resolve(String.format("%020d.sce", 2L));
+        byte[] middleBytes = Files.readAllBytes(middle);
+        Files.delete(middle);
+        assertEquals(INVALID_LOG, assertThrows(CoordinationException.class, () -> new PredictionEventStore(root, projectId)).getMessage(), "a gap");
+        Files.write(middle, middleBytes);
+
+        Files.delete(head);
+        assertEquals(2L, new PredictionEventStore(root, projectId).headSequence(), "a shorter log is not served from memory");
+    }
+
     @Test
     void sequenceGapIsRejectedByLoadAndByAppend(@TempDir Path root) throws Exception {
         assertBothRejectBadLog(root, UUID.randomUUID(), 1L, 2L, new byte[32]);

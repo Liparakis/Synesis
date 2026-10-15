@@ -564,18 +564,60 @@ public final class PredictionEventStore {
         try (var stream = Files.list(eventsDirectory)) {
             files = stream.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
         }
+        Path real = eventsDirectory.toRealPath();
+        List<PredictionEvent> verified = new ArrayList<>(VerifiedEventPrefixes.recall(real, projectId));
+        if (!stillHolds(verified, files)) {
+            VerifiedEventPrefixes.forget(real, projectId);
+            verified.clear();
+        }
         long sequence = 0L;
         byte[] digest = new byte[32];
-        for (Path file : files) {
-            PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-            if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
-                throw new CoordinationException("invalid coordination event log");
+        for (PredictionEvent known : verified) {
+            visitor.accept(known);
+            sequence = known.sequence();
+            digest = known.digest();
+        }
+        try {
+            for (Path file : files.subList(verified.size(), files.size())) {
+                PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
+                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
+                    throw new CoordinationException("invalid coordination event log");
+                }
+                verified.add(event);
+                visitor.accept(event);
+                sequence = event.sequence();
+                digest = event.digest();
             }
-            visitor.accept(event);
-            sequence = event.sequence();
-            digest = event.digest();
+        } finally {
+            VerifiedEventPrefixes.remember(real, projectId, verified);
         }
         return new Head(sequence, digest);
+    }
+
+    /**
+     * Checks that the directory still holds the files of a remembered verified prefix: the first files are
+     * exactly sequences one to the prefix length, and the last of them still has the bytes that were verified.
+     * Anything else (a file missing, renamed, added in the middle, or replaced at the head) makes the prefix
+     * untrusted and the caller verifies the whole log again.
+     */
+    private static boolean stillHolds(List<PredictionEvent> prefix, List<Path> files) throws IOException {
+        if (prefix.isEmpty()) {
+            return true;
+        }
+        if (files.size() < prefix.size()) {
+            return false;
+        }
+        for (int index = 0; index < prefix.size(); index++) {
+            if (!files.get(index).getFileName().toString().equals(String.format("%020d.sce", index + 1L))) {
+                return false;
+            }
+        }
+        PredictionEvent head = prefix.get(prefix.size() - 1);
+        try {
+            return Arrays.equals(Files.readAllBytes(files.get(prefix.size() - 1)), head.encoded());
+        } catch (java.nio.file.NoSuchFileException vanished) {
+            return false;
+        }
     }
 
     /**

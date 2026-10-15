@@ -1,3 +1,41 @@
+# 2026-10-15 — The event log is verified once per process, not on every open and every append
+
+**Why.** Opening a `PredictionEventStore` and every `append` read, decoded, chain-checked and
+Ed25519-verified every event file again. A heartbeat is appended on every MCP call and each append
+goes through `ProjectAppends.call`, which opens another store, so one call cost at least three full
+passes over a log that only grows.
+
+**Measured (VERIFIED, one run, Windows, a copy of the 720-event `k30-five-lllll` log, JUnit JVM with
+`-Xmx512m`).** One full pass took about 500 ms: 45-55 ms reading files, about 1 ms decoding, 440-520 ms
+verifying signatures (0.65 ms each). Before: open 490-640 ms, append on an open store 490-600 ms,
+open plus append (what `ProjectAppends.call` does) 1.0-1.2 s. After the first open: open 10-15 ms,
+append on an open store 9-18 ms, open plus append 14-19 ms. ESTIMATE: a get_next_action with several
+store opens dropped from seconds to tens of milliseconds at this size; not measured end to end.
+
+**What changed.** `VerifiedEventPrefixes` remembers, per process and per (real events directory,
+project), the events already verified. `PredictionEventStore.scan` replays those from memory and reads
+and verifies only the files after them. The prefix is trusted only while the directory still has
+files `1..K` by name and the file for sequence `K` has the bytes that were verified; otherwise the
+entry is dropped and the whole log is verified again, so a missing or changed head file, a gap, or a
+fork still fails exactly as before. At most eight logs are kept. No caller changed.
+
+**Not re-checked.** A file inside the remembered prefix that is rewritten in place, other than the
+head, is not noticed until the process restarts. Whoever can do that has the user's rights on the
+same disk and could equally write a new, correctly signed log. Every new event is still fully
+verified.
+
+**Tests.** `EventLogScanTest` +5: reopen on top of a remembered log, two writers on separate stores
+lose no event they reported appended (without the project append lock one of them may give up after
+eight lost retries, which it did once in the first combined run, so the test counts what each
+reported), a fork after the cache is warm is rejected by open and append, and a changed head
+file, a removed middle file and a removed head file are not served from memory. Together with the shared-log fix
+committed after this, the whole Linux gate (Podman, `check`) is green: link 165, coordination 240, project-record 60,
+relay 12, mcp-contract 20, workspace 730 (2 skipped), mcp 189, cli 131; `EventLogScanTest` then passed
+five more uncached runs. The Windows gate was not run.
+
+**NOT REACHED.** No real acceptance run; no measurement on the installed product.
+
+
 # 2026-10-15 — Two networks: answer link, hole punching, router port forward; old link formats removed
 
 ADR-0097 holds the decisions. Not committed.
