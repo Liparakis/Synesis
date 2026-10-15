@@ -2,7 +2,7 @@ import {render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {AgentsView, App, DiagnosticsView, NetworkView, ProjectHeader, ProjectSelectionView, ProjectsView, RegistryProjectView} from "./App";
 import {parseRoute, routePath} from "./routes";
-import {ControlPlaneClient, type AgentSnapshot, type ProjectSelection, type Snapshot} from "../api/controlPlane";
+import {ControlPlaneClient, ControlPlaneError, type AgentSnapshot, type ProjectSelection, type Snapshot} from "../api/controlPlane";
 import {vi} from "vitest";
 
 const emptySnapshot = {
@@ -396,6 +396,26 @@ describe("truthful product states", () => {
     await user.click(screen.getByRole("button", {name: "Use Answer"}));
     expect(answer).toHaveBeenCalledWith("host-op", "synesis://answer/SLA3-def");
     expect(screen.getByText("Answer accepted. This computer is now reaching out to the other one.")).toBeInTheDocument();
+  });
+
+  it("shows a version mismatch loudly instead of a generic failure", async () => {
+    const user = userEvent.setup();
+    const message = "This invitation comes from a different Synesis version (compatibility 3; this computer has 4). The other computer is older: ask its owner to update Synesis, then ask for a new invitation.";
+    const join = vi.fn().mockRejectedValue(new ControlPlaneError(400, "INCOMPATIBLE_VERSION", message));
+    const client = {join} as unknown as ControlPlaneClient;
+    const network = {
+      status: "UNCONFIGURED",
+      peers: [],
+      routes: [],
+      overlay: {status: "UNCONFIGURED", authorityNodeId: "", revision: 0, memberCount: 0, expiresAt: "", members: [], directEdges: [], desiredEdges: []},
+      relay: {status: "DISABLED", localAddress: "", activeConnections: 0, configured: false, connected: false, relayIdentity: "", authorized: false, activeRouteUsage: 0},
+    } as unknown as Snapshot["network"];
+
+    render(<NetworkView network={network} client={client}/>);
+
+    await user.type(screen.getByLabelText("Join from an invitation"), "synesis://join/SLB3-xyz");
+    await user.click(screen.getByRole("button", {name: "Join"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
 
   it("uses Projects as the global route and parses project-local views", () => {

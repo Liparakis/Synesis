@@ -12,11 +12,73 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.synesis.link.candidate.Candidate;
+import org.synesis.link.candidate.CandidateType;
+import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.LinkCompatibility;
 
 /** Verifies one-way compact onboarding over the existing authenticated Link path. */
 @Timeout(90)
 final class CompactOnboardingTest {
+
+  /** The same link with another compatibility number in its first two payload bytes. */
+  private static String withCompatibility(String link, int number) {
+    int dash = link.indexOf('-') + 1;
+    byte[] payload = java.util.Base64.getUrlDecoder().decode(link.substring(dash));
+    payload[0] = (byte) (number >>> 8);
+    payload[1] = (byte) number;
+    return link.substring(0, dash)
+        + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload);
+  }
+
+  @Test
+  void aDifferentCompatibilityNumberIsReportedAsSuchBeforeAnythingIsDialedOrGathered()
+      throws Exception {
+    Path hostProfile = Files.createTempDirectory("synesis-compat-host");
+    List<OnboardingEvent> hostEvents = new CopyOnWriteArrayList<>();
+    try (Onboarding.PreparedHost prepared = new Onboarding(hostProfile, hostEvents::add)
+        .createCompactInvitation(null, null, ignored -> {
+        })) {
+      String invitation = hostEvents.stream()
+          .filter(event -> event.type() == OnboardingEventType.SHARE_LINK)
+          .map(OnboardingEvent::value)
+          .findFirst()
+          .orElseThrow();
+      int older = LinkCompatibility.CURRENT - 1;
+      List<OnboardingEvent> joinEvents = new CopyOnWriteArrayList<>();
+      Onboarding join = new Onboarding(Files.createTempDirectory("synesis-compat-join"),
+          joinEvents::add);
+
+      OnboardingFailure failure = org.junit.jupiter.api.Assertions.assertThrows(
+          OnboardingFailure.class,
+          () -> join.importInvitation(withCompatibility(invitation, older)));
+
+      org.junit.jupiter.api.Assertions.assertEquals(OnboardingFailureCode.INCOMPATIBLE_VERSION,
+          failure.code());
+      org.junit.jupiter.api.Assertions.assertEquals(
+          new LinkCompatibility.Mismatch("invitation", LinkCompatibility.CURRENT, older),
+          failure.mismatch());
+      assertTrue(failure.mismatch().message().contains("The other computer is older"));
+      assertTrue(joinEvents.stream().noneMatch(event -> event.type()
+          == OnboardingEventType.CANDIDATES_GATHERED || event.type()
+          == OnboardingEventType.ANSWER_LINK));
+
+      String answer = CompactAnswer.create(CompactBootstrapInvitation.fromShareLink(invitation),
+          List.of(new Candidate(CandidateType.MANUAL,
+              java.net.InetAddress.getByName("203.0.113.7"), 4_404, 0))).shareLink();
+      int newer = LinkCompatibility.CURRENT + 1;
+      OnboardingFailure answerFailure = org.junit.jupiter.api.Assertions.assertThrows(
+          OnboardingFailure.class,
+          () -> prepared.importAnswer(withCompatibility(answer, newer)));
+      org.junit.jupiter.api.Assertions.assertEquals(OnboardingFailureCode.INCOMPATIBLE_VERSION,
+          answerFailure.code());
+      org.junit.jupiter.api.Assertions.assertEquals(
+          new LinkCompatibility.Mismatch("answer", LinkCompatibility.CURRENT, newer),
+          answerFailure.mismatch());
+      assertTrue(answerFailure.mismatch().message().contains("This computer is older"));
+    }
+  }
 
   @Test
   void joiningAnInvitationOfTheSameIdentityIsRefusedAsItsOwn() throws Exception {

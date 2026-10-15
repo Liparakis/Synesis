@@ -18,6 +18,7 @@ import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.onboarding.OnboardingFailureCode;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.IncompatibleVersionException;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.PeerSession.ApplicationStreamHandler;
 import org.synesis.link.session.SessionCloseReason;
@@ -131,6 +132,7 @@ public final class SyncApplicationService {
     private static String mapOnboarding(OnboardingFailureCode code) {
         return switch (code) {
             case INVITE_INVALID, ANSWER_INVALID, OWN_INVITATION -> "INVITE_INVALID";
+            case INCOMPATIBLE_VERSION -> "INCOMPATIBLE_VERSION";
             case HOST_IDENTITY_MISMATCH -> "AUTH_FAILED";
             case IDENTITY_FAILED -> "IDENTITY_FAILED";
             case HOST_TIMEOUT, NO_USABLE_CANDIDATE, CONNECTION_FAILED, INTERNAL -> "TRANSPORT_FAILED";
@@ -247,6 +249,8 @@ public final class SyncApplicationService {
             Map<String, String> query = query(uri.getQuery());
             String clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
             return new ParsedInvitation(clean, query, CompactBootstrapInvitation.fromShareLink(clean).hostNodeId());
+        } catch (IncompatibleVersionException differentVersion) {
+            throw failure("INCOMPATIBLE_VERSION");
         } catch (Exception invalidInvitation) {
             throw failure("INVITE_INVALID");
         }

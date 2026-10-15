@@ -11,9 +11,11 @@ public final class HandshakeFailure {
   private static final int MAGIC = 0x534C4631;
   private static final int VERSION = 1;
   private final HandshakeFailureCode code;
+  private final int senderCompatibility;
 
-  private HandshakeFailure(HandshakeFailureCode code) {
+  private HandshakeFailure(HandshakeFailureCode code, int senderCompatibility) {
     this.code = Objects.requireNonNull(code, "failure code");
+    this.senderCompatibility = senderCompatibility;
   }
 
   /**
@@ -23,7 +25,18 @@ public final class HandshakeFailure {
    * @return immutable failure message
    */
   public static HandshakeFailure create(HandshakeFailureCode code) {
-    return new HandshakeFailure(code);
+    return new HandshakeFailure(code, 0);
+  }
+
+  /**
+   * Creates the failure for peers whose compatibility numbers differ. It carries the sender's
+   * number so the receiver can name both.
+   *
+   * @param senderCompatibility the number of the build sending the failure
+   * @return immutable failure message of code {@link HandshakeFailureCode#INCOMPATIBLE_VERSION}
+   */
+  public static HandshakeFailure incompatible(int senderCompatibility) {
+    return new HandshakeFailure(HandshakeFailureCode.INCOMPATIBLE_VERSION, senderCompatibility);
   }
 
   /**
@@ -34,7 +47,7 @@ public final class HandshakeFailure {
    * @throws IOException if the message is malformed
    */
   public static HandshakeFailure decode(byte[] encoded) throws IOException {
-    if (encoded == null || encoded.length != 6) {
+    if (encoded == null || encoded.length < 6) {
       throw new IOException("malformed handshake failure");
     }
     int magic = ((encoded[0] & 255) << 24) | ((encoded[1] & 255) << 16)
@@ -43,7 +56,13 @@ public final class HandshakeFailure {
         || (encoded[5] & 255) >= HandshakeFailureCode.values().length) {
       throw new IOException("malformed handshake failure");
     }
-    return create(HandshakeFailureCode.values()[encoded[5] & 255]);
+    HandshakeFailureCode code = HandshakeFailureCode.values()[encoded[5] & 255];
+    boolean carriesNumber = code == HandshakeFailureCode.INCOMPATIBLE_VERSION;
+    if (encoded.length != (carriesNumber ? 8 : 6)) {
+      throw new IOException("malformed handshake failure");
+    }
+    return carriesNumber ? incompatible(((encoded[6] & 255) << 8) | (encoded[7] & 255))
+        : create(code);
   }
 
   /**
@@ -61,13 +80,20 @@ public final class HandshakeFailure {
   }
 
   /**
-   * Returns canonical six-byte failure encoding.
+   * Returns the canonical failure encoding: six bytes, or eight for
+   * {@link HandshakeFailureCode#INCOMPATIBLE_VERSION}, which adds the sender's compatibility
+   * number.
    *
    * @return encoded failure
    */
   public byte[] encoded() {
-    return new byte[]{(byte) (MAGIC >>> 24), (byte) (MAGIC >>> 16), (byte) (MAGIC >>> 8),
+    byte[] head = {(byte) (MAGIC >>> 24), (byte) (MAGIC >>> 16), (byte) (MAGIC >>> 8),
         (byte) MAGIC, VERSION, (byte) code.ordinal()};
+    if (code != HandshakeFailureCode.INCOMPATIBLE_VERSION) {
+      return head;
+    }
+    return new byte[]{head[0], head[1], head[2], head[3], head[4], head[5],
+        (byte) (senderCompatibility >>> 8), (byte) senderCompatibility};
   }
 
   /**
@@ -82,9 +108,12 @@ public final class HandshakeFailure {
   /**
    * Converts this wire value to the public exception type.
    *
+   * @param localCompatibility this build's compatibility number, named beside the sender's
    * @return categorized exception
    */
-  public HandshakeException exception() {
-    return new HandshakeException(code);
+  public HandshakeException exception(int localCompatibility) {
+    return code == HandshakeFailureCode.INCOMPATIBLE_VERSION
+        ? new HandshakeException(localCompatibility, senderCompatibility)
+        : new HandshakeException(code);
   }
 }

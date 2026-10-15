@@ -51,4 +51,19 @@ final class CommandAdapterTest {
         assertTrue(err.toString(StandardCharsets.UTF_8).contains("invalid or expired"));
         assertFalse(err.toString(StandardCharsets.UTF_8).contains("secret link"));
     }
+
+    @Test
+    void aCompatibilityMismatchIsNamedLoudlyWithBothNumbersAndTheOlderSide() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
+        int exit = FailureMapper.map(new OnboardingFailure(OnboardingFailureCode.INVITE_INVALID, null,
+                new org.synesis.link.protocol.LinkCompatibility.Mismatch("invitation", 2, 3)), terminal);
+        assertEquals(ExitCodes.INCOMPATIBLE_VERSION, exit);
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("FAILURE=INCOMPATIBLE_VERSION"));
+        assertTrue(err.toString(StandardCharsets.UTF_8).contains(
+                "This invitation comes from a different Synesis version (compatibility 3; this computer has 2). "
+                        + "This computer is older: update Synesis on this computer, then ask for a new invitation."));
+        assertFalse(err.toString(StandardCharsets.UTF_8).contains("invalid or expired"));
+    }
 }

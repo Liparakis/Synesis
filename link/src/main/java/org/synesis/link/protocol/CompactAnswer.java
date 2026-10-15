@@ -34,7 +34,7 @@ public final class CompactAnswer {
   public static final int MAX_LINK_CHARS = 512;
 
   private static final String PREFIX = "synesis://answer/SLA3-";
-  private static final int MAX_BYTES = 2 * Long.BYTES + Byte.BYTES
+  private static final int MAX_BYTES = Short.BYTES + 2 * Long.BYTES + Byte.BYTES
       + CompactEndpoints.MAX * CompactEndpoints.MAX_ENCODED_BYTES_EACH;
 
   private final UUID sessionId;
@@ -86,7 +86,9 @@ public final class CompactAnswer {
     if (encoded.length > MAX_BYTES) {
       throw new IOException("invalid answer length");
     }
+    IncompatibleVersionException.requireCurrent(encoded, "answer");
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
+      input.readUnsignedShort();
       UUID sessionId = new UUID(input.readLong(), input.readLong());
       List<Candidate> endpoints = CompactEndpoints.read(input);
       if (input.available() != 0) {
@@ -118,6 +120,7 @@ public final class CompactAnswer {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
+        output.writeShort(LinkCompatibility.CURRENT);
         output.writeLong(sessionId.getMostSignificantBits());
         output.writeLong(sessionId.getLeastSignificantBits());
         CompactEndpoints.write(output, endpoints);

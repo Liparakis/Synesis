@@ -3,6 +3,29 @@
 Wire data uses explicit versioned framing, bounded lengths, deterministic byte
 order, and structured rejection. Java object serialization is prohibited.
 
+## Compatibility number
+
+Two builds connect only if they carry the same **compatibility number**
+(`LinkCompatibility.CURRENT`, currently `4`). It is raised whenever any format
+sent between computers changes, and for nothing else; it is not the build
+string. It is an unsigned 16-bit big-endian value in a position no later
+layout may move, so a build with another number can still read it and refuse
+with a clear message instead of reporting corruption:
+
+- `synesis://join/SLB3-...` and `synesis://answer/SLA3-...`: the first two bytes
+  of the payload. The prefixes are frozen and name only the kind of link; the
+  `3` is history, not a version.
+- the `SLH1` handshake envelope: the two bytes after the magic and the format
+  byte (offset 5), before the role byte.
+- the `SLF1` handshake failure: `INCOMPATIBLE_VERSION` (ordinal `7`) carries the
+  sender's number as two further bytes (8 bytes in all); every other code stays
+  6 bytes.
+
+The invitation's number is inside the signed bytes. Builds from before this rule
+cannot read the number: they report a new link as invalid or expired, and a
+new build reports theirs as a different version only if the number is read at
+all; this cannot be fixed (ADR-0088: prerelease formats may change).
+
 ## Authenticated session and SL-006 frames
 
 The session transcript uses `SLT1`, one-byte major/minor version, bounded UTF-8
@@ -78,9 +101,9 @@ candidates.
 
 The joiner's answer to a compact invitation (ADR-0097). URL-safe base64
 without padding over: the invitation's 16-byte session UUID (most significant
-long first), then the endpoint list exactly as in `SLB3` (a count byte of 1 to
+long first), preceded by the two-byte compatibility number, then the endpoint list exactly as in `SLB3` (a count byte of 1 to
 8 and, for each endpoint, an address-width byte of 4 or 16, the address, and a
-two-byte port). Distinct endpoints only, no trailing bytes, at most 169 raw
+two-byte port). Distinct endpoints only, no trailing bytes, at most 171 raw
 bytes and 512 URI characters. The record is unsigned routing input and is
 decoded only to find the host operation it answers and the addresses to send
 toward.

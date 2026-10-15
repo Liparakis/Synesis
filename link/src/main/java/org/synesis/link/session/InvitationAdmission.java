@@ -9,8 +9,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.link.protocol.HandshakeTranscript;
 
 /**
@@ -34,6 +36,30 @@ public final class InvitationAdmission implements AutoCloseable {
   private static final Object CONSUMED = new Object();
   /** {@link #AVAILABLE}, {@link #CONSUMED}, or the {@link Reservation} that currently holds it. */
   private final AtomicReference<Object> state = new AtomicReference<>(AVAILABLE);
+  private final AtomicReference<Consumer<LinkCompatibility.Mismatch>> incompatiblePeer = new AtomicReference<>();
+
+  /**
+   * Sets who is told, once per invitation, that a connection came from a build with another
+   * compatibility number. That connection is refused before it is authenticated, so it does not end
+   * the wait for the real joiner; the listener exists so the host's user still learns of it.
+   *
+   * @param listener receives the first such mismatch
+   */
+  public void onIncompatiblePeer(Consumer<LinkCompatibility.Mismatch> listener) {
+    incompatiblePeer.set(listener);
+  }
+
+  /**
+   * Reports a connection refused for its compatibility number; only the first report is passed on.
+   *
+   * @param mismatch both numbers
+   */
+  public void incompatiblePeer(LinkCompatibility.Mismatch mismatch) {
+    Consumer<LinkCompatibility.Mismatch> listener = incompatiblePeer.getAndSet(null);
+    if (listener != null) {
+      listener.accept(mismatch);
+    }
+  }
 
   /**
    * Creates one single-use admission state for a signed invitation capability.

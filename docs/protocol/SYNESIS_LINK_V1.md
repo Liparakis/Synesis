@@ -7,8 +7,13 @@ synchronization semantics belong here.
 
 ## Authenticated establishment
 
-Each endpoint sends a bounded supported-version list in the first SLH1
-envelope. The selected highest exact intersection is in the signed transcript,
+Each endpoint states its compatibility number (see `WIRE_FORMAT.md`) in the
+first SLH1 envelope, before anything else in it is parsed. If the numbers
+differ, both sides fail with `INCOMPATIBLE_VERSION` naming both numbers, and the
+failing side sends an `SLF1` failure frame carrying its own number so the peer
+fails the same way. This happens before the transcript, admission or any
+project data. Each endpoint then sends a bounded supported-version list in the
+same SLH1 envelope. The selected highest exact intersection is in the signed transcript,
 which binds ALPN, both node identities and public keys, both nonces, session ID,
 and both epochs. Expected remote identity is checked before publishing
 `PeerSession`; wrong identities fail as `IDENTITY_MISMATCH`.
@@ -63,7 +68,9 @@ for a bounded settle window and choose one deterministic winner.
 
 SL-D-032 adds the normal one-way first-contact artifact:
 `synesis://join/SLB3-<base64url>` (ADR-0095). Its canonical payload is a
-signed, bounded binary record containing issue epoch seconds, a bounded
+signed, bounded binary record beginning with the two-byte compatibility number
+(read first, so a different number is refused before dialing and reported as a
+different Synesis version, not as an invalid or expired invitation), then issue epoch seconds, a bounded
 lifetime, a fresh 12-byte (96-bit) single-use admission capability, the
 inviter's compact Ed25519 public key, and one to eight signed non-relay UDP
 endpoint hints in the inviter's order of preference. The URI revision fixes the
@@ -93,9 +100,9 @@ peer drops a reply from an address it did not dial. Endpoint selection orders
 candidates server-reflexive, IPv6, manual, mapped, LAN, and takes one of every
 kind present before a second of any kind, up to eight.
 
-An SLB3 record with one IPv4 or one IPv6 endpoint is 122 or 134 raw bytes and
-183 or 199 URI characters; each further endpoint adds 7 or 19 bytes, and a full
-record of eight IPv6 endpoints is 267 bytes and 376 characters. The 32-byte
+An SLB3 record with one IPv4 or one IPv6 endpoint is 124 or 136 raw bytes and
+186 or 202 URI characters; each further endpoint adds 7 or 19 bytes, and a full
+record of eight IPv6 endpoints is 269 bytes and 379 characters. The 32-byte
 Ed25519 public key and 64-byte Ed25519 signature are the irreducible identity
 trust floor for the existing self-contained non-TOFU construction. Removing
 the detached signature would allow endpoint and key substitution; the normal
@@ -114,7 +121,7 @@ possession of an SLB3 endpoint hint does not grant project membership.
 
 The one-way path is the normal UX for directly reachable endpoints. Across two
 networks it is completed by an answer link (ADR-0097). Joining shows
-`synesis://answer/SLA3-<base64url>`: the invitation's session UUID and up to
+`synesis://answer/SLA3-<base64url>`: the compatibility number, the invitation's session UUID and up to
 eight of the joiner's endpoints, encoded like the invitation's. It is unsigned
 routing input; the session that follows is authenticated exactly as above.
 When the host's user pastes it, the host sends a one-byte datagram from its

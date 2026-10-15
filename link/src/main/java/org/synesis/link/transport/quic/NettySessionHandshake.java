@@ -27,6 +27,7 @@ import org.synesis.link.protocol.HandshakeProof;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.HandshakeException;
 import org.synesis.link.protocol.HandshakeFailureCode;
+import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
 import org.synesis.link.session.LivenessConfiguration;
@@ -116,10 +117,23 @@ public final class NettySessionHandshake {
       ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
       LivenessConfiguration livenessConfiguration,
       PeerSession.ApplicationStreamHandler applicationHandler) {
+    return clientStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
+        localProof, replayGuard, result, livenessConfiguration, applicationHandler,
+        LinkCompatibility.CURRENT);
+  }
+
+  /** Test seam: an initiator that states {@code compatibility} instead of this build's number. */
+  static ChannelHandler clientStreamHandler(NodeIdentity localIdentity,
+      String expectedRemoteNodeId,
+      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
+      HandshakeProof localProof,
+      ReplayGuard replayGuard, CompletableFuture<PeerSession> result,
+      LivenessConfiguration livenessConfiguration,
+      PeerSession.ApplicationStreamHandler applicationHandler, int compatibility) {
     return streamInitializer(
         new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, transcript,
             localProof, replayGuard, result, HandshakeRole.INITIATOR, livenessConfiguration, null,
-            applicationHandler));
+            applicationHandler, compatibility));
   }
 
   /**
@@ -158,10 +172,21 @@ public final class NettySessionHandshake {
       List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
       CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
       PeerSession.ApplicationStreamHandler applicationHandler) {
+    return serverStreamHandler(localIdentity, expectedRemoteNodeId, supportedVersions,
+        replayGuard, result, livenessConfiguration, applicationHandler,
+        LinkCompatibility.CURRENT);
+  }
+
+  /** Test seam: a responder that states {@code compatibility} instead of this build's number. */
+  static ChannelHandler serverStreamHandler(NodeIdentity localIdentity,
+      String expectedRemoteNodeId,
+      List<ProtocolVersion> supportedVersions, ReplayGuard replayGuard,
+      CompletableFuture<PeerSession> result, LivenessConfiguration livenessConfiguration,
+      PeerSession.ApplicationStreamHandler applicationHandler, int compatibility) {
     return streamInitializer(
         new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
             null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, null,
-            applicationHandler));
+            applicationHandler, compatibility));
   }
 
   /**
@@ -213,7 +238,8 @@ public final class NettySessionHandshake {
     return streamInitializer(
         () -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
             null, replayGuard, Objects.requireNonNull(resultFactory.get(), "result"),
-            HandshakeRole.RESPONDER, livenessConfiguration, null, applicationHandler),
+            HandshakeRole.RESPONDER, livenessConfiguration, null, applicationHandler,
+            LinkCompatibility.CURRENT),
         HandshakeRole.RESPONDER);
   }
 
@@ -239,7 +265,7 @@ public final class NettySessionHandshake {
     return streamInitializer(
         () -> new StreamState(localIdentity, expectedRemoteNodeId, supportedVersions, null,
             null, replayGuard, result, HandshakeRole.RESPONDER, livenessConfiguration, admission,
-            applicationHandler), HandshakeRole.RESPONDER);
+            applicationHandler, LinkCompatibility.CURRENT), HandshakeRole.RESPONDER);
   }
 
   private static ChannelHandler streamInitializer(StreamState state) {
@@ -332,6 +358,7 @@ public final class NettySessionHandshake {
     private final HandshakeRole localRole;
     private final LivenessConfiguration livenessConfiguration;
     private final PeerSession.ApplicationStreamHandler applicationHandler;
+    private final int compatibility;
     private final InvitationAdmission admission;
     // Lives for the whole connection: shared by every stream until the connection closes.
     private final AtomicBoolean controlClaimed = new AtomicBoolean();
@@ -349,7 +376,8 @@ public final class NettySessionHandshake {
         HandshakeProof localProof, ReplayGuard replayGuard,
         CompletableFuture<PeerSession> result, HandshakeRole localRole,
         LivenessConfiguration livenessConfiguration, InvitationAdmission admission,
-        PeerSession.ApplicationStreamHandler applicationHandler) {
+        PeerSession.ApplicationStreamHandler applicationHandler, int compatibility) {
+      this.compatibility = compatibility;
       this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
       this.expectedRemoteNodeId = expectedRemoteNodeId;
       this.supportedVersions = List.copyOf(supportedVersions);
@@ -432,7 +460,12 @@ public final class NettySessionHandshake {
     private HandshakeEnvelope decodePeerEnvelope(byte[] bytes) throws Exception {
       if (HandshakeFailure.looksLike(bytes)) {
         throw HandshakeFailure.decode(bytes)
-            .exception();
+            .exception(state.compatibility);
+      }
+      // Before the envelope is parsed: a build with another number may have another layout.
+      int remote = HandshakeEnvelope.peekCompatibility(bytes);
+      if (remote >= 0 && remote != state.compatibility) {
+        throw new HandshakeException(state.compatibility, remote);
       }
       HandshakeEnvelope envelope = HandshakeEnvelope.decode(bytes);
       if (envelope.role() != state.localRole.opposite()) {
@@ -488,7 +521,7 @@ public final class NettySessionHandshake {
         throw new IllegalStateException("duplicate handshake send");
       }
       sent = true;
-      HandshakeEnvelope envelope = HandshakeEnvelope.create(state.localRole,
+      HandshakeEnvelope envelope = HandshakeEnvelope.create(state.localRole, state.compatibility,
           state.supportedVersions,
           state.transcript, proof);
       context.writeAndFlush(Unpooled.wrappedBuffer(envelope.encoded()))
@@ -538,11 +571,15 @@ public final class NettySessionHandshake {
       // connection must not terminate the host's shared wait for the real joiner.
       if (state.admission == null) {
         state.result.completeExceptionally(exception);
+      } else if (exception.mismatch() != null) {
+        state.admission.incompatiblePeer(exception.mismatch());
       }
       if (context.channel()
           .isOpen()) {
-        context.writeAndFlush(Unpooled.wrappedBuffer(HandshakeFailure.create(exception.code())
-                .encoded()))
+        HandshakeFailure frame = exception.code() == HandshakeFailureCode.INCOMPATIBLE_VERSION
+            ? HandshakeFailure.incompatible(state.compatibility)
+            : HandshakeFailure.create(exception.code());
+        context.writeAndFlush(Unpooled.wrappedBuffer(frame.encoded()))
             .addListener(_ -> context.close());
       }
     }

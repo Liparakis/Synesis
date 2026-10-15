@@ -1,3 +1,56 @@
+# 2026-10-16 — Builds that cannot understand each other refuse to connect, loudly
+
+Step 1 of ADR-0098 (invariant 10).
+
+**Why.** A build whose invitation or handshake format differs from ours looked, to the user, like a
+corrupt or expired invitation (`Onboarding` reported every parse problem as `INVITE_INVALID`), and
+nothing was exchanged that could tell the two sides apart. The owner: mismatching versions should
+not connect and should fail clearly and loudly.
+
+**What changed.**
+
+- One owner for the number: `LinkCompatibility.CURRENT` in the `link` module, value `4` (the
+  invitation and answer layouts before it were the third generation, `SLB3` and `SLA3`). The rule is
+  in its Javadoc: raise it whenever any format sent between computers changes, and for nothing else.
+  It is not the build string.
+- Where it sits: the first two payload bytes of an invitation (inside the host's signature) and of an
+  answer, and two bytes right after the magic and format byte of the `SLH1` handshake envelope. The
+  link prefixes `SLB3-` and `SLA3-` are now frozen; they name the kind of link only.
+- A link with another number fails with `IncompatibleVersionException` before the rest is parsed, so
+  joining fails before dialing and importing an answer fails on the host. The new
+  `OnboardingFailureCode.INCOMPATIBLE_VERSION` carries both numbers; `Onboarding.failure` upgrades any
+  failure whose cause chain shows a mismatch, so no path can report one as invalid or lost.
+- The handshake reads the number before parsing the envelope. On a difference the side that finds it
+  fails with the new `HandshakeFailureCode.INCOMPATIBLE_VERSION` (ordinal 7, appended) and sends the
+  existing failure frame carrying its own number (8 bytes instead of 6 for this code only), so the
+  peer fails with both numbers too. This is before the transcript, admission and any project data.
+- Words: `This invitation comes from a different Synesis version (compatibility 3; this computer has
+  4). This computer is older: update Synesis on this computer, then ask for a new invitation.`, or
+  `The other computer is older: ask its owner to update Synesis, ...`. The CLI exits 15
+  (`ExitCodes.INCOMPATIBLE_VERSION`) with `FAILURE=INCOMPATIBLE_VERSION`; the control plane returns
+  `400` `INCOMPATIBLE_VERSION` with the same message; the browser shows it as an alert in the red
+  error style; `synesis version` prints `LINK_COMPATIBILITY=4`.
+- Wire vectors, `WIRE_FORMAT.md`, `SYNESIS_LINK_V1.md`, `THREAT_MODEL.md` and `control-plane-v1.md`
+  updated (ADR-0088: prerelease formats may change).
+
+**Limits.** Builds from before this change cannot read the number, so they still call a new link
+invalid or expired; unavoidable. A link whose first two bytes are damaged reads as a different
+version. A host waiting on an invitation keeps waiting after a mismatched attempt, since an
+unauthenticated connection must not end the wait for the real joiner; it prints the mismatch once as
+`INCOMPATIBLE_PEER=<the same sentence>` (`InvitationAdmission.onIncompatiblePeer`, tested in
+`NettyQuicLoopbackTest.aHostWaitingOnAnInvitationIsToldOfAnotherNumberAndKeepsWaiting`). The browser
+does not show that host-side line yet.
+
+Tests: the Linux gate, link 169, coordination 236, project-record 60, relay 12, mcp-contract 20,
+workspace 729 (2 skipped), MCP 189, CLI 129, browser UI 30, 0 failures. New: compatibility number
+position and refusal in `ProtocolWireCompatibilityTest`, invitation and answer in
+`CompactOnboardingTest` (no candidates gathered, no answer link made), both sides failing in
+`NettyQuicLoopbackTest`, the CLI message in `CommandAdapterTest`, `400 INCOMPATIBLE_VERSION` in
+`ControlPlaneHttpHandlerTest`, the alert in `App.test.tsx`.
+
+**NOT REACHED.** Two real builds with different numbers. The browser clicked through by a person. The
+Windows gate.
+
 # 2026-10-16 — A verified call no longer appends a heartbeat to the log
 
 ADR-0098 ("The log's size and replay cost") holds the reason.

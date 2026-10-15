@@ -50,32 +50,34 @@ final class ProtocolWireCompatibilityTest {
       + "e3d80001000004c000020911330000000300407bbc5b23481b70390cc8cdbaed955ba406eeb0266e76ea09b3dc"
       + "59646b55a02ebde0a04a514a67c658641d607d9465571ce1c74f891cee73d3aa8f4f0a2cbd0c";
   private static final String SLB3_V4 =
-      "684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba53612c86"
-      + "d0d150e04a0104cb00710711348765b078c7c30586160cb0874d05d22e521a7f5bc126f4fa9f47660f9c800785"
-      + "9b1d47f19e496d32a62c502cc3b13904c77f386bde22e03b13dd01d117bcdb08";
+      "0004684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba5361"
+      + "2c86d0d150e04a0104cb007107113415b269b124d0568173b4d28a4ecd43170f2e2e2dc74baf30d27051a8bc44"
+      + "11d64217440ca71d36e82a7687c59362ee1d6ae90c7f697e6c5a0173ee44ad62cf01";
   private static final String SLB3_V4_LINK =
-      "synesis://join/SLB3-aE7hgAJYEBESExQVFhcYGRobbHeARL7yl9rUij2SNFuVd0jAe1NfJ7pTYSyG0NFQ4EoBBM"
-      + "sAcQcRNIdlsHjHwwWGFgywh00F0i5SGn9bwSb0-p9HZg-cgAeFmx1H8Z5JbTKmLFAsw7E5BMd_OGveIuA7E90B0Re8"
-      + "2wg";
+      "synesis://join/SLB3-AARoTuGAAlgQERITFBUWFxgZGhtsd4BEvvKX2tSKPZI0W5V3SMB7U18nulNhLIbQ0VDgSg"
+      + "EEywBxBxE0FbJpsSTQVoFztNKKTs1DFw8uLi3HS68w0nBRqLxEEdZCF0QMpx026Cp2h8WTYu4daukMf2l-bFoBc-5E"
+      + "rWLPAQ";
   private static final String SLB3_V6 =
-      "684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba53612c86"
-      + "d0d150e04a011020010db80000000000000000000000071135e2a96fb979254e2b99b65bb59795b5a521813003"
-      + "beaa9c25b47b0ba63431bdd235d3c980bc863b530d8ed8e30d20c8ce295c732bfcab3ac9c85f8c7b7d38bb0a";
+      "0004684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba5361"
+      + "2c86d0d150e04a011020010db8000000000000000000000007113573d9af3d42d1e273e5ec6a2521c516ad2cf0"
+      + "5901742ff18501992e12a3edeb2253b29aeb9ce4b8694fe9e4eabaf006dab34fb249777cc265bc633f670643c6"
+      + "03";
   private static final String SLB3_V6_LINK =
-      "synesis://join/SLB3-aE7hgAJYEBESExQVFhcYGRobbHeARL7yl9rUij2SNFuVd0jAe1NfJ7pTYSyG0NFQ4EoBEC"
-      + "ABDbgAAAAAAAAAAAAAAAcRNeKpb7l5JU4rmbZbtZeVtaUhgTADvqqcJbR7C6Y0Mb3SNdPJgLyGO1MNjtjjDSDIzilc"
-      + "cyv8qzrJyF-Me304uwo";
+      "synesis://join/SLB3-AARoTuGAAlgQERITFBUWFxgZGhtsd4BEvvKX2tSKPZI0W5V3SMB7U18nulNhLIbQ0VDgSg"
+      + "EQIAENuAAAAAAAAAAAAAAABxE1c9mvPULR4nPl7GolIcUWrSzwWQF0L_GFAZkuEqPt6yJTsprrnOS4aU_p5Oq68Aba"
+      + "s0-ySXd8wmW8Yz9nBkPGAw";
   private static final String SLB3_BOTH =
-      "684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba53612c86"
-      + "d0d150e04a021020010db8000000000000000000000007113504cb0071071134178b9f0129b146b92cd937fd8e"
-      + "4eeee9ebb03ca07b8d8e2c531079a2351447ec1e041667caf8e72aaa0255116830c0ed91e1acdbaa2ddea8fa9c"
-      + "c5d4635e440d";
+      "0004684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba5361"
+      + "2c86d0d150e04a021020010db8000000000000000000000007113504cb0071071134a437cf4b824a23888f9d35"
+      + "cf65f85feaf6863cc2f544423c315e8cafdeefa18df6de840d5d133c11ea49fc81137753dbc98e3f11c24aec4a"
+      + "bc9c6c7b1105e70a";
   private static final String SLB3_BOTH_LINK =
-      "synesis://join/SLB3-aE7hgAJYEBESExQVFhcYGRobbHeARL7yl9rUij2SNFuVd0jAe1NfJ7pTYSyG0NFQ4EoCEC"
-      + "ABDbgAAAAAAAAAAAAAAAcRNQTLAHEHETQXi58BKbFGuSzZN_2OTu7p67A8oHuNjixTEHmiNRRH7B4EFmfK-OcqqgJV"
-      + "EWgwwO2R4azbqi3eqPqcxdRjXkQN";
-  private static final String SLA3 = "00112233445566778899aabbccddeeff0104cb0071071134";
-  private static final String SLA3_LINK = "synesis://answer/SLA3-ABEiM0RVZneImaq7zN3u_wEEywBxBxE0";
+      "synesis://join/SLB3-AARoTuGAAlgQERITFBUWFxgZGhtsd4BEvvKX2tSKPZI0W5V3SMB7U18nulNhLIbQ0VDgSg"
+      + "IQIAENuAAAAAAAAAAAAAAABxE1BMsAcQcRNKQ3z0uCSiOIj501z2X4X-r2hjzC9URCPDFejK_e76GN9t6EDV0TPBHq"
+      + "SfyBE3dT28mOPxHCSuxKvJxsexEF5wo";
+  private static final String SLA3 = "000400112233445566778899aabbccddeeff0104cb0071071134";
+  private static final String SLA3_LINK =
+      "synesis://answer/SLA3-AAQAESIzRFVmd4iZqrvM3e7_AQTLAHEHETQ";
   private static final String TRANSCRIPT =
       "534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899aabbccddeeff00000000000000"
       + "0100000000000000020020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f0020"
@@ -98,7 +100,7 @@ final class ProtocolWireCompatibilityTest {
       + "30dd9c8c50b1bddedb0e515a8daedc66cea28c8f9357e49188218307f714e621249232db68eb8d7f60df66d028"
       + "a0fff0a6b90b5ba6f01366ab05";
   private static final String ENVELOPE =
-      "534c4831010002010101000174534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899"
+      "534c48310100040002010101000174534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899"
       + "aabbccddeeff000000000000000100000000000000020020202122232425262728292a2b2c2d2e2f3031323334"
       + "35363738393a3b3c3d3e3f0020606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
       + "0010707172737475767778797a7b7c7d7e7f0044736c312d343230326231346664653833333332613366373232"
@@ -180,8 +182,8 @@ final class ProtocolWireCompatibilityTest {
   void compactBootstrapSlb3KeepsCanonicalBytesAndShareLinkForBothAddressFamilies()
       throws Exception {
     UUID expectedSession = UUID.fromString("332e5494-7ba9-13eb-0fd9-7974fa89a1ee");
-    for (String[] vector : new String[][]{{SLB3_V4, SLB3_V4_LINK, "122"},
-        {SLB3_V6, SLB3_V6_LINK, "134"}, {SLB3_BOTH, SLB3_BOTH_LINK, "141"}}) {
+    for (String[] vector : new String[][]{{SLB3_V4, SLB3_V4_LINK, "124"},
+        {SLB3_V6, SLB3_V6_LINK, "136"}, {SLB3_BOTH, SLB3_BOTH_LINK, "143"}}) {
       CompactBootstrapInvitation invitation = CompactBootstrapInvitation.decodeMinimized(
           unhex(vector[0]));
 
@@ -289,7 +291,7 @@ final class ProtocolWireCompatibilityTest {
 
   @Test
   void handshakeEnvelopeKeepsCanonicalBytesAndListsVersionsNewestFirst() throws Exception {
-    String bytes = "534c4831" + "01" + "00" + "02" + "0101" + "0100" + lp(2, TRANSCRIPT)
+    String bytes = "534c4831" + "01" + "0004" + "00" + "02" + "0101" + "0100" + lp(2, TRANSCRIPT)
         + lp(2, PROOF);
     HandshakeEnvelope envelope = HandshakeEnvelope.decode(unhex(bytes));
 
@@ -306,14 +308,51 @@ final class ProtocolWireCompatibilityTest {
   }
 
   @Test
+  void compatibilityNumberLeadsEveryInvitationAnswerAndEnvelope() throws Exception {
+    assertEquals("0004", hex(unhex(SLB3_V4)).substring(0, 4));
+    assertEquals("0004", SLA3.substring(0, 4));
+    assertEquals(4, HandshakeEnvelope.peekCompatibility(unhex(ENVELOPE)));
+    assertEquals(LinkCompatibility.CURRENT, HandshakeEnvelope.decode(unhex(ENVELOPE)).compatibility());
+    assertEquals(-1, HandshakeEnvelope.peekCompatibility(unhex("534c4831")));
+  }
+
+  @Test
+  void anotherCompatibilityNumberIsRefusedBeforeAnythingElseIsRead() throws Exception {
+    byte[] older = unhex(SLB3_V4);
+    older[1] = 3;
+    IncompatibleVersionException invitation = assertThrows(IncompatibleVersionException.class,
+        () -> CompactBootstrapInvitation.decodeMinimized(older));
+    assertEquals(new LinkCompatibility.Mismatch("invitation", 4, 3), invitation.mismatch());
+    byte[] newerJunk = {0, 9, 1, 2, 3};
+    assertEquals(9, assertThrows(IncompatibleVersionException.class,
+        () -> CompactBootstrapInvitation.decodeMinimized(newerJunk)).mismatch().remote());
+    byte[] answer = unhex(SLA3);
+    answer[1] = 7;
+    assertEquals(new LinkCompatibility.Mismatch("answer", 4, 7),
+        assertThrows(IncompatibleVersionException.class, () -> CompactAnswer.decode(answer))
+            .mismatch());
+  }
+
+  @Test
   void handshakeFailureIsMagicVersionAndOrdinalForEveryCode() throws Exception {
     HandshakeFailureCode[] codes = HandshakeFailureCode.values();
     for (int ordinal = 0; ordinal < codes.length; ordinal++) {
+      if (codes[ordinal] == HandshakeFailureCode.INCOMPATIBLE_VERSION) {
+        continue;
+      }
       String bytes = "534c463101" + String.format("%02x", ordinal);
       assertEquals(bytes, hex(HandshakeFailure.create(codes[ordinal]).encoded()));
       assertEquals(codes[ordinal], HandshakeFailure.decode(unhex(bytes)).code());
       assertTrue(HandshakeFailure.looksLike(unhex(bytes)));
     }
+    String incompatible = "534c463101" + String.format("%02x",
+        HandshakeFailureCode.INCOMPATIBLE_VERSION.ordinal()) + "0003";
+    assertEquals(incompatible, hex(HandshakeFailure.incompatible(3).encoded()));
+    assertEquals(new LinkCompatibility.Mismatch("connection", 4, 3),
+        HandshakeFailure.decode(unhex(incompatible)).exception(4).mismatch());
+    assertThrows(IOException.class, () -> HandshakeFailure.decode(truncated(incompatible)));
+    assertThrows(IOException.class,
+        () -> HandshakeFailure.decode(withTrailingByte(incompatible)));
     assertThrows(IOException.class,
         () -> HandshakeFailure.decode(withTrailingByte("534c46310100")));
     assertThrows(IOException.class, () -> HandshakeFailure.decode(truncated("534c46310100")));

@@ -186,6 +186,15 @@ final class OnboardingEndpoint implements AutoCloseable {
   }
 
   /**
+   * Tells the listener, once, that a computer with another compatibility number tried to join.
+   *
+   * @param listener receives both numbers
+   */
+  void onIncompatiblePeer(java.util.function.Consumer<org.synesis.link.protocol.LinkCompatibility.Mismatch> listener) {
+    admission.onIncompatiblePeer(listener);
+  }
+
+  /**
    * Asks the home router to forward the listening port, and returns the public endpoint as a
    * candidate. The forward is removed when this endpoint closes.
    *

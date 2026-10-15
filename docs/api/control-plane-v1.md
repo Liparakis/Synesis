@@ -146,7 +146,11 @@ connects or the invitation expires; it leaves `pendingJoins` either way.
 Gives a waiting host operation the joiner's answer. The host starts sending
 toward the joiner's endpoints and keeps waiting; the response is
 `SENDING_TO_JOINER`, or `ONBOARDING_ANSWER_INVALID` for a malformed answer or
-one that answers another invitation.
+one that answers another invitation. An invitation or answer that carries
+another Synesis compatibility number, and a handshake that fails the same way,
+return `400` with code `INCOMPATIBLE_VERSION` and a message naming both numbers,
+which side is older and what to do; it is never reported as `INVITE_INVALID` or
+`ANSWER_INVALID`.
 
 ### `POST /api/v1/commands/cancel`
 

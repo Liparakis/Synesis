@@ -13,6 +13,7 @@ liveness state, stream metadata, and resource capacity.
 | Forged, replayed, or oversized compact bootstrap    | SLB3 parser/admission | canonical bounded record, host signature, 12-byte capability, derived expiry, single-use admission | compact parser, tamper, expiry, and replay tests |
 | Impersonation or certificate substitution           | QUIC handshake        | expected long-term identity proof; TLS alone is insufficient  | wrong-key and substitution tests                   |
 | Downgrade or replay                                 | protocol negotiation  | explicit versions, transcript binding, no 0-RTT               | replay/downgrade tests                             |
+| Two builds that cannot understand each other        | compatibility number  | number read first from invitation, answer and SLH1; mismatch fails both sides before any project data | compatibility tests |
 | Malformed/oversized input                           | wire parser           | validate before allocation and hard bounds                    | parser tests                                       |
 | Stream, heartbeat, callback, or executor exhaustion | resource ownership    | bounded frames, queues, schedules, cleanup                    | saturation/leak checks                             |
 | Key or log leakage                                  | storage/observability | storage abstraction and safe diagnostics                      | redaction tests                                    |
@@ -96,6 +97,12 @@ mutual identity binding. Link then exchanges complete signed candidate
 descriptors over the authenticated `SLX1` application envelope and checks
 their node IDs, public keys, validity, and invitation expiry before using them.
 The capability creates no permanent trust or project membership.
+
+The compatibility number is not an authentication check and is not a downgrade
+defence: an attacker can state any number, and a number stated in the handshake
+only makes an honest mismatch fail early with a clear message. The number in an
+invitation is inside the host's signature. A corrupted first two bytes of a link
+read as a different version, which is the safe direction: the link is refused.
 
 The `SLA3` answer is unsigned routing input. A forged or altered answer can
 make the host send one-byte datagrams, four a second for thirty seconds, to

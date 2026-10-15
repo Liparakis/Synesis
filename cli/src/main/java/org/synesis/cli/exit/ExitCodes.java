@@ -39,6 +39,10 @@ public final class ExitCodes {
      */
     public static final int ANSWER_INVALID = 14;
     /**
+     * The other computer runs a Synesis with a different link compatibility number.
+     */
+    public static final int INCOMPATIBLE_VERSION = 15;
+    /**
      * Bounded session/network failure.
      */
     static final int SESSION_FAILED = 13;

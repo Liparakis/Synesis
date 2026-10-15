@@ -25,6 +25,7 @@ import {
   type AgentSnapshot,
   consumeBootstrapToken,
   ControlPlaneClient,
+  ControlPlaneError,
   type DiagnosticFinding,
   type KnownProjectSnapshot,
   type NetworkPeerSnapshot,
@@ -906,10 +907,16 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
   const [joinUri, setJoinUri] = useState("");
   const [joinResult, setJoinResult] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [versionMismatch, setVersionMismatch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<"membership" | "relay" | null>(null);
   const [connectionTarget, setConnectionTarget] = useState<{peer: NetworkPeerSnapshot; route: NetworkSnapshot["routes"][number] | null; memberStatus: string} | null>(null);
   const [terminationTarget, setTerminationTarget] = useState<{peer: NetworkPeerSnapshot; routeKind: string} | null>(null);
+
+  const fail = (error: unknown, fallback: string) => {
+    setVersionMismatch(error instanceof ControlPlaneError && error.code === "INCOMPATIBLE_VERSION");
+    setActionMessage(error instanceof Error ? error.message : fallback);
+  };
 
   const createInvite = async () => {
     if (!client) return;
@@ -918,9 +925,10 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
       const response = await client.invite(undefined, openRouterPort);
       setInvite(response.inviteUri);
       setInviteOperation(response.operationId);
+      setVersionMismatch(false);
       setActionMessage("Invitation created. Send it to the other computer; this one waits for it to connect.");
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Invitation failed.");
+      fail(error, "Invitation failed.");
     } finally { setBusy(false); }
   };
   const join = async () => {
@@ -929,9 +937,10 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
     try {
       const response = await client.join(joinUri.trim());
       setJoinResult(response.answerUri);
+      setVersionMismatch(false);
       setActionMessage("Connecting. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Join failed.");
+      fail(error, "Join failed.");
     } finally { setBusy(false); }
   };
   const submitAnswer = async () => {
@@ -939,9 +948,10 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
     setBusy(true);
     try {
       await client.answer(inviteOperation, answerUri.trim());
+      setVersionMismatch(false);
       setActionMessage("Answer accepted. This computer is now reaching out to the other one.");
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "The answer link was not accepted.");
+      fail(error, "The answer link was not accepted.");
     } finally { setBusy(false); }
   };
 
@@ -965,7 +975,7 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
         {invite && <CopyField label="Invitation URI" value={invite}/>}
         {inviteOperation && <div className="form-block"><label className="form-label" htmlFor="answer-uri">Answer from the other computer</label><p className="muted">Only needed when the other computer is on a different network and does not connect on its own.</p><div className="inline-form"><input className="text-field" id="answer-uri" value={answerUri} onChange={(event) => setAnswerUri(event.target.value)} placeholder="Paste the answer link" /><button className="button button-secondary" type="button" disabled={busy || !client || !answerUri.trim()} onClick={() => void submitAnswer()}><Check size={15}/> Use Answer</button></div></div>}
         {joinResult && <CopyField label="Answer link" value={joinResult}/>}
-        {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
+        {actionMessage && <p className={cx("action-message", versionMismatch && "selection-error")} role={versionMismatch ? "alert" : "status"}>{actionMessage}</p>}
       </section>
                 <section className="data-table-wrap panel">
             <table className="data-table"><thead><tr><th>Peer ID</th><th>Route</th><th>Membership State</th><th>Connection Status</th><th><span className="sr-only">Actions</span></th></tr></thead>

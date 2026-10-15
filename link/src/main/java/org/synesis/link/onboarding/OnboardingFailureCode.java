@@ -39,5 +39,10 @@ public enum OnboardingFailureCode {
   /**
    * An unexpected onboarding fault occurred.
    */
-  INTERNAL
+  INTERNAL,
+  /**
+   * The other computer's compatibility number differs from this build's, found in its invitation,
+   * its answer, or its handshake. Appended last; the failure carries both numbers.
+   */
+  INCOMPATIBLE_VERSION
 }

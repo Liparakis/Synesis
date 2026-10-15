@@ -18,6 +18,8 @@ import java.util.UUID;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.IncompatibleVersionException;
+import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.workspace.transport.control.ControlPlaneLinkOperations.PendingHost;
 import org.synesis.workspace.transport.control.ControlPlaneLinkOperations.PendingJoin;
 
@@ -349,6 +351,8 @@ final class ControlPlaneOnboardingEndpoints {
         try {
             CompactBootstrapInvitation invitation = CompactBootstrapInvitation.fromShareLink(link);
             return new InvitationDetails(invitation.hostNodeId(), invitation.expiresAt());
+        } catch (IncompatibleVersionException differentVersion) {
+            throw incompatible(differentVersion.mismatch());
         } catch (IOException | IllegalArgumentException invalid) {
             throw failure(400, "INVITE_INVALID", "invitation link is invalid");
         }
@@ -364,9 +368,20 @@ final class ControlPlaneOnboardingEndpoints {
     private static CompactAnswer parseAnswer(String link) throws ApiFailure {
         try {
             return CompactAnswer.fromShareLink(link);
+        } catch (IncompatibleVersionException differentVersion) {
+            throw incompatible(differentVersion.mismatch());
         } catch (IOException | IllegalArgumentException invalid) {
             throw failure(400, "ANSWER_INVALID", "answer link is invalid");
         }
+    }
+
+    /**
+     * A different compatibility number is not a malformed link, so it gets its own code and the
+     * message that says which side is older and what to do. The message holds only the two
+     * numbers, so it is safe to return.
+     */
+    private static ApiFailure incompatible(LinkCompatibility.Mismatch mismatch) {
+        return failure(400, "INCOMPATIBLE_VERSION", mismatch.message());
     }
 
     /**
@@ -376,6 +391,9 @@ final class ControlPlaneOnboardingEndpoints {
      * @return API failure coded {@code ONBOARDING_<code>}
      */
     private static ApiFailure onboardingFailure(OnboardingFailure failure) {
+        if (failure.mismatch() != null) {
+            return incompatible(failure.mismatch());
+        }
         return failure(400, "ONBOARDING_" + failure.code().name(), "onboarding operation failed");
     }
 

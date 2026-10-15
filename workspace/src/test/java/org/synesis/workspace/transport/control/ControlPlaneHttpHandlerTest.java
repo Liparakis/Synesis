@@ -390,6 +390,19 @@ class ControlPlaneHttpHandlerTest {
             Map<String, Object> connectionBody = object(connection.body());
             assertEquals("CONNECTING", connectionBody.get("state"));
             assertTrue(((String) connectionBody.get("answerUri")).startsWith("synesis://answer/SLA3-"));
+
+            String link = (String) invitationBody.get("inviteUri");
+            int dash = link.indexOf('-') + 1;
+            byte[] payload = java.util.Base64.getUrlDecoder().decode(link.substring(dash));
+            payload[1] = (byte) (payload[1] + 1);
+            String newer = link.substring(0, dash) + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(payload);
+            HttpResponse<String> refused = join.client.send(jsonRequest(join, "/api/v1/commands/join").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) joinCredentials.get("sessionToken"))
+                    .header(ControlPlaneHttpHandler.CSRF_HEADER, (String) joinCredentials.get("csrfToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of("inviteUri", newer)))).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(400, refused.statusCode());
+            assertTrue(refused.body().contains("INCOMPATIBLE_VERSION"));
+            assertTrue(refused.body().contains("This computer is older: update Synesis on this computer, then ask for a new invitation."));
+            assertFalse(refused.body().contains("INVITE_INVALID"));
         }
     }
 

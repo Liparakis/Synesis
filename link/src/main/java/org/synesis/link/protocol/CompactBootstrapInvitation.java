@@ -56,7 +56,8 @@ public final class CompactBootstrapInvitation {
   private static final int SIGNATURE_BYTES = 64;
   private static final int RAW_PUBLIC_KEY_BYTES = 32;
   /** Maximum compact invitation payload in bytes: every endpoint an IPv6 address. */
-  static final int MAX_BYTES = Integer.BYTES + Short.BYTES + MINIMIZED_CAPABILITY_BYTES
+  static final int MAX_BYTES = Short.BYTES + Integer.BYTES + Short.BYTES
+      + MINIMIZED_CAPABILITY_BYTES
       + RAW_PUBLIC_KEY_BYTES + Byte.BYTES
       + MAX_ENDPOINTS * CompactEndpoints.MAX_ENCODED_BYTES_EACH + SIGNATURE_BYTES;
   private static final long MAX_EPOCH_SECONDS = 0xFFFF_FFFFL;
@@ -132,21 +133,25 @@ public final class CompactBootstrapInvitation {
   /**
    * Decodes a bounded canonical SLB3 invitation without trusting its signature.
    *
-   * <p>The payload has no inner magic: the URI revision selects this parser. After the fixed
-   * fields come an endpoint count, then for each endpoint its address width (4 or 16), address,
-   * and port, then the signature. A future layout must use another URI revision rather than
-   * changing this one in place.
+   * <p>The payload has no inner magic: the URI prefix selects this parser. It starts with the
+   * two-byte {@link LinkCompatibility#CURRENT compatibility number}, which never moves, so a
+   * build with another number refuses the invitation before reading any of the rest. After it
+   * come the fixed fields, an endpoint count, then for each endpoint its address width (4 or 16),
+   * address, and port, then the signature. Any layout change raises the compatibility number.
    *
    * @param encoded complete minimized invitation bytes
    * @return decoded invitation requiring {@link #verifyAt(Instant, Duration)} before use
-   * @throws IOException if framing, bounds, or canonical values are invalid
+   * @throws IncompatibleVersionException if the invitation carries another compatibility number
+   * @throws IOException                  if framing, bounds, or canonical values are invalid
    */
   static CompactBootstrapInvitation decodeMinimized(byte[] encoded) throws IOException {
     Objects.requireNonNull(encoded, "minimized compact invitation");
     if (encoded.length > MAX_BYTES) {
       throw new IOException("invalid minimized compact invitation length");
     }
+    IncompatibleVersionException.requireCurrent(encoded, "invitation");
     try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(encoded))) {
+      input.readUnsignedShort();
       Instant issued = readEpoch(input);
       int lifetimeSeconds = input.readUnsignedShort();
       if (lifetimeSeconds == 0 || lifetimeSeconds > MAX_LIFETIME.toSeconds()) {
@@ -408,6 +413,7 @@ public final class CompactBootstrapInvitation {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       try (DataOutputStream output = new DataOutputStream(bytes)) {
+        output.writeShort(LinkCompatibility.CURRENT);
         output.writeInt((int) issuedAt.getEpochSecond());
         output.writeShort(Math.toIntExact(Duration.between(issuedAt, expiresAt).getSeconds()));
         output.write(capability);

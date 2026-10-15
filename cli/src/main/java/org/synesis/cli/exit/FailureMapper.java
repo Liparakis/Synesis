@@ -22,11 +22,12 @@ public final class FailureMapper {
     public static int map(OnboardingFailure failure, Terminal terminal) {
         OnboardingFailureCode code = failure.code();
         terminal.stdout("FAILURE=" + code.name());
-        terminal.stderr(human(code));
+        terminal.stderr(failure.mismatch() != null ? failure.mismatch().message() : human(code));
         return switch (code) {
             case IDENTITY_FAILED -> ExitCodes.LOCAL_CONFIGURATION;
             case INVITE_INVALID, OWN_INVITATION -> ExitCodes.INVITE_INVALID;
             case ANSWER_INVALID -> ExitCodes.ANSWER_INVALID;
+            case INCOMPATIBLE_VERSION -> ExitCodes.INCOMPATIBLE_VERSION;
             case HOST_IDENTITY_MISMATCH -> ExitCodes.HOST_IDENTITY_MISMATCH;
             case NO_USABLE_CANDIDATE, HOST_TIMEOUT, CONNECTION_FAILED -> ExitCodes.SESSION_FAILED;
             case INTERNAL -> ExitCodes.INTERNAL;
@@ -50,6 +51,7 @@ public final class FailureMapper {
             case IDENTITY_FAILED -> "Local identity configuration failed.";
             case INVITE_INVALID -> "The invitation is invalid or expired.";
             case ANSWER_INVALID -> "The answer is invalid, expired, mismatched, or already used.";
+            case INCOMPATIBLE_VERSION -> "The other computer runs a different Synesis version. Update Synesis on the older computer.";
             case HOST_IDENTITY_MISMATCH -> "The authenticated host identity did not match the invitation.";
             case OWN_INVITATION -> "This invitation was created by this identity. Join it from another identity or machine.";
             case NO_USABLE_CANDIDATE -> "The invitation names no address this computer can reach, for example only IPv6 addresses when this computer has no IPv6.";

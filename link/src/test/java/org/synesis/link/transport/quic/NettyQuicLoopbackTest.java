@@ -2,6 +2,7 @@ package org.synesis.link.transport.quic;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,7 +45,10 @@ import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.HandshakeException;
 import org.synesis.link.protocol.HandshakeFailureCode;
 import org.synesis.link.protocol.HandshakeRole;
+import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.link.protocol.HandshakeTranscript;
+import org.synesis.link.session.InvitationAdmission;
+import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.LivenessState;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;
@@ -59,6 +63,13 @@ final class NettyQuicLoopbackTest {
   private static void assertRejectedHandshake(String serverExpectedNodeId,
       java.util.List<ProtocolVersion> serverVersions, HandshakeFailureCode expected)
       throws Exception {
+    rejectedHandshake(serverExpectedNodeId, serverVersions, LinkCompatibility.CURRENT, expected);
+  }
+
+  /** Runs a handshake that must fail on both sides and returns {client, server} failures. */
+  private static HandshakeException[] rejectedHandshake(String serverExpectedNodeId,
+      java.util.List<ProtocolVersion> serverVersions, int serverCompatibility,
+      HandshakeFailureCode expected) throws Exception {
     MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2,
         NioIoHandler.newFactory());
     TestTlsMaterial certificate = TestTlsMaterial.create();
@@ -81,7 +92,8 @@ final class NettyQuicLoopbackTest {
           .handler(NettyQuicTransport.serverCodec(serverSsl, InsecureQuicTokenHandler.INSTANCE,
               new ChannelInboundHandlerAdapter(),
               NettySessionHandshake.serverStreamHandler(responder,
-                  serverExpectedNodeId, serverVersions, new ReplayGuard(), serverSession)))
+                  serverExpectedNodeId, serverVersions, new ReplayGuard(), serverSession,
+                  LivenessConfiguration.DEFAULT, null, serverCompatibility)))
           .bind(new InetSocketAddress(NetUtil.LOCALHOST4, 0))
           .sync()
           .channel();
@@ -111,8 +123,12 @@ final class NettyQuicLoopbackTest {
           .sync();
       ExecutionException clientFailure = assertThrows(ExecutionException.class,
           () -> clientSession.get(10, TimeUnit.SECONDS));
-      assertEquals(expected, ((HandshakeException) clientFailure.getCause()).code());
-      assertTrue(serverSession.isCompletedExceptionally());
+      HandshakeException clientCause = (HandshakeException) clientFailure.getCause();
+      assertEquals(expected, clientCause.code());
+      HandshakeException serverCause = (HandshakeException) assertThrows(ExecutionException.class,
+          () -> serverSession.get(10, TimeUnit.SECONDS)).getCause();
+      assertEquals(expected, serverCause.code());
+      return new HandshakeException[]{clientCause, serverCause};
     } finally {
       if (client != null) {
         client.close()
@@ -550,6 +566,72 @@ final class NettyQuicLoopbackTest {
     NodeIdentity responder = NodeIdentity.generate();
     assertRejectedHandshake(responder.nodeId(), java.util.List.of(new ProtocolVersion(2, 0)),
         HandshakeFailureCode.UNSUPPORTED_PROTOCOL_VERSION);
+  }
+
+  @Test
+  void differentCompatibilityNumbersMakeBothSidesFailBeforeAnySession() throws Exception {
+    NodeIdentity responder = NodeIdentity.generate();
+    int newer = LinkCompatibility.CURRENT + 1;
+
+    HandshakeException[] failures = rejectedHandshake(responder.nodeId(),
+        java.util.List.of(ProtocolVersion.V1), newer, HandshakeFailureCode.INCOMPATIBLE_VERSION);
+
+    assertEquals(new LinkCompatibility.Mismatch("connection", LinkCompatibility.CURRENT, newer),
+        failures[0].mismatch());
+    assertEquals(new LinkCompatibility.Mismatch("connection", newer, LinkCompatibility.CURRENT),
+        failures[1].mismatch());
+  }
+
+  @Test
+  void aHostWaitingOnAnInvitationIsToldOfAnotherNumberAndKeepsWaiting() throws Exception {
+    int newer = LinkCompatibility.CURRENT + 1;
+    NodeIdentity initiator = NodeIdentity.generate();
+    NodeIdentity responder = NodeIdentity.generate();
+    InvitationAdmission admission = new InvitationAdmission(java.util.UUID.randomUUID(),
+        new byte[org.synesis.link.protocol.CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES]);
+    CompletableFuture<LinkCompatibility.Mismatch> told = new CompletableFuture<>();
+    admission.onIncompatiblePeer(told::complete);
+    CompletableFuture<PeerSession> hostWait = new CompletableFuture<>();
+    CompletableFuture<PeerSession> clientSession = new CompletableFuture<>();
+    MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+    TestTlsMaterial certificate = TestTlsMaterial.create();
+    try {
+      Channel serverUdp = new Bootstrap().group(group).channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.serverCodec(QuicSslContextBuilder.forServer(certificate.key, null,
+                  certificate.certificate).applicationProtocols(SynesisLink.ALPN).build(),
+              InsecureQuicTokenHandler.INSTANCE, new ChannelInboundHandlerAdapter(),
+              NettySessionHandshake.serverInvitationStreamHandler(responder, null,
+                  java.util.List.of(ProtocolVersion.V1), new ReplayGuard(), hostWait,
+                  LivenessConfiguration.DEFAULT, admission, null)))
+          .bind(new InetSocketAddress(NetUtil.LOCALHOST4, 0)).sync().channel();
+      Channel clientUdp = new Bootstrap().group(group).channel(NioDatagramChannel.class)
+          .handler(NettyQuicTransport.clientCodec(QuicSslContextBuilder.forClient()
+              .trustManager(InsecureTrustManagerFactory.INSTANCE).applicationProtocols(SynesisLink.ALPN).build()))
+          .bind(new InetSocketAddress(NetUtil.LOCALHOST4, 0)).sync().channel();
+      QuicChannel client = QuicChannel.newBootstrap(clientUdp).handler(new ChannelInboundHandlerAdapter())
+          .streamHandler(new ChannelInboundHandlerAdapter()).remoteAddress(serverUdp.localAddress())
+          .connect().sync().getNow();
+      HandshakeTranscript transcript = HandshakeTranscript.forIdentities(ProtocolVersion.V1,
+          java.util.UUID.randomUUID(), 1, 1, new byte[]{1}, new byte[]{2}, initiator, responder);
+      client.createStream(QuicStreamType.BIDIRECTIONAL, NettySessionHandshake.clientStreamHandler(initiator,
+          responder.nodeId(), java.util.List.of(ProtocolVersion.V1), transcript,
+          SessionAuthenticator.createProof(initiator, transcript, HandshakeRole.INITIATOR), new ReplayGuard(),
+          clientSession, LivenessConfiguration.DEFAULT, null, newer)).sync();
+
+      HandshakeException joinerFailure = (HandshakeException) assertThrows(ExecutionException.class,
+          () -> clientSession.get(10, TimeUnit.SECONDS)).getCause();
+      assertEquals(HandshakeFailureCode.INCOMPATIBLE_VERSION, joinerFailure.code());
+      assertEquals(new LinkCompatibility.Mismatch("connection", LinkCompatibility.CURRENT, newer),
+          told.get(10, TimeUnit.SECONDS));
+      assertFalse(hostWait.isDone(), "the host still waits for the real joiner");
+      client.close().syncUninterruptibly();
+      clientUdp.close().syncUninterruptibly();
+      serverUdp.close().syncUninterruptibly();
+    } finally {
+      admission.close();
+      group.shutdownGracefully().syncUninterruptibly();
+      certificate.close();
+    }
   }
 
 }

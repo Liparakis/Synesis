@@ -102,7 +102,8 @@ final class ControlWireCompatibilityTest {
     assertEquals(table("INITIATOR", 0, "RESPONDER", 1), ordinals(HandshakeRole.values()));
     assertEquals(table("IDENTITY_MISMATCH", 0, "IDENTITY_PROOF_INVALID", 1,
         "UNSUPPORTED_PROTOCOL_VERSION", 2, "HANDSHAKE_REPLAY_REJECTED", 3,
-        "MALFORMED_HANDSHAKE", 4, "DUPLICATE_CONTROL_STREAM", 5, "INTERNAL_FAILURE", 6),
+        "MALFORMED_HANDSHAKE", 4, "DUPLICATE_CONTROL_STREAM", 5, "INTERNAL_FAILURE", 6,
+        "INCOMPATIBLE_VERSION", 7),
         ordinals(HandshakeFailureCode.values()));
     assertEquals(table("LAN", 0, "IPV6", 1, "MAPPED_IPV4", 2, "SERVER_REFLEXIVE", 3, "MANUAL", 4,
         "RELAY", 5), ordinals(CandidateType.values()));

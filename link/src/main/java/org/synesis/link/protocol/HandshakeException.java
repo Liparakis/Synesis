@@ -16,6 +16,10 @@ public final class HandshakeException extends Exception {
    * Stable category retained for callers.
    */
   private final HandshakeFailureCode code;
+  /**
+   * Both compatibility numbers, or {@code null} when the failure is not a mismatch.
+   */
+  private final LinkCompatibility.Mismatch mismatch;
 
   /**
    * Creates a categorized handshake failure.
@@ -25,6 +29,19 @@ public final class HandshakeException extends Exception {
   public HandshakeException(HandshakeFailureCode code) {
     super(code.name());
     this.code = code;
+    this.mismatch = null;
+  }
+
+  /**
+   * Creates the failure for two peers whose compatibility numbers differ.
+   *
+   * @param local  this side's compatibility number
+   * @param remote the other side's compatibility number
+   */
+  public HandshakeException(int local, int remote) {
+    super(HandshakeFailureCode.INCOMPATIBLE_VERSION.name());
+    this.code = HandshakeFailureCode.INCOMPATIBLE_VERSION;
+    this.mismatch = new LinkCompatibility.Mismatch("connection", local, remote);
   }
 
   /**
@@ -34,5 +51,14 @@ public final class HandshakeException extends Exception {
    */
   public HandshakeFailureCode code() {
     return code;
+  }
+
+  /**
+   * Returns both compatibility numbers for {@link HandshakeFailureCode#INCOMPATIBLE_VERSION}.
+   *
+   * @return the mismatch, or {@code null} for any other code
+   */
+  public LinkCompatibility.Mismatch mismatch() {
+    return mismatch;
   }
 }

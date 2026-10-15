@@ -44,7 +44,7 @@ final class CompactAnswerTest {
     assertEquals(List.of(reflexive.address(), lan.address()),
         parsed.endpoints().stream().map(Candidate::address).toList());
     assertEquals(List.of(61000, 5000), parsed.endpoints().stream().map(Candidate::port).toList());
-    assertEquals(16 + 1 + 7 + 7, answer.encoded().length);
+    assertEquals(2 + 16 + 1 + 7 + 7, answer.encoded().length);
   }
 
   @Test
@@ -52,7 +52,7 @@ final class CompactAnswerTest {
     byte[] encoded = CompactAnswer.create(invitation(), List.of(new Candidate(CandidateType.LAN,
         InetAddress.getByName("192.168.1.20"), 5000, 0))).encoded();
     byte[] noEndpoints = encoded.clone();
-    noEndpoints[16] = 0;
+    noEndpoints[18] = 0;
     for (byte[] bad : List.of(Arrays.copyOf(encoded, encoded.length - 1),
         Arrays.copyOf(encoded, encoded.length + 1), noEndpoints)) {
       assertThrows(IOException.class, () -> CompactAnswer.decode(bad));

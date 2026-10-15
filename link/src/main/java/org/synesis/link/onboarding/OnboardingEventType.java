@@ -64,6 +64,11 @@ public enum OnboardingEventType {
    */
   ROUTER_PORT_UNAVAILABLE,
   /**
+   * A computer with another compatibility number tried to join and was refused; the host keeps
+   * waiting. The value is the sentence for the person, naming both numbers and the older side.
+   */
+  INCOMPATIBLE_PEER,
+  /**
    * The invitation's host identity was pinned.
    */
   HOST_IDENTITY_PINNED,

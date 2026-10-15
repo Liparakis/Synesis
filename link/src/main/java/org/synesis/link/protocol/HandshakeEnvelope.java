@@ -31,13 +31,19 @@ public final class HandshakeEnvelope {
   private static final int VERSION = 1;
   private static final String FIELD_MESSAGE = "invalid bounded envelope field";
   private final HandshakeRole role;
+  private final int compatibility;
   private final List<ProtocolVersion> supportedVersions;
   private final HandshakeTranscript transcript;
   private final HandshakeProof proof;
 
-  private HandshakeEnvelope(HandshakeRole role, List<ProtocolVersion> supportedVersions,
-      HandshakeTranscript transcript, HandshakeProof proof) {
+  private HandshakeEnvelope(HandshakeRole role, int compatibility,
+      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
+      HandshakeProof proof) {
     this.role = Objects.requireNonNull(role, "role");
+    if (compatibility < 0 || compatibility > 0xFFFF) {
+      throw new IllegalArgumentException("compatibility number must fit two bytes");
+    }
+    this.compatibility = compatibility;
     this.supportedVersions = normalizeVersions(supportedVersions);
     this.transcript = Objects.requireNonNull(transcript, "transcript");
     this.proof = Objects.requireNonNull(proof, "proof");
@@ -71,7 +77,24 @@ public final class HandshakeEnvelope {
   public static HandshakeEnvelope create(HandshakeRole role,
       List<ProtocolVersion> supportedVersions,
       HandshakeTranscript transcript, HandshakeProof proof) {
-    return new HandshakeEnvelope(role, supportedVersions, transcript, proof);
+    return create(role, LinkCompatibility.CURRENT, supportedVersions, transcript, proof);
+  }
+
+  /**
+   * Creates an envelope that states a compatibility number other than this build's. Only the
+   * handshake's own tests need this.
+   *
+   * @param role              proof role
+   * @param compatibility     the compatibility number to state
+   * @param supportedVersions versions offered by this endpoint
+   * @param transcript        canonical transcript using the selected version
+   * @param proof             signed role proof
+   * @return immutable envelope
+   */
+  public static HandshakeEnvelope create(HandshakeRole role, int compatibility,
+      List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
+      HandshakeProof proof) {
+    return new HandshakeEnvelope(role, compatibility, supportedVersions, transcript, proof);
   }
 
   /**
@@ -90,6 +113,7 @@ public final class HandshakeEnvelope {
       if (input.readInt() != MAGIC || input.readUnsignedByte() != VERSION) {
         throw new IOException("unsupported handshake envelope");
       }
+      int compatibility = input.readUnsignedShort();
       int roleCode = input.readUnsignedByte();
       HandshakeRole[] roles = HandshakeRole.values();
       if (roleCode >= roles.length) {
@@ -110,7 +134,7 @@ public final class HandshakeEnvelope {
       if (input.available() != 0) {
         throw new IOException("trailing handshake envelope bytes");
       }
-      HandshakeEnvelope value = create(roles[roleCode], supportedVersions,
+      HandshakeEnvelope value = create(roles[roleCode], compatibility, supportedVersions,
           HandshakeTranscript.decode(transcriptBytes), HandshakeProof.decode(proofBytes));
       CodecSupport.requireCanonical(encoded, value.encoded(), "non-canonical handshake envelope");
       return value;
@@ -129,6 +153,18 @@ public final class HandshakeEnvelope {
     return encoded != null && encoded.length >= 4
         && (encoded[0] & 255) == 0x53 && (encoded[1] & 255) == 0x4C
         && (encoded[2] & 255) == 0x48 && (encoded[3] & 255) == 0x31;
+  }
+
+  /**
+   * Reads the compatibility number of an envelope without parsing the rest. It sits right after
+   * the magic and the format byte, a position no later layout may move.
+   *
+   * @param encoded bounded stream frame payload
+   * @return the stated number, or -1 if the payload is not an envelope or is too short
+   */
+  public static int peekCompatibility(byte[] encoded) {
+    return looksLike(encoded) && encoded.length >= 7
+        ? ((encoded[5] & 255) << 8) | (encoded[6] & 255) : -1;
   }
 
   private static List<ProtocolVersion> normalizeVersions(List<ProtocolVersion> versions) {
@@ -154,6 +190,7 @@ public final class HandshakeEnvelope {
       try (DataOutputStream output = new DataOutputStream(bytes)) {
         output.writeInt(MAGIC);
         output.writeByte(VERSION);
+        output.writeShort(compatibility);
         output.writeByte(role.ordinal());
         output.writeByte(supportedVersions.size());
         for (ProtocolVersion version : supportedVersions) {
@@ -176,6 +213,15 @@ public final class HandshakeEnvelope {
    */
   public HandshakeRole role() {
     return role;
+  }
+
+  /**
+   * Returns the compatibility number the sender states.
+   *
+   * @return compatibility number
+   */
+  public int compatibility() {
+    return compatibility;
   }
 
   /**
@@ -206,7 +252,7 @@ public final class HandshakeEnvelope {
   }
 
   private int encodedLength() {
-    return 7 + 2 * supportedVersions.size() + transcript.encoded().length + 2
+    return 9 + 2 * supportedVersions.size() + transcript.encoded().length + 2
         + proof.encoded().length;
   }
 }

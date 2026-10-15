@@ -31,5 +31,10 @@ public enum HandshakeFailureCode {
   /**
    * An unexpected internal failure prevented establishment.
    */
-  INTERNAL_FAILURE
+  INTERNAL_FAILURE,
+  /**
+   * The peers carry different {@link LinkCompatibility compatibility numbers}. Appended last
+   * because the wire encodes the ordinal.
+   */
+  INCOMPATIBLE_VERSION
 }

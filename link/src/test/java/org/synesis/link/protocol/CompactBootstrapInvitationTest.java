@@ -40,8 +40,8 @@ final class CompactBootstrapInvitationTest {
     assertArrayEquals(invitation.encoded(), parsed.encoded());
     assertEquals(CompactBootstrapInvitation.sessionIdForMinimized(host.publicKeyEncoded(),
         capability, ISSUED, EXPIRES), parsed.sessionId());
-    assertEquals(4 + 2 + 12 + 32 + 1 + (1 + 4 + 2) + 64, parsed.encoded().length);
-    assertEquals(183, parsed.shareLink().length());
+    assertEquals(2 + 4 + 2 + 12 + 32 + 1 + (1 + 4 + 2) + 64, parsed.encoded().length);
+    assertEquals(186, parsed.shareLink().length());
     assertEquals(CandidateType.MANUAL, parsed.endpoints().getFirst().type());
     assertEquals(0, parsed.endpoints().getFirst().priority());
   }
@@ -54,8 +54,8 @@ final class CompactBootstrapInvitationTest {
         new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
         List.of(new Candidate(CandidateType.IPV6, InetAddress.getByName("2001:db8::11"), 4_434, 0)));
 
-    assertEquals(134, invitation.encoded().length);
-    assertEquals(199, invitation.shareLink().length());
+    assertEquals(136, invitation.encoded().length);
+    assertEquals(202, invitation.shareLink().length());
     CompactBootstrapInvitation parsed = CompactBootstrapInvitation.fromShareLink(
         invitation.shareLink());
     assertTrue(parsed.verifyAt(ISSUED.plusSeconds(1), Duration.ZERO));
@@ -71,7 +71,7 @@ final class CompactBootstrapInvitationTest {
         new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
         List.of(new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.7"), 4434, 0)));
     byte[] tamperedCapability = invitation.encoded();
-    tamperedCapability[6] ^= 1;
+    tamperedCapability[8] ^= 1;
     CompactBootstrapInvitation parsedCapability = CompactBootstrapInvitation.decodeMinimized(
         tamperedCapability);
     assertFalse(parsedCapability.verifyAt(ISSUED.plusSeconds(1), Duration.ZERO));
@@ -202,7 +202,7 @@ final class CompactBootstrapInvitationTest {
         EXPIRES, new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
         List.of(new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.7"), 4434,
             0))).encoded();
-    int count = 4 + 2 + 12 + 32;
+    int count = 2 + 4 + 2 + 12 + 32;
     for (int[] change : new int[][]{{count, 0}, {count, 2}, {count, 9}, {count + 1, 5},
         {count + 1, 16}}) {
       byte[] changed = encoded.clone();

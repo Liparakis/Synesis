@@ -29,6 +29,9 @@ import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.HandshakeException;
+import org.synesis.link.protocol.IncompatibleVersionException;
+import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
@@ -152,7 +155,20 @@ public final class Onboarding {
     return value;
   }
 
+  /**
+   * Builds the failure, upgrading it to {@code INCOMPATIBLE_VERSION} when the cause chain shows a
+   * compatibility mismatch, so no caller can report one as an invalid invitation or a lost
+   * connection.
+   */
   private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
+    for (Throwable link = cause; link != null; link = link.getCause()) {
+      LinkCompatibility.Mismatch mismatch = link instanceof IncompatibleVersionException value
+          ? value.mismatch()
+          : link instanceof HandshakeException value ? value.mismatch() : null;
+      if (mismatch != null) {
+        return new OnboardingFailure(code, cause, mismatch);
+      }
+    }
     return new OnboardingFailure(code, cause);
   }
 
@@ -289,6 +305,7 @@ public final class Onboarding {
           localDescriptor, remoteDescriptor, applicationHandler);
       endpoint = OnboardingEndpoint.openServer(local.identity(), expectedPeer, sessionId,
           capability, bootstrapHandler, stunServer);
+      endpoint.onIncompatiblePeer(mismatch -> emit(OnboardingEventType.INCOMPATIBLE_PEER, mismatch.message()));
       emit(OnboardingEventType.SESSION_CREATED, "");
       emit(OnboardingEventType.LISTENER_READY, "");
       List<Candidate> candidates = new java.util.ArrayList<>(endpoint.gatherCandidates("host"));
