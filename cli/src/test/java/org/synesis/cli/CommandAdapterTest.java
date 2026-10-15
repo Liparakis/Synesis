@@ -33,10 +33,10 @@ final class CommandAdapterTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         ConsoleTerminal terminal = new ConsoleTerminal(stream(out), stream(err));
-        String link = "synesis://join/SYN1-exact-link";
+        String link = "synesis://join/SLB3-exact-link";
         new StatusRenderer(terminal).accept(new OnboardingEvent(OnboardingEventType.SHARE_LINK, link));
         assertTrue(out.toString(StandardCharsets.UTF_8).contains("SHARE_LINK=" + link));
-        assertTrue(out.toString(StandardCharsets.UTF_8).contains("QR_RENDERED=COMPACT"));
+        assertTrue(!out.toString(StandardCharsets.UTF_8).contains("QR_"));
         assertTrue(err.toString(StandardCharsets.UTF_8).isEmpty());
     }
 

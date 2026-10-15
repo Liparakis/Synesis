@@ -64,24 +64,9 @@ public interface Terminal {
     String readLine() throws IOException;
 
     /**
-     * Returns the detected terminal width.
-     *
-     * @return width in columns, or a bounded default
-     */
-    int width();
-
-    /**
-     * Reports whether compact QR glyphs are supported by the output charset.
-     *
-     * @return true when the glyphs can be encoded
-     */
-    boolean unicodeSupported();
-
-    /**
      * Returns whether the output encoding can represent every character of {@code text}.
      *
-     * <p>Block-drawing support, which {@link #unicodeSupported()} reports, does not imply that
-     * other symbols survive a legacy console code page, so decorations must ask for themselves.</p>
+     * <p>A legacy console code page cannot represent every symbol, so decorations must ask.</p>
      *
      * @param text characters a caller would like to print
      * @return {@code true} only when all of them can be encoded

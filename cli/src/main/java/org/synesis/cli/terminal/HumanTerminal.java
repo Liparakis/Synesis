@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  *
  * <p>Commands keep emitting the machine contract; this terminal only changes how those lines are
  * shown. Each line is rendered as it arrives, so long-running commands still report progress
- * immediately. Anything that is not a status fact — usage text, QR codes, protocol frames, free
+ * immediately. Anything that is not a status fact — usage text, protocol frames, free
  * prose — passes through untouched, and the raw writers are never wrapped, so a stream used as a
  * protocol channel cannot be reformatted by accident.</p>
  */
@@ -34,7 +34,7 @@ public final class HumanTerminal implements Terminal {
     private static final Pattern FACT = Pattern.compile("([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(?:=(.*))?", Pattern.DOTALL);
     private static final String RESULT_SUFFIX = "_RESULT";
     private static final int LABEL_WIDTH = 26;
-    private static final Set<String> ACRONYMS = Set.of("ID", "IDS", "MCP", "URI", "URL", "QR", "UI", "SHA", "PID", "HTTP", "CLI", "TTL");
+    private static final Set<String> ACRONYMS = Set.of("ID", "IDS", "MCP", "URI", "URL", "UI", "SHA", "PID", "HTTP", "CLI", "TTL");
     private static final Map<Tone, Set<String>> TONE_WORDS = Map.of(
             Tone.GOOD, Set.of("SUCCESS", "PASSED", "OK", "INSTALLED", "BOUND", "VERIFIED", "ATTESTED", "ASSIGNED", "RECORDED", "COMPLETE", "COMPLETED", "HEALTHY", "READY", "ALLOW", "ALREADY_INITIALIZED"),
             Tone.CAUTION, Set.of("DEGRADED", "UNPROVEN", "REVIEW_REQUIRED", "NOT_COMPLETED", "NOT_INSTALLED", "UNKNOWN", "FALLBACK", "EXPERIMENTAL", "PARTIAL", "WAITING", "PENDING", "WORKSPACE_UNVERIFIED"),
@@ -122,16 +122,6 @@ public final class HumanTerminal implements Terminal {
     @Override
     public String readLine() throws IOException {
         return delegate.readLine();
-    }
-
-    @Override
-    public int width() {
-        return delegate.width();
-    }
-
-    @Override
-    public boolean unicodeSupported() {
-        return delegate.unicodeSupported();
     }
 
     String render(String line) {

@@ -4,7 +4,6 @@
 # To regenerate this file, run: ./gradlew :cli:dependencies --write-locks
 com.google.code.gson:gson:2.11.0=protectionLite
 com.google.errorprone:error_prone_annotations:2.27.0=protectionLite
-com.google.zxing:core:3.5.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.guardsquare:proguard-base:7.10.0=protectionLite
 com.guardsquare:proguard-core:9.4.0=protectionLite
 info.picocli:picocli:4.7.7=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

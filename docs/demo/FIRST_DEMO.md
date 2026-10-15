@@ -12,7 +12,7 @@ On clean profiles the normal LAN flow is:
 
 The host automatically creates or reuses its local identity, binds its listener
 before gathering candidates, signs a ten-minute single-use invitation, and
-prints the copyable link plus a compact Unicode QR when the terminal fits it.
+prints the copyable link.
 The joiner verifies the invitation,
 creates or reuses its own identity, gathers candidates, authenticates both
 identities through the existing Link handshake, exercises control/liveness and
@@ -24,10 +24,6 @@ Stable terminal failure lines use `FAILURE=...`; common bounded outcomes are
 `HOST_TIMEOUT`. A failure before identity
 authentication releases the host's short reservation; authenticated admission
 is consumed even if later control work fails.
-
-QR output is optional: `QR_RENDERED=COMPACT` means it fit the terminal;
-`QR_SKIPPED=TERMINAL_TOO_NARROW` or `QR_SKIPPED=UNICODE_UNSUPPORTED` means the
-copyable `SHARE_LINK` remains the complete onboarding path.
 
 The generated launcher is a development distribution, not a production
 installer. Signing, permanent PATH changes, MSI, native image, publishing,

@@ -328,7 +328,6 @@ dependencies {
     // distribution must carry the MCP server so `synesis mcp` is runnable.
     runtimeOnly(project(":mcp"))
     implementation(libs.picocli)
-    implementation(libs.zxing.core)
     add("protectionLite", libs.proguard.base)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

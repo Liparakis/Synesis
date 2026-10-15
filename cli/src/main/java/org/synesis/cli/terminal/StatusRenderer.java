@@ -11,7 +11,6 @@ import org.synesis.link.onboarding.OnboardingEventType;
 public final class StatusRenderer implements Consumer<OnboardingEvent> {
 
     private final Terminal terminal;
-    private final CompactQrRenderer qr;
 
     /**
      * Creates a renderer bound to one terminal.
@@ -20,7 +19,6 @@ public final class StatusRenderer implements Consumer<OnboardingEvent> {
      */
     public StatusRenderer(Terminal terminal) {
         this.terminal = terminal;
-        this.qr = new CompactQrRenderer(terminal.width(), terminal.unicodeSupported());
     }
 
     /**
@@ -31,20 +29,9 @@ public final class StatusRenderer implements Consumer<OnboardingEvent> {
     @Override
     public void accept(OnboardingEvent event) {
         OnboardingEventType type = event.type();
-        if (type == OnboardingEventType.SHARE_LINK || type == OnboardingEventType.ANSWER_LINK) {
-            terminal.stdout(type.name() + "=" + event.value());
-            try {
-                String rendered = qr.render(event.value());
-                terminal.stdout("QR_RENDERED=COMPACT");
-                terminal.stdoutRaw(rendered);
-            } catch (IllegalArgumentException failure) {
-                String message = failure.getMessage();
-                String reason = switch (message == null ? "" : message) {
-                    case "TERMINAL_TOO_NARROW", "UNICODE_UNSUPPORTED" -> failure.getMessage();
-                    default -> "UNAVAILABLE";
-                };
-                terminal.stdout("QR_SKIPPED=" + reason);
-            }
+        if (type == OnboardingEventType.WAITING_FOR_HOST) {
+            terminal.stdout(type.name());
+            terminal.stdout("NEXT=Send the answer link above to the person who invited you. This keeps trying until the invitation expires.");
             return;
         }
         String line = switch (type) {

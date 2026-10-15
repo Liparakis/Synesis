@@ -61,6 +61,13 @@ did not keep the joiner's early packets against the host's port, unlike the lab'
 the IPv4 failure in the lab holds for some routers and not for all. Which routers, and whether the
 firewall rule was present on the friend's PC, were not inspected.
 
+**Also changed after the two-PC run.** The terminal no longer draws a QR code for links: the
+renderer, the `zxing` library and the terminal width and Unicode detection only it used are removed,
+and no `QR_RENDERED` or `QR_SKIPPED` line is printed. The join's hint and the messages for
+`CONNECTION_FAILED`, `HOST_TIMEOUT` and `NO_USABLE_CANDIDATE` now say what to try next. Linux gate
+after this: CLI 128 (the two QR tests are gone), every other module unchanged, 0 failures; the
+installer builds with strict dependency verification.
+
 **NOT REACHED.** A real router's UPnP service. NAT-PMP and PCP. The browser flows clicked through by a
 person. A session longer than the forward's one-hour lease. The reverse direction between the two
 PCs.
