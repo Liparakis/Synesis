@@ -81,7 +81,7 @@ public final class ProviderSessionTerminalizationService {
     public static boolean isSessionTerminal(ProjectLocation location, String sessionId) throws Exception {
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(sessionId, "sessionId");
-        Path events = location.root().resolve(".synesis/coordination/events");
+        Path events = location.coordinationDirectory().resolve("events");
         if (!Files.isDirectory(events)) {
             return false;
         }

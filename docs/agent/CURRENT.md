@@ -1,3 +1,44 @@
+# 2026-10-15 — The coordination server and the agents now share one event log
+
+**Defect.** Agents wrote `.synesis/coordination`. The coordination server, which the daemon starts
+with no data directory, read and wrote `.synesis/shared/coordination`. So the dashboard, the
+`coordination status` command and the task, ownership, prediction and speculation commands that go
+through the server's HTTP API worked on a log no agent writes. VERIFIED on the 236 acceptance
+projects under `Documents\SynesisRemasterAcceptance`: every agent event is in
+`.synesis/coordination/events`; one project has a `shared/coordination/events` folder, and it is
+empty. The control-plane tests did not show it because they built the service on the agents' folder
+by hand.
+
+**Cause.** `CoordinationCliSupport.data()` spelled its own default path. Commit 33433022 moved the
+agent call sites to `ProjectLocation.coordinationDirectory()` and did not reach it (the shared
+default is older than that commit).
+
+**What changed.**
+
+- `CoordinationCliSupport.data()` defaults to `ProjectLocation.coordinationDirectory()`. An explicit
+  `--data` still wins.
+- `.synesis/shared/coordination` is neither read, merged nor deleted. If it holds an `events` folder
+  when the server starts without `--data`, the server prints `COORDINATION_LEGACY_LOG_IGNORED=<path>`.
+- Five other places that spelled `.synesis/coordination` and already held a `ProjectLocation` now ask
+  it: `ProviderSessionCoordinationFacts`, `ProviderSessionTerminalizationService`,
+  `CodexWakeCoordinator`, `PostMigrationReplayVerifier`, `ProjectMigrationRestorationService`.
+  `DoctorService` and `SessionLeaseService` take a bare root, not a location, and still spell it.
+- Live dashboard updates. The server's append path was already safe: `CoordinationService.submit`
+  takes the same `ProjectAppendLock` as the agent services and decides on a log replayed under it.
+  Its live subscription was not: it only saw the server's own appends, so once the logs were one,
+  agent events would have reached the dashboard only on a refresh. `ControlPlaneEventStream` now
+  reads the durable log once a second, and at once after a server append, and sends every event after
+  the last one it sent.
+
+**Tests.** `CoordinationLogLocationTest` (cli, 3 tests) failed 2 of 3 before the fix: the server's
+default log was empty after an agent appended, and `coordination status` did not report the event.
+The control-plane tests now build the service on `location.coordinationDirectory()`, and a new
+`ControlPlaneHttpHandlerTest` case appends straight to the log, as another process would, and expects
+the stream to report it; with `ControlPlaneEventStream` put back to its previous code it fails.
+
+**NOT REACHED.** A real daemon, server and agent processes running together. Nothing here was run
+outside the test JVM.
+
 # 2026-10-15 — The event log is verified once per process, not on every open and every append
 
 **Why.** Opening a `PredictionEventStore` and every `append` read, decoded, chain-checked and

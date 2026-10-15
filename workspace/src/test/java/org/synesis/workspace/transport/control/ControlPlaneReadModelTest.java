@@ -51,7 +51,7 @@ class ControlPlaneReadModelTest {
         Files.createDirectories(profile);
         UUID projectId = UUID.randomUUID();
         ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
-        Path coordinationRoot = synesis.resolve("coordination");
+        Path coordinationRoot = location.coordinationDirectory();
         NodeIdentity signer = NodeIdentity.generate();
         PredictionEventStore writer = new PredictionEventStore(coordinationRoot, projectId);
         UUID groupId = UUID.randomUUID();

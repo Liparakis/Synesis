@@ -133,7 +133,7 @@ final class PostMigrationReplayVerifier {
         if (nodeId.isBlank()) {
             throw new IOException("project node identity unavailable");
         }
-        Path coordination = location.synesisDirectory().resolve("coordination");
+        Path coordination = location.coordinationDirectory();
         Path events = coordination.resolve("events");
         String eventHash = hashFiles(events, ".sce");
         PredictionEventStore store = null;

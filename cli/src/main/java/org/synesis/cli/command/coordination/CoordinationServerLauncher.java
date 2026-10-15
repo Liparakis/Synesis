@@ -82,6 +82,11 @@ final class CoordinationServerLauncher {
                 runtime.terminal().stderr("PROJECT_DISCOVERY_ERROR=" + discoveryFailure.code());
             }
             var projectData = CoordinationCliSupport.data(location, data);
+            var legacyLog = location.synesisDirectory().resolve("shared/coordination");
+            if (data == null && java.nio.file.Files.isDirectory(legacyLog.resolve("events"))) {
+                // Left in place, neither read nor deleted: it holds events no agent wrote, so the operator decides.
+                runtime.terminal().stderr("COORDINATION_LEGACY_LOG_IGNORED=" + legacyLog);
+            }
             var identityDirectory = CoordinationCliSupport.identity(location, identity);
             var node = CoordinationCliSupport.loadIdentity(identityDirectory);
             var store = new PredictionEventStore(projectData, location.projectId());

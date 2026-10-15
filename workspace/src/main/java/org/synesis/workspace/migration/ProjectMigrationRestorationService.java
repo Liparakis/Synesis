@@ -103,7 +103,7 @@ final class ProjectMigrationRestorationService {
 
     private static boolean forbiddenMetadataPath(Path target, ProjectLocation location) {
         Path synesis = location.synesisDirectory();
-        return target.startsWith(synesis.resolve("coordination")) || target.startsWith(synesis.resolve("local/snapshots")) || target.startsWith(synesis.resolve("local/profile/link"));
+        return target.startsWith(location.coordinationDirectory()) || target.startsWith(synesis.resolve("local/snapshots")) || target.startsWith(synesis.resolve("local/profile/link"));
     }
 
     private static boolean hasSymlinkAncestor(Path target, Path root) {

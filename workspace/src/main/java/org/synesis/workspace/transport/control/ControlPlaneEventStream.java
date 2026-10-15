@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -32,6 +33,12 @@ final class ControlPlaneEventStream {
      * Idle period after which an SSE stream emits a comment frame to keep proxies open.
      */
     private static final Duration SSE_KEEPALIVE = Duration.ofSeconds(15);
+
+    /**
+     * Interval at which the durable log is replayed for events appended by other processes.
+     * Each read replays the whole log, so this stays well above {@link #SSE_POLL_INTERVAL_MS}.
+     */
+    private static final Duration DURABLE_POLL = Duration.ofSeconds(1);
 
     /**
      * Sleep between polls of the two independent SSE event sources.
@@ -84,19 +91,33 @@ final class ControlPlaneEventStream {
                 CoordinationService.Subscription coordinationSubscription = coordination.subscribeLive();
                 ControlPlaneEventHub.Subscription onboardingSubscription = eventHub.subscribe();
                 OutputStream output = exchange.getResponseBody()) {
-            writeEvent(output, "snapshot", Long.toString(coordination.headSequence()), snapshotEvent(snapshot));
+            long delivered = coordination.headSequence();
+            writeEvent(output, "snapshot", Long.toString(delivered), snapshotEvent(snapshot));
             long keepaliveAt = nextKeepalive();
+            long durableCheckAt = nextDurableCheck();
             while (!Thread.currentThread().isInterrupted() && !closed.get()) {
-                if (coordinationSubscription.overflowed() || onboardingSubscription.overflowed()) {
+                if (onboardingSubscription.overflowed()) {
                     writeEvent(output, "refresh_required", "refresh", ordered("apiVersion", API_VERSION, "reason", "subscriber_queue_overflow"));
                     break;
                 }
-                PredictionEvent event = coordinationSubscription.poll();
-                if (event != null) {
-                    String eventType = uiEventType(event.type());
-                    writeEvent(output, eventType, Long.toString(event.sequence()), ordered("apiVersion", API_VERSION, "sequence", event.sequence(), "type", eventType));
-                    keepaliveAt = nextKeepalive();
-                    continue;
+                // Agents append from other processes, which no in-process subscription sees. The subscription
+                // only wakes this loop early for the server's own appends; every event is sent from the durable log.
+                boolean woken = false;
+                while (coordinationSubscription.poll() != null) {
+                    woken = true;
+                }
+                if (woken || System.nanoTime() >= durableCheckAt) {
+                    durableCheckAt = nextDurableCheck();
+                    List<PredictionEvent> appended = coordination.replayAfter(delivered);
+                    for (PredictionEvent event : appended) {
+                        String eventType = uiEventType(event.type());
+                        writeEvent(output, eventType, Long.toString(event.sequence()), ordered("apiVersion", API_VERSION, "sequence", event.sequence(), "type", eventType));
+                        delivered = event.sequence();
+                    }
+                    if (!appended.isEmpty()) {
+                        keepaliveAt = nextKeepalive();
+                        continue;
+                    }
                 }
                 Event onboardingEvent = onboardingSubscription.poll();
                 if (onboardingEvent != null) {
@@ -132,6 +153,15 @@ final class ControlPlaneEventStream {
         event.put("headSequence", coordination.headSequence());
         event.put("snapshot", snapshot.get());
         return event;
+    }
+
+    /**
+     * Computes when the durable log is next read for events other processes appended.
+     *
+     * @return {@link System#nanoTime()} value {@link #DURABLE_POLL} from now
+     */
+    private static long nextDurableCheck() {
+        return System.nanoTime() + DURABLE_POLL.toNanos();
     }
 
     /**

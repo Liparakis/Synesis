@@ -45,7 +45,7 @@ final class CodexWakeCoordinator implements AutoCloseable {
     CodexWakeCoordinator(ProjectLocation location, CodexWakeAdmissionService.LifecycleDispatcher dispatcher) {
         Path runtimeRoot = CodexWakeAdmissionService.runtimeRoot(location);
         this.projectRoot = location.root();
-        this.eventsDirectory = location.root().resolve(".synesis").resolve("coordination").resolve("events").toAbsolutePath().normalize();
+        this.eventsDirectory = location.coordinationDirectory().resolve("events").toAbsolutePath().normalize();
         this.admissionService = new CodexWakeAdmissionService(dispatcher, runtimeRoot.resolve("wake-admissions.json"));
         this.scanAction = () -> this.admissionService.scan(this.projectRoot);
         this.thread = new Thread(this::run, "synesis-codex-wake-relay");

@@ -307,7 +307,25 @@ class ControlPlaneHttpHandlerTest {
 
     @Test
     @Timeout(20)
-    void liveStreamMapsPeerLifecycleToSemanticEvents() throws Exception {
+    void liveStreamReportsEventsAnotherProcessAppendedToTheProjectLog() throws Exception {
+        try (Fixture fixture = new Fixture()) {
+            Map<String, Object> credentials = login(fixture);
+            HttpResponse<java.io.InputStream> stream = fixture.client.send(request(fixture, "/api/v1/events").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken")).GET().build(),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            assertEquals(200, stream.statusCode());
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream.body()))) {
+                assertSnapshotEvent(reader);
+
+                fixture.appendAsAnotherProcess();
+
+                assertCoordinationEvent(reader);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(20)
+    void liveStreamMapsPeerLifecycleToSemanticEvents()throws Exception {
         try (Fixture fixture = new Fixture()) {
             Map<String, Object> credentials = login(fixture);
             HttpResponse<java.io.InputStream> stream = fixture.client.send(request(fixture, "/api/v1/events").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken")).GET().build(),
@@ -509,6 +527,7 @@ class ControlPlaneHttpHandlerTest {
         private final CoordinationService coordination;
         private final ControlPlaneEventHub eventHub;
         private final UUID projectId;
+        private final Path coordinationDirectory;
         private final URI baseUri;
         private UUID seededGroupId;
         private UUID seededIntentId;
@@ -537,7 +556,8 @@ class ControlPlaneHttpHandlerTest {
             Files.createDirectories(profile);
             projectId = sharedProjectId;
             ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
-            Path coordinationRoot = synesis.resolve("coordination");
+            Path coordinationRoot = location.coordinationDirectory();
+            coordinationDirectory = coordinationRoot;
             NodeIdentity signer = NodeIdentity.generate();
             if (seedProject) {
                 seedProject(coordinationRoot, signer);
@@ -554,7 +574,7 @@ class ControlPlaneHttpHandlerTest {
             baseUri = URI.create("http://127.0.0.1:" + server.address().getPort());
         }
 
-        private void appendPrediction() throws Exception {
+        private CoordinationCommand predictionCommand() throws Exception {
             NodeIdentity requester = NodeIdentity.generate();
             UUID prediction = UUID.randomUUID();
             PredictionContract contract = new PredictionContract(prediction,
@@ -586,7 +606,18 @@ class ControlPlaneHttpHandlerTest {
                     20,
                     1_900_000_000_000L);
             CoordinationCommand command = CoordinationCommand.create(UUID.randomUUID(), projectId, prediction, PredictionEventType.PREDICTION_CREATED, requester.nodeId(), contract.encoded(), requester);
-            coordination.submit(command);
+            return command;
+        }
+
+        private void appendPrediction() throws Exception {
+            coordination.submit(predictionCommand());
+        }
+
+        /** Appends the way an agent process does: straight to the project log, never through the server. */
+        private void appendAsAnotherProcess() throws Exception {
+            CoordinationCommand command = predictionCommand();
+            NodeIdentity agent = NodeIdentity.generate();
+            new PredictionEventStore(coordinationDirectory, projectId).append(command.predictionId(), command.type(), agent.nodeId(), command.encoded(), agent);
         }
 
         private void seedProject(Path coordinationRoot, NodeIdentity signer) throws Exception {

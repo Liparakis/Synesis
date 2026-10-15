@@ -66,7 +66,7 @@ final class ProviderSessionCoordinationFacts {
     }
 
     static boolean hasActiveNoChangeIntent(ProjectLocation location, Binding binding) throws Exception {
-        Path events = location.root().resolve(".synesis/coordination/events");
+        Path events = location.coordinationDirectory().resolve("events");
         if (!Files.exists(events)) {
             return false;
         }

@@ -54,12 +54,16 @@ public final class CoordinationCliSupport {
     /**
      * Resolves the coordination data directory.
      *
+     * <p>The default is the project's own coordination directory, the log agents append to, so the
+     * server, the dashboard and the agents see one history. The older default
+     * {@code .synesis/shared/coordination} was never written by an agent and is no longer read.</p>
+     *
      * @param location resolved project location
      * @param override optional data-directory override
      * @return normalized coordination data directory
      */
     public static Path data(ProjectLocation location, Path override) {
-        return (override == null ? location.synesisDirectory().resolve("shared").resolve("coordination") : override).toAbsolutePath().normalize();
+        return (override == null ? location.coordinationDirectory() : override).toAbsolutePath().normalize();
     }
 
     /**
