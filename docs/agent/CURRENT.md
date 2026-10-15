@@ -1,3 +1,41 @@
+# 2026-10-16 — A verified call no longer appends a heartbeat to the log
+
+ADR-0098 ("The log's size and replay cost") holds the reason.
+
+**Why.** In real five-agent runs `PARTICIPANT_HEARTBEAT` was 68% of the events and half the bytes
+of the coordination log. What it records, that a participant made a verified call at a time, is
+current state, not history.
+
+**What changed.**
+
+- A verified MCP call now checks that the participant exists and is active (a fresh replay, no
+  append lock) and then writes the call's time to `admin/participant-activity/<participant>`, one
+  small file replaced atomically, in `ParticipantActivity`. Nothing is appended. An unknown
+  participant still gives `PARTICIPANT_NOT_FOUND`, a suspended, recovery-held or terminal one
+  `SESSION_EPOCH_FENCED`, as before.
+- `lastVerifiedActivity` is the later of the time replayed from the log and the recorded time. It
+  is applied where the readers get their participants: `collaboration_status` (so the MCP field and
+  the control plane keep their meaning), the run controller's `EventLogObserver`, and
+  `ConsumerAbsenceGuard`. Logs that already hold heartbeats replay unchanged; the event type, its
+  projection case and the places that ignore it as bookkeeping stay for them.
+- The session lease was not used: its `lastHeartbeatEpochMillis` is also set when a lease is closed
+  or confirmed terminal, which would make a dead consumer look recently active.
+- A heartbeat event used to reactivate a suspended participant in the projection. The writer never
+  appended one for a non-active participant, so only logs from other writers could do that; the
+  replay is unchanged.
+
+**Shown (Linux gate, Podman).** Tests that pin the behaviour passed on the old code and on the new:
+`collaboration_status` reports the call's time, an agent that called after the latest event has
+seen it all and one that called before has not, and the consumer's absence moment restarts on a
+call and stays fixed when calls stop. The new test that an MCP-path heartbeat leaves the log head
+unchanged failed on the old code (expected 2, was 5) and passes on the new. Whole gate: link 165,
+coordination 236, project-record 60, relay 12, mcp-contract 20, workspace 735 (2 skipped), MCP 189,
+CLI 128, 0 failures. Two existing tests that relied on polls appending heartbeats now append them
+the way old logs hold them, or assert that a poll leaves the log head alone.
+
+**NOT REACHED.** No real multi-agent run, so the log-size saving is not measured; the Windows gate
+was not run.
+
 # 2026-10-15 — The coordination server and the agents now share one event log
 
 **Defect.** Agents wrote `.synesis/coordination`. The coordination server, which the daemon starts

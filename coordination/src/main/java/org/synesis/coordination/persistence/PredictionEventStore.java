@@ -391,8 +391,9 @@ public final class PredictionEventStore {
      * Reports whether an optimistic envelope issued at {@code revision} still describes this log.
      *
      * <p>Completion envelopes are fenced by the revision at which they were projected. Every MCP
-     * call from every participant appends a {@link PredictionEventType#PARTICIPANT_HEARTBEAT}, so
-     * requiring that revision to equal the head lets one participant's liveness invalidate another
+     * call from every participant used to append a {@link PredictionEventType#PARTICIPANT_HEARTBEAT}
+     * (it is now kept outside the log, but logs written before still hold them), so
+     * requiring that revision to equal the head would let one participant's liveness invalidate another
      * participant's envelope. A heartbeat, a message between lanes and a mark of delivery
      * change no claim, grant, snapshot, or capability state, so they do not make the envelope
      * stale; any other event appended after {@code revision} does.</p>

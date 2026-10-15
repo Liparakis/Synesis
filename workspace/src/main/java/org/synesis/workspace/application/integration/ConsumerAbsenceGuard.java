@@ -16,6 +16,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.link.identity.NodeIdentity;
 
+import org.synesis.workspace.application.collaboration.ParticipantActivity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -102,7 +103,7 @@ public final class ConsumerAbsenceGuard {
         }
         ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
         ProviderSessionBindingService bindings = new ProviderSessionBindingService();
-        List<Participant> participants = store.collaborationProjection().participants();
+        List<Participant> participants = ParticipantActivity.overlay(location.root(), store.collaborationProjection().participants());
         for (CapabilityRequestRecord record : owing) {
             Optional<String> consumer = participants.stream().map(Participant::provider).distinct()
                     .flatMap(provider -> bindingsOf(bindings, location, provider).stream())

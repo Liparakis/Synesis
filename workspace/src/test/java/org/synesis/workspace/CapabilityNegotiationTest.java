@@ -1009,10 +1009,34 @@ class CapabilityNegotiationTest {
         assertFalse(observation.heldByOperator("claude"));
         assertFalse(observation.heldByOperator("codex"));
         String consumerParticipant = WorkspaceCollaborationService.participantHandle(bindingService.find(projectService.locate(projectRoot), "claude", "inst-1").orElseThrow().sessionId());
-        long consumerLastCall = store.collaborationProjection().participants().stream().filter(participant -> participant.id().equals(consumerParticipant))
+        long consumerLastCall = org.synesis.workspace.application.collaboration.ParticipantActivity.overlay(projectService.locate(projectRoot).root(), store.collaborationProjection().participants()).stream().filter(participant -> participant.id().equals(consumerParticipant))
                 .mapToLong(org.synesis.coordination.domain.collaboration.Participant::lastVerifiedActivity).max().orElse(0L);
         assertEquals(java.util.OptionalLong.of(RequesterAnswerPolicy.absentAtEpochMillis(store.capabilityRequestProjection().findByHandle(handle).orElseThrow(), consumerLastCall)),
                 observation.answerDeadline("codex"));
         assertEquals(java.util.OptionalLong.empty(), observation.answerDeadline("claude"));
+    }
+
+    private long consumerAbsentAt() throws Exception {
+        return org.synesis.workspace.application.integration.ConsumerAbsenceGuard.owed(projectRoot, replayedStore()).getFirst().absentAtEpochMillis();
+    }
+
+    @Test
+    void aConsumerThatKeepsCallingIsAbsentLaterThanOneThatStopped() throws Exception {
+        String handle = boundConsumerOwingAVerdict();
+        System.setProperty(RequesterAnswerPolicy.GRACE_PROPERTY, "3600");
+        long graceMillis = 3_600_000L;
+        assertEquals(replayedRequest(handle).updatedAtEpochMillis() + graceMillis, consumerAbsentAt(), "no call yet: the wait runs from the record's last change");
+
+        Thread.sleep(20);
+        long before = System.currentTimeMillis();
+        new WorkspaceCollaborationService().heartbeat(projectRoot, "claude", "inst-1");
+        long after = System.currentTimeMillis();
+        long called = consumerAbsentAt();
+        assertTrue(called >= before + graceMillis && called <= after + graceMillis, "a call restarts the wait: " + called);
+
+        Thread.sleep(20);
+        assertEquals(called, consumerAbsentAt(), "a consumer that stopped calling is absent at a fixed moment");
+        new WorkspaceCollaborationService().heartbeat(projectRoot, "claude", "inst-1");
+        assertTrue(consumerAbsentAt() > called, "a consumer that keeps calling is absent later");
     }
 }

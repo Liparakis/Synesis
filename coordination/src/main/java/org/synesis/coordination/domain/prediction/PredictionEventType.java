@@ -203,7 +203,8 @@ public enum PredictionEventType {
      */
     COORDINATION_RESPONDED(46),
     /**
-     * Records verified activity for an authenticated participant.
+     * Records verified activity for an authenticated participant. No longer written: the time of a
+     * verified call is kept outside the log. Logs that already hold these events replay unchanged.
      */
     PARTICIPANT_HEARTBEAT(47),
     /**

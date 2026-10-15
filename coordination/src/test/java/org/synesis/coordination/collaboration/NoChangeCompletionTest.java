@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -316,6 +317,12 @@ final class NoChangeCompletionTest {
                 .isPresent());
     }
 
+    /** Appends a heartbeat the way logs written before activity left the log hold them. */
+    private static void oldHeartbeat(Path temp, UUID project, NodeIdentity identity, String participant) throws Exception {
+        new PredictionEventStore(temp, project).append(UUID.randomUUID(), PredictionEventType.PARTICIPANT_HEARTBEAT,
+                identity.nodeId(), CollaborationCodec.encodeHeartbeat(participant), identity);
+    }
+
     @Test
     void heartbeatsAfterProjectionDoNotStaleTheCompletion(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
@@ -328,8 +335,8 @@ final class NoChangeCompletionTest {
         assertTrue(service.announce(polling).acquired());
 
         NoChangeCompletion projected = completion(temp, project, finishing);
-        service.heartbeat(polling.participant());
-        service.heartbeat(finishing.participant());
+        oldHeartbeat(temp, project, identity, polling.participant());
+        oldHeartbeat(temp, project, identity, finishing.participant());
 
         PredictionEventStore beforeFinish = new PredictionEventStore(temp, project);
         assertEquals(projected.expectedRevision() + 2, beforeFinish.headSequence());
@@ -359,9 +366,9 @@ final class NoChangeCompletionTest {
         assertTrue(service.announce(polling).acquired());
 
         NoChangeCompletion projected = completion(temp, project, finishing);
-        service.heartbeat(polling.participant());
+        oldHeartbeat(temp, project, identity, polling.participant());
         assertTrue(service.announce(intent(project, "agt-late", "verification-c.py", group)).acquired());
-        service.heartbeat(polling.participant());
+        oldHeartbeat(temp, project, identity, polling.participant());
 
         assertFalse(new PredictionEventStore(temp, project).unchangedSince(projected.expectedRevision()));
         assertThrows(IOException.class, () -> service.completeNoChange(projected));

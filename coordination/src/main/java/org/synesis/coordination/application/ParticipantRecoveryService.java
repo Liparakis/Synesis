@@ -169,29 +169,25 @@ final class ParticipantRecoveryService {
     }
 
     /**
-     * Appends a signed verified-activity heartbeat for an active participant.
+     * Checks that a verified call may be recorded for the participant: it must exist and be active.
+     *
+     * <p>Nothing is appended. The time of the call is current state, not history, and is kept by the
+     * caller outside the log; a participant that is suspended, recovery-held or terminal is fenced here
+     * exactly as the old heartbeat event fenced it. A fresh replay without the append lock decides,
+     * since the check changes nothing and a later fence only affects the next call.</p>
      *
      * @param participant participant ID
-     * @throws IOException              persistence or validation failure
-     * @throws GeneralSecurityException signing failure
+     * @throws IOException              when the participant is unknown or fenced, or replay fails
+     * @throws GeneralSecurityException when signature verification fails
      */
     void heartbeat(ParticipantId participant) throws IOException, GeneralSecurityException {
-        appends.run(current -> {
-            Optional<Participant.State> participantState = current.collaborationProjection().participantState(participant);
-            if (participantState.isEmpty()) {
-                throw new CoordinationException("PARTICIPANT_NOT_FOUND");
-            }
-            if (participantState.orElseThrow() != Participant.State.ACTIVE) {
-                throw new CoordinationException("SESSION_EPOCH_FENCED");
-            }
-            ParticipantId durableParticipant = current.collaborationProjection().participantKey(participant)
-                    .orElseThrow(CoordinationMissingElementException::new);
-            current.append(participantStreamId(durableParticipant),
-                    PredictionEventType.PARTICIPANT_HEARTBEAT,
-                    signer.nodeId(),
-                    CollaborationCodec.encodeHeartbeat(participant),
-                    signer);
-        });
+        Optional<Participant.State> participantState = appends.fresh().collaborationProjection().participantState(participant);
+        if (participantState.isEmpty()) {
+            throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+        }
+        if (participantState.orElseThrow() != Participant.State.ACTIVE) {
+            throw new CoordinationException("SESSION_EPOCH_FENCED");
+        }
     }
 
     /**

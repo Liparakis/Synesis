@@ -185,4 +185,14 @@ public final class ProjectAdministrativeLayout {
     public static Path sessionLeases(Path controlRoot) {
         return adminDirectory(controlRoot).resolve("session-leases");
     }
+
+    /**
+     * Resolves the directory holding one file per participant with the time of its latest verified call.
+     *
+     * @param controlRoot control project root path
+     * @return participant activity directory
+     */
+    public static Path participantActivity(Path controlRoot) {
+        return adminDirectory(controlRoot).resolve("participant-activity");
+    }
 }

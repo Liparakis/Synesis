@@ -477,8 +477,8 @@ class SyntheticTwoProcessCollaborationTest {
         long projectedRevision = ((Number) ownerFinish.get("expectedRevision")).longValue();
         toolCall(requesterHandler, "get_next_action", Map.of());
         PredictionEventStore beforeFinish = replayedStore();
-        assertTrue(beforeFinish.headSequence() > projectedRevision, "the peer poll must have advanced the log");
-        assertTrue(beforeFinish.unchangedSince(projectedRevision), "only heartbeats may separate the projection from the finish");
+        assertEquals(projectedRevision, beforeFinish.headSequence(), "a peer poll records its call outside the log");
+        assertTrue(beforeFinish.unchangedSince(projectedRevision), "nothing may separate the projection from the finish");
         String ownerFinished = toolCall(ownerHandler, "finish_lane", ownerFinish);
         assertEquals("integrated", ((Map<String, Object>) extractInnerResult(ownerFinished).get("completion")).get("task"), ownerFinished);
 

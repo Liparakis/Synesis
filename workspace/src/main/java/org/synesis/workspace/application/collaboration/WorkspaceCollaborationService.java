@@ -497,7 +497,9 @@ public final class WorkspaceCollaborationService {
     }
 
     /**
-     * Records verified activity for the exact provider session's participant.
+     * Records verified activity for the exact provider session's participant: fences a participant that
+     * is not active, then stores the time of the call in {@link ParticipantActivity}. Nothing is
+     * appended to the coordination log.
      *
      * @param projectRoot          project root
      * @param provider             provider ID
@@ -505,10 +507,10 @@ public final class WorkspaceCollaborationService {
      * @throws Exception when resolution or append fails
      */
     public void heartbeat(Path projectRoot, String provider, String connectionInstanceId) throws Exception {
-        withSession(projectRoot, provider, connectionInstanceId, (store, identity, binding) -> {
-            new WorkIntentService(store, identity).heartbeat(participantHandle(binding.sessionId()));
-            return null;
-        });
+        ProjectLocation location = projectService.locate(projectRoot);
+        String participant = participantHandle(binding(location, provider, connectionInstanceId).sessionId());
+        new WorkIntentService(location.openCoordinationStore(), location.loadOrCreateIdentity()).heartbeat(participant);
+        ParticipantActivity.record(location.root(), participant);
     }
 
     /**
@@ -583,7 +585,7 @@ public final class WorkspaceCollaborationService {
         WorkIntentService service = new WorkIntentService(store, location.loadOrCreateIdentity());
         return new CollaborationSnapshot(service.activeIntents(),
                 service.requests(),
-                store.collaborationProjection().participants(),
+                ParticipantActivity.overlay(location.root(), store.collaborationProjection().participants()),
                 store.workGroupProjection().groups(),
                 store.workGroupProjection().grants(),
                 store.taskCompletionProjection().allSnapshots());

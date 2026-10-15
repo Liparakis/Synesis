@@ -569,18 +569,19 @@ public final class WorkIntentService {
     }
 
     /**
-     * Appends a signed verified-activity heartbeat for an active participant.
+     * Checks that the participant is active, so a verified call may be recorded for it. Appends nothing.
      *
      * @param participant participant ID
-     * @throws IOException              persistence or validation failure
-     * @throws GeneralSecurityException signing failure
+     * @throws IOException              unknown or fenced participant, or persistence failure
+     * @throws GeneralSecurityException signature verification failure
      */
     public void heartbeat(String participant) throws IOException, GeneralSecurityException {
         heartbeat(new ParticipantId(participant));
     }
 
     /**
-     * Appends a verified-activity heartbeat for the exact typed participant identity.
+     * Checks that the exact typed participant identity is active. Appends nothing: the time of the call
+     * is kept outside the log by the caller.
      *
      * @param participant exact participant identity
      * @throws IOException              when persistence, authorization, or transition validation fails

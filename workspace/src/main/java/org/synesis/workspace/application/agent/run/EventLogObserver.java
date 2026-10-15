@@ -13,6 +13,7 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.collaboration.ParticipantActivity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -98,7 +99,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             throw new IOException("coordination log could not be verified", failure);
         }
         List<PredictionEvent> events = store.events();
-        List<Participant> participants = store.collaborationProjection().participants();
+        List<Participant> participants = ParticipantActivity.overlay(location.root(), store.collaborationProjection().participants());
         List<WorkGroup> groups = store.workGroupProjection().groups();
         boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store);
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
