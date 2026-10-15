@@ -7,7 +7,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -25,21 +24,16 @@ import org.synesis.link.candidate.CandidatePairs;
 import org.synesis.link.session.CandidateRacer;
 import org.synesis.link.candidate.ConnectionPolicy;
 import org.synesis.link.session.DirectConnectionResult;
-import org.synesis.link.protocol.TraversalCoordinator;
 import org.synesis.link.demo.DemoWorkRequest;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
-import org.synesis.link.protocol.SessionInvitation;
-import org.synesis.link.protocol.TraversalAnswer;
-import org.synesis.link.protocol.TraversalInvitation;
-import org.synesis.link.protocol.TraversalOffer;
 import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
-import org.synesis.link.transport.quic.NettyTraversalExchange;
 
 /**
  * Link-owned synchronous onboarding faÃ§ade.
@@ -50,7 +44,10 @@ import org.synesis.link.transport.quic.NettyTraversalExchange;
  * and cleans up all resources before it returns or throws.
  *
  * <p>The type is thread-confined: one operation may be active at a time, and
- * the listener is called synchronously on the operation thread.
+ * the listener is called synchronously on the operation thread. The one exception is
+ * {@link PreparedHost#importAnswer(String)}, which a user's paste delivers while the host waits on
+ * another thread; its event is emitted on the calling thread, so a listener shared with a waiting
+ * host must accept a call from either.
  *
  * @since 1.0
  */
@@ -58,8 +55,6 @@ public final class Onboarding {
 
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final int NONCE_BYTES = 16;
-  private static final ConnectionPolicy DIRECT_CONNECTION_POLICY = new ConnectionPolicy(8, 8, 2,
-      Duration.ofMillis(100), Duration.ofSeconds(10), Duration.ofSeconds(20), 16);
   /**
    * Dials every endpoint of a compact invitation at once: the endpoints are alternatives of which
    * usually one answers, and waiting out a dead one before trying the next would spend the race.
@@ -68,6 +63,17 @@ public final class Onboarding {
       CompactBootstrapInvitation.MAX_ENDPOINTS, CompactBootstrapInvitation.MAX_ENDPOINTS,
       CompactBootstrapInvitation.MAX_ENDPOINTS, Duration.ofMillis(100), Duration.ofSeconds(10),
       Duration.ofSeconds(20), 16);
+  /** The longest one race of {@link #COMPACT_CONNECTION_POLICY} is waited for. */
+  private static final Duration RACE_BOUND = Duration.ofSeconds(25);
+  /** The shortest time between the starts of two races. */
+  private static final Duration MIN_ROUND = Duration.ofSeconds(5);
+  /** Environment variable naming the STUN server as {@code host:port}, or {@code off}. */
+  public static final String STUN_SERVER_VARIABLE = "SYNESIS_STUN_SERVER";
+  /**
+   * STUN server used when none is configured. A STUN server only tells a machine the public
+   * address its router gives it; it carries no Synesis traffic and learns nothing but that address.
+   */
+  static final String DEFAULT_STUN_SERVER = "stun.cloudflare.com:3478";
   private final Path profileDirectory;
   private final Consumer<OnboardingEvent> events;
   private final InetSocketAddress stunServer;
@@ -112,87 +118,42 @@ public final class Onboarding {
     return new Onboarding(IdentityBootstrap.defaultDirectory(), events);
   }
 
+  /**
+   * Returns the STUN server the product uses: {@value #STUN_SERVER_VARIABLE} when set, otherwise
+   * {@value #DEFAULT_STUN_SERVER}. The name is resolved when an invitation is created or answered.
+   *
+   * @return unresolved STUN server, or {@code null} when it is configured {@code off}
+   * @throws IllegalArgumentException if the variable is neither {@code host:port} nor {@code off}
+   */
+  public static InetSocketAddress stunServerFromEnvironment() {
+    return parseStunServer(System.getenv(STUN_SERVER_VARIABLE));
+  }
+
+  static InetSocketAddress parseStunServer(String value) {
+    String configured = value == null || value.isBlank() ? DEFAULT_STUN_SERVER : value.trim();
+    if ("off".equalsIgnoreCase(configured)) {
+      return null;
+    }
+    int colon = configured.lastIndexOf(':');
+    try {
+      int port = Integer.parseInt(configured.substring(colon + 1));
+      if (colon < 1 || port < 1 || port > 65_535) {
+        throw new NumberFormatException();
+      }
+      return InetSocketAddress.createUnresolved(configured.substring(0, colon), port);
+    } catch (NumberFormatException | IndexOutOfBoundsException invalid) {
+      throw new IllegalArgumentException(STUN_SERVER_VARIABLE + " must be host:port or off");
+    }
+  }
+
   private static byte[] randomBytes() {
     byte[] value = new byte[NONCE_BYTES];
     RANDOM.nextBytes(value);
     return value;
   }
 
-  private static byte[] randomTraversalBytes() {
-    byte[] value = new byte[TraversalOffer.NONCE_BYTES];
-    RANDOM.nextBytes(value);
-    return value;
-  }
-
   private static OnboardingFailure failure(OnboardingFailureCode code, Throwable cause) {
     return new OnboardingFailure(code, cause);
-  }
-
-  private static boolean isCompactInvitationLink(String link) {
-    return CompactBootstrapInvitation.isShareLink(link);
-  }
-
-  /**
-   * Opens a host session and creates a human-mediated SLO1 link.
-   *
-   * <p>The returned handle owns the bound UDP channel and must remain open
-   * while the link is copied and while the answer is imported.
-   *
-   * @param expectedPeer optional expected responder node ID
-   * @return open host handle
-   * @throws OnboardingFailure if identity, transport, or candidate setup fails
-   */
-  public PreparedHost createInvitation(String expectedPeer) throws OnboardingFailure {
-    return createInvitation(expectedPeer, null, _ -> {
-    });
-  }
-
-  /**
-   * Opens a host session and creates a human-mediated SLO1 link with callbacks.
-   *
-   * @param expectedPeer       optional expected responder node ID
-   * @param applicationHandler optional application-stream handler
-   * @param sessionAction      callback invoked after control readiness
-   * @return open host handle
-   * @throws OnboardingFailure if identity, transport, or candidate setup fails
-   */
-  public PreparedHost createInvitation(String expectedPeer,
-      PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
-    Objects.requireNonNull(sessionAction, "session action");
-    IdentityBootstrap.Result local = loadIdentity();
-    emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
-        : OnboardingEventType.IDENTITY_LOADED, "");
-    UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[SessionInvitation.CAPABILITY_BYTES];
-    RANDOM.nextBytes(capability);
-    OnboardingEndpoint endpoint = null;
-    try {
-      endpoint = OnboardingEndpoint.openServer(local.identity(), expectedPeer, sessionId,
-          capability, applicationHandler, stunServer);
-      emit(OnboardingEventType.SESSION_CREATED, "");
-      emit(OnboardingEventType.LISTENER_READY, "");
-      List<Candidate> candidates = endpoint.gatherCandidates("host");
-      emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
-      Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-      Instant expires = issued.plus(SessionInvitation.DEFAULT_LIFETIME);
-      CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued, expires,
-          candidates);
-      SessionInvitation invitation = SessionInvitation.create(local.identity(), sessionId,
-          ProtocolVersion.V1,
-          issued, expires, capability, descriptor);
-      TraversalOffer offer = TraversalOffer.create(local.identity(), expectedPeer, sessionId,
-          invitation.digest(), issued, expires, randomTraversalBytes(), descriptor);
-      TraversalInvitation link = TraversalInvitation.create(invitation, offer);
-      emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
-      emit(OnboardingEventType.INVITE_CREATED, "");
-      emit(OnboardingEventType.SHARE_LINK, link.shareLink());
-      return new PreparedHost(local.identity(), expectedPeer, invitation, offer, endpoint,
-          sessionAction);
-    } catch (Exception failure) {
-      closeAfterFailedOpen(endpoint);
-      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
-    }
   }
 
   private PreparedJoin importCompactInvitation(String link,
@@ -222,10 +183,12 @@ public final class Onboarding {
       List<Candidate> candidates = endpoint.gatherCandidates("join");
       CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
           Instant.now().truncatedTo(ChronoUnit.SECONDS), invitation.expiresAt(), candidates);
+      CompactAnswer answer = CompactAnswer.create(invitation, candidates);
       emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
-      return new PreparedJoin(local.identity(), null, null, null, null, localDescriptor,
-          invitation, endpoint, applicationHandler, sessionAction);
+      emit(OnboardingEventType.ANSWER_LINK, answer.shareLink());
+      return new PreparedJoin(local.identity(), localDescriptor, invitation, answer, endpoint,
+          applicationHandler, sessionAction);
     } catch (Exception failure) {
       closeAfterFailedOpen(endpoint);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
@@ -286,6 +249,28 @@ public final class Onboarding {
   public PreparedHost createCompactInvitation(String expectedPeer,
       PeerSession.ApplicationStreamHandler applicationHandler,
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    return createCompactInvitation(expectedPeer, false, applicationHandler, sessionAction);
+  }
+
+  /**
+   * Opens a compact host handle, and when the user chose to, first asks the home router to forward
+   * the listening port so a joiner on another network reaches this side directly.
+   *
+   * <p>A router that does not answer or refuses is reported through
+   * {@link OnboardingEventType#ROUTER_PORT_UNAVAILABLE} and the invitation is made without the
+   * forward; the answer link still helps where the network allows it.
+   *
+   * @param expectedPeer       optional expected responder node ID
+   * @param openRouterPort     whether to ask the router for a forward, which changes a setting on
+   *                           the user's router until the handle closes
+   * @param applicationHandler optional handler for non-bootstrap application payloads
+   * @param sessionAction      callback invoked after authenticated descriptor exchange
+   * @return open compact host handle
+   * @throws OnboardingFailure if identity, listener, candidate, or compact-signing setup fails
+   */
+  public PreparedHost createCompactInvitation(String expectedPeer, boolean openRouterPort,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     IdentityBootstrap.Result local = loadIdentity();
     emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
@@ -306,7 +291,17 @@ public final class Onboarding {
           capability, bootstrapHandler, stunServer);
       emit(OnboardingEventType.SESSION_CREATED, "");
       emit(OnboardingEventType.LISTENER_READY, "");
-      List<Candidate> candidates = endpoint.gatherCandidates("host");
+      List<Candidate> candidates = new java.util.ArrayList<>(endpoint.gatherCandidates("host"));
+      if (openRouterPort) {
+        try {
+          Candidate forwarded = endpoint.openRouterPort();
+          candidates.add(forwarded);
+          emit(OnboardingEventType.ROUTER_PORT_OPENED,
+              forwarded.address().getHostAddress() + ":" + forwarded.port());
+        } catch (java.io.IOException refused) {
+          emit(OnboardingEventType.ROUTER_PORT_UNAVAILABLE, String.valueOf(refused.getMessage()));
+        }
+      }
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued, expires,
           candidates);
@@ -317,7 +312,7 @@ public final class Onboarding {
       emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.INVITE_CREATED, "");
       emit(OnboardingEventType.SHARE_LINK, invitation.shareLink());
-      return new PreparedHost(local.identity(), expectedPeer, null, null, invitation,
+      return new PreparedHost(local.identity(), expectedPeer, invitation,
           remoteDescriptor, endpoint, sessionAction);
     } catch (Exception failure) {
       closeAfterFailedOpen(endpoint);
@@ -338,11 +333,10 @@ public final class Onboarding {
   }
 
   /**
-   * Imports a compact one-way or legacy human-mediated invitation and keeps the local QUIC
-   * endpoint ready for the direct attempt.
+   * Imports a compact invitation and keeps the local QUIC endpoint ready for the direct attempt.
    *
-   * @param link exact compact or SLO1 link received from the host
-   * @return open join handle; compact handles do not contain an answer link
+   * @param link exact compact link received from the host
+   * @return open join handle
    * @throws OnboardingFailure if the link, identity, transport, or candidates are invalid
    */
   public PreparedJoin importInvitation(String link) throws OnboardingFailure {
@@ -360,13 +354,12 @@ public final class Onboarding {
   }
 
   /**
-   * Imports a compact or human-mediated invitation with callbacks. Legacy SLO1 input creates an
-   * SLA2 answer; compact input keeps the signed endpoint hint and uses one-way contact.
+   * Imports a compact invitation with callbacks.
    *
-   * @param link               exact compact or SLO1 link received from the host
+   * @param link               exact compact link received from the host
    * @param applicationHandler optional application-stream handler
    * @param sessionAction      callback invoked after control readiness
-   * @return open join handle containing the answer link
+   * @return open join handle
    * @throws OnboardingFailure if the link, identity, transport, or candidates are invalid
    */
   public PreparedJoin importInvitation(String link,
@@ -374,50 +367,7 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     Objects.requireNonNull(link, "link");
-    if (isCompactInvitationLink(link)) {
-      return importCompactInvitation(link, applicationHandler, sessionAction);
-    }
-    SessionInvitation invitation;
-    TraversalOffer offer;
-    try {
-      TraversalInvitation mediated = TraversalInvitation.fromShareLink(link);
-      IdentityBootstrap.Result local = loadIdentity();
-      emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
-          : OnboardingEventType.IDENTITY_LOADED, "");
-      if (!mediated.verifyAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW,
-          local.identity().nodeId())) {
-        throw new IllegalArgumentException("SLO1 is not valid for this identity");
-      }
-      invitation = mediated.invitation();
-      offer = mediated.offer();
-      CandidateDescriptor host = CandidateDescriptor.decode(invitation.descriptorEncoded());
-      emit(OnboardingEventType.INVITE_PARSED, "");
-      emit(OnboardingEventType.INVITE_VERIFIED, "");
-      requireAnotherHost(host.nodeId(), local);
-      emit(OnboardingEventType.HOST_IDENTITY_PINNED, host.nodeId());
-      OnboardingEndpoint endpoint = null;
-      try {
-        endpoint = OnboardingEndpoint.openClient(stunServer);
-        List<Candidate> candidates = endpoint.gatherCandidates("join");
-        CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
-            Instant.now().truncatedTo(ChronoUnit.SECONDS),
-            invitation.expiresAt(), candidates);
-        TraversalAnswer answer = TraversalAnswer.create(local.identity(), offer, localDescriptor,
-            randomTraversalBytes());
-        emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
-        emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
-        emit(OnboardingEventType.ANSWER_LINK, answer.shareLink());
-        return new PreparedJoin(local.identity(), invitation, offer, answer, host, localDescriptor,
-            endpoint, applicationHandler, sessionAction);
-      } catch (Exception failure) {
-        closeAfterFailedOpen(endpoint);
-        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
-      }
-    } catch (OnboardingFailure failure) {
-      throw failure;
-    } catch (Exception failure) {
-      throw failure(OnboardingFailureCode.INVITE_INVALID, failure);
-    }
+    return importCompactInvitation(link, applicationHandler, sessionAction);
   }
 
   /**
@@ -438,93 +388,6 @@ public final class Onboarding {
           .nodeId();
     } catch (Exception failure) {
       throw failure(OnboardingFailureCode.IDENTITY_FAILED, failure);
-    }
-  }
-
-  /**
-   * Hosts one signed invitation and waits for the authenticated peer.
-   *
-   * @param expectedPeer optional expected peer node ID, or {@code null}
-   * @throws OnboardingFailure when identity, listener, candidate, or session setup fails or the
-   *                           bounded host wait expires
-   */
-  public void host(String expectedPeer) throws OnboardingFailure {
-    host(expectedPeer, null, _ -> {
-    });
-  }
-
-  /**
-   * Hosts one invitation and runs a bounded callback on the authenticated session.
-   *
-   * @param expectedPeer       optional expected peer node ID, or {@code null}
-   * @param applicationHandler optional bounded application-stream handler
-   * @param sessionAction      callback invoked after control readiness
-   * @throws OnboardingFailure if setup, callback, or cleanup fails
-   */
-  public void host(String expectedPeer, PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
-    Objects.requireNonNull(sessionAction, "session action");
-    IdentityBootstrap.Result local = loadIdentity();
-    emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
-        : OnboardingEventType.IDENTITY_LOADED, "");
-    UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[SessionInvitation.CAPABILITY_BYTES];
-    RANDOM.nextBytes(capability);
-    try (OnboardingEndpoint endpoint = OnboardingEndpoint.openServer(local.identity(),
-        expectedPeer, sessionId, capability, applicationHandler, stunServer)) {
-      emit(OnboardingEventType.SESSION_CREATED, "");
-      emit(OnboardingEventType.LISTENER_READY, "");
-      List<Candidate> candidates = endpoint.gatherCandidates("host");
-      emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
-      Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-      CandidateDescriptor descriptor = CandidateDescriptor.create(local.identity(), issued,
-          issued.plus(SessionInvitation.DEFAULT_LIFETIME), candidates);
-      SessionInvitation invitation = SessionInvitation.create(local.identity(), sessionId,
-          ProtocolVersion.V1,
-          descriptor.issuedAt(), descriptor.expiresAt(), capability, descriptor);
-      emit(OnboardingEventType.DESCRIPTOR_CREATED, "");
-      emit(OnboardingEventType.INVITE_CREATED, "");
-      emit(OnboardingEventType.SHARE_LINK, invitation.shareLink());
-      byte[] invitationDigest = invitation.digest();
-      NettyTraversalExchange traversal = new NettyTraversalExchange(endpoint.udp(),
-          Duration.ofSeconds(10), offer -> {
-            try {
-              if (!sessionId.equals(offer.sessionId())
-                  || !Arrays.equals(invitationDigest, offer.invitationDigest())
-                  || (expectedPeer != null && !expectedPeer.equals(offer.initiatorNodeId()))
-                  || !offer.verifyAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW,
-                  local.identity().nodeId())) {
-                return null;
-              }
-              return TraversalAnswer.create(local.identity(), offer, descriptor,
-                  randomTraversalBytes());
-            } catch (Exception invalidOffer) {
-              return null;
-            }
-          });
-      try {
-        PeerSession session;
-        try {
-          session = endpoint.established().get(SessionInvitation.DEFAULT_LIFETIME.toSeconds() + 30,
-              TimeUnit.SECONDS);
-        } catch (java.util.concurrent.TimeoutException timeout) {
-          throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
-        }
-        emitSession(session);
-        sessionAction.accept(session);
-        session.terminalCompletion()
-            .toCompletableFuture()
-            .get(30, TimeUnit.SECONDS);
-        emit(OnboardingEventType.SESSION_CLOSED, "");
-      } finally {
-        traversal.close();
-      }
-    } catch (OnboardingFailure failure) {
-      throw failure;
-    } catch (java.util.concurrent.TimeoutException timeout) {
-      throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
-    } catch (Exception failure) {
-      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
     }
   }
 
@@ -563,90 +426,26 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     Objects.requireNonNull(link, "link");
-    if (isCompactInvitationLink(link)) {
-      try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
-        prepared.connect();
-      }
-      return;
+    try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
+      prepared.connect();
     }
-    SessionInvitation invitation;
-    try {
-      invitation = SessionInvitation.fromShareLink(link);
-      emit(OnboardingEventType.INVITE_PARSED, "");
-      if (!invitation.protocolVersion()
-          .equals(ProtocolVersion.V1)
-          || !invitation.verifyAt(Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW)) {
-        throw new IllegalArgumentException("invalid invitation");
-      }
-      emit(OnboardingEventType.INVITE_VERIFIED, "");
-    } catch (Exception failure) {
-      throw failure(OnboardingFailureCode.INVITE_INVALID, failure);
-    }
-    CandidateDescriptor host;
-    try {
-      host = CandidateDescriptor.decode(invitation.descriptorEncoded());
-    } catch (Exception failure) {
-      throw failure(OnboardingFailureCode.INVITE_INVALID, failure);
-    }
-    IdentityBootstrap.Result local = loadIdentity();
-    emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
-        : OnboardingEventType.IDENTITY_LOADED, "");
-    requireAnotherHost(host.nodeId(), local);
-    emit(OnboardingEventType.HOST_IDENTITY_PINNED, host.nodeId());
-    try (OnboardingEndpoint endpoint = OnboardingEndpoint.openClient(stunServer)) {
-      List<Candidate> localCandidates = endpoint.gatherCandidates("join");
-      CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
-          Instant.now().truncatedTo(ChronoUnit.SECONDS),
-          invitation.expiresAt(), localCandidates);
-      CandidateDescriptor remoteDescriptor = host;
-      TraversalCoordinator coordinator = null;
-      NettyTraversalExchange traversal = new NettyTraversalExchange(endpoint.udp(),
-          Duration.ofSeconds(10), null);
-      try {
-        try {
-          TraversalOffer offer = TraversalOffer.create(local.identity(), host.nodeId(),
-              invitation.sessionId(),
-              invitation.digest(), localDescriptor.issuedAt(), localDescriptor.expiresAt(),
-              randomTraversalBytes(), localDescriptor);
-          TraversalAnswer answer = traversal.sendOffer(offer, host.candidates())
-              .toCompletableFuture()
-              .get(12, TimeUnit.SECONDS);
-          coordinator = new TraversalCoordinator(local.identity(), host.nodeId(),
-              invitation.sessionId(), 8);
-          coordinator.accept(offer, answer, Instant.now(), CandidateDescriptor.DEFAULT_CLOCK_SKEW);
-          remoteDescriptor = CandidateDescriptor.decode(answer.descriptorEncoded());
-        } catch (java.util.concurrent.TimeoutException timeout) {
-          // Existing invitation candidates remain a compatible fallback.
-        } catch (java.util.concurrent.ExecutionException failure) {
-          if (!(failure.getCause() instanceof java.util.concurrent.TimeoutException)) {
-            throw failure;
-          }
-        }
-        emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
-        emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(localCandidates.size()));
-        List<CandidatePair> pairs = coordinator == null
-            ? CandidatePairs.generate(localCandidates, remoteDescriptor.candidates(), 8)
-            : coordinator.plan(
-                CandidatePairs.generate(localCandidates, remoteDescriptor.candidates(), 8))
-              .stream()
-              .map(TraversalCoordinator.Attempt::pair)
-              .toList();
-        if (pairs.isEmpty()) {
-          throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
-        }
-        HandshakeTranscript transcript = handshakeTranscript(local.identity(),
-            invitation.sessionId(), invitation.capability(), host.nodeId(),
-            host.publicKeyEncoded());
-        connectAndRun(local.identity(), transcript, DIRECT_CONNECTION_POLICY, pairs,
-            endpoint.udp(), applicationHandler, sessionAction, false, _ -> {
-            });
-      } finally {
-        traversal.close();
-      }
-    } catch (OnboardingFailure failure) {
-      throw failure;
-    } catch (Exception failure) {
-      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+  }
+
+  /**
+   * Joins one invitation with a single round of attempts, for a caller that cannot show the
+   * answer link: without it the host never sends toward this side, so waiting longer cannot help.
+   *
+   * @param link               exact signed share link
+   * @param applicationHandler optional bounded application-stream handler
+   * @param sessionAction      callback invoked after control readiness
+   * @throws OnboardingFailure if setup, the attempts, the callback, or cleanup fails
+   */
+  public void joinOnce(String link, PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(link, "link");
+    try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
+      prepared.connect(false, Instant.now());
     }
   }
 
@@ -660,46 +459,67 @@ public final class Onboarding {
   }
 
   /**
-   * Races the candidate pairs, authenticates the host named by the transcript, and runs the
-   * session step shared by every join flow.
+   * Races the candidate pairs until one authenticates the host named by the transcript or the
+   * invitation expires, then runs the session step.
    *
+   * <p>The race is run again rather than once because, across two routers, the first rounds are
+   * expected to fail: the host's router drops this side's packets until the host has the answer
+   * link and sends toward this side, and a person carries that link over.
+   *
+   * @param deadline            when the invitation expires; no round starts that would end after it
    * @param afterAuthentication step that runs on the verified session before the path is announced
    */
   private PeerSession connectAndRun(NodeIdentity identity, HandshakeTranscript transcript,
-      ConnectionPolicy policy, List<CandidatePair> pairs, Channel udp,
+      List<CandidatePair> pairs, Channel udp, Instant deadline,
       PeerSession.ApplicationStreamHandler applicationHandler, Consumer<PeerSession> sessionAction,
       boolean keepAlive, SessionStep afterAuthentication)
       throws Exception {
     String hostNodeId = transcript.nodeId(HandshakeRole.RESPONDER);
     byte[] hostPublicKey = transcript.publicKeyEncoded(HandshakeRole.RESPONDER);
-    try (CandidateRacer racer = new CandidateRacer(policy)) {
-      DirectConnectionResult result = racer.race(pairs, hostNodeId,
-              pair -> ClientQuicConnectionAttempt.attempt(identity, hostNodeId, hostPublicKey,
-                  transcript, udp, pair, applicationHandler))
-          .completion()
-          .toCompletableFuture()
-          .get(25, TimeUnit.SECONDS);
-      if (result.session() == null) {
-        throw failure(OnboardingFailureCode.CONNECTION_FAILED,
-            new IllegalStateException("candidate race failed: " + result.failureCategory()
-                + " diagnostics=" + result.diagnostics()));
-      }
-      PeerSession session = result.session();
-      if (!session.hasRemotePublicKey(hostPublicKey)) {
-        throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
-      }
-      afterAuthentication.run(session);
-      emit(OnboardingEventType.PATH_SELECTED, result.winner().identifier());
-      emitSession(session);
-      sessionAction.accept(session);
-      if (!keepAlive) {
-        session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+    DirectConnectionResult result;
+    boolean waitingAnnounced = false;
+    while (true) {
+      long roundStart = System.nanoTime();
+      try (CandidateRacer racer = new CandidateRacer(COMPACT_CONNECTION_POLICY)) {
+        result = racer.race(pairs, hostNodeId,
+                pair -> ClientQuicConnectionAttempt.attempt(identity, hostNodeId, hostPublicKey,
+                    transcript, udp, pair, applicationHandler))
+            .completion()
             .toCompletableFuture()
-            .get(10, TimeUnit.SECONDS);
-        emit(OnboardingEventType.SESSION_CLOSED, "");
+            .get(RACE_BOUND.toSeconds(), TimeUnit.SECONDS);
       }
-      return session;
+      if (result.session() != null || !udp.isOpen()
+          || Instant.now().plus(RACE_BOUND).isAfter(deadline)) {
+        break;
+      }
+      if (!waitingAnnounced) {
+        emit(OnboardingEventType.WAITING_FOR_HOST, "");
+        waitingAnnounced = true;
+      }
+      // A round that fails at once, as with no route, must not turn the wait into a busy loop.
+      long elapsed = System.nanoTime() - roundStart;
+      TimeUnit.NANOSECONDS.sleep(Math.max(0, MIN_ROUND.toNanos() - elapsed));
     }
+    if (result.session() == null) {
+      throw failure(OnboardingFailureCode.CONNECTION_FAILED,
+          new IllegalStateException("candidate race failed: " + result.failureCategory()
+              + " diagnostics=" + result.diagnostics()));
+    }
+    PeerSession session = result.session();
+    if (!session.hasRemotePublicKey(hostPublicKey)) {
+      throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
+    }
+    afterAuthentication.run(session);
+    emit(OnboardingEventType.PATH_SELECTED, result.winner().identifier());
+    emitSession(session);
+    sessionAction.accept(session);
+    if (!keepAlive) {
+      session.closeGracefully(SessionCloseReason.LOCAL_REQUEST)
+          .toCompletableFuture()
+          .get(10, TimeUnit.SECONDS);
+      emit(OnboardingEventType.SESSION_CLOSED, "");
+    }
+    return session;
   }
 
   private static void closeAfterFailedOpen(OnboardingEndpoint endpoint) {
@@ -751,95 +571,73 @@ public final class Onboarding {
   }
 
   /**
-   * Open host-side state for one human-mediated invitation.
+   * Open host-side state for one compact invitation.
    *
-   * <p>The instance is single-use: one valid answer may be imported before
-   * the authenticated session is awaited.
+   * <p>The instance is single-use: it serves one authenticated session.
    */
   public final class PreparedHost implements AutoCloseable {
 
     private final NodeIdentity identity;
     private final String expectedPeer;
-    private final SessionInvitation invitation;
-    private final TraversalOffer offer;
     private final CompactBootstrapInvitation compactInvitation;
     private final CompletableFuture<CandidateDescriptor> remoteDescriptor;
     private final OnboardingEndpoint endpoint;
     private final Consumer<PeerSession> sessionAction;
     private final CompletableFuture<Void> compactCompletion;
-    private final AtomicBoolean answerImported = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    private PreparedHost(NodeIdentity identity, String expectedPeer, SessionInvitation invitation,
-        TraversalOffer offer, OnboardingEndpoint endpoint, Consumer<PeerSession> sessionAction) {
-      this(identity, expectedPeer, invitation, offer, null, null, endpoint, sessionAction);
-    }
-
-    private PreparedHost(NodeIdentity identity, String expectedPeer, SessionInvitation invitation,
-        TraversalOffer offer, CompactBootstrapInvitation compactInvitation,
+    private PreparedHost(NodeIdentity identity, String expectedPeer,
+        CompactBootstrapInvitation compactInvitation,
         CompletableFuture<CandidateDescriptor> remoteDescriptor, OnboardingEndpoint endpoint,
         Consumer<PeerSession> sessionAction) {
       this.identity = identity;
       this.expectedPeer = expectedPeer;
-      this.invitation = invitation;
-      this.offer = offer;
       this.compactInvitation = compactInvitation;
       this.remoteDescriptor = remoteDescriptor;
       this.endpoint = endpoint;
       this.sessionAction = sessionAction;
-      this.compactCompletion = compactInvitation == null ? null : new CompletableFuture<>();
+      this.compactCompletion = new CompletableFuture<>();
     }
 
     /**
-     * Returns the exact compact one-way link, or the legacy SLO1 link for a mediated handle.
+     * Returns the exact compact invitation link.
      *
      * @return copyable signed invitation link
      */
     public String invitationLink() {
-      return compactInvitation == null
-          ? TraversalInvitation.create(invitation, offer).shareLink()
-          : compactInvitation.shareLink();
+      return compactInvitation.shareLink();
     }
 
     /**
-     * Waits for a compact one-way session and closes it after the callback.
+     * Waits for the session and closes it after the callback.
      *
-     * @throws OnboardingFailure if this is a legacy handle or the session/exchange fails
+     * @throws OnboardingFailure if the session or descriptor exchange fails
      */
     public void awaitConnection() throws OnboardingFailure {
       awaitConnection(false);
     }
 
     /**
-     * Waits for a compact one-way session while retaining the authenticated endpoint.
+     * Waits for the session while retaining the authenticated endpoint.
      *
      * @return authenticated control-ready session
-     * @throws OnboardingFailure if this is a legacy handle or the session/exchange fails
+     * @throws OnboardingFailure if the session or descriptor exchange fails
      */
     public PeerSession awaitConnectionAndKeepAlive() throws OnboardingFailure {
       return awaitConnection(true);
     }
 
     /**
-     * Returns the completion stage for a compact host wait.
+     * Returns the completion stage for the host wait, which completes after descriptor exchange
+     * and the configured session callback have finished.
      *
-     * <p>Legacy host handles return an already-completed stage because their lifecycle is driven
-     * explicitly by {@link #importAnswer(String)}. Compact stages complete after descriptor
-     * exchange and the configured session callback have finished.
-     *
-     * @return compact wait completion, or an already-completed stage for a legacy handle
+     * @return host wait completion
      */
     public CompletionStage<Void> completion() {
-      return compactCompletion == null
-          ? CompletableFuture.completedFuture(null)
-          : compactCompletion;
+      return compactCompletion;
     }
 
     private PeerSession awaitConnection(boolean keepAlive) throws OnboardingFailure {
-      if (compactInvitation == null || remoteDescriptor == null) {
-        throw failure(OnboardingFailureCode.ANSWER_INVALID,
-            new IllegalStateException("host handle requires a legacy answer"));
-      }
       try {
         PeerSession session = endpoint.established().get(
             CompactBootstrapInvitation.MAX_LIFETIME.toSeconds() + 30, TimeUnit.SECONDS);
@@ -851,73 +649,44 @@ public final class Onboarding {
           session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
           emit(OnboardingEventType.SESSION_CLOSED, "");
         }
-        if (compactCompletion != null) {
-          compactCompletion.complete(null);
-        }
+        compactCompletion.complete(null);
         return session;
       } catch (java.util.concurrent.TimeoutException timeout) {
-        if (compactCompletion != null) {
-          compactCompletion.completeExceptionally(timeout);
-        }
+        compactCompletion.completeExceptionally(timeout);
         throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
       } catch (Exception failure) {
-        if (compactCompletion != null) {
-          compactCompletion.completeExceptionally(failure);
-        }
+        compactCompletion.completeExceptionally(failure);
         throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
       }
     }
 
     /**
-     * Imports one exact SLA2 answer and waits for the authenticated session.
+     * Accepts the joiner's answer link and starts sending toward the addresses it names, so this
+     * side's router lets the joiner's connection attempts through. It returns at once; the
+     * session still arrives through {@link #awaitConnection()}. Pasting the answer again starts the
+     * sending again.
      *
-     * @param link exact answer link returned by the other user
-     * @throws OnboardingFailure if the answer is invalid, reused, or the session fails
+     * @param link exact answer link the joiner's user sent back
+     * @throws OnboardingFailure {@code ANSWER_INVALID} if the link is malformed or answers another
+     *                           invitation
      */
     public void importAnswer(String link) throws OnboardingFailure {
-      importAnswer(link, false);
-    }
-
-    /**
-     * Imports one exact answer and returns after authentication while retaining the live Link
-     * endpoint and session for an owning runtime.
-     *
-     * @param link exact answer link returned by the other user
-     * @return authenticated control-ready session
-     * @throws OnboardingFailure if the answer is invalid, reused, or the session fails
-     */
-    public PeerSession importAnswerAndKeepAlive(String link) throws OnboardingFailure {
-      return importAnswer(link, true);
-    }
-
-    private PeerSession importAnswer(String link, boolean keepAlive) throws OnboardingFailure {
+      CompactAnswer answer;
       try {
-        TraversalAnswer answer = TraversalAnswer.fromShareLink(link);
-        if (!answer.verifyAt(Instant.now(), TraversalAnswer.DEFAULT_CLOCK_SKEW, offer)) {
-          throw new IllegalArgumentException("answer signature or offer binding is invalid");
-        }
-        if (expectedPeer != null && !expectedPeer.equals(answer.responderNodeId())) {
-          throw new IllegalArgumentException("answer responder is not the expected peer");
-        }
-        if (!answerImported.compareAndSet(false, true)) {
-          throw new IllegalStateException("answer has already been imported");
-        }
-        emit(OnboardingEventType.ANSWER_VERIFIED, "");
-        emit(OnboardingEventType.TRAVERSAL_STARTED, "");
-        PeerSession session = endpoint.established().get(
-            SessionInvitation.DEFAULT_LIFETIME.toSeconds() + 30, TimeUnit.SECONDS);
-        emitSession(session);
-        sessionAction.accept(session);
-        if (!keepAlive) {
-          session.terminalCompletion().toCompletableFuture().get(30, TimeUnit.SECONDS);
-          emit(OnboardingEventType.SESSION_CLOSED, "");
-        }
-        return session;
-      } catch (java.util.concurrent.TimeoutException timeout) {
-        throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
-      } catch (Exception failure) {
-        throw failure(OnboardingFailureCode.ANSWER_INVALID, failure);
+        answer = CompactAnswer.fromShareLink(link);
+      } catch (java.io.IOException invalid) {
+        throw failure(OnboardingFailureCode.ANSWER_INVALID, invalid);
       }
+      if (!answer.sessionId().equals(compactInvitation.sessionId())) {
+        throw failure(OnboardingFailureCode.ANSWER_INVALID,
+            new IllegalArgumentException("answer belongs to another invitation"));
+      }
+      if (closed.get()) {
+        throw failure(OnboardingFailureCode.ANSWER_INVALID,
+            new IllegalStateException("host handle is closed"));
+      }
+      endpoint.punch(answer.endpoints());
+      emit(OnboardingEventType.ANSWER_VERIFIED, "");
     }
 
     /**
@@ -926,10 +695,8 @@ public final class Onboarding {
     @Override
     public void close() {
       if (closed.compareAndSet(false, true)) {
-        if (compactCompletion != null) {
-          compactCompletion.completeExceptionally(
-              new java.util.concurrent.CancellationException("host handle closed"));
-        }
+        compactCompletion.completeExceptionally(
+            new java.util.concurrent.CancellationException("host handle closed"));
         endpoint.close();
       }
     }
@@ -938,42 +705,27 @@ public final class Onboarding {
   /**
    * Opens join-side state for one invitation.
    *
-   * <p>The instance is single-use: a legacy handle creates an answer and a compact handle keeps
-   * the local endpoint ready for the direct race; {@link #connect()} starts that race once.
+   * <p>The instance is single-use: it keeps the local endpoint ready for the direct race, and
+   * {@link #connect()} starts that race once.
    */
   public final class PreparedJoin implements AutoCloseable {
 
     private final NodeIdentity identity;
-    private final SessionInvitation invitation;
-    private final TraversalOffer offer;
-    private final TraversalAnswer answer;
-    private final CandidateDescriptor host;
     private final CandidateDescriptor localDescriptor;
     private final CompactBootstrapInvitation compactInvitation;
+    private final CompactAnswer answer;
     private final OnboardingEndpoint endpoint;
     private final PeerSession.ApplicationStreamHandler applicationHandler;
     private final Consumer<PeerSession> sessionAction;
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    private PreparedJoin(NodeIdentity identity, SessionInvitation invitation, TraversalOffer offer,
-        TraversalAnswer answer, CandidateDescriptor host, CandidateDescriptor localDescriptor,
+    private PreparedJoin(NodeIdentity identity, CandidateDescriptor localDescriptor,
+        CompactBootstrapInvitation compactInvitation, CompactAnswer answer,
         OnboardingEndpoint endpoint, PeerSession.ApplicationStreamHandler applicationHandler,
         Consumer<PeerSession> sessionAction) {
-      this(identity, invitation, offer, answer, host, localDescriptor, null, endpoint,
-          applicationHandler, sessionAction);
-    }
-
-    private PreparedJoin(NodeIdentity identity, SessionInvitation invitation, TraversalOffer offer,
-        TraversalAnswer answer, CandidateDescriptor host, CandidateDescriptor localDescriptor,
-        CompactBootstrapInvitation compactInvitation, OnboardingEndpoint endpoint,
-        PeerSession.ApplicationStreamHandler applicationHandler,
-        Consumer<PeerSession> sessionAction) {
       this.identity = identity;
-      this.invitation = invitation;
-      this.offer = offer;
       this.answer = answer;
-      this.host = host;
       this.localDescriptor = localDescriptor;
       this.compactInvitation = compactInvitation;
       this.endpoint = endpoint;
@@ -982,72 +734,43 @@ public final class Onboarding {
     }
 
     /**
-     * Returns the exact legacy SLA2 link to send back to the host user.
+     * Returns the answer link for the host's user. It is needed only when the two sides are on
+     * different networks and the host has to send toward this side before either can connect.
      *
-     * @return copyable signed SLA2 link, or {@code null} for a compact one-way handle
+     * @return copyable answer link
      */
     public String answerLink() {
-      return answer == null ? null : answer.shareLink();
+      return answer.shareLink();
     }
 
     /**
-     * Starts the existing bounded candidate race and authenticated Link session.
+     * Dials the host until one authenticated session is made or the invitation expires, runs the
+     * session callback, and closes the session.
      *
-     * @throws OnboardingFailure if the answer is reused, candidates are unusable, or connection
-     *                           fails
+     * @throws OnboardingFailure if this handle was already used, no candidate is usable, or no
+     *                           session is made before the invitation expires
      */
     public void connect() throws OnboardingFailure {
-      connect(false);
+      connect(false, compactInvitation.expiresAt());
     }
 
     /**
-     * Starts the bounded candidate race and returns after authentication while retaining the live
-     * Link endpoint and session for an owning runtime.
+     * Dials the host like {@link #connect()} and returns after authentication while retaining the
+     * live Link endpoint and session for an owning runtime.
      *
      * @return authenticated control-ready session
-     * @throws OnboardingFailure if the answer is reused, candidates are unusable, or connection
-     *                           fails
+     * @throws OnboardingFailure if this handle was already used, no candidate is usable, or no
+     *                           session is made before the invitation expires
      */
     public PeerSession connectAndKeepAlive() throws OnboardingFailure {
-      return connect(true);
+      return connect(true, compactInvitation.expiresAt());
     }
 
-    private PeerSession connect(boolean keepAlive) throws OnboardingFailure {
+    private PeerSession connect(boolean keepAlive, Instant deadline) throws OnboardingFailure {
       if (!started.compareAndSet(false, true)) {
         throw failure(OnboardingFailureCode.ANSWER_INVALID,
             new IllegalStateException("answer has already been used"));
       }
-      if (compactInvitation != null) {
-        return connectCompactPrepared(keepAlive);
-      }
-      try {
-        TraversalCoordinator coordinator = new TraversalCoordinator(identity, host.nodeId(),
-            invitation.sessionId(), 8);
-        coordinator.acceptAsAnswerer(offer, answer, Instant.now(),
-            CandidateDescriptor.DEFAULT_CLOCK_SKEW);
-        List<CandidatePair> pairs = coordinator.plan(
-                CandidatePairs.generate(localDescriptor.candidates(),
-                    host.candidates(), 8))
-            .stream()
-            .map(TraversalCoordinator.Attempt::pair)
-            .toList();
-        if (pairs.isEmpty()) {
-          throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
-        }
-        HandshakeTranscript transcript = handshakeTranscript(identity, invitation.sessionId(),
-            invitation.capability(), host.nodeId(), host.publicKeyEncoded());
-        emit(OnboardingEventType.TRAVERSAL_STARTED, "");
-        return connectAndRun(identity, transcript, DIRECT_CONNECTION_POLICY, pairs,
-            endpoint.udp(), applicationHandler, sessionAction, keepAlive, _ -> {
-            });
-      } catch (OnboardingFailure failure) {
-        throw failure;
-      } catch (Exception failure) {
-        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
-      }
-    }
-
-    private PeerSession connectCompactPrepared(boolean keepAlive) throws OnboardingFailure {
       try {
         List<CandidatePair> pairs = CandidatePairs.onePerRemote(localDescriptor.candidates(),
             compactInvitation.endpoints());
@@ -1058,8 +781,9 @@ public final class Onboarding {
             compactInvitation.sessionId(), compactInvitation.capability(),
             compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded());
         emit(OnboardingEventType.TRAVERSAL_STARTED, "");
-        return connectAndRun(identity, transcript, COMPACT_CONNECTION_POLICY, pairs,
-            endpoint.udp(), applicationHandler, sessionAction, keepAlive, session -> {
+        return connectAndRun(identity, transcript, pairs, endpoint.udp(),
+            deadline, applicationHandler, sessionAction, keepAlive,
+            session -> {
               CompactDescriptorExchange.exchangeDescriptor(session, localDescriptor,
                   compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded(),
                   compactInvitation.expiresAt());

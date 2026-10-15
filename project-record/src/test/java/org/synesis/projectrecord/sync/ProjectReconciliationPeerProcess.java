@@ -89,7 +89,7 @@ public final class ProjectReconciliationPeerProcess {
         }
       }
     });
-    onboarding.host(Files.readString(joinId)
+    onboarding.hostCompact(Files.readString(joinId)
         .trim(), sync.handler(), _ -> {
       try {
         waitFor(marker);

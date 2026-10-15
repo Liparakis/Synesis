@@ -15,8 +15,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,15 +25,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.link.candidate.Candidate;
-import org.synesis.link.candidate.CandidateDescriptor;
 import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.link.protocol.CompactAnswer;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
-import org.synesis.link.protocol.ReturnTarget;
-import org.synesis.link.protocol.SessionInvitation;
-import org.synesis.link.protocol.TraversalAnswer;
-import org.synesis.link.protocol.TraversalInvitation;
-import org.synesis.link.protocol.TraversalOffer;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -48,36 +42,18 @@ final class DaemonServerRoutingTest {
     @TempDir
     Path temp;
 
-    private static String v2Answer(UUID projectId) throws Exception {
-        NodeIdentity host = NodeIdentity.generate();
-        NodeIdentity joiner = NodeIdentity.generate();
-        Instant issued = Instant.now().minusSeconds(2);
-        Instant expires = issued.plusSeconds(120);
-        UUID session = UUID.randomUUID();
-        CandidateDescriptor hostDescriptor = descriptor(host, issued, expires, 4401);
-        CandidateDescriptor joinerDescriptor = descriptor(joiner, issued, expires, 4402);
-        SessionInvitation invitation = SessionInvitation.create(host, session, ProtocolVersion.V1, issued, expires, new byte[SessionInvitation.CAPABILITY_BYTES], hostDescriptor);
-        TraversalOffer offer = TraversalOffer.createV2(host, null, session, digest(invitation.encoded()), issued, expires, new byte[TraversalOffer.NONCE_BYTES], hostDescriptor, ReturnTarget.of(projectId));
-        return TraversalAnswer.create(joiner, offer, joinerDescriptor, new byte[TraversalAnswer.NONCE_BYTES]).shareLink();
+    private static CompactBootstrapInvitation invitation() throws Exception {
+        java.time.Instant issued = java.time.Instant.now().minusSeconds(2);
+        return CompactBootstrapInvitation.createMinimized(NodeIdentity.generate(), ProtocolVersion.V1, issued, issued.plusSeconds(120),
+                new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES], List.of(candidate(4401)));
     }
 
-    private static String validSlo1() throws Exception {
-        NodeIdentity host = NodeIdentity.generate();
-        Instant issued = Instant.now().minusSeconds(2);
-        Instant expires = issued.plusSeconds(120);
-        UUID session = UUID.randomUUID();
-        CandidateDescriptor descriptor = descriptor(host, issued, expires, 4401);
-        SessionInvitation invitation = SessionInvitation.create(host, session, ProtocolVersion.V1, issued, expires, new byte[SessionInvitation.CAPABILITY_BYTES], descriptor);
-        TraversalOffer offer = TraversalOffer.create(host, null, session, digest(invitation.encoded()), issued, expires, new byte[TraversalOffer.NONCE_BYTES], descriptor);
-        return TraversalInvitation.create(invitation, offer).shareLink();
+    private static String answer(CompactBootstrapInvitation invitation) throws Exception {
+        return CompactAnswer.create(invitation, List.of(candidate(4402))).shareLink();
     }
 
-    private static CandidateDescriptor descriptor(NodeIdentity identity, Instant issued, Instant expires, int port) throws Exception {
-        return CandidateDescriptor.create(identity, issued, expires, List.of(new Candidate(CandidateType.MANUAL, InetAddress.getByName("198.51.100.1"), port, 1)));
-    }
-
-    private static byte[] digest(byte[] value) throws Exception {
-        return MessageDigest.getInstance("SHA-256").digest(value);
+    private static Candidate candidate(int port) throws Exception {
+        return new Candidate(CandidateType.MANUAL, InetAddress.getByName("198.51.100.1"), port, 1);
     }
 
     private static Thread serve(DaemonServer server) {
@@ -125,28 +101,25 @@ final class DaemonServerRoutingTest {
 
     @Test
     @Timeout(15)
-    void v2AnswerRoutesOnlyToSignedTargetAndUnknownTargetFailsClosed() throws Exception {
+    void anAnswerGoesToTheOneRunningRuntimeAndIsUnresolvedWithoutOne() throws Exception {
         ProjectApplicationService service = new ProjectApplicationService();
-        var first = service.init(Files.createDirectories(temp.resolve("one")), false).location();
-        var second = service.init(Files.createDirectories(temp.resolve("two")), false).location();
+        var project = service.init(Files.createDirectories(temp.resolve("one")), false).location();
         KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("registry.json"));
-        registry.observe(first);
-        registry.observe(second);
+        registry.observe(project);
         FakeStarter starter = new FakeStarter();
         DaemonServer server = DaemonServer.start(temp.resolve("daemon"), registry, starter, new LocalProjectSelectionStore());
         Thread serving = serve(server);
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
-            String routed = v2Answer(first.projectId());
-            Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", routed, "openBrowser", false)));
-            assertTrue(Boolean.TRUE.equals(result.get("ok")));
-            assertEquals(List.of(routed), starter.runtime(first.root()).uris);
-            assertTrue(starter.runtime(second.root()).uris.isEmpty());
-
-            String unknown = v2Answer(UUID.randomUUID());
-            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", unknown, "openBrowser", false)));
+            CompactBootstrapInvitation invitation = invitation();
+            String answer = answer(invitation);
+            Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", answer, "openBrowser", false)));
             assertEquals("URI_UNRESOLVED", unresolved.get("state"));
-            assertTrue(starter.runtime(second.root()).uris.isEmpty());
+
+            assertTrue(Boolean.TRUE.equals(object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation.shareLink(), "openBrowser", false))).get("ok")));
+            Map<String, Object> routed = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", answer, "openBrowser", false)));
+            assertTrue(Boolean.TRUE.equals(routed.get("ok")));
+            assertEquals(List.of(invitation.shareLink(), answer), starter.runtime(project.root()).uris);
         } finally {
             server.close();
             serving.join(TimeUnit.SECONDS.toMillis(3));
@@ -166,7 +139,7 @@ final class DaemonServerRoutingTest {
         Thread serving = serve(server);
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
-            String invitation = validSlo1();
+            String invitation = invitation().shareLink();
             Map<String, Object> required = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation, "openBrowser", false)));
             assertEquals("PROJECT_SELECTION_REQUIRED", required.get("state"));
             assertTrue(starter.allUris().isEmpty());
@@ -186,7 +159,7 @@ final class DaemonServerRoutingTest {
 
     @Test
     @Timeout(15)
-    void oneEligibleProjectStartsAndReceivesSlo1Directly() throws Exception {
+    void oneEligibleProjectStartsAndReceivesAnInvitationDirectly() throws Exception {
         ProjectApplicationService service = new ProjectApplicationService();
         var project = service.init(Files.createDirectories(temp.resolve("one")), false).location();
         KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("registry.json"));
@@ -196,7 +169,7 @@ final class DaemonServerRoutingTest {
         Thread serving = serve(server);
         try {
             DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("daemon/endpoint.json"));
-            String invitation = validSlo1();
+            String invitation = invitation().shareLink();
             Map<String, Object> result = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", invitation, "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(result.get("ok")));
             assertEquals(List.of(invitation), starter.runtime(project.root()).uris);

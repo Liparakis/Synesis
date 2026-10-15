@@ -110,9 +110,9 @@ final class SynesisCliParsingTest {
     @Test
     void malformedUriArgumentsAreNotEchoedInUsageErrors() throws Exception {
         Invocation invocation = invocation();
-        String privateUri = "synesis://answer/SLA2-private-value";
+        String privateUri = "synesis://answer/SLA3-private-value";
 
-        int exit = SynesisCli.execute(new String[]{"open", "synesis://join/SLO1-valid", privateUri}, invocation.runtime());
+        int exit = SynesisCli.execute(new String[]{"open", "synesis://join/SLB3-valid", privateUri}, invocation.runtime());
 
         assertEquals(ExitCodes.USAGE, exit);
         assertFalse(invocation.stderr().contains(privateUri));

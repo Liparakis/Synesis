@@ -28,9 +28,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
-import org.synesis.link.protocol.TraversalAnswer;
-import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.discovery.InstallationHome;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
@@ -257,17 +256,10 @@ final class DaemonServer implements AutoCloseable {
         }
         validateUriShape(uriValue);
         if (isAnswer(uriValue)) {
-            TraversalAnswer answer = TraversalAnswer.fromShareLink(uriValue);
-            if (answer.formatVersion() == TraversalAnswer.FORMAT_VERSION_V2) {
-                return openTargetedAnswer(uriValue, answer, openBrowser);
-            }
-            return openLegacy(uriValue, openBrowser);
+            CompactAnswer.fromShareLink(uriValue);
+            return openOnLiveRuntime(uriValue, openBrowser);
         }
-        if (CompactBootstrapInvitation.isShareLink(uriValue)) {
-            CompactBootstrapInvitation.fromShareLink(uriValue);
-        } else {
-            TraversalInvitation.fromShareLink(uriValue);
-        }
+        CompactBootstrapInvitation.fromShareLink(uriValue);
         List<KnownProjectRegistry.ProjectView> eligibleProjects;
         try {
             eligibleProjects = eligibleProjects();
@@ -288,7 +280,11 @@ final class DaemonServer implements AutoCloseable {
         }
     }
 
-    private Map<String, Object> openLegacy(String uriValue, boolean openBrowser) throws IOException {
+    /**
+     * Hands an answer to the one running project runtime. The answer names no project; only a
+     * runtime that is waiting for a peer can use it, and that runtime is running.
+     */
+    private Map<String, Object> openOnLiveRuntime(String uriValue, boolean openBrowser) throws IOException {
         List<RuntimeHandle> eligible = liveRuntimes();
         if (eligible.isEmpty()) {
             return response("URI_UNRESOLVED", Map.of("reason", "NO_LIVE_PROJECT_RUNTIME"));
@@ -297,28 +293,6 @@ final class DaemonServer implements AutoCloseable {
             return response("URI_AMBIGUOUS", Map.of("reason", "MULTIPLE_LIVE_PROJECT_RUNTIMES", "runtimeCount", eligible.size()));
         }
         return dispatch(eligible.getFirst(), uriValue, openBrowser);
-    }
-
-    private Map<String, Object> openTargetedAnswer(String uriValue, TraversalAnswer answer, boolean openBrowser) throws IOException {
-        UUID target = answer.returnTarget().orElseThrow(() -> new IOException("URI_INVALID")).returnProjectId();
-        List<KnownProjectRegistry.ProjectView> projects;
-        try {
-            projects = knownProjects();
-        } catch (IOException unavailable) {
-            return response("URI_UNRESOLVED", Map.of("reason", "PROJECT_REGISTRY_UNAVAILABLE"));
-        }
-        KnownProjectRegistry.ProjectView view = logicalProjectChoices(projects).stream().filter(project -> project.projectId().equals(target)).findFirst().orElse(null);
-        if (view == null) {
-            return response("URI_UNRESOLVED", Map.of("reason", "RETURN_TARGET_UNKNOWN", "projectId", target.toString()));
-        }
-        if (view.status() == KnownProjectRegistry.Status.UNAVAILABLE || view.status() == KnownProjectRegistry.Status.IDENTITY_MISMATCH) {
-            return response("URI_UNRESOLVED", Map.of("reason", "RETURN_TARGET_UNAVAILABLE", "projectId", target.toString()));
-        }
-        try {
-            return dispatch(runtimeFor(view), uriValue, openBrowser);
-        } catch (IOException unavailable) {
-            return response("URI_UNRESOLVED", Map.of("reason", "PROJECT_RUNTIME_UNAVAILABLE", "projectId", target.toString()));
-        }
     }
 
     private Map<String, Object> createSelection(String uriValue, List<KnownProjectRegistry.ProjectView> projects, boolean openBrowser) {
@@ -534,7 +508,7 @@ final class DaemonServer implements AutoCloseable {
         String path = uri.getPath();
         boolean join = "join".equalsIgnoreCase(host);
         boolean answer = "answer".equalsIgnoreCase(host);
-        boolean payload = join && path != null && (path.startsWith("/SLO1-") || path.startsWith("/SLB3-")) || answer && path != null && path.startsWith("/SLA2-");
+        boolean payload = join && path != null && path.startsWith("/SLB3-") || answer && path != null && path.startsWith("/SLA3-");
         if (!"synesis".equalsIgnoreCase(uri.getScheme()) || host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || !payload) {
             throw new IOException("URI_UNSUPPORTED");
         }

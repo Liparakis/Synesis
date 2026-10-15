@@ -426,7 +426,6 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             case "invite" -> onboarding.invite(exchange, body);
             case "join" -> onboarding.join(exchange, body);
             case "answer" -> onboarding.answer(exchange, body);
-            case "connect" -> onboarding.connect(exchange, body);
             case "cancel" -> onboarding.cancel(exchange, body);
             case "select-project" -> projects.selectProject(exchange, body);
             case "choose-project" -> projects.chooseProject(exchange);

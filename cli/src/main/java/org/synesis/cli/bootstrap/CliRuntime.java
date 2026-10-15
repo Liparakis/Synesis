@@ -69,7 +69,7 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplic
     public static CliRuntime defaults(Terminal terminal) {
         StatusRenderer renderer = new StatusRenderer(terminal);
         Path profile = IdentityBootstrap.defaultDirectory();
-        return new CliRuntime(new Onboarding(profile, renderer), terminal);
+        return new CliRuntime(new Onboarding(profile, renderer, Onboarding.stunServerFromEnvironment()), terminal);
     }
 
     /**

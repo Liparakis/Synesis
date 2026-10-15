@@ -49,79 +49,6 @@ final class ProtocolWireCompatibilityTest {
       + "dd4151c82991ba97fa221974651b1d9985e7b1901387f7f0ae16dd9325988900000000684ee18000000000684e"
       + "e3d80001000004c000020911330000000300407bbc5b23481b70390cc8cdbaed955ba406eeb0266e76ea09b3dc"
       + "59646b55a02ebde0a04a514a67c658641d607d9465571ce1c74f891cee73d3aa8f4f0a2cbd0c";
-  private static final String INVITATION =
-      "53494e3101010000112233445566778899aabbccddeeff00000000684ee18000000000684ee3d8002040414243"
-      + "4445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f00f3534c4431010044736c312d34323032"
-      + "623134666465383333333261336637323233653930376662306434663336383834376663346230653734366561"
-      + "333134373339636539346566653830002c302a300506032b65700321006c778044bef297dad48a3d92345b9577"
-      + "48c07b535f27ba53612c86d0d150e04a00000000684ee18000000000684ee3d8000201001020010db800000000"
-      + "0000000000000001113200000002040004c633640111310000000100408c7ff4a3cdf9f8e3db01bfd496cf4e5d"
-      + "b63995f4f910febe0bff49b1b618e64d92848bf5df9fb4082cce2e581d92b0425657d185fc32268ba1b6babf73"
-      + "a4b70900402c22fa95c9c91fef4d98fc76a6ce571c93d8bbbba562728017d143f87770133f6f79ca14434868c1"
-      + "80039ef3d4f040895fd5f6537b829c5fa47a174b549ae10d";
-  private static final String INVITATION_LINK =
-      "synesis://join/SYN1-U0lOMQEBAAARIjNEVWZ3iJmqu8zd7v8AAAAAaE7hgAAAAABoTuPYACBAQUJDREVGR0hJSk"
-      + "tMTU5PUFFSU1RVVldYWVpbXF1eXwDzU0xEMQEARHNsMS00MjAyYjE0ZmRlODMzMzJhM2Y3MjIzZTkwN2ZiMGQ0ZjM2"
-      + "ODg0N2ZjNGIwZTc0NmVhMzE0NzM5Y2U5NGVmZTgwACwwKjAFBgMrZXADIQBsd4BEvvKX2tSKPZI0W5V3SMB7U18nul"
-      + "NhLIbQ0VDgSgAAAABoTuGAAAAAAGhO49gAAgEAECABDbgAAAAAAAAAAAAAAAERMgAAAAIEAATGM2QBETEAAAABAECM"
-      + "f_Sjzfn449sBv9SWz05dtjmV9PkQ_r4L_0mxthjmTZKEi_Xfn7QILM4uWB2SsEJWV9GF_DImi6G2ur9zpLcJAEAsIv"
-      + "qVyckf702Y_Hamzlcck9i7u6VicoAX0UP4d3ATP295yhRDSGjBgAOe89TwQIlf1fZTe4KcX6R6F0tUmuEN";
-  private static final String OFFER =
-      "534c4f3101010000112233445566778899aabbccddeeff0044736c312d34323032623134666465383333333261"
-      + "336637323233653930376662306434663336383834376663346230653734366561333134373339636539346566"
-      + "653830002c302a300506032b65700321006c778044bef297dad48a3d92345b957748c07b535f27ba53612c86d0"
-      + "d150e04a0044736c312d3065376437626562623062613561383731336630626363636330363132343165653234"
-      + "62326335643131653230383039376338366534383336643230643261330020707088440dacb4a036b8a5ccfb4f"
-      + "42db97a768a26fb4872b7a1e69fa2d0ac87c00000000684ee18000000000684ee3d80020808182838485868788"
-      + "898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f00f3534c4431010044736c312d343230326231346664"
-      + "653833333332613366373232336539303766623064346633363838343766633462306537343665613331343733"
-      + "39636539346566653830002c302a300506032b65700321006c778044bef297dad48a3d92345b957748c07b535f"
-      + "27ba53612c86d0d150e04a00000000684ee18000000000684ee3d8000201001020010db8000000000000000000"
-      + "000001113200000002040004c633640111310000000100408c7ff4a3cdf9f8e3db01bfd496cf4e5db63995f4f9"
-      + "10febe0bff49b1b618e64d92848bf5df9fb4082cce2e581d92b0425657d185fc32268ba1b6babf73a4b7090040"
-      + "312b0e69b678a91601ec12b84861af01eb73a2b082c4783881e0d11114e8d2ed51d1fe01174a591052fa891986"
-      + "d76029bd9c96010c1ea57b6c16362f69c45204";
-  private static final String SLO1_LINK =
-      "synesis://join/SLO1-U0xPMQEAAAGAU0lOMQEBAAARIjNEVWZ3iJmqu8zd7v8AAAAAaE7hgAAAAABoTuPYACBAQU"
-      + "JDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eXwDzU0xEMQEARHNsMS00MjAyYjE0ZmRlODMzMzJhM2Y3MjIzZTkw"
-      + "N2ZiMGQ0ZjM2ODg0N2ZjNGIwZTc0NmVhMzE0NzM5Y2U5NGVmZTgwACwwKjAFBgMrZXADIQBsd4BEvvKX2tSKPZI0W5"
-      + "V3SMB7U18nulNhLIbQ0VDgSgAAAABoTuGAAAAAAGhO49gAAgEAECABDbgAAAAAAAAAAAAAAAERMgAAAAIEAATGM2QB"
-      + "ETEAAAABAECMf_Sjzfn449sBv9SWz05dtjmV9PkQ_r4L_0mxthjmTZKEi_Xfn7QILM4uWB2SsEJWV9GF_DImi6G2ur"
-      + "9zpLcJAEAsIvqVyckf702Y_Hamzlcck9i7u6VicoAX0UP4d3ATP295yhRDSGjBgAOe89TwQIlf1fZTe4KcX6R6F0tU"
-      + "muENAAACXFNMTzEBAQAAESIzRFVmd4iZqrvM3e7_AERzbDEtNDIwMmIxNGZkZTgzMzMyYTNmNzIyM2U5MDdmYjBkNG"
-      + "YzNjg4NDdmYzRiMGU3NDZlYTMxNDczOWNlOTRlZmU4MAAsMCowBQYDK2VwAyEAbHeARL7yl9rUij2SNFuVd0jAe1Nf"
-      + "J7pTYSyG0NFQ4EoARHNsMS0wZTdkN2JlYmIwYmE1YTg3MTNmMGJjY2NjMDYxMjQxZWUyNGIyYzVkMTFlMjA4MDk3Yz"
-      + "g2ZTQ4MzZkMjBkMmEzACBwcIhEDay0oDa4pcz7T0Lbl6doom-0hyt6Hmn6LQrIfAAAAABoTuGAAAAAAGhO49gAIICB"
-      + "goOEhYaHiImKi4yNjo-QkZKTlJWWl5iZmpucnZ6fAPNTTEQxAQBEc2wxLTQyMDJiMTRmZGU4MzMzMmEzZjcyMjNlOT"
-      + "A3ZmIwZDRmMzY4ODQ3ZmM0YjBlNzQ2ZWEzMTQ3MzljZTk0ZWZlODAALDAqMAUGAytlcAMhAGx3gES-8pfa1Io9kjRb"
-      + "lXdIwHtTXye6U2EshtDRUOBKAAAAAGhO4YAAAAAAaE7j2AACAQAQIAENuAAAAAAAAAAAAAAAAREyAAAAAgQABMYzZA"
-      + "ERMQAAAAEAQIx_9KPN-fjj2wG_1JbPTl22OZX0-RD-vgv_SbG2GOZNkoSL9d-ftAgszi5YHZKwQlZX0YX8MiaLoba6"
-      + "v3OktwkAQDErDmm2eKkWAewSuEhhrwHrc6KwgsR4OIHg0REU6NLtUdH-ARdKWRBS-okZhtdgKb2clgEMHqV7bBY2L2"
-      + "nEUgQ";
-  private static final String ANSWER =
-      "534c413201010000112233445566778899aabbccddeeff0020e51793af35e89a050e472a5d8524e0b853016223"
-      + "b3e6cec35d2debbd131af1d70044736c312d343230326231346664653833333332613366373232336539303766"
-      + "623064346633363838343766633462306537343665613331343733396365393465666538300044736c312d3065"
-      + "376437626562623062613561383731336630626363636330363132343165653234623263356431316532303830"
-      + "3937633836653438333664323064326133002c302a300506032b657003210043dd4151c82991ba97fa22197465"
-      + "1b1d9985e7b1901387f7f0ae16dd9325988900000000684ee18000000000684ee3d80020c0c1c2c3c4c5c6c7c8"
-      + "c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf00da534c4431010044736c312d306537643762656262"
-      + "306261356138373133663062636363633036313234316565323462326335643131653230383039376338366534"
-      + "38333664323064326133002c302a300506032b657003210043dd4151c82991ba97fa221974651b1d9985e7b190"
-      + "1387f7f0ae16dd9325988900000000684ee18000000000684ee3d80001000004c000020911330000000300407b"
-      + "bc5b23481b70390cc8cdbaed955ba406eeb0266e76ea09b3dc59646b55a02ebde0a04a514a67c658641d607d94"
-      + "65571ce1c74f891cee73d3aa8f4f0a2cbd0c00403ca7db8effe8e5d7ffb7cbcb0a0a703214cc0a1f23b936623c"
-      + "89bebca02d4a627c437c1910a1031804a97b1e0c808aad1a2ef5511cac7aabd18437d3d2557e0f";
-  private static final String ANSWER_LINK =
-      "synesis://answer/SLA2-U0xBMgEBAAARIjNEVWZ3iJmqu8zd7v8AIOUXk6816JoFDkcqXYUk4LhTAWIjs-bOw10t"
-      + "670TGvHXAERzbDEtNDIwMmIxNGZkZTgzMzMyYTNmNzIyM2U5MDdmYjBkNGYzNjg4NDdmYzRiMGU3NDZlYTMxNDczOW"
-      + "NlOTRlZmU4MABEc2wxLTBlN2Q3YmViYjBiYTVhODcxM2YwYmNjY2MwNjEyNDFlZTI0YjJjNWQxMWUyMDgwOTdjODZl"
-      + "NDgzNmQyMGQyYTMALDAqMAUGAytlcAMhAEPdQVHIKZG6l_oiGXRlGx2ZheexkBOH9_CuFt2TJZiJAAAAAGhO4YAAAA"
-      + "AAaE7j2AAgwMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t8A2lNMRDEBAERzbDEtMGU3ZDdiZWJiMGJhNWE4"
-      + "NzEzZjBiY2NjYzA2MTI0MWVlMjRiMmM1ZDExZTIwODA5N2M4NmU0ODM2ZDIwZDJhMwAsMCowBQYDK2VwAyEAQ91BUc"
-      + "gpkbqX-iIZdGUbHZmF57GQE4f38K4W3ZMlmIkAAAAAaE7hgAAAAABoTuPYAAEAAATAAAIJETMAAAADAEB7vFsjSBtw"
-      + "OQzIzbrtlVukBu6wJm526gmz3Flka1WgLr3goEpRSmfGWGQdYH2UZVcc4cdPiRzuc9Oqj08KLL0MAEA8p9uO_-jl1_"
-      + "-3y8sKCnAyFMwKHyO5NmI8ib68oC1KYnxDfBkQoQMYBKl7HgyAiq0aLvVRHKx6q9GEN9PSVX4P";
   private static final String SLB3_V4 =
       "684ee1800258101112131415161718191a1b6c778044bef297dad48a3d92345b957748c07b535f27ba53612c86"
       + "d0d150e04a0104cb00710711348765b078c7c30586160cb0874d05d22e521a7f5bc126f4fa9f47660f9c800785"
@@ -147,6 +74,8 @@ final class ProtocolWireCompatibilityTest {
       "synesis://join/SLB3-aE7hgAJYEBESExQVFhcYGRobbHeARL7yl9rUij2SNFuVd0jAe1NfJ7pTYSyG0NFQ4EoCEC"
       + "ABDbgAAAAAAAAAAAAAAAcRNQTLAHEHETQXi58BKbFGuSzZN_2OTu7p67A8oHuNjixTEHmiNRRH7B4EFmfK-OcqqgJV"
       + "EWgwwO2R4azbqi3eqPqcxdRjXkQN";
+  private static final String SLA3 = "00112233445566778899aabbccddeeff0104cb0071071134";
+  private static final String SLA3_LINK = "synesis://answer/SLA3-ABEiM0RVZneImaq7zN3u_wEEywBxBxE0";
   private static final String TRANSCRIPT =
       "534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899aabbccddeeff00000000000000"
       + "0100000000000000020020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f0020"
@@ -248,100 +177,6 @@ final class ProtocolWireCompatibilityTest {
   }
 
   @Test
-  void sessionInvitationSyn1KeepsCanonicalBytesAndShareLink() throws Exception {
-    SessionInvitation invitation = SessionInvitation.decode(unhex(INVITATION));
-
-    assertEquals(INVITATION, hex(invitation.encoded()));
-    assertEquals(INVITATION_LINK, invitation.shareLink());
-    assertEquals(INVITATION, hex(SessionInvitation.fromShareLink(INVITATION_LINK).encoded()));
-    assertEquals(ProtocolVersion.V1, invitation.protocolVersion());
-    assertEquals(SESSION, invitation.sessionId());
-    assertEquals(ISSUED, invitation.issuedAt());
-    assertEquals(EXPIRES, invitation.expiresAt());
-    assertEquals("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
-        hex(invitation.capability()));
-    assertEquals(HOST_DESCRIPTOR, hex(invitation.descriptorEncoded()));
-    assertTrue(invitation.verifyAt(NOW, SKEW));
-    assertFalse(invitation.verifyAt(EXPIRES, SKEW));
-  }
-
-  @Test
-  void sessionInvitationRejectsTrailingAndTruncatedInput() {
-    assertThrows(IOException.class, () -> SessionInvitation.decode(withTrailingByte(INVITATION)));
-    assertThrows(IOException.class, () -> SessionInvitation.decode(truncated(INVITATION)));
-  }
-
-  @Test
-  void traversalOfferV1KeepsCanonicalBytes() throws Exception {
-    TraversalOffer offer = TraversalOffer.decode(unhex(OFFER));
-
-    assertEquals(OFFER, hex(offer.encoded()));
-    assertEquals(TraversalOffer.FORMAT_VERSION_V1, offer.formatVersion());
-    assertTrue(offer.returnTarget().isEmpty());
-    assertEquals(ProtocolVersion.V1, offer.protocolVersion());
-    assertEquals(SESSION, offer.sessionId());
-    assertEquals(HOST_ID, offer.initiatorNodeId());
-    assertEquals(HOST_PUBLIC_KEY, hex(offer.initiatorPublicKeyEncoded()));
-    assertEquals(joinerId(), offer.expectedResponderNodeId());
-    assertEquals(hex(sha256(INVITATION)), hex(offer.invitationDigest()));
-    assertEquals(ISSUED, offer.issuedAt());
-    assertEquals(EXPIRES, offer.expiresAt());
-    assertEquals("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
-        hex(offer.attemptNonce()));
-    assertEquals(HOST_DESCRIPTOR, hex(offer.descriptorEncoded()));
-    assertTrue(offer.verifyAt(NOW, SKEW, joinerId()));
-    assertEquals(hex(sha256(OFFER)), hex(offer.digest()));
-  }
-
-  @Test
-  void traversalOfferRejectsTrailingAndTruncatedInput() {
-    assertThrows(IOException.class, () -> TraversalOffer.decode(withTrailingByte(OFFER)));
-    assertThrows(IOException.class, () -> TraversalOffer.decode(truncated(OFFER)));
-  }
-
-  @Test
-  void traversalInvitationSlo1V1KeepsCanonicalBytesAndShareLink() throws Exception {
-    String bytes = "534c4f31" + "01" + lp(4, INVITATION) + lp(4, OFFER);
-    TraversalInvitation link = TraversalInvitation.decode(unhex(bytes));
-
-    assertEquals(bytes, hex(link.encoded()));
-    assertEquals(SLO1_LINK, link.shareLink());
-    assertEquals(bytes, hex(TraversalInvitation.fromShareLink(SLO1_LINK).encoded()));
-    assertEquals(TraversalInvitation.FORMAT_VERSION_V1, link.formatVersion());
-    assertTrue(link.returnTarget().isEmpty());
-    assertEquals(INVITATION, hex(link.invitation().encoded()));
-    assertEquals(OFFER, hex(link.offer().encoded()));
-    assertTrue(link.verifyAt(NOW, SKEW, joinerId()));
-    assertThrows(IOException.class, () -> TraversalInvitation.decode(withTrailingByte(bytes)));
-    assertThrows(IOException.class, () -> TraversalInvitation.decode(truncated(bytes)));
-  }
-
-  @Test
-  void traversalAnswerV1KeepsCanonicalBytesAndShareLink() throws Exception {
-    TraversalAnswer answer = TraversalAnswer.decode(unhex(ANSWER));
-    TraversalOffer offer = TraversalOffer.decode(unhex(OFFER));
-
-    assertEquals(ANSWER, hex(answer.encoded()));
-    assertEquals(ANSWER_LINK, answer.shareLink());
-    assertEquals(ANSWER, hex(TraversalAnswer.fromShareLink(ANSWER_LINK).encoded()));
-    assertEquals(TraversalAnswer.FORMAT_VERSION_V1, answer.formatVersion());
-    assertTrue(answer.returnTarget().isEmpty());
-    assertEquals(ProtocolVersion.V1, answer.protocolVersion());
-    assertEquals(SESSION, answer.sessionId());
-    assertEquals(hex(offer.digest()), hex(answer.offerDigest()));
-    assertEquals(HOST_ID, answer.initiatorNodeId());
-    assertEquals(joinerId(), answer.responderNodeId());
-    assertEquals(ISSUED, answer.issuedAt());
-    assertEquals(EXPIRES, answer.expiresAt());
-    assertEquals("c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
-        hex(answer.answerNonce()));
-    assertEquals(JOINER_DESCRIPTOR, hex(answer.descriptorEncoded()));
-    assertTrue(answer.verifyAt(NOW, SKEW, offer));
-    assertThrows(IOException.class, () -> TraversalAnswer.decode(withTrailingByte(ANSWER)));
-    assertThrows(IOException.class, () -> TraversalAnswer.decode(truncated(ANSWER)));
-  }
-
-  @Test
   void compactBootstrapSlb3KeepsCanonicalBytesAndShareLinkForBothAddressFamilies()
       throws Exception {
     UUID expectedSession = UUID.fromString("332e5494-7ba9-13eb-0fd9-7974fa89a1ee");
@@ -380,6 +215,19 @@ final class ProtocolWireCompatibilityTest {
     assertEquals(4405, v6.port());
     assertEquals(List.of(v6, v4),
         CompactBootstrapInvitation.decodeMinimized(unhex(SLB3_BOTH)).endpoints());
+  }
+
+  @Test
+  void compactAnswerSla3KeepsCanonicalBytesAndShareLink() throws Exception {
+    CompactAnswer answer = CompactAnswer.fromShareLink(SLA3_LINK);
+
+    assertEquals(SLA3, hex(answer.encoded()));
+    assertEquals(SLA3_LINK, answer.shareLink());
+    assertEquals(SESSION, answer.sessionId());
+    assertEquals("203.0.113.7", answer.endpoints().getFirst().address().getHostAddress());
+    assertEquals(4404, answer.endpoints().getFirst().port());
+    assertThrows(IOException.class, () -> CompactAnswer.decode(withTrailingByte(SLA3)));
+    assertThrows(IOException.class, () -> CompactAnswer.decode(truncated(SLA3)));
   }
 
   @Test

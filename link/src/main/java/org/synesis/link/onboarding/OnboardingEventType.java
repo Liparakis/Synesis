@@ -43,13 +43,26 @@ public enum OnboardingEventType {
    */
   INVITE_VERIFIED,
   /**
-   * A human-mediated answer was accepted and traversal may begin.
+   * The host accepted the joiner's answer link and is sending toward the joiner's addresses.
    */
   ANSWER_VERIFIED,
   /**
-   * Direct traversal has started after the two-link exchange.
+   * The joiner has started dialing the invitation's endpoints.
    */
   TRAVERSAL_STARTED,
+  /**
+   * The joiner's first attempts failed and it keeps dialing until the invitation expires. Across
+   * two networks this is expected until the host's user pastes the answer link.
+   */
+  WAITING_FOR_HOST,
+  /**
+   * The home router forwards a public port to this host; the value is that public address and port.
+   */
+  ROUTER_PORT_OPENED,
+  /**
+   * The host asked the home router for a forward and did not get one; the value says why.
+   */
+  ROUTER_PORT_UNAVAILABLE,
   /**
    * The invitation's host identity was pinned.
    */
@@ -67,7 +80,8 @@ public enum OnboardingEventType {
    */
   SHARE_LINK,
   /**
-   * The exact signed answer link for the human-mediated flow.
+   * The joiner's answer link, which the host's user pastes when a direct connection does not
+   * happen on its own.
    */
   ANSWER_LINK,
   /**

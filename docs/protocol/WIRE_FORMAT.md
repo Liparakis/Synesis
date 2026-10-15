@@ -69,48 +69,21 @@ multicast, disallowed loopback/private scopes, and ambiguous link-local input
 before pair generation. The optional server-reflexive provider uses bounded
 RFC 8489 STUN Binding request/response messages. Its transaction ID and mapped
 address are routing inputs only, never node identity, and it must use the same
-caller-owned UDP transport as the eventual QUIC path. Unsupported PCP,
-NAT-PMP, UPnP, TURN, and DHT discovery do not produce wire claims or
-placeholder candidates.
+caller-owned UDP transport as the eventual QUIC path. A UPnP IGD port forward
+on the host's router appears as a `MAPPED_IPV4` candidate. Unsupported PCP,
+NAT-PMP, TURN, and DHT discovery do not produce wire claims or placeholder
+candidates.
 
-## SL-D-035 human-mediated traversal links
+## `synesis://answer/SLA3-...` answer
 
-Traversal signaling is a human-mediated signed exchange. The host emits
-`synesis://join/SLO1-...`, a URL-safe base64 wrapper with magic `SLO1`,
-wrapper version `1`, a bounded canonical `SIN1` invitation, and a bounded
-canonical signed traversal offer. The offer contains protocol version,
-session UUID, durable initiator ID and public key, optional expected
-responder ID, invitation SHA-256 binding, validity interval, fresh 32-byte
-attempt nonce, and the complete signed initiator descriptor. The wrapper is
-bounded to 36,928 raw bytes and 65,536 URI characters.
-
-The joiner emits `synesis://answer/SLA2-...`, a URL-safe base64 canonical
-signed answer capped at 24,576 raw bytes and 49,152 URI characters. It
-contains the exact offer SHA-256 digest, both durable IDs, responder public
-key, validity interval, fresh 32-byte answer nonce, and the complete signed
-responder descriptor. Both records are signed over every preceding field;
-the wrapper adds no trust of its own. Importing SLA2 is the final signaling
-step and directly makes the candidate matrix eligible for the existing
-bounded race. No Synesis rendezvous transport, mailbox, directory, or
-central service is required. Existing `SLT1` mutual proof and `SLH1` control
-readiness remain mandatory before application bytes.
-
-## `synesis://join/SYN1-...` invitation
-
-The share link is URL-safe base64 without padding over a bounded canonical
-binary invitation. The binary value contains magic `SIN1`, format version `1`,
-protocol major/minor, session UUID, issue and expiry epoch seconds, a 32-byte
-single-use capability, the complete signed candidate descriptor, and an Ed25519
-signature over every preceding field. Raw invitations are limited to 12,288
-bytes and links to 16,384 characters. Private keys, session keys, reusable
-authority, and Java object serialization are forbidden.
-
-The descriptor and invitation signatures are verified before candidate use. The
-invitation expiry is ten minutes by default with the existing bounded clock-skew
-policy. The capability is copied into the existing signed handshake transcript;
-the host reserves it for at most 15 seconds and consumes it after mutual
-identity proof verification. A valid invitation pins the host identity, while
-the bearer capability authorizes one admission attempt only.
+The joiner's answer to a compact invitation (ADR-0097). URL-safe base64
+without padding over: the invitation's 16-byte session UUID (most significant
+long first), then the endpoint list exactly as in `SLB3` (a count byte of 1 to
+8 and, for each endpoint, an address-width byte of 4 or 16, the address, and a
+two-byte port). Distinct endpoints only, no trailing bytes, at most 169 raw
+bytes and 512 URI characters. The record is unsigned routing input and is
+decoded only to find the host operation it answers and the addresses to send
+toward.
 
 ## `synesis-demo-work/1` application frame
 

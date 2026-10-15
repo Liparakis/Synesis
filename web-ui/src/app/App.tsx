@@ -898,8 +898,11 @@ function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; ta
   );
 }
 
-export function NetworkView({network, onboarding = {pendingJoins: []}, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; client: ControlPlaneClient | null}) {
+export function NetworkView({network, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; client: ControlPlaneClient | null}) {
   const [invite, setInvite] = useState("");
+  const [inviteOperation, setInviteOperation] = useState("");
+  const [answerUri, setAnswerUri] = useState("");
+  const [openRouterPort, setOpenRouterPort] = useState(false);
   const [joinUri, setJoinUri] = useState("");
   const [joinResult, setJoinResult] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -912,9 +915,10 @@ export function NetworkView({network, onboarding = {pendingJoins: []}, client}: 
     if (!client) return;
     setBusy(true);
     try {
-      const response = await client.invite();
+      const response = await client.invite(undefined, openRouterPort);
       setInvite(response.inviteUri);
-      setActionMessage("Invitation created by the local control plane.");
+      setInviteOperation(response.operationId);
+      setActionMessage("Invitation created. Send it to the other computer; this one waits for it to connect.");
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Invitation failed.");
     } finally { setBusy(false); }
@@ -925,22 +929,21 @@ export function NetworkView({network, onboarding = {pendingJoins: []}, client}: 
     try {
       const response = await client.join(joinUri.trim());
       setJoinResult(response.answerUri);
-      setActionMessage("Join request accepted; return the answer URI to the inviter.");
+      setActionMessage("Connecting. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Join failed.");
     } finally { setBusy(false); }
   };
-  const connectJoin = async () => {
-    if (!client || onboarding.pendingJoins.length === 0) return;
+  const submitAnswer = async () => {
+    if (!client || !inviteOperation || !answerUri.trim()) return;
     setBusy(true);
     try {
-      await client.connect(onboarding.pendingJoins[0].operationId);
-      setActionMessage("Pending join connected through the local Link runtime.");
+      await client.answer(inviteOperation, answerUri.trim());
+      setActionMessage("Answer accepted. This computer is now reaching out to the other one.");
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Join connection failed.");
+      setActionMessage(error instanceof Error ? error.message : "The answer link was not accepted.");
     } finally { setBusy(false); }
   };
-  const pendingJoin = onboarding.pendingJoins[0];
 
   return (
     <div className="view-stack">
@@ -957,10 +960,11 @@ export function NetworkView({network, onboarding = {pendingJoins: []}, client}: 
       <section className="onboarding panel" aria-label="Link onboarding">
         <div className="onboarding-grid">
           <div className="form-block"><label className="form-label" htmlFor="join-uri">Join from an invitation</label><p className="muted">Paste the URI another node created for you.</p><div className="inline-form"><input className="text-field" id="join-uri" value={joinUri} onChange={(event) => setJoinUri(event.target.value)} placeholder="Paste an invitation URI" /><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={15}/> Join</button></div></div>
-          <div className="form-block"><span className="form-label">Invite another node</span><p className="muted">The URI is created by the local runtime and expires according to its response.</p><div className="inline-form"><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={15}/> Create Invitation</button>{pendingJoin && <button className="button button-primary" type="button" disabled={busy || !client} onClick={() => void connectJoin()}><Check size={15}/> Complete Join</button>}</div></div>
+          <div className="form-block"><span className="form-label">Invite another node</span><p className="muted">The URI is created by the local runtime and expires according to its response.</p><div className="inline-form"><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={15}/> Create Invitation</button></div><label className="muted"><input type="checkbox" checked={openRouterPort} onChange={(event) => setOpenRouterPort(event.target.checked)}/> Ask my router to open a port (UPnP), so a computer on another network can connect. This changes a router setting until the session ends.</label></div>
         </div>
         {invite && <CopyField label="Invitation URI" value={invite}/>}
-        {joinResult && <CopyField label="Answer URI" value={joinResult}/>}
+        {inviteOperation && <div className="form-block"><label className="form-label" htmlFor="answer-uri">Answer from the other computer</label><p className="muted">Only needed when the other computer is on a different network and does not connect on its own.</p><div className="inline-form"><input className="text-field" id="answer-uri" value={answerUri} onChange={(event) => setAnswerUri(event.target.value)} placeholder="Paste the answer link" /><button className="button button-secondary" type="button" disabled={busy || !client || !answerUri.trim()} onClick={() => void submitAnswer()}><Check size={15}/> Use Answer</button></div></div>}
+        {joinResult && <CopyField label="Answer link" value={joinResult}/>}
         {actionMessage && <p className="action-message" role="status">{actionMessage}</p>}
       </section>
                 <section className="data-table-wrap panel">

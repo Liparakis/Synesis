@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/** Pins the order of {@link OnboardingEventType}s that each onboarding flow emits. */
+/** Pins the order of {@link OnboardingEventType}s that onboarding emits. */
 @Timeout(120)
 final class OnboardingEventSequenceTest {
 
@@ -27,62 +27,6 @@ final class OnboardingEventSequenceTest {
 
   private final List<OnboardingEvent> hostEvents = new CopyOnWriteArrayList<>();
   private final List<OnboardingEvent> joinEvents = new CopyOnWriteArrayList<>();
-
-  @Test
-  void directHostAndJoinEmitTheirEventsInOrder() throws Exception {
-    Onboarding host = onboarding(hostEvents);
-    CompletableFuture<Void> hostDone = CompletableFuture.runAsync(() -> {
-      try {
-        host.host(null, null, _ -> {
-        });
-      } catch (OnboardingFailure failure) {
-        throw new IllegalStateException(failure);
-      }
-    });
-    String link = awaitShareLink();
-    assertNotNull(link);
-    onboarding(joinEvents).join(link, null, _ -> {
-    });
-    hostDone.get(60, TimeUnit.SECONDS);
-
-    assertEquals(sequence(List.of(HOST_PREPARED, SESSION_FACTS, List.of(OnboardingEventType.SESSION_CLOSED))),
-        types(hostEvents));
-    assertEquals(sequence(List.of(List.of(OnboardingEventType.INVITE_PARSED,
-        OnboardingEventType.INVITE_VERIFIED, OnboardingEventType.IDENTITY_CREATED,
-        OnboardingEventType.HOST_IDENTITY_PINNED, OnboardingEventType.LOCAL_DESCRIPTOR_CREATED,
-        OnboardingEventType.CANDIDATES_GATHERED, OnboardingEventType.PATH_SELECTED),
-        SESSION_FACTS, List.of(OnboardingEventType.SESSION_CLOSED))), types(joinEvents));
-  }
-
-  @Test
-  void mediatedHostAndJoinEmitTheirEventsInOrder() throws Exception {
-    try (Onboarding.PreparedHost host = onboarding(hostEvents).createInvitation(null, null,
-        _ -> {
-        });
-        Onboarding.PreparedJoin join = onboarding(joinEvents).importInvitation(
-            host.invitationLink(), null, _ -> {
-            })) {
-      CompletableFuture<Void> hostDone = CompletableFuture.runAsync(() -> {
-        try {
-          host.importAnswer(join.answerLink());
-        } catch (OnboardingFailure failure) {
-          throw new IllegalStateException(failure);
-        }
-      });
-      join.connect();
-      hostDone.get(60, TimeUnit.SECONDS);
-    }
-
-    assertEquals(sequence(List.of(HOST_PREPARED,
-        List.of(OnboardingEventType.ANSWER_VERIFIED, OnboardingEventType.TRAVERSAL_STARTED),
-        SESSION_FACTS, List.of(OnboardingEventType.SESSION_CLOSED))), types(hostEvents));
-    assertEquals(sequence(List.of(List.of(OnboardingEventType.IDENTITY_CREATED,
-        OnboardingEventType.INVITE_PARSED, OnboardingEventType.INVITE_VERIFIED,
-        OnboardingEventType.HOST_IDENTITY_PINNED, OnboardingEventType.LOCAL_DESCRIPTOR_CREATED,
-        OnboardingEventType.CANDIDATES_GATHERED, OnboardingEventType.ANSWER_LINK,
-        OnboardingEventType.TRAVERSAL_STARTED, OnboardingEventType.PATH_SELECTED),
-        SESSION_FACTS, List.of(OnboardingEventType.SESSION_CLOSED))), types(joinEvents));
-  }
 
   @Test
   void compactHostAndJoinEmitTheirEventsInOrder() throws Exception {
@@ -108,7 +52,8 @@ final class OnboardingEventSequenceTest {
     assertEquals(sequence(List.of(List.of(OnboardingEventType.INVITE_PARSED,
         OnboardingEventType.INVITE_VERIFIED, OnboardingEventType.IDENTITY_CREATED,
         OnboardingEventType.HOST_IDENTITY_PINNED, OnboardingEventType.LOCAL_DESCRIPTOR_CREATED,
-        OnboardingEventType.CANDIDATES_GATHERED, OnboardingEventType.TRAVERSAL_STARTED,
+        OnboardingEventType.CANDIDATES_GATHERED, OnboardingEventType.ANSWER_LINK,
+        OnboardingEventType.TRAVERSAL_STARTED,
         OnboardingEventType.DESCRIPTORS_EXCHANGED, OnboardingEventType.PATH_SELECTED),
         SESSION_FACTS, List.of(OnboardingEventType.SESSION_CLOSED))), types(joinEvents));
   }

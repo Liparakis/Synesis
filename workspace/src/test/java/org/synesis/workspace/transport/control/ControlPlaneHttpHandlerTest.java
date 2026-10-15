@@ -370,8 +370,8 @@ class ControlPlaneHttpHandlerTest {
                     .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of("inviteUri", invitationBody.get("inviteUri"))))).build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(201, connection.statusCode());
             Map<String, Object> connectionBody = object(connection.body());
-            assertEquals("CONNECTED", connectionBody.get("state"));
-            assertFalse(connectionBody.containsKey("answerUri"));
+            assertEquals("CONNECTING", connectionBody.get("state"));
+            assertTrue(((String) connectionBody.get("answerUri")).startsWith("synesis://answer/SLA3-"));
         }
     }
 
@@ -400,16 +400,21 @@ class ControlPlaneHttpHandlerTest {
                     .POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(Map.of("uri", invitationBody.get("inviteUri"))))).build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(201, joinResult.statusCode());
             Map<String, Object> joinBody = object(joinResult.body());
-            assertEquals("CONNECTED", joinBody.get("state"));
-            assertFalse(joinBody.containsKey("answerUri"));
+            assertEquals("CONNECTING", joinBody.get("state"));
+            assertTrue(((String) joinBody.get("answerUri")).startsWith("synesis://answer/SLA3-"));
 
+            // The join dials in the background and leaves the pending list once it has connected.
             Map<String, Object> joinCredentials = login(join);
-            HttpResponse<String> pendingSnapshot = join.client.send(request(join, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) joinCredentials.get("sessionToken")).GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
-            assertEquals(200, pendingSnapshot.statusCode());
-            Map<String, Object> snapshot = object(pendingSnapshot.body());
-            Map<?, ?> onboarding = (Map<?, ?>) snapshot.get("onboarding");
-            List<?> pendingJoins = (List<?>) onboarding.get("pendingJoins");
+            List<?> pendingJoins = List.of(joinBody);
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+            while (!pendingJoins.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(100);
+                HttpResponse<String> pendingSnapshot = join.client.send(request(join, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) joinCredentials.get("sessionToken")).GET().build(),
+                        HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, pendingSnapshot.statusCode());
+                Map<?, ?> onboarding = (Map<?, ?>) object(pendingSnapshot.body()).get("onboarding");
+                pendingJoins = (List<?>) onboarding.get("pendingJoins");
+            }
             assertTrue(pendingJoins.isEmpty());
 
             HttpResponse<String> cancel = host.client.send(jsonRequest(host, "/api/v1/commands/cancel").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) hostCredentials.get("sessionToken"))

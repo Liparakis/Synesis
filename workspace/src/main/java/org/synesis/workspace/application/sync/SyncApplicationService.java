@@ -18,7 +18,6 @@ import org.synesis.link.onboarding.OnboardingEventType;
 import org.synesis.link.onboarding.OnboardingFailure;
 import org.synesis.link.onboarding.OnboardingFailureCode;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
-import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.PeerSession.ApplicationStreamHandler;
 import org.synesis.link.session.SessionCloseReason;
@@ -247,14 +246,7 @@ public final class SyncApplicationService {
             URI uri = URI.create(invitation);
             Map<String, String> query = query(uri.getQuery());
             String clean = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment()).toString();
-            String host;
-            if (CompactBootstrapInvitation.isShareLink(clean)) {
-                host = CompactBootstrapInvitation.fromShareLink(clean).hostNodeId();
-            } else {
-                var decoded = SessionInvitation.fromShareLink(clean);
-                host = org.synesis.link.candidate.CandidateDescriptor.decode(decoded.descriptorEncoded()).nodeId();
-            }
-            return new ParsedInvitation(clean, query, host);
+            return new ParsedInvitation(clean, query, CompactBootstrapInvitation.fromShareLink(clean).hostNodeId());
         } catch (Exception invalidInvitation) {
             throw failure("INVITE_INVALID");
         }
@@ -275,7 +267,7 @@ public final class SyncApplicationService {
         Onboarding onboarding = new Onboarding(plan.profile().resolve("link"), ignored -> {
         });
         try {
-            onboarding.join(link, null, session -> {
+            onboarding.joinOnce(link, null, session -> {
                 try {
                     exchange(plan, session, values);
                 } catch (SyncFailure failure) {

@@ -112,26 +112,24 @@ This is an explicit descriptor exchange, not a trust-on-first-use key update.
 Project identity and membership remain higher-level authorization decisions;
 possession of an SLB3 endpoint hint does not grant project membership.
 
-The one-way path is the normal UX for directly reachable or otherwise
-pre-discoverable endpoints. Existing signed SLO1/SLA2 remains available for
-coordinated candidate exchange when a NAT class requires a return target before
-the first transport. That compatibility path is not compressed and remains
-subject to its existing size and validation bounds. Cross-network NAT success
-is not claimed by SLB3 local or LAN evidence.
+The one-way path is the normal UX for directly reachable endpoints. Across two
+networks it is completed by an answer link (ADR-0097). Joining shows
+`synesis://answer/SLA3-<base64url>`: the invitation's session UUID and up to
+eight of the joiner's endpoints, encoded like the invitation's. It is unsigned
+routing input; the session that follows is authenticated exactly as above.
+When the host's user pastes it, the host sends a one-byte datagram from its
+listening socket to each endpoint four times a second for thirty seconds, so
+its own router or firewall lets the joiner's attempts in. The joiner keeps
+dialing until the invitation expires. Endpoints may include the
+server-reflexive address a configured STUN server reports, and, when the host's
+user chose it, a UPnP port forward on the host's router (`MAPPED_IPV4`).
 
-Human-mediated onboarding uses two copyable links and no Synesis signaling
-service. The host command creates `synesis://join/SLO1-...`, which contains
-the existing signed `SYN1` invitation plus the host-signed traversal offer.
-The join command verifies SLO1, gathers candidates on its already-bound UDP
-endpoint, and emits `synesis://answer/SLA2-...`. SLA2 contains the exact SLO1
-offer digest, the joiner's signed descriptor, and the answer signature. The
-host remains alive with its UDP/QUIC endpoint and imports one SLA2 from stdin;
-a valid import immediately enables the existing direct race. The two links
-may be moved by any user-controlled channel (chat, email, QR, or removable
-media). No mailbox, account, directory, rendezvous server, or Synesis-
-operated service is involved. Handles and the invitation capability are
-single-use, and the links expire with the existing ten-minute invitation
-lifetime.
+This works through stateful firewalls, including IPv6 home routers, and
+through a router forward. It does not work through two IPv4 NAT routers that
+record the joiner's early packets as a connection to their own port, which
+the common Linux-based ones do; ADR-0097 records the measurement. No
+mailbox, account, directory, rendezvous server, or Synesis-operated service is
+involved; the links move by any channel the users choose.
 
 ## Demo application boundary
 

@@ -70,7 +70,7 @@ final class BrowserLauncherTest {
         RecordingDesktop desktop = new RecordingDesktop(false, false);
         List<List<String>> commands = new ArrayList<>();
 
-        assertFalse(BrowserLauncher.open(URI.create("synesis://join/SLO1-test"), "Linux", desktop, commands::add));
+        assertFalse(BrowserLauncher.open(URI.create("synesis://join/SLB3-test"), "Linux", desktop, commands::add));
         assertFalse(BrowserLauncher.open(URI.create("file:///tmp/bootstrap"), "Linux", desktop, commands::add));
         assertTrue(commands.isEmpty());
     }

@@ -91,7 +91,8 @@ final class CoordinationServerLauncher {
                 return ExitCodes.LOCAL_CONFIGURATION;
             }
             var eventHub = new ControlPlaneEventHub();
-            var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish);
+            var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish,
+                    Onboarding.stunServerFromEnvironment());
             var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, null, eventHub::publish, location.identity());
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {

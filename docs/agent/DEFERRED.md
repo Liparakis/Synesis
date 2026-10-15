@@ -18,7 +18,7 @@ restructures them, and this entry does not activate any of them.
 - `workspace`: `ProjectCommandMaintenanceService.cleanupDeadAnchor`.
 - `coordination`: the ownership registry stack.
 - `link`: the legacy SYN1 and SLO1 host flows in `Onboarding`, which only tests
-  produce.
+  produced. Removed on 2026-10-15 by the owner's decision, with SLA2 (ADR-0097).
 
 For each, the open question is whether to wire it in, keep it parked with a
 stated reason, or remove it.
@@ -402,11 +402,12 @@ diagnostics, identity checks, and cleanup.
 
 ## SL-D-034 — Optional router port mapping
 
-**Status:** DEFERRED
+**Status:** PARTIAL (2026-10-15, ADR-0097)
 **Area:** Connectivity
-**Current verified capability:** No router mapping implementation is claimed.
-**Missing capability:** One opt-in product capability covering PCP, NAT-PMP, and UPnP IGD mapping with explicit
-ownership and cleanup.
+**Current verified capability:** UPnP IGD forward of the host's listening port on the user's choice, removed when the host
+closes, one-hour lease after a crash; a session through it in the Podman lab with `miniupnpd` 2.3.9.
+**Missing capability:** PCP and NAT-PMP, which need the router's address; renewal for sessions longer than the lease;
+a physical router matrix.
 **Reason deferred:** Router trust, consent, renewal, crash cleanup, exposure, and protocol coverage require one security
 and operations decision.
 **Activation trigger:** A supported router-mapping requirement is approved with an explicit user-consent model.
@@ -421,8 +422,11 @@ forged-gateway tests, exposure review, and physical router matrix results.
 
 **Status:** DEFERRED
 **Area:** Connectivity
-**Current verified capability:** Human-mediated signed SLO1/SLA2 exchange, bounded candidate pairing, and coordinated direct attempts exist on the existing Link UDP/QUIC endpoint.
-**Missing capability:** Controlled-NAT and physical two-network evidence for compatible and unsupported topologies.
+**Current verified capability:** The compact invitation's `SLA3` answer link and the host's punch (ADR-0097). In the
+Podman lab: through two IPv6 stateful firewalls, a session; through two IPv4 Linux NAT routers, none, because the host's
+router keeps the joiner's early packets on the host's port.
+**Missing capability:** IPv4 through two Linux-style NAT routers without a forward (needs simultaneous sending or a short
+time-to-live, neither available to copy-pasted links in Java); physical two-network evidence.
 **Reason deferred:** NAT behavior, consent, resource limits, and failure classification are not physically verified.
 **Activation trigger:** A serverless direct-connectivity task requires traversal of compatible NATs without relay
 infrastructure.

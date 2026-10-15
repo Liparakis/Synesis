@@ -24,9 +24,9 @@ For launcher validation, build with
 generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
 normal flow is `synesis host`, copy its
 `synesis://join/SLB3-...` output to the other machine, and run
-`synesis join "<link>"`. No answer is printed for the compact one-way path.
-If the selected topology requires coordinated candidate exchange, use the
-legacy SLO1/SLA2 flow documented in [`SYNESIS_LINK_V1.md`](../protocol/SYNESIS_LINK_V1.md).
+`synesis join "<link>"`. On different networks, paste the `ANSWER_LINK` the
+join prints into the waiting `synesis host`, or start the host with
+`--open-router-port`; see ADR-0097 for which networks each gets through.
 No signaling server or mailbox is used. Use a temporary PATH change only in the current
 shell if desired; do not record a permanent PATH or installation claim.
 Capture sanitized launcher output in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing

@@ -10,7 +10,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.synesis.link.protocol.SessionInvitation;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.HandshakeTranscript;
 
@@ -40,14 +39,12 @@ public final class InvitationAdmission implements AutoCloseable {
    * Creates one single-use admission state for a signed invitation capability.
    *
    * @param sessionId  invited session identifier
-   * @param capability invitation capability bytes; legacy invitations use 32 bytes and SLB3
-   *                   compact invitations use 12 bytes
+   * @param capability compact invitation capability bytes
    */
   public InvitationAdmission(UUID sessionId, byte[] capability) {
     this.sessionId = sessionId;
     this.capability = capability.clone();
-    if (capability.length != SessionInvitation.CAPABILITY_BYTES
-        && capability.length != CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES) {
+    if (capability.length != CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES) {
       throw new IllegalArgumentException("invalid invitation capability");
     }
   }

@@ -12,16 +12,12 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.function.BooleanSupplier;
 import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
-import org.synesis.link.protocol.TraversalAnswer;
-import org.synesis.link.protocol.TraversalInvitation;
 import org.synesis.workspace.transport.control.ControlPlaneLinkOperations.PendingHost;
 import org.synesis.workspace.transport.control.ControlPlaneLinkOperations.PendingJoin;
 
@@ -60,7 +56,7 @@ final class ControlPlaneOnboardingEndpoints {
     private final ControlPlaneLinkOperations linkOperations;
 
     /**
-     * Guards {@link #hosts}, {@link #joins}, {@link #operationExpiry}, and {@link #activeOperations}.
+     * Guards {@link #hosts}, {@link #joins}, and {@link #operationExpiry}.
      */
     private final Object operationLock = new Object();
 
@@ -85,11 +81,6 @@ final class ControlPlaneOnboardingEndpoints {
     private final Map<String, Instant> operationExpiry = new HashMap<>();
 
     /**
-     * Ids of operations currently executing; these are exempt from expiry and cancellation. Guarded by {@link #operationLock}.
-     */
-    private final Set<String> activeOperations = new HashSet<>();
-
-    /**
      * Creates the onboarding endpoints over a Link operation owner.
      *
      * @param linkOperations supported Link operation owner
@@ -109,7 +100,6 @@ final class ControlPlaneOnboardingEndpoints {
             hosts.clear();
             joins.clear();
             operationExpiry.clear();
-            activeOperations.clear();
         }
         pending.forEach(ControlPlaneOnboardingEndpoints::closeQuietly);
         linkOperations.close();
@@ -131,28 +121,17 @@ final class ControlPlaneOnboardingEndpoints {
                 if (expiresAt == null) {
                     continue;
                 }
-                boolean compact = CompactBootstrapInvitation.isShareLink(host.getValue().invitationLink());
-                pendingHosts.add(ordered("operationId", host.getKey(), "state", hostState(compact), "expiresAt", expiresAt.toString()));
+                pendingHosts.add(ordered("operationId", host.getKey(), "state", "WAITING_FOR_CONNECTION", "expiresAt", expiresAt.toString()));
             }
             for (String operationId : joins.keySet()) {
                 Instant expiresAt = operationExpiry.get(operationId);
                 if (expiresAt == null) {
                     continue;
                 }
-                pendingJoins.add(ordered("operationId", operationId, "state", "WAITING_FOR_CONNECT", "expiresAt", expiresAt.toString()));
+                pendingJoins.add(ordered("operationId", operationId, "state", "CONNECTING", "expiresAt", expiresAt.toString()));
             }
         }
         return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins);
-    }
-
-    /**
-     * Names the waiting state of a host operation.
-     *
-     * @param compact whether the invitation is a compact bootstrap invitation
-     * @return {@code WAITING_FOR_CONNECTION} for compact invitations, otherwise {@code WAITING_FOR_ANSWER}
-     */
-    private static String hostState(boolean compact) {
-        return compact ? "WAITING_FOR_CONNECTION" : "WAITING_FOR_ANSWER";
     }
 
     /**
@@ -190,20 +169,22 @@ final class ControlPlaneOnboardingEndpoints {
     /**
      * Creates an invitation and registers it as a pending host operation.
      *
-     * <p>Compact invitations connect on their own, so completion is monitored; classic ones wait for an answer.
+     * <p>The peer connects on its own, so completion is monitored; an answer only helps it through.
      *
      * @param exchange HTTP exchange
-     * @param body     request body with optional {@code expectedPeer}
+     * @param body     request body with optional {@code expectedPeer} and optional boolean
+     *                 {@code openRouterPort}, the user's choice to have the router forward a port
      * @throws IOException when the response cannot be written
      * @throws ApiFailure  when capacity is exhausted or the Link layer fails
      */
     void invite(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String expectedPeer = body.get("expectedPeer") == null ? null : requiredText(body, "expectedPeer", MAX_PEER_LENGTH);
+        boolean openRouterPort = Boolean.TRUE.equals(body.get("openRouterPort"));
         ensureCapacity();
         PendingHost prepared;
         try {
             synchronized (onboardingLock) {
-                prepared = linkOperations.createInvitation(expectedPeer);
+                prepared = linkOperations.createInvitation(expectedPeer, openRouterPort);
             }
         } catch (OnboardingFailure failure) {
             throw onboardingFailure(failure);
@@ -215,22 +196,21 @@ final class ControlPlaneOnboardingEndpoints {
             hosts.put(operationId, prepared);
             operationExpiry.put(operationId, parsed.expiresAt());
         }
-        if (parsed.compact()) {
-            monitorCompactHost(operationId, prepared);
-        }
+        monitorHost(operationId, prepared);
         Map<String, Object> response = newResponse();
         response.put("operationId", operationId);
         response.put("inviteUri", link);
         response.put("peerIdentity", parsed.peerIdentity());
         response.put("expiresAt", parsed.expiresAt().toString());
-        response.put("state", hostState(parsed.compact()));
+        response.put("state", "WAITING_FOR_CONNECTION");
         sendJson(exchange, 201, response);
     }
 
     /**
      * Imports an invitation as a pending join operation.
      *
-     * <p>Compact invitations connect immediately; classic ones return an answer link and wait for {@code connect}.
+     * <p>The join dials the host in the background until it connects or the invitation expires, and
+     * the response returns at once with the answer link the host's user may need.
      *
      * @param exchange HTTP exchange
      * @param body     request body containing {@code inviteUri}
@@ -254,70 +234,67 @@ final class ControlPlaneOnboardingEndpoints {
             joins.put(operationId, prepared);
             operationExpiry.put(operationId, parsed.expiresAt());
         }
-        if (parsed.compact()) {
-            Map<String, Object> connected = operationResult(operationId, "CONNECTED");
-            connected.put("peerIdentity", parsed.peerIdentity());
-            complete(exchange, 201, connected, joins, operationId, prepared, prepared::connect, prepared::retainsSession);
-            return;
-        }
+        // Not marked running: a join dials until its invitation expires, and cancelling or expiry
+        // must be able to close it, which ends the dialing.
+        Thread.ofVirtual().start(() -> {
+            boolean connected = false;
+            try {
+                prepared.connect();
+                connected = true;
+            } catch (OnboardingFailure failed) {
+                // The operation leaves the pending list without a peer in the network view.
+            } finally {
+                finish(joins, operationId, prepared, connected && prepared.retainsSession());
+            }
+        });
         Map<String, Object> response = newResponse();
         response.put("operationId", operationId);
         response.put("answerUri", prepared.answerLink());
         response.put("peerIdentity", parsed.peerIdentity());
         response.put("expiresAt", parsed.expiresAt().toString());
-        response.put("state", "WAITING_FOR_CONNECT");
+        response.put("state", "CONNECTING");
         sendJson(exchange, 201, response);
     }
 
     /**
-     * Completes a pending host operation with the joiner's answer.
+     * Gives a waiting host operation the joiner's answer, which makes it send toward the joiner.
+     * The operation keeps waiting for the peer.
      *
      * @param exchange HTTP exchange
      * @param body     request body containing {@code operationId} and {@code answerUri}
      * @throws IOException when the response cannot be written
-     * @throws ApiFailure  when the operation is unknown or busy, or the Link layer fails
+     * @throws ApiFailure  when the operation is unknown or the Link layer rejects the answer
      */
     void answer(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String operationId = requiredText(body, "operationId", MAX_OPERATION_ID_LENGTH);
         String answer = requiredText(body, "answerUri", MAX_LINK_LENGTH);
-        PendingHost prepared = begin(hosts, operationId, "host");
-        // The retained host handle owns its bounded wait. Do not serialize it
-        // with a join handle: the Link handshake requires both sides to run at
-        // the same time when they are hosted by this runtime.
-        complete(exchange, 200, operationResult(operationId, "CONNECTED"), hosts, operationId, prepared, () -> prepared.importAnswer(answer), prepared::retainsSession);
+        PendingHost prepared;
+        synchronized (operationLock) {
+            prepared = hosts.get(operationId);
+        }
+        if (prepared == null) {
+            throw failure(404, "OPERATION_NOT_FOUND", "host operation is not available");
+        }
+        try {
+            prepared.importAnswer(answer);
+        } catch (OnboardingFailure failure) {
+            throw onboardingFailure(failure);
+        }
+        sendJson(exchange, 200, operationResult(operationId, "SENDING_TO_JOINER"));
     }
 
     /**
-     * Connects a pending join operation.
+     * Cancels a pending operation and closes its handle, which also ends a join that is still dialing.
      *
      * @param exchange HTTP exchange
      * @param body     request body containing {@code operationId}
      * @throws IOException when the response cannot be written
-     * @throws ApiFailure  when the operation is unknown or busy, or the Link layer fails
-     */
-    void connect(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
-        String operationId = requiredText(body, "operationId", MAX_OPERATION_ID_LENGTH);
-        PendingJoin prepared = begin(joins, operationId, "join");
-        // The retained join handle owns its bounded candidate race. It must be
-        // able to overlap a host answer operation in the same runtime.
-        complete(exchange, 200, operationResult(operationId, "CONNECTED"), joins, operationId, prepared, prepared::connect, prepared::retainsSession);
-    }
-
-    /**
-     * Cancels an idle pending operation and closes its handle.
-     *
-     * @param exchange HTTP exchange
-     * @param body     request body containing {@code operationId}
-     * @throws IOException when the response cannot be written
-     * @throws ApiFailure  409 when the operation is running, 404 when it does not exist
+     * @throws ApiFailure  404 when the operation does not exist
      */
     void cancel(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
         String operationId = requiredText(body, "operationId", MAX_OPERATION_ID_LENGTH);
         AutoCloseable pending;
         synchronized (operationLock) {
-            if (activeOperations.contains(operationId)) {
-                throw failure(409, "OPERATION_BUSY", "onboarding operation is already running");
-            }
             pending = hosts.remove(operationId);
             if (pending == null) {
                 pending = joins.remove(operationId);
@@ -338,13 +315,13 @@ final class ControlPlaneOnboardingEndpoints {
      * @return operation id
      * @throws ApiFailure 404 when nothing matches, 409 when more than one operation matches
      */
-    private String matchingHostOperation(TraversalAnswer answer) throws ApiFailure {
+    private String matchingHostOperation(CompactAnswer answer) throws ApiFailure {
         List<String> matches = new ArrayList<>();
         synchronized (operationLock) {
             for (Map.Entry<String, PendingHost> entry : hosts.entrySet()) {
                 try {
-                    TraversalInvitation invitation = TraversalInvitation.fromShareLink(entry.getValue().invitationLink());
-                    if (invitation.invitation().sessionId().equals(answer.sessionId())) {
+                    CompactBootstrapInvitation invitation = CompactBootstrapInvitation.fromShareLink(entry.getValue().invitationLink());
+                    if (invitation.sessionId().equals(answer.sessionId())) {
                         matches.add(entry.getKey());
                     }
                 } catch (IOException | IllegalArgumentException invalidStoredInvitation) {
@@ -362,35 +339,31 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * Extracts the display details of either invitation flavour.
+     * Extracts the display details of an invitation.
      *
      * @param link share link
-     * @return peer identity, expiry, and whether the invitation is compact
+     * @return peer identity and expiry
      * @throws ApiFailure 400 when the link is invalid
      */
     private static InvitationDetails parseInvitationDetails(String link) throws ApiFailure {
         try {
-            if (CompactBootstrapInvitation.isShareLink(link)) {
-                CompactBootstrapInvitation invitation = CompactBootstrapInvitation.fromShareLink(link);
-                return new InvitationDetails(invitation.hostNodeId(), invitation.expiresAt(), true);
-            }
-            TraversalInvitation invitation = TraversalInvitation.fromShareLink(link);
-            return new InvitationDetails(invitation.offer().initiatorNodeId(), invitation.invitation().expiresAt(), false);
+            CompactBootstrapInvitation invitation = CompactBootstrapInvitation.fromShareLink(link);
+            return new InvitationDetails(invitation.hostNodeId(), invitation.expiresAt());
         } catch (IOException | IllegalArgumentException invalid) {
             throw failure(400, "INVITE_INVALID", "invitation link is invalid");
         }
     }
 
     /**
-     * Parses a traversal answer.
+     * Parses an answer link.
      *
      * @param link share link
      * @return parsed answer
      * @throws ApiFailure 400 when the link is invalid
      */
-    private static TraversalAnswer parseAnswer(String link) throws ApiFailure {
+    private static CompactAnswer parseAnswer(String link) throws ApiFailure {
         try {
-            return TraversalAnswer.fromShareLink(link);
+            return CompactAnswer.fromShareLink(link);
         } catch (IOException | IllegalArgumentException invalid) {
             throw failure(400, "ANSWER_INVALID", "answer link is invalid");
         }
@@ -421,58 +394,6 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * Marks an operation as running and returns its handle.
-     *
-     * @param registry    {@link #hosts} or {@link #joins}
-     * @param operationId operation id
-     * @param kind        {@code host} or {@code join}, used in the client-visible message
-     * @param <T>         handle type
-     * @return the operation handle
-     * @throws ApiFailure 404 when unknown, 409 when already running
-     */
-    private <T> T begin(Map<String, T> registry, String operationId, String kind) throws ApiFailure {
-        synchronized (operationLock) {
-            T result = registry.get(operationId);
-            if (result == null) {
-                throw failure(404, "OPERATION_NOT_FOUND", kind + " operation is not available");
-            }
-            if (!activeOperations.add(operationId)) {
-                throw failure(409, "OPERATION_BUSY", kind + " operation is already running");
-            }
-            return result;
-        }
-    }
-
-    /**
-     * Runs the Link step of a registered operation, sends the result, and always retires the operation.
-     *
-     * @param exchange        HTTP exchange
-     * @param status          HTTP status of the success response
-     * @param result          success response body
-     * @param registry        {@link #hosts} or {@link #joins}
-     * @param operationId     operation id
-     * @param prepared        the operation handle
-     * @param step            the Link call that completes the operation
-     * @param retainsSession  whether the handle now owns a live session; read once the step succeeded
-     * @param <T>             handle type
-     * @throws IOException when the response cannot be written
-     * @throws ApiFailure  400 when the Link layer fails
-     */
-    private <T extends AutoCloseable> void complete(HttpExchange exchange, int status, Map<String, Object> result, Map<String, T> registry, String operationId, T prepared, LinkStep step, BooleanSupplier retainsSession)
-            throws IOException, ApiFailure {
-        boolean retain = false;
-        try {
-            step.run();
-            retain = retainsSession.getAsBoolean();
-            sendJson(exchange, status, result);
-        } catch (OnboardingFailure failure) {
-            throw onboardingFailure(failure);
-        } finally {
-            finish(registry, operationId, prepared, retain);
-        }
-    }
-
-    /**
      * Retires a finished operation and closes its handle unless the established session must outlive it.
      *
      * @param registry    {@link #hosts} or {@link #joins}
@@ -485,7 +406,6 @@ final class ControlPlaneOnboardingEndpoints {
         synchronized (operationLock) {
             registry.remove(operationId, prepared);
             operationExpiry.remove(operationId);
-            activeOperations.remove(operationId);
         }
         if (!retain) {
             closeQuietly(prepared);
@@ -493,12 +413,12 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * Retires a compact host operation once its peer connects or the attempt fails.
+     * Retires a host operation once its peer connects or the wait fails.
      *
      * @param operationId operation id
      * @param prepared    the host handle
      */
-    private void monitorCompactHost(String operationId, PendingHost prepared) {
+    private void monitorHost(String operationId, PendingHost prepared) {
         prepared.completion().whenComplete((ignored, failure) -> finish(hosts, operationId, prepared, failure == null && prepared.retainsSession()));
     }
 
@@ -516,14 +436,14 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * Closes and forgets idle operations past their expiry; running operations are left alone.
+     * Closes and forgets operations past their expiry.
      */
     void cleanupExpiredOperations() {
         Instant now = Instant.now();
         List<AutoCloseable> expired = new ArrayList<>();
         synchronized (operationLock) {
             operationExpiry.entrySet().removeIf(entry -> {
-                if (now.isBefore(entry.getValue()) || activeOperations.contains(entry.getKey())) {
+                if (now.isBefore(entry.getValue())) {
                     return false;
                 }
                 PendingHost host = hosts.remove(entry.getKey());
@@ -555,27 +475,12 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * The Link call that completes a pending operation.
-     */
-    @FunctionalInterface
-    private interface LinkStep {
-
-        /**
-         * Performs the call.
-         *
-         * @throws OnboardingFailure when the Link layer rejects it
-         */
-        void run() throws OnboardingFailure;
-    }
-
-    /**
      * Display details extracted from an invitation link.
      *
      * @param peerIdentity node id of the inviting peer
      * @param expiresAt    invitation expiry
-     * @param compact      whether this is a compact bootstrap invitation
      */
-    private record InvitationDetails(String peerIdentity, Instant expiresAt, boolean compact) {
+    private record InvitationDetails(String peerIdentity, Instant expiresAt) {
 
     }
 }

@@ -20,7 +20,7 @@ final class InvitationAdmissionTest {
     NodeIdentity initiator = NodeIdentity.generate();
     NodeIdentity responder = NodeIdentity.generate();
     UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[32];
+    byte[] capability = new byte[12];
     capability[0] = 9;
     HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
         SynesisLink.ALPN,
@@ -39,7 +39,7 @@ final class InvitationAdmissionTest {
     NodeIdentity initiator = NodeIdentity.generate();
     NodeIdentity responder = NodeIdentity.generate();
     UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[32];
+    byte[] capability = new byte[12];
     HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
         SynesisLink.ALPN,
         sessionId, 1, 2, new byte[]{1}, new byte[]{2}, capability, initiator.nodeId(),
@@ -59,7 +59,7 @@ final class InvitationAdmissionTest {
     NodeIdentity initiator = NodeIdentity.generate();
     NodeIdentity responder = NodeIdentity.generate();
     UUID sessionId = UUID.randomUUID();
-    byte[] capability = new byte[32];
+    byte[] capability = new byte[12];
     HandshakeTranscript transcript = HandshakeTranscript.create(ProtocolVersion.V1,
         SynesisLink.ALPN,
         sessionId, 1, 2, new byte[]{1}, new byte[]{2}, capability, initiator.nodeId(),

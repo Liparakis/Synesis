@@ -34,7 +34,6 @@ import org.synesis.link.overlay.OverlayPeerSessionBridge;
 import org.synesis.link.overlay.OverlayTopologyAdvertisement;
 import org.synesis.link.overlay.OverlayTopologyPropagation;
 import org.synesis.link.overlay.OverlayTopologyView;
-import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.session.LivenessTransition;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
@@ -227,17 +226,18 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     /**
      * Creates and retains one live host-side onboarding handle.
      *
-     * @param expectedPeer optional expected responder node ID
+     * @param expectedPeer   optional expected responder node ID
+     * @param openRouterPort whether the user chose to have the home router forward a port
      * @return live pending host operation
      * @throws OnboardingFailure if Link cannot create the invitation
      */
     @Override
-    public PendingHost createInvitation(String expectedPeer) throws OnboardingFailure {
+    public PendingHost createInvitation(String expectedPeer, boolean openRouterPort) throws OnboardingFailure {
         ensureOpen();
-        Onboarding.PreparedHost delegate = onboarding.createCompactInvitation(expectedPeer, applicationHandler, this::acceptSession);
+        Onboarding.PreparedHost delegate = onboarding.createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, this::acceptSession);
         LiveHost result = new LiveHost(delegate);
         handles.add(result);
-        result.startDirectWaitIfNeeded();
+        result.startWait();
         return result;
     }
 
@@ -465,29 +465,20 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         private final AtomicBoolean closedHandle = new AtomicBoolean();
 
         /**
-         * Whether the invitation is compact and therefore rejects answers.
-         */
-        private final boolean compact;
-
-        /**
          * Wraps a prepared host.
          *
          * @param delegate underlying Link host operation
          */
         private LiveHost(Onboarding.PreparedHost delegate) {
             this.delegate = delegate;
-            compact = CompactBootstrapInvitation.isShareLink(delegate.invitationLink());
         }
 
         /**
-         * Starts waiting for the peer of a compact invitation; a no-op for classic invitations.
+         * Starts waiting for the peer.
          *
          * <p>Called after the handle is registered so that {@link #close()} can cancel it.
          */
-        private void startDirectWaitIfNeeded() {
-            if (!compact) {
-                return;
-            }
+        private void startWait() {
             CompletableFuture.runAsync(() -> {
                 try {
                     delegate.awaitConnectionAndKeepAlive();
@@ -508,18 +499,16 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         }
 
         /**
-         * Imports the peer's answer and keeps the resulting session alive.
+         * Starts sending toward the joiner the answer names; the session still arrives through the
+         * wait started by {@link #startWait()}.
          *
          * @param link answer share link
-         * @throws OnboardingFailure {@link OnboardingFailureCode#ANSWER_INVALID} for compact
-         *                           invitations, otherwise whatever the Link layer reports
+         * @throws OnboardingFailure {@link OnboardingFailureCode#ANSWER_INVALID} if the answer is
+         *                           malformed or answers another invitation
          */
         @Override
         public void importAnswer(String link) throws OnboardingFailure {
-            if (compact) {
-                throw new OnboardingFailure(OnboardingFailureCode.ANSWER_INVALID, new IllegalArgumentException("compact invitation does not accept an answer"));
-            }
-            delegate.importAnswerAndKeepAlive(link);
+            delegate.importAnswer(link);
         }
 
         /**

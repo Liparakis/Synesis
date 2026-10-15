@@ -135,8 +135,8 @@ class LinkRuntimeOwnerControlPlaneTest {
             assertTrue(((String) invitation.get("inviteUri")).startsWith("synesis://join/SLB3-"));
             assertEquals("WAITING_FOR_CONNECTION", invitation.get("state"));
             Map<String, Object> connection = command(join, joinSession, "join", Map.of("inviteUri", invitation.get("inviteUri")));
-            assertEquals("CONNECTED", connection.get("state"));
-            assertTrue(!connection.containsKey("answerUri"));
+            assertEquals("CONNECTING", connection.get("state"));
+            assertTrue(((String) connection.get("answerUri")).startsWith("synesis://answer/SLA3-"));
 
             Map<String, Object> hostNetwork = awaitPeer(host, hostSession, joinIdentity.nodeId());
             Map<String, Object> joinNetwork = awaitPeer(join, joinSession, hostIdentity.nodeId());

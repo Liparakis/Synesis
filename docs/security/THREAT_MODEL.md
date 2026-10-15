@@ -97,16 +97,21 @@ descriptors over the authenticated `SLX1` application envelope and checks
 their node IDs, public keys, validity, and invitation expiry before using them.
 The capability creates no permanent trust or project membership.
 
-Legacy SLO1/SLA2 remains a separate signed compatibility path for coordinated
-candidate exchange. Compact local loopback success does not establish a claim
-about arbitrary Internet NAT, symmetric-NAT hole punching, or universal
-reachability.
+The `SLA3` answer is unsigned routing input. A forged or altered answer can
+make the host send one-byte datagrams, four a second for thirty seconds, to
+up to eight addresses it names; it grants no admission. A STUN server learns
+the public address of a machine that creates or answers an invitation; its
+reply is a candidate, never identity. A UPnP router's replies are untrusted
+local-network input: bounded, parsed without DTDs or external entities, and
+the description is fetched only from the address that answered the search. A
+port forward is opened only on the user's choice and removed when the host
+closes, or by its one-hour lease after a crash.
 
 Long-term private identity material is stored through the atomic, overwrite-
 preventing file store with restrictive permissions where supported. Public
 metadata is separately checked against the loaded key. QUIC TLS keys are
-ephemeral transport material and are deleted during host cleanup. QR output is
-only another representation of the same link and has no separate trust path.
+ephemeral transport material and are deleted during host cleanup. The link is shown
+as text only.
 
 ## Demo application mitigations
 

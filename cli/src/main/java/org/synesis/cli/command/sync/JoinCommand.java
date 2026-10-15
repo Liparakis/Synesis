@@ -11,7 +11,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Adapts {@code synesis join <link>} to the Link façade.
  */
-@Command(name = "join", description = "Verify a compact or legacy invitation and start direct onboarding.", mixinStandardHelpOptions = true)
+@Command(name = "join", description = "Verify an invitation and connect; show an answer link for the inviter if the computers are on different networks.", mixinStandardHelpOptions = true)
 public final class JoinCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

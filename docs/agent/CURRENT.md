@@ -1,3 +1,70 @@
+# 2026-10-15 — Two networks: answer link, hole punching, router port forward; old link formats removed
+
+ADR-0097 holds the decisions. Not committed.
+
+**Why.** Two computers on different home networks could not connect: each home router drops what
+its own side did not start, the invitation named only the host's interface addresses, and nothing
+made the host's router let the joiner in. The owner chose: no meeting-point server, both users paste
+the other's link, relay out of scope, STUN through Cloudflare by default.
+
+**What changed.**
+
+- `SYN1`, `SLO1`, `SLA2`, the signed traversal offer and answer, the traversal coordinator and its
+  UDP exchange are removed, with the control plane's `connect` command, the browser's "Complete
+  Join", and the daemon's routing of answers by return target. Only tests produced them.
+- STUN: `stun.cloudflare.com:3478`, or `SYNESIS_STUN_SERVER` (`host:port` or `off`). Tests run with
+  it off. Project sync does not use it.
+- Joining shows `synesis://answer/SLA3-...`. The host takes it from its input (`synesis host`), the
+  browser's new answer field, or a `synesis://answer/` link, and sends one-byte datagrams toward the
+  joiner's endpoints for thirty seconds. The joiner dials until the invitation expires and says
+  `WAITING_FOR_HOST` after its first race fails. Project sync makes one race.
+- `synesis host --open-router-port`, or the browser's checkbox, asks the router over UPnP to forward
+  the listening port and puts the forward in the invitation; it is removed when the host closes.
+- The control plane's `join` returns at once with the answer link and `CONNECTING` and dials in the
+  background.
+
+**Shown in a Podman lab on the WSL machine.** Two routers, each translating its LAN and dropping
+traffic its LAN did not start, one peer behind each, a STUN responder between them. Scripts in
+`D:\SynesisAcceptance\link-vm\natlab`.
+
+| Case | Result |
+| --- | --- |
+| IPv4, answer pasted | No session |
+| IPv6 behind both firewalls, answer pasted | Session, `IPV6/IPV6`, `WORK_RESULT=OK` |
+| IPv6 behind both firewalls, no answer | No session |
+| IPv4, `miniupnpd` 2.3.9 on the host's router, `--open-router-port`, no answer | Session on the first race, `WORK_RESULT=OK` |
+
+The IPv4 failure is the router, not the code: the host's router recorded the joiner's early packets
+as a connection to its own address and port (`[UNREPLIED]` in its connection table), and when the
+host sent toward the joiner it translated the host's packets to another port. Three lab artifacts
+were found and removed before these results: Podman's own NAT rewrote packets forwarded into the
+LANs, `miniupnpd` refused a documentation-range address as reserved, and its setup script found no
+WAN interface without a default route.
+
+Tests: the Linux gate on the final code, link 165, coordination 236, project-record 60, relay 12,
+mcp-contract 20, workspace 729 (2 skipped), MCP 189, CLI 130, 0 failures; new tests include
+`RouterPortMappingTest` against a fake router, `HolePunchTest`, `CompactAnswerTest` and the `SLA3`
+vector. On Windows `check repositoryHygieneCheck` ran every module's tests with 0 failures but
+failed the workspace test task without a failing test; Gradle then could not recreate the
+workspace test-state folder, which deleted cleanly a minute later, and the workspace suite alone
+passed, 729 (1 skipped), 0 failures; the cause was not established. `repositoryHygieneCheck` passes.
+Browser UI: typecheck, lint, 29 tests.
+
+**Shown between two physical computers on two home networks**, both on the installer
+`0.1.0-dev.remaster46-20261015` built from this tree. The friend's PC hosted with
+`synesis host --open-router-port` and reported `no UPnP router answered`; the friend installed it
+through the setup wizard with the firewall option ticked. The repository owner's PC joined: its first
+race failed and it reported `WAITING_FOR_HOST`; the answer link was pasted into the host, which
+reported `ANSWER_VERIFIED`; the next race connected over IPv4 (`LAN/MANUAL`), both sides reported the
+other's node ID, `CONTROL_READY=true`, `LIVENESS=LIVE`, and the join `Work: OK`. These two routers
+did not keep the joiner's early packets against the host's port, unlike the lab's Linux routers, so
+the IPv4 failure in the lab holds for some routers and not for all. Which routers, and whether the
+firewall rule was present on the friend's PC, were not inspected.
+
+**NOT REACHED.** A real router's UPnP service. NAT-PMP and PCP. The browser flows clicked through by a
+person. A session longer than the forward's one-hour lease. The reverse direction between the two
+PCs.
+
 # 2026-10-14 — Two machines connect over Link in both directions
 
 ADR-0095 and ADR-0096 hold the decisions.

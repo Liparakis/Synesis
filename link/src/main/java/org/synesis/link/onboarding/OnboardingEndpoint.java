@@ -1,26 +1,35 @@
 package org.synesis.link.onboarding;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.codec.quic.InsecureQuicTokenHandler;
 import io.netty.handler.codec.quic.QuicSslContext;
 import io.netty.handler.codec.quic.QuicSslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateProvider;
+import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.candidate.StunCandidateProvider;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.link.portmap.RouterPortMapping;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.session.InvitationAdmission;
 import org.synesis.link.session.LivenessConfiguration;
@@ -38,8 +47,8 @@ import org.synesis.link.transport.quic.NettyStunBindingTransport;
  *
  * <p>A factory either returns an endpoint that owns everything it opened or releases the partial set
  * and throws, so no caller closes a resource individually. {@link #close()} is the only release
- * path and applies one order: STUN binding, UDP channel, event loop group, invitation admission,
- * then TLS material. Components layered on the UDP channel, such as a traversal exchange, must be
+ * path and applies one order: router port forward, STUN binding, UDP channel, event loop group,
+ * invitation admission, then TLS material. Components layered on the UDP channel, such as a traversal exchange, must be
  * closed before the endpoint.
  */
 final class OnboardingEndpoint implements AutoCloseable {
@@ -52,8 +61,37 @@ final class OnboardingEndpoint implements AutoCloseable {
   private InvitationAdmission admission;
   private CompletableFuture<PeerSession> established;
 
+  /** How long the host keeps sending toward a joiner after its answer arrives. */
+  static final Duration PUNCH_DURATION = Duration.ofSeconds(30);
+  private static final long PUNCH_INTERVAL_MILLIS = 250;
+  /** One byte no QUIC or STUN parser accepts, so the joiner drops it; it only has to leave. */
+  private static final byte[] PUNCH_PAYLOAD = {0};
+  private ScheduledFuture<?> punching;
+  private RouterPortMapping portMapping;
+
   private OnboardingEndpoint(InetSocketAddress stunServer) {
-    this.stunServer = stunServer;
+    this.stunServer = resolveIpv4(stunServer);
+  }
+
+  /**
+   * Resolves a configured STUN host to an IPv4 address. Behind a NAT it is the IPv4 mapping a
+   * peer needs; IPv6 addresses are offered as they are. A server that does not resolve, as when
+   * the machine is offline, leaves the endpoint without a reflexive candidate.
+   */
+  private static InetSocketAddress resolveIpv4(InetSocketAddress server) {
+    if (server == null || !server.isUnresolved()) {
+      return server;
+    }
+    try {
+      for (InetAddress address : InetAddress.getAllByName(server.getHostString())) {
+        if (address instanceof Inet4Address) {
+          return new InetSocketAddress(address, server.getPort());
+        }
+      }
+    } catch (UnknownHostException unresolvable) {
+      // No reflexive candidate; local and IPv6 candidates still work.
+    }
+    return null;
   }
 
   /**
@@ -126,6 +164,39 @@ final class OnboardingEndpoint implements AutoCloseable {
     return established;
   }
 
+  /**
+   * Sends a small datagram from the listening socket to each target, every quarter second for
+   * {@link #PUNCH_DURATION}. Each one opens this side's router to that target, so a peer's
+   * connection attempt that the router would otherwise drop gets through. A later call replaces an
+   * earlier one.
+   */
+  synchronized void punch(List<Candidate> targets) {
+    if (punching != null) {
+      punching.cancel(false);
+    }
+    ScheduledFuture<?> sending = udp.eventLoop().scheduleAtFixedRate(() -> {
+      for (Candidate target : targets) {
+        udp.writeAndFlush(new DatagramPacket(Unpooled.wrappedBuffer(PUNCH_PAYLOAD),
+            new InetSocketAddress(target.address(), target.port())));
+      }
+    }, 0, PUNCH_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+    udp.eventLoop().schedule(() -> sending.cancel(false), PUNCH_DURATION.toMillis(),
+        TimeUnit.MILLISECONDS);
+    punching = sending;
+  }
+
+  /**
+   * Asks the home router to forward the listening port, and returns the public endpoint as a
+   * candidate. The forward is removed when this endpoint closes.
+   *
+   * @throws java.io.IOException with a short reason when no router agrees
+   */
+  Candidate openRouterPort() throws java.io.IOException {
+    portMapping = RouterPortMapping.open(((InetSocketAddress) udp.localAddress()).getPort());
+    return new Candidate(CandidateType.MAPPED_IPV4, portMapping.external().getAddress(),
+        portMapping.external().getPort(), 0);
+  }
+
   /** Gathers local candidates on the bound port, plus the STUN-reflexive one when configured. */
   List<Candidate> gatherCandidates(String id) throws Exception {
     List<CandidateProvider> providers = stun == null ? List.of()
@@ -136,6 +207,9 @@ final class OnboardingEndpoint implements AutoCloseable {
 
   @Override
   public void close() {
+    if (portMapping != null) {
+      portMapping.close();
+    }
     if (stun != null) {
       stun.close();
     }

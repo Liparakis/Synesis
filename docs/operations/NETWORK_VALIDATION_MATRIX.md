@@ -8,12 +8,12 @@ support.
 | Scenario                            | Expected support level                                                 | Evidence status                                                                                 | Related active capability               |
 |-------------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|-----------------------------------------|
 | Same LAN                            | Baseline direct candidate path                                         | Windows and a bridged virtual machine, both directions, 2026-10-14; two physical computers not run | `SL-D-031`                              |
-| Global IPv6                         | Candidate path if operator network permits it                          | Physical evidence required                                                                      | `SL-D-031`, `SL-D-033`                  |
+| Global IPv6                         | Candidate path; through stateful firewalls with the answer link (ADR-0097) | Lab 2026-10-15: two firewalls, answer pasted, session; no answer, none | `SL-D-031`, `SL-D-033` |
 | Manual port forwarding              | Explicit operator-configured endpoint                                  | Physical evidence required                                                                      | `SL-D-033`                              |
 | PCP                                 | Optional router mapping adapter                                        | Not implemented                                                                                 | `SL-D-034`                              |
 | NAT-PMP                             | Optional router mapping adapter                                        | Not implemented                                                                                 | `SL-D-034`                              |
-| UPnP IGD                            | Optional, consentful router mapping adapter                            | Not implemented                                                                                 | `SL-D-034`                              |
-| Cone-NAT hole punching              | Bounded coordinated attempts                                           | Same-socket loopback codec/provider/coordinator evidence; controlled/physical evidence required | `SL-D-035`                              |
+| UPnP IGD                            | Host asks on the user's choice; removed on close (ADR-0097) | Lab 2026-10-15: `miniupnpd` 2.3.9 on the host's router, session with no answer; no real router | `SL-D-034` |
+| Cone-NAT hole punching              | Answer link and host punch (ADR-0097) | Two real home networks 2026-10-15: session over IPv4 with the answer. Lab: fails behind two Linux NAT routers that keep the joiner's early packets on the host's port | `SL-D-035` |
 | Symmetric NAT                       | Explicit unsupported or failed result unless evidence proves otherwise | Not verified                                                                                    | `SL-D-035`                              |
 | CGNAT                               | Explicit unsupported or failed result unless evidence proves otherwise | Not verified                                                                                    | `SL-D-031`, `SL-D-035`                  |
 | VPN/overlay                         | Interface/provider-specific behavior                                   | Not verified                                                                                    | `SL-D-031`                              |
@@ -25,9 +25,10 @@ support.
 | QUIC path migration                 | Evidence claim boundary, not a feature                                 | Not verified                                                                                    | Historical `SL-D-012`, research archive |
 | Application-silence fault injection | Evidence claim boundary, not a feature                                 | Not verified                                                                                    | Historical `SL-D-017`, research archive |
 
-Unsupported topologies must produce a bounded diagnostic result. SL-D-035
-authorizes only configured STUN Binding discovery and opaque signed
-offer/answer transport; it does not authorize TURN, relay, hosted rendezvous,
-or implicit production peer-discovery infrastructure. Same-socket Netty
-integration is verified on loopback; controlled-NAT and physical topology
-evidence remain open gates.
+Unsupported topologies must produce a bounded diagnostic result. ADR-0097
+adds STUN Binding discovery (Cloudflare by default, configurable), an unsigned
+answer link carried by the users, and an optional UPnP forward; it does not
+authorize TURN, relay, hosted rendezvous, or implicit production
+peer-discovery infrastructure. The controlled-NAT rows above come from a
+Podman lab on one machine (`D:\SynesisAcceptance\link-vm\natlab`); physical
+topology evidence remains an open gate.

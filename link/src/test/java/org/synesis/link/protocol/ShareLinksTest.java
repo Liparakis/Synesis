@@ -22,12 +22,6 @@ final class ShareLinksTest {
   }
 
   private static final List<Format> FORMATS = List.of(
-      new Format("SYN1", SessionInvitation::fromShareLink, "join", "SYN1-",
-          SessionInvitation.MAX_LINK_CHARS, "invitation", "invalid invitation link format"),
-      new Format("SLO1", TraversalInvitation::fromShareLink, "join", "SLO1-",
-          TraversalInvitation.MAX_LINK_CHARS, "SLO1", "invalid SLO1 link format"),
-      new Format("SLA2", TraversalAnswer::fromShareLink, "answer", "SLA2-",
-          TraversalAnswer.MAX_LINK_CHARS, "SLA2", "invalid SLA2 link format"),
       new Format("SLB3", CompactBootstrapInvitation::fromShareLink, "join", "SLB3-",
           CompactBootstrapInvitation.MAX_LINK_CHARS, "compact invitation",
           "unsupported compact invitation link format"));

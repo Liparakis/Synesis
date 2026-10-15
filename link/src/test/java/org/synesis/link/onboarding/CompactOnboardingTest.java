@@ -106,6 +106,9 @@ final class CompactOnboardingTest {
     assertTrue(joinEvents.stream()
         .anyMatch(event -> event.type() == OnboardingEventType.CONTROL_READY
             && Boolean.parseBoolean(event.value())));
-    assertFalse(joinEvents.stream().anyMatch(event -> event.type() == OnboardingEventType.ANSWER_LINK));
+    assertTrue(joinEvents.stream().anyMatch(event -> event.type() == OnboardingEventType.ANSWER_LINK
+        && event.value().startsWith("synesis://answer/SLA3-")));
+    assertFalse(joinEvents.stream()
+        .anyMatch(event -> event.type() == OnboardingEventType.WAITING_FOR_HOST));
   }
 }

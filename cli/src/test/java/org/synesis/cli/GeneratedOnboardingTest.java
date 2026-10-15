@@ -73,7 +73,7 @@ final class GeneratedOnboardingTest {
             assertTrue(capturedHost.output().contains("SESSION_CLOSED"));
             assertTrue(joinOutput.contains("INVITE_VERIFIED"));
             assertTrue(joinOutput.contains("DESCRIPTORS_EXCHANGED"));
-            assertTrue(!joinOutput.contains("ANSWER_LINK="));
+            assertTrue(joinOutput.contains("ANSWER_LINK=synesis://answer/SLA3-"));
             assertTrue(joinOutput.contains("WORK_RESULT=OK"));
             assertTrue(joinOutput.contains("SESSION_CLOSED"));
         } finally {

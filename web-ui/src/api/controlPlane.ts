@@ -479,8 +479,8 @@ export class ControlPlaneClient {
     return normalizeSnapshot((await response.json()) as Snapshot);
   }
 
-  async invite(expectedPeer?: string): Promise<InviteResponse> {
-    return this.command<InviteResponse>("invite", expectedPeer ? {expectedPeer} : {});
+  async invite(expectedPeer?: string, openRouterPort = false): Promise<InviteResponse> {
+    return this.command<InviteResponse>("invite", {...(expectedPeer ? {expectedPeer} : {}), ...(openRouterPort ? {openRouterPort} : {})});
   }
 
   async join(inviteUri: string): Promise<JoinResponse> {
@@ -489,10 +489,6 @@ export class ControlPlaneClient {
 
   async answer(operationId: string, answerUri: string): Promise<OperationResponse> {
     return this.command<OperationResponse>("answer", {operationId, answerUri});
-  }
-
-  async connect(operationId: string): Promise<OperationResponse> {
-    return this.command<OperationResponse>("connect", {operationId});
   }
 
   async projectSelection(selectionId: string): Promise<ProjectSelection> {
@@ -561,7 +557,7 @@ export class ControlPlaneClient {
     };
   }
 
-  private async command<T>(name: string, body: Record<string, string | string[]>): Promise<T> {
+  private async command<T>(name: string, body: Record<string, string | string[] | boolean>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},

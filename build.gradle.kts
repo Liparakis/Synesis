@@ -148,6 +148,8 @@ subprojects {
         environment("XDG_STATE_HOME", testHome.resolve(".local/state").absolutePath)
         environment("XDG_DATA_HOME", testHome.resolve(".local/share").absolutePath)
         systemProperty("user.home", testHome.absolutePath)
+        // Tests, and the CLI processes they start, must not ask a public STUN server.
+        environment("SYNESIS_STUN_SERVER", "off")
         doFirst {
             testState.deleteRecursively()
             check(testHome.mkdirs() && testLocalAppData.mkdirs()) { "Unable to create isolated test state: $testState" }

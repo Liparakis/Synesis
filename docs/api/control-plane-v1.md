@@ -102,22 +102,23 @@ connected.
 ## Supported commands
 
 Commands are deliberately narrow adapters over existing application services.
-They do not duplicate compact or SLO1/SLA2 validation or create a second Link runtime.
+They do not duplicate invitation or answer validation or create a second Link runtime.
 
 ### `POST /api/v1/commands/invite`
 
 ```json
 {
-    "expectedPeer": "optional-node-id"
+    "expectedPeer": "optional-node-id",
+    "openRouterPort": false
 }
 ```
 
-Delegates to the compact one-way `Onboarding.createCompactInvitation` path.
-The response contains an opaque `operationId`, the exact `synesis://join/SLB3-...`
-`inviteUri` for the operator to copy, the authenticated peer identity, expiry,
-and `WAITING_FOR_CONNECTION` state. The link is returned only to the
-authenticated caller and is never emitted through SSE. Legacy SLO1 creation
-remains available through the Link API for coordinated compatibility flows.
+Delegates to `Onboarding.createCompactInvitation`. With `openRouterPort`
+`true`, the user's choice, the host first asks its router over UPnP to forward
+the listening port (ADR-0097). The response contains an opaque `operationId`,
+the exact `synesis://join/SLB3-...` `inviteUri` for the operator to copy, the
+host identity, expiry, and `WAITING_FOR_CONNECTION` state. The link is
+returned only to the authenticated caller and is never emitted through SSE.
 
 ### `POST /api/v1/commands/join`
 
@@ -127,38 +128,25 @@ remains available through the Link API for coordinated compatibility flows.
 }
 ```
 
-Delegates to `Onboarding.importInvitation`. For an SLB3 link, the request
-verifies the signed host key and endpoint, performs the direct authenticated
-attempt, exchanges the complete signed candidate descriptors over the
-authenticated application stream, and returns `CONNECTED`. No `answerUri` or
-second user action is produced. A legacy SLO1 link continues to return an
-opaque `operationId`, the exact SLA2 `answerUri`, the pinned host identity,
-expiry, and `WAITING_FOR_CONNECT` state.
+Delegates to `Onboarding.importInvitation` and returns at once with an opaque
+`operationId`, the `answerUri` (`synesis://answer/SLA3-...`) the host's user
+pastes when the computers are on different networks, the pinned host identity,
+expiry, and `CONNECTING` state. The join dials in the background until it
+connects or the invitation expires; it leaves `pendingJoins` either way.
 
 ### `POST /api/v1/commands/answer`
 
 ```json
 {
     "operationId": "...",
-    "answerUri": "synesis://answer/SLA2-..."
+    "answerUri": "synesis://answer/SLA3-..."
 }
 ```
 
-Delegates to the stored `PreparedHost.importAnswer` for legacy SLO1/SLA2
-operations. Compact SLB3 operations reject this command because the
-compact flow is one-way. The legacy operation closes its one-shot handle and returns
-`CONNECTED` or a typed redacted onboarding error.
-
-### `POST /api/v1/commands/connect`
-
-```json
-{
-    "operationId": "..."
-}
-```
-
-Delegates to the stored `PreparedJoin.connect`, then closes the one-shot handle
-and returns `CONNECTED` or a typed redacted onboarding error.
+Gives a waiting host operation the joiner's answer. The host starts sending
+toward the joiner's endpoints and keeps waiting; the response is
+`SENDING_TO_JOINER`, or `ONBOARDING_ANSWER_INVALID` for a malformed answer or
+one that answers another invitation.
 
 ### `POST /api/v1/commands/cancel`
 
@@ -168,9 +156,8 @@ and returns `CONNECTED` or a typed redacted onboarding error.
 }
 ```
 
-Closes a pending invite or join handle before it is used and returns
-`CANCELLED`. An operation already in `answer` or `connect` is conflict-locked
-and cannot be cancelled concurrently.
+Closes a pending invite or join handle and returns `CANCELLED`. A join that is
+still dialing stops.
 
 At most 16 pending onboarding handles are retained in memory. Expired or
 completed handles are closed; links are not written to project state.

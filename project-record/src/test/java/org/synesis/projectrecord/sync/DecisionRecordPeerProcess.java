@@ -72,7 +72,7 @@ public final class DecisionRecordPeerProcess {
         }
       }
     });
-    onboarding.host(Files.readString(joinId)
+    onboarding.hostCompact(Files.readString(joinId)
         .trim(), sync.handler(), _ -> {
       try {
         waitFor(marker);

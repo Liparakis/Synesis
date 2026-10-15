@@ -369,10 +369,12 @@ describe("truthful product states", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("connects a runtime-projected pending join through the existing client command", async () => {
+  it("shows the joiner its answer link and lets the inviter use one", async () => {
     const user = userEvent.setup();
-    const connect = vi.fn().mockResolvedValue({apiVersion: "v1", operationId: "join-op", state: "CONNECTED"});
-    const client = {connect} as unknown as ControlPlaneClient;
+    const join = vi.fn().mockResolvedValue({apiVersion: "v1", operationId: "join-op", answerUri: "synesis://answer/SLA3-abc", peerIdentity: "sl1-host", expiresAt: "2026-09-11T02:00:00Z", state: "CONNECTING"});
+    const invite = vi.fn().mockResolvedValue({apiVersion: "v1", operationId: "host-op", inviteUri: "synesis://join/SLB3-xyz", peerIdentity: "sl1-me", expiresAt: "2026-09-11T02:00:00Z", state: "WAITING_FOR_CONNECTION"});
+    const answer = vi.fn().mockResolvedValue({apiVersion: "v1", operationId: "host-op", state: "SENDING_TO_JOINER"});
+    const client = {join, invite, answer} as unknown as ControlPlaneClient;
     const network = {
       status: "UNCONFIGURED",
       peers: [],
@@ -381,11 +383,19 @@ describe("truthful product states", () => {
       relay: {status: "DISABLED", localAddress: "", activeConnections: 0, configured: false, connected: false, relayIdentity: "", authorized: false, activeRouteUsage: 0},
     } as unknown as Snapshot["network"];
 
-    render(<NetworkView network={network} client={client} onboarding={{pendingJoins: [{operationId: "join-op", state: "WAITING_FOR_CONNECT", expiresAt: "2026-09-11T02:00:00Z"}]}}/>);
+    render(<NetworkView network={network} client={client}/>);
 
-    await user.click(screen.getByRole("button", {name: "Complete Join"}));
-    expect(connect).toHaveBeenCalledWith("join-op");
-    expect(screen.getByText("Pending join connected through the local Link runtime.")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Join from an invitation"), "synesis://join/SLB3-xyz");
+    await user.click(screen.getByRole("button", {name: "Join"}));
+    expect(join).toHaveBeenCalledWith("synesis://join/SLB3-xyz");
+    expect(screen.getByText("synesis://answer/SLA3-abc")).toBeInTheDocument();
+
+    expect(screen.queryByLabelText("Answer from the other computer")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Create Invitation"}));
+    await user.type(screen.getByLabelText("Answer from the other computer"), "synesis://answer/SLA3-def");
+    await user.click(screen.getByRole("button", {name: "Use Answer"}));
+    expect(answer).toHaveBeenCalledWith("host-op", "synesis://answer/SLA3-def");
+    expect(screen.getByText("Answer accepted. This computer is now reaching out to the other one.")).toBeInTheDocument();
   });
 
   it("uses Projects as the global route and parses project-local views", () => {

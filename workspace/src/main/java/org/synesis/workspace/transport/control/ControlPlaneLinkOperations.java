@@ -14,11 +14,12 @@ public interface ControlPlaneLinkOperations extends AutoCloseable {
   /**
    * Creates one pending signed invitation.
    *
-   * @param expectedPeer optional expected responder node ID
+   * @param expectedPeer   optional expected responder node ID
+   * @param openRouterPort whether the user chose to have the home router forward a port
    * @return pending host operation
    * @throws OnboardingFailure if Link cannot create the invitation
    */
-  PendingHost createInvitation(String expectedPeer) throws OnboardingFailure;
+  PendingHost createInvitation(String expectedPeer, boolean openRouterPort) throws OnboardingFailure;
 
   /**
    * Imports one pending signed invitation.
@@ -41,29 +42,25 @@ public interface ControlPlaneLinkOperations extends AutoCloseable {
   interface PendingHost extends AutoCloseable {
 
     /**
-     * Returns the exact compact one-way invitation URI, or the legacy SLO1 URI when the
-     * implementation selects the coordinated compatibility flow.
+     * Returns the exact compact invitation URI.
      *
      * @return invitation URI
      */
     String invitationLink();
 
     /**
-     * Consumes one exact legacy SLA2 answer. Compact one-way invitations do not accept an
-     * answer and fail closed through this method.
+     * Accepts the joiner's answer and starts sending toward the addresses it names. It returns at
+     * once; the session completes {@link #completion()}.
      *
      * @param link exact answer URI
-     * @throws OnboardingFailure if Link rejects the answer or session
+     * @throws OnboardingFailure if Link rejects the answer
      */
     void importAnswer(String link) throws OnboardingFailure;
 
     /**
-     * Returns the completion stage for a compact one-way host wait.
+     * Returns the stage that completes when the host's wait for its peer ends.
      *
-     * <p>Legacy host operations return an already-completed stage because their lifecycle is
-     * driven by the explicit answer command.
-     *
-     * @return compact completion stage or an already-completed legacy stage
+     * @return completion stage
      */
     CompletionStage<Void> completion();
 
@@ -87,16 +84,17 @@ public interface ControlPlaneLinkOperations extends AutoCloseable {
   interface PendingJoin extends AutoCloseable {
 
     /**
-     * Returns the exact legacy SLA2 answer URI, or {@code null} for a compact one-way invitation.
+     * Returns the answer URI for the host's user, needed when the two sides are on different
+     * networks.
      *
-     * @return answer URI, or {@code null} when no answer is required
+     * @return answer URI
      */
     String answerLink();
 
     /**
-     * Consumes the answer by starting one authenticated connection.
+     * Dials the host until one authenticated connection is made or the invitation expires.
      *
-     * @throws OnboardingFailure if Link rejects the answer or connection
+     * @throws OnboardingFailure if no connection is made before the invitation expires
      */
     void connect() throws OnboardingFailure;
 
