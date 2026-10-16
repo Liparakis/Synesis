@@ -1,3 +1,35 @@
+# 2026-10-17 — Two homes, one project: four agents completed a WorkGroup across two networks (remaster56)
+
+**Run.** Owner (this PC, leader) and a friend's Windows PC (member) on two home networks, build
+`0.1.0-dev.remaster56-20261017`, private GitHub repository as code remote, project `SynesisTest2` (four-agent goal:
+`slug.py` and `wrap.py`, two writers and two reviewers, mandatory review, `python -m unittest`). Joining used the one
+link: `synesis link invite` on the owner; on the friend, `git clone` then `synesis link join <link> --project`; the
+friend's `ANSWER_LINK` pasted on the owner (`link answer`, `LINK_STATE=CONNECTED`); `link accept` on the owner. Then
+`synesis agents run` with two `claude:sonnet:medium` agents on each computer, started within about a minute.
+Owner: `AGENT_RUN_RESULT=COMPLETED`, 204 s, `AGENT_RESUMES=2`; friend: `COMPLETED`, about 235 s, each agent resumed
+once. Both modules integrated on the leader (`cded733`, `f115c98`), 15 tests pass, 21 of 58 log entries name the
+friend's node, no disconnect during the run. Real current-build acceptance proven across two networks: one-link
+admission, answer-link connection, owner approval, concurrent claims from both computers, lane continuation, review,
+integration, run completion on both sides. Not established: which computer wrote or reviewed which module.
+
+**First attempt (`SynesisTest`, abandoned).** An earlier join (02:08) connected and was accepted, and a drop
+(`LIVENESS_EXPIRED` after 840 s) redialed by itself within 90 s. It failed for these reasons, recorded as open defects:
+
+1. The member could not fetch from GitHub without a prompt (the clone's sign-in had not been stored). Every provider
+   binding on the member was `FAILED` with `CODE_REMOTE_UNAVAILABLE` (`followLeaderIfMember` before the worktree), but
+   agents only saw `workspace_not_ready`/`SESSION_NOT_ACTIVE`, and `provider install` only `WORKTREE_BINDING_STATUS=FAILED`.
+   Neither the join nor the install checks or names this.
+2. The owner's agents started first, wrote both modules, waited for review, exited (a turn ended on a background
+   timer), and the run ended `STALLED` with `AGENT_RESUMES=0` although a connected member could still review.
+3. A second owner run started fresh agents that claimed both reviewer lanes; each review then waited for author
+   admission from authors that had exited (`RECOVERY_HELD`), and that run also ended `STALLED`.
+4. The Windows Firewall rule "Synesis Link" named remaster47's `java.exe` after updates installed without
+   `--allow-link`, so inbound Link was blocked on the LAN until the owner reinstalled with it.
+5. On the leader, `coordination status` prints no `REPLICATION_STATE`; only `replication.log` shows the connection.
+
+The old project was retired: `remove-member` for the friend's node and its Git remote removed; the repository was
+force-pushed with the new project's history and its `refs/synesis/*` deleted.
+
 # 2026-10-17 — The one link joined a friend's computer for real (remaster56, this PC and the VM)
 
 **Run.** Build `0.1.0-dev.remaster56-20261017` (`LINK_COMPATIBILITY=6`) on this PC (owner) and the bridged VM (friend).
