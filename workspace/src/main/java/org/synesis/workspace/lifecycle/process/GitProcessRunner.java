@@ -48,7 +48,9 @@ public final class GitProcessRunner {
 
     /**
      * Runs a required Git command that talks to a remote ({@code push}, {@code fetch}), under the same
-     * environment and hook policy as every other command but with {@link #REMOTE_TIMEOUT}.
+     * hook policy as every other command but with {@link #REMOTE_TIMEOUT}. It keeps the system Git
+     * configuration, where Git for Windows registers the credential helper: without it a private HTTPS
+     * remote cannot be reached (seen 2026-10-16). Hooks stay disabled by {@code core.hooksPath}.
      *
      * @param workdir   Git working directory
      * @param arguments Git arguments after {@code git}
@@ -56,7 +58,7 @@ public final class GitProcessRunner {
      * @throws IOException if Git fails to start, times out, or exits nonzero
      */
     public static String runRemote(Path workdir, String... arguments) throws IOException {
-        return runInternal(workdir, null, REMOTE_TIMEOUT, true, arguments).output();
+        return runInternal(workdir, null, REMOTE_TIMEOUT, true, DEFAULT_MAX_OUTPUT_BYTES, true, arguments).output();
     }
 
     /**
@@ -138,21 +140,23 @@ public final class GitProcessRunner {
      * @throws IOException if Git fails to start or times out
      */
     static Result runResult(Path workdir, int maxOutputBytes, String... arguments) throws IOException {
-        return runInternal(workdir, null, DEFAULT_TIMEOUT, false, maxOutputBytes, arguments);
+        return runInternal(workdir, null, DEFAULT_TIMEOUT, false, maxOutputBytes, false, arguments);
     }
 
     private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required, String... arguments) throws IOException {
-        return runInternal(workdir, index, timeout, required, DEFAULT_MAX_OUTPUT_BYTES, arguments);
+        return runInternal(workdir, index, timeout, required, DEFAULT_MAX_OUTPUT_BYTES, false, arguments);
     }
 
-    private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required, int maxOutputBytes, String... arguments) throws IOException {
+    private static Result runInternal(Path workdir, Path index, Duration timeout, boolean required, int maxOutputBytes, boolean systemConfig, String... arguments) throws IOException {
         Path hooks = Files.createTempDirectory("synesis-empty-hooks-");
         try {
             List<String> command = new ArrayList<>();
             command.add("git");
             command.addAll(List.of(arguments));
             Map<String, String> environment = new HashMap<>();
-            environment.put("GIT_CONFIG_NOSYSTEM", "1");
+            if (!systemConfig) {
+                environment.put("GIT_CONFIG_NOSYSTEM", "1");
+            }
             environment.put("GIT_CONFIG_NOGLOBAL", "1");
             environment.put("GIT_TERMINAL_PROMPT", "0");
             environment.put("GIT_OPTIONAL_LOCKS", "0");
