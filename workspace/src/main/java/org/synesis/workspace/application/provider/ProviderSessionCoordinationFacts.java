@@ -25,7 +25,14 @@ final class ProviderSessionCoordinationFacts {
     private ProviderSessionCoordinationFacts() {
     }
 
-    static boolean cleanlyDetached(ProjectLocation location, Binding binding) {
+    /**
+     * Reports whether the durable log says this session's lane has ended: detached after a clean
+     * shutdown, or completed because its last intent was released. The log is the authority, not
+     * the local binding file. A lane integrated by another computer completes the participant in
+     * the replicated log but never touches this computer's binding, which would stay BOUND to a
+     * participant that can no longer announce.
+     */
+    static boolean laneEnded(ProjectLocation location, Binding binding) {
         Path coordination = location.coordinationDirectory();
         if (!Files.isDirectory(coordination.resolve("events"))) {
             return false;
@@ -33,7 +40,8 @@ final class ProviderSessionCoordinationFacts {
         try {
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
             return location.openCoordinationStore().collaborationProjection().participantState(participant)
-                    .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED).orElse(false);
+                    .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED
+                            || state == org.synesis.coordination.domain.collaboration.Participant.State.COMPLETED).orElse(false);
         } catch (Exception ignored) {
             return false;
         }

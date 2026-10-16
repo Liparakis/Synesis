@@ -23,7 +23,7 @@ import static org.synesis.workspace.application.provider.ProviderBindingFile.req
 import static org.synesis.workspace.application.provider.ProviderBindingFile.sessionsDirectory;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.authorizedRecoveryContinuation;
-import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.cleanlyDetached;
+import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.laneEnded;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.hasActiveManagedAttachment;
 import static org.synesis.workspace.application.provider.ProviderWorkspaceRefresh.controlAdvancedWithoutUnintegratedWorkerWork;
 import static org.synesis.workspace.application.provider.ProviderWorkspaceRefresh.reallocatePreservingSession;
@@ -132,7 +132,7 @@ public final class ProviderSessionBindingService {
                 if (binding.state() == ProviderBindingStatus.TERMINAL || isSessionTerminal(location, binding.sessionId())) {
                     throw new BindingException("SESSION_TERMINAL", "The exact provider session has an irreversible terminal fence");
                 }
-                if (cleanlyDetached(location, binding) && !hasActiveManagedAttachment(location, binding)) {
+                if (laneEnded(location, binding) && !hasActiveManagedAttachment(location, binding)) {
                     return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
                 }
                 if (binding.state().resumesOnEnsure()) {

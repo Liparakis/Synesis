@@ -188,6 +188,57 @@ final class ProviderSessionBindingServiceTest {
         assertEquals("COMPLETED", service.find(location, "codex", "multiple-intents").orElseThrow().status());
     }
 
+    @Test
+    void sessionWhoseLaneWasReleasedElsewhereStartsAFreshSessionButAnOpenLaneKeepsItsSession() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-lane-ended-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "ended@example.invalid");
+        git(root, "config", "user.name", "Lane Ended Test");
+        git(root, "commit", "-m", "baseline");
+        var service = new ProviderSessionBindingService();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+        var intents = new WorkIntentService(store, identity);
+
+        var open = service.ensure(location, "codex", "open-lane").binding();
+        announce(intents, location, open, "open.py");
+        var ended = service.ensure(location, "codex", "ended-lane").binding();
+        UUID endedIntent = announce(intents, location, ended, "ended.py");
+        // The leader's integration releases the lane in the replicated log; this computer's
+        // binding file is never completed, so only the log says the lane is over.
+        intents.release(endedIntent, WorkspaceCollaborationService.participantHandle(ended.sessionId()));
+        Files.writeString(root.resolve("README.md"), "integrated\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "integrated");
+
+        var next = service.ensure(location, "codex", "ended-lane").binding();
+        var stillOpen = service.ensure(location, "codex", "open-lane").binding();
+
+        assertNotEquals(ended.sessionId(), next.sessionId());
+        assertEquals(gitHead(root), next.baseCommit());
+        assertEquals(open.sessionId(), stillOpen.sessionId());
+    }
+
+    private static UUID announce(WorkIntentService intents, ProjectLocation location, ProviderSessionBindingService.Binding binding, String path) throws Exception {
+        UUID id = UUID.randomUUID();
+        assertTrue(intents.announce(new WorkIntent(id,
+                location.projectId(),
+                WorkspaceCollaborationService.participantHandle(binding.sessionId()),
+                "codex",
+                UUID.randomUUID(),
+                "goal",
+                "acceptance",
+                binding.baseCommit(),
+                List.of(ResourceSelector.pathExact(path)),
+                1,
+                UUID.randomUUID(),
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        return id;
+    }
+
     private static boolean completeBinding(ProviderSessionBindingService service, ProjectLocation location, String sessionId, boolean bySession, boolean heldLock) throws Exception {
         if (heldLock) {
             try (var lock = org.synesis.coordination.persistence.ProjectAppendLock.acquire(location.root().resolve(".synesis/coordination"))) {

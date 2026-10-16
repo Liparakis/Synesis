@@ -1,3 +1,32 @@
+# 2026-10-16 — A finished producer on another computer can now start a reviewer lane (real run 5)
+
+Real run 5 of ADR-0098 step 2: leader A (Windows), member B (Linux VM). B's Codex #1 wrote `slug.py` in a producer lane;
+the leader integrated it. Codex #1 was then offered the open `wrap.py` review and called `ensure_session` with a reviewer
+task. Both calls (and the one after `ensure_session {refresh:true}`) were refused with `blocked / workspace_generation_changed
+/ retry`; `get_next_action` kept answering `coordination_intent_required`. No reviewer ever started, `wrap.py` stayed
+`REVIEW_PENDING`, the run stalled.
+
+**Root cause (the first hypothesis, a stale workspace generation, was wrong).** The refusal was not a generation check.
+`WorkIntentAnnouncement.announce` throws `SESSION_EPOCH_FENCED` for a participant that is not `ACTIVE`, and
+`McpSessionEstablishment.announceClaims` (`SESSION_EPOCH_FENCED` branch) reports that as `workspace_generation_changed`.
+The leader's integration released Codex #1's lane in the replicated log, so its participant became `COMPLETED`. On one
+computer the same integration then completes the local binding file (`completeBySessionId`), and the next `ensure` makes
+a new session. On B only the leader's binding files were touched; B's binding stayed `BOUND` with the same session id, so
+`ensure` resumed it (even with `refresh`) and every announce hit the completed participant. Single-PC is not affected by
+this path, but a session whose binding was left `BOUND` after its lane was released any other way would be.
+
+**Changed.** `ProviderSessionBindingService.ensure` now starts a fresh session (new binding on the current control head)
+when the durable log says the participant's lane has ended: `DETACHED` (as before) or `COMPLETED`
+(`ProviderSessionCoordinationFacts.laneEnded`, replaces `cleanlyDetached`). A participant is `COMPLETED` only when it owns
+no intent, and an active managed attachment still blocks the rebind. A caller with an open lane is unchanged; the stale
+workspace refusal (`WORKSPACE_STALE_DIRTY`, generation check) is not weakened.
+
+**Left as is.** The `SESSION_EPOCH_FENCED` to `workspace_generation_changed` mapping is still misleading for a revoked or
+cancelled participant; it is no longer reached by a finished producer.
+
+**Evidence.** `ProviderSessionBindingServiceTest.sessionWhoseLaneWasReleasedElsewhereStartsAFreshSessionButAnOpenLaneKeepsItsSession`
+failed before the change (same session id after the lane was released) and passes after. No real run of the fix yet.
+
 # 2026-10-16 — A new agent is now told it may review a snapshot awaiting review (real run 4 follow-up)
 
 Real run 4 of ADR-0098 step 2 (see the entry below) left `wrap.py` `REVIEW_PENDING` under mandatory review: a fresh agent
