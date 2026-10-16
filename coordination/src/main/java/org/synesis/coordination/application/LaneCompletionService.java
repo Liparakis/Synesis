@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityLifecycleState;
 import org.synesis.coordination.domain.capability.CapabilityRequestPayload;
 import org.synesis.coordination.domain.capability.CapabilityRequestRecord;
+import org.synesis.coordination.domain.collaboration.LaneCompletionRules;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.contract.ContractCodec;
 import org.synesis.coordination.domain.collaboration.NoChangeCompletion;

@@ -1053,6 +1053,36 @@ class AgentNextActionServiceTest {
         assertFalse(ownerResponse.toJson().contains("REVIEW_ADMISSION_REQUIRED"));
     }
 
+    /**
+     * A reviewer lane is admitted only beside a producer of another participant. The tests that put one participant
+     * on both sides of a review need that other producer on the log first, and release it once the reviewer is in.
+     *
+     * @return the other producer's lane
+     */
+    private static UUID appendOtherProducer(PredictionEventStore store,
+            org.synesis.link.identity.NodeIdentity identity,
+            WorkIntent producer) throws Exception {
+        UUID otherId = UUID.randomUUID();
+        WorkIntent other = new WorkIntent(otherId,
+                producer.projectId(),
+                "agt_other_producer",
+                "codex",
+                UUID.randomUUID(),
+                "Implement the rest",
+                "Publish the rest",
+                producer.baseCommit(),
+                List.of(ResourceSelector.pathExact("src/Other.java")),
+                1,
+                producer.workGroupId(),
+                WorkIntent.defaultAuthorityLineage(otherId),
+                WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER,
+                List.of(),
+                List.of());
+        store.append(otherId, PredictionEventType.WORK_INTENT_ANNOUNCED, identity.nodeId(), CollaborationCodec.encodeIntent(other), identity);
+        return otherId;
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void selfReviewGrantIsNotProjectedAsAnExecutableReviewAction() throws Exception {
@@ -1067,6 +1097,7 @@ class AgentNextActionServiceTest {
         String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        UUID otherProducer = appendOtherProducer(store, identity, producer.intent());
         UUID reviewerIntentId = UUID.randomUUID();
         WorkIntent reviewer = new WorkIntent(reviewerIntentId,
                 producer.intent().projectId(),
@@ -1082,9 +1113,10 @@ class AgentNextActionServiceTest {
                 WorkIntent.defaultAuthorityLineage(reviewerIntentId),
                 WorkIntent.Status.ANNOUNCED,
                 WorkIntent.Role.REVIEWER,
-                List.of(ResourceSelector.pathExact("src/Product.java")),
+                List.of(),
                 List.of());
         store.append(reviewer.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED, identity.nodeId(), CollaborationCodec.encodeIntent(reviewer), identity);
+        store.append(otherProducer, PredictionEventType.WORK_INTENT_RELEASED, identity.nodeId(), CollaborationCodec.encodeRelease(otherProducer), identity);
         assertEquals(producer.intent().workGroupId(), reviewer.workGroupId());
         LaneGrant selfGrant = new LaneGrant(UUID.randomUUID(), producer.intent().workGroupId(), producer.intent().intentId(), participant, producer.intent().version(), true);
         store.append(selfGrant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(selfGrant), identity);
@@ -1113,6 +1145,7 @@ class AgentNextActionServiceTest {
         var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
         PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
 
+        UUID otherProducer = appendOtherProducer(store, identity, producer.intent());
         UUID reviewerIntentId = UUID.randomUUID();
         WorkIntent reviewer = new WorkIntent(reviewerIntentId,
                 producer.intent().projectId(),
@@ -1128,9 +1161,10 @@ class AgentNextActionServiceTest {
                 WorkIntent.defaultAuthorityLineage(reviewerIntentId),
                 WorkIntent.Status.ANNOUNCED,
                 WorkIntent.Role.REVIEWER,
-                List.of(ResourceSelector.pathExact("src/Product.java")),
+                List.of(),
                 List.of());
         store.append(reviewer.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED, identity.nodeId(), CollaborationCodec.encodeIntent(reviewer), identity);
+        store.append(otherProducer, PredictionEventType.WORK_INTENT_RELEASED, identity.nodeId(), CollaborationCodec.encodeRelease(otherProducer), identity);
 
         LaneGrant continuationGrant = new LaneGrant(UUID.randomUUID(), reviewer.workGroupId(), reviewer.intentId(), participant, reviewer.version(), true);
         store.append(continuationGrant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(continuationGrant), identity);
@@ -1501,7 +1535,7 @@ class AgentNextActionServiceTest {
                 List.of("PATH_EXACT:src/task_tracker.py"),
                 "refs/synesis/snapshots/snap_reviewer_first",
                 "reviewer-first-integrity");
-        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(UUID.nameUUIDFromBytes("syn039-reviewer-first-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(ownerClaim.intent().taskId(),
                 "snap_reviewer_first",
                 identity.nodeId(),
                 "supervisor",
@@ -1592,7 +1626,7 @@ class AgentNextActionServiceTest {
                 List.of("PATH_EXACT:tests/completed_review.py"),
                 "refs/synesis/snapshots/snap_completed_review",
                 "completed-review-integrity");
-        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(UUID.nameUUIDFromBytes("syn039-completed-review-task".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(completedClaim.intent().taskId(),
                 "snap_completed_review",
                 identity.nodeId(),
                 "supervisor",

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -12,6 +13,8 @@ import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -49,6 +52,35 @@ final class ReviewValidationPayloadTest {
                 PredictionEventType.LANE_GRANT_CONSUMED,
                 identity.nodeId(),
                 CollaborationCodec.encodeLaneGrant(grant),
+                identity);
+        // A decision is about a snapshot the log holds; admission refuses one about nothing.
+        store.append(UUID.randomUUID(),
+                PredictionEventType.TASK_SNAPSHOT_CREATED,
+                identity.nodeId(),
+                new TaskSnapshotPayload(taskId,
+                        "snap_accept",
+                        "node",
+                        "supervisor",
+                        "worker",
+                        "session-owner",
+                        "base",
+                        "commit-accept",
+                        List.of("src/a.py"),
+                        List.of(),
+                        "accepted work",
+                        new SnapshotProvenance(groupId,
+                                intentId,
+                                UUID.randomUUID(),
+                                "agt-owner",
+                                "session-owner",
+                                1,
+                                List.of(),
+                                List.of(),
+                                List.of("PATH:src/a.py"),
+                                "refs/synesis/snapshots/snap_accept",
+                                "integrity",
+                                "artifacts"),
+                        true).encode(),
                 identity);
         ReviewValidationPayload accepted = new ReviewValidationPayload(grantId,
                 groupId,

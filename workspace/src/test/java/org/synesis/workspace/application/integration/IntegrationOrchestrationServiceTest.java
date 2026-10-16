@@ -130,7 +130,10 @@ class IntegrationOrchestrationServiceTest {
             Files.createDirectories(lane.resolve("src"));
             Files.writeString(lane.resolve("src/claimed.py"), "claimed\n");
 
-            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(SnapshotRequest.forTask(UUID.randomUUID(), "node", "sup", "worker", "lane", lane, root, "snapshot", java.util.Optional.empty(), List.of()));
+            TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(intent.taskId(), "node", "sup", "worker", "lane", lane, root, "snapshot", java.util.Optional.empty(), List.of(),
+                SnapshotRequest.ClaimScope.unscoped(intent.selectors()),
+                new SnapshotRequest.Lane(intent.workGroupId(), intent.intentId(), intent.participant(), "lane", intent.version(), intent.authorityLineageId(), List.of()),
+                false, baselineCommit, null));
             assertEquals(baselineCommit, snapshot.baseCommit());
             assertEquals(List.of("src/claimed.py"), snapshot.changedPaths());
             TaskSnapshotPayload payload = new TaskSnapshotPayload(snapshot.taskId(),
@@ -208,8 +211,6 @@ class IntegrationOrchestrationServiceTest {
         assertTrue(owner.announce(ownerIntent).acquired());
         assertTrue(new WorkIntentService(store, identity).announce(contenderIntent).acquired());
         new WorkIntentService(store, identity).request("agt_contender", ownerIntentId, org.synesis.coordination.domain.collaboration.CoordinationRequest.Kind.CONTRACT, "agree on API");
-        new WorkIntentService(store, identity).detach("agt_contender");
-        new WorkIntentService(store, identity).detach("agt_owner");
 
         Path laneParent = Files.createTempDirectory("synesis-integration-lane-parent-");
         Path lane = laneParent.resolve("lane");
@@ -236,6 +237,9 @@ class IntegrationOrchestrationServiceTest {
                     snapshot.provenance(),
                     false);
             store.append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload.encode(), identity);
+            // The lanes end after the owner published, as they do when a finished lane is released.
+            new WorkIntentService(store, identity).detach("agt_contender");
+            new WorkIntentService(store, identity).detach("agt_owner");
 
             var response = new IntegrationOrchestrationService().orchestrateIntegration(root, store, identity);
             assertNotEquals(AgentReason.OWNER_REQUEST_PENDING, response.reason(), response.toString());

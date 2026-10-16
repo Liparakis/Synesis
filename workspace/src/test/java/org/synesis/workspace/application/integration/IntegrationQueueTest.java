@@ -428,6 +428,8 @@ class IntegrationQueueTest {
                 WorkIntent.Status.ANNOUNCED);
         WorkIntentService intentService = new WorkIntentService(store, identity);
         assertTrue(intentService.announce(owner).acquired());
+        // The owner publishes, then its process is lost and a successor continues the lane.
+        publishSnapshot(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()), identity, root, task, "snap_predecessor", ownerLane, group, ownerCommit, owner.participant(), "src/recovered.py", "PATH_EXACT:src/recovered.py", ownerLane, List.of());
         intentService.suspend(owner.participant());
         String recoveryReference = root.resolve("recovery").toAbsolutePath() + "#hash";
         intentService.holdRecovery(owner.participant(), recoveryReference);
@@ -457,9 +459,6 @@ class IntegrationQueueTest {
                 owner.version(),
                 true));
         intentService.continueFromRecovery(new LaneContinuation(grantId, ownerLane, successor, owner.participant(), successor.participant(), owner.version(), recoveryReference));
-
-        store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
-        publishSnapshot(store, identity, root, task, "snap_predecessor", ownerLane, group, ownerCommit, owner.participant(), "src/recovered.py", "PATH_EXACT:src/recovered.py", ownerLane, List.of());
 
         var integration = new IntegrationOrchestrationService().orchestrateIntegration(root, new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()), identity);
         assertEquals(AgentStatus.COMPLETED, integration.status(), integration.toJson());

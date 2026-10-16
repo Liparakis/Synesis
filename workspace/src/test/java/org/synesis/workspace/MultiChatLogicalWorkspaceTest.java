@@ -186,12 +186,13 @@ final class MultiChatLogicalWorkspaceTest {
         Path sourceWorktree = Path.of(sourceBinding.worktreePath());
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
         List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("src/conflict.py"));
-        assertTrue(collaboration.announce(root, "codex", "repair-source", "source", "repair", selectors).acquired());
+        var sourceClaim = collaboration.announce(root, "codex", "repair-source", "source", "repair", selectors);
+        assertTrue(sourceClaim.acquired());
         UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Files.createDirectories(sourceWorktree.resolve("src"));
         Files.writeString(sourceWorktree.resolve("src/conflict.py"), "original\n");
-        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(UUID.randomUUID(), "node", "sup", "worker", sourceBinding.sessionId(), sourceWorktree, root, "conflict", java.util.Optional.empty(), List.of(),
+        TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(sourceClaim.intent().taskId(), "node", "sup", "worker", sourceBinding.sessionId(), sourceWorktree, root, "conflict", java.util.Optional.empty(), List.of(),
             SnapshotRequest.ClaimScope.unscoped(selectors),
             SnapshotRequest.Lane.of(group, sourceIntentId, WorkspaceCollaborationService.participantHandle(sourceBinding.sessionId()), sourceBinding.sessionId(), 1, List.of()),
             false, null, null));

@@ -18,7 +18,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
+import org.synesis.coordination.domain.collaboration.AppendAdmission;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
+import org.synesis.coordination.domain.collaboration.ProjectionView;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
 import org.synesis.coordination.domain.contract.ContractProjection;
 import org.synesis.coordination.domain.conversation.ConversationProjection;
@@ -42,7 +44,7 @@ import org.synesis.link.identity.NodeIdentity;
  * projection replay is
  * deterministic.
  */
-public final class PredictionEventStore {
+public final class PredictionEventStore implements ProjectionView {
 
     /**
      * Test-only hook; a volatile reference keeps a fault visible to the fresh store opened by a service during the same
@@ -123,7 +125,10 @@ public final class PredictionEventStore {
             new Stage(workGroupProjection::validate, workGroupProjection::apply),
             new Stage(contractProjection::validate, contractProjection::apply),
             new Stage(operatorRequestProjection::validate, operatorRequestProjection::apply),
-            new Stage(conversationProjection::validate, conversationProjection::apply));
+            new Stage(conversationProjection::validate, conversationProjection::apply),
+            // Last, so a rule of one projection answers first. It reads every projection and applies nothing.
+            new Stage(event -> AppendAdmission.check(event, this), event -> {
+            }));
     /**
      * Events replayed into this instance's in-memory projections.
      */
@@ -202,16 +207,14 @@ public final class PredictionEventStore {
      */
     public synchronized PredictionEvent append(UUID predictionId, PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(predictionId, "prediction ID");
-        // A caller may hold a long-lived store while another connection
-        // appends through a fresh instance.  Derive the append head from the
-        // durable directory so the stale instance cannot overwrite the other
-        // event or fork the hash chain.  Its in-memory projections remain a
-        // caller concern; authority-sensitive services use fresh projections
-        // at their boundaries.
+        // A caller may hold a long-lived store while another connection appends through a fresh
+        // instance. Reading the durable head brings this instance's projections up to it first, so
+        // the event is validated against the log it will be placed on and not against what this
+        // instance saw when it opened. Without that, a rule would be checked on stale state.
         //
         // Reading the head and placing the file are not one step across processes, and not every
         // appender holds the project append lock. A sequence another writer took in between is
-        // never replaced: this append is made again on the new head.
+        // never replaced: this append is made again on the new head, after catching up again.
         for (int attempt = 1; ; attempt++) {
             Head durableHead = durableHead();
             long sequence = durableHead.sequence() + 1L;
@@ -359,13 +362,17 @@ public final class PredictionEventStore {
     }
 
     /**
-     * Returns the verified durable event-log head.
+     * Returns the verified durable event-log head, after applying to this instance's projections every verified event
+     * it has not applied yet.
      *
      * @throws IOException              when payload validation or durable I/O fails
      * @throws GeneralSecurityException when signing or signature verification fails
      */
     private synchronized Head durableHead() throws IOException, GeneralSecurityException {
         return scan(event -> {
+            if (event.sequence() > events.size()) {
+                replay(event);
+            }
         });
     }
 
@@ -548,7 +555,7 @@ public final class PredictionEventStore {
      * @throws GeneralSecurityException when signing or signature verification fails
      */
     private void load() throws IOException, GeneralSecurityException {
-        scan(this::replay);
+        durableHead();
     }
 
     /**

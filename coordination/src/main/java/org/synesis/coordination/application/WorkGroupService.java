@@ -3,19 +3,17 @@ package org.synesis.coordination.application;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.AppendAdmission;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.ParticipantId;
-import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkGroupVersion;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
-import org.synesis.coordination.domain.task.TaskCompletionState;
-import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -41,28 +39,6 @@ public final class WorkGroupService {
         this.store = CoordinationNullException.requireNonNull(store, "store");
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
         this.appends = new ProjectAppends(store);
-    }
-
-    /**
-     * Verifies the exact snapshot, owner lane, epoch, and review state for this grant.
-     *
-     * @param current fresh authoritative project projection
-     * @throws IOException when payload validation or durable I/O fails
-     */
-    private static void validateSnapshotBoundGrant(PredictionEventStore current, LaneGrant grant) throws IOException {
-        SnapshotId snapshotId = grant.snapshot()
-                .orElseThrow(() -> new CoordinationException("REVIEW_SNAPSHOT_NOT_FOUND"));
-        TaskSnapshotRecord snapshot = current.taskCompletionProjection().findSnapshotById(snapshotId)
-                .orElseThrow(() -> new CoordinationException("REVIEW_SNAPSHOT_NOT_FOUND"));
-        if (!snapshot.reviewRequired() || !snapshot.provenance().workGroupIdentity().equals(grant.group())
-                || !snapshot.provenance().laneIdentity().equals(grant.targetIntent()) || !snapshot.provenance()
-                .claimEpochIdentity().equals(grant.epoch()) || snapshot.provenance().participantIdentity()
-                .equals(grant.targetParticipantIdentity()) ||
-                current.taskCompletionProjection().snapshotState(snapshot.snapshotIdentity())
-                        .orElse(TaskCompletionState.ACTIVE) != TaskCompletionState.REVIEW_PENDING
-                || current.workGroupProjection().reviewValidationForSnapshot(snapshot.snapshotIdentity()).isPresent()) {
-            throw new CoordinationException("REVIEW_SNAPSHOT_MISMATCH");
-        }
     }
 
     /**
@@ -147,13 +123,7 @@ public final class WorkGroupService {
             if (!current.workGroupProjection().grantAvailable(grantKey)) {
                 throw new CoordinationException("LANE_GRANT_REPLAYED");
             }
-            if (grant.snapshotId() == null) {
-                if (current.collaborationProjection().successorIntent(grant.targetIntent()).isPresent()) {
-                    throw new CoordinationException("LANE_GRANT_TARGET_STALE");
-                }
-            } else {
-                validateSnapshotBoundGrant(current, grant);
-            }
+            AppendAdmission.requireGrantTargetCurrent(current, grant);
             if (!grant.targetParticipantIdentity().equals(participant) || !grant.targetIntent().equals(intent)) {
                 throw new CoordinationException("LANE_GRANT_TARGET_MISMATCH");
             }

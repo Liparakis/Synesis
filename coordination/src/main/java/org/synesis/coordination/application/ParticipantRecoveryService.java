@@ -6,6 +6,7 @@ import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.AppendAdmission;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -44,7 +45,8 @@ final class ParticipantRecoveryService {
     }
 
     /**
-     * Revalidates source authority, claim epoch, recovery snapshot, grant, and target.
+     * Revalidates the continuation before it is appended. The rules that guard authority are the projections'
+     * ({@link AppendAdmission}); this early answer runs the same ones, then checks the successor itself.
      *
      * @param current      fresh authoritative project projection
      * @param continuation proposed successor continuation
@@ -53,64 +55,10 @@ final class ParticipantRecoveryService {
     private static void validateContinuation(PredictionEventStore current,
             LaneContinuation continuation,
             boolean requireGrant) throws IOException {
+        AppendAdmission.requireLawfulContinuation(current, continuation, requireGrant);
         WorkIntent source = current.collaborationProjection().intent(continuation.sourceIntent())
                 .orElseThrow(() -> new CoordinationException("CONTINUATION_SOURCE_NOT_FOUND"));
-        if (!source.participantIdentity().equals(continuation.sourceOwner())) {
-            throw new CoordinationException("CONTINUATION_SOURCE_MISMATCH");
-        }
-        if (!source.claimEpoch().equals(continuation.claimEpoch())) {
-            throw new CoordinationException("CLAIM_EPOCH_STALE");
-        }
-        boolean recoveryHeld = current.collaborationProjection().participantState(continuation.sourceOwner())
-                .filter(state -> state == Participant.State.RECOVERY_HELD).isPresent();
-        if (!recoveryHeld) {
-            throw new CoordinationException("RECOVERY_NOT_HELD");
-        }
-        if (current.collaborationProjection().recoverySnapshotReference(continuation.sourceOwner())
-                .filter(continuation.recoverySnapshot()::equals).isEmpty()) {
-            throw new CoordinationException("RECOVERY_SNAPSHOT_MISMATCH");
-        }
-        WorkGroup group = current.workGroupProjection().group(source.group())
-                .orElseThrow(() -> new CoordinationException("WORK_GROUP_NOT_FOUND"));
-        if (group.status() != WorkGroup.Status.ACTIVE) {
-            throw new CoordinationException("WORK_GROUP_NOT_ACTIVE");
-        }
-        LaneGrant grant = current.workGroupProjection().grants().stream()
-                .filter(candidate -> candidate.identity().equals(continuation.grant())).findFirst().orElse(null);
-        if (grant == null && requireGrant) {
-            throw new CoordinationException("LANE_GRANT_NOT_FOUND");
-        }
-        if (grant != null && (!grant.singleUse() || !grant.epoch().equals(continuation.claimEpoch())
-                || !grant.targetParticipantIdentity().equals(continuation.targetOwner()) || !grant.targetIntent()
-                .equals(continuation.targetIntent().identity()) || !grant.group().equals(source.group()))) {
-            throw new CoordinationException("LANE_GRANT_TARGET_MISMATCH");
-        }
-        validateContinuationRoleIsolation(current, source, continuation);
         validateContinuationTarget(current, source, continuation);
-    }
-
-    /**
-     * Prevents one successor participant from becoming both sides of a review obligation.
-     *
-     * @param current      freshly loaded project projection
-     * @param source       recovery-held source intent
-     * @param continuation proposed successor continuation
-     * @throws IOException when the successor identity is already the opposite active role
-     */
-    private static void validateContinuationRoleIsolation(PredictionEventStore current,
-            WorkIntent source,
-            LaneContinuation continuation) throws IOException {
-        if (source.role() != WorkIntent.Role.PRODUCER && source.role() != WorkIntent.Role.REVIEWER) {
-            return;
-        }
-        WorkIntent.Role oppositeRole =
-                source.role() == WorkIntent.Role.PRODUCER ? WorkIntent.Role.REVIEWER : WorkIntent.Role.PRODUCER;
-        boolean conflicts = current.collaborationProjection().activeIntents().stream()
-                .filter(intent -> intent.group().equals(source.group())).filter(intent -> intent.role() == oppositeRole)
-                .anyMatch(intent -> intent.participantIdentity().equals(continuation.targetOwner()));
-        if (conflicts) {
-            throw new CoordinationException("REVIEW_SELF_NOT_ALLOWED");
-        }
     }
 
     /**

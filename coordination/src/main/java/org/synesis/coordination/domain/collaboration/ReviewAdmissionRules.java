@@ -1,4 +1,4 @@
-package org.synesis.coordination.application;
+package org.synesis.coordination.domain.collaboration;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -7,9 +7,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.synesis.coordination.domain.collaboration.CoordinationRequest;
-import org.synesis.coordination.domain.collaboration.LaneGrant;
-import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotId;
@@ -18,19 +15,57 @@ import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationMissingElementException;
-import org.synesis.coordination.persistence.PredictionEventStore;
 
 /**
  * Decides, from a fresh project projection, whether a review request, a reviewer admission, or a review grant is
  * allowed, and whether a repeated review request is an idempotent replay.
  *
- * <p>Every rule is a stateless check over projected state and appends nothing, so {@link CoordinationRequestService}
+ * <p>Every rule is a stateless check over projected state and appends nothing, so {@code CoordinationRequestService}
  * only sequences these decisions inside the project append lock. Callers must pass a projection read inside that
  * lock; the rules never re-read durable state.</p>
  */
-final class ReviewAdmissionRules {
+public final class ReviewAdmissionRules {
+
+    /**
+     * Refusal code of a reviewer lane announced with no producer to review.
+     */
+    public static final String REVIEWER_REQUIRES_PRODUCER = "REVIEWER_REQUIRES_PRODUCER";
 
     private ReviewAdmissionRules() {
+    }
+
+    /**
+     * Refuses a reviewer lane that has no producer lane to review; any other lane passes.
+     *
+     * @param current project projections
+     * @param intent  the lane about to be announced
+     * @throws IOException with {@link #REVIEWER_REQUIRES_PRODUCER} when a reviewer has nobody to review
+     */
+    public static void requireProducerToReview(ProjectionView current, WorkIntent intent) throws IOException {
+        if (intent.role() == WorkIntent.Role.REVIEWER && !hasProducerToReview(current, intent)) {
+            throw new CoordinationException(REVIEWER_REQUIRES_PRODUCER);
+        }
+    }
+
+    /**
+     * Validates a review request that is about to be recorded as new, as {@link #existingReviewRequest} does
+     * before it lets a service append one.
+     *
+     * @param current project projections
+     * @param request the request being recorded
+     * @param target  the producer lane it names
+     * @throws IOException when the requester may not ask for this review
+     */
+    public static void validateNewReviewRequest(ProjectionView current, CoordinationRequest request, WorkIntent target)
+            throws IOException {
+        validateReviewDirection(current, request.requesterIdentity(), target);
+        SnapshotId snapshot = request.snapshot().orElse(null);
+        requireSnapshotWhenMandatory(current, target, snapshot);
+        if (snapshot != null) {
+            validateReviewAdmission(current, request.requesterIdentity(), target);
+            validateReviewCandidate(current, target, snapshot);
+            validateReviewSnapshotUnassigned(current, snapshot, request.identity());
+        }
     }
 
     /**
@@ -46,7 +81,7 @@ final class ReviewAdmissionRules {
      * @param reviewer the reviewer intent about to be announced
      * @return {@code true} when there is a producer lane for it to review
      */
-    static boolean hasProducerToReview(PredictionEventStore current, WorkIntent reviewer) {
+    public static boolean hasProducerToReview(ProjectionView current, WorkIntent reviewer) {
         return current.collaborationProjection().activeIntents().stream()
                 .filter(intent -> intent.role() == WorkIntent.Role.PRODUCER && intent.workGroupId().equals(reviewer.workGroupId()) && !intent.participant().equals(reviewer.participant()))
                 .anyMatch(producer -> reviewer.reviewTargetSelectors().isEmpty() || reviewTargetsMatch(reviewer, producer));
@@ -55,7 +90,7 @@ final class ReviewAdmissionRules {
     /**
      * Validates the semantic direction of an explicit review request.
      */
-    private static void validateReviewDirection(PredictionEventStore current,
+    private static void validateReviewDirection(ProjectionView current,
             ParticipantId requester,
             WorkIntent target) throws IOException {
         if (target.role() != WorkIntent.Role.PRODUCER) {
@@ -92,8 +127,12 @@ final class ReviewAdmissionRules {
 
     /**
      * Returns whether every declared review target overlaps a producer selector.
+     *
+     * @param reviewer reviewer lane with its declared targets
+     * @param producer producer lane
+     * @return {@code true} when the reviewer's targets are covered by the producer's claims
      */
-    static boolean reviewTargetsMatch(WorkIntent reviewer, WorkIntent producer) {
+    public static boolean reviewTargetsMatch(WorkIntent reviewer, WorkIntent producer) {
         return reviewer.reviewTargetSelectors().stream()
                 .allMatch(targetSelector -> producer.selectors().stream().anyMatch(targetSelector::overlaps));
     }
@@ -105,7 +144,7 @@ final class ReviewAdmissionRules {
      * @param target  proposed target intent
      * @throws IOException when payload validation or durable I/O fails
      */
-    private static void validateReviewAdmission(PredictionEventStore current,
+    private static void validateReviewAdmission(ProjectionView current,
             ParticipantId requester,
             WorkIntent target) throws IOException {
         validateReviewDirection(current, requester, target);
@@ -123,10 +162,11 @@ final class ReviewAdmissionRules {
      * Validates the review request invariant before the state transition.
      *
      * @param current fresh authoritative project projection
+     * @param request the request being served
      * @param target  proposed target intent
      * @throws IOException when payload validation or durable I/O fails
      */
-    static void validateReviewRequest(PredictionEventStore current,
+    public static void validateReviewRequest(ProjectionView current,
             CoordinationRequest request,
             WorkIntent target) throws IOException {
         validateReviewAdmission(current, request.requesterIdentity(), target);
@@ -141,7 +181,7 @@ final class ReviewAdmissionRules {
     /**
      * Rejects an unpinned review request when the work group makes review mandatory.
      */
-    private static void requireSnapshotWhenMandatory(PredictionEventStore current,
+    private static void requireSnapshotWhenMandatory(ProjectionView current,
             WorkIntent target,
             SnapshotId snapshot) throws IOException {
         boolean mandatoryReview = current.workGroupProjection().group(target.group())
@@ -158,7 +198,7 @@ final class ReviewAdmissionRules {
      * @param target  proposed target intent
      * @throws IOException when payload validation or durable I/O fails
      */
-    private static void validateReviewCandidate(PredictionEventStore current, WorkIntent target, SnapshotId snapshotId)
+    private static void validateReviewCandidate(ProjectionView current, WorkIntent target, SnapshotId snapshotId)
             throws IOException {
         TaskSnapshotRecord snapshot = current.taskCompletionProjection().findSnapshotById(snapshotId)
                 .orElseThrow(() -> new CoordinationException("REVIEW_SNAPSHOT_NOT_FOUND"));
@@ -187,7 +227,7 @@ final class ReviewAdmissionRules {
     /**
      * Follows durable successor links and detects cycles while checking the target intent.
      */
-    private static boolean isSuccessorOf(PredictionEventStore current,
+    private static boolean isSuccessorOf(ProjectionView current,
             WorkIntentId sourceIntentId,
             WorkIntentId targetIntentId) {
         Set<WorkIntentId> visited = new HashSet<>();
@@ -211,7 +251,7 @@ final class ReviewAdmissionRules {
      * @param current fresh authoritative project projection
      * @throws IOException when payload validation or durable I/O fails
      */
-    private static void validateReviewSnapshotUnassigned(PredictionEventStore current,
+    private static void validateReviewSnapshotUnassigned(ProjectionView current,
             SnapshotId snapshotId,
             RequestId requestId) throws IOException {
         UUID ownGrantId = requestId == null ? null : LaneGrant.reviewGrantId(requestId.value());
@@ -244,7 +284,7 @@ final class ReviewAdmissionRules {
      * @param snapshot          exact candidate snapshot, or {@code null} for an unpinned request
      * @return matching request, if one exists
      */
-    private static CoordinationRequest findExistingReviewRequest(PredictionEventStore current,
+    private static CoordinationRequest findExistingReviewRequest(ProjectionView current,
             ParticipantId requester,
             WorkIntentId conflictingIntent,
             SnapshotId snapshot) {
@@ -266,7 +306,7 @@ final class ReviewAdmissionRules {
      * @param existing  matching review request
      * @return {@code true} when the response and grant still identify the same obligation
      */
-    private static boolean hasCurrentAcceptedReviewGrant(PredictionEventStore current,
+    private static boolean hasCurrentAcceptedReviewGrant(ProjectionView current,
             ParticipantId requester,
             WorkIntent target,
             SnapshotId snapshot,
@@ -294,8 +334,15 @@ final class ReviewAdmissionRules {
 
     /**
      * Applies review-specific admission and idempotent replay rules.
+     *
+     * @param current           project projections
+     * @param requester         requesting participant
+     * @param conflictingIntent lane the review targets
+     * @param snapshot          exact candidate snapshot, or {@code null} for an unpinned request
+     * @return the request to replay, or empty when a new request may be appended
+     * @throws IOException when the requester may not ask for this review
      */
-    static Optional<CoordinationRequest> existingReviewRequest(PredictionEventStore current,
+    public static Optional<CoordinationRequest> existingReviewRequest(ProjectionView current,
             ParticipantId requester,
             WorkIntentId conflictingIntent,
             SnapshotId snapshot) throws IOException {
@@ -320,7 +367,7 @@ final class ReviewAdmissionRules {
      * @return existing request when its durable response remains replayable
      * @throws IOException when the target was superseded or no request can be replayed
      */
-    private static Optional<CoordinationRequest> replayRequestForMissingReviewTarget(PredictionEventStore current,
+    private static Optional<CoordinationRequest> replayRequestForMissingReviewTarget(ProjectionView current,
             WorkIntentId conflictingIntent,
             CoordinationRequest existing) throws IOException {
         if (current.collaborationProjection().successorIntent(conflictingIntent).isPresent()) {
@@ -343,7 +390,7 @@ final class ReviewAdmissionRules {
      * @return the request to replay, or empty when a new request may be appended
      * @throws IOException when the candidate is stale, unauthorized, or malformed
      */
-    private static Optional<CoordinationRequest> existingReviewRequestForTarget(PredictionEventStore current,
+    private static Optional<CoordinationRequest> existingReviewRequestForTarget(ProjectionView current,
             ParticipantId requester,
             WorkIntent target,
             SnapshotId snapshot,
@@ -371,7 +418,7 @@ final class ReviewAdmissionRules {
      * @param existing  matching review request, if one exists
      * @throws IOException when the group requires a snapshot or the pinned candidate is invalid
      */
-    private static void validateReviewSnapshotRequest(PredictionEventStore current,
+    private static void validateReviewSnapshotRequest(ProjectionView current,
             ParticipantId requester,
             WorkIntent target,
             SnapshotId snapshot,
@@ -393,7 +440,7 @@ final class ReviewAdmissionRules {
      * @param existing matching review request, if one exists
      * @return {@code true} when the existing response remains the idempotent result
      */
-    private static boolean shouldReplayDurableReviewResponse(PredictionEventStore current,
+    private static boolean shouldReplayDurableReviewResponse(ProjectionView current,
             WorkIntent target,
             SnapshotId snapshot,
             CoordinationRequest existing) {
@@ -416,7 +463,7 @@ final class ReviewAdmissionRules {
      * @param status  requested response status
      * @throws IOException when review authority or candidate state is invalid
      */
-    static void validateReviewApproval(PredictionEventStore current,
+    public static void validateReviewApproval(ProjectionView current,
             CoordinationRequest request,
             CoordinationRequest.Status status) throws IOException {
         if (request.status() != CoordinationRequest.Status.PENDING || status != CoordinationRequest.Status.ACCEPTED

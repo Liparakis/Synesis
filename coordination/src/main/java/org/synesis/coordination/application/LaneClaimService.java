@@ -5,6 +5,7 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ClaimConflict;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
@@ -49,9 +50,6 @@ final class LaneClaimService {
         this.signer = CoordinationNullException.requireNonNull(signer, "signer");
     }
 
-    /** Refusal of a reviewer lane announced while its work group has no producer lane for it to review. */
-    static final String REVIEWER_REQUIRES_PRODUCER = "REVIEWER_REQUIRES_PRODUCER";
-
     /**
      * Announces an intent and atomically acquires all requested selectors.
      *
@@ -75,9 +73,7 @@ final class LaneClaimService {
             if (existingGroup != null && existingGroup.status() != WorkGroup.Status.ACTIVE) {
                 throw new CoordinationException("WORK_GROUP_NOT_ACTIVE");
             }
-            if (intent.role() == WorkIntent.Role.REVIEWER && !ReviewAdmissionRules.hasProducerToReview(current, intent)) {
-                throw new CoordinationException(REVIEWER_REQUIRES_PRODUCER);
-            }
+            ReviewAdmissionRules.requireProducerToReview(current, intent);
             if (existingGroup == null) {
                 WorkGroup group = new WorkGroup(intent.group().value(),
                         intent.project().value(),

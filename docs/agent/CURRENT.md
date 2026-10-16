@@ -1,3 +1,50 @@
+# 2026-10-16 — Every rule that guards authority is checked by the log, not only by a service
+
+The audit ADR-0098 "Settled before code" asks for, done as its own change before step 2.
+
+**Why.** In step 2 a member computer runs the services on a copy of the leader's log and proposes the
+entry; the leader accepts it only if its projections accept it. A rule that lives only in a service
+is then enforced by the proposer, which the leader does not trust. On one computer `finish_lane` and
+`cancel_lane` append without the project append lock, so their checks could also run on state that
+had moved.
+
+**What changed.**
+
+- New `AppendAdmission` (in `domain/collaboration`, with the small `ProjectionView` it reads) runs as
+  the last stage of `PredictionEventStore`'s validation, so a refusal has the same code and message
+  the service gave. The services call the same functions as an early answer, so there is one rule.
+- Moved from services, now checked on the event: `REVIEWER_REQUIRES_PRODUCER` and
+  `WORK_GROUP_NOT_ACTIVE` (lane announce); review request rules, reviewer admission, own-lane review
+  and handoff target (`ReviewAdmissionRules`); grant issued only to the lane's owner for a lawful
+  review; grant consumed once and still pointing at a live lane or a waiting review snapshot;
+  continuation source, owner, `CLAIM_EPOCH_STALE`, recovery hold and snapshot, work group, grant
+  match and the successor not taking the other side of a review; review decision self-approval,
+  producer match and stale lane; no-change completion on a stale group version or with a review
+  obligation (`LaneCompletionRules`); snapshot and completion preparation need the lane still the
+  caller's at the claimed epoch; `task_not_cancellable` for an integrated task; a capability is
+  published only by a lane that is still active; a closed work group cannot be reopened.
+- `append` now brings its projections up to the durable head (applying the verified events it had not
+  seen) before validating, so it judges the event against the log it is placed on. Hard-link
+  placement and the retry on a taken sequence are unchanged.
+- Left in the services on purpose, because the log cannot say them: who the caller is (session
+  binding), whether a commit, tree or worktree is what the caller claims, the shape of an input, and
+  local blocks such as the append lock being unavailable. This is the trust left in a member.
+- Rules are checked at append only. Replay does not ask whether an old entry would be admitted today.
+
+**Tests changed on purpose.** Tests that wrote an unlawful event straight to the store (a reviewer
+with no other producer, a snapshot for a task the lane did not own, an owner released before it
+published) now put the log in a lawful order first. `AgentNextActionServiceTest` self-review cases
+add another producer, then release it, so the reviewer lane is admitted and the test still checks
+that a self grant is not offered as a review.
+
+Tests: the Linux gate, link 170, coordination 255, project-record 60, relay 12, mcp-contract 20,
+workspace 736 (2 skipped), MCP 189, CLI 132, browser UI (passed), 0 failures. New: `AppendAdmissionTest` (15,
+each rule appended straight to the store; all 15 fail with the stage off, and the ones that read
+state fail with catch-up off), including the stale-store case (two store instances). VERIFIED on Linux only.
+
+NOT REACHED: the Windows gate; the second-computer path (step 2 itself); rules for `ImplementationPublicationService`
+that depend on a local binding or tree (`CAPABILITY_PUBLICATION_TREE_STALE`, owner session checks).
+
 # 2026-10-16 — Builds that cannot understand each other refuse to connect, loudly
 
 Step 1 of ADR-0098 (invariant 10).

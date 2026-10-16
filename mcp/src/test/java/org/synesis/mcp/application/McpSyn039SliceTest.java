@@ -449,11 +449,12 @@ final class McpSyn039SliceTest {
         assertTrue(ownerPublication.contains(ids.groupId.toString()), ownerPublication);
         assertTrue(ownerPublication.contains("claimEpoch"), ownerPublication);
 
+        // The owner publishes while its lane is open, and the lane is released afterwards.
+        appendReviewableSnapshot(project, ids, claim.intent().participant());
         collaboration.release(project, "codex", "syn039-owner");
         String replayedAdmission = reviewer.handleMessage(toolCall("request_coordination", ProviderJson.write(admissionArguments)));
         assertFalse(replayedAdmission.contains("INTENT_NOT_FOUND"), replayedAdmission);
         assertEquals(requestId, nestedField(replayedAdmission));
-        appendReviewableSnapshot(project, ids, claim.intent().participant());
         String next = reviewer.handleMessage(toolCall("get_next_action", "{}"));
         assertTrue(next.contains("review_validation"), next);
         assertTrue(next.contains("snap_reviewable"), next);
