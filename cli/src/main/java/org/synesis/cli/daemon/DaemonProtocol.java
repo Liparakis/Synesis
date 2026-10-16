@@ -74,6 +74,9 @@ final class DaemonProtocol {
         if (openBrowserValue != null && !(openBrowserValue instanceof Boolean)) {
             throw new IOException("openBrowser is invalid");
         }
+        if ((operation == Operation.PROJECT_RUNTIME || operation == Operation.STOP_PROJECT_RUNTIME) && project == null) {
+            throw new IOException("project is required for " + operation);
+        }
         if (operation == Operation.OPEN_PROJECT && project == null) {
             throw new IOException("project is required for " + operation);
         }
@@ -140,6 +143,16 @@ final class DaemonProtocol {
          * Open a selected project through the daemon.
          */
         OPEN_PROJECT,
+        /**
+         * Start, if needed, the project's runtime and return its endpoint and runtime command token, so a command
+         * line client can drive the project's control plane (link invite and join).
+         */
+        PROJECT_RUNTIME,
+        /**
+         * Stop the project's runtime if the daemon holds one, so that it starts again with the project's current
+         * replication role. Nothing is started when none runs.
+         */
+        STOP_PROJECT_RUNTIME,
         /**
          * Hand a bounded Synesis URI to the daemon.
          */

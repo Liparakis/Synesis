@@ -78,6 +78,25 @@ public final class DaemonClient {
     }
 
     /**
+     * Stops a project's runtime when a daemon is already running and holds one. A daemon is never started for this.
+     *
+     * @param project project directory
+     * @return whether a runtime was stopped; it starts again, with the project's current settings, when next needed
+     * @throws IOException when the daemon answers with an error
+     */
+    public static boolean stopProjectRuntime(Path project) throws IOException {
+        DaemonEndpoint.Record endpoint = connectExisting();
+        if (endpoint == null) {
+            return false;
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("token", endpoint.token());
+        request.put("operation", DaemonProtocol.Operation.STOP_PROJECT_RUNTIME.name());
+        request.put("project", Objects.requireNonNull(project, "project").toAbsolutePath().normalize().toString());
+        return "STOPPED".equals(exchange(endpoint, request).get("state"));
+    }
+
+    /**
      * Reads one pending selection through an already running daemon.
      *
      * @param selectionId pending selection identifier

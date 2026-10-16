@@ -23,8 +23,10 @@ import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
+import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
 
+import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.lifecycle.codex.ProjectRuntimeHost;
@@ -78,7 +80,7 @@ final class CoordinationServerLauncher {
      * @param parentPid   owning daemon PID, or a non-positive value for no owner watch
      * @return stable process exit code
      */
-    @SuppressWarnings("try") // the leader side is held for the server's lifetime; the Link slice that attaches sessions will use it
+    @SuppressWarnings("try") // the replication side is held for the server's lifetime and only closed
     static Integer run(CliRuntime runtime, Path project, Path data, Path identity, String host, int port, int duration, boolean openBrowser, boolean browserOpen, long parentPid) {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
@@ -107,7 +109,15 @@ final class CoordinationServerLauncher {
             var eventHub = new ControlPlaneEventHub();
             var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish,
                     Onboarding.stunServerFromEnvironment());
-            var linkOwner = new LinkRuntimeOwner(controlOnboarding, node, null, eventHub::publish, location.identity());
+            // A member's agents reach the leader through this server; the Link session arrives at attach.
+            var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
+                    ? MemberReplication.open(projectData, location.projectId()) : null;
+            // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
+            var mergeDriver = replicationSettings.filter(settings -> !settings.isMember()).isPresent()
+                    ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
+            var leaderReplication = mergeDriver != null
+                    ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
+            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication);
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
                 @Override
@@ -120,19 +130,14 @@ final class CoordinationServerLauncher {
                     return DaemonClient.selectProject(selectionId, projectId);
                 }
             }, projectRegistry);
+            // The replication side is listed last so it stops first: it answers on the sessions the link owner holds.
             try (control;
                     linkOwner;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
-                    // A member's agents reach the leader through this server; the Link session arrives at attach.
-                    var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
-                            ? MemberReplication.open(projectData, location.projectId()) : null;
-                    // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
-                    // Sessions arrive at LeaderReplication.attach, which no product flow calls yet.
-                    var mergeDriver = replicationSettings.filter(settings -> !settings.isMember()).isPresent()
-                            ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
-                    var leaderReplication = mergeDriver != null
-                            ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null) {
+                    memberReplication;
+                    mergeDriver;
+                    leaderReplication) {
                 server.start();
                 if (memberReplication != null) {
                     memberReplication.serve(server);
@@ -171,6 +176,33 @@ final class CoordinationServerLauncher {
             runtime.terminal().stderr("COORDINATION_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
+    }
+
+    /**
+     * The owner of the Link sessions the browser control plane's invite and join establish. On a computer with a
+     * replication role those sessions carry the replication of the log (ADR-0098): the role's side answers its
+     * frames, and a session whose peer is the leader (for a member) or a member (for the leader) is attached to it.
+     * A peer that is neither is still admitted, as before, and gets nothing from the log: the replication side
+     * refuses it. The leader's member list is read afresh per request, so the check here only decides who is told
+     * of new entries at once; a member added after its session was admitted pulls at its next interval.
+     */
+    static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSettings settings,
+            MemberReplication member, LeaderReplication leader) {
+        if (member != null) {
+            return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, member.handler(), session -> {
+                if (session.remoteNodeId().equals(settings.leaderNodeId())) {
+                    member.attach(session);
+                }
+            });
+        }
+        if (leader != null) {
+            return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, leader.handler(), session -> {
+                if (leader.isMember(session.remoteNodeId())) {
+                    leader.attach(session);
+                }
+            });
+        }
+        return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
     }
 
     private static boolean isLoopback(String host) {

@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.persistence.LeaderEndpoint;
@@ -51,7 +52,7 @@ public final class LeaderReplication implements AutoCloseable {
     private final Path root;
     private final UUID projectId;
     private final LeaderEndpoint endpoint;
-    private final Set<String> members;
+    private final Supplier<Set<String>> members;
     private final Runnable afterMemberEntry;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, Long> noticed = new ConcurrentHashMap<>();
@@ -82,11 +83,24 @@ public final class LeaderReplication implements AutoCloseable {
      *                         block
      */
     public LeaderReplication(Path root, UUID projectId, Set<String> members, Runnable afterMemberEntry) {
+        this(root, projectId, fixed(CoordinationNullException.requireNonNull(members, "members")), afterMemberEntry);
+    }
+
+    /**
+     * As above, with the member set read afresh for every request, so that a member added to or removed from the
+     * leader's settings is served or refused from its next request on, with no restart.
+     *
+     * @param root             the leader's coordination folder
+     * @param projectId        the project
+     * @param members          current nodes allowed to propose and pull; an empty set refuses everyone
+     * @param afterMemberEntry called after each accepted proposal; it must not block
+     */
+    public LeaderReplication(Path root, UUID projectId, Supplier<Set<String>> members, Runnable afterMemberEntry) {
         this.afterMemberEntry = CoordinationNullException.requireNonNull(afterMemberEntry, "afterMemberEntry");
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
-        this.members = Set.copyOf(CoordinationNullException.requireNonNull(members, "members"));
-        this.endpoint = new LeaderEndpoint(root, projectId, this.members);
+        this.members = CoordinationNullException.requireNonNull(members, "members");
+        this.endpoint = new LeaderEndpoint(root, projectId, members);
         notices.scheduleWithFixedDelay(this::noticeAll, NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
                 TimeUnit.MILLISECONDS);
     }
@@ -114,10 +128,38 @@ public final class LeaderReplication implements AutoCloseable {
      * @throws IOException when the settings are missing, invalid, or are a member's
      */
     public static LeaderReplication open(Path root, UUID projectId, Runnable afterMemberEntry) throws IOException {
-        ReplicationSettings settings = ReplicationSettings.read(root)
+        ReplicationSettings.read(root)
                 .filter(found -> !found.isMember())
                 .orElseThrow(() -> new CoordinationException("NOT_A_LEADER"));
-        return new LeaderReplication(root, projectId, settings.members(), afterMemberEntry);
+        return new LeaderReplication(root, projectId, () -> currentMembers(root), afterMemberEntry);
+    }
+
+    /**
+     * The members the settings file names now. A file that is gone, unreadable, or has become a member's names
+     * nobody: an unreadable role never admits a proposer (fail closed).
+     */
+    private static Set<String> currentMembers(Path root) {
+        try {
+            return ReplicationSettings.read(root).filter(found -> !found.isMember())
+                    .map(ReplicationSettings::members).orElse(Set.of());
+        } catch (CoordinationException unreadable) {
+            return Set.of();
+        }
+    }
+
+    private static Supplier<Set<String>> fixed(Set<String> members) {
+        Set<String> copy = Set.copyOf(members);
+        return () -> copy;
+    }
+
+    /**
+     * Tells whether a node may propose and pull now.
+     *
+     * @param nodeId a node ID
+     * @return true when the leader's settings name it as a member
+     */
+    public boolean isMember(String nodeId) {
+        return members.get().contains(nodeId);
     }
 
     /**
@@ -142,7 +184,7 @@ public final class LeaderReplication implements AutoCloseable {
      * @throws IllegalArgumentException when the remote node is not a member
      */
     public void attach(PeerSession session) {
-        if (!members.contains(session.remoteNodeId())) {
+        if (!isMember(session.remoteNodeId())) {
             throw new IllegalArgumentException("session peer is not a member");
         }
         sessions.put(session.remoteNodeId(), session);
@@ -183,7 +225,7 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     private byte[] pull(String sender, ReplicationMessage.Pull pull) throws IOException, GeneralSecurityException {
-        if (!members.contains(sender)) {
+        if (!isMember(sender)) {
             return refusal("PROPOSER_NOT_A_MEMBER");
         }
         if (!pull.project().equals(projectId)) {
@@ -201,7 +243,7 @@ public final class LeaderReplication implements AutoCloseable {
     private void noticeAll() {
         long head = PredictionEventStore.recordedEvents(root);
         sessions.forEach((node, session) -> {
-            if (!Sessions.live(session) || noticed.getOrDefault(node, -1L) == head) {
+            if (!isMember(node) || !Sessions.live(session) || noticed.getOrDefault(node, -1L) == head) {
                 return;
             }
             noticed.put(node, head);

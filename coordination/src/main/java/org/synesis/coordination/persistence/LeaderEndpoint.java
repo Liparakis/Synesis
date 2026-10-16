@@ -6,6 +6,7 @@ import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -24,7 +25,7 @@ public final class LeaderEndpoint {
 
     private final Path root;
     private final UUID projectId;
-    private final Set<String> members;
+    private final Supplier<Set<String>> members;
 
     /**
      * Serves one project's log.
@@ -34,9 +35,26 @@ public final class LeaderEndpoint {
      * @param members   nodes allowed to propose; local state on the leader in step 2
      */
     public LeaderEndpoint(Path root, UUID projectId, Set<String> members) {
+        this(root, projectId, fixed(CoordinationNullException.requireNonNull(members, "members")));
+    }
+
+    /**
+     * Serves one project's log to the members the supplier names <em>at the time of each proposal</em>, so that a
+     * member added to or removed from {@code replication.properties} needs no restart.
+     *
+     * @param root      the leader's coordination folder
+     * @param projectId the project
+     * @param members   current nodes allowed to propose; an empty set refuses everyone
+     */
+    public LeaderEndpoint(Path root, UUID projectId, Supplier<Set<String>> members) {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
-        this.members = Set.copyOf(CoordinationNullException.requireNonNull(members, "members"));
+        this.members = CoordinationNullException.requireNonNull(members, "members");
+    }
+
+    private static Supplier<Set<String>> fixed(Set<String> members) {
+        Set<String> copy = Set.copyOf(members);
+        return () -> copy;
     }
 
     /**
@@ -62,7 +80,7 @@ public final class LeaderEndpoint {
         if (!event.actorNodeId().equals(authenticatedSender)) {
             return new ProposalOutcome.Refused("PROPOSAL_SENDER_MISMATCH");
         }
-        if (!members.contains(authenticatedSender)) {
+        if (!members.get().contains(authenticatedSender)) {
             return new ProposalOutcome.Refused("PROPOSER_NOT_A_MEMBER");
         }
         if (event.type().leaderOnly()) {

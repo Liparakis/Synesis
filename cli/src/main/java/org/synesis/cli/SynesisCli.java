@@ -55,7 +55,15 @@ import org.synesis.cli.command.prediction.PredictionPublishCommand;
 import org.synesis.cli.command.prediction.PredictionRespondCommand;
 import org.synesis.cli.command.prediction.PredictionShowCommand;
 import org.synesis.cli.command.project.InitCommand;
+import org.synesis.cli.command.link.LinkAnswerCommand;
+import org.synesis.cli.command.link.LinkCommand;
+import org.synesis.cli.command.link.LinkInviteCommand;
+import org.synesis.cli.command.link.LinkJoinCommand;
+import org.synesis.cli.command.project.ProjectAddMemberCommand;
 import org.synesis.cli.command.project.ProjectCommand;
+import org.synesis.cli.command.project.ProjectFollowCommand;
+import org.synesis.cli.command.project.ProjectRemoveMemberCommand;
+import org.synesis.cli.command.project.ProjectShareCommand;
 import org.synesis.cli.command.project.ProjectCreateCommand;
 import org.synesis.cli.command.project.ProjectValidationClearCommand;
 import org.synesis.cli.command.project.ProjectValidationCommand;
@@ -151,8 +159,16 @@ public final class SynesisCli {
         command.addSubcommand("init", new InitCommand(runtime));
         command.addSubcommand("project", new ProjectCommand());
         command.getSubcommands().get("project").addSubcommand("create", new ProjectCreateCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("share", new ProjectShareCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("add-member", new ProjectAddMemberCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("remove-member", new ProjectRemoveMemberCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("follow", new ProjectFollowCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("validation", new CommandLine(new ProjectValidationCommand()).addSubcommand("set", new ProjectValidationSetCommand(runtime))
                 .addSubcommand("show", new ProjectValidationShowCommand(runtime)).addSubcommand("clear", new ProjectValidationClearCommand(runtime)));
+        command.addSubcommand("link", new LinkCommand());
+        command.getSubcommands().get("link").addSubcommand("invite", new LinkInviteCommand(runtime));
+        command.getSubcommands().get("link").addSubcommand("join", new LinkJoinCommand(runtime));
+        command.getSubcommands().get("link").addSubcommand("answer", new LinkAnswerCommand(runtime));
         command.addSubcommand("constraint", new ConstraintCommand());
         command.getSubcommands().get("constraint").addSubcommand("create", new ConstraintCreateCommand(runtime));
         CommandLine collaboration = new CommandLine(new CollaborationCommand()).addSubcommand("announce", new CollaborationAnnounceCommand(runtime))

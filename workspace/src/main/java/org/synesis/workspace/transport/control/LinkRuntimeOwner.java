@@ -121,6 +121,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     private final PeerSession.ApplicationStreamHandler applicationHandler;
 
     /**
+     * Told about each admitted session; a no-op unless the caller supplied one.
+     */
+    private final Consumer<PeerSession> sessionListener;
+
+    /**
      * Accepted sessions by remote node id; at most one per peer, a newer session replaces an older one.
      */
     private final ConcurrentMap<String, PeerSession> sessions = new ConcurrentHashMap<>();
@@ -154,7 +159,31 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      * @param projectIdentity canonical local project identity
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
-        this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"));
+        this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), null, session -> {
+        });
+    }
+
+    /**
+     * Creates a runtime owner whose project application traffic is answered by a delegate, and which tells a
+     * listener about every session it admits (ADR-0098: the replication of a project's log runs on the sessions
+     * the browser control plane's invite and join establish).
+     *
+     * <p>The delegate sees only frames that follow the project-context exchange, so it never serves a peer of
+     * another project. It cannot be combined with overlay membership, which installs its own handler.
+     *
+     * @param onboarding      Link-owned onboarding facade
+     * @param localIdentity   local authenticated node identity
+     * @param events          safe Link event sink
+     * @param projectIdentity canonical local project identity
+     * @param projectHandler  answers every application stream that is not the project-context exchange; a frame it
+     *                        does not understand must be refused by it
+     * @param sessionListener called with each admitted session after the owner has registered it; a thrown
+     *                        exception rejects the session, so a listener that merely ignores a peer returns
+     */
+    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
+            Consumer<PeerSession> sessionListener) {
+        this(onboarding, localIdentity, null, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), Objects.requireNonNull(projectHandler, "project handler"),
+                Objects.requireNonNull(sessionListener, "session listener"));
     }
 
     /**
@@ -169,7 +198,9 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      * @throws IllegalArgumentException when the local node is not in the membership, or the
      *                                  membership belongs to a different project
      */
-    private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity) {
+    private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity,
+            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener) {
+        this.sessionListener = sessionListener;
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
         this.events = Objects.requireNonNull(events, "events");
@@ -203,7 +234,9 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         }
         if (projectIdentity != null) {
             // The project responder wraps the overlay handler; with no overlay it must fail closed rather than ignore frames.
-            PeerSession.ApplicationStreamHandler delegate = handler == null ? (remote, payload) -> CompletableFuture.failedFuture(new IllegalStateException("no project application handler is installed")) : handler;
+            PeerSession.ApplicationStreamHandler delegate = handler != null ? handler
+                    : projectHandler != null ? projectHandler
+                    : (remote, payload) -> CompletableFuture.failedFuture(new IllegalStateException("no project application handler is installed"));
             handler = ProjectContextExchange.withResponder(projectIdentity, delegate);
         }
         this.applicationHandler = handler;
@@ -349,6 +382,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
             }
         });
         publishTopology();
+        sessionListener.accept(session);
     }
 
     /**

@@ -1,3 +1,69 @@
+# 2026-10-16 — Two computers, one project: roles, members, and the replication on control-plane sessions (ADR-0098 step 2, slice 4)
+
+Until now nothing in the product gave a computer a role or connected replication to a Link session. A person can now
+turn a project into a leader on one computer and a member on another and connect them; the sequence is in
+`docs/operations/TWO_MACHINE_TESTING.md`, "Two computers, one project". Not yet run on two real computers.
+
+**Replication frames reach the sessions the control plane establishes.** `LinkRuntimeOwner` gained a constructor
+taking an application-stream delegate and a session listener (the old constructor is unchanged, so an owner without
+a delegate still refuses every project frame: "no project application handler is installed"). The delegate answers the
+frames that follow the project-context exchange, so a peer of another project never reaches it; the listener runs at
+the end of `acceptSession`. `CoordinationServerLauncher.linkOwner` wires them from the role in
+`replication.properties`: a member passes `MemberReplication.handler()` and attaches the session whose peer is its
+leader; a leader passes `LeaderReplication.handler()` and attaches the session of a current member. A peer that is
+neither is admitted as before and gets nothing: the replication side refuses it. The replication objects are created
+before the owner and closed first (listed last in the launcher's `try`).
+
+**The leader's member list is read per request.** `LeaderEndpoint` and `LeaderReplication` take a
+`Supplier<Set<String>>` (the old `Set` constructors remain); `LeaderReplication.open` reads `replication.properties`
+each time, and a file that is gone, unreadable, or now a member's names nobody (fail closed). So `add-member` and
+`remove-member` take effect on the next proposal or pull with no restart. A member added after its session was admitted
+is served at once but is told of new entries only by its 15 second pull, because the leader attaches sessions when they
+are admitted.
+
+**Commands.** `synesis project share --code-remote <remote>`, `add-member <nodeId>`, `remove-member <nodeId>`,
+`follow --leader <nodeId> --code-remote <remote>` (cli, `command/project`; shared base `ProjectRoleCommand`), printing
+`KEY=VALUE` and refusing with `ERROR=<code>` (exit 10, nothing written): `ALREADY_A_MEMBER`, `NOT_A_LEADER`,
+`CODE_REMOTE_UNKNOWN` (the clone has no such remote: checked with `git remote get-url`, so a typo surfaces here and not
+at the first push), `INVALID_NODE_ID` (`NodeIdentity.isNodeId`; `ReplicationSettings` itself keeps its looser check
+because existing tests use short names), `MEMBER_IS_THIS_COMPUTER`, `LEADER_IS_THIS_COMPUTER`, `NOT_A_MEMBER`,
+`FOLLOWING_ANOTHER_LEADER`, `ALREADY_A_LEADER`, `LOG_NOT_EMPTY`. The follow rule: a member's log is a copy of the
+leader's, so a computer with entries of its own would never merge (they are not on the leader's log) and would stop at
+`LEADER_LOG_DIVERGED` at the first pull; `follow` refuses it up front unless this computer already follows the same
+leader (changing the remote). The leader is the owner in step 2, so `remove-member` is leader-only.
+`share` and `follow` stop the project's runtime when the installation daemon holds one (`RUNTIME_STOPPED=true`),
+because the server reads the role once at start; it starts again with the new role on next use. `add-member` and
+`remove-member` do not. A runtime started by `synesis ui` belongs to that process and is not stopped.
+
+**`synesis link invite [--expect <nodeId>] | join <uri> | answer <operation> <uri>`** (cli, `command/link`) run the
+operation on the project's running runtime, the process that owns the Link sessions, print `OPERATION_ID`,
+`INVITE_LINK` / `ANSWER_LINK`, `EXPIRES_AT`, and wait (`--wait-seconds`, default 300, 0 returns at once) for a session
+that did not exist before: `LINK_STATE=CONNECTED` with `PEER_NODE_ID`, or `WAITING` (timed out), `FAILED` (the
+operation ended without a session), exit 1. The bare `synesis host` and `join` use a different per-installation key and
+are one-shot, so they cannot join a project. Reaching the runtime: two new daemon operations, `PROJECT_RUNTIME`
+(starts the project's runtime if needed and returns its endpoint and runtime command token) and `STOP_PROJECT_RUNTIME`
+(never starts a daemon or a runtime); `HttpRuntimeControl` then calls the control plane with the runtime command token.
+The control plane's session-authenticated routes now also accept that token (`ControlPlaneSessions.authenticate`):
+it already mints a bootstrap token and with it a session, so it is the same authority, and a command line client no
+longer replaces the session of an open browser tab to use it. The token reaches a local process through the daemon's
+own authenticated IPC; the daemon's request line still carries no project authority.
+
+**Found, not changed.** `synesis init` on a clone takes the `ALREADY_INITIALIZED` branch and does not create the
+`.synesis/shared`, `local/providers`, `local/runtime` and `local/profile/records` folders that `init` and `initReplica`
+create; nothing read in this slice needs them (the stores create their folders on write), but it is not shown for every
+reader. Any session that holds the same project identity is admitted by the control plane, member or not (as before);
+only replication refuses it. The ADR says a member is "added through the existing invitation": the invitation only
+connects; membership is the leader's list, which is why `add-member` exists.
+
+Tests: `LinkRuntimeOwnerProjectHandlerTest` (delegate answers, listener sees the authenticated session; no delegate still
+refuses), `ControlPlaneReplicationTest` (two owners as the launcher wires them, driven through the control plane with
+the runtime token: a member's entry reaches the leader and the leader's reaches the member by notice; add and remove take
+effect with no restart; the token is the only credential besides a session), `ProjectRoleCommandsTest`,
+`LinkCommandsTest` (fake runtime), `HttpRuntimeControlTest`, `DaemonProjectRuntimeAccessTest`. Each fails with the
+delegate and listener (removed together), the live list, the token, the follow log rule or the runtime stop removed in
+turn. Whole Linux gate: link 171, coordination 302, project-record 60, relay 12, mcp-contract 20, workspace 756 (2
+skipped), mcp 189, cli 163, no failures.
+
 # 2026-10-16 — Code moves through a shared Git remote; the leader fetches before it decides (ADR-0098 step 2, slice 3b)
 
 The log names commits (`refs/synesis/prepared/<completionId>`, `refs/synesis/snapshots/<id>`); the objects now travel

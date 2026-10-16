@@ -151,6 +151,13 @@ final class ControlPlaneSessions {
      * @throws ApiFailure 401 without a valid session, 403 without a valid CSRF token
      */
     void authenticate(HttpExchange exchange, boolean mutation) throws ApiFailure {
+        if (!tokenMismatch(runtimeCommandToken, exchange.getRequestHeaders().getFirst(RUNTIME_COMMAND_HEADER))) {
+            // The runtime command token already mints a bootstrap token and with it a session, so presenting it
+            // is the same authority. A browser never holds it, so the CSRF header that guards a browser's
+            // ambient credentials has nothing to guard here, and a command line client need not replace the
+            // session of an open browser tab to use the control plane.
+            return;
+        }
         Session current = session;
         if (current == null || Instant.now().isAfter(current.expiresAt()) || tokenMismatch(current.sessionToken(), exchange.getRequestHeaders().getFirst(SESSION_HEADER))) {
             throw failure(401, "AUTH_REQUIRED", "a valid control session is required");

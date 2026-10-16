@@ -199,6 +199,8 @@ final class DaemonServer implements AutoCloseable {
             case STATUS -> status();
             case SHUTDOWN -> response("STOPPING", Map.of());
             case OPEN_UI, OPEN_PROJECT -> openProject(request);
+            case PROJECT_RUNTIME -> projectRuntime(Path.of(request.project()).toAbsolutePath().normalize());
+            case STOP_PROJECT_RUNTIME -> stopProjectRuntime(Path.of(request.project()).toAbsolutePath().normalize());
             case OPEN_URI -> openUri(request.uri(), request.openBrowser());
             case GET_SELECTION -> describeSelection(UUID.fromString(request.selectionId()));
             case SELECT_PROJECT -> selectProject(UUID.fromString(request.selectionId()), UUID.fromString(request.projectId()));
@@ -228,6 +230,20 @@ final class DaemonServer implements AutoCloseable {
             return error("NO_KNOWN_PROJECT");
         }
         return openUi(runtime, request.openBrowser());
+    }
+
+    private synchronized Map<String, Object> projectRuntime(Path project) throws IOException {
+        RuntimeHandle runtime = reachableOrStarted(project);
+        return response("READY", Map.of("endpoint", runtime.endpoint().toString(), "commandToken", runtime.commandToken()));
+    }
+
+    private synchronized Map<String, Object> stopProjectRuntime(Path project) {
+        RuntimeHandle runtime = runtimes.remove(project);
+        if (runtime == null) {
+            return response("NOT_RUNNING", Map.of());
+        }
+        runtime.close();
+        return response("STOPPED", Map.of());
     }
 
     private static Map<String, Object> openUi(RuntimeHandle runtime, boolean openBrowser) throws IOException {
@@ -672,6 +688,17 @@ final class DaemonServer implements AutoCloseable {
          * @return local endpoint
          */
         URI endpoint();
+
+        /**
+         * Returns the secret that authenticates runtime-owned commands, for a local client that drives the control
+         * plane directly.
+         *
+         * @return the runtime command token
+         * @throws IOException when this handle does not hold one
+         */
+        default String commandToken() throws IOException {
+            throw new IOException("RUNTIME_COMMAND_UNAVAILABLE");
+        }
 
         /**
          * Stops the process-local runtime handle.

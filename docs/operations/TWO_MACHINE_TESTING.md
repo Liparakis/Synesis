@@ -39,3 +39,47 @@ authenticated node IDs, control readiness, LIVE state, request/result status,
 close reason, cleanup, and exact command/date. Do not record private keys,
 identity or descriptor files, passwords, full personal addresses, usernames,
 access tokens, or absolute personal paths.
+
+## Two computers, one project
+
+This is the flow for one project that runs on two computers (ADR-0098 step 2): computer A is the leader and keeps the
+authoritative log; computer B is a member, runs its own agents, and sends each entry to A. It needs a Git remote that
+**both** computers can push to and fetch from, because code travels through it and never through the log. Name the
+remote in each clone (`git remote -v`); `origin` is not assumed. A bare repository on a shared folder or a host works.
+
+The commands print `KEY=VALUE` lines. Run each one in the project directory, or give `--project <directory>`.
+
+**On A (the owner), once:**
+
+1. `synesis project share --code-remote origin` makes this computer the leader. It prints `NODE_ID` (A's node ID).
+2. `synesis project add-member <B's node ID>` allows B. B's node ID comes from step 2 below.
+
+**On B, once:**
+
+1. `git clone <the same repository>`, then `synesis init` in the clone. B must hold the same `.synesis/project.json`
+   as A, which the clone carries; the Link session is refused when the project identity differs.
+2. `synesis identity show --project .` prints B's `NODE_ID`; give it to A for `add-member`.
+3. `synesis project follow --leader <A's node ID> --code-remote origin`. It refuses a log that already has entries
+   (`LOG_NOT_EMPTY`): a member's log is a copy of A's, so it must start empty. Do not start agents on B before this.
+
+`share` and `follow` stop the project's runtime if the installation daemon runs one (`RUNTIME_STOPPED=true`); the
+runtime starts again with the new role the next time `synesis link` needs it. A runtime started by `synesis ui` in
+a terminal is not the daemon's: stop it there and start it again. `add-member` and `remove-member` need no restart; the
+leader reads its member list for every request. A member added after its session was established is served at once, but
+hears of new entries only at its next 15 second pull.
+
+**Connecting (either side can invite). On B:**
+
+1. `synesis link invite --expect <A's node ID>` prints `INVITE_LINK=synesis://join/...` and waits.
+2. On A: `synesis link join "<INVITE_LINK>"`. It prints `ANSWER_LINK=synesis://answer/...` and waits.
+3. On the same network that is all. Across two networks, give A's `ANSWER_LINK` to B:
+   `synesis link answer <OPERATION_ID printed by invite> "<ANSWER_LINK>"` (ADR-0097 says which networks get through).
+
+Both commands end with `LINK_STATE=CONNECTED` and `PEER_NODE_ID=<the other computer>`, or `LINK_STATE=WAITING` when
+`--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended without a session. The
+connection stays with the project's runtime after the command ends. From then on B pulls A's log and sends its entries
+to A, and A merges B's lanes without an agent of its own. `synesis coordination status` on B shows
+`REPLICATION_STATE`. `synesis project remove-member <node ID>` on A stops serving a member; its earlier entries stay.
+
+Not done in step 2: the session is not redialled after it drops (run `link invite` and `link join` again), and a
+member list is local state of A.

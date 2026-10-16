@@ -210,6 +210,11 @@ final class ProcessRuntimeHandle implements DaemonServer.RuntimeHandle {
     }
 
     @Override
+    public String commandToken() {
+        return commandToken;
+    }
+
+    @Override
     public URI endpoint() {
         return endpoint;
     }
