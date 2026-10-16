@@ -441,6 +441,23 @@ class ConversationServiceTest {
     }
 
     @Test
+    void anOpenLaneOfAnActiveParticipantTheControllerDidNotStartKeepsTheRunGoingAndASuspendedHolderDoesNot() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+        ProjectLocation location = projectService.locate(projectRoot);
+        List<AgentRunController.Observation.Connection> onlyA = List.of(new AgentRunController.Observation.Connection(PROVIDER, A));
+        List<AgentRunController.Observation.Connection> all = List.of(onlyA.getFirst(), new AgentRunController.Observation.Connection(PROVIDER, B), new AgentRunController.Observation.Connection(PROVIDER, C));
+
+        assertTrue(observer.observe().foreignActiveLaneOpen(onlyA), "B and C hold open lanes and are not ours");
+        assertFalse(observer.observe().foreignActiveLaneOpen(all), "every lane is ours");
+
+        WorkIntentService intents = new WorkIntentService(store(), new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity());
+        intents.suspend(laneOf(B).participant());
+        intents.suspend(laneOf(C).participant());
+
+        assertFalse(observer.observe().foreignActiveLaneOpen(onlyA), "a suspended holder will not progress, so nothing is waited for");
+    }
+
+    @Test
     void aSuspendedHolderStillHoldsItsOpenLaneAndALaneContinuedByAnotherSessionIsNoLongerItsOwn() throws Exception {
         EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
         ProjectLocation location = projectService.locate(projectRoot);

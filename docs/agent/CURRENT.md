@@ -1,3 +1,25 @@
+# 2026-10-16 — `synesis agents run` no longer ends while another computer's agent still holds a lane (ADR-0098 step 2)
+
+Found in a real two-computer run today: computer B's only agent (Codex) finished its lane, waited for a review that
+only the agent on computer A could give, and stopped. B's `agents run` then returned STALLED after 394 s while A's
+agent was still working, so nobody on B was left to review A's work, and A's controller would have done the same
+when its agent stopped to wait for B. The same held on one computer whenever a lane belonged to a participant the
+controller did not start (an interactive agent in another terminal).
+
+**Rule.** When every agent this controller started has stopped and the run would otherwise end STALLED,
+`Observation.foreignActiveLaneOpen(managed)` is asked: is an open lane held by a participant whose replicated state is
+ACTIVE and who is not behind one of the controller's own connections? If so the controller keeps polling. Its agents
+are resumed by the existing path (progress after they stopped, for an agent whose own lane is still open); otherwise
+the run ends TIMED_OUT at `--timeout-minutes`. Suspended, recovery-held, revoked, cancelled, completed and detached
+holders do not count. NEEDS_OPERATOR, RESUME_LIMIT_REACHED, NO_WORK_ANNOUNCED and a complete project end the run as
+before; `foreignActiveLaneOpen` defaults to false, so other observations are unchanged. Limit: liveness is the
+participant state in the log, not a process check, so a crashed foreign agent whose participant is still ACTIVE keeps
+the run waiting until the deadline.
+
+Tests: `AgentRunControllerTest` (keeps polling and times out; resumed when the foreign lane progresses; STALLED as
+before with none) and `ConversationServiceTest` (the observer counts an active foreign lane and ignores suspended
+holders).
+
 # 2026-10-16 — Two computers, one project: roles, members, and the replication on control-plane sessions (ADR-0098 step 2, slice 4)
 
 Until now nothing in the product gave a computer a role or connected replication to a Link session. A person can now

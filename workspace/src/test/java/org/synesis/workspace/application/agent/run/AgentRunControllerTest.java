@@ -124,6 +124,44 @@ final class AgentRunControllerTest {
         assertEquals(2, script.launches.size(), "an idle project must not be poked");
     }
 
+    @Test
+    void aRunWhoseAgentsAllStoppedKeepsPollingWhileAnotherActiveParticipantHoldsALaneAndIsTimedOutAtTheDeadline() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().foreignLane();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(30));
+
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
+        assertEquals(0, result.resumes());
+        assertEquals(30, script.tick, "it waited for the deadline instead of stalling");
+    }
+
+    @Test
+    void anAgentStoppedWhileAForeignLaneIsOpenIsResumedWhenThatLaneProgressesAndTheRunCompletes() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3, 3);
+        script.at(0).head(5).announced().foreignLane();
+        script.at(10).head(9).progressAfter(5).foreignLane();
+        script.at(14).head(12).progressAfter(9).complete();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(60));
+
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+        assertTrue(result.resumes() >= 1, "the review another computer gave woke an agent here");
+        assertTrue(script.launches.stream().anyMatch(launch -> launch.startsWith("resume ")), script.launches.toString());
+    }
+
+    @Test
+    void withNoForeignActiveLaneAStoppedRunStallsAsBefore() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced();
+
+        assertEquals(AgentRunController.Outcome.STALLED, script.run(8, Duration.ofSeconds(30)).outcome());
+        assertTrue(script.tick < 30);
+    }
+
     /** A run nobody in it can continue says who can, and names the request instead of a stall. */
     @Test
     void runLeftWithAnOpenOperatorRequestSaysItNeedsAnOperator() throws Exception {
@@ -686,6 +724,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean foreignActiveLaneOpen(List<Connection> managed) {
+                    return state.foreignLane;
+                }
+
+                @Override
                 public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
                     Long sequence = laneHeldUnder(connectionInstanceId) ? state.messages.get(agentOf.get(connectionInstanceId)) : null;
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
@@ -702,6 +745,7 @@ final class AgentRunControllerTest {
         private boolean announced;
         private boolean complete;
         private boolean allCancelled;
+        private boolean foreignLane;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
 
@@ -731,6 +775,12 @@ final class AgentRunControllerTest {
         /** Work was recorded after this many events, so an agent that saw no further is behind. */
         private State progressAfter(long sequence) {
             progressAfter = sequence;
+            return this;
+        }
+
+        /** A lane of an active participant this controller did not start is open. */
+        private State foreignLane() {
+            foreignLane = true;
             return this;
         }
 

@@ -195,10 +195,18 @@ public final class AgentRunController {
                 // for its answer period to end: nothing in the log will announce that moment.
                 if (agents.stream().noneMatch(agent -> agent.process != null) && !awaitingDeadline) {
                     Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                    if (outcome == Outcome.NEEDS_OPERATOR) {
-                        observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
+                    // Our agents stopped, but a participant this controller did not start (another
+                    // computer's agent, an interactive agent) still holds a lane. Ending now would
+                    // leave nobody here to review or integrate its work, so keep polling until it
+                    // progresses, ends, or the deadline passes.
+                    boolean foreignLaneOpen = outcome == Outcome.STALLED && observation.foreignActiveLaneOpen(agents.stream()
+                            .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList());
+                    if (!foreignLaneOpen) {
+                        if (outcome == Outcome.NEEDS_OPERATOR) {
+                            observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
+                        }
+                        return new Result(outcome, resumes(agents));
                     }
-                    return new Result(outcome, resumes(agents));
                 }
                 if (clockMillis.getAsLong() >= deadline) {
                     return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
@@ -493,6 +501,29 @@ public final class AgentRunController {
          * @return {@code true} while that session's lane is open
          */
         boolean holdsOpenLane(String provider, String connectionInstanceId);
+
+        /**
+         * One connection the controller gave a process of its own.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection identity
+         */
+        record Connection(String provider, String connectionInstanceId) {
+        }
+
+        /**
+         * Reports whether a lane is open that is held by an active participant this controller did
+         * not start: an agent on another computer sharing the log, or an interactive agent. Such a
+         * participant may still need a review or an integration that only this computer's agents
+         * can give, and its progress is what resumes them. A participant that is suspended,
+         * revoked, cancelled, detached or otherwise not active holds nothing that will progress.
+         *
+         * @param managed every connection this controller gave a process
+         * @return {@code true} while another active participant holds an open lane
+         */
+        default boolean foreignActiveLaneOpen(List<Connection> managed) {
+            return false;
+        }
 
         /**
          * Returns the log position of the newest message addressed to the lane that the session

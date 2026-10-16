@@ -152,6 +152,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean foreignActiveLaneOpen(List<AgentRunController.Observation.Connection> managed) {
+                java.util.Set<String> own = managed.stream().map(connection -> participantOf(connection.provider(), connection.connectionInstanceId()))
+                        .filter(Objects::nonNull).collect(java.util.stream.Collectors.toUnmodifiableSet());
+                java.util.Set<String> active = participants.stream().filter(candidate -> candidate.state() == Participant.State.ACTIVE).map(Participant::id)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                return store.collaborationProjection().activeIntents().stream().anyMatch(intent -> !own.contains(intent.participant()) && active.contains(intent.participant()));
+            }
+
+            @Override
             public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
                 String participant = participantOf(provider, connectionInstanceId);
                 // The lane is the one the service hands messages for, so nobody is woken for a
