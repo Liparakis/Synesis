@@ -1,3 +1,29 @@
+# 2026-10-16 — Two computers, one project: the WorkGroup COMPLETED (run 7, ADR-0098 step 2 done)
+
+Same setup as run 6 (two Claude Code agents, Sonnet 5.5 medium, on the Windows leader; two Codex agents, GPT-6
+Luna high, on the Linux member; README with two writers and two reviewers, mandatory review, `python -m unittest`
+validation), on build remaster54 with a34d0188 (the validation command is not a part to claim).
+
+**Shown (VERIFIED from both logs and Git):**
+
+| Module | Written on | Reviewed on | Merged by the leader |
+| --- | --- | --- | --- |
+| `slug.py` | member (Codex) | leader (Claude), REVIEW request ACCEPTED | `e2fda35` |
+| `wrap.py` | leader (Claude) | member (Codex), REVIEW request ACCEPTED | `460c35d`, review note `272eb04` |
+
+- WorkGroup `STATUS=COMPLETED`; both computers' `synesis agents run` returned `AGENT_RUN_RESULT=COMPLETED` (the
+  member's after 182 s).
+- No extra lane was opened.
+- Both logs held the same 50 entries, and the session stayed connected throughout.
+- The leader's head and the shared remote's `master` are `272eb04`. `python -m unittest` on the leader: 13 tests, OK.
+- The member's own checkout stayed on `e2fda35`: it fast-forwards only before giving out a new lane, and none was
+  needed after the work ended.
+
+This meets step 2's "done when" in ADR-0098: an agent on one computer and an agent on another claim, review and
+integrate one WorkGroup, with no two agents ever holding the same file.
+
+**NOT REACHED:** two networks (both computers are on one LAN); a real Link drop and redial during a run; a
+coordination-server restart mid-run (it would still need a new invitation).
 # 2026-10-16 — The project's validation command is not a part to claim (run 6 follow-up)
 
 Run 6 (`mp6-two-pc`, `python -m unittest` in `.synesis/project.json` `validation`, mandatory review) never completed its

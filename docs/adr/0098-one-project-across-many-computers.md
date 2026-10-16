@@ -10,7 +10,10 @@ Built so far (`docs/agent/CURRENT.md`, 2026-10-15 and 2026-10-16):
 - **Step 1**, the compatibility number: `LinkCompatibility.CURRENT` = 4.
 - **From step 2's "First"**, heartbeats out of the log: `ParticipantActivity`.
 - **Found and fixed while writing this ADR:** one coordination folder and incremental log reads.
-- **Step 2, built 2026-10-16, PARTIAL:**
+- **Step 2, DONE 2026-10-16 (run 7).** Writers and reviewers on both computers. The WorkGroup COMPLETED, and both
+  computers' runs COMPLETED. Not reached: two networks, a real drop and redial during a run. See
+  `docs/agent/CURRENT.md`, "run 7". The history before it:
+- **Step 2, built 2026-10-16, PARTIAL at first:**
   - The audit, member proposals, Link transport, code through a Git remote, merge outside the lock, joining, and
     redial are built.
   - In real runs between two computers, cross-computer claims, review and the leader merging a member's lane were
