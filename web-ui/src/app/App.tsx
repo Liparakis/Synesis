@@ -25,6 +25,7 @@ import {
   type AgentSnapshot,
   consumeBootstrapToken,
   ControlPlaneClient,
+  type ProjectLinkDescription,
   ControlPlaneError,
   type DiagnosticFinding,
   type KnownProjectSnapshot,
@@ -34,6 +35,7 @@ import {
   type ProjectSelection,
   type Snapshot,
   clearSelectionId,
+  projectLinkFromLocation,
   selectionIdFromLocation,
 } from "../api/controlPlane";
 import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "./routes";
@@ -42,6 +44,31 @@ export type View = ProjectView | "projects";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
 type CoordinationTab = "claims" | "tasks" | "capabilities" | "ownership" | "conversations" | "operator";
 type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProjects">;
+type JoinClient = Pick<ControlPlaneClient, "join" | "openProjectLink" | "chooseProject"> & Partial<Pick<ControlPlaneClient, "describeProjectLink">>;
+const PROJECT_LINK_PREFIX = "synesis://project/";
+
+function projectLinkMessage(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code : "";
+  if (code === "PROJECT_IDENTITY_MISMATCH") return "That folder holds a different project than the invitation's.";
+  if (code === "PROJECT_FOLDER_NOT_THE_PROJECT") return "That folder is not a copy of this project. Clone the project's repository, then choose the clone.";
+  if (code === "PROJECT_FOLDER_INVALID") return "That folder could not be found.";
+  if (code === "LOG_NOT_EMPTY") return "This copy of the project already has its own work log, so it cannot follow another computer.";
+  if (code === "ALREADY_A_MEMBER" || code === "FOLLOWING_ANOTHER_LEADER") return "This computer already follows another computer for this project.";
+  if (code === "ALREADY_A_LEADER") return "This computer already leads this project with members of its own.";
+  if (code === "INVITER_IS_THIS_COMPUTER") return "This invitation was made on this computer.";
+  if (code === "CODE_REMOTE_NAME_TAKEN") return "This copy has a Git remote named synesis that points elsewhere. Rename it, then try again.";
+  if (code === "INVITE_INVALID") return "This invitation is not valid or has expired. Ask for a new one.";
+  if (code === "PROJECT_RUNTIME_UNAVAILABLE") return "The project's runtime could not be reached on this computer.";
+  return error instanceof Error ? error.message : "The invitation could not be opened.";
+}
+
+function codeRemoteReasonText(reason: string | null | undefined): string {
+  if (reason === "SEVERAL_GIT_REMOTES") return "this project has several Git remotes and none is named code.remote";
+  if (reason === "URL_NOT_SHAREABLE") return "the remote's URL is not an https://, ssh:// or user@host:path address";
+  if (reason === "CODE_REMOTE_MISSING") return "code.remote names a remote this project does not have";
+  return "this project has no Git remote";
+}
 
 function asLiveRegistryProject(project: NonNullable<Snapshot["project"]>): KnownProjectSnapshot {
   return {
@@ -91,6 +118,7 @@ export function App() {
   const [message, setMessage] = useState("Connecting to the local control plane");
   const [selection, setSelection] = useState<ProjectSelection | null>(null);
   const [selectionError, setSelectionError] = useState<Error | null>(null);
+  const [projectLink, setProjectLink] = useState("");
   const clientRef = useRef<ControlPlaneClient | null>(null);
   const [mockRequested] = useState(() => import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mock") === "1");
   const mockMode = import.meta.env.DEV && mockRequested;
@@ -157,9 +185,13 @@ export function App() {
       try {
         const bootstrap = consumeBootstrapToken();
         const pendingSelectionId = selectionIdFromLocation();
+        const pendingProjectLink = projectLinkFromLocation();
+        if (pendingProjectLink) setProjectLink(pendingProjectLink);
         if (typeof window !== "undefined" && window.location.pathname === "/") {
-          const suffix = pendingSelectionId ? `#selectionId=${encodeURIComponent(pendingSelectionId)}` : "";
-          window.history.replaceState(null, "", `/projects${suffix}`);
+          const kept = new URLSearchParams();
+          if (pendingSelectionId) kept.set("selectionId", pendingSelectionId);
+          if (pendingProjectLink) kept.set("projectLink", pendingProjectLink);
+          window.history.replaceState(null, "", `/projects${kept.size > 0 ? `#${kept.toString()}` : ""}`);
         }
         // A reloaded tab has no bootstrap token left; it carries on with the session it had.
         const initial = bootstrap ? await client.startSession(bootstrap) : await client.resumeSession();
@@ -262,6 +294,8 @@ export function App() {
             <ProjectsView
               snapshot={snapshot}
               client={registryClient}
+              joinClient={mockMode ? null : clientRef.current}
+              initialProjectLink={projectLink}
               onSnapshotRefresh={async () => {
                 if (clientRef.current) setSnapshot(await clientRef.current.snapshot());
               }}
@@ -283,7 +317,7 @@ export function App() {
             {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={openProjectView}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
-            {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} client={clientRef.current}/>}
+            {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} projectName={snapshot.project?.name} client={clientRef.current}/>}
             {route.view === "diagnostics" && <DiagnosticsView diagnostics={snapshot.diagnostics}/>}
           </div>
         )}
@@ -346,7 +380,7 @@ export function ProjectSelectionView({selection, client, onCompleted, onError}: 
   </div>;
 }
 
-export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject, onOpenNetwork}: {snapshot: Snapshot; client?: ProjectRegistryClient | null; onSnapshotRefresh?: () => Promise<void>; onOpenProject?: (project: KnownProjectSnapshot) => void; onOpenNetwork?: () => void}) {
+export function ProjectsView({snapshot, client, joinClient, initialProjectLink, onSnapshotRefresh, onOpenProject, onOpenNetwork}: {snapshot: Snapshot; client?: ProjectRegistryClient | null; joinClient?: JoinClient | null; initialProjectLink?: string; onSnapshotRefresh?: () => Promise<void>; onOpenProject?: (project: KnownProjectSnapshot) => void; onOpenNetwork?: () => void}) {
   const projects = registryProjects(snapshot);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<KnownProjectSnapshot["status"] | "ALL">("ALL");
@@ -453,6 +487,7 @@ export function ProjectsView({snapshot, client, onSnapshotRefresh, onOpenProject
         </div>
         {client && <button className="button button-primary" type="button" onClick={() => { setMutationError(""); setRemovalError(""); setAddPath(""); setAddProjectName(""); setAddOpen(true); }}><Plus size={16} aria-hidden="true"/>Add project</button>}
       </header>
+      {joinClient && <section className="onboarding panel" aria-label="Join a shared project"><JoinPanel client={joinClient} initialLink={initialProjectLink} onRegistered={refreshRegistry}/></section>}
       <div className="stat-strip" aria-label={projects.length + " known projects, " + liveCount + " live"}>
         <Stat label="Known projects" value={projects.length}/>
         <Stat label="Live runtimes" value={liveCount} tone="good"/>
@@ -899,13 +934,117 @@ function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; ta
   );
 }
 
-export function NetworkView({network, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; client: ControlPlaneClient | null}) {
+function shortNode(nodeId: string): string {
+  return nodeId.length > 16 ? nodeId.slice(0, 12) + "…" : nodeId;
+}
+
+/**
+ * Opens an invitation another computer made: a project invitation finds the project's folder on this computer (asking
+ * for it when the project is not registered here), follows the inviter and connects; the owner then has to accept.
+ * A plain connection invitation is joined as before.
+ */
+function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient | null; initialLink?: string; onRegistered?: () => Promise<void> | void}) {
+  const [link, setLink] = useState(initialLink);
+  const [folder, setFolder] = useState("");
+  const [folderNeeded, setFolderNeeded] = useState<{url: string | null} | null>(null);
+  const [answerUri, setAnswerUri] = useState("");
+  const [message, setMessage] = useState("");
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [details, setDetails] = useState<ProjectLinkDescription | null>(null);
+  useEffect(() => {
+    if (initialLink) setLink(initialLink);
+  }, [initialLink]);
+  // What the invitation says is shown before Join, so the person sees whose project it is and where code comes from.
+  useEffect(() => {
+    const text = link.trim();
+    setDetails(null);
+    if (!client || !text.startsWith(PROJECT_LINK_PREFIX) || typeof client.describeProjectLink !== "function") return;
+    let current = true;
+    const timer = setTimeout(() => {
+      client.describeProjectLink?.(text).then((described) => { if (current) setDetails(described); }).catch(() => undefined);
+    }, 150);
+    return () => { current = false; clearTimeout(timer); };
+  }, [client, link]);
+
+  const open = async (chosen?: string) => {
+    const text = link.trim();
+    if (!client || !text || busy) return;
+    setBusy(true);
+    setProblem("");
+    setMessage("");
+    try {
+      if (!text.startsWith(PROJECT_LINK_PREFIX)) {
+        const response = await client.join(text);
+        setFolderNeeded(null);
+        setAnswerUri(response.answerUri);
+        setMessage("Connecting. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
+        return;
+      }
+      const response = await client.openProjectLink(text, chosen);
+      if (response.state === "PROJECT_NOT_FOUND") {
+        setAnswerUri("");
+        setFolderNeeded({url: response.codeRemoteUrl ?? null});
+        return;
+      }
+      setFolderNeeded(null);
+      setAnswerUri(response.answerUri ?? "");
+      setMessage("Connecting to the owner of the project. They have to accept this computer before any work is shared. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
+      await onRegistered?.();
+    } catch (error) {
+      setProblem(projectLinkMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseFolder = async () => {
+    if (!client || busy) return;
+    try {
+      const choice = await client.chooseProject();
+      if (choice.state === "SELECTED") setFolder(choice.path);
+    } catch (error) {
+      setProblem(projectLinkMessage(error));
+    }
+  };
+
+  return (
+    <div className="form-block">
+      <label className="form-label" htmlFor="join-uri">Join from an invitation</label>
+      <p className="muted">Paste the invitation another computer created for you.</p>
+      <div className="inline-form">
+        <input className="text-field" id="join-uri" value={link} onChange={(event) => setLink(event.target.value)} placeholder="Paste an invitation link" />
+        <button className="button button-secondary" type="button" disabled={busy || !client || !link.trim()} onClick={() => void open()}><UserRound size={15}/> Join</button>
+      </div>
+      {details && <div className="form-block" role="group" aria-label="About this invitation">
+        <p>From computer <code>{shortNode(details.hostNodeId)}</code> for the project <strong>{details.projectName ?? details.projectId}</strong>.</p>
+        <p>{details.codeRemoteUrl ? <>Code is fetched from <code>{details.codeRemoteUrl}</code>.</> : "It names no code remote, so code cannot move between you until the owner adds one."}</p>
+        <p className="muted">Expires {new Date(details.expiresAt).toLocaleString()}.</p>
+      </div>}
+      {folderNeeded && <div className="form-block" role="group" aria-label="Where is the project?">
+        <p role="status">This project is not on this computer yet. {folderNeeded.url
+          ? <>Clone it from <code>{folderNeeded.url}</code>, then choose the folder you cloned it into.</>
+          : "Choose the folder where you have it."}</p>
+        <label className="form-label" htmlFor="project-folder">Project folder</label>
+        <div className="inline-form">
+          <input className="text-field" id="project-folder" value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="Folder that holds the project" />
+          {client && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void chooseFolder()}><FolderOpen size={15}/> Choose folder</button>}
+          <button className="button button-secondary" type="button" disabled={busy || !folder.trim()} onClick={() => void open(folder.trim())}><Check size={15}/> Use this folder</button>
+        </div>
+      </div>}
+      {answerUri && <CopyField label="Answer link" value={answerUri}/>}
+      {message && <p className="action-message" role="status">{message}</p>}
+      {problem && <p className="action-message selection-error" role="alert">{problem}</p>}
+    </div>
+  );
+}
+
+export function NetworkView({network, onboarding, projectName, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; projectName?: string; client: ControlPlaneClient | null}) {
   const [invite, setInvite] = useState("");
   const [inviteOperation, setInviteOperation] = useState("");
   const [answerUri, setAnswerUri] = useState("");
   const [openRouterPort, setOpenRouterPort] = useState(false);
-  const [joinUri, setJoinUri] = useState("");
-  const [joinResult, setJoinResult] = useState("");
+  const [decided, setDecided] = useState<string[]>([]);
   const [actionMessage, setActionMessage] = useState("");
   const [versionMismatch, setVersionMismatch] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -922,27 +1061,32 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
     if (!client) return;
     setBusy(true);
     try {
-      const response = await client.invite(undefined, openRouterPort);
+      const response = await client.invite(undefined, openRouterPort, true);
       setInvite(response.inviteUri);
       setInviteOperation(response.operationId);
       setVersionMismatch(false);
-      setActionMessage("Invitation created. Send it to the other computer; this one waits for it to connect.");
+      setActionMessage(response.kind !== "PROJECT"
+        ? "Invitation created. Send it to the other computer; this one waits for it."
+        : response.codeRemoteUrl
+          ? `Invitation created. It names the Git remote ${response.codeRemoteName ?? ""} (${response.codeRemoteUrl}): that is where the other computer gets the code. Send it to the other computer; this one waits for it and asks you before it lets that computer in.`
+          : `Invitation created, but it names no code remote (${codeRemoteReasonText(response.codeRemoteReason)}). The other computer cannot be accepted until the project has one: add a Git remote, then create a new invitation.`);
     } catch (error) {
       fail(error, "Invitation failed.");
     } finally { setBusy(false); }
   };
-  const join = async () => {
-    if (!client || !joinUri.trim()) return;
+  const decide = async (nodeId: string, accept: boolean) => {
+    if (!client) return;
     setBusy(true);
     try {
-      const response = await client.join(joinUri.trim());
-      setJoinResult(response.answerUri);
+      await (accept ? client.acceptJoin(nodeId) : client.declineJoin(nodeId));
+      setDecided((current) => [...current, nodeId]);
       setVersionMismatch(false);
-      setActionMessage("Connecting. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
+      setActionMessage(accept ? "Accepted. That computer is now a member and is served the project's log." : "Declined. That computer was disconnected.");
     } catch (error) {
-      fail(error, "Join failed.");
+      fail(error, accept ? "The request could not be accepted." : "The request could not be declined.");
     } finally { setBusy(false); }
   };
+  const joinRequests = (onboarding?.joinRequests ?? []).filter((request) => !decided.includes(request.nodeId));
   const submitAnswer = async () => {
     if (!client || !inviteOperation || !answerUri.trim()) return;
     setBusy(true);
@@ -969,12 +1113,18 @@ export function NetworkView({network, client}: {network: NetworkSnapshot; onboar
       </div>
       <section className="onboarding panel" aria-label="Link onboarding">
         <div className="onboarding-grid">
-          <div className="form-block"><label className="form-label" htmlFor="join-uri">Join from an invitation</label><p className="muted">Paste the URI another node created for you.</p><div className="inline-form"><input className="text-field" id="join-uri" value={joinUri} onChange={(event) => setJoinUri(event.target.value)} placeholder="Paste an invitation URI" /><button className="button button-secondary" type="button" disabled={busy || !client || !joinUri.trim()} onClick={() => void join()}><UserRound size={15}/> Join</button></div></div>
-          <div className="form-block"><span className="form-label">Invite another node</span><p className="muted">The URI is created by the local runtime and expires according to its response.</p><div className="inline-form"><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={15}/> Create Invitation</button></div><label className="muted"><input type="checkbox" checked={openRouterPort} onChange={(event) => setOpenRouterPort(event.target.checked)}/> Ask my router to open a port (UPnP), so a computer on another network can connect. This changes a router setting until the session ends.</label></div>
+          <JoinPanel client={client}/>
+          <div className="form-block"><span className="form-label">Invite another computer</span><p className="muted">The invitation names this project and the Git remote code is fetched from, and expires after a few minutes. When another computer opens it, this one asks you before it lets that computer in.</p><div className="inline-form"><button className="button button-secondary" type="button" disabled={busy || !client} onClick={() => void createInvite()}><Plus size={15}/> Create Invitation</button></div><label className="muted"><input type="checkbox" checked={openRouterPort} onChange={(event) => setOpenRouterPort(event.target.checked)}/> Ask my router to open a port (UPnP), so a computer on another network can connect. This changes a router setting until the session ends.</label></div>
         </div>
         {invite && <CopyField label="Invitation URI" value={invite}/>}
         {inviteOperation && <div className="form-block"><label className="form-label" htmlFor="answer-uri">Answer from the other computer</label><p className="muted">Only needed when the other computer is on a different network and does not connect on its own.</p><div className="inline-form"><input className="text-field" id="answer-uri" value={answerUri} onChange={(event) => setAnswerUri(event.target.value)} placeholder="Paste the answer link" /><button className="button button-secondary" type="button" disabled={busy || !client || !answerUri.trim()} onClick={() => void submitAnswer()}><Check size={15}/> Use Answer</button></div></div>}
-        {joinResult && <CopyField label="Answer link" value={joinResult}/>}
+        {joinRequests.length > 0 && <div className="form-block" role="group" aria-label="Computers waiting to join">
+          {joinRequests.map((request) => <div className="inline-form" key={request.nodeId}>
+            <span><span className="mono" title={request.nodeId}>{shortNode(request.nodeId)}</span> wants to join {projectName ?? "this project"}</span>
+            <button className="button button-primary" type="button" disabled={busy || !client} aria-label={"Accept " + shortNode(request.nodeId)} onClick={() => void decide(request.nodeId, true)}><Check size={15}/> Accept</button>
+            <button className="button button-secondary" type="button" disabled={busy || !client} aria-label={"Decline " + shortNode(request.nodeId)} onClick={() => void decide(request.nodeId, false)}><X size={15}/> Decline</button>
+          </div>)}
+        </div>}
         {actionMessage && <p className={cx("action-message", versionMismatch && "selection-error")} role={versionMismatch ? "alert" : "status"}>{actionMessage}</p>}
       </section>
                 <section className="data-table-wrap panel">

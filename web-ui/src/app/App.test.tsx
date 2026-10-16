@@ -491,3 +491,152 @@ describe("truthful product states", () => {
     expect(screen.queryByRole("navigation", {name: "Project views"})).not.toBeInTheDocument();
   });
 });
+
+describe("shared project invitations", () => {
+  const network = {
+    status: "UNCONFIGURED",
+    peers: [],
+    routes: [],
+    overlay: {status: "UNCONFIGURED", authorityNodeId: "", revision: 0, memberCount: 0, expiresAt: "", members: [], directEdges: [], desiredEdges: []},
+    relay: {status: "DISABLED", localAddress: "", activeConnections: 0, configured: false, connected: false, relayIdentity: "", authorized: false, activeRouteUsage: 0},
+  } as unknown as Snapshot["network"];
+  const link = "synesis://project/SLP1-abc";
+
+  it("opens a pasted project link, finds the folder by itself and shows the answer link", async () => {
+    const user = userEvent.setup();
+    const openProjectLink = vi.fn().mockResolvedValue({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz", folder: "C:\\work\\project"});
+    const client = {openProjectLink, join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+
+    expect(openProjectLink).toHaveBeenCalledWith(link, undefined);
+    expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("They have to accept this computer");
+    expect(screen.queryByLabelText("Project folder")).not.toBeInTheDocument();
+  });
+
+  it("asks for the folder when the project is not on this computer, names the URL to clone from, and uses the chosen folder", async () => {
+    const user = userEvent.setup();
+    const openProjectLink = vi.fn()
+      .mockResolvedValueOnce({apiVersion: "v1", state: "PROJECT_NOT_FOUND", codeRemoteUrl: "https://example.test/org/project.git"})
+      .mockResolvedValueOnce({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz"});
+    const chooseProject = vi.fn().mockResolvedValue({state: "SELECTED", path: "C:\\work\\clone", name: "clone"});
+    const client = {openProjectLink, chooseProject, join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+
+    const group = await screen.findByRole("group", {name: "Where is the project?"});
+    expect(group).toHaveTextContent("This project is not on this computer yet");
+    expect(within(group).getByText("https://example.test/org/project.git")).toBeInTheDocument();
+    expect(within(group).getByRole("button", {name: "Use this folder"})).toBeDisabled();
+
+    await user.click(within(group).getByRole("button", {name: "Choose folder"}));
+    expect(chooseProject).toHaveBeenCalledTimes(1);
+    expect(within(group).getByLabelText("Project folder")).toHaveValue("C:\\work\\clone");
+    await user.click(within(group).getByRole("button", {name: "Use this folder"}));
+
+    expect(openProjectLink).toHaveBeenLastCalledWith(link, "C:\\work\\clone");
+    expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
+    expect(screen.queryByRole("group", {name: "Where is the project?"})).not.toBeInTheDocument();
+  });
+
+  it("says plainly that a folder holds a different project", async () => {
+    const user = userEvent.setup();
+    const openProjectLink = vi.fn().mockRejectedValue(new ControlPlaneError(409, "PROJECT_IDENTITY_MISMATCH", "the project link cannot be used here"));
+    const client = {openProjectLink, join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("That folder holds a different project than the invitation's.");
+  });
+
+  it("offers the join box on the Projects page and fills it from a clicked link", async () => {
+    const user = userEvent.setup();
+    const openProjectLink = vi.fn().mockResolvedValue({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz"});
+    const joinClient = {openProjectLink, join: vi.fn(), chooseProject: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<ProjectsView snapshot={registrySnapshot} joinClient={joinClient} initialProjectLink={link}/>);
+
+    expect(screen.getByLabelText("Join from an invitation")).toHaveValue(link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+    expect(openProjectLink).toHaveBeenCalledWith(link, undefined);
+  });
+
+  it("creates a project invitation, shows the remote it names, and says why when it names none", async () => {
+    const user = userEvent.setup();
+    const invite = vi.fn()
+      .mockResolvedValueOnce({apiVersion: "v1", operationId: "host-op", inviteUri: link, peerIdentity: "sl1-me", expiresAt: "2026-09-11T02:00:00Z", state: "WAITING_FOR_CONNECTION", kind: "PROJECT", codeRemoteUrl: "https://example.test/org/p.git", codeRemoteName: "origin"})
+      .mockResolvedValueOnce({apiVersion: "v1", operationId: "host-op", inviteUri: link, peerIdentity: "sl1-me", expiresAt: "2026-09-11T02:00:00Z", state: "WAITING_FOR_CONNECTION", kind: "PROJECT", codeRemoteUrl: null, codeRemoteReason: "SEVERAL_GIT_REMOTES"});
+    const client = {invite} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.click(screen.getByRole("button", {name: "Create Invitation"}));
+
+    expect(invite).toHaveBeenCalledWith(undefined, false, true);
+    expect(screen.getByText(link)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("origin (https://example.test/org/p.git)");
+
+    await user.click(screen.getByRole("button", {name: "Create Invitation"}));
+
+    expect(screen.getByRole("status")).toHaveTextContent("names no code remote");
+    expect(screen.getByRole("status")).toHaveTextContent("several Git remotes");
+    expect(screen.getByRole("status")).toHaveTextContent("create a new invitation");
+  });
+
+  it("shows who invited, which project, where code comes from and when it expires before the person joins", async () => {
+    const user = userEvent.setup();
+    const describeProjectLink = vi.fn().mockResolvedValue({apiVersion: "v1", hostNodeId: "sl1-4202b14fde83332a3f7223e907fb0d4f368847fc4b0e746ea314739ce94efe80", projectId: "p-1",
+      projectName: "board-game", codeRemoteUrl: "https://example.test/org/p.git", expiresAt: "2026-09-11T02:10:00Z"});
+    const openProjectLink = vi.fn().mockResolvedValue({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz"});
+    const client = {describeProjectLink, openProjectLink, join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+
+    const about = await screen.findByRole("group", {name: "About this invitation"});
+    expect(describeProjectLink).toHaveBeenLastCalledWith(link);
+    expect(about).toHaveTextContent("sl1-4202b14f");
+    expect(about).toHaveTextContent("board-game");
+    expect(about).toHaveTextContent("https://example.test/org/p.git");
+    expect(about).toHaveTextContent("Expires");
+    expect(openProjectLink).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", {name: "Join"}));
+    expect(openProjectLink).toHaveBeenCalledWith(link, undefined);
+  });
+
+  it("lets the owner accept or decline each computer that wants to join", async () => {
+    const user = userEvent.setup();
+    const acceptJoin = vi.fn().mockResolvedValue({state: "ACCEPTED"});
+    const declineJoin = vi.fn().mockResolvedValue({state: "DECLINED"});
+    const client = {acceptJoin, declineJoin} as unknown as ControlPlaneClient;
+    const onboarding = {
+      pendingJoins: [],
+      joinRequests: [
+        {nodeId: "sl1-4202b14fde83332a3f7223e907fb0d4f368847fc4b0e746ea314739ce94efe80", requestedAt: "2026-09-11T02:00:00Z", expiresAt: "2026-09-11T02:10:00Z"},
+        {nodeId: "sl1-0e7d7bebb0ba5a8713f0bcccc061241ee24b2c5d11e208097c86e4836d20d2a3", requestedAt: "2026-09-11T02:01:00Z", expiresAt: "2026-09-11T02:10:00Z"},
+      ],
+    } as unknown as NonNullable<Snapshot["onboarding"]>;
+
+    render(<NetworkView network={network} onboarding={onboarding} projectName="Board game" client={client}/>);
+
+    const waiting = screen.getByRole("group", {name: "Computers waiting to join"});
+    expect(waiting).toHaveTextContent("sl1-4202b14f… wants to join Board game");
+    expect(waiting).toHaveTextContent("sl1-0e7d7beb… wants to join Board game");
+
+    await user.click(within(waiting).getByRole("button", {name: "Accept sl1-4202b14f…"}));
+    expect(acceptJoin).toHaveBeenCalledWith("sl1-4202b14fde83332a3f7223e907fb0d4f368847fc4b0e746ea314739ce94efe80");
+    expect(await screen.findByText("Accepted. That computer is now a member and is served the project's log.")).toBeInTheDocument();
+    expect(waiting).not.toHaveTextContent("sl1-4202b14f…");
+
+    await user.click(within(waiting).getByRole("button", {name: "Decline sl1-0e7d7beb…"}));
+    expect(declineJoin).toHaveBeenCalledWith("sl1-0e7d7bebb0ba5a8713f0bcccc061241ee24b2c5d11e208097c86e4836d20d2a3");
+    expect(screen.queryByRole("group", {name: "Computers waiting to join"})).not.toBeInTheDocument();
+  });
+});

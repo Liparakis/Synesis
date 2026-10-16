@@ -42,44 +42,61 @@ access tokens, or absolute personal paths.
 
 ## Two computers, one project
 
-This is the flow for one project that runs on two computers (ADR-0098 step 2): computer A is the leader and keeps the
-authoritative log; computer B is a member, runs its own agents, and sends each entry to A. It needs a Git remote that
-**both** computers can push to and fetch from, because code travels through it and never through the log. Name the
-remote in each clone (`git remote -v`); `origin` is not assumed. A bare repository on a shared folder or a host works.
+This is the flow for one project that runs on two computers (ADR-0098): computer A (the owner) is the leader and keeps the
+authoritative log; computer B (the friend) is a member, runs its own agents, and sends each entry to A. It needs a Git
+remote that **both** computers can push to and fetch from, because code travels through it and never through the log.
+A bare repository on a shared folder or a host works.
 
-The commands print `KEY=VALUE` lines. Run each one in the project directory, or give `--project <directory>`.
+**One link does it.** The commands print `KEY=VALUE` lines; run each one in the project directory, or give
+`--project <directory>`.
 
-**On A (the owner), once:**
+1. **A (the owner) invites.** In the browser UI, open the project's Network view and press **Create Invitation**; or run
+   `synesis link invite`. This writes nothing on A: A keeps working exactly as before until it accepts B. It prints one
+   link, `INVITE_LINK=synesis://project/SLP1-...`, and the code remote the link names, `CODE_REMOTE=<name>` and
+   `CODE_REMOTE_URL=<url>` (the configured `code.remote`, or the project's only Git remote; never credentials, and only
+   an `https://`, `ssh://` or `user@host:path` address). A project with several remotes and none configured, no remote, or
+   a remote that is a local path or a network share prints `CODE_REMOTE_URL=NONE` and a `NOTE=`: B could join, but A
+   cannot accept B, so add a Git remote and create a new invitation. On a computer that is a member, `link invite` makes
+   the plain connection invitation (no project link), as in the topology below. The command waits for B.
+2. **B (the friend) opens the link.** Click it (the installer's `synesis://` handler opens the browser UI with the link
+   filled in, on the installation's home workspace if B knows no project yet; the UI first shows the inviter, the project,
+   the code remote URL and the expiry, and B presses **Join**), or paste it into the **Join from an invitation** box on the UI's Projects page or Network view, or run
+   `synesis link join "<INVITE_LINK>"`, with or without `--project`. Synesis looks the project's identity up in B's
+   known-project registry:
+   - **Known:** that folder is used, with no question.
+   - **Not known, but B has it:** the UI asks for the folder (type it, or **Choose folder**); on the command line pass
+     `--project <folder>`. The folder is accepted only if its `.synesis/project.json` has the same project identity; a
+     clone that holds only that file is made a replica (`initReplica`) and registered.
+   - **Not on this computer:** B is told so with the URL to clone from (`CODE_REMOTE_URL`). Synesis does not clone. B
+     clones it, then chooses the folder as above.
 
-1. `synesis project share --code-remote origin` makes this computer the leader. It prints `NODE_ID` (A's node ID).
-2. `synesis project add-member <B's node ID>` allows B. B's node ID comes from step 2 below.
-
-**On B, once:**
-
-1. `git clone <the same repository>`, then `synesis init` in the clone. B must hold the same `.synesis/project.json`
-   as A, which the clone carries; the Link session is refused when the project identity differs.
-2. `synesis identity show --project .` prints B's `NODE_ID`; give it to A for `add-member`.
-3. `synesis project follow --leader <A's node ID> --code-remote origin`. It refuses a log that already has entries
-   (`LOG_NOT_EMPTY`): a member's log is a copy of A's, so it must start empty. Do not start agents on B before this.
-
-`share` and `follow` stop the project's runtime if the installation daemon runs one (`RUNTIME_STOPPED=true`); the
-runtime starts again with the new role the next time `synesis link` needs it. A runtime started by `synesis ui` in
-a terminal is not the daemon's: stop it there and start it again. `add-member` and `remove-member` need no restart; the
-leader reads its member list for every request. A member added after its session was established is served at once, but
-hears of new entries only at its next 15 second pull.
-
-**Connecting (either side can invite). On B:**
-
-1. `synesis link invite --expect <A's node ID>` prints `INVITE_LINK=synesis://join/...` and waits.
-2. On A: `synesis link join "<INVITE_LINK>"`. It prints `ANSWER_LINK=synesis://answer/...` and waits.
-3. On the same network that is all. Across two networks, give A's `ANSWER_LINK` to B:
+   Then, with no node ID typed, B's computer becomes a member of A, sets its code remote (the remote of the clone
+   whose URL matches A's; if none matches, a remote named `synesis` is added), and connects. It refuses, and writes
+   nothing, when B's copy already has log entries (`LOG_NOT_EMPTY`), follows another leader, or leads members of its
+   own. B should not start agents before this.
+3. **A (the owner) accepts.** B's connection is authenticated and the project identity is checked, but nothing is served
+   on it until A's person accepts it. The Network view lists `<node> wants to join <project>` with **Accept** and
+   **Decline**; or run `synesis link requests`, then `synesis link accept <node ID>` or `synesis link decline <node ID>`.
+   Accepting makes A the leader, adds B as a member, sets `code.remote` to the remote the link named and starts serving B at
+   once; if the link named no URL it is refused with `CODE_REMOTE_NOT_CONFIGURED` and the request stays. Declining closes B's session. A request ends when the
+   invitation it used expires (ten minutes), and requests are not kept across a restart of A's runtime: B asks again
+   with a new invitation.
+4. **Two networks.** If B does not connect within a few seconds, B's UI (and `synesis link join`) shows an answer link
+   (`ANSWER_LINK=synesis://answer/...`). Give it to A: paste it into the answer box of the Network view, or
    `synesis link answer <OPERATION_ID printed by invite> "<ANSWER_LINK>"` (ADR-0097 says which networks get through).
+   Or A starts with the router-port option, which asks the router to forward a port.
 
-Both commands end with `LINK_STATE=CONNECTED` and `PEER_NODE_ID=<the other computer>`, or `LINK_STATE=WAITING` when
-`--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended without a session. The
-connection stays with the project's runtime after the command ends. From then on B pulls A's log and sends its entries
-to A, and A merges B's lanes without an agent of its own. `synesis coordination status` on B shows
-`REPLICATION_STATE`. `synesis project remove-member <node ID>` on A stops serving a member; its earlier entries stay.
+`synesis project share`, `add-member`, `remove-member` and `follow` stay for scripts and for removing a member
+(`remove-member` on A stops serving a member; its earlier entries stay). The other documented way in is the old one
+(`share`, `identity show`, `add-member`, `follow --leader`, then `link invite --expect` / `link join`); the one link
+replaces it. `follow` and `share` stop the project's runtime if the installation daemon runs one
+(`RUNTIME_STOPPED=true`); the link does not need a restart.
+
+`link invite` and `link join` end with `LINK_STATE=CONNECTED` and `PEER_NODE_ID=<the other computer>`, or
+`LINK_STATE=WAITING` when `--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended
+without a session. `CONNECTED` means the session exists, not that A accepted it. The connection stays with the project's
+runtime after the command ends. Once A has accepted, B pulls A's log and sends its entries to A, and A merges B's lanes
+without an agent of its own. `synesis coordination status` on B shows `REPLICATION_STATE`.
 
 **A dropped link redials by itself.** The computer that ran `link join` (the one that dialed) dials the other again when
 the session ends, at the endpoints of the invitation it used, one second later and then every 2, 4, 8, 16, 30 seconds

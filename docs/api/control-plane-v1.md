@@ -152,6 +152,88 @@ return `400` with code `INCOMPATIBLE_VERSION` and a message naming both numbers,
 which side is older and what to do; it is never reported as `INVITE_INVALID` or
 `ANSWER_INVALID`.
 
+### Project invitations (ADR-0098, "Joining, revised")
+
+One link carries the connection invitation, the project's identity and the inviter's code remote URL. The owner makes
+it, the friend opens it, the owner decides.
+
+#### `POST /api/v1/commands/invite` with `"project": true`
+
+Creates the connection invitation as above and returns it wrapped as a signed `synesis://project/SLP1-...` `inviteUri`
+(`WIRE_FORMAT.md`). **It writes nothing**: no role file, so a computer that has none keeps working exactly as before
+(task completion and publication included) until it accepts its first joiner. The code remote the link names is the
+project's explicit `code.remote`, or its only Git remote; never a guess among several. The response adds
+`kind: "PROJECT"`, `projectId`, `role: "leader"`, `codeRemoteName` and `codeRemoteUrl` (the URL without credentials; the
+owner is shown both), and `codeRemoteReason` when `codeRemoteUrl` is `null`: `NO_GIT_REMOTE`, `SEVERAL_GIT_REMOTES`,
+`CODE_REMOTE_MISSING` (`code.remote` names a remote the project does not have) or `URL_NOT_SHAREABLE` (not `https://`,
+`ssh://` or `user@host:path`). A link without a URL can be opened, but its joiner cannot be accepted
+(`accept-join` answers `409 CODE_REMOTE_NOT_CONFIGURED`); add a Git remote and create a new invitation. On a computer
+that follows another leader the same command (with or without `project`) creates the plain connection invitation of the
+section above, with no `kind`: a member can host a connection for its leader.
+
+#### `POST /api/v1/commands/describe-project-link`
+
+`{"link": "synesis://project/SLP1-..."}`. Verifies the link (`400 INVITE_INVALID`, `400 INCOMPATIBLE_VERSION`) and
+returns `hostNodeId` (the inviter), `projectId`, `projectName` (the folder name when this computer knows the project,
+else `null`), `codeRemoteUrl` (or `null`) and `expiresAt`. It changes nothing; the UI shows it before the person presses
+Join.
+
+#### `POST /api/v1/commands/open-project-link`
+
+```json
+{
+    "link": "synesis://project/SLP1-...",
+    "folder": "optional path of the folder that holds the project"
+}
+```
+
+Verifies both signatures and the expiry (`400 INVITE_INVALID`, `400 INCOMPATIBLE_VERSION`), then finds the project's
+folder on this computer:
+
+- no `folder`: the installation's known-project registry is asked for the identity (project UUID and creation time).
+  A registered copy is used; with several, the one this runtime serves wins, else the first by path.
+- `folder`: it must be the project. Its `.synesis/project.json` must carry the link's identity (`409
+  PROJECT_IDENTITY_MISMATCH`); a clone that holds only that file (no local state) is made a replica (`initReplica`,
+  ADR-0080); a folder with no `.synesis` is accepted only if one of its Git remotes has the link's code remote URL
+  (`409 PROJECT_FOLDER_NOT_THE_PROJECT`), and is made a replica. The folder is then registered. A path that is not a
+  directory is `400 PROJECT_FOLDER_INVALID`.
+
+No folder found answers `200` with `state: "PROJECT_NOT_FOUND"`, `projectId`, `hostNodeId` and `codeRemoteUrl`
+(or `null`): the person is told the project is not on this computer and where to clone it from. Synesis never clones.
+
+A folder found is followed: the runtime that serves it (this one, or the folder's own, reached with its runtime command
+token through `POST /api/v1/commands/join-project-link`) sets the member role with the inviter as leader, sets the
+code remote (the remote whose URL matches, else one named `synesis` is added, `409 CODE_REMOTE_NAME_TAKEN` if that name
+is taken), switches its replication side to a member's without a restart, and joins the connection invitation. The
+connection is prepared first (capacity `429 OPERATION_LIMIT`, an unusable invitation) so that those refusals write
+nothing; then the role file, the `synesis` remote and the live switch happen under the project lock, and a failed switch
+puts the file and the remote back. The same link can be opened again after a failure. Refusals
+(`409`, nothing written): `LOG_NOT_EMPTY` (a member's log is a copy of the leader's, so it must be empty),
+`FOLLOWING_ANOTHER_LEADER`, `ALREADY_A_LEADER`, `INVITER_IS_THIS_COMPUTER`. The response is `200` with `state:
+"CONNECTING"`, `operationId`, `answerUri` (for a friend on another network), `peerIdentity`, `expiresAt`, `folder`,
+`role: "member"`, `leaderNodeId` and `codeRemote`.
+
+#### `POST /api/v1/commands/join-project-link`
+
+`{"link": "synesis://project/SLP1-..."}`. The same follow-and-join for the project this runtime serves, refusing a link
+of another project (`409 PROJECT_IDENTITY_MISMATCH`). It is what `open-project-link` and `synesis link join` call on the
+folder's runtime.
+
+#### `accept-join` and `decline-join`
+
+`{"nodeId": "sl1-..."}`. A node that authenticates through the invitation and is not a member is held: it has a Link
+session, the project identity was checked, and nothing is served on it. It is listed in the snapshot as
+`onboarding.joinRequests`, each `{nodeId, requestedAt, expiresAt}`, where `expiresAt` is the expiry of the invitation it
+used; a request ends there and its session is closed. `accept-join` adds the node to the member list, serves its live
+session at once (it also stays served after a restart, because it is recorded in `replication.peers`) and returns
+`state: "ACCEPTED"`. Accepting is what writes the leader role (keeping the members), adds the node and sets `code.remote`
+to the remote whose URL the link that brought the node carried, under the project lock so two accepts never lose a
+member; if that link carried no URL, or no remote has it any more, it answers `409 CODE_REMOTE_NOT_CONFIGURED` and the
+request stays. `decline-join` closes its session and returns `DECLINED`; its invitation was used up by its first
+connection, so it cannot come back with it. `404 JOIN_REQUEST_UNKNOWN` when no such request waits (decided, expired, or
+the runtime restarted: requests are kept in memory and a restart drops them), `503 MEMBER_NOT_SAVED` when the member
+list could not be written, in which case the request stays.
+
 ### `POST /api/v1/commands/cancel`
 
 ```json

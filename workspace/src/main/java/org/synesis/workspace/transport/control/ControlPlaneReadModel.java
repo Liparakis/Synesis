@@ -181,6 +181,15 @@ public final class ControlPlaneReadModel {
     }
 
     /**
+     * Returns the location of the project this runtime serves.
+     *
+     * @return project location
+     */
+    ProjectLocation location() {
+        return location;
+    }
+
+    /**
      * Returns bounded discovery metadata for projects known to this installation.
      *
      * <p>Only the current control-plane project is marked live. Other entries are read from

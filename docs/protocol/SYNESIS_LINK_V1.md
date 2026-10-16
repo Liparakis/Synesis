@@ -142,6 +142,13 @@ This is an explicit descriptor exchange, not a trust-on-first-use key update.
 Project identity and membership remain higher-level authorization decisions;
 possession of an SLB3 endpoint hint does not grant project membership.
 
+A project is shared with one link, `synesis://project/SLP1-<base64url>` (ADR-0098, "Joining, revised"): the same
+SLB3 record, unchanged, inside a second signed record that adds the project identity and the inviter's code remote
+URL (`WIRE_FORMAT.md`). The extra signature is made over everything before it, including the SLB3 bytes, so neither
+the identity nor the URL can be changed or moved onto another connection invitation. The joiner dials the SLB3 inside
+it exactly as before. A connection that authenticates through it is held, not served, until the inviter's person
+accepts the joiner (`control-plane-v1.md`); this is the compatibility 6 change.
+
 The one-way path is the normal UX for directly reachable endpoints. Across two
 networks it is completed by an answer link (ADR-0097). Joining shows
 `synesis://answer/SLA3-<base64url>`: the compatibility number, the invitation's session UUID and up to

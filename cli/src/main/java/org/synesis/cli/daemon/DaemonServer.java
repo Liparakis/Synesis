@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.ProjectInvitation;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.discovery.InstallationHome;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
@@ -252,6 +253,13 @@ final class DaemonServer implements AutoCloseable {
         return response(ready ? "READY" : "BROWSER_OPEN_FAILED", Map.of("endpoint", runtime.endpoint().toString(), "browserOpened", browserOpened));
     }
 
+    private static Map<String, Object> openUiWithProjectLink(RuntimeHandle runtime, String link, boolean openBrowser) throws IOException {
+        URI target = URI.create(runtime.uiUri() + "&projectLink=" + java.net.URLEncoder.encode(link, StandardCharsets.UTF_8));
+        boolean browserOpened = openBrowser && BrowserLauncher.open(target);
+        boolean ready = !openBrowser || browserOpened;
+        return response(ready ? "READY" : "BROWSER_OPEN_FAILED", Map.of("endpoint", runtime.endpoint().toString(), "browserOpened", browserOpened));
+    }
+
     /**
      * Reports whether a URI only asks for the UI: the bare scheme, or the {@code ui} or
      * {@code open} address. It carries nothing to verify, so it is matched as text and never
@@ -271,6 +279,12 @@ final class DaemonServer implements AutoCloseable {
             return runtime == null ? response("URI_UNRESOLVED", Map.of("reason", "NO_KNOWN_PROJECT")) : openUi(runtime, openBrowser);
         }
         validateUriShape(uriValue);
+        if (ProjectInvitation.isShareLink(uriValue)) {
+            // A project link names no folder and may need the person to choose one, so the UI carries it from here.
+            ProjectInvitation.fromShareLink(uriValue);
+            RuntimeHandle runtime = knownProjectRuntime();
+            return runtime == null ? response("URI_UNRESOLVED", Map.of("reason", "NO_KNOWN_PROJECT")) : openUiWithProjectLink(runtime, uriValue, openBrowser);
+        }
         if (isAnswer(uriValue)) {
             CompactAnswer.fromShareLink(uriValue);
             return openOnLiveRuntime(uriValue, openBrowser);
@@ -524,7 +538,9 @@ final class DaemonServer implements AutoCloseable {
         String path = uri.getPath();
         boolean join = "join".equalsIgnoreCase(host);
         boolean answer = "answer".equalsIgnoreCase(host);
-        boolean payload = join && path != null && path.startsWith("/SLB3-") || answer && path != null && path.startsWith("/SLA3-");
+        boolean project = "project".equalsIgnoreCase(host);
+        boolean payload = join && path != null && path.startsWith("/SLB3-") || answer && path != null && path.startsWith("/SLA3-")
+                || project && path != null && path.startsWith("/SLP1-");
         if (!"synesis".equalsIgnoreCase(uri.getScheme()) || host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || !payload) {
             throw new IOException("URI_UNSUPPORTED");
         }

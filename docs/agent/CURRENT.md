@@ -1,3 +1,71 @@
+# 2026-10-16 — One link takes a friend into a project; the owner accepts each join (ADR-0098, "Joining, revised")
+
+**Spec.** The ADR section "Joining, revised (owner, 2026-10-16)" (uncommitted in the main checkout; not edited here).
+
+**Link.** `synesis://project/SLP1-...` (`ProjectInvitation`, link module): compatibility number, project UUID and creation
+time, the inviter's code remote URL (never credentials: `publicUrl` strips `user:password@` and the web user; a parser
+refuses a URL that carries them, starts with `-`, or is a Git remote helper like `ext::`), the unchanged `SLB3` payload,
+and a second Ed25519 signature by the inviter's node key over a domain tag plus everything before it. The SLB3 signature
+covers only its own fields, and widening it would have changed what the joiner hands to Link, so the project link signs
+the whole payload instead: changing the identity or URL, or moving a signed SLB3 onto another project, fails
+`verifyAt`. `LinkCompatibility.CURRENT` 5 to 6; the pinned `SLB3`/`SLA3`/envelope vectors were regenerated (SLB3 now
+uses a fixed key of its own, `INVITER_ID` in `ProtocolWireCompatibilityTest`; SLA3 only changes its first two bytes) and
+SLP1 vectors added. Docs: WIRE_FORMAT, SYNESIS_LINK_V1, THREAT_MODEL, control-plane-v1, TWO_MACHINE_TESTING.
+
+**Owner.** `invite` with `project: true` (UI **Create Invitation**, `synesis link invite`) writes nothing: `ProjectSharing.invitationRemote`
+reads the explicit `code.remote` or the only Git remote, and `LinkRuntimeOwner.projectInvitationLink` signs the link. A
+runtime with no role file is an unshared leader (`LeaderReplication.serving`, `ReplicationSide`), so no restart is needed;
+`noticeAll` skips its head count while no member is attached. Only the first accept writes the leader role (see review fixes).
+
+**Friend.** `open-project-link {link, folder?}` (UI: paste box on the Projects page and Network view; the daemon opens the
+UI with `&projectLink=` for a clicked `synesis://project/` link; `synesis link join <link>` with or without `--project`):
+registry lookup by identity (several copies: the one this runtime serves, else the first by path); else `PROJECT_NOT_FOUND`
+with the code remote URL (no clone); a chosen folder must carry the same identity (`PROJECT_IDENTITY_MISMATCH`), a clone
+holding only `project.json` gets `initReplica`, a folder with no `.synesis` is accepted only if a remote has the link's URL.
+The folder's own runtime (reached with its runtime command token if it is not the serving one) then runs
+`ProjectSharing.follow` (member role, code remote = matching remote or a new `synesis` one, empty-log check, peers
+retained to the leader) and switches its `ReplicationSide` to a member's live, then joins the SLB3 inside.
+
+**Approval.** `LinkRuntimeOwner(... , MemberAdmission)`: a node that authenticates through a hosted invitation and is not
+in `returningPeers` is held (session, identity checked, nothing served) and listed in `snapshot.onboarding.joinRequests`;
+`accept-join` writes the member list, attaches the live session and records `hosted` in `replication.peers`;
+`decline-join` closes it. A request ends with its invitation; a session that ended first leaves the request, and a later
+accept makes the node a member who is served when it redials. Requests are not persisted: a restart drops them.
+CLI: `synesis link requests|accept <node>|decline <node>`.
+
+**Tests (all in the Linux gate).** `ProjectInvitationTest` (9) and the SLP1 wire vectors; `ProjectSharingTest` (16);
+`LinkRuntimeOwnerJoinRequestsTest` (5); `ProjectLinkFlowTest` (6: invite, open from another project's runtime, held before
+accept, member proposal lands after accept, decline, unknown project then wrong folder then clone, tampered link, own log
+and ALREADY_A_MEMBER, restart drops requests); `LinkCommandsTest` (+7); web-ui App tests (+6). Without the hold the join
+request and flow tests fail (4 of 5 and 3 of 6); without the live switch to member the end-to-end flow fails.
+Changed on purpose: `link invite` sends `project: true` and prints `CODE_REMOTE_URL`; the two compatibility vectors;
+`HolePunchTest` uses an `SLA3-AAY` stub for the new number.
+
+**Review fixes (2026-10-17, same uncommitted change).**
+- Creating an invitation no longer writes a role file (it could make `CodeRemote.of` throw `CODE_REMOTE_NOT_CONFIGURED` for
+  the owner's own completions and publications). The response and CLI show `codeRemoteName`, `codeRemoteUrl` or
+  `codeRemoteReason`. `accept-join` writes the leader role, the member and `code.remote` (the remote whose URL the link
+  that brought the node carried, remembered by `LinkRuntimeOwner` per connection invitation); no URL means
+  `409 CODE_REMOTE_NOT_CONFIGURED` and the request stays. `MemberAdmission.admit` now takes the URL.
+- `invite` on a member makes the plain connection invitation again (the documented member-hosts topology).
+- `ProjectSharing.follow` and `admit` run under `ProjectAppendLock`, which also fences agents' appends, so the empty-log
+  check, the role file and the live switch (`LiveSwitch`) are one step; a failed switch restores the file and removes the
+  remote this call added. The CLI scripts `project share|follow|add-member` still write the role file without that lock.
+- `open-project-link` prepares the connection first (`startJoin(link, BeforeConnect)`), so capacity or transport refusals
+  write nothing; a failure after the live switch cannot un-switch the running side (restart or a new open reconciles).
+- Code remote URLs are `https://`, `ssh://` or `user@host:path` only (`ProjectInvitation.isFetchableUrl`), when making
+  and when parsing a link; the owner's invitation otherwise carries none and says why.
+- One directory: the control plane uses `ProjectLinkGateway.coordinationDirectory()` (the `--data` directory) for the role
+  file; the launcher's admission uses it too.
+- New `describe-project-link` command; the Join panel shows inviter, project, code remote URL and expiry before Join.
+- A clicked `synesis://project/` link on an installation with no project already opened the UI on the home workspace
+  (`knownProjectRuntime`); `DaemonServerRoutingTest` now pins it (finding 7 was not reproducible).
+- Tests that failed before: lock tests in `ProjectSharingTest` (lock removed: 2 fail), capacity test in
+  `ProjectLinkFlowTest` (old order: fails); API-shape tests fail to compile against the old signatures.
+
+**Not done.** Cloning (or receiving over Link) the repository for the friend; a way to leave a leader after a declined
+join (the friend's computer stays a member of it and redials a refused host every 30 s at most); the real two-computer run.
+
 # 2026-10-16 — Drop and restart tested on two real computers
 
 Windows leader (dials out) and Linux VM member (hosts), project `mp7-two-pc`, after the run 7 WorkGroup completed.

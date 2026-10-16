@@ -428,6 +428,41 @@ This also stops one computer's merge from blocking its own agents.
   - A push to a real GitHub repository is tested early in step 2. If a host refuses custom refs,
     the push reports `CODE_REMOTE_UNAVAILABLE` with the reason.
 
+### Joining, revised (owner, 2026-10-16)
+
+The first build exposed the plumbing:
+- node IDs copied both ways;
+- `project share`, `add-member` and `follow`;
+- a code-remote name typed on each computer.
+
+The owner wants one link instead.
+
+1. **The owner creates a project invitation.** In the browser UI or with `synesis link invite`, the owner gets one
+   link. It carries the connection invitation (the existing `SLB3` payload: signed, single use, expiring), the
+   project identity (UUID and creation time from `project.json`), and the owner's code remote URL if the project has
+   one. Making the invitation makes the owner's computer the leader if it is not one yet.
+2. **The friend opens it.** They click it (the installer's `synesis://` handler opens the browser UI) or paste it
+   into the UI's invitation box. The command line keeps working. Synesis then looks up the project identity in the
+   friend's known-project registry.
+   - **Known:** that folder is used.
+   - **Not known:** the friend is asked where the project is. A chosen folder is accepted only if its
+     `.synesis/project.json` carries the same identity. It is then registered as a copy of the project (ADR-0080,
+     `initReplica`) and becomes the folder used.
+   - **Not on this computer:** the friend is told so, with the code remote URL to clone from. They clone it
+     themselves and choose the folder. Synesis cloning it, or receiving it over Link when there is no Git host, is
+     deferred until after build step 6 (USER-STATED).
+3. **The friend's computer follows the inviter automatically.** It sets the member role and the code remote from the
+   invitation, with the log still empty, then connects. No node IDs are typed.
+4. **The owner approves each join** (USER-STATED). The connection is authenticated as today and project identity is
+   checked (`ProjectContextExchange`), but the session is not served until the owner accepts the request. The owner
+   sees it in the UI ("<node> wants to join <project>", Accept or Decline) or with `synesis link requests` and
+   `synesis link accept <node>`. Accepting adds the member. Declining closes the session and the invitation.
+5. **Across two networks,** the answer link of ADR-0097 still goes from the friend back to the owner, or the owner
+   starts with the router-port option.
+
+The commands `project share`, `add-member`, `remove-member` and `follow` stay for scripts and removal. They are no
+longer the documented way in.
+
 ### Rejected for step 2
 
 - **The leader re-runs every service** (the Haiku, Sonnet and Fable runners). B sends typed

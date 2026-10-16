@@ -133,7 +133,11 @@ final class ControlPlaneOnboardingEndpoints {
                 pendingJoins.add(ordered("operationId", operationId, "state", "CONNECTING", "expiresAt", expiresAt.toString()));
             }
         }
-        return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins);
+        List<Map<String, Object>> joinRequests = new ArrayList<>();
+        for (ControlPlaneLinkOperations.JoinRequest request : linkOperations.joinRequests()) {
+            joinRequests.add(ordered("nodeId", request.nodeId(), "requestedAt", request.requestedAt().toString(), "expiresAt", request.expiresAt().toString()));
+        }
+        return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins, "joinRequests", joinRequests);
     }
 
     /**
@@ -180,6 +184,27 @@ final class ControlPlaneOnboardingEndpoints {
      * @throws ApiFailure  when capacity is exhausted or the Link layer fails
      */
     void invite(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
+        sendJson(exchange, 201, startInvitation(body, link -> link));
+    }
+
+    /**
+     * Turns the connection invitation this computer made into the link it hands out; a project link signs it.
+     */
+    @FunctionalInterface
+    interface InvitationLink {
+
+        String of(String connectionLink) throws IOException, java.security.GeneralSecurityException;
+    }
+
+    /**
+     * Creates an invitation, registers its pending host operation and describes it.
+     *
+     * @param body    request body of {@code invite}
+     * @param handOut the link given back as {@code inviteUri}
+     * @return the response body
+     * @throws ApiFailure when capacity is exhausted or the Link layer fails
+     */
+    Map<String, Object> startInvitation(Map<String, Object> body, InvitationLink handOut) throws ApiFailure {
         String expectedPeer = body.get("expectedPeer") == null ? null : requiredText(body, "expectedPeer", MAX_PEER_LENGTH);
         boolean openRouterPort = Boolean.TRUE.equals(body.get("openRouterPort"));
         ensureCapacity();
@@ -201,11 +226,27 @@ final class ControlPlaneOnboardingEndpoints {
         monitorHost(operationId, prepared);
         Map<String, Object> response = newResponse();
         response.put("operationId", operationId);
-        response.put("inviteUri", link);
+        try {
+            response.put("inviteUri", handOut.of(link));
+        } catch (IOException | java.security.GeneralSecurityException | RuntimeException unsigned) {
+            cancelQuietly(operationId);
+            throw failure(500, "INVITE_NOT_SIGNED", "the invitation could not be signed");
+        }
         response.put("peerIdentity", parsed.peerIdentity());
         response.put("expiresAt", parsed.expiresAt().toString());
         response.put("state", "WAITING_FOR_CONNECTION");
-        sendJson(exchange, 201, response);
+        return response;
+    }
+
+    private void cancelQuietly(String operationId) {
+        AutoCloseable pending;
+        synchronized (operationLock) {
+            pending = hosts.remove(operationId);
+            operationExpiry.remove(operationId);
+        }
+        if (pending != null) {
+            closeQuietly(pending);
+        }
     }
 
     /**
@@ -220,7 +261,39 @@ final class ControlPlaneOnboardingEndpoints {
      * @throws ApiFailure  when the invitation is invalid, capacity is exhausted, or the Link layer fails
      */
     void join(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
-        String link = requiredText(body, "inviteUri", MAX_LINK_LENGTH);
+        sendJson(exchange, 201, startJoin(requiredText(body, "inviteUri", MAX_LINK_LENGTH)));
+    }
+
+    /**
+     * Imports a connection invitation as a pending join operation and describes it.
+     *
+     * @param link the {@code SLB3} invitation
+     * @return the response body
+     * @throws ApiFailure when the invitation is invalid, capacity is exhausted, or the Link layer fails
+     */
+    Map<String, Object> startJoin(String link) throws ApiFailure {
+        return startJoin(link, () -> { });
+    }
+
+    /**
+     * A step that must succeed once the connection is prepared and before it dials.
+     */
+    @FunctionalInterface
+    interface BeforeConnect {
+
+        void run() throws ApiFailure;
+    }
+
+    /**
+     * Imports a connection invitation as a pending join operation, runs {@code beforeConnect}, and only then dials. If
+     * the step fails the operation is closed and nothing is dialed.
+     *
+     * @param link          the {@code SLB3} invitation
+     * @param beforeConnect what is done once the invitation is known to be usable, such as taking a role
+     * @return the response body
+     * @throws ApiFailure when the invitation is invalid, capacity is exhausted, the Link layer fails or the step fails
+     */
+    Map<String, Object> startJoin(String link, BeforeConnect beforeConnect) throws ApiFailure {
         InvitationDetails parsed = parseInvitationDetails(link);
         ensureCapacity();
         PendingJoin prepared;
@@ -235,6 +308,16 @@ final class ControlPlaneOnboardingEndpoints {
         synchronized (operationLock) {
             joins.put(operationId, prepared);
             operationExpiry.put(operationId, parsed.expiresAt());
+        }
+        try {
+            beforeConnect.run();
+        } catch (ApiFailure | RuntimeException refused) {
+            synchronized (operationLock) {
+                joins.remove(operationId);
+                operationExpiry.remove(operationId);
+            }
+            closeQuietly(prepared);
+            throw refused;
         }
         // Not marked running: a join dials until its invitation expires, and cancelling or expiry
         // must be able to close it, which ends the dialing.
@@ -255,7 +338,7 @@ final class ControlPlaneOnboardingEndpoints {
         response.put("peerIdentity", parsed.peerIdentity());
         response.put("expiresAt", parsed.expiresAt().toString());
         response.put("state", "CONNECTING");
-        sendJson(exchange, 201, response);
+        return response;
     }
 
     /**

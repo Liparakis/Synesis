@@ -31,6 +31,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.session.ReplayGuard;
 
+import org.synesis.workspace.transport.control.ProjectSharing;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.doctor.DoctorService;
@@ -117,13 +118,25 @@ final class CoordinationServerLauncher {
             // A member's agents reach the leader through this server; the Link session arrives at attach.
             var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
                     ? MemberReplication.open(projectData, location.projectId()) : null;
+            // A project with no role file is an unshared leader: it serves nobody until its person accepts a joiner.
             // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
-            var mergeDriver = replicationSettings.filter(settings -> !settings.isMember()).isPresent()
+            var mergeDriver = memberReplication == null
                     ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
             var leaderReplication = mergeDriver != null
-                    ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
-            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication, new ReplicationJournal(projectData), projectData);
+                    ? LeaderReplication.serving(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
+            var side = new ReplicationSide(projectData, location.projectId(), memberReplication,
+                    replicationSettings.map(ReplicationSettings::leaderNodeId).orElse(null), leaderReplication, mergeDriver);
+            var journal = new ReplicationJournal(projectData);
+            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), side, journal, projectData,
+                    (nodeId, codeRemoteUrl) -> {
+                        try {
+                            ProjectSharing.admit(location.root(), projectData, nodeId, codeRemoteUrl);
+                        } catch (ProjectSharing.Refusal refused) {
+                            throw new java.io.IOException(refused.code(), refused);
+                        }
+                    });
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
+            var serverRef = new java.util.concurrent.atomic.AtomicReference<CoordinationHttpServer>();
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
                 @Override
                 public java.util.Map<String, Object> describe(java.util.UUID selectionId) throws java.io.IOException {
@@ -134,16 +147,34 @@ final class CoordinationServerLauncher {
                 public java.util.Map<String, Object> select(java.util.UUID selectionId, java.util.UUID projectId) throws java.io.IOException {
                     return DaemonClient.selectProject(selectionId, projectId);
                 }
-            }, projectRegistry);
+            }, projectRegistry, new ControlPlaneHttpHandler.ProjectLinkGateway() {
+                @Override
+                public void becomeMember(String leaderNodeId) throws java.io.IOException {
+                    CoordinationHttpServer started = serverRef.get();
+                    if (started == null) {
+                        throw new java.io.IOException("the coordination server is not started");
+                    }
+                    side.becomeMember(leaderNodeId, started);
+                }
+
+                @Override
+                public java.util.Map<String, Object> projectRuntime(Path project) throws java.io.IOException {
+                    return DaemonClient.request("PROJECT_RUNTIME", project, null, false);
+                }
+
+                @Override
+                public Path coordinationDirectory() {
+                    return projectData;
+                }
+            });
             // The replication side is listed last so it stops first: it answers on the sessions the link owner holds.
             try (control;
                     linkOwner;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
-                    memberReplication;
-                    mergeDriver;
-                    leaderReplication) {
+                    side) {
                 server.start();
+                serverRef.set(server);
                 if (memberReplication != null) {
                     memberReplication.serve(server);
                 }
@@ -201,23 +232,21 @@ final class CoordinationServerLauncher {
      */
     static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSettings settings,
             MemberReplication member, LeaderReplication leader, ReplicationJournal journal, Path coordination) {
-        LinkRuntimeOwner.PeerMemory memory = peerMemory(coordination, journal);
-        LinkRuntimeOwner owner;
-        if (member != null) {
-            owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, member.handler(), session -> {
-                if (session.remoteNodeId().equals(settings.leaderNodeId())) {
-                    member.attach(session);
-                }
-            }, settings.leaderNodeId()::equals, journal::record, memory);
-        } else if (leader != null) {
-            owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, leader.handler(), session -> {
-                if (leader.isMember(session.remoteNodeId())) {
-                    leader.attach(session);
-                }
-            }, leader::isMember, journal::record, memory);
-        } else {
+        if (member == null && leader == null) {
             return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
         }
+        ReplicationSide side = new ReplicationSide(coordination, identity.projectId(), member, settings == null ? null : settings.leaderNodeId(), leader, null);
+        return linkOwner(onboarding, node, eventHub, identity, side, journal, coordination, null);
+    }
+
+    /**
+     * The same owner over a replication side that can change role while the server runs, for the product: it holds a
+     * joiner that no member list names until {@code admission} is told to add it (ADR-0098, "Joining, revised").
+     */
+    static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSide side,
+            ReplicationJournal journal, Path coordination, LinkRuntimeOwner.MemberAdmission admission) {
+        LinkRuntimeOwner.PeerMemory memory = peerMemory(coordination, journal);
+        LinkRuntimeOwner owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, side.handler(), side::attach, side::returning, journal::record, memory, admission);
         ReplicationPeers peers = ReplicationPeers.none();
         try {
             peers = ReplicationPeers.read(coordination);

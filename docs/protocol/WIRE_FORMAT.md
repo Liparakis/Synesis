@@ -6,13 +6,13 @@ order, and structured rejection. Java object serialization is prohibited.
 ## Compatibility number
 
 Two builds connect only if they carry the same **compatibility number**
-(`LinkCompatibility.CURRENT`, currently `5`). It is raised whenever any format
+(`LinkCompatibility.CURRENT`, currently `6`). It is raised whenever any format
 sent between computers changes, and for nothing else; it is not the build
 string. It is an unsigned 16-bit big-endian value in a position no later
 layout may move, so a build with another number can still read it and refuse
 with a clear message instead of reporting corruption:
 
-- `synesis://join/SLB3-...` and `synesis://answer/SLA3-...`: the first two bytes
+- `synesis://join/SLB3-...`, `synesis://answer/SLA3-...` and `synesis://project/SLP1-...`: the first two bytes
   of the payload. The prefixes are frozen and name only the kind of link; the
   `3` is history, not a version.
 - the `SLH1` handshake envelope: the two bytes after the magic and the format
@@ -123,6 +123,36 @@ two-byte port). Distinct endpoints only, no trailing bytes, at most 171 raw
 bytes and 512 URI characters. The record is unsigned routing input and is
 decoded only to find the host operation it answers and the addresses to send
 toward.
+
+## `synesis://project/SLP1-...` project invitation
+
+One link that invites a person into a project (ADR-0098, "Joining, revised"). URL-safe base64 without padding over, in
+order:
+
+| Width | Field                                                                                        |
+|------:|----------------------------------------------------------------------------------------------|
+|     2 | compatibility number (`6`)                                                                   |
+|    16 | project UUID, most significant long first                                                    |
+|     8 | project creation time, epoch seconds as a signed `long`                                      |
+|     4 | project creation time, nanosecond of the second                                              |
+|     2 | code remote URL length `n`, 0 to 256                                                         |
+|     n | code remote URL, UTF-8; empty when the inviter's project has none                            |
+|     2 | length `m` of the connection invitation that follows                                         |
+|     m | the inviter's `SLB3` payload, byte for byte, with its own signature                          |
+|    64 | Ed25519 signature by the inviter's node key (the key inside the `SLB3` payload)             |
+
+The signature covers the ASCII domain `synesis-link/SLP1/project` followed by every byte before it, so the project
+identity, the URL and the exact connection invitation are all signed: a signed `SLB3` payload cannot be moved onto
+another project, and the URL cannot be changed. (The `SLB3` signature alone covers only its own fields; extending it
+would have changed the payload the joiner hands to Link, which stays unchanged.) A parser verifies both signatures, the
+inviter binding and the `SLB3` validity interval, so the link expires with its connection invitation (ten minutes at
+most).
+
+The URL never carries credentials: the user and password of an `http(s)` URL are removed by the inviter, a URL with a
+password is not accepted by a parser, and neither a URL beginning with `-` nor a Git remote-helper URL (`ext::...`) is
+accepted. Only `https://host/path`, `ssh://[user@]host/path` and `user@host:path` are accepted (a local path, a file URL,
+a backslash or a Windows network-share path would make a later fetch or push open another share or write another
+repository), both when an inviter makes a link and when a parser reads one. At most 1,200 URI characters, no trailing bytes, canonical re-encoding required.
 
 ## `synesis-demo-work/1` application frame
 

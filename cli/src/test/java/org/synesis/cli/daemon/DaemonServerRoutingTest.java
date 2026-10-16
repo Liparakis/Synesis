@@ -292,6 +292,34 @@ final class DaemonServerRoutingTest {
         }
     }
 
+    /** A friend who installed Synesis and pastes the owner's project link into the browser has no project yet; the UI still opens, on the home workspace. */
+    @Test
+    @Timeout(15)
+    void aProjectLinkOnAnInstallationThatKnowsNoProjectOpensTheUiOnTheHomeWorkspace() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("link-registry.json"));
+        FakeStarter starter = new FakeStarter();
+        Path home = temp.resolve("link-home-workspace");
+        DaemonServer server = DaemonServer.start(temp.resolve("link-daemon"), registry, starter, new LocalProjectSelectionStore(), () -> home);
+        Thread serving = serve(server);
+        try {
+            DaemonEndpoint.Record endpoint = awaitEndpoint(temp.resolve("link-daemon/endpoint.json"));
+            org.synesis.link.identity.NodeIdentity owner = org.synesis.link.identity.NodeIdentity.generate();
+            var connection = org.synesis.link.protocol.CompactBootstrapInvitation.createMinimized(owner, org.synesis.link.protocol.ProtocolVersion.V1,
+                    java.time.Instant.now(), java.time.Instant.now().plusSeconds(300), new byte[org.synesis.link.protocol.CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
+                    List.of(new org.synesis.link.candidate.Candidate(org.synesis.link.candidate.CandidateType.MANUAL, java.net.InetAddress.getByName("203.0.113.7"), 4433, 0)));
+            String link = org.synesis.link.protocol.ProjectInvitation.create(owner, connection, java.util.UUID.randomUUID(), java.time.Instant.now(), null).shareLink();
+
+            Map<String, Object> opened = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", link, "openBrowser", false)));
+
+            assertEquals("READY", opened.get("state"));
+            assertEquals(java.util.Set.of(home.toAbsolutePath().normalize()), starter.runtimes.keySet());
+            assertEquals(List.of(), starter.allUris(), "the link is carried by the UI address, not handed to a runtime as a deep link");
+        } finally {
+            server.close();
+            serving.join(TimeUnit.SECONDS.toMillis(3));
+        }
+    }
+
     /** The installer stops the daemon before it replaces or removes the files it runs from. */
     @Test
     @Timeout(15)

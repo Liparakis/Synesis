@@ -54,10 +54,30 @@ abstract class LinkOperationCommand implements Callable<Integer> {
      */
     abstract String begin(RuntimeControl control) throws IOException, RuntimeControl.Rejected;
 
+    /**
+     * Finds the project whose runtime the operation runs on: {@code --project}, else the current directory.
+     * {@code link join} overrides it for a project link, which names the project by identity.
+     *
+     * @return the project directory
+     * @throws ProjectApplicationException when the directory holds no initialized project
+     * @throws IOException                 when the project cannot be read
+     * @throws RuntimeControl.Rejected     when the project cannot be found for another reason, with its code
+     */
+    Path projectRoot() throws ProjectApplicationException, IOException, RuntimeControl.Rejected {
+        return ProjectOptions.locate(runtime, project).root();
+    }
+
+    /**
+     * @return the {@code --project} directory the person gave, or {@code null}
+     */
+    final String projectOption() {
+        return project;
+    }
+
     @Override
     public final Integer call() {
         try {
-            Path root = ProjectOptions.locate(runtime, project).root();
+            Path root = projectRoot();
             RuntimeControl control = source.open(root);
             // Taken before the operation starts, so that a peer that connects at once is not mistaken for an old session.
             Set<String> before = sessionIds(control);

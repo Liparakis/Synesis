@@ -82,6 +82,31 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         void hosted(int port, String nodeId);
     }
 
+    /**
+     * Makes a node a member of the project this computer leads, durably. Told only when the owner's person accepts a
+     * join request ({@link #acceptJoin}).
+     */
+    @FunctionalInterface
+    public interface MemberAdmission {
+
+        /**
+         * Adds the node to the member list and saves it, with the code remote the invitation it used carried.
+         *
+         * @param nodeId        the node to add to the member list
+         * @param codeRemoteUrl the URL of the code remote the project link carried, or {@code null} for an invitation
+         *                      that was not a project link
+         * @throws java.io.IOException when the list cannot be saved; the request then stays pending. A message of
+         *                             {@value #CODE_REMOTE_NOT_CONFIGURED} makes the refusal that code
+         */
+        void admit(String nodeId, String codeRemoteUrl) throws java.io.IOException;
+
+        /** The refusal code of an accept whose invitation carried no usable code remote. */
+        String CODE_REMOTE_NOT_CONFIGURED = "CODE_REMOTE_NOT_CONFIGURED";
+    }
+
+    private record Held(String nodeId, Instant requestedAt, Instant expiresAt, int port, String codeRemoteUrl) {
+    }
+
     private static final PeerMemory FORGETS = new PeerMemory() {
         @Override
         public void dialed(String hostNodeId, String invitationLink) {
@@ -190,6 +215,22 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     private final PeerMemory memory;
 
     /**
+     * Adds an accepted joiner to the member list, or {@code null} when this computer holds no joiners.
+     */
+    private final MemberAdmission admission;
+
+    /**
+     * Join requests by node id. A request outlives its session and ends with the invitation it used.
+     */
+    private final ConcurrentMap<String, Held> requests = new ConcurrentHashMap<>();
+
+    /**
+     * The code remote URL each project link carried, by the connection invitation it wraps, so that accepting a
+     * joiner records the remote of the link that brought it and not whatever the project has configured by then.
+     */
+    private final ConcurrentMap<String, String> projectUrls = new ConcurrentHashMap<>();
+
+    /**
      * Accepted sessions by remote node id; at most one per peer, a newer session replaces an older one.
      */
     private final ConcurrentMap<String, PeerSession> sessions = new ConcurrentHashMap<>();
@@ -224,7 +265,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
         this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), null, session -> {
-        }, NO_RETURNING_PEERS, NO_JOURNAL, FORGETS);
+        }, NO_RETURNING_PEERS, NO_JOURNAL, FORGETS, null);
     }
 
     /**
@@ -298,9 +339,33 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
             Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory) {
+        this(onboarding, localIdentity, events, projectIdentity, projectHandler, sessionListener, returningPeers, journal, memory, null);
+    }
+
+    /**
+     * Creates a runtime owner like the one above for the computer that leads a project and lets its person decide who
+     * joins (ADR-0098, "Joining, revised"). A node that authenticates through an invitation this computer hosts and
+     * that {@code returningPeers} does not name gets a session, which the project handler serves nothing, and is
+     * listed as a {@link JoinRequest}. {@link #acceptJoin} adds it with {@code admission}, serves its live session
+     * through {@code sessionListener} and records it for a restart; {@link #declineJoin} closes its session.
+     *
+     * @param onboarding      Link-owned onboarding facade
+     * @param localIdentity   local authenticated node identity
+     * @param events          safe Link event sink
+     * @param projectIdentity canonical local project identity
+     * @param projectHandler  answers every application stream that is not the project-context exchange
+     * @param sessionListener called with each admitted session after the owner has registered it, and again with the
+     *                        live session of an accepted request
+     * @param returningPeers  whether a node is one this computer serves, redials or admits again
+     * @param journal         receives one line for each session start and end, redial outcome and decision
+     * @param memory          told about each dialed host and each admitted node that {@code returningPeers} names
+     * @param admission       makes an accepted node a member, or {@code null} to hold no requests
+     */
+    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
+            Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory, MemberAdmission admission) {
         this(onboarding, localIdentity, null, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), Objects.requireNonNull(projectHandler, "project handler"),
                 Objects.requireNonNull(sessionListener, "session listener"), Objects.requireNonNull(returningPeers, "returning peers"), Objects.requireNonNull(journal, "journal"),
-                Objects.requireNonNull(memory, "peer memory"));
+                Objects.requireNonNull(memory, "peer memory"), admission);
     }
 
     /**
@@ -316,8 +381,9 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      *                                  membership belongs to a different project
      */
     private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity,
-            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory) {
+            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory, MemberAdmission admission) {
         this.memory = memory;
+        this.admission = admission;
         this.sessionListener = sessionListener;
         this.returningPeers = returningPeers;
         this.journal = journal;
@@ -388,12 +454,17 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     public PendingHost createInvitation(String expectedPeer, boolean openRouterPort) throws OnboardingFailure {
         ensureOpen();
         AtomicReference<Onboarding.PreparedHost> hosting = new AtomicReference<>();
+        AtomicReference<Instant> invitationExpiry = new AtomicReference<>();
         Onboarding.PreparedHost delegate = onboarding.createRetainedInvitation(expectedPeer, openRouterPort, applicationHandler, session -> {
             acceptSession(session);
             // The host is set before the listener can accept anyone.
+            if (admission != null && !returningPeers.test(session.remoteNodeId())) {
+                hold(session, hosting.get().listeningPort(), invitationExpiry.get(), hosting.get().invitationLink());
+            }
             remember(() -> memory.hosted(hosting.get().listeningPort(), session.remoteNodeId()), session);
         }, peer -> !closed.get() && returningPeers.test(peer));
         hosting.set(delegate);
+        invitationExpiry.set(expiryOf(delegate.invitationLink()));
         LiveHost result = new LiveHost(delegate);
         handles.add(result);
         result.startWait();
@@ -411,6 +482,141 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     public PendingJoin importInvitation(String link) throws OnboardingFailure {
         ensureOpen();
         return retainJoin(link, onboarding::importRetainedInvitation);
+    }
+
+    private Instant expiryOf(String invitationLink) {
+        try {
+            return org.synesis.link.protocol.CompactBootstrapInvitation.fromShareLink(invitationLink).expiresAt();
+        } catch (java.io.IOException | RuntimeException unreadable) {
+            return clock.instant().plus(org.synesis.link.protocol.CompactBootstrapInvitation.MAX_LIFETIME);
+        }
+    }
+
+    /**
+     * Keeps a joiner that is not one of this computer's members as a request. The session stays open and is served
+     * nothing: only the project-context exchange runs on it until a person decides.
+     */
+    private void hold(PeerSession session, int port, Instant expiresAt, String connectionLink) {
+        Instant now = clock.instant();
+        requests.put(session.remoteNodeId(), new Held(session.remoteNodeId(), now,
+                expiresAt == null ? now.plus(org.synesis.link.protocol.CompactBootstrapInvitation.MAX_LIFETIME) : expiresAt, port, projectUrls.get(connectionLink)));
+        record("JOIN_REQUESTED peer=" + session.remoteNodeId());
+        publish(OnboardingEventType.SESSION_CREATED, "JOIN_REQUESTED");
+    }
+
+    /**
+     * Lists the joiners waiting for a decision, oldest first. A request ends with the invitation it used, and the
+     * session it held, if still open, is closed with it.
+     *
+     * @return the pending requests
+     */
+    @Override
+    public List<JoinRequest> joinRequests() {
+        Instant now = clock.instant();
+        for (Held held : List.copyOf(requests.values())) {
+            if (!now.isBefore(held.expiresAt) && requests.remove(held.nodeId, held)) {
+                closeHeld(held.nodeId);
+                record("JOIN_EXPIRED peer=" + held.nodeId);
+            }
+        }
+        return requests.values().stream().sorted(Comparator.comparing(Held::requestedAt).thenComparing(Held::nodeId))
+                .map(held -> new JoinRequest(held.nodeId, held.requestedAt, held.expiresAt)).toList();
+    }
+
+    /**
+     * Accepts a joiner: the node becomes a member, its live session (if it still has one) is served from now on, and
+     * it is recorded so that a restart admits it again. If its session ended meanwhile, it is admitted when it
+     * dials again, because it is a member now. A failure to save the member list leaves the request pending.
+     *
+     * @param nodeId the requesting node
+     * @throws JoinRequestException when there is no such request, it expired, or the member list was not saved
+     */
+    @Override
+    public void acceptJoin(String nodeId) throws JoinRequestException {
+        Held held = pendingRequest(nodeId);
+        try {
+            admission.admit(nodeId, held.codeRemoteUrl);
+        } catch (java.io.IOException | RuntimeException unsaved) {
+            throw new JoinRequestException(MemberAdmission.CODE_REMOTE_NOT_CONFIGURED.equals(unsaved.getMessage()) ? MemberAdmission.CODE_REMOTE_NOT_CONFIGURED : "MEMBER_NOT_SAVED");
+        }
+        requests.remove(nodeId, held);
+        record("JOIN_ACCEPTED peer=" + nodeId);
+        publish(OnboardingEventType.SESSION_CREATED, "JOIN_ACCEPTED");
+        try {
+            memory.hosted(held.port, nodeId);
+        } catch (RuntimeException ignored) {
+            // The memory serves the next restart; it does not decide this session.
+        }
+        PeerSession live = sessions.get(nodeId);
+        if (live != null) {
+            try {
+                sessionListener.accept(live);
+            } catch (RuntimeException ignored) {
+                // A member that cannot be attached now is served when it dials again.
+            }
+        }
+    }
+
+    /**
+     * Declines a joiner: its session is closed and it is not a member. Its invitation was used by its first
+     * connection, so it cannot come back with it.
+     *
+     * @param nodeId the requesting node
+     * @throws JoinRequestException when there is no such request or it expired
+     */
+    @Override
+    public void declineJoin(String nodeId) throws JoinRequestException {
+        Held held = pendingRequest(nodeId);
+        requests.remove(nodeId, held);
+        closeHeld(nodeId);
+        record("JOIN_DECLINED peer=" + nodeId);
+        publish(OnboardingEventType.SESSION_CREATED, "JOIN_DECLINED");
+    }
+
+    private Held pendingRequest(String nodeId) throws JoinRequestException {
+        if (admission == null) {
+            throw new JoinRequestException("JOIN_REQUEST_UNKNOWN");
+        }
+        joinRequests();
+        Held held = requests.get(nodeId);
+        if (held == null) {
+            throw new JoinRequestException("JOIN_REQUEST_UNKNOWN");
+        }
+        return held;
+    }
+
+    private void closeHeld(String nodeId) {
+        PeerSession live = sessions.get(nodeId);
+        if (live != null) {
+            closeSessionQuietly(live);
+        }
+    }
+
+    /**
+     * Signs a project link around an invitation this computer made.
+     *
+     * @param connectionLink the {@code SLB3} link {@link #createInvitation} returned
+     * @param projectId      the project's identifier
+     * @param createdAt      the project's creation time
+     * @param codeRemoteUrl  URL of the code remote without credentials, or {@code null}
+     * @return the {@code SLP1} link
+     * @throws java.io.IOException              when {@code connectionLink} is not an invitation
+     * @throws GeneralSecurityException         when signing fails
+     */
+    @Override
+    public String projectInvitationLink(String connectionLink, java.util.UUID projectId, Instant createdAt, String codeRemoteUrl)
+            throws java.io.IOException, GeneralSecurityException {
+        String link = org.synesis.link.protocol.ProjectInvitation.create(localIdentity,
+                org.synesis.link.protocol.CompactBootstrapInvitation.fromShareLink(connectionLink), projectId, createdAt, codeRemoteUrl).shareLink();
+        if (codeRemoteUrl != null) {
+            projectUrls.put(connectionLink, codeRemoteUrl);
+        }
+        return link;
+    }
+
+    @Override
+    public String localNodeId() {
+        return localIdentity.nodeId();
     }
 
     /**

@@ -113,6 +113,21 @@ as it could when it first connected; stealing a key is outside this model. Resou
 invitation path's: one bounded handshake frame, a failure frame, a closed stream, and QUIC's idle timeout of sixty
 seconds for retained endpoints.
 
+Joining a project with a link (ADR-0098, "Joining, revised"). Holding a project link, an invitation, grants a
+connection and nothing else. A node that authenticates through it and is not in the leader's member list is held: the
+Link session exists and the project identity was checked (`ProjectContextExchange`), but the replication side serves it
+nothing (its proposals and pulls are refused as `PROPOSER_NOT_A_MEMBER`), and the leader's person sees it as a join
+request. Only an explicit accept adds it to the member list. The request ends with the invitation that produced it
+(ten minutes), is not kept across a restart, and a decline closes the session; the invitation was consumed by the first
+connection, so a declined node cannot use it again, and the returning rule admits it only once it is a member. The
+project link's signature covers the project identity and the code remote URL, so an intermediary cannot point a friend at
+another project or another repository; a friend still trusts the inviter's URL as it would any repository it clones, and
+the URL never carries credentials (removed by the inviter, refused by the parser) and is only an `https://`, `ssh://` or
+`user@host:path` address, never a local path, a file URL or a network share, so a later fetch or push cannot open a share
+(NTLM hash leak) or write another local repository. The friend sees the URL before joining. A friend's computer sets its member
+role only after checking the log is empty and the project is the one named, and the inviter's person, not the friend, is
+the one who decides membership.
+
 Across a restart (ADR-0098 step 2). The coordination server writes down, in `replication.peers` beside the role file
 (local, excluded from version control, never replicated), which hosts it dialed (the node ID and the invitation link,
 whose endpoints it dials again) and, for each invitation it hosted, the UDP port and the node IDs it admitted through it.

@@ -250,6 +250,46 @@ export interface InviteResponse {
   peerIdentity: string;
   expiresAt: string;
   state: string;
+  /** "PROJECT" for a project invitation; absent for a plain connection invitation. */
+  kind?: string;
+  /** The inviter's code remote URL (no credentials); null when the project has none. */
+  codeRemoteUrl?: string | null;
+  /** The Git remote that URL belongs to; null when there is no URL. */
+  codeRemoteName?: string | null;
+  /** Why there is no URL: NO_GIT_REMOTE, SEVERAL_GIT_REMOTES, CODE_REMOTE_MISSING or URL_NOT_SHAREABLE. */
+  codeRemoteReason?: string | null;
+}
+
+/** What a project invitation says, read before anything is done with it. */
+export interface ProjectLinkDescription {
+  apiVersion: string;
+  hostNodeId: string;
+  projectId: string;
+  /** The folder name of the project when this computer knows it. */
+  projectName?: string | null;
+  codeRemoteUrl?: string | null;
+  expiresAt: string;
+}
+
+/** What opening a project invitation answers: connecting, or a request for the folder that holds the project. */
+export interface ProjectLinkResponse {
+  apiVersion: string;
+  state: "CONNECTING" | "PROJECT_NOT_FOUND";
+  projectId?: string;
+  hostNodeId?: string;
+  codeRemoteUrl?: string | null;
+  operationId?: string;
+  answerUri?: string;
+  peerIdentity?: string;
+  expiresAt?: string;
+  folder?: string;
+  codeRemote?: string | null;
+}
+
+export interface JoinRequestSnapshot {
+  nodeId: string;
+  requestedAt: string;
+  expiresAt: string;
 }
 
 export interface JoinResponse {
@@ -288,6 +328,8 @@ export interface PendingJoinSnapshot {
 
 export interface OnboardingSnapshot {
   pendingJoins: PendingJoinSnapshot[];
+  /** Computers that opened this project's invitation and wait for the owner's decision. */
+  joinRequests: JoinRequestSnapshot[];
 }
 
 export interface ServerEvent {
@@ -321,8 +363,13 @@ export function consumeBootstrapToken(): string | null {
   const params = new URLSearchParams(raw);
   const token = params.get("bootstrap");
   if (token) {
-    const selectionId = params.get("selectionId");
-    const suffix = selectionId ? `#selectionId=${encodeURIComponent(selectionId)}` : "";
+    // The bootstrap token goes; what the link that opened this tab carried stays until the page has used it.
+    const kept = new URLSearchParams();
+    for (const key of ["selectionId", "projectLink"]) {
+      const value = params.get(key);
+      if (value) kept.set(key, value);
+    }
+    const suffix = kept.size > 0 ? `#${kept.toString()}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${suffix}`);
   }
   return token;
@@ -331,6 +378,12 @@ export function consumeBootstrapToken(): string | null {
 export function selectionIdFromLocation(): string | null {
   const raw = window.location.hash.replace(/^#/, "");
   return new URLSearchParams(raw).get("selectionId");
+}
+
+/** The project invitation a clicked synesis:// link handed to this tab, if any. */
+export function projectLinkFromLocation(): string | null {
+  const raw = window.location.hash.replace(/^#/, "");
+  return new URLSearchParams(raw).get("projectLink");
 }
 
 export function clearSelectionId(): void {
@@ -355,6 +408,7 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
     ownerships: input.ownerships ?? [],
     onboarding: {
       pendingJoins: input.onboarding?.pendingJoins ?? [],
+      joinRequests: input.onboarding?.joinRequests ?? [],
     },
     network: {
       status: network.status ?? "UNCONFIGURED",
@@ -479,8 +533,26 @@ export class ControlPlaneClient {
     return normalizeSnapshot((await response.json()) as Snapshot);
   }
 
-  async invite(expectedPeer?: string, openRouterPort = false): Promise<InviteResponse> {
-    return this.command<InviteResponse>("invite", {...(expectedPeer ? {expectedPeer} : {}), ...(openRouterPort ? {openRouterPort} : {})});
+  async invite(expectedPeer?: string, openRouterPort = false, project = false): Promise<InviteResponse> {
+    return this.command<InviteResponse>("invite", {...(expectedPeer ? {expectedPeer} : {}), ...(openRouterPort ? {openRouterPort} : {}), ...(project ? {project} : {})});
+  }
+
+  /** Opens a project invitation: finds the project's folder, follows the inviter, and connects. */
+  async openProjectLink(link: string, folder?: string): Promise<ProjectLinkResponse> {
+    return this.command<ProjectLinkResponse>("open-project-link", {link, ...(folder ? {folder} : {})});
+  }
+
+  /** Reads a project invitation without joining. */
+  async describeProjectLink(link: string): Promise<ProjectLinkDescription> {
+    return this.command<ProjectLinkDescription>("describe-project-link", {link});
+  }
+
+  async acceptJoin(nodeId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("accept-join", {nodeId});
+  }
+
+  async declineJoin(nodeId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("decline-join", {nodeId});
   }
 
   async join(inviteUri: string): Promise<JoinResponse> {

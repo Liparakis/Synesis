@@ -94,6 +94,11 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private final ControlPlaneProjectEndpoints projects;
 
     /**
+     * Project links: making them, opening them, and deciding who joins.
+     */
+    private final ProjectLinkEndpoints projectLinks;
+
+    /**
      * Server-sent-events stream.
      */
     private final ControlPlaneEventStream eventStream;
@@ -119,11 +124,82 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             ControlPlaneEventHub eventHub,
             SelectionGateway selectionGateway,
             KnownProjectRegistry projectRegistry) {
+        this(readModel, coordination, linkOperations, eventHub, selectionGateway, projectRegistry, ProjectLinkGateway.UNAVAILABLE);
+    }
+
+    /**
+     * Creates a control-plane handler that can also follow an inviter's project link.
+     *
+     * @param readModel          explicit public-safe read model
+     * @param coordination       durable coordination service
+     * @param linkOperations     supported Link operation owner
+     * @param eventHub           bounded onboarding event hub
+     * @param selectionGateway   authenticated local daemon selection bridge
+     * @param projectRegistry    installation-local discovery index, or {@code null} when none is configured
+     * @param projectLinkGateway what joining needs from the process that owns this runtime
+     */
+    public ControlPlaneHttpHandler(ControlPlaneReadModel readModel,
+            CoordinationService coordination,
+            ControlPlaneLinkOperations linkOperations,
+            ControlPlaneEventHub eventHub,
+            SelectionGateway selectionGateway,
+            KnownProjectRegistry projectRegistry,
+            ProjectLinkGateway projectLinkGateway) {
         this.readModel = Objects.requireNonNull(readModel, "read model");
         this.coordination = Objects.requireNonNull(coordination, "coordination");
         this.onboarding = new ControlPlaneOnboardingEndpoints(Objects.requireNonNull(linkOperations, "link operations"));
         this.eventStream = new ControlPlaneEventStream(this.coordination, Objects.requireNonNull(eventHub, "event hub"));
         this.projects = new ControlPlaneProjectEndpoints(this.readModel, projectRegistry, Objects.requireNonNull(selectionGateway, "selection gateway"));
+        this.projectLinks = new ProjectLinkEndpoints(this.readModel, projectRegistry, linkOperations, onboarding, Objects.requireNonNull(projectLinkGateway, "project link gateway"));
+    }
+
+    /**
+     * What following a project link needs from the process that owns this runtime (ADR-0098, "Joining, revised").
+     */
+    public interface ProjectLinkGateway {
+
+        /**
+         * Gateway for a runtime that cannot follow an inviter or reach another project's runtime.
+         */
+        ProjectLinkGateway UNAVAILABLE = new ProjectLinkGateway() {
+            @Override
+            public void becomeMember(String leaderNodeId) throws IOException {
+                throw new IOException("project_link_unavailable");
+            }
+
+            @Override
+            public Map<String, Object> projectRuntime(java.nio.file.Path project) throws IOException {
+                throw new IOException("project_link_unavailable");
+            }
+        };
+
+        /**
+         * Makes the running replication side of this runtime a member's of {@code leaderNodeId}, after the role
+         * file was written, so no restart is needed.
+         *
+         * @param leaderNodeId the inviter
+         * @throws IOException when the switch cannot be made
+         */
+        void becomeMember(String leaderNodeId) throws IOException;
+
+        /**
+         * Reaches the runtime of another project folder on this computer, starting it when it is not running.
+         *
+         * @param project the project folder
+         * @return the runtime's {@code endpoint} and {@code commandToken}
+         * @throws IOException when the runtime cannot be reached
+         */
+        Map<String, Object> projectRuntime(java.nio.file.Path project) throws IOException;
+
+        /**
+         * The coordination folder this runtime serves, which holds the role file. It differs from the project's
+         * default only when the server was started with a data override.
+         *
+         * @return the folder, or {@code null} to use the project's own
+         */
+        default java.nio.file.Path coordinationDirectory() {
+            return null;
+        }
     }
 
     /**
@@ -423,8 +499,19 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         requireJson(exchange);
         Map<String, Object> body = readObject(exchange);
         switch (name) {
-            case "invite" -> onboarding.invite(exchange, body);
+            case "invite" -> {
+                if (Boolean.TRUE.equals(body.get("project"))) {
+                    projectLinks.invite(exchange, body);
+                } else {
+                    onboarding.invite(exchange, body);
+                }
+            }
             case "join" -> onboarding.join(exchange, body);
+            case "open-project-link" -> projectLinks.open(exchange, body);
+            case "join-project-link" -> projectLinks.join(exchange, body);
+            case "describe-project-link" -> projectLinks.describe(exchange, body);
+            case "accept-join" -> projectLinks.decide(exchange, body, true);
+            case "decline-join" -> projectLinks.decide(exchange, body, false);
             case "answer" -> onboarding.answer(exchange, body);
             case "cancel" -> onboarding.cancel(exchange, body);
             case "select-project" -> projects.selectProject(exchange, body);

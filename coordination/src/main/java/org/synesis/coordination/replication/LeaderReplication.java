@@ -135,6 +135,20 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
+     * Serves the project of a coordination folder that has no role yet, as a leader with no members. A log with no
+     * role file is a leader (ADR-0098), and the member list is read afresh for every request, so a computer that
+     * later accepts a joiner serves it without a restart. Until then everyone is refused.
+     *
+     * @param root             the leader's coordination folder
+     * @param projectId        the project
+     * @param afterMemberEntry called after each accepted proposal; it must not block
+     * @return the leader side
+     */
+    public static LeaderReplication serving(Path root, UUID projectId, Runnable afterMemberEntry) {
+        return new LeaderReplication(root, projectId, () -> currentMembers(root), afterMemberEntry);
+    }
+
+    /**
      * The members the settings file names now. A file that is gone, unreadable, or has become a member's names
      * nobody: an unreadable role never admits a proposer (fail closed).
      */
@@ -241,6 +255,9 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     private void noticeAll() {
+        if (sessions.isEmpty()) {
+            return;
+        }
         long head = PredictionEventStore.recordedEvents(root);
         sessions.forEach((node, session) -> {
             if (!isMember(node) || !Sessions.live(session) || noticed.getOrDefault(node, -1L) == head) {

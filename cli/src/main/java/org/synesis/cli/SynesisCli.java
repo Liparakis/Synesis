@@ -55,7 +55,10 @@ import org.synesis.cli.command.prediction.PredictionPublishCommand;
 import org.synesis.cli.command.prediction.PredictionRespondCommand;
 import org.synesis.cli.command.prediction.PredictionShowCommand;
 import org.synesis.cli.command.project.InitCommand;
+import org.synesis.cli.command.link.LinkAcceptCommand;
 import org.synesis.cli.command.link.LinkAnswerCommand;
+import org.synesis.cli.command.link.LinkDeclineCommand;
+import org.synesis.cli.command.link.LinkRequestsCommand;
 import org.synesis.cli.command.link.LinkCommand;
 import org.synesis.cli.command.link.LinkInviteCommand;
 import org.synesis.cli.command.link.LinkJoinCommand;
@@ -169,6 +172,9 @@ public final class SynesisCli {
         command.getSubcommands().get("link").addSubcommand("invite", new LinkInviteCommand(runtime));
         command.getSubcommands().get("link").addSubcommand("join", new LinkJoinCommand(runtime));
         command.getSubcommands().get("link").addSubcommand("answer", new LinkAnswerCommand(runtime));
+        command.getSubcommands().get("link").addSubcommand("requests", new LinkRequestsCommand(runtime));
+        command.getSubcommands().get("link").addSubcommand("accept", new LinkAcceptCommand(runtime));
+        command.getSubcommands().get("link").addSubcommand("decline", new LinkDeclineCommand(runtime));
         command.addSubcommand("constraint", new ConstraintCommand());
         command.getSubcommands().get("constraint").addSubcommand("create", new ConstraintCreateCommand(runtime));
         CommandLine collaboration = new CommandLine(new CollaborationCommand()).addSubcommand("announce", new CollaborationAnnounceCommand(runtime))

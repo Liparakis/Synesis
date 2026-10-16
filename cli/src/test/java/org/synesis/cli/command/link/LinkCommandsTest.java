@@ -6,9 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +28,15 @@ import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.link.candidate.Candidate;
+import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
+import org.synesis.link.protocol.ProjectInvitation;
+import org.synesis.link.protocol.ProtocolVersion;
 
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 import picocli.CommandLine;
 
@@ -83,8 +91,25 @@ class LinkCommandsTest {
         Run invited = invite("--expect", peer);
 
         assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
-        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://join/SLB3-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "LINK_STATE=CONNECTED", "PEER_NODE_ID=" + peer), invited.stdout());
-        assertEquals(List.of("invite " + Map.of("expectedPeer", peer)), runtime.commands);
+        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://project/SLP1-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "CODE_REMOTE=origin", "CODE_REMOTE_URL=https://example.test/p.git", "LINK_STATE=CONNECTED", "PEER_NODE_ID=" + peer), invited.stdout());
+        assertEquals(1, runtime.commands.size());
+        assertTrue(runtime.commands.getFirst().startsWith("invite ") && runtime.commands.getFirst().contains("project=true") && runtime.commands.getFirst().contains("expectedPeer=" + peer), runtime.commands.toString());
+    }
+
+    @Test
+    void aProjectInvitationWithoutAnUrlSaysWhyAndAMemberHostsAPlainInvitation() throws Exception {
+        runtime.inviteKind = "NO_URL";
+
+        Run none = invite("--wait-seconds", "0");
+
+        assertTrue(none.stdout().contains("CODE_REMOTE_URL=NONE"), none.toString());
+        assertTrue(none.stdout().stream().anyMatch(line -> line.startsWith("NOTE=this project has several Git remotes")), none.toString());
+
+        runtime.inviteKind = "PLAIN";
+        Run plain = invite("--wait-seconds", "0");
+
+        assertEquals(ExitCodes.OK, plain.exit(), plain.toString());
+        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://join/SLB3-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "LINK_STATE=PENDING"), plain.stdout());
     }
 
     @Test
@@ -171,6 +196,116 @@ class LinkCommandsTest {
         assertEquals(List.of("ERROR=PROJECT_RUNTIME_UNAVAILABLE"), joined.stderr());
     }
 
+    private Run runIn(String folder, Function<CliRuntime, Callable<Integer>> command, String... arguments) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8));
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal);
+        List<String> all = new ArrayList<>();
+        if (folder != null) {
+            all.addAll(List.of("--project", folder));
+        }
+        all.addAll(List.of(arguments));
+        int exit = new CommandLine(command.apply(cli)).execute(all.toArray(String[]::new));
+        return new Run(exit, out.toString(StandardCharsets.UTF_8).lines().toList(), err.toString(StandardCharsets.UTF_8).lines().toList());
+    }
+
+    private String projectLink(String url) throws Exception {
+        NodeIdentity host = NodeIdentity.generate();
+        var location = new ProjectApplicationService().require(root);
+        var connection = CompactBootstrapInvitation.createMinimized(host, ProtocolVersion.V1, Instant.now(), Instant.now().plusSeconds(300),
+                new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES],
+                List.of(new Candidate(CandidateType.MANUAL, InetAddress.getByName("203.0.113.7"), 4433, 0)));
+        return ProjectInvitation.create(host, connection, location.projectId(), location.createdAt(), url).shareLink();
+    }
+
+    @Test
+    void joiningAProjectLinkFindsTheProjectInTheRegistryWithoutAFolderAndAsksItsRuntimeToFollow() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+        registry.register(root);
+        String link = projectLink("https://example.test/p.git");
+        runtime.connectsAfterReads = 2;
+        runtime.peerNode = "sl1-host";
+
+        Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), link);
+
+        assertEquals(ExitCodes.OK, joined.exit(), joined.toString());
+        assertEquals(List.of("join-project-link " + Map.of("link", link)), runtime.commands);
+        assertTrue(joined.stdout().contains("PROJECT_FOLDER=" + root), joined.toString());
+        assertTrue(joined.stdout().contains("LINK_STATE=CONNECTED"), joined.toString());
+    }
+
+    @Test
+    void joiningAProjectLinkOfAProjectNotOnThisComputerTellsWhereToCloneFromAndDoesNothing() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+
+        Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), projectLink("https://example.test/p.git"));
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit(), joined.toString());
+        assertEquals(List.of("ERROR=PROJECT_NOT_ON_THIS_COMPUTER"), joined.stderr());
+        assertTrue(joined.stdout().contains("CODE_REMOTE_URL=https://example.test/p.git"), joined.toString());
+        assertEquals(List.of(), runtime.commands);
+    }
+
+    @Test
+    void joiningAProjectLinkWithAFolderChecksThatFolderIsTheProject() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+        Path other = Files.createDirectories(tmp.resolve("other"));
+        new ProjectApplicationService().init(other);
+        String link = projectLink(null);
+
+        Run wrong = runIn(other.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), link);
+        Run right = runIn(root.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), link, "--wait-seconds", "0");
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, wrong.exit(), wrong.toString());
+        assertEquals(List.of("ERROR=PROJECT_IDENTITY_MISMATCH"), wrong.stderr());
+        assertEquals(ExitCodes.OK, right.exit(), right.toString());
+        assertEquals(List.of("join-project-link " + Map.of("link", link)), runtime.commands);
+        assertEquals(List.of(root), registry.projects().stream().map(KnownProjectRegistry.ProjectView::path).toList(), "the chosen folder is registered, the wrong one is not");
+    }
+
+    @Test
+    void aProjectLinkOfAnotherCompatibilityNumberIsRefusedBeforeTheRuntimeIsAsked() throws Exception {
+        Run joined = runIn(root.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5), "synesis://project/SLP1-AAAA");
+
+        assertEquals(ExitCodes.INCOMPATIBLE_VERSION, joined.exit(), joined.toString());
+        assertEquals(List.of(), runtime.commands);
+    }
+
+    @Test
+    void requestsListsTheComputersWaitingToJoin() throws Exception {
+        runtime.joinRequests = List.of(Map.of("nodeId", "sl1-friend", "requestedAt", "2026-10-16T12:00:00Z", "expiresAt", "2026-10-16T12:10:00Z"));
+
+        Run listed = run(cli -> new LinkRequestsCommand(cli, project -> runtime));
+
+        assertEquals(ExitCodes.OK, listed.exit(), listed.toString());
+        assertEquals(List.of("JOIN_REQUESTS=1", "JOIN_REQUEST=sl1-friend REQUESTED_AT=2026-10-16T12:00:00Z EXPIRES_AT=2026-10-16T12:10:00Z"), listed.stdout());
+    }
+
+    @Test
+    void acceptAndDeclineTellTheRuntimeWhichNodeAndPrintTheOutcome() throws Exception {
+        String node = NodeIdentity.generate().nodeId();
+
+        Run accepted = run(cli -> new LinkAcceptCommand(cli, project -> runtime), node);
+        Run declined = run(cli -> new LinkDeclineCommand(cli, project -> runtime), node);
+
+        assertEquals(List.of("JOIN_REQUEST=" + node + " STATE=ACCEPTED"), accepted.stdout());
+        assertEquals(List.of("JOIN_REQUEST=" + node + " STATE=DECLINED"), declined.stdout());
+        assertEquals(List.of("accept-join " + Map.of("nodeId", node), "decline-join " + Map.of("nodeId", node)), runtime.commands);
+    }
+
+    @Test
+    void decidingOnARequestThatIsGoneIsReportedWithTheRuntimesCode() throws Exception {
+        runtime.rejection = "JOIN_REQUEST_UNKNOWN";
+
+        Run accepted = run(cli -> new LinkAcceptCommand(cli, project -> runtime), NodeIdentity.generate().nodeId());
+        Run notANode = run(cli -> new LinkDeclineCommand(cli, project -> runtime), "somebody");
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, accepted.exit());
+        assertEquals(List.of("ERROR=JOIN_REQUEST_UNKNOWN"), accepted.stderr());
+        assertEquals(List.of("ERROR=INVALID_NODE_ID"), notANode.stderr());
+    }
+
     /** A runtime whose network view gains a peer after a number of reads. */
     private static final class FakeRuntime implements RuntimeControl {
 
@@ -180,7 +315,9 @@ class LinkCommandsTest {
         String existingSession;
         boolean endsWithoutSession;
         String rejection;
+        List<Map<String, Object>> joinRequests = List.of();
         String operation = "op-1";
+        String inviteKind = "PROJECT";
         private int networkReads;
 
         @Override
@@ -190,8 +327,15 @@ class LinkCommandsTest {
             }
             commands.add(name + " " + body);
             return switch (name) {
-                case "invite" -> Map.of("operationId", "op-1", "inviteUri", "synesis://join/SLB3-test", "expiresAt", "2026-10-16T12:00:00Z");
-                case "join" -> Map.of("operationId", "op-2", "answerUri", "synesis://answer/SLA3-test", "peerIdentity", "sl1-host", "expiresAt", "2026-10-16T12:00:00Z");
+                case "invite" -> switch (inviteKind) {
+                    case "PLAIN" -> Map.of("operationId", "op-1", "inviteUri", "synesis://join/SLB3-test", "expiresAt", "2026-10-16T12:00:00Z");
+                    case "NO_URL" -> Map.of("operationId", "op-1", "inviteUri", "synesis://project/SLP1-test", "expiresAt", "2026-10-16T12:00:00Z", "kind", "PROJECT", "codeRemoteReason", "SEVERAL_GIT_REMOTES");
+                    default -> Map.of("operationId", "op-1", "inviteUri", "synesis://project/SLP1-test", "expiresAt", "2026-10-16T12:00:00Z", "kind", "PROJECT", "codeRemoteName", "origin",
+                            "codeRemoteUrl", "https://example.test/p.git");
+                };
+                case "join-project-link", "join" -> Map.of("operationId", "op-2", "answerUri", "synesis://answer/SLA3-test", "peerIdentity", "sl1-host", "expiresAt", "2026-10-16T12:00:00Z");
+                case "accept-join" -> Map.of("state", "ACCEPTED");
+                case "decline-join" -> Map.of("state", "DECLINED");
                 default -> Map.of("operationId", operation, "state", "SENDING_TO_JOINER");
             };
         }
@@ -210,7 +354,7 @@ class LinkCommandsTest {
                 return Map.of("network", Map.of("peers", peers));
             }
             boolean pending = !endsWithoutSession;
-            return Map.of("onboarding", Map.of("pendingHosts", pending ? List.of(Map.of("operationId", "op-1")) : List.of(), "pendingJoins", pending ? List.of(Map.of("operationId", "op-2")) : List.of()));
+            return Map.of("onboarding", Map.of("pendingHosts", pending ? List.of(Map.of("operationId", "op-1")) : List.of(), "pendingJoins", pending ? List.of(Map.of("operationId", "op-2")) : List.of(), "joinRequests", joinRequests));
         }
     }
 }
