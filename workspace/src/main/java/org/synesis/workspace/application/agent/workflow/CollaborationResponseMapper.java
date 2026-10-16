@@ -45,6 +45,31 @@ public final class CollaborationResponseMapper {
     }
 
     /**
+     * Lists the review candidates a session that holds no lane yet may take up, in the compact
+     * form {@code ensure_session} returns: the snapshot, the files it covers and the ready
+     * {@code reviewerIntent}. A session that holds a lane gets none, because one session holds one
+     * lane. This is guidance only; admission still enforces independence.
+     *
+     * @param location    project location
+     * @param participant exact participant handle of the session
+     * @return the open candidates, empty when there are none or the session holds a lane
+     * @throws Exception if the project log cannot be read
+     */
+    public static List<Map<String, Object>> openReviewCandidates(org.synesis.workspace.application.project.ProjectLocation location, String participant) throws Exception {
+        PredictionEventStore store = NextActionSupport.openEventStore(location).orElse(null);
+        if (store == null || NextActionSupport.activeIntentOf(store, participant).isPresent()) {
+            return List.of();
+        }
+        return AgentReviewActionProjection.reviewCandidatesFor(store, participant).stream().map(candidate -> {
+            Map<String, Object> compact = new LinkedHashMap<>();
+            compact.put(NextActionKeys.SNAPSHOT_ID, candidate.get(NextActionKeys.SNAPSHOT_ID));
+            compact.put("files", store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).map(snapshot -> AgentReviewActionProjection.snapshotReviewTargets(snapshot).stream().map(target -> target.get("path")).toList()).orElse(List.of()));
+            compact.put("reviewerIntent", candidate.get("reviewerIntent"));
+            return compact;
+        }).toList();
+    }
+
+    /**
      * Describes a lane by what it is for and the files it claims: what a caller needs to tell
      * whose a file is, without an identifier to copy.
      *

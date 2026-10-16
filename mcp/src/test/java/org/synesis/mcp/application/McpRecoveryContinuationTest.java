@@ -425,6 +425,75 @@ final class McpRecoveryContinuationTest {
         assertEquals(snapshotId, reviewPayload.get("snapshotId"));
     }
 
+    /**
+     * Real run 4: a fresh session in a mandatory-review project saw only "choose a part that no
+     * participant claims" and never learned it could review the snapshot awaiting review.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void freshSessionIsToldItMayReviewASnapshotAwaitingReview(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("fresh-reviewer-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        ensureAndTrust(sessions, location, project, "fresh-review-producer");
+        ensureAndTrust(sessions, location, project, "fresh-review-newcomer");
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var producerBinding = bindings.find(location, "codex", "fresh-review-producer").orElseThrow();
+
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(project, groupId, "Build a feature", "Review the exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var producerClaim = collaboration.announce(project, "codex", "fresh-review-producer", "Implement a feature", "Publish the feature candidate", List.of(ResourceSelector.pathExact("src/wrap.py")), groupId);
+        String snapshotId = "snap_fresh_reviewer";
+        SnapshotProvenance provenance = new SnapshotProvenance(groupId,
+                producerClaim.intent().intentId(),
+                producerClaim.intent().authorityLineageId(),
+                producerClaim.intent().participant(),
+                producerBinding.sessionId(),
+                producerClaim.intent().version(),
+                List.of(),
+                List.of(),
+                List.of("PATH_EXACT:src/wrap.py"),
+                "refs/synesis/snapshots/" + snapshotId,
+                "integrity-" + snapshotId,
+                "manifest-" + snapshotId);
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(producerClaim.intent().taskId(),
+                snapshotId,
+                "node",
+                "supervisor",
+                "worker",
+                producerBinding.sessionId(),
+                producerClaim.intent().baseCommit(),
+                "candidate-commit",
+                List.of("src/wrap.py"),
+                List.of(),
+                "Publish candidate",
+                provenance,
+                true);
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        store(project).append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+
+        McpProtocolHandler newcomer = new McpProtocolHandler(sessions, project, "codex", "fresh-review-newcomer");
+        Map<String, Object> ensured = innerResult(newcomer.handleMessage(toolCall("ensure_session", "{}")));
+        assertEquals("ready", ensured.get("status"), ensured.toString());
+        List<Map<String, Object>> offered = (List<Map<String, Object>>) ((Map<String, Object>) ensured.get("result")).get("reviewCandidates");
+        assertEquals(1, offered.size(), ensured.toString());
+        assertEquals(snapshotId, offered.getFirst().get("snapshotId"));
+        assertEquals(List.of("src/wrap.py"), offered.getFirst().get("files"));
+        assertEquals("ensure_session", ((Map<String, Object>) offered.getFirst().get("reviewerIntent")).get("tool"));
+
+        Map<String, Object> next = innerResult(newcomer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("coordination_intent_required", next.get("reason"), next.toString());
+        String instruction = String.valueOf(((Map<String, Object>) next.get("result")).get("instruction"));
+        assertTrue(instruction.contains("review a snapshot awaiting review: reviewCandidates[i].reviewerIntent"), instruction);
+        assertTrue(instruction.contains("choose a part that no listed participant claims"), instruction);
+
+        Map<String, Object> producerEnsured = innerResult(new McpProtocolHandler(sessions, project, "codex", "fresh-review-producer").handleMessage(toolCall("ensure_session", "{}")));
+        assertFalse(((Map<String, Object>) producerEnsured.get("result")).containsKey("reviewCandidates"), producerEnsured.toString());
+    }
+
     private static Path initializedProject(Path project) throws Exception {
         Files.createDirectories(project);
         git(project, "init");

@@ -762,7 +762,7 @@ public final class AgentNextActionService {
                 noOpenWork.put("instruction", "Every lane announced in this project is finished or cancelled. Announce a new intent with ensure_session only if part of the goal is still not done.");
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, noOpenWork);
             }
-            return claimRequiredResponse(collaboration);
+            return claimRequiredResponse(store, lane.participantId(), collaboration);
         }
 
         AgentResponse integrationState = integrationStateAction(store, actor);
@@ -832,16 +832,23 @@ public final class AgentNextActionService {
      * or requester of a different lane. The response stays actionable - the caller must establish
      * its own claim first, and discovery remains available in the bounded payload.</p>
      *
+     * @param store         current project projection
+     * @param participantId exact participant handle of the caller
      * @param collaboration public collaboration projection
      * @return a {@code BLOCKED} response asking the caller to ensure its session
      */
-    private static AgentResponse claimRequiredResponse(Map<String, Object> collaboration) {
+    private static AgentResponse claimRequiredResponse(PredictionEventStore store, String participantId, Map<String, Object> collaboration) {
         Map<String, Object> claimRequired = new LinkedHashMap<>(collaboration);
         claimRequired.put(NextActionKeys.CLAIMS_REQUIRED, true);
         claimRequired.put(NextActionKeys.REASON, AgentReason.COORDINATION_INTENT_REQUIRED.value());
         // An agent told only to call ensure_session called it without a task until its polls ran
         // out, and left without reading the goal.
-        claimRequired.put("instruction", "This session holds no lane. Read the project goal with read_file, choose a part that no listed participant claims, and announce it by calling "
+        // A review candidate is as much a way to a lane as an unclaimed part. Shown only the
+        // unclaimed part, a fresh agent left a snapshot awaiting review unreviewed.
+        String choice = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).isEmpty() ? "choose a part that no listed participant claims, and announce it by calling "
+                : "either choose a part that no listed participant claims, or review a snapshot awaiting review: reviewCandidates[i].reviewerIntent holds its ensure_session arguments, "
+                        + "to which you add claims for your report or test path. Announce your choice by calling ";
+        claimRequired.put("instruction", "This session holds no lane. Read the project goal with read_file, " + choice
                 + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing.");
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, claimRequired);
     }

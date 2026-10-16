@@ -583,6 +583,22 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
                 }).toList();
     }
 
+/**
+     * Lists the review candidates a participant may take up: those whose snapshot neither it nor
+     * the lane now holding that work produced. Independence is still enforced at admission; this
+     * only keeps guidance from pointing a caller at work it would be refused.
+     *
+     * @param store         current project projection
+     * @param participantId exact participant handle
+     * @return the open candidates the participant did not produce
+     */
+    static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
+        return reviewCandidates(store).stream().filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> {
+            WorkIntent producer = reviewProducerIntent(store, snapshot);
+            return !snapshot.provenance().participant().equals(participantId) && (producer == null || !producer.participant().equals(participantId));
+        }).isPresent()).toList();
+    }
+
 static List<Map<String, Object>> actionableReviewCandidates(PredictionEventStore store, String participantId, List<Map<String, Object>> candidates) {
         WorkIntent reviewer = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantId)).filter(intent -> intent.role() == WorkIntent.Role.REVIEWER).findFirst()
                 .orElse(null);

@@ -1,3 +1,24 @@
+# 2026-10-16 — A new agent is now told it may review a snapshot awaiting review (real run 4 follow-up)
+
+Real run 4 of ADR-0098 step 2 (see the entry below) left `wrap.py` `REVIEW_PENDING` under mandatory review: a fresh agent
+started after the dedicated reviewer's lane ended claimed an already-integrated part, cancelled, and said it "wasn't
+assigned to review" `wrap.py`. The design already lets any eligible caller become the reviewer (ADR-0046, ADR-0089):
+every caller's collaboration view lists `reviewCandidates`, each `AVAILABLE` with a ready `reviewerIntent`. The agent
+was never pointed at them: its `COORDINATION_INTENT_REQUIRED` instruction said only to "choose a part that no listed
+participant claims", and the bare `ensure_session` result carried no candidates, so an agent that announced right after
+`ensure_session` never saw them. Once it held a producer lane it could not become a reviewer.
+
+**Changed (guidance and payload only; no authority rule).**
+- `get_next_action`, claim-required answer: when the lane-less caller has open review candidates it did not produce,
+  the instruction offers reviewing one as an equal alternative to claiming an unclaimed part and names
+  `reviewCandidates[i].reviewerIntent`. With none, the instruction is unchanged.
+- `ensure_session`: a session that holds no lane gets `result.reviewCandidates` (additive; `snapshotId`, `files`,
+  `reviewerIntent`) when there are open candidates. A session that holds a lane gets none.
+- Independence (`REVIEW_SELF_*`) and `REVIEW_CANDIDATE_ALREADY_ASSIGNED` still decide at admission.
+
+**Not reached.** No real run of this yet; source and Linux-gate tests only. The exclusion of a candidate whose snapshot
+the caller authored before handing its lane on (continuation) is in the code but has no test of its own.
+
 # 2026-10-16 — Two computers, one project: four real runs of ADR-0098 step 2 (PARTIAL)
 
 A = the owner's Windows computer, leader, real Claude Code (Sonnet 5.5, medium); it only dials out (no inbound

@@ -43,6 +43,7 @@ import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
+import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
@@ -346,6 +347,46 @@ class AgentNextActionServiceTest {
             assertEquals(groupId.toString(), payload.get("workGroupId"));
         }
         assertEquals(eventsBeforePoll, new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).headSequence());
+    }
+
+    private static final String UNCLAIMED_ONLY = "This session holds no lane. Read the project goal with read_file, choose a part that no listed participant claims, and announce it by calling "
+            + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing.";
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void laneLessCallerIsPointedAtReviewCandidatesAsAnAlternativeToClaimingAPart() throws Exception {
+        prepareSessionAndTrust("codex", "fresh-owner");
+        prepareSessionAndTrust("codex", "fresh-newcomer");
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(controlRoot, groupId, "Build a board", "CRUD and persistence", ReviewPolicy.mandatoryIndependent());
+        var owner = collaboration.announce(controlRoot, "codex", "fresh-owner", "Implement board creation", "Publish the board creation lane", List.of(ResourceSelector.pathExact("src/BoardCreate.java")), groupId);
+
+        AgentResponse before = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "fresh-newcomer"));
+        assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, before.reason(), before.toJson());
+        assertEquals(UNCLAIMED_ONLY, ((Map<String, Object>) before.result()).get("instruction"));
+
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        appendMandatorySnapshot(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()), identity, bindings.find(location, "codex", "fresh-owner").orElseThrow(), owner.intent(),
+                "snap_fresh", "src/BoardCreate.java");
+
+        AgentResponse after = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "fresh-newcomer"));
+        assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, after.reason(), after.toJson());
+        Map<String, Object> result = (Map<String, Object>) after.result();
+        String instruction = (String) result.get("instruction");
+        assertTrue(instruction.contains("either choose a part that no listed participant claims, or review a snapshot awaiting review: reviewCandidates[i].reviewerIntent"), instruction);
+        assertEquals("snap_fresh", ((Map<String, Object>) ((List<?>) result.get("reviewCandidates")).getFirst()).get("snapshotId"));
+
+        String newcomer = WorkspaceCollaborationService.participantHandle(bindings.find(location, "codex", "fresh-newcomer").orElseThrow().sessionId());
+        List<Map<String, Object>> offered = CollaborationResponseMapper.openReviewCandidates(location, newcomer);
+        assertEquals(1, offered.size());
+        assertEquals("snap_fresh", offered.getFirst().get("snapshotId"));
+        assertEquals(List.of("src/BoardCreate.java"), offered.getFirst().get("files"));
+        assertEquals("ensure_session", ((Map<String, Object>) offered.getFirst().get("reviewerIntent")).get("tool"));
+        // The only candidate is the owner's own snapshot, and a session that holds a lane takes no second one.
+        assertTrue(CollaborationResponseMapper.openReviewCandidates(location, owner.intent().participant()).isEmpty());
     }
 
     private static void appendMandatorySnapshot(PredictionEventStore store,

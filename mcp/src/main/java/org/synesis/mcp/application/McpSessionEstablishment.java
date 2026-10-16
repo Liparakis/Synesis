@@ -32,6 +32,8 @@ import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.AgentTaskIntent;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
+import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
+import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
@@ -189,8 +191,34 @@ final class McpSessionEstablishment {
         AgentResponse unwound = unwindCompletion(arguments, activeProjectRoot);
         AgentResponse repaired = repairJoin(arguments, activeProjectRoot);
         AgentResponse claimed = claimPhase(task, selectors, refresh, claimsFieldSpecified(arguments), activeProjectRoot);
-        AgentResponse reply = claimed != null ? claimed : repaired != null ? repaired : unwound != null ? unwound : admitted;
+        AgentResponse reply = claimed != null ? claimed : repaired != null ? repaired : unwound != null ? unwound : withOpenReviewCandidates(admitted, activeProjectRoot);
         return textResultResponse(id, McpRefusalGuidance.of(reply).toJson());
+    }
+
+    /**
+     * Adds the review candidates this session could take up to an admission that announced nothing,
+     * so an agent that announces right after {@code ensure_session} sees them beside the unclaimed
+     * parts. Guidance only: a failure to read them leaves the admission reply as it was.
+     *
+     * @param admitted          the admission reply
+     * @param activeProjectRoot the connection's currently selected control project root
+     * @return the reply, with {@code reviewCandidates} in its result when there are any
+     */
+    private AgentResponse withOpenReviewCandidates(AgentResponse admitted, Path activeProjectRoot) {
+        try {
+            ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+            String sessionId = authorityResolver.resolve(location, provider, connectionInstanceId).sessionId();
+            List<Map<String, Object>> candidates = CollaborationResponseMapper.openReviewCandidates(location, WorkspaceCollaborationService.participantHandle(sessionId));
+            if (candidates.isEmpty() || !(admitted.toMap().get("result") instanceof Map<?, ?> current)) {
+                return admitted;
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            current.forEach((key, value) -> result.put(String.valueOf(key), value));
+            result.put("reviewCandidates", candidates);
+            return new AgentResponse(admitted.status(), admitted.reason(), admitted.nextAction(), result);
+        } catch (Exception unreadable) {
+            return admitted;
+        }
     }
 
     /**
