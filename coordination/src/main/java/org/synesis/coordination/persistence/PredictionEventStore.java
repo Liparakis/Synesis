@@ -538,6 +538,16 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
+     * Tells whether this log is a member's copy, which proposes its entries to a leader, and not the leader's own.
+     * A log whose replication settings cannot be read counts as a member's, as it does for appends.
+     *
+     * @return true for a member
+     */
+    public boolean isReplicationMember() {
+        return role.isMember();
+    }
+
+    /**
      * Brings a member's copy up to the leader's log, a page at a time.
      *
      * @return how many entries were new

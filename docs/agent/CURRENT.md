@@ -1,3 +1,66 @@
+# 2026-10-16 — A merge no longer holds the log; only the leader merges, and a member's entry triggers a pass (ADR-0098 step 2, slice 3a)
+
+`IntegrationOrchestrationService` held the project append lock for a whole integration attempt, through the worktree,
+the cherry-picks and the project's test gate. Every other writer on the computer gave up after two seconds, and so
+would every member proposal the leader places under that lock. Invariant 8 ("a merge never holds the log") is built
+here for the one computer; Git and Link are unchanged.
+
+**What changed.**
+
+- **A pass is three parts.** (a) Under the append lock, on a log replayed after it was taken: everything the pass did
+  before (guards, recovery of an attempt found started, choosing the oldest ready work group) and
+  `INTEGRATION_ATTEMPT_STARTED`. (b) With no append lock: the integration worktree, the cherry-picks and the test gate.
+  (c) Under the append lock again, on a fresh replay: the outcome is recorded only if the attempt's basis still holds.
+- **The basis (`staleBasis`).** The attempt is still the active started one; the control head is still the head it
+  started from; every snapshot is still `INTEGRATING`, has no snapshot of a later claim epoch in its task and lineage,
+  and passes the same per-snapshot metadata checks that chose it (stale base, claim epoch, claim coverage, prepared
+  and snapshot refs, and no live coordination request open). Per snapshot, as when it was chosen: the group was never
+  checked against its own paths, and checking it so would retry for ever. If any fails, nothing is advanced and the
+  attempt ends as `INTEGRATION_ATTEMPT_FAILED`, status `pending`, reason `STALE_ATTEMPT_BASIS:<reasons>`; the snapshots
+  return to the state they had and a later pass chooses again. The response is `RETRY_REQUIRED` /
+  `INTEGRATION_STALE`. No new event type. The pass does not loop inside itself: the next pump retries.
+- **One pass at a time, without the append lock.** `ProjectIntegrationLock` (`integration.lock` beside
+  `append.lock`, same file-lock and in-process guard) is tried once and never waited for, and is held across (a) to (c).
+  A pass that finds it taken answers `WAITING` / `INTEGRATION_PENDING` / `WAIT` with `integrationRunning: true`. The
+  JVM-static monitor is gone. Nothing that appends takes this lock.
+- **Recording waits for the append lock.** Part (c) waits up to five times two seconds. If it still cannot, the
+  worktree is removed and the attempt is left started; the next pass ends it as interrupted (the recovery that
+  already existed).
+- **Leader only.** `PredictionEventStore.isReplicationMember()`; a member's pump (also a log whose role file cannot be
+  read) answers the existing nothing-to-integrate result, `READY` / `RETRY`, and touches neither the log nor Git.
+- **The leader's merge driver.** `LeaderReplication` takes a hook that runs after each accepted member proposal (a
+  throwing hook cannot lose the answer). `MergeDriver` (cli, `command/coordination`, because cli is where the
+  workspace and coordination modules meet) turns calls into one pass 3 s later, coalesced, on one thread; an entry
+  during a pass causes one more after it. `CoordinationServerLauncher` starts both when `replication.properties` says
+  leader. NOT YET REACHED in the product: nothing attaches a Link session to `LeaderReplication` (slice 4), so the hook
+  fires only in tests.
+
+**Crash reasoning.** Between (a) and (b)/(c) the log shows an attempt started, no commit, snapshots `INTEGRATING`, and
+the worktree on disk. That is exactly what a pass that died in the test gate left before, and the recovery is
+unchanged: the next pass holds the integration lock (a dead holder released it), finds no commit on record, ends the
+attempt as `INTERRUPTED`, removes the worktree, and makes a new one. Two interrupted attempts in a row still raise the
+operator request. A death inside (c) is as before: `INTEGRATION_COMMIT_CREATED` is recorded before the fast-forward, and
+a head that equals the recorded commit is completed by `recoverAdvancedControlBranch`.
+
+**Semantic changes (deliberate).**
+
+- A caller that meets a running pass is told to wait at once (`WAITING` / `INTEGRATION_PENDING`); before it waited two
+  seconds and got `BLOCKED` / `INTEGRATION_CONFLICT` / `INTEGRATION_LOCK_UNAVAILABLE`.
+- While a pass runs, other writers append. A lane that changes (new claim epoch, a later snapshot, a new request) or a
+  moved head during the pass now ends the attempt as stale instead of being impossible.
+- A pass on a member's log does nothing.
+
+**Found on the way.** `INTEGRATION_ATTEMPT_STARTED` is recorded before the slow part and is visible to members, which
+the ADR's text does not mention (it describes preparing, testing and then proposing). The ADR also says a stale pass
+"starts again"; here it ends the attempt and the next pump starts a new one.
+
+Tests: `IntegrationOutsideAppendLockTest` (another writer appends while the gate is held open; a second pass is busy
+and runs no second gate; a member's log integrates nothing, the leader's does; fail on the old service),
+`IntegrationStaleOutcomeTest` (head moved; claim epoch moved and a later snapshot; death after the slow part),
+`LeaderReplicationHookTest`, `MergeDriverTest`. The existing integration, validation-refusal, interrupted-attempt and
+queue tests pass unchanged except that the nested test helpers `Project` and `Lane` of
+`IntegrationValidationRefusalTest` are package-private for reuse.
+
 # 2026-10-16 — A member's proposals and pulls travel to the leader over Link (ADR-0098 step 2, slice 2)
 
 Two computers, each with its own project root, node identity and coordination server, joined by a real

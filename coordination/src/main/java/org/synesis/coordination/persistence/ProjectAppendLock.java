@@ -72,13 +72,31 @@ public final class ProjectAppendLock implements AutoCloseable {
      * @throws IOException when the lock cannot be acquired within two seconds or the acquisition thread is interrupted
      */
     public static ProjectAppendLock acquire(Path root) throws IOException {
+        return acquireFile(root, "append.lock", 2_000_000_000L, false);
+    }
+
+    /**
+     * Takes the named lock file of a project once, without waiting.
+     *
+     * @param root project coordination root
+     * @param name lock file name beside {@code append.lock}
+     * @return lock handle, or {@code null} when another thread or process holds the file
+     * @throws IOException when the file cannot be opened
+     */
+    static ProjectAppendLock tryAcquireFile(Path root, String name) throws IOException {
+        return acquireFile(root, name, 0L, true);
+    }
+
+    private static ProjectAppendLock acquireFile(Path root, String name, long waitNanos, boolean nullOnBusy) throws IOException {
         CoordinationNullException.requireNonNull(root, "root");
         Files.createDirectories(root);
-        Path file = root.toRealPath().resolve("append.lock");
+        Path file = root.toRealPath().resolve(name);
         Semaphore guard = IN_PROCESS.computeIfAbsent(file, ignored -> new Semaphore(1));
-        long deadline = System.nanoTime() + 2_000_000_000L;
+        long deadline = System.nanoTime() + waitNanos;
         while (!guard.tryAcquire()) {
-            waitForRetry(deadline);
+            if (!waitForRetry(deadline, nullOnBusy)) {
+                return null;
+            }
         }
         try {
             FileChannel channel = FileChannel.open(file,
@@ -94,7 +112,11 @@ public final class ProjectAppendLock implements AutoCloseable {
                     } catch (OverlappingFileLockException ignored) {
                         // A lock this process took on the file by another road than this class.
                     }
-                    waitForRetry(deadline);
+                    if (!waitForRetry(deadline, nullOnBusy)) {
+                        channel.close();
+                        guard.release();
+                        return null;
+                    }
                 }
             } catch (IOException | RuntimeException failure) {
                 channel.close();
@@ -107,10 +129,14 @@ public final class ProjectAppendLock implements AutoCloseable {
     }
 
     /**
-     * Waits before the lock is tried again, and gives up at the deadline or when the thread is interrupted.
+     * Waits before the lock is tried again. At the deadline it returns {@code false} when the caller asked not to
+     * wait, else it fails; an interrupted thread always fails.
      */
-    private static void waitForRetry(long deadline) throws CoordinationException {
+    private static boolean waitForRetry(long deadline, boolean nullOnBusy) throws CoordinationException {
         if (System.nanoTime() >= deadline) {
+            if (nullOnBusy) {
+                return false;
+            }
             throw new CoordinationException("event append lock timeout");
         }
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L));
@@ -118,6 +144,7 @@ public final class ProjectAppendLock implements AutoCloseable {
             Thread.currentThread().interrupt();
             throw new CoordinationException("event append lock interrupted");
         }
+        return true;
     }
 
     /**

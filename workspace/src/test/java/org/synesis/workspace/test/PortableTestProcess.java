@@ -67,6 +67,10 @@ public final class PortableTestProcess {
         validate(Path.of(arguments[1]), arguments[2]);
         System.exit(0);
       }
+      case "gate" -> {
+        gate(Path.of(arguments[1]), Path.of(arguments[2]));
+        System.exit(0);
+      }
       default -> throw new IllegalArgumentException("unknown fixture: " + arguments[0]);
     }
   }
@@ -79,6 +83,19 @@ public final class PortableTestProcess {
     } else {
       System.out.print(output);
       System.out.flush();
+    }
+  }
+
+  /**
+   * Records that it started (one line appended to {@code started}), then waits until {@code release} exists. A
+   * test holds a validation command open this way and counts how many times one ran.
+   */
+  private static void gate(Path started, Path release) throws Exception {
+    Files.writeString(started, "run\n", StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE,
+        java.nio.file.StandardOpenOption.APPEND);
+    long deadline = System.nanoTime() + 60_000_000_000L;
+    while (!Files.exists(release) && System.nanoTime() < deadline) {
+      Thread.sleep(20);
     }
   }
 

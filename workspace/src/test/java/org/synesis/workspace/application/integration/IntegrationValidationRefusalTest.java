@@ -59,11 +59,11 @@ class IntegrationValidationRefusalTest {
     private static final List<String> FAILS = List.of("git", "rev-parse", "--verify", "refs/heads/branch-that-does-not-exist");
     private static final List<String> PASSES = List.of("git", "rev-parse", "--verify", "HEAD");
 
-    private record Lane(UUID id, UUID task, String participant) {
+    record Lane(UUID id, UUID task, String participant) {
     }
 
     /** A Git project initialized by the service, with the lanes and snapshots a test publishes into it. */
-    private static final class Project {
+    static final class Project {
 
         final Path root;
         final ProjectApplicationService service = new ProjectApplicationService();

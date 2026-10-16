@@ -244,6 +244,37 @@ final class ValidationRefusalLifecycleTest {
     }
 
     @Test
+    void aReviewRejectionRecordedWhileTheSnapshotIsBeingIntegratedSurvivesTheStaleAttemptEnding(@TempDir Path temp) throws Exception {
+        PredictionEventStore store = announced(temp);
+        LaneGrant grant = new LaneGrant(UUID.randomUUID(), groupId, laneId, "agt-reviewer", 1, true);
+        store.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(),
+                CollaborationCodec.encodeLaneGrant(grant), identity);
+        store.append(grant.grantId(), PredictionEventType.LANE_GRANT_CONSUMED, identity.nodeId(),
+                CollaborationCodec.encodeLaneGrant(grant), identity);
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(),
+                snapshot("snap_s1", 1, true).encode(), identity);
+        store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(),
+                new ReviewValidationPayload(grant.grantId(), groupId, laneId, "agt-reviewer", 1, taskId, "snap_s1",
+                        "ACCEPTED", "", "agt-owner").encode(), identity);
+        attemptStarted(store, "att_1", "snap_s1");
+        assertEquals(TaskCompletionState.INTEGRATING, stateOf(store, "snap_s1"));
+
+        LaneGrant second = new LaneGrant(UUID.randomUUID(), groupId, laneId, "agt-reviewer-2", 1, true);
+        store.append(second.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(),
+                CollaborationCodec.encodeLaneGrant(second), identity);
+        store.append(second.grantId(), PredictionEventType.LANE_GRANT_CONSUMED, identity.nodeId(),
+                CollaborationCodec.encodeLaneGrant(second), identity);
+        store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(),
+                new ReviewValidationPayload(second.grantId(), groupId, laneId, "agt-reviewer-2", 1, taskId, "snap_s1",
+                        "REJECTED", "needs work", "agt-owner").encode(), identity);
+        assertEquals(TaskCompletionState.REVIEW_REJECTED, stateOf(store, "snap_s1"));
+        attemptFailedPending(store, "att_1", "snap_s1");
+
+        assertEquals(TaskCompletionState.REVIEW_REJECTED, stateOf(store, "snap_s1"));
+        assertTrue(store.taskCompletionProjection().eligibleSnapshots().isEmpty());
+    }
+
+    @Test
     void replayInANewStoreGivesTheSameStatesAndVersions(@TempDir Path temp) throws Exception {
         PredictionEventStore store = afterFailedAttempt(temp);
         refuse(store, refusal("att_1", "snap_s1", 1, 1));

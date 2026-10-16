@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
@@ -26,6 +27,7 @@ import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
+import org.synesis.coordination.persistence.ProjectIntegrationLock;
 
 import org.synesis.link.identity.NodeIdentity;
 
@@ -60,6 +62,14 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  *   <li>Releases semantic ownership and finalizes worker sessions.</li>
  * </ol>
  *
+ * <p>One pass at a time runs per project ({@link ProjectIntegrationLock}), and only on the leader's
+ * log. A pass holds the append lock only for its short first part (choosing the work and recording
+ * the attempt as started) and its short last part (recording how it ended and advancing the
+ * branch). The worktree, the cherry-picks and the test gate run between them with the lock free,
+ * so no other writer waits for a merge. The last part records an outcome only if what the attempt
+ * started from still holds, replayed after the lock is taken; otherwise the attempt is ended as
+ * pending and a later pass chooses again (ADR-0098, invariant 8).</p>
+ *
  * @since 1.0
  */
 public final class IntegrationOrchestrationService {
@@ -67,17 +77,43 @@ public final class IntegrationOrchestrationService {
     /** Why an attempt ended when the process that ran it died before recording how it ended. */
     private static final String INTERRUPTED = "INTERRUPTED";
 
-    private static final Object INTEGRATION_LOCK = new Object();
+    /** Why a finished slow part was not recorded: what the attempt started from has changed. */
+    private static final String STALE_BASIS = "STALE_ATTEMPT_BASIS:";
+
+    /** How many times the append lock is waited for (two seconds each) before an attempt is left for the next pass. */
+    private static final int RECORDING_LOCK_TRIES = 5;
+
+    private static final AgentResponse LOCK_UNAVAILABLE = new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
+
+    /** A pass with nothing to integrate: no snapshot is waiting, or this computer is not the project's leader. */
+    private static final AgentResponse NOTHING_TO_INTEGRATE = new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+
     private final IntegrationWorkspaceService workspaceService;
     private final ControlBranchAdvancementService advancementService;
     private final ProjectApplicationService projectService;
     private final ProjectProcessExecutor processExecutor;
     private final ProviderSessionBindingService bindingService;
+    private final Runnable beforeRecording;
+
+    /** What a pass chose to integrate: the attempt it recorded as started, the head it started from, and the snapshots in apply order. */
+    private record Attempt(String id, String expectedControlHead, List<TaskSnapshotRecord> ordered) {
+    }
 
     /**
      * Creates an integration orchestration service.
      */
     public IntegrationOrchestrationService() {
+        this(() -> {
+        });
+    }
+
+    /**
+     * Creates a service that runs a hook after the slow part of a pass and before its outcome is
+     * recorded. The pass holds no append lock there. A test uses it to change the log, or to die,
+     * at the one point where a pass is outside it.
+     */
+    IntegrationOrchestrationService(Runnable beforeRecording) {
+        this.beforeRecording = Objects.requireNonNull(beforeRecording, "beforeRecording");
         this.workspaceService = new IntegrationWorkspaceService();
         this.advancementService = new ControlBranchAdvancementService();
         this.projectService = new ProjectApplicationService();
@@ -403,21 +439,25 @@ public final class IntegrationOrchestrationService {
         Objects.requireNonNull(store, "store");
         Objects.requireNonNull(identity, "identity");
 
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
+        if (store.isReplicationMember()) {
+            // The checkout, the test gate and the branch are the leader's (ADR-0098): a member's
+            // snapshots reach the leader's log as proposals and the leader's pass integrates them.
+            return NOTHING_TO_INTEGRATE;
+        }
+        try (ProjectIntegrationLock onePass = ProjectIntegrationLock.tryAcquire(store.rootDirectory())) {
+            if (onePass == null) {
+                // The pass that holds the lock integrates what is ready; this caller waits like any
+                // other for an attempt in progress.
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", 1, "integrationRunning", true));
             }
-            // A peer may integrate while this caller waits for the project lock.
-            // Eligibility and append validation must use the durable state after acquisition.
-            PredictionEventStore current;
-            try {
-                current = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            } catch (IOException | java.security.GeneralSecurityException failure) {
-                return AgentFailures.internal(controlRoot, "integration.open_state", failure, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
+            AtomicReference<Attempt> started = new AtomicReference<>();
+            AgentResponse notStarted = startAttempt(controlRoot, store, identity, operatorAsked, started);
+            if (notStarted != null) {
+                return notStarted;
             }
-            return orchestrateIntegrationLocked(lock, controlRoot, current, identity, operatorAsked);
+            return runAndRecord(controlRoot, store, identity, started.get());
         } catch (IOException failure) {
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
+            return LOCK_UNAVAILABLE;
         }
     }
 
@@ -430,235 +470,229 @@ public final class IntegrationOrchestrationService {
         }
     }
 
-    private AgentResponse orchestrateIntegrationLocked(ProjectAppendLock appendLock, Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked) {
-
-        synchronized (INTEGRATION_LOCK) {
-            // Looked at on every pass, not only when the branch is advanced: the operator is asked
-            // when the stray file appears, and no attempt is started that could only be refused.
-            Optional<OperatorRequest> operator = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
-            if (operator.isPresent()) {
-                return ControlCheckoutGuard.blocked(operator.get());
+    /**
+     * The short first part of a pass, under the append lock: settles what an attempt found started
+     * means, chooses what to integrate, and records {@code INTEGRATION_ATTEMPT_STARTED}.
+     *
+     * @param started receives the attempt when one was started
+     * @return the pass's response when no attempt was started, {@code null} when one was
+     */
+    private AgentResponse startAttempt(Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked, AtomicReference<Attempt> started) {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                return LOCK_UNAVAILABLE;
             }
-            ConsumerAbsenceGuard.reconcile(controlRoot, store, identity, System.currentTimeMillis());
+            // A peer may integrate while this caller waits for the project lock.
+            // Eligibility and append validation must use the durable state after acquisition.
+            PredictionEventStore current;
+            try {
+                current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            } catch (IOException | java.security.GeneralSecurityException failure) {
+                return AgentFailures.internal(controlRoot, "integration.open_state", failure, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
+            }
+            return startAttemptLocked(lock, controlRoot, current, identity, operatorAsked, started);
+        } catch (IOException failure) {
+            return LOCK_UNAVAILABLE;
+        }
+    }
 
-            // The whole attempt runs under the project lock, which this pass
-            // holds: an attempt found started was left by a process that died
-            // in it, and no process is running it. It is completed when the
-            // branch already points at its commit, ended as interrupted when
-            // the branch cannot hold its commit, and waited on otherwise. This
-            // is looked at before the eligible snapshots are: the snapshots of
-            // a started attempt are not eligible, so a project whose whole work
-            // was in the attempt would otherwise never reach it.
-            var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt();
-            if (activeAttempt.isPresent() && "started".equals(activeAttempt.get().status())) {
-                var attempt = activeAttempt.get();
-                try {
-                    String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
-                    if (!attempt.integrationCommitSha().isBlank() && head.equals(attempt.integrationCommitSha())) {
-                        List<TaskSnapshotRecord> recovered = attempt.taskSnapshotIds().stream().map(id -> store.taskCompletionProjection().findSnapshotById(id).orElse(null)).filter(Objects::nonNull).toList();
-                        if (recovered.size() == attempt.taskSnapshotIds().size()) {
-                            var recoveredResult = advancementService.recoverAdvancedControlBranch(controlRoot,
-                                    attempt.attemptId(),
-                                    attempt.expectedControlHead(),
-                                    attempt.integrationCommitSha(),
-                                    recovered,
-                                    store,
-                                    identity);
-                            if (recoveredResult.advanced()) {
-                                finalizeIntegratedLanes(appendLock, controlRoot, recovered, store, identity);
-                                return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("recovered", true, "attemptId", attempt.attemptId()));
-                            }
+    private AgentResponse startAttemptLocked(ProjectAppendLock appendLock, Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked, AtomicReference<Attempt> started) {
+        // Looked at on every pass, not only when the branch is advanced: the operator is asked
+        // when the stray file appears, and no attempt is started that could only be refused.
+        Optional<OperatorRequest> operator = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
+        if (operator.isPresent()) {
+            return ControlCheckoutGuard.blocked(operator.get());
+        }
+        ConsumerAbsenceGuard.reconcile(controlRoot, store, identity, System.currentTimeMillis());
+
+        // The whole attempt runs under the project's integration lock, which this pass holds:
+        // an attempt found started was left by a process that died in it, and no process is
+        // running it. It is completed when the branch already points at its commit, ended as
+        // interrupted when the branch cannot hold its commit, and waited on otherwise. This
+        // is looked at before the eligible snapshots are: the snapshots of
+        // a started attempt are not eligible, so a project whose whole work
+        // was in the attempt would otherwise never reach it.
+        var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt();
+        if (activeAttempt.isPresent() && "started".equals(activeAttempt.get().status())) {
+            var attempt = activeAttempt.get();
+            try {
+                String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
+                if (!attempt.integrationCommitSha().isBlank() && head.equals(attempt.integrationCommitSha())) {
+                    List<TaskSnapshotRecord> recovered = attempt.taskSnapshotIds().stream().map(id -> store.taskCompletionProjection().findSnapshotById(id).orElse(null)).filter(Objects::nonNull).toList();
+                    if (recovered.size() == attempt.taskSnapshotIds().size()) {
+                        var recoveredResult = advancementService.recoverAdvancedControlBranch(controlRoot,
+                                attempt.attemptId(),
+                                attempt.expectedControlHead(),
+                                attempt.integrationCommitSha(),
+                                recovered,
+                                store,
+                                identity);
+                        if (recoveredResult.advanced()) {
+                            finalizeIntegratedLanes(appendLock, controlRoot, recovered, store, identity);
+                            return new AgentResponse(AgentStatus.COMPLETED, null, null, Map.of("recovered", true, "attemptId", attempt.attemptId()));
                         }
                     }
-                } catch (Exception ignored) {
-                    // Keep the attempt pending; the next reconciliation can
-                    // retry without changing the control branch.
                 }
-                // An attempt whose recorded commit the branch holds is not interrupted. When the
-                // commit is the head, the recovery above completes the attempt, on this pass or a
-                // later one. When the head has moved past it, the attempt is waited on and nothing
-                // ends the wait, as it was before attempts were ended as interrupted.
-                if (!branchCannotHold(controlRoot, attempt) || interruptedAttemptNotRecorded(store, identity, attempt)) {
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("attemptId", attempt.attemptId(), "pending", 1));
-                }
-                // The process that died left the attempt's worktree behind, and the attempt made
-                // next takes a new one.
-                workspaceService.removeIntegrationWorktree(IntegrationWorkspaceService.resolveIntegrationRoot(controlRoot).resolve(attempt.attemptId()));
-                Optional<IntegrationAttemptRecord> before = store.taskCompletionProjection().integrationAttemptBefore(attempt.attemptId()).filter(previous -> INTERRUPTED.equals(previous.failureReason()));
-                if (before.isPresent() && declaresValidation(controlRoot)) {
-                    // A pass that dies every time gives no verdict and never will. A third attempt
-                    // would die as these did, and so would every one after it, with nobody told.
-                    // Where no command is declared the attempt is short and is simply made again:
-                    // the request would name a command that does not exist and close on the next pass.
-                    return ValidationFailureGuard.blocked(ValidationFailureGuard.raise(controlRoot, store, identity,
-                            "The project's validation command gave no verdict on the work waiting to be integrated: the pass that ran the command died twice (attempt " + before.get().attemptId() + ", then attempt "
-                                    + attempt.attemptId() + "). ",
-                            "", "attempt " + attempt.attemptId() + " interrupted after attempt " + before.get().attemptId()));
-                }
+            } catch (Exception ignored) {
+                // Keep the attempt pending; the next reconciliation can
+                // retry without changing the control branch.
             }
-
-            List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
-            Optional<OperatorRequest> validationFailing = ValidationFailureGuard.reconcile(controlRoot, store, identity, !snapshots.isEmpty());
-            if (snapshots.isEmpty()) {
-                List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
-                if (!pendingReviews.isEmpty()) {
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("state", TaskCompletionState.REVIEW_PENDING.value());
-                    result.put("reviewPending", true);
-                    result.put("snapshotIds", pendingReviews.stream().map(TaskSnapshotRecord::snapshotId).toList());
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
-                }
-                return new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+            // An attempt whose recorded commit the branch holds is not interrupted. When the
+            // commit is the head, the recovery above completes the attempt, on this pass or a
+            // later one. When the head has moved past it, the attempt is waited on and nothing
+            // ends the wait, as it was before attempts were ended as interrupted.
+            if (!branchCannotHold(controlRoot, attempt) || interruptedAttemptNotRecorded(store, identity, attempt)) {
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("attemptId", attempt.attemptId(), "pending", 1));
             }
-
-            // Do not integrate while a durable coordination request affecting
-            // the active collaboration graph is unresolved.  This check is
-            // intentionally before attempt allocation so a blocked negotiation
-            // cannot leave a misleading started attempt behind.
-            PredictionEventStore coordinationStore;
-            try {
-                coordinationStore = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            } catch (Exception failure) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "COORDINATION_STATE_UNAVAILABLE"));
+            // The process that died left the attempt's worktree behind, and the attempt made
+            // next takes a new one.
+            workspaceService.removeIntegrationWorktree(IntegrationWorkspaceService.resolveIntegrationRoot(controlRoot).resolve(attempt.attemptId()));
+            Optional<IntegrationAttemptRecord> before = store.taskCompletionProjection().integrationAttemptBefore(attempt.attemptId()).filter(previous -> INTERRUPTED.equals(previous.failureReason()));
+            if (before.isPresent() && declaresValidation(controlRoot)) {
+                // A pass that dies every time gives no verdict and never will. A third attempt
+                // would die as these did, and so would every one after it, with nobody told.
+                // Where no command is declared the attempt is short and is simply made again:
+                // the request would name a command that does not exist and close on the next pass.
+                return ValidationFailureGuard.blocked(ValidationFailureGuard.raise(controlRoot, store, identity,
+                        "The project's validation command gave no verdict on the work waiting to be integrated: the pass that ran the command died twice (attempt " + before.get().attemptId() + ", then attempt "
+                                + attempt.attemptId() + "). ",
+                        "", "attempt " + attempt.attemptId() + " interrupted after attempt " + before.get().attemptId()));
             }
-            var pendingRequests = new WorkIntentService(coordinationStore, identity).requests().stream()
-                    .filter(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING).filter(request -> IntegrationCandidatePolicy.liveCoordinationRequest(coordinationStore, request))
-                    .toList();
-            if (!pendingRequests.isEmpty()) {
-                // This pump has no participant binding. Only the caller's inbox
-                // can project an owned request as a response obligation.
-                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", pendingRequests.size()));
-            }
+        }
 
-            CapabilityRequestProjection capProj = store.capabilityRequestProjection();
-
-            // Resolve the control head once for this pump.  Candidate
-            // classification is durable and deterministic against that head;
-            // infrastructure failures remain pending and are retried by a
-            // later pump.
-            String expectedControlHead;
-            try {
-                expectedControlHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
-            } catch (Exception ex) {
-                return AgentFailures.internal(controlRoot, "integration.read_control_head", ex, null);
-            }
-
-            // Pick the oldest dependency-ready work group. Structurally
-            // invalid candidates are durably blocked and removed from the
-            // eligible queue; compatible ready snapshots from that same
-            // work group travel through one guarded integration attempt so a
-            // project gate can validate their complete change set together.
-            List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
-            List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store);
-            if (eligible.isEmpty()) {
+        List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
+        Optional<OperatorRequest> validationFailing = ValidationFailureGuard.reconcile(controlRoot, store, identity, !snapshots.isEmpty());
+        if (snapshots.isEmpty()) {
+            List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
+            if (!pendingReviews.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
-                result.put("state", "review_acceptance_required");
-                result.put("reviewAcceptanceRequired", true);
-                result.put("snapshotIds", snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList());
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, result);
+                result.put("state", TaskCompletionState.REVIEW_PENDING.value());
+                result.put("reviewPending", true);
+                result.put("snapshotIds", pendingReviews.stream().map(TaskSnapshotRecord::snapshotId).toList());
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
             }
-            List<TaskSnapshotRecord> readyCandidates = new ArrayList<>();
-            boolean sawPendingDependency = false;
-            for (TaskSnapshotRecord candidate : eligible) {
-                IntegrationCandidatePolicy.CandidateResolution resolution = IntegrationCandidatePolicy.resolveCandidate(candidate,
-                        allSnapshots,
-                        capProj,
-                        store.taskCompletionProjection(),
-                        (implementation, owner) -> carriesValidatedContent(controlRoot, implementation.commitSha(), implementation.changedPaths(), owner.commitSha()));
-                if (!resolution.structuralFailures().isEmpty()) {
-                    if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, resolution.structuralFailures())) {
-                        return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
-                    }
-                    continue;
+            return NOTHING_TO_INTEGRATE;
+        }
+
+        // Do not integrate while a durable coordination request affecting
+        // the active collaboration graph is unresolved.  This check is
+        // intentionally before attempt allocation so a blocked negotiation
+        // cannot leave a misleading started attempt behind.
+        PredictionEventStore coordinationStore;
+        try {
+            coordinationStore = new PredictionEventStore(store.rootDirectory(), store.projectId());
+        } catch (Exception failure) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "COORDINATION_STATE_UNAVAILABLE"));
+        }
+        var pendingRequests = new WorkIntentService(coordinationStore, identity).requests().stream()
+                .filter(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING).filter(request -> IntegrationCandidatePolicy.liveCoordinationRequest(coordinationStore, request))
+                .toList();
+        if (!pendingRequests.isEmpty()) {
+            // This pump has no participant binding. Only the caller's inbox
+            // can project an owned request as a response obligation.
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", pendingRequests.size()));
+        }
+
+        CapabilityRequestProjection capProj = store.capabilityRequestProjection();
+
+        // Resolve the control head once for this pump.  Candidate
+        // classification is durable and deterministic against that head;
+        // infrastructure failures remain pending and are retried by a
+        // later pump.
+        String expectedControlHead;
+        try {
+            expectedControlHead = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
+        } catch (Exception ex) {
+            return AgentFailures.internal(controlRoot, "integration.read_control_head", ex, null);
+        }
+
+        // Pick the oldest dependency-ready work group. Structurally
+        // invalid candidates are durably blocked and removed from the
+        // eligible queue; compatible ready snapshots from that same
+        // work group travel through one guarded integration attempt so a
+        // project gate can validate their complete change set together.
+        List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
+        List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store);
+        if (eligible.isEmpty()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("state", "review_acceptance_required");
+            result.put("reviewAcceptanceRequired", true);
+            result.put("snapshotIds", snapshots.stream().map(TaskSnapshotRecord::snapshotId).toList());
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, result);
+        }
+        List<TaskSnapshotRecord> readyCandidates = new ArrayList<>();
+        boolean sawPendingDependency = false;
+        for (TaskSnapshotRecord candidate : eligible) {
+            IntegrationCandidatePolicy.CandidateResolution resolution = IntegrationCandidatePolicy.resolveCandidate(candidate,
+                    allSnapshots,
+                    capProj,
+                    store.taskCompletionProjection(),
+                    (implementation, owner) -> carriesValidatedContent(controlRoot, implementation.commitSha(), implementation.changedPaths(), owner.commitSha()));
+            if (!resolution.structuralFailures().isEmpty()) {
+                if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, resolution.structuralFailures())) {
+                    return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
                 }
-                if (!resolution.ready()) {
-                    sawPendingDependency = true;
-                    continue;
+                continue;
+            }
+            if (!resolution.ready()) {
+                sawPendingDependency = true;
+                continue;
+            }
+            List<String> metadataFailures = validateSnapshotMetadata(controlRoot, List.of(candidate), expectedControlHead, store);
+            if (!metadataFailures.isEmpty()) {
+                if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, metadataFailures)) {
+                    return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
                 }
-                List<String> metadataFailures = validateSnapshotMetadata(controlRoot, List.of(candidate), expectedControlHead, store);
-                if (!metadataFailures.isEmpty()) {
-                    if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, metadataFailures)) {
-                        return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
-                    }
-                    continue;
-                }
-                readyCandidates.add(candidate);
+                continue;
             }
-            if (readyCandidates.isEmpty()) {
-                if (sawPendingDependency) {
-                    return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pendingDependencies", eligible.size()));
-                }
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("state", "integration_blocked"));
+            readyCandidates.add(candidate);
+        }
+        if (readyCandidates.isEmpty()) {
+            if (sawPendingDependency) {
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pendingDependencies", eligible.size()));
             }
-            snapshots = IntegrationCandidatePolicy.oldestWorkGroup(readyCandidates);
-            List<TaskSnapshotRecord> ordered;
-            try {
-                ordered = IntegrationCandidatePolicy.sortTopologically(snapshots, capProj);
-            } catch (IllegalStateException cycleErr) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "Dependency cycle detected"));
-            }
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("state", "integration_blocked"));
+        }
+        snapshots = IntegrationCandidatePolicy.oldestWorkGroup(readyCandidates);
+        List<TaskSnapshotRecord> ordered;
+        try {
+            ordered = IntegrationCandidatePolicy.sortTopologically(snapshots, capProj);
+        } catch (IllegalStateException cycleErr) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("error", "Dependency cycle detected"));
+        }
 
-            // The pass is held here, where an attempt would be started, and not before the
-            // candidates were classified. Held earlier, a snapshot whose lane had ended was never
-            // blocked as stale: it stayed eligible, and the request waited for ever on work that
-            // could no longer integrate. Ending the lane is one of the operator's levers.
-            if (validationFailing.isPresent() && !operatorAsked) {
-                return ValidationFailureGuard.blocked(validationFailing.get());
-            }
+        // The pass is held here, where an attempt would be started, and not before the
+        // candidates were classified. Held earlier, a snapshot whose lane had ended was never
+        // blocked as stale: it stayed eligible, and the request waited for ever on work that
+        // could no longer integrate. Ending the lane is one of the operator's levers.
+        if (validationFailing.isPresent() && !operatorAsked) {
+            return ValidationFailureGuard.blocked(validationFailing.get());
+        }
 
-            // 4. Allocate integration attempt ID
-            String attemptToken = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-            String attemptId = "att_" + attemptToken;
+        String attemptId = "att_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        try {
+            IntegrationAttemptPayload startPayload = new IntegrationAttemptPayload(attemptId, store.projectId(), ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(), expectedControlHead, "", "started", "");
+            store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED, identity.nodeId(), startPayload.encode(), identity);
+        } catch (Exception ex) {
+            return AgentFailures.internal(controlRoot, "integration.start_attempt", ex, null);
+        }
+        started.set(new Attempt(attemptId, expectedControlHead, ordered));
+        return null;
+    }
 
-            // 5. Append INTEGRATION_ATTEMPT_STARTED
-            try {
-                IntegrationAttemptPayload startPayload = new IntegrationAttemptPayload(attemptId, store.projectId(), ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(), expectedControlHead, "", "started", "");
-                store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_STARTED, identity.nodeId(), startPayload.encode(), identity);
-            } catch (Exception ex) {
-                return AgentFailures.internal(controlRoot, "integration.start_attempt", ex, null);
-            }
+    /**
+     * The slow part of a pass, with the append lock free for every other writer (ADR-0098,
+     * invariant 8): the worktree, the cherry-picks and the project's test gate. Then the lock is
+     * taken to record how it ended.
+     */
+    private AgentResponse runAndRecord(Path controlRoot, PredictionEventStore store, NodeIdentity identity, Attempt attempt) {
+        var prepResult = workspaceService.prepareIntegrationWorktree(controlRoot, attempt.id(), attempt.expectedControlHead(), attempt.ordered());
 
-            // 6. Prepare integration worktree and apply snapshots
-            var prepResult = workspaceService.prepareIntegrationWorktree(controlRoot, attemptId, expectedControlHead, ordered);
-
-            if (!prepResult.success()) {
-                try {
-                    String status = isMergeConflict(prepResult.failureReason()) ? "conflict" : "pending";
-                    IntegrationAttemptPayload failurePayload = new IntegrationAttemptPayload(attemptId,
-                            store.projectId(),
-                            ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead,
-                            "",
-                            status,
-                            prepResult.failureReason());
-                    store.append(UUID.randomUUID(),
-                            isMergeConflict(prepResult.failureReason()) ? PredictionEventType.INTEGRATION_CONFLICTED : PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
-                            identity.nodeId(),
-                            failurePayload.encode(),
-                            identity);
-                    if (isMergeConflict(prepResult.failureReason())) {
-                        store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED, identity.nodeId(), failurePayload.encode(), identity);
-                    } else {
-                        workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
-                    }
-                } catch (Exception ignored) {
-                    // Leave the attempt and immutable candidate recoverable for
-                    // the next reconciliation pass.
-                }
-
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("state", isMergeConflict(prepResult.failureReason()) ? "repair_required" : "integration_pending");
-                result.put("reason", prepResult.failureReason());
-                return new AgentResponse(isMergeConflict(prepResult.failureReason()) ? AgentStatus.BLOCKED : AgentStatus.WAITING,
-                        isMergeConflict(prepResult.failureReason()) ? AgentReason.INTEGRATION_CONFLICT : AgentReason.INTEGRATION_PENDING,
-                        isMergeConflict(prepResult.failureReason()) ? AgentNextAction.REQUEST_HUMAN_HELP : AgentNextAction.RETRY,
-                        result);
-            }
-
-            // 6. Execute the project-owned validation argv through the same
-            // generic primitive used by run_command and finish_lane.
-            ExecutionResult validation = null;
-            ProjectCommandSpec command = null;
+        // The project-owned validation argv runs through the same generic primitive used by
+        // run_command and finish_lane.
+        ExecutionResult validation = null;
+        ProjectCommandSpec command = null;
+        if (prepResult.success()) {
             try {
                 command = projectService.locate(controlRoot).validation();
                 if (command != null) {
@@ -667,100 +701,236 @@ public final class IntegrationOrchestrationService {
             } catch (Exception failure) {
                 validation = new ExecutionResult(ProjectProcessExecutor.Outcome.COMMAND_START_FAILED, null, "", "", 0, 0, 0, 0, false, false);
             }
-            if (validation != null && !validation.succeeded()) {
-                Exception attemptNotEnded = null;
-                try {
-                    IntegrationAttemptPayload failPayload = new IntegrationAttemptPayload(attemptId,
-                            store.projectId(),
-                            ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
-                            expectedControlHead,
-                            prepResult.integrationCommitSha(),
-                            "pending",
-                            "VALIDATION_FAILED:" + validation.outcome().value());
-                    store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED, identity.nodeId(), failPayload.encode(), identity);
-                } catch (Exception failure) {
-                    attemptNotEnded = failure;
-                }
+        }
+        beforeRecording.run();
 
-                workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
-                if (attemptNotEnded != null) {
-                    // Nothing can be refused for an attempt the log still shows as started. The
-                    // failure is reported as one, and the next pass ends the attempt as interrupted.
-                    return AgentFailures.internal(controlRoot, "integration.record_validation_failure", attemptNotEnded, null);
-                }
-                return validationFailed(controlRoot, store, identity, attemptId, ordered, prepResult.integrationCommitSha(), command, validation);
-            }
-            if (validation != null) {
-                ValidationFailureGuard.close(controlRoot, store, identity, "The project's validation command passed.");
-            }
+        ProjectAppendLock lock;
+        try {
+            lock = acquireForRecording(store.rootDirectory());
+        } catch (IOException unavailable) {
+            // The attempt stays started and no commit is on record: the next pass ends it as
+            // interrupted and makes a new one.
+            workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+            return LOCK_UNAVAILABLE;
+        }
+        try (ProjectAppendLock held = lock) {
+            PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            return recordOutcome(held, controlRoot, current, identity, attempt, prepResult, command, validation);
+        } catch (IOException | java.security.GeneralSecurityException failure) {
+            workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+            return AgentFailures.internal(controlRoot, "integration.open_state", failure, Map.of("failure", "INTEGRATION_STATE_UNAVAILABLE"));
+        }
+    }
 
-            // Record INTEGRATION_COMMIT_CREATED
+    /**
+     * Takes the append lock for the short last part of a pass. The pass holds minutes of work and
+     * recording is cheap, so a lock that other writers keep busy for a while is waited for.
+     */
+    private static ProjectAppendLock acquireForRecording(Path root) throws IOException {
+        IOException busy = null;
+        for (int attempt = 0; attempt < RECORDING_LOCK_TRIES; attempt++) {
             try {
-                IntegrationAttemptPayload commitPayload = new IntegrationAttemptPayload(attemptId,
+                return ProjectAppendLock.acquire(root);
+            } catch (IOException failure) {
+                busy = failure;
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+            }
+        }
+        throw busy;
+    }
+
+    /**
+     * Tells why the log and the branch are no longer what the attempt started from. The attempt
+     * is recorded as done only when this is empty, so an outcome is never recorded for work that
+     * has been decided differently since: another head, a lane whose claim ended or moved to a
+     * later epoch, a snapshot that a later one replaced, or a request now open.
+     *
+     * @return the reasons, empty when the attempt may be recorded
+     */
+    private static List<String> staleBasis(Path controlRoot, PredictionEventStore store, Attempt attempt) {
+        List<String> reasons = new ArrayList<>();
+        Optional<IntegrationAttemptRecord> active = store.taskCompletionProjection().activeIntegrationAttempt();
+        if (active.isEmpty() || !active.get().attemptId().equals(attempt.id()) || !"started".equals(active.get().status())) {
+            reasons.add("ATTEMPT_NOT_ACTIVE");
+        }
+        String head;
+        try {
+            head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
+        } catch (Exception unreadable) {
+            reasons.add("CONTROL_HEAD_UNREADABLE");
+            return reasons;
+        }
+        if (!head.equals(attempt.expectedControlHead())) {
+            reasons.add("CONTROL_HEAD_MOVED");
+        }
+        List<TaskSnapshotRecord> all = store.taskCompletionProjection().allSnapshots();
+        for (TaskSnapshotRecord snapshot : attempt.ordered()) {
+            if (store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(null) != TaskCompletionState.INTEGRATING) {
+                reasons.add("SNAPSHOT_STATE_CHANGED:" + snapshot.snapshotId());
+            }
+            if (all.stream().anyMatch(later -> later.taskId().equals(snapshot.taskId()) && later.provenance().authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                    && later.provenance().claimEpoch() > snapshot.provenance().claimEpoch())) {
+                reasons.add("SNAPSHOT_SUPERSEDED:" + snapshot.snapshotId());
+            }
+            // One snapshot at a time, as when the attempt was chosen: the group's snapshots were never
+            // checked against each other's paths, and a pass that now did would retry for ever.
+            reasons.addAll(validateSnapshotMetadata(controlRoot, List.of(snapshot), head, store));
+        }
+        return reasons;
+    }
+
+    /**
+     * The last part of a pass, under the append lock and on a log replayed after it was taken:
+     * records how the slow part ended, and advances the branch, only if the attempt's basis still
+     * holds.
+     */
+    private AgentResponse recordOutcome(ProjectAppendLock appendLock, Path controlRoot, PredictionEventStore store, NodeIdentity identity, Attempt attempt, IntegrationWorkspaceService.IntegrationWorktreeResult prepResult,
+            ProjectCommandSpec command, ExecutionResult validation) {
+        String attemptId = attempt.id();
+        String expectedControlHead = attempt.expectedControlHead();
+        List<TaskSnapshotRecord> ordered = attempt.ordered();
+
+        List<String> stale = staleBasis(controlRoot, store, attempt);
+        if (!stale.isEmpty()) {
+            // The work was never wrong, only decided on a basis that has moved: the snapshots go
+            // back to the state they had and a later pass chooses again.
+            appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", STALE_BASIS + String.join(",", stale));
+            workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("pending", 1);
+            result.put("stale", stale);
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.INTEGRATION_STALE, AgentNextAction.RETRY, result);
+        }
+
+        if (!prepResult.success()) {
+            try {
+                String status = isMergeConflict(prepResult.failureReason()) ? "conflict" : "pending";
+                IntegrationAttemptPayload failurePayload = new IntegrationAttemptPayload(attemptId,
+                        store.projectId(),
+                        ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                        expectedControlHead,
+                        "",
+                        status,
+                        prepResult.failureReason());
+                store.append(UUID.randomUUID(),
+                        isMergeConflict(prepResult.failureReason()) ? PredictionEventType.INTEGRATION_CONFLICTED : PredictionEventType.INTEGRATION_ATTEMPT_FAILED,
+                        identity.nodeId(),
+                        failurePayload.encode(),
+                        identity);
+                if (isMergeConflict(prepResult.failureReason())) {
+                    store.append(UUID.randomUUID(), PredictionEventType.REPAIR_REQUIRED, identity.nodeId(), failurePayload.encode(), identity);
+                } else {
+                    workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+                }
+            } catch (Exception ignored) {
+                // Leave the attempt and immutable candidate recoverable for
+                // the next reconciliation pass.
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("state", isMergeConflict(prepResult.failureReason()) ? "repair_required" : "integration_pending");
+            result.put("reason", prepResult.failureReason());
+            return new AgentResponse(isMergeConflict(prepResult.failureReason()) ? AgentStatus.BLOCKED : AgentStatus.WAITING,
+                    isMergeConflict(prepResult.failureReason()) ? AgentReason.INTEGRATION_CONFLICT : AgentReason.INTEGRATION_PENDING,
+                    isMergeConflict(prepResult.failureReason()) ? AgentNextAction.REQUEST_HUMAN_HELP : AgentNextAction.RETRY,
+                    result);
+        }
+
+        if (validation != null && !validation.succeeded()) {
+            Exception attemptNotEnded = null;
+            try {
+                IntegrationAttemptPayload failPayload = new IntegrationAttemptPayload(attemptId,
                         store.projectId(),
                         ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
                         expectedControlHead,
                         prepResult.integrationCommitSha(),
-                        "started",
-                        "");
-                store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_COMMIT_CREATED, identity.nodeId(), commitPayload.encode(), identity);
+                        "pending",
+                        "VALIDATION_FAILED:" + validation.outcome().value());
+                store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_ATTEMPT_FAILED, identity.nodeId(), failPayload.encode(), identity);
             } catch (Exception failure) {
-                // The branch is advanced only to a commit the log names. A pass that finds this
-                // attempt started tells by that commit whether the branch holds it; advanced
-                // without it, a process that then died left work on the branch that the next pass
-                // took for never integrated.
-                workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
-                return AgentFailures.internal(controlRoot, "integration.record_commit", failure, null);
+                attemptNotEnded = failure;
             }
 
-            // 7. Advance control branch
-            var advResult = advancementService.advanceControlBranch(controlRoot, attemptId, expectedControlHead, prepResult.integrationCommitSha(), ordered, store, identity);
-
-            // Cleanup integration worktree after attempt
             workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
-
-            if (advResult.stale()) {
-                // The head moved under the attempt. That says nothing against the snapshots,
-                // which are tried again on the new head.
-                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", "STALE_CONTROL_HEAD");
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", 1);
-                return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.INTEGRATION_STALE, AgentNextAction.RETRY, result);
+            if (attemptNotEnded != null) {
+                // Nothing can be refused for an attempt the log still shows as started. The
+                // failure is reported as one, and the next pass ends the attempt as interrupted.
+                return AgentFailures.internal(controlRoot, "integration.record_validation_failure", attemptNotEnded, null);
             }
-
-            if (advResult.dirtyControl()) {
-                // A foreign change that appeared during the attempt. Recording the attempt as
-                // failed ended the snapshots for good: after a person had cleaned the checkout
-                // the work was still never integrated.
-                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", advResult.failureReason());
-                Optional<OperatorRequest> raised = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
-                if (raised.isPresent()) {
-                    return ControlCheckoutGuard.blocked(raised.get());
-                }
-                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, Map.of("pending", 1));
-            }
-            if (!advResult.advanced()) {
-                appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "failed", advResult.failureReason());
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("pending", 1);
-                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
-            }
-
-            try {
-                finalizeIntegratedLanes(appendLock, controlRoot, ordered, store, identity);
-            } catch (Exception failure) {
-                return AgentFailures.internal(controlRoot, "integration.finalize_lanes", failure,
-                        Map.of("failure", "INTEGRATION_TERMINALIZATION_FAILED", "message", failure.getMessage() == null ? "unknown" : failure.getMessage()));
-            }
-
-            // Success! Fully integrated
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("task", "integrated");
-            if (validation != null) {
-                result.put("validation", validation.toMap());
-            }
-            return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
+            return validationFailed(controlRoot, store, identity, attemptId, ordered, prepResult.integrationCommitSha(), command, validation);
         }
+        if (validation != null) {
+            ValidationFailureGuard.close(controlRoot, store, identity, "The project's validation command passed.");
+        }
+
+        // Record INTEGRATION_COMMIT_CREATED
+        try {
+            IntegrationAttemptPayload commitPayload = new IntegrationAttemptPayload(attemptId,
+                    store.projectId(),
+                    ordered.stream().map(TaskSnapshotRecord::snapshotId).toList(),
+                    expectedControlHead,
+                    prepResult.integrationCommitSha(),
+                    "started",
+                    "");
+            store.append(UUID.randomUUID(), PredictionEventType.INTEGRATION_COMMIT_CREATED, identity.nodeId(), commitPayload.encode(), identity);
+        } catch (Exception failure) {
+            // The branch is advanced only to a commit the log names. A pass that finds this
+            // attempt started tells by that commit whether the branch holds it; advanced
+            // without it, a process that then died left work on the branch that the next pass
+            // took for never integrated.
+            workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+            return AgentFailures.internal(controlRoot, "integration.record_commit", failure, null);
+        }
+
+        // Advance control branch
+        var advResult = advancementService.advanceControlBranch(controlRoot, attemptId, expectedControlHead, prepResult.integrationCommitSha(), ordered, store, identity);
+
+        // Cleanup integration worktree after attempt
+        workspaceService.removeIntegrationWorktree(prepResult.worktreePath());
+
+        if (advResult.stale()) {
+            // The head moved under the attempt. That says nothing against the snapshots,
+            // which are tried again on the new head.
+            appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", "STALE_CONTROL_HEAD");
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("pending", 1);
+            return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.INTEGRATION_STALE, AgentNextAction.RETRY, result);
+        }
+
+        if (advResult.dirtyControl()) {
+            // A foreign change that appeared during the attempt. Recording the attempt as
+            // failed ended the snapshots for good: after a person had cleaned the checkout
+            // the work was still never integrated.
+            appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "pending", advResult.failureReason());
+            Optional<OperatorRequest> raised = ControlCheckoutGuard.reconcile(controlRoot, store, identity);
+            if (raised.isPresent()) {
+                return ControlCheckoutGuard.blocked(raised.get());
+            }
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, Map.of("pending", 1));
+        }
+        if (!advResult.advanced()) {
+            appendAttemptFailure(store, identity, attemptId, ordered, expectedControlHead, prepResult.integrationCommitSha(), "failed", advResult.failureReason());
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("pending", 1);
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, result);
+        }
+
+        try {
+            finalizeIntegratedLanes(appendLock, controlRoot, ordered, store, identity);
+        } catch (Exception failure) {
+            return AgentFailures.internal(controlRoot, "integration.finalize_lanes", failure,
+                    Map.of("failure", "INTEGRATION_TERMINALIZATION_FAILED", "message", failure.getMessage() == null ? "unknown" : failure.getMessage()));
+        }
+
+        // Success! Fully integrated
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("task", "integrated");
+        if (validation != null) {
+            result.put("validation", validation.toMap());
+        }
+        return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
     }
 
     /**

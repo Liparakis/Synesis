@@ -19,6 +19,7 @@ import org.synesis.cli.ui.StaticResourceHandler;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
@@ -37,6 +38,9 @@ import org.synesis.workspace.transport.control.network.LinkNetworkProjection;
  * Shared composition for the coordination server and the installed browser UI command.
  */
 final class CoordinationServerLauncher {
+
+    /** How long after a member's entry the leader's merge pass runs, so a burst of entries is merged together. */
+    private static final long MERGE_DELAY_MILLIS = 3_000L;
 
     private CoordinationServerLauncher() {
     }
@@ -74,6 +78,7 @@ final class CoordinationServerLauncher {
      * @param parentPid   owning daemon PID, or a non-positive value for no owner watch
      * @return stable process exit code
      */
+    @SuppressWarnings("try") // the leader side is held for the server's lifetime; the Link slice that attaches sessions will use it
     static Integer run(CliRuntime runtime, Path project, Path data, Path identity, String host, int port, int duration, boolean openBrowser, boolean browserOpen, long parentPid) {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
@@ -121,7 +126,13 @@ final class CoordinationServerLauncher {
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
                     // A member's agents reach the leader through this server; the Link session arrives at attach.
                     var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
-                            ? MemberReplication.open(projectData, location.projectId()) : null) {
+                            ? MemberReplication.open(projectData, location.projectId()) : null;
+                    // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
+                    // Sessions arrive at LeaderReplication.attach, which no product flow calls yet.
+                    var mergeDriver = replicationSettings.filter(settings -> !settings.isMember()).isPresent()
+                            ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
+                    var leaderReplication = mergeDriver != null
+                            ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null) {
                 server.start();
                 if (memberReplication != null) {
                     memberReplication.serve(server);

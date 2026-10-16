@@ -52,6 +52,7 @@ public final class LeaderReplication implements AutoCloseable {
     private final UUID projectId;
     private final LeaderEndpoint endpoint;
     private final Set<String> members;
+    private final Runnable afterMemberEntry;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, Long> noticed = new ConcurrentHashMap<>();
     private final ExecutorService requests = Executors.newCachedThreadPool(daemon("synesis-replication-leader"));
@@ -66,6 +67,22 @@ public final class LeaderReplication implements AutoCloseable {
      * @param members   nodes allowed to propose and pull
      */
     public LeaderReplication(Path root, UUID projectId, Set<String> members) {
+        this(root, projectId, members, () -> {
+        });
+    }
+
+    /**
+     * Serves one project's log and tells the owner of {@code afterMemberEntry} whenever a member's entry went on
+     * the log, so the leader can act on it without an agent of its own (the merge driver, ADR-0098).
+     *
+     * @param root             the leader's coordination folder
+     * @param projectId        the project
+     * @param members          nodes allowed to propose and pull
+     * @param afterMemberEntry called after each accepted proposal, on the thread that answered it; it must not
+     *                         block
+     */
+    public LeaderReplication(Path root, UUID projectId, Set<String> members, Runnable afterMemberEntry) {
+        this.afterMemberEntry = CoordinationNullException.requireNonNull(afterMemberEntry, "afterMemberEntry");
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = Set.copyOf(CoordinationNullException.requireNonNull(members, "members"));
@@ -83,10 +100,24 @@ public final class LeaderReplication implements AutoCloseable {
      * @throws IOException when the settings are missing, invalid, or are a member's
      */
     public static LeaderReplication open(Path root, UUID projectId) throws IOException {
+        return open(root, projectId, () -> {
+        });
+    }
+
+    /**
+     * As {@link #open(Path, UUID)}, calling {@code afterMemberEntry} after each accepted member proposal.
+     *
+     * @param root             the leader's coordination folder
+     * @param projectId        the project
+     * @param afterMemberEntry called after each accepted proposal; it must not block
+     * @return the leader side
+     * @throws IOException when the settings are missing, invalid, or are a member's
+     */
+    public static LeaderReplication open(Path root, UUID projectId, Runnable afterMemberEntry) throws IOException {
         ReplicationSettings settings = ReplicationSettings.read(root)
                 .filter(found -> !found.isMember())
                 .orElseThrow(() -> new CoordinationException("NOT_A_LEADER"));
-        return new LeaderReplication(root, projectId, settings.members());
+        return new LeaderReplication(root, projectId, settings.members(), afterMemberEntry);
     }
 
     /**
@@ -142,6 +173,11 @@ public final class LeaderReplication implements AutoCloseable {
         ProposalOutcome outcome = endpoint.accept(propose.event(), sender);
         if (outcome instanceof ProposalOutcome.Accepted) {
             notices.execute(this::noticeAll);
+            try {
+                afterMemberEntry.run();
+            } catch (RuntimeException hookFailed) {
+                // The entry is on the log and the member must be told so; the hook's owner retries on its own.
+            }
         }
         return ReplicationCodec.encode(new ReplicationMessage.Outcome(outcome));
     }
