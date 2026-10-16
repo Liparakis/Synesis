@@ -325,11 +325,11 @@ final class ControlPlaneReplicationTest {
         Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(both));
         await(() -> hasUsableSessionOtherThan(a, before) && restarted.hasPeer());
         b.resumeDialing((String) invitation.get("inviteUri"));
-        settle();
+        // A refused attempt takes longer to give up on Windows than on Linux; wait for it rather than for a fixed time.
+        await(() -> bJournal.stream().anyMatch(line -> line.startsWith("REDIAL_FAILED")));
 
         assertTrue(b.get().sessions().isEmpty(), bJournal.toString());
         assertTrue(restarted.owner.get().sessions().stream().noneMatch(session -> session.remoteNodeId().equals(bNode.nodeId())));
-        assertTrue(bJournal.stream().anyMatch(line -> line.startsWith("REDIAL_FAILED")), bJournal.toString());
     }
 
     @Test
