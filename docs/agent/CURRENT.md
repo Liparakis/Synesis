@@ -1,3 +1,21 @@
+# 2026-10-16 — Drop and restart tested on two real computers
+
+Windows leader (dials out) and Linux VM member (hosts), project `mp7-two-pc`, after the run 7 WorkGroup completed.
+VERIFIED from both computers' `replication.log` and `coordination status`:
+
+- **Drop** (build remaster54): the VM's virtual cable was unplugged for 60 s.
+  - Both sides logged `DISCONNECT reason=LIVENESS_EXPIRED` 31 s in.
+  - The leader's first redial failed while unplugged.
+  - It reconnected 6 s after the cable was back (`REDIAL_OK attempts=3`).
+  - The member showed `REPLICATION_LAST_DISCONNECT=LIVENESS_EXPIRED ...` and returned to `CONNECTED`.
+- **Restart, before 1091dca8:** after restarting the leader's runtime nothing reconnected. Neither side kept the other.
+- **Restart, after 1091dca8** (build remaster55, a fresh `link invite`/`link join` so the peers were recorded):
+  - Leader runtime restarted: `DIAL_RESUMED`, then `CONNECTED` and `REDIAL_OK attempts=1` within about a second. The
+    member closed the stale session as `replaced=true`.
+  - Member runtime restarted: `HOST_RESUMED port=58885 peers=1`. The leader saw the old session expire after 30 s and
+    redialed (`REDIAL_OK attempts=1`). The replay guard held 3 handshakes.
+
+Not tested: a restart of a whole computer (the address may change), and two networks.
 # 2026-10-16 — The retained host's replay guard survives a restart (closes the residual risk below)
 
 **Gap.** The host's `ReplayGuard` was in memory while the hosting UDP port and the returning-peer admission survived a
