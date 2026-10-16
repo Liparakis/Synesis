@@ -30,6 +30,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
@@ -63,6 +64,12 @@ public final class ImplementationPublicationService {
 
     private static AgentResponse blocked(String reason, AgentReason agentReason, AgentNextAction nextAction) {
         return new AgentResponse(AgentStatus.BLOCKED, agentReason, nextAction, Map.of("reason", reason));
+    }
+
+    /** Nothing was published; an unreachable remote is tried again, a missing setting needs the operator. */
+    private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
+        return blocked(refused.code(), AgentReason.POLICY_DENIED,
+                CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP);
     }
 
     private static boolean validTreeHash(String value) {
@@ -174,6 +181,12 @@ public final class ImplementationPublicationService {
                 return blocked("CAPABILITY_PUBLISHER_WORKSPACE_STALE", AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION);
             }
 
+            Optional<CodeRemote> codeRemote;
+            try {
+                codeRemote = CodeRemote.of(coordination);
+            } catch (CodeRemote.Refused refused) {
+                return codeRemoteRefusal(refused);
+            }
             List<ResourceSelector> foreignClaims = foreignClaims(store, participant);
             String laneBase = snapshotService.snapshotBaseForBoundWorktree(ownerWorktree, intent.baseCommit(), binding.baseCommit());
             String currentTreeHash = snapshotService.capabilityPublicationTreeHash(ownerWorktree, laneBase, intent.selectors(), foreignClaims);
@@ -210,6 +223,14 @@ public final class ImplementationPublicationService {
                     request.expectedTreeHash()));
             if (snapshot.changedPaths().size() > ImplementationRevisionRecord.MAX_CHANGED_PATHS) {
                 return blocked("CAPABILITY_PUBLICATION_PATH_LIMIT_EXCEEDED", AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP);
+            }
+            if (codeRemote.isPresent()) {
+                // The entries below name this commit; the computers that read them fetch it from the remote.
+                try {
+                    codeRemote.get().pushRefs(ownerWorktree, snapshot.provenance().snapshotRef());
+                } catch (CodeRemote.Refused refused) {
+                    return codeRemoteRefusal(refused);
+                }
             }
 
             Optional<ImplementationRevisionRecord> latestOpt = store.capabilityRequestProjection().findLatestImplementation(request.requestHandle());

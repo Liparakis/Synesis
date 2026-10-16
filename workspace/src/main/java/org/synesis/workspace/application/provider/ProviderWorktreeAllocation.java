@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -14,6 +15,7 @@ import org.synesis.workspace.provider.ProviderIntegration;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.writeText;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.runGit;
+import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.currentCommit;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.validCommit;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.verifyBinding;
 
@@ -48,6 +50,12 @@ final class ProviderWorktreeAllocation {
         try {
             Files.createDirectories(path.getParent());
             if (!Files.exists(path)) {
+                // A member bases a new lane on the head the leader integrated (ADR-0098). The base
+                // recorded in the binding, and so in the intent, is then a commit the leader has.
+                if (CodeRemote.followLeaderIfMember(location.coordinationDirectory(), location.root())) {
+                    String followed = currentCommit(location.root());
+                    baseCommit = validCommit(followed) ? followed : baseCommit;
+                }
                 try {
                     runGit(location.root(), "worktree", "add", "-b", branch, path.toString(), baseCommit);
                 } catch (Exception branchExists) {
@@ -62,6 +70,8 @@ final class ProviderWorktreeAllocation {
             }
             Binding allocated = binding.withAllocatedWorktree(worktreeId, location.root().toString(), path.toString(), branch, baseCommit);
             return verifyBinding(location.root(), allocated);
+        } catch (CodeRemote.Refused refused) {
+            return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", refused.code());
         } catch (Exception failure) {
             String diagnostic = String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT") ? "PROVIDER_CONFIGURATION_CONFLICT" : "WORKSPACE_ALLOCATION_FAILED";
             return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", diagnostic);

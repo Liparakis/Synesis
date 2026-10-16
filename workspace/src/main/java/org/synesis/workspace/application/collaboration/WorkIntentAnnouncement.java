@@ -21,6 +21,7 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 
 import org.synesis.link.identity.NodeIdentity;
 
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -213,6 +214,7 @@ final class WorkIntentAnnouncement {
             throw new IOException("REPAIR_LINEAGE_OR_SCOPE_MISMATCH");
         }
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
+        CodeRemote.ensureCommit(location.coordinationDirectory(), location.root(), snapshot.commitSha());
         try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!appendLock.isHeld()) {
                 throw new IOException("event append lock unavailable");

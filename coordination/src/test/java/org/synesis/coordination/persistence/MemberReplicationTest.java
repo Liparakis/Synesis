@@ -240,14 +240,16 @@ final class MemberReplicationTest {
                 endpoint.accept(release, member.nodeId()));
         assertEquals(before, leaderStore().events().size());
 
-        // The rule is in the log's admission, so it holds for every append, on any store.
+        // The member's own store refuses it too, before anything is proposed.
+        memberStore().pullFromLeader();
         IOException local = assertThrows(IOException.class,
-                () -> leaderStore().append(held.intentId(),
+                () -> memberStore().append(held.intentId(),
                         PredictionEventType.WORK_INTENT_RELEASED,
                         member.nodeId(),
                         CollaborationCodec.encodeRelease(held.intentId()),
                         member));
         assertEquals("PARTICIPANT_NOT_OWNED_BY_SIGNER", local.getMessage());
+        assertEquals(before, leaderStore().events().size());
 
         // The node that introduced the participant can still release it.
         leaderStore().append(held.intentId(),
@@ -256,6 +258,24 @@ final class MemberReplicationTest {
                 CollaborationCodec.encodeRelease(held.intentId()),
                 leader);
         assertEquals(before + 1, leaderStore().events().size());
+    }
+
+    @Test
+    void theLeaderMayReleaseAMembersLaneItDecidedToMerge() throws Exception {
+        WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
+        assertTrue(new WorkIntentService(memberStore(), member).announce(lane).acquired());
+        long before = leaderStore().events().size();
+
+        // Closing a merged lane is the leader's own entry; ADR-0098 lets the leader act for any participant.
+        leaderStore().append(lane.intentId(),
+                PredictionEventType.WORK_INTENT_RELEASED,
+                leader.nodeId(),
+                CollaborationCodec.encodeRelease(lane.intentId()),
+                leader);
+
+        assertEquals(before + 1, leaderStore().events().size());
+        memberStore().pullFromLeader();
+        assertSameLog(leaderStore(), memberStore());
     }
 
     @Test

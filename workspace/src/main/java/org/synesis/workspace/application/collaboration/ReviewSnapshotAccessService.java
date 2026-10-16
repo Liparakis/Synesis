@@ -20,6 +20,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
 import org.synesis.workspace.application.project.execution.ExecutionResult;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -183,6 +184,7 @@ public final class ReviewSnapshotAccessService {
                 return new AccessResult(null, "REVIEW_SNAPSHOT_AMBIGUOUS");
             }
             GrantSnapshot candidate = candidates.getFirst();
+            CodeRemote.ensureCommit(location.coordinationDirectory(), location.root(), candidate.snapshot().commitSha());
             verifySnapshotRef(location.root(), candidate.snapshot());
             Path worktree = ensureReviewWorktree(location.root(), location.projectId(), candidate.grant(), candidate.snapshot());
             return new AccessResult(new Access(candidate.grant(), candidate.snapshot(), worktree), null);

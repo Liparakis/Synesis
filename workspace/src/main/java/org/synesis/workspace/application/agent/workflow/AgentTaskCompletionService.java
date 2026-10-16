@@ -40,6 +40,7 @@ import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.LaneIdentities;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
@@ -515,6 +516,18 @@ public final class AgentTaskCompletionService {
         String participantHandle = WorkspaceCollaborationService.participantHandle(binding.sessionId());
         UUID taskId = snapshot.taskId();
 
+        // On a computer that exchanges code, the commits the next entries name must reach the code
+        // remote first (ADR-0098). Whether it can is known before anything is pinned or proposed.
+        Optional<CodeRemote> codeRemote;
+        try {
+            codeRemote = CodeRemote.of(location.coordinationDirectory());
+        } catch (CodeRemote.Refused refused) {
+            if (!snapshotAlreadyExists) {
+                snapshotService.removeSnapshotRef(worktree, snapshot);
+            }
+            return codeRemoteRefusal(refused);
+        }
+
         // A completion transaction must publish a complete lane diff. A clean lane cannot create a
         // useful implementation snapshot or release its authority without preserving any work.
         if (snapshot.changedPaths().isEmpty()) {
@@ -570,6 +583,13 @@ public final class AgentTaskCompletionService {
         }
         String preparedRef = snapshotService.pinPreparedRef(worktree, snapshot, completionId);
         String preparedTreeHash = snapshotService.treeHash(worktree, snapshot.commitSha());
+        if (codeRemote.isPresent()) {
+            try {
+                codeRemote.get().pushRefs(worktree, preparedRef);
+            } catch (CodeRemote.Refused refused) {
+                return codeRemoteRefusal(refused);
+            }
+        }
         if (store.taskCompletionProjection().findPrepared(taskId, snapshot.provenance().laneId(), snapshot.provenance().claimEpoch()).isEmpty()) {
             CompletionPreparedPayload prepared = new CompletionPreparedPayload(taskId,
                     completionId,
@@ -583,6 +603,13 @@ public final class AgentTaskCompletionService {
         }
 
         snapshotService.promotePreparedRef(worktree, preparedRef, snapshot.provenance().snapshotRef(), snapshot.commitSha());
+        if (codeRemote.isPresent()) {
+            try {
+                codeRemote.get().pushRefs(worktree, snapshot.provenance().snapshotRef());
+            } catch (CodeRemote.Refused refused) {
+                return codeRemoteRefusal(refused);
+            }
+        }
         if (!snapshotAlreadyExists) {
             TaskSnapshotPayload snapshotPayload = new TaskSnapshotPayload(snapshot.taskId(),
                     snapshot.snapshotId(),
@@ -611,6 +638,12 @@ public final class AgentTaskCompletionService {
         // inbox read from reusing stale write authority.
         bindingService.complete(location, request.provider(), request.connectionInstanceId());
         return sealAndContinue(result, request, location, binding, identity);
+    }
+
+    /** Nothing was proposed; an unreachable remote is tried again, a missing setting needs the operator. */
+    private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
+        AgentNextAction next = CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, next, Map.of(NextActionKeys.REASON, refused.code(), "message", refused.getMessage()));
     }
 
     /**

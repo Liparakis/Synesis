@@ -1,3 +1,83 @@
+# 2026-10-16 — Code moves through a shared Git remote; the leader fetches before it decides (ADR-0098 step 2, slice 3b)
+
+The log names commits (`refs/synesis/prepared/<completionId>`, `refs/synesis/snapshots/<id>`); the objects now travel
+between the members' and the leader's clones through one Git remote. Nothing is pushed or fetched on a computer with no
+`replication.properties` (every project today).
+
+**The setting.** `code.remote=<remote name>` in `replication.properties`, for a member or a leader
+(`ReplicationSettings.codeRemote()`, `withCodeRemote`; `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, so never a URL or an option;
+the record gained a component and keeps its old two-argument constructor). A computer with settings and no remote
+refuses what needs code exchange with `CODE_REMOTE_NOT_CONFIGURED`; `origin` is never assumed. `CodeRemote`
+(workspace, `application/control`) is the one place that reads it and runs the Git commands: `CodeRemote.of` answers
+empty for a single computer.
+
+**Push, before the proposal.** In `AgentTaskCompletionService`: the prepared ref after it is pinned (before
+`COMPLETION_PREPARED`), the snapshot ref after it is promoted (before `TASK_SNAPSHOT_CREATED`). In
+`ImplementationPublicationService`: the snapshot ref after `createSnapshot` (before `CAPABILITY_IMPLEMENTATION_PUBLISHED`).
+There is no single place where refs are written (several places update refs), so the push sits at the three points
+where a ref becomes something an entry names, and never for a provisional ref that is removed again. Only
+`refs/synesis/...` can be passed (anything else is `IllegalArgumentException`), unforced. A failed push is
+`CODE_REMOTE_UNAVAILABLE` with Git's last line; nothing is proposed. A ref pushed for a proposal that then fails stays on
+the remote (immutable, harmless).
+
+**Fetch, before anything reads those commits.** The leader's pass fetches `refs/synesis/*` (unforced) after it holds the
+integration lock and before it takes the append lock, only when the log has snapshots waiting. A failed fetch answers
+`WAITING` / `INTEGRATION_PENDING` with `failure: CODE_REMOTE_UNAVAILABLE` and starts no attempt, because the pass's checks
+would otherwise record the work as missing; no remote setting answers `BLOCKED` with `CODE_REMOTE_NOT_CONFIGURED`.
+Review access, the capability validation worktree and the repair-lane materialization call `CodeRemote.ensureCommit`,
+which fetches only when the commit is not in the clone; a commit still missing afterwards reaches the existing snapshot
+errors.
+
+**The leader reads what a snapshot changes from the commit.** It already took the tree from the objects (prepared tree
+hash against `rev-parse commit^{tree}`, and the cherry-pick applies the commit). It did not take the changed paths: the
+claim-coverage and overlap checks ran on the list in the entry. On a computer with replication settings,
+`validateSnapshotMetadata` now compares `diff-tree parent commit` with the declared list and refuses a commit that
+changes an undeclared path (`UNDECLARED_PATH:<path>`, or `UNVERIFIABLE_PATHS` when it cannot be read). Not on a single
+computer (the same process wrote both).
+
+**The leader publishes the control branch.** After every pass, outside the locks, `publishControlBranch` pushes the
+checkout's head to the same branch name when `refs/remotes/<remote>/<branch>` is not already that head. A failed push is
+logged (WARNING) and leaves the tracking ref behind, so the next pass tries again; it never changes a pass's answer.
+Only that branch and `refs/synesis/*` are pushed.
+
+**A member's new lane is based on the leader's head: the member's own control checkout follows it.** When a worktree is
+about to be created (`ProviderWorktreeAllocation`), a member fetches the control branch into
+`refs/remotes/<remote>/<branch>` and fast-forwards its control checkout when it holds nothing Synesis did not put there
+(`ControlBranchAdvancementService.foreignChanges`) and can fast-forward. The binding's `baseCommit`, the intent's base,
+`CONTROL_BASE_ADVANCED`, `workspaceGenerationFresh` and the worktree itself all start from the control checkout's `HEAD`,
+so this is one change at one place; basing lanes on the remote-tracking ref instead would have changed all of them. It is
+the operation the leader already performs on its own checkout at each integration. Checkout dirty or not a fast-forward:
+left untouched, the lane is based on the older head, and the leader's `STALE_BASE` (`isAncestor(base, controlHead)`)
+still accepts it while that head is in the leader's history. A fetch that fails fails the allocation
+(`CODE_REMOTE_UNAVAILABLE`); a member without a remote setting gets `CODE_REMOTE_NOT_CONFIGURED`.
+
+**Timeouts.** `GitProcessRunner.runRemote`: 30 s (local commands keep 10 s), same environment, hooks off, no signing, same
+output cap. A push or fetch over a network does not fit in 10 s; 30 s bounds the time a member's append lock is held
+during a capability publication. `GIT_CONFIG_NOGLOBAL` stays, so a remote that needs a credential helper from global
+configuration cannot be used; an SSH agent or credentials in the clone's own configuration can.
+
+**Found on the way.**
+
+- Fixed: after the leader integrated a member's lane, `finalizeIntegratedLanes` appended `WORK_INTENT_RELEASED` signed
+  by the leader for a participant the member introduced, and the participant guard (slice 1) refused it with
+  `PARTICIPANT_NOT_OWNED_BY_SIGNER`, so the pass answered `FAILED` / `INTEGRATION_TERMINALIZATION_FAILED` after the
+  branch advanced. The leader decides for the project, so its own entries may act for any participant: the guard now
+  applies to a member's entries only, on the member and when the leader judges a proposal
+  (`ProjectionView.leaderEntry`, set off while `PredictionEventStore.admit` runs). On one computer nothing changes.
+  `MemberReplicationTest.theLeaderMayReleaseAMembersLaneItDecidedToMerge` is new; the attribution test now checks
+  the member's own store instead of a leader store appending with a member's key, which no real path does.
+  `CodeExchangeMemberTest` now asserts the pass `COMPLETED`; its second lane starts a new work group, because the
+  merged lane was its group's only one and the group completed.
+- Refs of a completion that is unwound are removed locally and stay on the remote. Nothing prunes `refs/synesis/*`.
+- ADR "Pre-push hooks": the tests use a local bare repository; a push to a real GitHub repository is still untested.
+
+Tests: `CodeExchangeLeaderTest` (fetch and integrate from a bare remote, control branch published; undeclared path
+refused; fetch failure; not configured; failed control push does not block and is retried; single computer pushes
+nothing; `ensureCommit`), `CodeExchangeMemberTest` (real sessions, completion and integration: refs on the remote when
+each entry is proposed, the leader integrates from fetched objects, the member's next lane is based on the integrated
+head; push failure proposes nothing; no remote setting; no settings, no push), `ReplicationCodeRemoteSettingTest`.
+Each fails with the push, the fetch, the control publish, the follow, the path check or the role gate removed in turn.
+
 # 2026-10-16 — A merge no longer holds the log; only the leader merges, and a member's entry triggers a pass (ADR-0098 step 2, slice 3a)
 
 `IntegrationOrchestrationService` held the project append lock for a whole integration attempt, through the worktree,

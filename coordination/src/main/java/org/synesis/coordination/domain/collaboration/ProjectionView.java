@@ -36,4 +36,15 @@ public interface ProjectionView {
      * @return task completion projection
      */
     TaskCompletionProjection taskCompletionProjection();
+
+    /**
+     * Reports whether the entry being judged is the leader's own: written locally on a computer that is not a
+     * member. The leader decides for the project, so it may act for any participant, for example releasing a
+     * member's lane after merging it; a member's entry, proposed or judged on the member, may act only for its own.
+     *
+     * @return {@code true} for a local entry on the leader or a single computer
+     */
+    default boolean leaderEntry() {
+        return false;
+    }
 }

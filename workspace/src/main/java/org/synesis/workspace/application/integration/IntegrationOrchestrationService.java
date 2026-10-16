@@ -36,6 +36,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
 import org.synesis.workspace.application.project.execution.ExecutionResult;
@@ -82,6 +83,8 @@ public final class IntegrationOrchestrationService {
 
     /** How many times the append lock is waited for (two seconds each) before an attempt is left for the next pass. */
     private static final int RECORDING_LOCK_TRIES = 5;
+
+    private static final System.Logger LOG = System.getLogger(IntegrationOrchestrationService.class.getName());
 
     private static final AgentResponse LOCK_UNAVAILABLE = new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.RETRY, Map.of("failure", "INTEGRATION_LOCK_UNAVAILABLE"));
 
@@ -330,6 +333,7 @@ public final class IntegrationOrchestrationService {
     private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots, String controlHead, PredictionEventStore store) {
         Set<String> changed = new java.util.HashSet<>();
         List<String> failures = new ArrayList<>();
+        boolean exchangesCode = exchangesCode(store);
         if (store.collaborationProjection().requests().stream()
                 .anyMatch(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING && IntegrationCandidatePolicy.liveCoordinationRequest(store, request))) {
             failures.add("UNRESOLVED_COORDINATION_REQUEST");
@@ -341,6 +345,9 @@ public final class IntegrationOrchestrationService {
             }
             if (!isAncestor(controlRoot, snapshot.baseCommit(), controlHead)) {
                 failures.add("STALE_BASE:" + snapshot.snapshotId());
+            }
+            if (exchangesCode) {
+                failures.addAll(undeclaredPaths(controlRoot, snapshot));
             }
             WorkIntent laneIntent = IntegrationCandidatePolicy.currentIntentForSnapshot(store, snapshot);
             boolean exactLane = laneIntent != null && laneIntent.intentId().equals(snapshot.provenance().laneId());
@@ -400,6 +407,37 @@ public final class IntegrationOrchestrationService {
         return List.copyOf(failures);
     }
 
+    /** Whether commits reach this log's computer from others, so that the paths a snapshot declares were not made here. */
+    private static boolean exchangesCode(PredictionEventStore store) {
+        try {
+            return CodeRemote.of(store.rootDirectory()).isPresent();
+        } catch (CodeRemote.Refused refused) {
+            return true;
+        }
+    }
+
+    /**
+     * The paths a snapshot's commit changes that its record does not declare. The record is a member's claim;
+     * the claim fence and the overlap check run on it, while the cherry-pick applies what the commit really
+     * changes, so the leader reads that from the commit it fetched and refuses a record that hides a path.
+     */
+    private static List<String> undeclaredPaths(Path controlRoot, TaskSnapshotRecord snapshot) {
+        Set<String> declared = new java.util.HashSet<>();
+        snapshot.changedPaths().forEach(path -> declared.add(path.replace('\\', '/')));
+        List<String> undeclared = new ArrayList<>();
+        try {
+            String changes = GitProcessRunner.run(controlRoot, "diff-tree", "-r", "--no-commit-id", "--name-only", "--no-renames", "-z", snapshot.commitSha() + "^", snapshot.commitSha());
+            for (String path : changes.split("\0")) {
+                if (!path.isEmpty() && !declared.contains(path.replace('\\', '/'))) {
+                    undeclared.add("UNDECLARED_PATH:" + path);
+                }
+            }
+        } catch (IOException unreadable) {
+            undeclared.add("UNVERIFIABLE_PATHS:" + snapshot.snapshotId());
+        }
+        return undeclared;
+    }
+
     private static boolean isAncestor(Path workdir, String base, String head) {
         try {
             return GitProcessRunner.isAncestor(workdir, base, head);
@@ -444,11 +482,75 @@ public final class IntegrationOrchestrationService {
             // snapshots reach the leader's log as proposals and the leader's pass integrates them.
             return NOTHING_TO_INTEGRATE;
         }
+        AgentResponse response = integrate(controlRoot, store, identity, operatorAsked);
+        publishControlBranch(controlRoot, store);
+        return response;
+    }
+
+    /**
+     * Gives the code remote the leader's control branch once a pass has run, outside every lock. It asks the
+     * remote nothing when the remote is known to hold the head, so a failed push is simply tried again by the
+     * next pass, and a remote that is down never delays the log (ADR-0098).
+     */
+    private static void publishControlBranch(Path controlRoot, PredictionEventStore store) {
+        try {
+            Optional<CodeRemote> remote = CodeRemote.of(store.rootDirectory());
+            if (remote.isPresent()) {
+                remote.get().publishControlBranch(controlRoot);
+            }
+        } catch (CodeRemote.Refused refused) {
+            if (CodeRemote.UNAVAILABLE.equals(refused.code())) {
+                LOG.log(System.Logger.Level.WARNING, "The control branch was not pushed; the next pass tries again. {0}", refused.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Brings in the commits the log names before a pass reads them. The leader's clone holds the lanes of
+     * its own computer only; the members' snapshots were pushed to the code remote before they were proposed.
+     * The pass is not started when they cannot be had, because its checks would then record work as missing.
+     *
+     * @return the pass's response when it must not run, {@code null} when it may
+     */
+    private static AgentResponse fetchCommitsNamedByLog(Path controlRoot, PredictionEventStore store) {
+        Optional<CodeRemote> remote = Optional.empty();
+        CodeRemote.Refused notConfigured = null;
+        try {
+            remote = CodeRemote.of(store.rootDirectory());
+        } catch (CodeRemote.Refused refused) {
+            notConfigured = refused;
+        }
+        if (remote.isEmpty() && notConfigured == null) {
+            return null;
+        }
+        try {
+            if (IntegrationCandidatePolicy.currentRevisions(new PredictionEventStore(store.rootDirectory(), store.projectId())).isEmpty()) {
+                return null;
+            }
+        } catch (IOException | java.security.GeneralSecurityException unreadable) {
+            return null;
+        }
+        if (notConfigured != null) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", notConfigured.code(), "message", notConfigured.getMessage()));
+        }
+        try {
+            remote.get().fetchSynesisRefs(controlRoot);
+            return null;
+        } catch (CodeRemote.Refused refused) {
+            return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, Map.of("pending", 1, "failure", refused.code(), "message", refused.getMessage()));
+        }
+    }
+
+    private AgentResponse integrate(Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked) {
         try (ProjectIntegrationLock onePass = ProjectIntegrationLock.tryAcquire(store.rootDirectory())) {
             if (onePass == null) {
                 // The pass that holds the lock integrates what is ready; this caller waits like any
                 // other for an attempt in progress.
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", 1, "integrationRunning", true));
+            }
+            AgentResponse fetchFailed = fetchCommitsNamedByLog(controlRoot, store);
+            if (fetchFailed != null) {
+                return fetchFailed;
             }
             AtomicReference<Attempt> started = new AtomicReference<>();
             AgentResponse notStarted = startAttempt(controlRoot, store, identity, operatorAsked, started);

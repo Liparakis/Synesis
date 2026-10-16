@@ -1,0 +1,255 @@
+package org.synesis.workspace.application.integration;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.persistence.LeaderChannel;
+import org.synesis.coordination.persistence.LeaderEndpoint;
+import org.synesis.coordination.persistence.ProposalOutcome;
+import org.synesis.coordination.persistence.ReplicationRole;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.link.identity.IdentityBootstrap;
+import org.synesis.link.identity.NodeIdentity;
+
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
+import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
+import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
+import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.test.ProviderTestSupport;
+import org.synesis.workspace.test.TestGit;
+
+/**
+ * Code moves through a shared Git remote between a member's clone and the leader's (ADR-0098, step 2, slice 3b),
+ * driven through the real session, completion and integration services. The log is exchanged in process; the code is
+ * exchanged through a bare repository.
+ */
+class CodeExchangeMemberTest {
+
+    /** The in-process link to the leader, noting what the code remote held each time an entry was proposed. */
+    private static final class RecordingChannel implements LeaderChannel {
+
+        private final LeaderEndpoint endpoint;
+        private final String sender;
+        private final Path remote;
+        final List<String> proposed = new ArrayList<>();
+        final List<String> refsHeld = new ArrayList<>();
+
+        RecordingChannel(LeaderEndpoint endpoint, String sender, Path remote) {
+            this.endpoint = endpoint;
+            this.sender = sender;
+            this.remote = remote;
+        }
+
+        @Override
+        public ProposalOutcome propose(byte[] encodedEvent) throws IOException {
+            proposed.add(PredictionEvent.decode(encodedEvent).type().name());
+            refsHeld.add(TestGit.output(remote, "for-each-ref", "--format=%(refname)", "refs/synesis"));
+            try {
+                return endpoint.accept(encodedEvent, sender);
+            } catch (GeneralSecurityException failure) {
+                throw new IOException(failure);
+            }
+        }
+
+        @Override
+        public List<byte[]> pull(long after, int maxEntries, int maxBytes) throws IOException {
+            try {
+                return endpoint.entriesAfter(after, maxEntries, maxBytes);
+            } catch (GeneralSecurityException failure) {
+                throw new IOException(failure);
+            }
+        }
+
+        boolean proposed(PredictionEventType type) {
+            return proposed.contains(type.name());
+        }
+
+        String refsHeldWhenProposing(PredictionEventType type) {
+            return refsHeld.get(proposed.indexOf(type.name()));
+        }
+    }
+
+    @TempDir
+    Path temp;
+
+    private Project leader;
+    private Path remote;
+    private String branch;
+    private Path memberRoot;
+    private ProjectLocation member;
+    private NodeIdentity memberIdentity;
+    private RecordingChannel channel;
+    private Path memberCoordination;
+    private final ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+
+    @BeforeEach
+    void setUp() throws Exception {
+        Files.createDirectories(temp.resolve("leader"));
+        leader = new Project(temp.resolve("leader"));
+        remote = temp.resolve("code.git");
+        TestGit.output(temp, "init", "--bare", remote.toString());
+        leader.git("remote", "add", "origin", remote.toString());
+        branch = leader.git("rev-parse", "--abbrev-ref", "HEAD");
+        leader.git("push", "origin", "HEAD:refs/heads/" + branch);
+        TestGit.run(remote, "symbolic-ref", "HEAD", "refs/heads/" + branch);
+
+        memberRoot = temp.resolve("member");
+        TestGit.run(temp, "clone", remote.toString(), memberRoot.toString());
+        TestGit.run(memberRoot, "config", "user.name", "Member");
+        TestGit.run(memberRoot, "config", "user.email", "member@example.invalid");
+        var initialized = new ProjectApplicationService().initReplica(memberRoot, leader.location.identity(), false);
+        member = initialized.location();
+        memberIdentity = new IdentityBootstrap(member.profile().resolve("link")).loadOrCreate().identity();
+        memberCoordination = member.coordinationDirectory();
+    }
+
+    @AfterEach
+    void unregister() throws Exception {
+        ReplicationRole.register(memberCoordination, ReplicationRole.leader());
+    }
+
+    /** Both computers get their replication settings; the member's log proposes to the leader's in process. */
+    private void replicate() throws Exception {
+        ReplicationSettings.leader(Set.of(memberIdentity.nodeId())).withCodeRemote("origin").write(leader.root.resolve(".synesis/coordination"));
+        ReplicationSettings.member(leader.identity.nodeId()).withCodeRemote("origin").write(memberCoordination);
+        channel = new RecordingChannel(new LeaderEndpoint(leader.root.resolve(".synesis/coordination"), leader.location.projectId(), Set.of(memberIdentity.nodeId())),
+                memberIdentity.nodeId(), remote);
+        ReplicationRole.register(memberCoordination, ReplicationRole.memberOf(leader.identity.nodeId(), channel));
+        ProviderTestSupport.install(member, "codex");
+    }
+
+    private Path startLane(String connection, String path) throws Exception {
+        return startLane(connection, path, null);
+    }
+
+    private Path startLane(String connection, String path, java.util.UUID workGroup) throws Exception {
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", connection, null, false));
+        var binding = bindings.find(member, "codex", connection).orElseThrow();
+        assertNotNull(binding.worktreePath(), binding.toString());
+        bindings.verifyWorkspaceTrust(member, "codex", binding.sessionId(), Path.of(binding.worktreePath()));
+        new WorkspaceCollaborationService().announce(memberRoot, "codex", connection, "Write " + path, "The file exists", List.of(ResourceSelector.pathExact(path)), workGroup);
+        Path worktree = Path.of(binding.worktreePath());
+        Files.createDirectories(worktree.resolve(path).getParent());
+        Files.writeString(worktree.resolve(path), "written on the member's computer\n");
+        return worktree;
+    }
+
+    private AgentResponse finish(String connection) {
+        return new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(memberRoot, "codex", connection, "Wrote the file"));
+    }
+
+    private String remoteRefs() throws IOException {
+        return TestGit.output(remote, "for-each-ref", "--format=%(refname)", "refs/synesis");
+    }
+
+    @Test
+    void aMembersLaneTravelsThroughTheRemoteAndTheNextLaneStartsOnTheIntegratedHead() throws Exception {
+        replicate();
+        startLane("m-1", "src/a.txt");
+
+        AgentResponse finished = finish("m-1");
+
+        assertTrue(channel.proposed(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
+        assertTrue(channel.refsHeldWhenProposing(PredictionEventType.COMPLETION_PREPARED).contains("refs/synesis/prepared/"),
+                "the prepared commit was on the remote before its entry was proposed");
+        assertTrue(channel.refsHeldWhenProposing(PredictionEventType.TASK_SNAPSHOT_CREATED).contains("refs/synesis/snapshots/"),
+                "the snapshot commit was on the remote before its entry was proposed");
+        String snapshotId = leader.store().taskCompletionProjection().allSnapshots().getFirst().snapshotId();
+        String snapshotCommit = leader.store().taskCompletionProjection().allSnapshots().getFirst().commitSha();
+        assertFalse(commitInLeaderClone(snapshotCommit), "the leader's clone does not hold the member's commit yet");
+
+        // After integrating, the leader releases the member's lane: its own entry, which may act for any participant.
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toJson());
+        assertEquals(TaskCompletionState.INTEGRATED, leader.state(snapshotId));
+        assertTrue(leader.headHas("src/a.txt"));
+        assertEquals(leader.head(), TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "the leader published the control branch");
+
+        // The merged lane was the group's only one, so the group completed; new work starts a new group.
+        Path next = startLane("m-2", "src/b.txt", java.util.UUID.randomUUID());
+
+        assertEquals(leader.head(), TestGit.output(memberRoot, "rev-parse", "HEAD"), "the member's checkout followed the leader");
+        assertEquals(leader.head(), bindings.find(member, "codex", "m-2").orElseThrow().baseCommit(), "the new lane is based on the integrated head");
+        assertTrue(Files.exists(next.resolve("src/a.txt")), "the new lane sees the integrated work");
+    }
+
+    @Test
+    void aRemoteThatRefusesThePushStopsTheCompletionBeforeAnythingIsProposed() throws Exception {
+        replicate();
+        startLane("m-1", "src/a.txt");
+        TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
+        int proposedBefore = channel.proposed.size();
+
+        AgentResponse finished = finish("m-1");
+
+        assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
+        assertTrue(finished.toJson().contains("CODE_REMOTE_UNAVAILABLE"), finished.toJson());
+        assertFalse(channel.proposed(PredictionEventType.COMPLETION_PREPARED));
+        assertFalse(channel.proposed(PredictionEventType.TASK_SNAPSHOT_CREATED));
+        assertEquals(proposedBefore, channel.proposed.size(), "no entry was proposed");
+        assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED));
+    }
+
+    @Test
+    void aMemberWithNoCodeRemoteSettingRefusesAndPushesNothing() throws Exception {
+        replicate();
+        startLane("m-1", "src/a.txt");
+        ReplicationSettings.member(leader.identity.nodeId()).write(memberCoordination);
+
+        AgentResponse finished = finish("m-1");
+
+        assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
+        assertTrue(finished.toJson().contains("CODE_REMOTE_NOT_CONFIGURED"), finished.toJson());
+        assertFalse(channel.proposed(PredictionEventType.COMPLETION_PREPARED));
+        assertEquals("", remoteRefs());
+    }
+
+    @Test
+    void aProjectWithNoReplicationSettingsPushesAndFetchesNothing() throws Exception {
+        ProviderTestSupport.install(member, "codex");
+        String branchBefore = TestGit.output(remote, "rev-parse", "refs/heads/" + branch);
+        startLane("m-1", "src/a.txt");
+
+        AgentResponse finished = finish("m-1");
+
+        assertEquals(AgentStatus.COMPLETED, finished.status(), finished.toJson());
+        assertEquals("", remoteRefs(), "no snapshot or prepared ref reached the remote");
+        assertEquals(branchBefore, TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "the control branch was not pushed");
+    }
+
+    private boolean commitInLeaderClone(String commit) {
+        try {
+            TestGit.output(leader.root, "cat-file", "-e", commit + "^{commit}");
+            return true;
+        } catch (IOException absent) {
+            return false;
+        }
+    }
+}

@@ -20,6 +20,13 @@ public final class GitProcessRunner {
      */
     static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
     /**
+     * Maximum lifetime of one Git command that talks to a remote. A push or fetch moves objects over a
+     * network, which the local bound of ten seconds would cut off on an ordinary connection. Thirty
+     * seconds is still short enough that a lock held across one (a member's append lock, a
+     * capability publication) is lost to a slow remote for a bounded time only.
+     */
+    static final Duration REMOTE_TIMEOUT = Duration.ofSeconds(30);
+    /**
      * Maximum merged output retained for one local Git command.
      */
     public static final int DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -37,6 +44,19 @@ public final class GitProcessRunner {
      */
     public static String run(Path workdir, String... arguments) throws IOException {
         return runInternal(workdir, null, DEFAULT_TIMEOUT, true, arguments).output();
+    }
+
+    /**
+     * Runs a required Git command that talks to a remote ({@code push}, {@code fetch}), under the same
+     * environment and hook policy as every other command but with {@link #REMOTE_TIMEOUT}.
+     *
+     * @param workdir   Git working directory
+     * @param arguments Git arguments after {@code git}
+     * @return bounded UTF-8 output
+     * @throws IOException if Git fails to start, times out, or exits nonzero
+     */
+    public static String runRemote(Path workdir, String... arguments) throws IOException {
+        return runInternal(workdir, null, REMOTE_TIMEOUT, true, arguments).output();
     }
 
     /**

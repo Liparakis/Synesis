@@ -199,9 +199,11 @@ Local files of a computer, never sent to a peer, in the coordination folder
 beside `events/`:
 
 - `replication.properties`: `role=member` then `leader=<node ID>`, or
-  `role=leader` then any number of `member=<node ID>`. Absent means leader. A
-  file that does not follow this exactly makes the log refuse every append and
-  pull with `REPLICATION_ROLE_INVALID`.
+  `role=leader` then any number of `member=<node ID>`. Either form may carry one
+  `code.remote=<name>`, the name of the Git remote of the computer's clone through
+  which code moves (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, never a URL). Absent means
+  leader. A file that does not follow this exactly makes the log refuse every
+  append and pull with `REPLICATION_ROLE_INVALID`.
 - `replication.endpoint`: `127.0.0.1:<port>`, written by a member's
   coordination server while it runs; only a loopback host is ever used.
 - `replication.status`: `CONNECTED`, `DISCONNECTED` or `DIVERGED`.

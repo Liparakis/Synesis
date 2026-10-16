@@ -57,6 +57,9 @@ final class ParticipantAttribution {
      * @throws IOException with {@code PARTICIPANT_NOT_OWNED_BY_SIGNER}
      */
     static void require(PredictionEvent event, ProjectionView view) throws IOException {
+        if (view.leaderEntry()) {
+            return;
+        }
         for (ParticipantId participant : actingFor(event, view)) {
             Optional<String> introducer = view.collaborationProjection().introducingNode(participant);
             if (introducer.isPresent() && !introducer.get().equals(event.actorNodeId())) {

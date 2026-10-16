@@ -93,6 +93,11 @@ public final class PredictionEventStore implements ProjectionView {
      */
     private final ReplicationRole role;
     /**
+     * Set while {@link #admit} judges a member's proposal, so the admission rules know the entry is not the
+     * leader's own.
+     */
+    private boolean admittingProposal;
+    /**
      * Projection for prediction-specific state.
      */
     private final PredictionProjection projection = new PredictionProjection();
@@ -447,12 +452,15 @@ public final class PredictionEventStore implements ProjectionView {
         if (event.sequence() != head.sequence() + 1L || !Arrays.equals(event.previousDigest(), head.digest())) {
             return new ProposalOutcome.HeadMoved(head.sequence());
         }
+        admittingProposal = true;
         try {
             validateProjections(event);
         } catch (CoordinationException refusal) {
             return new ProposalOutcome.Refused(refusal.code());
         } catch (RuntimeException malformed) {
             return new ProposalOutcome.Refused("PROPOSAL_PAYLOAD_INVALID");
+        } finally {
+            admittingProposal = false;
         }
         try {
             persistEvent(event, event.sequence());
@@ -685,6 +693,11 @@ public final class PredictionEventStore implements ProjectionView {
      */
     public ProjectId projectIdentity() {
         return new ProjectId(projectId);
+    }
+
+    @Override
+    public boolean leaderEntry() {
+        return !role.isMember() && !admittingProposal;
     }
 
     /**

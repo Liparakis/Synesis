@@ -1,0 +1,259 @@
+package org.synesis.workspace.application.integration;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.CompletionPreparedPayload;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
+
+import org.synesis.workspace.agent.AgentReason;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.control.CodeRemote;
+import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Lane;
+import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
+import org.synesis.workspace.test.TestGit;
+
+/**
+ * The leader's side of code exchange (ADR-0098, step 2, slice 3b): the commits a member's snapshot names are on the
+ * code remote and not in the leader's clone, and the leader's pass fetches them, recomputes what they change,
+ * advances the control branch and publishes it. A project with no replication settings never touches a remote.
+ */
+class CodeExchangeLeaderTest {
+
+    /** A leader's project, a bare code remote, and a clone standing for the member's computer. */
+    private static final class Computers {
+
+        final Project leader;
+        final Path remote;
+        final Path member;
+        final String branch;
+
+        Computers(Path temp, boolean replicated) throws Exception {
+            Files.createDirectories(temp.resolve("leader"));
+            leader = new Project(temp.resolve("leader"));
+            remote = temp.resolve("code.git");
+            TestGit.output(temp, "init", "--bare", remote.toString());
+            leader.git("remote", "add", "origin", remote.toString());
+            branch = leader.git("rev-parse", "--abbrev-ref", "HEAD");
+            leader.git("push", "origin", "HEAD:refs/heads/" + branch);
+            TestGit.run(remote, "symbolic-ref", "HEAD", "refs/heads/" + branch);
+            member = temp.resolve("member");
+            TestGit.run(temp, "clone", remote.toString(), member.toString());
+            TestGit.run(member, "config", "user.name", "Member");
+            TestGit.run(member, "config", "user.email", "member@example.invalid");
+            if (replicated) {
+                ReplicationSettings.leader(Set.of()).withCodeRemote("origin").write(coordination());
+            }
+        }
+
+        Path coordination() {
+            return leader.root.resolve(".synesis/coordination");
+        }
+
+        String remoteRefs() throws IOException {
+            return TestGit.output(remote, "for-each-ref", "--format=%(refname) %(objectname)");
+        }
+
+        /**
+         * What the member's computer does for a lane: commits {@code files} in its own clone, pushes the prepared and
+         * snapshot refs to the remote, and the entries naming them reach the leader's log. The leader's clone never
+         * holds the commit. {@code declared} is the member's claim of what the commit changes.
+         */
+        String publishFromMember(Lane lane, String snapshotId, Map<String, String> files, List<String> declared) throws Exception {
+            String base = TestGit.output(member, "rev-parse", "HEAD");
+            for (Map.Entry<String, String> file : files.entrySet()) {
+                Files.createDirectories(member.resolve(file.getKey()).getParent());
+                Files.writeString(member.resolve(file.getKey()), file.getValue());
+                TestGit.run(member, "add", file.getKey());
+            }
+            TestGit.run(member, "commit", "-m", snapshotId);
+            String commit = TestGit.output(member, "rev-parse", "HEAD");
+            TestGit.run(member, "reset", "--hard", base);
+            String preparedRef = "refs/synesis/prepared/cmp_" + snapshotId;
+            String snapshotRef = "refs/synesis/snapshots/" + snapshotId;
+            TestGit.run(member, "update-ref", preparedRef, commit);
+            TestGit.run(member, "update-ref", snapshotRef, commit);
+            TestGit.run(member, "push", "origin", preparedRef + ":" + preparedRef, snapshotRef + ":" + snapshotRef);
+            String tree = TestGit.output(member, "rev-parse", commit + "^{tree}");
+            SnapshotProvenance provenance = new SnapshotProvenance(leader.group, lane.id(), WorkIntent.defaultAuthorityLineage(lane.id()), lane.participant(), "binding", 1,
+                    List.of(), List.of(), declared.stream().map(path -> "PATH_EXACT:" + path).toList(), snapshotRef, tree, "manifest");
+            TaskSnapshotPayload snapshot = new TaskSnapshotPayload(lane.task(), snapshotId, leader.identity.nodeId(), "sup", "worker", "session", base, commit, declared, List.of(),
+                    "snapshot", provenance, false);
+            CompletionPreparedPayload prepared = new CompletionPreparedPayload(lane.task(), "cmp_" + snapshotId, lane.id(), 1, base, preparedRef, tree, declared);
+            PredictionEventStore store = leader.store();
+            store.append(UUID.randomUUID(), PredictionEventType.COMPLETION_PREPARED, leader.identity.nodeId(), prepared.encode(), leader.identity);
+            store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, leader.identity.nodeId(), snapshot.encode(), leader.identity);
+            return commit;
+        }
+    }
+
+    @Test
+    void theLeaderFetchesTheMembersCommitIntegratesItAndPublishesTheControlBranch(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, true);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        String commit = computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "from the member\n"), List.of("src/a.txt"));
+        assertFalse(hasCommit(leader.root, commit), "the leader's clone does not hold the member's commit before the pass");
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toString());
+        assertEquals(TaskCompletionState.INTEGRATED, leader.state("snap_1"));
+        assertTrue(leader.headHas("src/a.txt"));
+        assertEquals(leader.head(), TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch),
+                "the control branch was pushed after it advanced");
+    }
+
+    @Test
+    void aCommitThatChangesMoreThanTheRecordDeclaresIsRefusedNotIntegrated(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, true);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        String head = leader.head();
+        // The record claims one claimed file; the commit also carries a file nobody claimed.
+        computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "claimed\n", "src/secret.txt", "smuggled\n"), List.of("src/a.txt"));
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.BLOCKED, pass.status(), pass.toString());
+        assertEquals(head, leader.head());
+        assertFalse(leader.headHas("src/secret.txt"));
+        assertFalse(leader.headHas("src/a.txt"));
+        assertEquals(0, leader.count(PredictionEventType.INTEGRATION_ATTEMPT_STARTED));
+    }
+
+    @Test
+    void aRemoteThatCannotBeFetchedFromStartsNoAttemptAndNamesTheCode(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, true);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "x\n"), List.of("src/a.txt"));
+        leader.git("remote", "set-url", "origin", temp.resolve("gone.git").toString());
+        String head = leader.head();
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.WAITING, pass.status(), pass.toString());
+        assertEquals(AgentReason.INTEGRATION_PENDING, pass.reason(), pass.toString());
+        assertEquals("CODE_REMOTE_UNAVAILABLE", ((Map<?, ?>) pass.result()).get("failure"));
+        assertEquals(0, leader.count(PredictionEventType.INTEGRATION_ATTEMPT_STARTED));
+        assertEquals(0, leader.count(PredictionEventType.TASK_INTEGRATED));
+        assertEquals(head, leader.head());
+    }
+
+    @Test
+    void aLeaderWhoseSettingsNameNoRemoteRefusesWorkItCannotFetch(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, false);
+        ReplicationSettings.leader(Set.of()).write(computers.coordination());
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "x\n"), List.of("src/a.txt"));
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.BLOCKED, pass.status(), pass.toString());
+        assertEquals("CODE_REMOTE_NOT_CONFIGURED", ((Map<?, ?>) pass.result()).get("failure"));
+        assertEquals(0, leader.count(PredictionEventType.INTEGRATION_ATTEMPT_STARTED));
+    }
+
+    @Test
+    void aControlBranchPushThatFailsNeverBlocksTheLogAndTheNextPassPushesAgain(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, true);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "x\n"), List.of("src/a.txt"));
+        String branchBefore = TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch);
+        // Somebody else moved the remote branch, so the leader's push cannot fast-forward it.
+        TestGit.run(computers.member, "commit", "--allow-empty", "-m", "someone else");
+        TestGit.run(computers.member, "push", "origin", "HEAD:refs/heads/" + computers.branch);
+        String moved = TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch);
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toString());
+        assertEquals(TaskCompletionState.INTEGRATED, leader.state("snap_1"));
+        assertEquals(moved, TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch), "the remote refused the push");
+
+        TestGit.run(computers.remote, "update-ref", "refs/heads/" + computers.branch, branchBefore);
+        AgentResponse next = leader.pump();
+
+        assertEquals(AgentStatus.READY, next.status(), next.toString());
+        assertEquals(leader.head(), TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch), "the next pass published the branch");
+    }
+
+    @Test
+    void aSingleComputerProjectNeverTouchesItsRemote(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, false);
+        Project leader = computers.leader;
+        String refsBefore = computers.remoteRefs();
+        Lane lane = leader.announce("agt_lane", "src/a.txt");
+        leader.publish(lane, "snap_1", 1, "src/a.txt", "x\n");
+
+        AgentResponse pass = leader.pump();
+
+        assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toString());
+        assertEquals(refsBefore, computers.remoteRefs(), "no ref was pushed");
+        assertNotEquals(leader.head(), TestGit.output(computers.remote, "rev-parse", "refs/heads/" + computers.branch), "the control branch was not pushed");
+    }
+
+    @Test
+    void aReviewOrValidationWorktreeFetchesTheNamedCommitOnlyWhenItIsMissing(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, true);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        String commit = computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "x\n"), List.of("src/a.txt"));
+        assertFalse(hasCommit(leader.root, commit));
+
+        CodeRemote.ensureCommit(computers.coordination(), leader.root, commit);
+
+        assertTrue(hasCommit(leader.root, commit));
+        leader.git("remote", "set-url", "origin", temp.resolve("gone.git").toString());
+        CodeRemote.ensureCommit(computers.coordination(), leader.root, commit);
+
+        String absent = "0123456789012345678901234567890123456789";
+        CodeRemote.Refused refused = org.junit.jupiter.api.Assertions.assertThrows(CodeRemote.Refused.class,
+                () -> CodeRemote.ensureCommit(computers.coordination(), leader.root, absent));
+        assertEquals(CodeRemote.UNAVAILABLE, refused.code());
+    }
+
+    @Test
+    void aSingleComputerNeverFetchesAMissingCommit(@TempDir Path temp) throws Exception {
+        Computers computers = new Computers(temp, false);
+        Project leader = computers.leader;
+        Lane lane = leader.announce("agt_member", "src/a.txt");
+        String commit = computers.publishFromMember(lane, "snap_1", Map.of("src/a.txt", "x\n"), List.of("src/a.txt"));
+
+        CodeRemote.ensureCommit(computers.coordination(), leader.root, commit);
+
+        assertFalse(hasCommit(leader.root, commit));
+    }
+
+    private static boolean hasCommit(Path repository, String commit) {
+        try {
+            TestGit.output(repository, "cat-file", "-e", commit + "^{commit}");
+            return true;
+        } catch (IOException absent) {
+            return false;
+        }
+    }
+}

@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
@@ -24,12 +25,16 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * is a leader, which is every log today. A file that cannot be read or parsed is an error, never a leader.</p>
  *
  * <p>The format is strict and line based: {@code role=leader} or {@code role=member} first, then for a member one
- * {@code leader=<node ID>}, for a leader any number of {@code member=<node ID>}. Nothing else is accepted.</p>
+ * {@code leader=<node ID>}, for a leader any number of {@code member=<node ID>}, and in either case at most one
+ * {@code code.remote=<name>}: the name of the remote of the project's clone through which code moves between
+ * computers. It is a name, never a URL, and is never guessed: a computer with a role and no code remote refuses
+ * the operations that need one. Nothing else is accepted.</p>
  *
  * @param leaderNodeId the leader's node, for a member; null for the leader
  * @param members      nodes allowed to propose, for the leader; empty for a member
+ * @param codeRemote   name of the remote code moves through; null when none is configured
  */
-public record ReplicationSettings(String leaderNodeId, Set<String> members) {
+public record ReplicationSettings(String leaderNodeId, Set<String> members, String codeRemote) {
 
     /**
      * Name of the file in the coordination folder.
@@ -43,12 +48,35 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members) {
 
     private static final int MAX_FILE_BYTES = 64 * 1024;
     private static final int MAX_NODE_ID_CHARS = 128;
+    private static final String CODE_REMOTE_KEY = "code.remote";
+    /** A remote name cannot begin with a dash, so it can never be taken for an option of the command it is given to. */
+    private static final Pattern REMOTE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
 
     /**
      * Normalizes the sets.
      */
     public ReplicationSettings {
         members = Set.copyOf(members);
+    }
+
+    /**
+     * Settings with no code remote, as every file was before {@code code.remote} existed.
+     *
+     * @param leaderNodeId the leader's node, for a member; null for the leader
+     * @param members      nodes allowed to propose, for the leader
+     */
+    public ReplicationSettings(String leaderNodeId, Set<String> members) {
+        this(leaderNodeId, members, null);
+    }
+
+    /**
+     * Returns these settings with the remote that code moves through.
+     *
+     * @param remoteName name of a remote of the project's clone
+     * @return the settings including the remote
+     */
+    public ReplicationSettings withCodeRemote(String remoteName) {
+        return new ReplicationSettings(leaderNodeId, members, CoordinationNullException.requireNonNull(remoteName, "code remote"));
     }
 
     /**
@@ -114,9 +142,16 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members) {
         }
         String role = value(lines[0], "role");
         String leader = null;
+        String codeRemote = null;
         Set<String> members = new LinkedHashSet<>();
         for (int index = 1; index < lines.length - 1; index++) {
-            if (role.equals("member") && leader == null) {
+            if (lines[index].startsWith(CODE_REMOTE_KEY + "=")) {
+                String name = value(lines[index], CODE_REMOTE_KEY);
+                if (codeRemote != null || !REMOTE_NAME.matcher(name).matches()) {
+                    throw new CoordinationException(INVALID);
+                }
+                codeRemote = name;
+            } else if (role.equals("member") && leader == null) {
                 leader = nodeId(value(lines[index], "leader"));
             } else if (role.equals("leader")) {
                 if (!members.add(nodeId(value(lines[index], "member")))) {
@@ -131,9 +166,9 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members) {
                 if (leader == null) {
                     throw new CoordinationException(INVALID);
                 }
-                yield member(leader);
+                yield new ReplicationSettings(leader, Set.of(), codeRemote);
             }
-            case "leader" -> leader(members);
+            case "leader" -> new ReplicationSettings(null, members, codeRemote);
             default -> throw new CoordinationException(INVALID);
         };
     }
@@ -163,6 +198,9 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members) {
         StringBuilder text = new StringBuilder(isMember() ? "role=member\nleader=" + leaderNodeId + "\n"
                 : "role=leader\n");
         members.stream().sorted().forEach(member -> text.append("member=").append(member).append('\n'));
+        if (codeRemote != null) {
+            text.append(CODE_REMOTE_KEY).append('=').append(codeRemote).append('\n');
+        }
         parse(text.toString());
         Files.createDirectories(coordinationRoot);
         Path temporary = coordinationRoot.resolve(FILE + ".tmp-" + UUID.randomUUID());
