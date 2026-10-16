@@ -1,3 +1,21 @@
+# 2026-10-17 — The one link joined a friend's computer for real (remaster56, this PC and the VM)
+
+**Run.** Build `0.1.0-dev.remaster56-20261017` (`LINK_COMPATIBILITY=6`) on this PC (owner) and the bridged VM (friend).
+Disposable project `mp8-one-link`, code remote a bare repository on the VM over SSH (the only remote, so the link named
+it). `synesis link invite` printed `INVITE_LINK=synesis://project/SLP1-...` and `CODE_REMOTE_URL=ssh://...` and wrote no
+`replication.properties`. On the VM, `git clone` of that URL, then `synesis link join <link> --project ~/mp8`, printed
+`PROJECT_FOLDER`, `NEXT=the owner ... accepts` and an `ANSWER_LINK`. `synesis link answer` on the owner connected
+(`LINK_STATE=CONNECTED`); `synesis link requests` listed the VM's node; `synesis link accept` wrote `role=leader`,
+the member and `code.remote=shared`. The VM then showed `role=member`, `code.remote=origin` (its clone's matching remote)
+and `REPLICATION_STATE=CONNECTED`. Real current-build acceptance proven: owner invite, friend locate-by-remote, hold
+before accept, accept, follow. Not run here: the browser UI panels (unit-tested only), agents on this project (entry
+replication was proven by run 7), two separate networks.
+
+**Found.** The LAN dial from the VM did not get in: the Windows Firewall rule "Synesis Link" still named remaster47's
+`java.exe`. An update moves the runtime to a new version folder, and only `install --allow-link` replaces the rule, so an
+update without it silently stops this computer from hosting (the answer link still works, since the host then dials
+out). Recorded in the friend guide; not fixed.
+
 # 2026-10-16 — One link takes a friend into a project; the owner accepts each join (ADR-0098, "Joining, revised")
 
 **Spec.** The ADR section "Joining, revised (owner, 2026-10-16)" (uncommitted in the main checkout; not edited here).
