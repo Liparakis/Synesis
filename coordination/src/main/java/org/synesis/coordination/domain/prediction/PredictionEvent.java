@@ -364,6 +364,15 @@ public final class PredictionEvent {
     }
 
     /**
+     * Returns the node that signed this event; {@link #verify()} binds it to the signing key.
+     *
+     * @return signing node identifier
+     */
+    public String actorNodeId() {
+        return actorNodeId;
+    }
+
+    /**
      * Returns the monotonic project sequence.
      *
      * @return sequence

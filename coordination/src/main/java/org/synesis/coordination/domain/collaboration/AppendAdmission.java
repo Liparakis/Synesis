@@ -47,6 +47,7 @@ public final class AppendAdmission {
      * @throws IOException with the refusal code when the event is not admitted
      */
     public static void check(PredictionEvent event, ProjectionView view) throws IOException {
+        ParticipantAttribution.require(event, view);
         byte[] payload = event.payload();
         switch (event.type()) {
             case WORK_INTENT_ANNOUNCED -> announced(CollaborationCodec.decodeIntent(payload), view);

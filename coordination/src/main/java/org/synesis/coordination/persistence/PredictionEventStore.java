@@ -74,9 +74,24 @@ public final class PredictionEventStore implements ProjectionView {
     private static final Duration ABANDONED_TEMPORARY_AGE = Duration.ofMinutes(1);
 
     /**
+     * How often a proposal with no answer is sent again before its outcome is reported unknown.
+     */
+    private static final int MAX_PROPOSAL_SENDS = 3;
+
+    /**
+     * Largest page a member asks the leader for, in entries and in encoded bytes.
+     */
+    private static final int PULL_PAGE_ENTRIES = 256;
+    private static final int PULL_PAGE_BYTES = 1 << 20;
+
+    /**
      * Clock used for newly appended event timestamps.
      */
     private final Clock clock;
+    /**
+     * Whether this log decides its own entries or proposes them to a leader.
+     */
+    private final ReplicationRole role;
     /**
      * Projection for prediction-specific state.
      */
@@ -161,6 +176,7 @@ public final class PredictionEventStore implements ProjectionView {
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.clock = CoordinationNullException.requireNonNull(clock, "clock");
         Files.createDirectories(eventsDirectory);
+        this.role = ReplicationRole.of(root);
         cleanupTemporaryFiles();
         load();
     }
@@ -215,6 +231,9 @@ public final class PredictionEventStore implements ProjectionView {
         // Reading the head and placing the file are not one step across processes, and not every
         // appender holds the project append lock. A sequence another writer took in between is
         // never replaced: this append is made again on the new head, after catching up again.
+        //
+        // A member does not decide where its entry goes. It builds and checks the entry as above, then the
+        // leader places it (invariant 1); only an entry the leader accepted is placed here, as the same bytes.
         for (int attempt = 1; ; attempt++) {
             Head durableHead = durableHead();
             long sequence = durableHead.sequence() + 1L;
@@ -224,7 +243,18 @@ public final class PredictionEventStore implements ProjectionView {
             }
             validateProjections(event);
             try {
-                persistEvent(event, sequence);
+                if (role.isMember()) {
+                    if (!leaderAccepts(event)) {
+                        if (attempt >= MAX_APPEND_ATTEMPTS) {
+                            throw new CoordinationException("event append lost its sequence to other writers");
+                        }
+                        pullFromLeader();
+                        continue;
+                    }
+                    placeCommitted(event);
+                } else {
+                    persistEvent(event, sequence);
+                }
             } catch (FileAlreadyExistsException taken) {
                 if (attempt >= MAX_APPEND_ATTEMPTS) {
                     throw new CoordinationException("event append lost its sequence to other writers");
@@ -284,7 +314,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws IOException                when the durable file write or placement fails
      */
     private void persistEvent(PredictionEvent event, long sequence) throws IOException {
-        Path target = eventsDirectory.resolve(String.format("%020d.sce", sequence));
+        Path target = eventFile(sequence);
         Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
         try {
             try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
@@ -333,6 +363,198 @@ public final class PredictionEventStore implements ProjectionView {
             stage.apply().accept(event);
         }
         events.add(event);
+    }
+
+    private Path eventFile(long sequence) {
+        return eventsDirectory.resolve(String.format("%020d.sce", sequence));
+    }
+
+    /**
+     * Sends a member's entry to the leader and reads the answer.
+     *
+     * <p>A proposal with no answer is sent again as the same bytes, which the leader recognises, up to
+     * {@link #MAX_PROPOSAL_SENDS} times. After that the entry may or may not be on the leader's log, nothing is
+     * placed here, and the next pull settles it.</p>
+     *
+     * @return true when the leader holds the entry; false when its head moved and the entry must be built again
+     * @throws IOException with the leader's refusal code, {@code LEADER_UNREACHABLE} or {@code LEADER_OUTCOME_UNKNOWN}
+     */
+    private boolean leaderAccepts(PredictionEvent event) throws IOException {
+        byte[] encoded = event.encoded();
+        for (int sends = 1; ; sends++) {
+            switch (role.channel().propose(encoded)) {
+                case ProposalOutcome.Accepted accepted -> {
+                    if (accepted.sequence() != event.sequence()) {
+                        throw new CoordinationException("LEADER_LOG_DIVERGED");
+                    }
+                    return true;
+                }
+                case ProposalOutcome.HeadMoved moved -> {
+                    return false;
+                }
+                case ProposalOutcome.Refused refused -> throw new CoordinationException(refused.code());
+                case ProposalOutcome.Unreachable unreachable -> throw new CoordinationException("LEADER_UNREACHABLE");
+                case ProposalOutcome.NoAnswer noAnswer -> {
+                    if (sends >= MAX_PROPOSAL_SENDS) {
+                        throw new CoordinationException("LEADER_OUTCOME_UNKNOWN");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Places an entry the leader holds. A file already there must be the same bytes, as a pull that ran meanwhile
+     * would have left; anything else means the two logs differ.
+     *
+     * @throws IOException with {@code LEADER_LOG_DIVERGED} when another entry holds the sequence
+     */
+    private void placeCommitted(PredictionEvent event) throws IOException {
+        try {
+            persistEvent(event, event.sequence());
+        } catch (FileAlreadyExistsException taken) {
+            if (!Arrays.equals(Files.readAllBytes(eventFile(event.sequence())), event.encoded())) {
+                throw new CoordinationException("LEADER_LOG_DIVERGED");
+            }
+        }
+    }
+
+    /**
+     * Decides a member's proposal on the leader's log: the leader's side of {@link LeaderEndpoint#accept}. The
+     * caller holds the project append lock, opened this store after taking it, and has checked who sent the entry.
+     *
+     * @param event the member's signed entry, signature already verified
+     * @return the outcome; the entry is placed only for {@link ProposalOutcome.Accepted} after a first send
+     * @throws IOException              when durable I/O fails
+     * @throws GeneralSecurityException when signature verification of the existing log fails
+     */
+    synchronized ProposalOutcome admit(PredictionEvent event) throws IOException, GeneralSecurityException {
+        if (role.isMember()) {
+            throw new CoordinationException("MEMBER_CANNOT_DECIDE");
+        }
+        if (!event.projectId().equals(projectId)) {
+            return new ProposalOutcome.Refused("PROPOSAL_PROJECT_MISMATCH");
+        }
+        Head head = durableHead();
+        if (event.sequence() <= head.sequence()) {
+            // A resend of an entry the leader already holds is answered like the first send.
+            boolean identical = Arrays.equals(events.get((int) event.sequence() - 1).encoded(), event.encoded());
+            return identical ? new ProposalOutcome.Accepted(event.sequence())
+                    : new ProposalOutcome.HeadMoved(head.sequence());
+        }
+        if (event.sequence() != head.sequence() + 1L || !Arrays.equals(event.previousDigest(), head.digest())) {
+            return new ProposalOutcome.HeadMoved(head.sequence());
+        }
+        try {
+            validateProjections(event);
+        } catch (CoordinationException refusal) {
+            return new ProposalOutcome.Refused(refusal.code());
+        } catch (RuntimeException malformed) {
+            return new ProposalOutcome.Refused("PROPOSAL_PAYLOAD_INVALID");
+        }
+        try {
+            persistEvent(event, event.sequence());
+        } catch (FileAlreadyExistsException taken) {
+            return new ProposalOutcome.HeadMoved(head.sequence());
+        }
+        applyProjections(event);
+        return new ProposalOutcome.Accepted(event.sequence());
+    }
+
+    /**
+     * Returns the encoded entries after a sequence, for a member catching up.
+     *
+     * @param sequence   the caller's head sequence
+     * @param maxEntries most entries to return, at least one
+     * @param maxBytes   soft bound on the encoded size; one entry is returned even if it is larger
+     * @return entries from {@code sequence + 1} in order; empty when the caller is current
+     * @throws IOException              when the log cannot be read
+     * @throws GeneralSecurityException when a signature cannot be checked
+     */
+    public synchronized List<byte[]> entriesAfter(long sequence, int maxEntries, int maxBytes)
+            throws IOException, GeneralSecurityException {
+        durableHead();
+        List<byte[]> page = new ArrayList<>();
+        int bytes = 0;
+        for (int index = (int) Math.max(sequence, 0L); index < events.size() && page.size() < Math.max(maxEntries, 1);
+                index++) {
+            byte[] encoded = events.get(index).encoded();
+            if (!page.isEmpty() && bytes + encoded.length > maxBytes) {
+                break;
+            }
+            page.add(encoded);
+            bytes += encoded.length;
+        }
+        return page;
+    }
+
+    /**
+     * Places and applies the leader's entries that this log does not hold yet.
+     *
+     * <p>The whole batch is checked first: each new entry must be this project's, the next sequence, chained to
+     * its predecessor's digest and correctly signed, and an entry already held must be byte-identical. If any is
+     * not, nothing is placed and the log is reported as diverged; a member never repairs its copy by guessing.
+     * Entries are placed exactly as received, so both logs hold the same files.</p>
+     *
+     * @param entries encoded entries in sequence order
+     * @return how many entries were new
+     * @throws IOException              with {@code LEADER_LOG_DIVERGED} on a gap, a digest mismatch, a bad
+     *                                  signature or a differing entry
+     * @throws GeneralSecurityException when signature verification fails
+     */
+    public synchronized int applyCommitted(List<byte[]> entries) throws IOException, GeneralSecurityException {
+        Head head = durableHead();
+        long sequence = head.sequence();
+        byte[] digest = head.digest();
+        List<PredictionEvent> fresh = new ArrayList<>();
+        for (byte[] encoded : entries) {
+            PredictionEvent event;
+            try {
+                event = PredictionEvent.decode(encoded);
+            } catch (CoordinationException malformed) {
+                throw new CoordinationException("LEADER_LOG_DIVERGED", malformed);
+            }
+            if (event.sequence() <= head.sequence()) {
+                if (!Arrays.equals(events.get((int) event.sequence() - 1).encoded(), encoded)) {
+                    throw new CoordinationException("LEADER_LOG_DIVERGED");
+                }
+                continue;
+            }
+            if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L
+                    || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
+                throw new CoordinationException("LEADER_LOG_DIVERGED");
+            }
+            fresh.add(event);
+            sequence = event.sequence();
+            digest = event.digest();
+        }
+        for (PredictionEvent event : fresh) {
+            placeCommitted(event);
+            applyProjections(event);
+        }
+        return fresh.size();
+    }
+
+    /**
+     * Brings a member's copy up to the leader's log, a page at a time.
+     *
+     * @return how many entries were new
+     * @throws IOException              with {@code LEADER_UNREACHABLE} or {@code LEADER_LOG_DIVERGED}
+     * @throws GeneralSecurityException when signature verification fails
+     */
+    public synchronized int pullFromLeader() throws IOException, GeneralSecurityException {
+        if (!role.isMember()) {
+            throw new CoordinationException("NOT_A_MEMBER");
+        }
+        int applied = 0;
+        while (true) {
+            List<byte[]> page = role.channel().pull(durableHead().sequence(), PULL_PAGE_ENTRIES, PULL_PAGE_BYTES);
+            int fresh = page.isEmpty() ? 0 : applyCommitted(page);
+            if (fresh == 0) {
+                return applied;
+            }
+            applied += fresh;
+        }
     }
 
     /**

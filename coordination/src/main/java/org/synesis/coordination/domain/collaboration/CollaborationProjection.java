@@ -34,6 +34,8 @@ public final class CollaborationProjection {
     private final Map<WorkIntentId, NoChangeCompletion> noChangeCompletions = new LinkedHashMap<>();
     private final ProviderSessionFences sessionFences;
     private final Map<ParticipantId, Participant> participantHistory = new LinkedHashMap<>();
+    /** The node that signed the entry that first put each participant on the log; see {@link #introducingNode}. */
+    private final Map<ParticipantId, String> introducedBy = new LinkedHashMap<>();
     private final Map<WorkIntentId, WorkIntentId> successorIntents = new LinkedHashMap<>();
     private final Set<WorkGroupId> groupsWithLanes = new LinkedHashSet<>();
     private boolean activated;
@@ -58,6 +60,7 @@ public final class CollaborationProjection {
         noChangeCompletions.putAll(source.noChangeCompletions);
         sessionFences = new ProviderSessionFences(source.sessionFences);
         participantHistory.putAll(source.participantHistory);
+        introducedBy.putAll(source.introducedBy);
         successorIntents.putAll(source.successorIntents);
         groupsWithLanes.addAll(source.groupsWithLanes);
         activated = source.activated;
@@ -153,9 +156,38 @@ public final class CollaborationProjection {
             default -> {
             }
         }
+        recordIntroducer(event);
         if (!event.type().recordsNoStateChange()) {
             lastStateChangeSequence = event.sequence();
         }
+    }
+
+    /**
+     * Remembers which node signed the entry that first put a participant on the log: an announcement, a repair
+     * lane or a continuation. Later entries acting for that participant must come from the same node
+     * ({@link AppendAdmission}).
+     */
+    private void recordIntroducer(PredictionEvent event) throws IOException {
+        WorkIntent introduced = switch (event.type()) {
+            case WORK_INTENT_ANNOUNCED -> CollaborationCodec.decodeIntent(event.payload());
+            case REPAIR_LANE_CREATED -> RepairLanePayload.decode(event.payload()).targetIntent();
+            case LANE_CONTINUATION_ACCEPTED -> CollaborationCodec.decodeContinuation(event.payload()).targetIntent();
+            default -> null;
+        };
+        if (introduced != null) {
+            introducedBy.putIfAbsent(introduced.participantIdentity(), event.actorNodeId());
+        }
+    }
+
+    /**
+     * Returns the node that signed the entry that introduced a participant.
+     *
+     * @param handle participant handle as an entry names it
+     * @return the introducing node; empty when the participant was never introduced on this log
+     */
+    public synchronized Optional<String> introducingNode(ParticipantId handle) {
+        return Optional.ofNullable(introducedBy.get(handle))
+                .or(() -> participantKey(handle).map(introducedBy::get));
     }
 
     /**

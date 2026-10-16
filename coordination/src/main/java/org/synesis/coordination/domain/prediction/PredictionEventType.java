@@ -388,6 +388,21 @@ public enum PredictionEventType {
     }
 
     /**
+     * Tells whether only the project's leader computer may write this event (ADR-0098). These record what the
+     * integration pass did on the leader's checkout, so a member proposing one is refused.
+     *
+     * @return true for events written by the integration pass
+     */
+    public boolean leaderOnly() {
+        return switch (this) {
+            case INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED,
+                 INTEGRATION_COMMIT_CREATED, INTEGRATION_BLOCKED, INTEGRATION_VALIDATION_REFUSED, REPAIR_REQUIRED,
+                 CONTROL_BRANCH_ADVANCED, TASK_INTEGRATED -> true;
+            default -> false;
+        };
+    }
+
+    /**
      * Tells whether this event advances a prediction's own lifecycle, as opposed to belonging to another
      * projection of the shared event sequence.
      *

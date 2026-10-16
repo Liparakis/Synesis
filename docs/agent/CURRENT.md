@@ -1,3 +1,50 @@
+# 2026-10-16 — A member's log proposes entries to a leader's log (ADR-0098 step 2, slice 1)
+
+Two project roots on one computer, in one test: a leader log and a member log joined by an in-process
+channel. No Link, Git or MCP change.
+
+**What changed.**
+
+- `ReplicationRole` says whether a log decides its own entries (leader, the default and every log
+  today) or proposes them to a leader (member, with a `LeaderChannel`). It is looked up by
+  coordination folder and kept in memory, because the services open a fresh `PredictionEventStore`
+  for every decision and know only the folder, and a channel is a live connection. A persisted member
+  list and leader identity wait for the Link slice that has a connection to restore.
+- `PredictionEventStore.append` on a member builds, signs and validates the entry exactly as before
+  (same projections, same `AppendAdmission`, against its own copy), then sends the encoded entry to
+  the leader. Only an entry the leader accepted is placed on the member, as the same bytes. A moved
+  head makes the member pull and retry through the existing loop and its `MAX_APPEND_ATTEMPTS`; a
+  leader refusal is thrown as the same `CoordinationException` code a local refusal has; no leader is
+  `LEADER_UNREACHABLE`; no answer after three sends of the same bytes is `LEADER_OUTCOME_UNKNOWN`
+  and nothing is placed. A leader log behaves as before.
+- `LeaderEndpoint.accept(bytes, authenticatedSender)` is the leader's side: the entry must verify, be
+  signed by the authenticated sender, who must be in the member set; its type must not be leader-only
+  (`PredictionEventType.leaderOnly()`: the `INTEGRATION_*` entries the integration pass writes,
+  `REPAIR_REQUIRED`, `CONTROL_BRANCH_ADVANCED`, `TASK_INTEGRATED`); it must follow the leader's head;
+  then the leader's projections and `AppendAdmission` decide, under `ProjectAppendLock` on a store
+  opened after the lock. The member's bytes are placed unchanged and never re-signed. The same bytes
+  sent again are answered `Accepted`.
+- Pull: `entriesAfter(sequence, maxEntries, maxBytes)` on the leader, `applyCommitted` and
+  `pullFromLeader` on the member. The whole batch is chained and verified before anything is placed;
+  a gap, a digest mismatch, a bad signature or a differing entry is `LEADER_LOG_DIVERGED`.
+- Attribution (ADR guard 2): an entry acting for a participant is admitted only from the node that
+  signed the entry that introduced it (announcement, repair lane or continuation), else
+  `PARTICIPANT_NOT_OWNED_BY_SIGNER`. It is in `AppendAdmission`, so it holds for every append. The
+  event types it covers and the payload field for each are in the table in `ParticipantAttribution`.
+
+**Semantic notes.** The rule also covers the participant lifecycle entries (suspend, abandon,
+revoke, recovery hold), so a leader that later fences a member's participant needs an explicit
+exemption, which belongs with leader-observed liveness in step 3. Types keyed by task, prediction,
+contract, capability, work group or operator request carry no participant and are not covered. A
+leader's refusal of a member-built entry arises from leader-only rules (membership, type) or a race;
+at the same head the member's own check already gives the same answer.
+
+Tests: the Linux gate, link 170, coordination 267 (was 255), project-record 60, relay 12, mcp-contract 20, workspace 736 (2 skipped), MCP 189, CLI 132, browser UI (passed), 0 failures. New: `MemberReplicationTest` (12). Removing the attribution rule, the
+leader-only check or the resend recognition each fails 1 to 2 of them. VERIFIED on Linux only.
+
+NOT REACHED: the Windows gate; Link as the transport; a persisted member list; Git and the merge
+moved outside the lock; a real second computer.
+
 # 2026-10-16 — Every rule that guards authority is checked by the log, not only by a service
 
 The audit ADR-0098 "Settled before code" asks for, done as its own change before step 2.
