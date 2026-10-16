@@ -5,6 +5,7 @@ import java.util.Set;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 
+import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.link.identity.NodeIdentity;
@@ -13,7 +14,8 @@ import picocli.CommandLine.Parameters;
 
 /**
  * Changes the list of computers the leader serves. The list is local state of the leader in step 2 (ADR-0098); the
- * running leader reads it for every request, so a change needs no restart.
+ * running leader reads it for every request, so a change needs no restart. A node that is not a member afterwards is
+ * also dropped from {@code replication.peers}, which a restarted server would otherwise dial or admit it from.
  */
 abstract class ProjectMemberCommand extends ProjectRoleCommand {
 
@@ -47,6 +49,10 @@ abstract class ProjectMemberCommand extends ProjectRoleCommand {
         boolean changed = change(members, member);
         if (changed) {
             role.write(new ReplicationSettings(null, members, leader.codeRemote()));
+        }
+        if (!members.contains(member)) {
+            // Whatever the change was, a node that is not a member must not be dialed or admitted again after a restart.
+            ReplicationPeers.forget(role.coordination(), member);
         }
         runtime.terminal().stdout("ROLE=leader");
         runtime.terminal().stdout("MEMBER_NODE_ID=" + member);

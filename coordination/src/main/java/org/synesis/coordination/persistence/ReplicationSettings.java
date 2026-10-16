@@ -202,15 +202,22 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
             text.append(CODE_REMOTE_KEY).append('=').append(codeRemote).append('\n');
         }
         parse(text.toString());
+        replace(coordinationRoot, FILE, text);
+    }
+
+    /**
+     * Replaces a file of the coordination folder in one step, so a reader sees a complete old or a complete new file.
+     */
+    static void replace(Path coordinationRoot, String name, CharSequence text) throws IOException {
         Files.createDirectories(coordinationRoot);
-        Path temporary = coordinationRoot.resolve(FILE + ".tmp-" + UUID.randomUUID());
+        Path temporary = coordinationRoot.resolve(name + ".tmp-" + UUID.randomUUID());
         try {
             Files.writeString(temporary, text, StandardCharsets.UTF_8);
             try {
-                Files.move(temporary, coordinationRoot.resolve(FILE), StandardCopyOption.ATOMIC_MOVE,
+                Files.move(temporary, coordinationRoot.resolve(name), StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, coordinationRoot.resolve(FILE), StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temporary, coordinationRoot.resolve(name), StandardCopyOption.REPLACE_EXISTING);
             }
         } finally {
             Files.deleteIfExists(temporary);

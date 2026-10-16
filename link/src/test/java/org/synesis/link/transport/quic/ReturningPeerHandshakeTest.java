@@ -212,6 +212,26 @@ final class ReturningPeerHandshakeTest {
         refusal(dial(known, withoutInvitation(known, (byte) 60))));
   }
 
+  /** A host that restarted has no invitation any more, and its caller recorded that one was used. */
+  @Test
+  void aRestartedHostAdmitsTheNodesItsRuleNamesAndNoOneElse() throws Exception {
+    admission.admitReturning(node -> node.equals(known.nodeId()), returned::complete);
+    admission.markConsumed();
+
+    dial(known, withoutInvitation(known, (byte) 80)).get(10, TimeUnit.SECONDS);
+    assertEquals(known.nodeId(), returned.get(10, TimeUnit.SECONDS).remoteNodeId());
+    assertEquals(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED,
+        refusal(dial(stranger, withoutInvitation(stranger, (byte) 81))));
+  }
+
+  @Test
+  void aRestartedHostWithNoRuleAdmitsNobody() throws Exception {
+    admission.markConsumed();
+
+    assertEquals(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED,
+        refusal(dial(known, withoutInvitation(known, (byte) 82))));
+  }
+
   @Test
   void aNodeTheRuleStoppedNamingIsRefusedFromThenOn() throws Exception {
     boolean[] member = {true};

@@ -61,7 +61,9 @@ against the transcript's node IDs and public keys, the transcript fingerprint ac
 asked a second time with the proved identity before the session is published. Every refusal is the existing
 `HANDSHAKE_REPLAY_REJECTED` (not named, not consumed, replayed) or `IDENTITY_PROOF_INVALID`/`IDENTITY_MISMATCH` (proof
 or identity); no code is added to the table, and a host that offers no rule answers every empty-capability handshake
-as `HANDSHAKE_REPLAY_REJECTED`, which is what an older build does. A peer with a wrong key fails the proof check: node ID
+as `HANDSHAKE_REPLAY_REJECTED`, which is what an older build does. A host that restarted treats its invitation as consumed
+before the restart and so reads empty-capability handshakes the same way; its rule then names only the nodes it admitted
+before (the replay guard is loaded from the host's `replication.replay`; without it the host resumes nothing). A peer with a wrong key fails the proof check: node ID
 is derived from the public key, and a transcript naming a node with another key cannot be built.
 
 ## SL-007 heartbeat payloads

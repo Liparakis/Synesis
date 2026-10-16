@@ -107,12 +107,35 @@ claiming a known ID without its key fails. A host with no rule, or an unused inv
 capability. The rule is a narrower grant than the invitation (it names one peer, not whoever holds a link) and
 creates no membership. Replay: each handshake carries a fresh session ID and nonces chosen by the dialer, the dialer
 verifies the host's proof over them, and the host refuses a transcript it has accepted before. The replay guard is
-process-local (8,192 entries for a retained host; a full guard refuses every later handshake, which needs a new
-invitation) and is gone after a restart, which is also when the host's port changes, so a recording from before
-the restart cannot reach the new endpoint. A peer holding the leader's or a member's key can come back at will,
+8,192 entries for a retained host (a full guard refuses every later handshake, which needs a new invitation), and a
+retained host keeps it across a restart ("Across a restart" below). A peer holding the leader's or a member's key can come back at will,
 as it could when it first connected; stealing a key is outside this model. Resource use by an unnamed dialer is the
 invitation path's: one bounded handshake frame, a failure frame, a closed stream, and QUIC's idle timeout of sixty
 seconds for retained endpoints.
+
+Across a restart (ADR-0098 step 2). The coordination server writes down, in `replication.peers` beside the role file
+(local, excluded from version control, never replicated), which hosts it dialed (the node ID and the invitation link,
+whose endpoints it dials again) and, for each invitation it hosted, the UDP port and the node IDs it admitted through it.
+A restarted server redials the first and, for the second, listens on the same port with an invitation that counts as
+used before the restart: its capability is random and told to no one, so no invitation opens it, and the returning rule
+is narrower than after a first connection. It admits only a node that is both recorded for that port and still named
+by the role (a member admits its leader; a leader admits a node in its current member list), with the same checks: both
+proofs verified, the rule asked again with the proved identity, the replay guard, no capability and so no membership. A
+node the role names but this host never admitted is refused, as is every unknown node. The file grants nothing by itself:
+a record the role no longer names is skipped at start and logged, and `remove-member` and `follow` drop the records of
+a node the role no longer allows. A file that cannot be parsed restores nothing (fail closed) and is replaced by the next
+write. A port that cannot be bound again hosts nothing and is logged; only a new invitation reconnects those peers.
+The host's replay guard is kept too, in `replication.replay` beside it: one transcript fingerprint per line, no more
+than the guard's 8,192, written whole and atomically (temporary file, then move) every time the guard accepts a new
+handshake and before `accept` returns, so a handshake is on disk before its session exists; if the write fails the
+handshake is refused. The restarted server loads the file before any endpoint listens, so a returning handshake recorded
+before the restart, replayed against the same port, is refused like any replay, and the capacity is the same. A missing
+file while a hosting record exists, or a file that cannot be read or does not follow the format, means a recorded
+handshake could be replayed: the server resumes no hosting, drops the hosting records, and journals
+`REPLAY_GUARD_UNREADABLE`; a new invitation reconnects those peers. Not covered: an attacker who can write the
+coordination folder (it could also edit the role and peers files, which is outside this model), and power loss between
+the move and the disk flush, which can lose the last fingerprint; a crash of the process alone cannot, since the file is
+replaced before the session is handed on.
 
 The compatibility number is not an authentication check and is not a downgrade
 defence: an attacker can state any number, and a number stated in the handshake

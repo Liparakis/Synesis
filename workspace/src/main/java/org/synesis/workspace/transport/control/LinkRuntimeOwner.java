@@ -59,6 +59,40 @@ import org.synesis.workspace.transport.control.network.RelayState;
 public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Supplier<LinkState> {
 
     /**
+     * Where an owner writes down which peers its sessions were made with, so that a restart can resume them (see
+     * {@link #resumeDialing} and {@link #resumeHosting}). It is told only about peers the owner's returning rule
+     * names, and must not throw.
+     */
+    public interface PeerMemory {
+
+        /**
+         * This computer dialed a host through an invitation.
+         *
+         * @param hostNodeId     the host's node ID
+         * @param invitationLink the exact invitation link
+         */
+        void dialed(String hostNodeId, String invitationLink);
+
+        /**
+         * This computer admitted a node through the invitation it hosts on a UDP port.
+         *
+         * @param port   the port the invitation is hosted on
+         * @param nodeId the node admitted
+         */
+        void hosted(int port, String nodeId);
+    }
+
+    private static final PeerMemory FORGETS = new PeerMemory() {
+        @Override
+        public void dialed(String hostNodeId, String invitationLink) {
+        }
+
+        @Override
+        public void hosted(int port, String nodeId) {
+        }
+    };
+
+    /**
      * Number of recent frames the overlay forwarder remembers to drop duplicates.
      */
     private static final int DUPLICATE_GUARD_CAPACITY = 256;
@@ -151,6 +185,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     private final Consumer<String> journal;
 
     /**
+     * Told which peers sessions were made with, so a restart can resume them; forgets everything unless supplied.
+     */
+    private final PeerMemory memory;
+
+    /**
      * Accepted sessions by remote node id; at most one per peer, a newer session replaces an older one.
      */
     private final ConcurrentMap<String, PeerSession> sessions = new ConcurrentHashMap<>();
@@ -185,7 +224,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
         this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), null, session -> {
-        }, NO_RETURNING_PEERS, NO_JOURNAL);
+        }, NO_RETURNING_PEERS, NO_JOURNAL, FORGETS);
     }
 
     /**
@@ -220,7 +259,8 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      * names, after authenticating both identities. Nobody else is admitted that way, and the rule is read at every
      * connection and every attempt, so a node it stops naming is neither dialed nor admitted from then on. The
      * hosting side keeps listening on the same port, which is why a redial at the invitation's endpoints reaches it.
-     * Neither side remembers this across a restart of the owner: a restart needs a new invitation.
+     * Neither side remembers this across a restart of the owner unless the constructor that takes a {@link PeerMemory}
+     * is used; without one a restart needs a new invitation.
      *
      * @param onboarding      Link-owned onboarding facade
      * @param localIdentity   local authenticated node identity
@@ -237,8 +277,30 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
             Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal) {
+        this(onboarding, localIdentity, events, projectIdentity, projectHandler, sessionListener, returningPeers, journal, FORGETS);
+    }
+
+    /**
+     * Creates a runtime owner like the one above, which also writes down the peers its sessions were made with, so
+     * that a restart of the computer's coordination server resumes them with no new invitation (ADR-0098): the
+     * caller reads what it wrote and hands it to {@link #resumeDialing} and {@link #resumeHosting}.
+     *
+     * @param onboarding      Link-owned onboarding facade
+     * @param localIdentity   local authenticated node identity
+     * @param events          safe Link event sink
+     * @param projectIdentity canonical local project identity
+     * @param projectHandler  answers every application stream that is not the project-context exchange
+     * @param sessionListener called with each admitted session after the owner has registered it
+     * @param returningPeers  whether a node is one this computer redials or admits again
+     * @param journal         receives one line for each session start and end and each redial outcome
+     * @param memory          told about each dialed host and each admitted node that {@code returningPeers} names
+     * @see #LinkRuntimeOwner(Onboarding, NodeIdentity, Consumer, ProjectIdentity, PeerSession.ApplicationStreamHandler, Consumer, Predicate, Consumer)
+     */
+    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
+            Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory) {
         this(onboarding, localIdentity, null, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), Objects.requireNonNull(projectHandler, "project handler"),
-                Objects.requireNonNull(sessionListener, "session listener"), Objects.requireNonNull(returningPeers, "returning peers"), Objects.requireNonNull(journal, "journal"));
+                Objects.requireNonNull(sessionListener, "session listener"), Objects.requireNonNull(returningPeers, "returning peers"), Objects.requireNonNull(journal, "journal"),
+                Objects.requireNonNull(memory, "peer memory"));
     }
 
     /**
@@ -254,7 +316,8 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      *                                  membership belongs to a different project
      */
     private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity,
-            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal) {
+            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal, PeerMemory memory) {
+        this.memory = memory;
         this.sessionListener = sessionListener;
         this.returningPeers = returningPeers;
         this.journal = journal;
@@ -324,7 +387,13 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public PendingHost createInvitation(String expectedPeer, boolean openRouterPort) throws OnboardingFailure {
         ensureOpen();
-        Onboarding.PreparedHost delegate = onboarding.createRetainedInvitation(expectedPeer, openRouterPort, applicationHandler, this::acceptSession, peer -> !closed.get() && returningPeers.test(peer));
+        AtomicReference<Onboarding.PreparedHost> hosting = new AtomicReference<>();
+        Onboarding.PreparedHost delegate = onboarding.createRetainedInvitation(expectedPeer, openRouterPort, applicationHandler, session -> {
+            acceptSession(session);
+            // The host is set before the listener can accept anyone.
+            remember(() -> memory.hosted(hosting.get().listeningPort(), session.remoteNodeId()), session);
+        }, peer -> !closed.get() && returningPeers.test(peer));
+        hosting.set(delegate);
         LiveHost result = new LiveHost(delegate);
         handles.add(result);
         result.startWait();
@@ -341,9 +410,63 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public PendingJoin importInvitation(String link) throws OnboardingFailure {
         ensureOpen();
+        return retainJoin(link, onboarding::importRetainedInvitation);
+    }
+
+    /**
+     * Dials a host again after this computer's coordination server restarted, from the invitation its first session
+     * was made with, with no new invitation (ADR-0098 step 2). The first dial is made after the redial delay, and
+     * later ones back off like any redial. Nothing is dialed when the returning rule no longer names the host, and
+     * a link that is not an authentic invitation, or any other failure, is journaled and ignored.
+     *
+     * @param invitationLink the link {@link PeerMemory#dialed} was given
+     */
+    public void resumeDialing(String invitationLink) {
+        try {
+            ensureOpen();
+            LiveJoin join = retainJoin(invitationLink, onboarding::resumeRetainedJoin);
+            if (join.resume()) {
+                record("DIAL_RESUMED peer=" + join.peer);
+            }
+        } catch (OnboardingFailure | RuntimeException failure) {
+            record("DIAL_RESUME_FAILED cause=" + failure);
+        }
+    }
+
+    /**
+     * Listens again on the UDP port an invitation was hosted on before this computer's coordination server restarted,
+     * and admits exactly {@code peers} that {@code returningPeers} still names, with no invitation (ADR-0098 step 2).
+     * If the port is taken nothing is hosted, a line says so, and only a new invitation reconnects those peers: the
+     * ones that dial redial the old endpoints.
+     *
+     * @param port  the port {@link PeerMemory#hosted} was given
+     * @param peers the nodes it was given for that port
+     */
+    public void resumeHosting(int port, Set<String> peers) {
+        Set<String> allowed = Set.copyOf(peers.stream().filter(returningPeers).toList());
+        if (allowed.isEmpty()) {
+            record("HOST_RESUME_SKIPPED port=" + port + " reason=no recorded peer is named any more");
+            return;
+        }
+        try {
+            ensureOpen();
+            Onboarding.ResumedHost resumed = onboarding.resumeRetainedHost(port, applicationHandler, this::acceptSession,
+                    peer -> !closed.get() && allowed.contains(peer) && returningPeers.test(peer));
+            handles.add(resumed);
+            record("HOST_RESUMED port=" + resumed.listeningPort() + " peers=" + allowed.size());
+        } catch (OnboardingFailure | RuntimeException failure) {
+            record("HOST_RESUME_FAILED port=" + port + " cause=" + (failure.getCause() != null ? failure.getCause() : failure) + "; only a new invitation reconnects those peers");
+        }
+    }
+
+    /**
+     * Creates the join handle for a link and wires it to this owner.
+     */
+    private LiveJoin retainJoin(String link, JoinFactory factory) throws OnboardingFailure {
         AtomicReference<LiveJoin> dialer = new AtomicReference<>();
-        Onboarding.PreparedJoin delegate = onboarding.importRetainedInvitation(link, applicationHandler, session -> {
+        Onboarding.PreparedJoin delegate = factory.prepare(link, applicationHandler, session -> {
             acceptSession(session);
+            remember(() -> memory.dialed(session.remoteNodeId(), link), session);
             // The handle is set before connect() can run, and a redial runs only after connect() returned.
             dialer.get().watch(session);
         });
@@ -351,6 +474,29 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         dialer.set(result);
         handles.add(result);
         return result;
+    }
+
+    /**
+     * Makes or restores a join handle.
+     */
+    @FunctionalInterface
+    private interface JoinFactory {
+        Onboarding.PreparedJoin prepare(String link, PeerSession.ApplicationStreamHandler handler, Consumer<PeerSession> sessionAction) throws OnboardingFailure;
+    }
+
+    /**
+     * Writes a peer down for the next restart, but only a peer the returning rule names: anything else would never be
+     * dialed or admitted again. A failing memory never affects a session.
+     */
+    private void remember(Runnable write, PeerSession session) {
+        if (!returningPeers.test(session.remoteNodeId())) {
+            return;
+        }
+        try {
+            write.run();
+        } catch (RuntimeException ignored) {
+            // The memory serves the next restart; it does not decide this session.
+        }
     }
 
     /**
@@ -713,6 +859,22 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         private boolean redialWanted() {
             String host = peer;
             return !closedHandle.get() && !closed.get() && host != null && !sessions.containsKey(host) && returningPeers.test(host);
+        }
+
+        /**
+         * Starts redialing a host this computer was connected to before it restarted.
+         *
+         * @return false, after closing this handle, when the rule no longer names the host
+         */
+        private boolean resume() {
+            peer = delegate.hostNodeId();
+            if (!returningPeers.test(peer)) {
+                record("DIAL_RESUME_SKIPPED peer=" + peer + " reason=not named any more");
+                close();
+                return false;
+            }
+            redialer.start();
+            return true;
         }
 
         /**

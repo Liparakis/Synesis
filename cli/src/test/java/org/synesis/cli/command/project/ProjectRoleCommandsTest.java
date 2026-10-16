@@ -24,6 +24,7 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 
+import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.link.identity.NodeIdentity;
@@ -159,9 +160,12 @@ class ProjectRoleCommandsTest {
         assertEquals("origin", settings().codeRemote());
         assertEquals(List.of("CHANGED=false"), add(peer).stdout().stream().filter(line -> line.startsWith("CHANGED")).toList());
 
+        ReplicationPeers.rememberHosted(coordination(), 40000, peer);
+        ReplicationPeers.rememberDialed(coordination(), peer, "synesis://join/SLB3-x");
         Run removed = remove(peer);
         assertEquals(List.of("ROLE=leader", "MEMBER_NODE_ID=" + peer, "CHANGED=true", "MEMBERS=0"), removed.stdout(), removed.toString());
         assertEquals(Set.of(), settings().members());
+        assertEquals(ReplicationPeers.none(), ReplicationPeers.read(coordination()), "a removed member must not be dialed or admitted after a restart");
         assertEquals(List.of("ERROR=NOT_A_MEMBER"), remove(peer).stderr());
         assertEquals(List.of(), stopped);
     }
@@ -181,11 +185,16 @@ class ProjectRoleCommandsTest {
 
     @Test
     void followMakesThisComputerAMemberOfTheLeaderWithTheRemoteAndStopsTheRuntime() throws Exception {
+        String other = NodeIdentity.generate().nodeId();
+        ReplicationPeers.rememberHosted(coordination(), 40000, other);
+        ReplicationPeers.rememberDialed(coordination(), peer, "synesis://join/SLB3-x");
         Run followed = follow("--leader", peer, "--code-remote", "origin");
 
         assertEquals(ExitCodes.OK, followed.exit(), followed.toString());
         assertEquals(List.of("ROLE=member", "NODE_ID=" + ownNode(), "LEADER_NODE_ID=" + peer, "CODE_REMOTE=origin", "RUNTIME_STOPPED=true"), followed.stdout());
         assertEquals(ReplicationSettings.member(peer).withCodeRemote("origin"), settings());
+        assertEquals(java.util.Map.of(peer, "synesis://join/SLB3-x"), ReplicationPeers.read(coordination()).dialed());
+        assertEquals(java.util.Map.of(), ReplicationPeers.read(coordination()).hosted(), "only the leader may be resumed by a member");
         assertEquals(1, stopped.size());
     }
 

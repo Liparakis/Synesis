@@ -1,3 +1,64 @@
+# 2026-10-16 — The retained host's replay guard survives a restart (closes the residual risk below)
+
+**Gap.** The host's `ReplayGuard` was in memory while the hosting UDP port and the returning-peer admission survived a
+restart, so a returning handshake recorded before the restart could be replayed once against the restarted host.
+
+**Change.** `replication.replay` (new, `ReplicationReplay`, beside `replication.peers`; local, never replicated): one
+transcript fingerprint per line, at most 8,192, strict format, atomic whole-file replace. `ReplayGuard` takes an
+optional `Store`: a newly accepted fingerprint is saved before `accept` returns (the session exists only after
+`SessionAuthenticator.establish` returned), and a failed save refuses the handshake. `Onboarding.useRetainedReplayGuard`
+gives every retained host endpoint the same guard; `CoordinationServerLauncher.linkOwner` loads the file before any
+endpoint listens. Missing file with a hosting record, or an unreadable one: no hosting resumes, the hosting records are
+dropped, `REPLAY_GUARD_UNREADABLE` is journaled. One-shot `host/join` and non-retained paths are unchanged (fresh guard).
+Capacity is per project now, not per endpoint.
+
+**Proof (Linux gate).** `ReplayGuardTest` (4: a real handshake accepted, guard rebuilt from what the store saved, the
+same transcript refused; save-before-return; failed save refuses; capacity across reload), `ReplicationReplayTest` (4),
+three new `ControlPlaneReplicationTest` cases (file keeps and extends across a host restart; malformed file; missing
+file). With the load disabled the three cli cases fail (3 of 13).
+
+**Limits.** Power loss before the disk flush can lose the last fingerprint; an attacker who can write the coordination
+folder is outside the model. Not re-run on two real computers; Windows gate not run.
+
+# 2026-10-16 — A project session survives a restart of either coordination server (ADR-0098 step 2)
+
+**Real evidence that motivated it** (two computers on one LAN; leader = Windows, which only dials out because it has no
+inbound firewall rule; member = a Linux VM, which hosted the invitation). Drop test PASSED: the VM's virtual cable
+unplugged for 60 s, both sides journaled `DISCONNECT reason=LIVENESS_EXPIRED` at +31 s, the leader's redial failed while
+unplugged and reconnected 6 s after the replug (`REDIAL_OK attempts=3`), the member went back to CONNECTED. Restart test
+FAILED as c16f19bd documented: stopping and restarting the LEADER's project runtime reconnected nothing (no new leader journal
+line; the member stayed DISCONNECTED after `LIVENESS_EXPIRED`), because nothing was persisted.
+
+**Change.** `replication.peers` (new, `ReplicationPeers`, beside `replication.properties`; local, excluded from version
+control, never replicated; strict line format, atomic write): `dial=<host node ID> <invitation link>` for a host this
+computer dialed, `host=<port> <node ID>` for each node admitted through an invitation it hosted. `LinkRuntimeOwner` writes
+them through a `PeerMemory` (only for peers its returning rule names) and has `resumeDialing(link)` and `resumeHosting(port,
+peers)`; `CoordinationServerLauncher.linkOwner` reads the file at start and resumes both. A dialer restores its `PreparedJoin`
+from the link (`Onboarding.resumeRetainedJoin`: signature checked as of the issue time, handle counts as connected) and the
+existing `Redialer` starts at once with the same backoff. A host rebinds the SAME UDP port (`Onboarding.resumeRetainedHost`,
+`OnboardingEndpoint` takes a port) with `InvitationAdmission.markConsumed()` and a random, unshared capability, and admits
+only nodes both recorded for that port and still named by the role. `remove-member` drops a node's records, `follow` keeps
+only the leader's. Journal lines: `DIAL_RESUMED`, `HOST_RESUMED`, `DIAL_RESUME_SKIPPED`, `HOST_RESUME_SKIPPED`,
+`HOST_RESUME_FAILED`, `PEERS_IGNORED`, `PEERS_NOT_SAVED`. Docs: THREAT_MODEL ("Across a restart"), SYNESIS_LINK_V1
+("Returning peers"), TWO_MACHINE_TESTING.
+
+**Rule change.** "Only after the invitation was used" is now "only after an invitation was used, now or before a restart", and
+a restarted host is stricter than a first-run one: recorded nodes only. No wire frame changes.
+
+**Proof (Linux gate, Podman, Sonnet-5.5 work).** Six new `ControlPlaneReplicationTest` cases fail without the resume step
+(6 of 10 failed with the read of the file disabled) and pass with it: a restarted leader (the joiner) redials without an
+invitation and a member proposal is accepted; a restarted member (the host) rebinds its port and the leader's redial
+reconnects; a node the role names but the host never admitted is refused by the restarted host; a member removed while the
+leader was down is neither redialed nor admitted; a malformed peers file resumes nothing and the server starts; a taken port
+is logged and the server starts. Plus `ReplicationPeersTest` (6), two `ReturningPeerHandshakeTest` cases, and
+`ProjectRoleCommandsTest` assertions for `remove-member` and `follow`. Full `check repositoryHygieneCheck --continue
+--no-build-cache` on Linux: BUILD SUCCESSFUL (link 184, coordination 312, project-record 60, relay 12, mcp-contract 20,
+workspace 771 with 2 skipped, mcp 190, cli 170; 0 failures).
+
+**NOT REACHED / limits.** Not re-run on the two real computers; the Windows gate was not run. A host whose port was taken
+hosts nothing (`HOST_RESUME_FAILED`; only a new invitation reconnects), and a dialer whose host changed address cannot reach
+the invitation's old endpoints. The replay-guard residual risk recorded here is closed by the entry above.
+
 # 2026-10-16 — Two computers, one project: the WorkGroup COMPLETED (run 7, ADR-0098 step 2 done)
 
 Same setup as run 6 (two Claude Code agents, Sonnet 5.5 medium, on the Windows leader; two Codex agents, GPT-6

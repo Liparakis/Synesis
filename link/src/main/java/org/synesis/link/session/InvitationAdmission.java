@@ -121,10 +121,20 @@ public final class InvitationAdmission implements AutoCloseable {
   }
 
   /**
+   * Records that the invitation was used before this process started, so a host that restarted admits
+   * the peers its returning rule names. The caller persisted that fact when the invitation was used;
+   * the capability of such an admission is random and told to no one, so nothing else can consume it.
+   */
+  public void markConsumed() {
+    state.set(CONSUMED);
+  }
+
+  /**
    * Tells whether a connection claiming this node ID may be admitted without the capability.
    *
    * @param remoteNodeId node ID the connection claims or has proved
-   * @return true only after the invitation was consumed, with a rule installed that names the node
+   * @return true only after the invitation was consumed (now, or before a restart: {@link #markConsumed()}), with a
+   *     rule installed that names the node
    */
   public boolean admitsReturning(String remoteNodeId) {
     Returning rule = returning.get();

@@ -17,7 +17,10 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.ui.StaticResourceHandler;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
+import org.synesis.coordination.persistence.ReplicationReplay;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
@@ -26,6 +29,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.session.ReplayGuard;
 
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
@@ -118,7 +122,7 @@ final class CoordinationServerLauncher {
                     ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
             var leaderReplication = mergeDriver != null
                     ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
-            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication, new ReplicationJournal(projectData));
+            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication, new ReplicationJournal(projectData), projectData);
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
                 @Override
@@ -190,24 +194,101 @@ final class CoordinationServerLauncher {
      * <p>A session that ends is dialed again by the computer that dialed it, and admitted again by the one that hosted it,
      * without a new invitation, for exactly the nodes the replication side attaches: a member's leader and a leader's
      * current members. Every session start and end is written to the replication journal, with the reason it ended.
+     *
+     * <p>Those peers are also written to {@code replication.peers} in {@code coordination} as sessions are made, and
+     * read back here: a restart of this server dials the hosts it dialed and listens again on the ports it hosted, for
+     * the nodes the role still names, with no new invitation. A file that cannot be read restores nothing.
      */
     static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSettings settings,
-            MemberReplication member, LeaderReplication leader, ReplicationJournal journal) {
+            MemberReplication member, LeaderReplication leader, ReplicationJournal journal, Path coordination) {
+        LinkRuntimeOwner.PeerMemory memory = peerMemory(coordination, journal);
+        LinkRuntimeOwner owner;
         if (member != null) {
-            return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, member.handler(), session -> {
+            owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, member.handler(), session -> {
                 if (session.remoteNodeId().equals(settings.leaderNodeId())) {
                     member.attach(session);
                 }
-            }, settings.leaderNodeId()::equals, journal::record);
-        }
-        if (leader != null) {
-            return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, leader.handler(), session -> {
+            }, settings.leaderNodeId()::equals, journal::record, memory);
+        } else if (leader != null) {
+            owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, leader.handler(), session -> {
                 if (leader.isMember(session.remoteNodeId())) {
                     leader.attach(session);
                 }
-            }, leader::isMember, journal::record);
+            }, leader::isMember, journal::record, memory);
+        } else {
+            return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
         }
-        return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
+        ReplicationPeers peers = ReplicationPeers.none();
+        try {
+            peers = ReplicationPeers.read(coordination);
+        } catch (CoordinationException unreadable) {
+            journal.record("PEERS_IGNORED code=" + unreadable.code() + "; no session is resumed, a new invitation is needed");
+        }
+        // The guard is restored even when nothing is resumed: invitations made from now on need it saved too.
+        boolean hostingMayResume = restoreReplayGuard(onboarding, coordination, journal, !peers.hosted().isEmpty());
+        peers.dialed().values().forEach(owner::resumeDialing);
+        if (hostingMayResume) {
+            peers.hosted().forEach(owner::resumeHosting);
+            return owner;
+        }
+        try {
+            ReplicationPeers.forgetHosted(coordination);
+        } catch (java.io.IOException unwritable) {
+            journal.record("PEERS_NOT_SAVED cause=" + unwritable.getMessage() + "; the hosting records stay");
+        }
+        return owner;
+    }
+
+    /**
+     * Gives the onboarding the replay guard of a retained host as the last run left it, before any endpoint listens,
+     * and saves each handshake the guard accepts before the session is handed on. A host that listens again on its old
+     * port may resume only with that memory: a missing or unreadable file while a hosting record exists means a
+     * recorded handshake could be replayed, so the answer is false and the caller resumes no hosting (fail closed).
+     * The guard still starts, empty, for invitations made from now on.
+     */
+    private static boolean restoreReplayGuard(Onboarding onboarding, Path coordination, ReplicationJournal journal, boolean hostingRecorded) {
+        int capacity = Onboarding.retainedReplayEntries();
+        java.util.Set<String> restored = java.util.Set.of();
+        boolean known;
+        try {
+            var read = ReplicationReplay.read(coordination, capacity);
+            restored = read.orElse(restored);
+            known = read.isPresent() || !hostingRecorded;
+        } catch (CoordinationException unreadable) {
+            known = false;
+        }
+        onboarding.useRetainedReplayGuard(new ReplayGuard(capacity, restored, fingerprints -> ReplicationReplay.write(coordination, fingerprints)));
+        if (!known) {
+            journal.record("REPLAY_GUARD_UNREADABLE code=" + ReplicationReplay.INVALID + "; no hosting is resumed, a new invitation is needed");
+        }
+        return known;
+    }
+
+    @FunctionalInterface
+    private interface PeersWrite {
+        void run() throws java.io.IOException;
+    }
+
+    private static LinkRuntimeOwner.PeerMemory peerMemory(Path coordination, ReplicationJournal journal) {
+        return new LinkRuntimeOwner.PeerMemory() {
+            @Override
+            public void dialed(String hostNodeId, String invitationLink) {
+                save(() -> ReplicationPeers.rememberDialed(coordination, hostNodeId, invitationLink));
+            }
+
+            @Override
+            public void hosted(int port, String nodeId) {
+                save(() -> ReplicationPeers.rememberHosted(coordination, port, nodeId));
+            }
+
+            private void save(PeersWrite write) {
+                try {
+                    write.run();
+                } catch (java.io.IOException unwritable) {
+                    journal.record("PEERS_NOT_SAVED cause=" + unwritable.getMessage() + "; a restart will need a new invitation");
+                }
+            }
+        };
     }
 
     private static boolean isLoopback(String host) {

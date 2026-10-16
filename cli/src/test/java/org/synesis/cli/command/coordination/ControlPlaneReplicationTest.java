@@ -5,11 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -18,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -31,6 +35,8 @@ import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
+import org.synesis.coordination.persistence.ReplicationReplay;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
@@ -96,6 +102,7 @@ final class ControlPlaneReplicationTest {
         final URI endpoint;
         final String commandToken;
         final LinkRuntimeOwner owner;
+        private final List<AutoCloseable> mine = new ArrayList<>();
 
         Computer(String name, NodeIdentity node, ReplicationSettings settings) throws Exception {
             Path root = temp.resolve(name);
@@ -104,22 +111,34 @@ final class ControlPlaneReplicationTest {
             this.node = node;
             this.coordination = synesis.resolve("coordination");
             settings.write(coordination);
-            MemberReplication member = settings.isMember() ? closing(MemberReplication.open(coordination, projectId)) : null;
-            LeaderReplication leader = settings.isMember() ? null : closing(LeaderReplication.open(coordination, projectId));
+            MemberReplication member = settings.isMember() ? own(MemberReplication.open(coordination, projectId)) : null;
+            LeaderReplication leader = settings.isMember() ? null : own(LeaderReplication.open(coordination, projectId));
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
-            this.owner = closing(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
-                    new ProjectIdentity(projectId, createdAt), settings, member, leader, new ReplicationJournal(coordination)));
+            this.owner = own(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
+                    new ProjectIdentity(projectId, createdAt), settings, member, leader, new ReplicationJournal(coordination), coordination));
             CoordinationService service = new CoordinationService(new PredictionEventStore(coordination, projectId), node);
             ProjectLocation location = new ProjectLocation(root, synesis, synesis.resolve("project.json"), profile, projectId, createdAt);
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, service, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), null);
-            ControlPlaneHttpHandler control = closing(new ControlPlaneHttpHandler(readModel, service, owner, eventHub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, null));
-            CoordinationHttpServer server = closing(new CoordinationHttpServer(service, new InetSocketAddress("127.0.0.1", 0), null, control));
+            ControlPlaneHttpHandler control = own(new ControlPlaneHttpHandler(readModel, service, owner, eventHub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, null));
+            CoordinationHttpServer server = own(new CoordinationHttpServer(service, new InetSocketAddress("127.0.0.1", 0), null, control));
             server.start();
             if (member != null) {
                 member.serve(server);
             }
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
+        }
+
+        private <T extends AutoCloseable> T own(T resource) {
+            mine.add(resource);
+            return closing(resource);
+        }
+
+        /** Stops this computer's server and link owner as a restart of its process would, leaving its folders as they are. */
+        void stop() throws Exception {
+            for (int index = mine.size() - 1; index >= 0; index--) {
+                mine.get(index).close();
+            }
         }
 
         Map<String, Object> post(String command, Map<String, Object> body) throws Exception {
@@ -217,6 +236,222 @@ final class ControlPlaneReplicationTest {
         assertTrue(ReplicationJournal.lastDisconnect(member.coordination).orElseThrow().startsWith("REMOTE_REQUEST "));
         assertTrue(ReplicationJournal.lastDisconnect(leader.coordination).orElseThrow().startsWith("LOCAL_REQUEST "));
         assertEquals(2, ReplicationJournal.read(member.coordination).stream().filter(line -> line.contains(" CONNECTED ")).count());
+    }
+
+    private boolean hasUsableSessionOtherThan(Computer computer, List<PeerSession> earlier) {
+        return computer.owner.get().sessions().stream().anyMatch(session -> !earlier.contains(session) && session.isUsable());
+    }
+
+    private static boolean journaled(Computer computer, String event) {
+        return ReplicationJournal.read(computer.coordination).stream().anyMatch(line -> line.contains(" " + event));
+    }
+
+    private static void settle() throws InterruptedException {
+        Thread.sleep(5_000);
+    }
+
+    private LinkRuntimeOwner strangerOwner(String name, NodeIdentity node, java.util.function.Predicate<String> returning, List<String> journal) {
+        return closing(new LinkRuntimeOwner(new Onboarding(temp.resolve(name + "/.synesis/local/profile/link"), ignored -> {
+        }), node, ignored -> {
+        }, new ProjectIdentity(projectId, createdAt), (remote, payload) -> CompletableFuture.completedFuture(new byte[0]), session -> {
+        }, returning, journal::add));
+    }
+
+    /**
+     * The first real run's restart test failed here: the leader dialed the member's invitation, its coordination server was
+     * restarted, and nothing reconnected until a person made a new invitation. Now the leader writes down whom it dialed and
+     * dials again by itself.
+     */
+    @Test
+    void aRestartedJoinerDialsItsHostAgainWithoutAnInvitationAndTheMembersNextProposalIsAccepted() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
+        List<PeerSession> before = List.copyOf(member.owner.get().sessions());
+
+        leader.stop();
+        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+
+        await(() -> hasUsableSessionOtherThan(member, before) && restarted.hasPeer());
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
+        assertEquals(4, restarted.store().events().size());
+        assertTrue(journaled(restarted, "DIAL_RESUMED"));
+    }
+
+    /** The other half: the member hosted the invitation, its server restarts, and the leader's redial finds the same port. */
+    @Test
+    void aRestartedHostListensOnItsOldPortAndAdmitsTheNodeItAdmittedBefore() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        assertEquals(Set.of(leaderNode.nodeId()), ReplicationPeers.read(member.coordination).hosted().values().iterator().next());
+        List<PeerSession> before = List.copyOf(leader.owner.get().sessions());
+
+        member.stop();
+        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+
+        await(() -> hasUsableSessionOtherThan(leader, before) && restarted.hasPeer());
+        assertTrue(new WorkIntentService(restarted.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
+        assertEquals(2, leader.store().events().size());
+        assertTrue(journaled(restarted, "HOST_RESUMED"));
+    }
+
+    /** A node the role names, which the host never admitted, gets nothing from a restarted host: not by link, not by redial. */
+    @Test
+    void aRestartedHostRefusesANodeItNeverAdmittedEvenWhenTheRoleNamesIt() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity aNode = identity("a");
+        NodeIdentity bNode = identity("b");
+        Set<String> both = Set.of(aNode.nodeId(), bNode.nodeId());
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(both));
+        Computer a = new Computer("a", aNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Map<String, Object> invitation = leader.post("invite", Map.of());
+        a.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
+        await(() -> MemberReplication.recordedState(a.coordination).filter("CONNECTED"::equals).isPresent());
+        List<String> bJournal = new CopyOnWriteArrayList<>();
+        LinkRuntimeOwner b = strangerOwner("b", bNode, node -> true, bJournal);
+        List<PeerSession> before = List.copyOf(a.owner.get().sessions());
+
+        leader.stop();
+        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(both));
+        await(() -> hasUsableSessionOtherThan(a, before) && restarted.hasPeer());
+        b.resumeDialing((String) invitation.get("inviteUri"));
+        settle();
+
+        assertTrue(b.get().sessions().isEmpty(), bJournal.toString());
+        assertTrue(restarted.owner.get().sessions().stream().noneMatch(session -> session.remoteNodeId().equals(bNode.nodeId())));
+        assertTrue(bJournal.stream().anyMatch(line -> line.startsWith("REDIAL_FAILED")), bJournal.toString());
+    }
+
+    @Test
+    void aMemberRemovedBeforeTheRestartIsNeitherAdmittedByTheRestartedHostNorRedialed() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity aNode = identity("a");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(aNode.nodeId(), memberNode.nodeId())));
+        Computer a = new Computer("a", aNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        a.post("join", Map.of("inviteUri", leader.post("invite", Map.of()).get("inviteUri")));
+        leader.post("join", Map.of("inviteUri", member.post("invite", Map.of()).get("inviteUri")));
+        await(() -> a.hasPeer() && member.hasPeer() && leader.peers().size() == 2);
+        leader.stop();
+        // The leader's list loses both while it is down; neither record is used.
+        ReplicationSettings.leader(Set.of()).write(leader.coordination);
+
+        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of()));
+        settle();
+
+        assertTrue(restarted.owner.get().sessions().isEmpty());
+        assertTrue(a.owner.get().sessions().stream().noneMatch(PeerSession::isUsable));
+        assertTrue(member.owner.get().sessions().stream().noneMatch(PeerSession::isUsable));
+        assertTrue(journaled(restarted, "HOST_RESUME_SKIPPED"));
+        assertTrue(journaled(restarted, "DIAL_RESUME_SKIPPED"));
+    }
+
+    @Test
+    void aPeersFileThatCannotBeReadResumesNothingAndTheServerStarts() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        leader.stop();
+        Files.writeString(leader.coordination.resolve(ReplicationPeers.FILE), "dial=not a record\n");
+
+        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        settle();
+
+        assertTrue(restarted.owner.get().sessions().isEmpty());
+        assertTrue(member.owner.get().sessions().stream().noneMatch(PeerSession::isUsable));
+        assertTrue(journaled(restarted, "PEERS_IGNORED"));
+    }
+
+    private Computer hostedAndConnected(NodeIdentity leaderNode, NodeIdentity memberNode) throws Exception {
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        return member;
+    }
+
+    /** The handshake that admitted the leader is on disk before the host restarts, and the restarted host adds to it instead of starting over. */
+    @Test
+    void aHostKeepsItsAcceptedHandshakesAcrossARestartAndAddsTheNextOne() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer member = hostedAndConnected(leaderNode, memberNode);
+        Set<String> before = ReplicationReplay.read(member.coordination, 8_192).orElseThrow();
+        assertEquals(1, before.size());
+
+        member.stop();
+        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+
+        await(() -> journaled(restarted, "HOST_RESUMED") && restarted.hasPeer());
+        Set<String> after = ReplicationReplay.read(restarted.coordination, 8_192).orElseThrow();
+        assertEquals(2, after.size());
+        assertTrue(after.containsAll(before));
+    }
+
+    @Test
+    void aReplayFileThatCannotBeReadMeansTheHostDoesNotResumeAndForgetsItsHostingRecord() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer member = hostedAndConnected(leaderNode, memberNode);
+        member.stop();
+        Files.writeString(member.coordination.resolve(ReplicationReplay.FILE), "not a fingerprint\n");
+
+        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        settle();
+
+        assertTrue(journaled(restarted, "REPLAY_GUARD_UNREADABLE"), ReplicationJournal.read(restarted.coordination).toString());
+        assertTrue(!journaled(restarted, "HOST_RESUMED"));
+        assertTrue(restarted.owner.get().sessions().isEmpty());
+        assertTrue(ReplicationPeers.read(restarted.coordination).hosted().isEmpty());
+    }
+
+    @Test
+    void aMissingReplayFileWhileAHostingRecordExistsMeansTheHostDoesNotResume() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer member = hostedAndConnected(leaderNode, memberNode);
+        member.stop();
+        Files.delete(member.coordination.resolve(ReplicationReplay.FILE));
+
+        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        settle();
+
+        assertTrue(journaled(restarted, "REPLAY_GUARD_UNREADABLE"));
+        assertTrue(!journaled(restarted, "HOST_RESUMED"));
+        assertTrue(restarted.owner.get().sessions().isEmpty());
+    }
+
+    @Test
+    void aHostWhoseOldPortIsTakenSaysSoAndStillStarts() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        int port = ReplicationPeers.read(member.coordination).hosted().keySet().iterator().next();
+        member.stop();
+
+        try (DatagramSocket taken = new DatagramSocket(port)) {
+            Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+            assertTrue(taken.isBound());
+            assertTrue(journaled(restarted, "HOST_RESUME_FAILED"), ReplicationJournal.read(restarted.coordination).toString());
+            assertTrue(restarted.owner.get().sessions().isEmpty());
+        }
     }
 
     @Test

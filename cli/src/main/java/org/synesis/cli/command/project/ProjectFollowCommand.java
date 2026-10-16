@@ -1,8 +1,11 @@
 package org.synesis.cli.command.project;
 
+import java.util.Set;
+
 import org.synesis.cli.bootstrap.CliRuntime;
 
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.link.identity.NodeIdentity;
@@ -59,6 +62,8 @@ public final class ProjectFollowCommand extends ProjectRoleCommand {
         }
         requireRemote(role, codeRemote);
         role.write(ReplicationSettings.member(leader).withCodeRemote(codeRemote));
+        // A member reconnects to its leader only; records of any other node (from an earlier role) must not be resumed.
+        ReplicationPeers.retainOnly(role.coordination(), Set.of(leader));
         runtime.terminal().stdout("ROLE=member");
         runtime.terminal().stdout("NODE_ID=" + own);
         runtime.terminal().stdout("LEADER_NODE_ID=" + leader);

@@ -97,5 +97,16 @@ redial, a redial that worked) are in `replication.log` beside `replication.statu
 folder (`.synesis/coordination`). While the link is down a member's proposals answer `LEADER_UNREACHABLE` at once, and
 the member catches up with a pull (within 15 seconds) once the link is back.
 
-Not done in step 2: a restart of either coordination server still needs a new `link invite` and `link join` (neither
-side remembers the other's endpoints or the invitation across a restart), and a member list is local state of A.
+**A restart of either coordination server recovers by itself.** Each computer writes down, in `replication.peers` in the
+project's coordination folder (local, excluded from version control, never sent to a peer), the host it dialed and its
+invitation link, and the UDP port it hosted an invitation on with the node IDs it admitted. When the server starts again
+(`synesis project share`/`follow` stop it, the next `synesis link ...` starts it) the computer that dialed dials the same
+host again, and the computer that hosted listens on the same port again and admits exactly the nodes it admitted before
+that its role still names. No new invitation is needed. `replication.log` says what happened: `DIAL_RESUMED`,
+`HOST_RESUMED` and, when something cannot resume, `DIAL_RESUME_SKIPPED`/`HOST_RESUME_SKIPPED` (the role no longer names
+the peer), `PEERS_IGNORED` (the file cannot be read) or `HOST_RESUME_FAILED`. `remove-member` and `follow` drop the
+records of nodes the role no longer names.
+
+What still needs a new `link invite` and `link join`: the hosting computer's port was taken by another program when it
+started again (`HOST_RESUME_FAILED`), the dialing computer can no longer reach the endpoints of the invitation (the host's
+address changed), or the file was lost or unreadable. A member list is local state of A.

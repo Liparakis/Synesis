@@ -27,8 +27,15 @@ handshake"), on the same listening socket, so the UDP port in the invitation sta
 is open. Both identities are authenticated as for the first session and a transcript is accepted once per host
 process. Before the invitation is consumed, and on a host given no rule, nobody is admitted without the capability.
 The dialing side, which kept the invitation's endpoints, dials them again (the endpoint the last session was made over
-first) with a fresh session ID; when and how often is the caller's policy, not the protocol's. Neither side keeps this
-across a restart of the process.
+first) with a fresh session ID; when and how often is the caller's policy, not the protocol's.
+
+Link itself keeps nothing across a restart of the process, but it can start from what its caller kept. A host can
+be reopened on the UDP port it had (`Onboarding.resumeRetainedHost`) with an admission whose invitation counts as used
+before the restart (`InvitationAdmission.markConsumed`); its capability is random and unknown to anyone, so it admits
+without one only the nodes the caller's rule names, which the coordination server limits to the node IDs it recorded
+for that port. A dialer can be restored from the invitation link its first session used
+(`Onboarding.resumeRetainedJoin`): the link is checked as of its issue time, since only its signature and the host it
+pins matter now, and `redial` dials its endpoints with no invitation. A retained host keeps its replay guard across a restart (`replication.replay`), and resumes no hosting without it.
 
 ## Control-ready liveness
 

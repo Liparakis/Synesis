@@ -38,6 +38,7 @@ import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
 import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
+import org.synesis.link.session.ReplayGuard;
 import org.synesis.link.session.SessionCloseReason;
 
 /**
@@ -82,6 +83,26 @@ public final class Onboarding {
   private final Path profileDirectory;
   private final Consumer<OnboardingEvent> events;
   private final InetSocketAddress stunServer;
+  private volatile ReplayGuard retainedReplay = new ReplayGuard(OnboardingEndpoint.RETAINED_REPLAY_ENTRIES);
+
+  /**
+   * Replaces the replay guard that every retained host endpoint of this facade shares, so that a caller can give it
+   * one restored from disk before any endpoint listens. Without it the guard is process-local.
+   *
+   * @param guard guard of {@link #retainedReplayEntries()} capacity
+   */
+  public void useRetainedReplayGuard(ReplayGuard guard) {
+    this.retainedReplay = Objects.requireNonNull(guard, "guard");
+  }
+
+  /**
+   * Capacity of the retained host's replay guard.
+   *
+   * @return maximum accepted handshakes it remembers
+   */
+  public static int retainedReplayEntries() {
+    return OnboardingEndpoint.RETAINED_REPLAY_ENTRIES;
+  }
 
   /**
    * Creates an onboarding faÃ§ade for one profile.
@@ -176,13 +197,17 @@ public final class Onboarding {
 
   private PreparedJoin importCompactInvitation(String link,
       PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction, boolean retained) throws OnboardingFailure {
+      Consumer<PeerSession> sessionAction, boolean retained, boolean resumed)
+      throws OnboardingFailure {
     CompactBootstrapInvitation invitation;
     try {
       invitation = CompactBootstrapInvitation.fromShareLink(link);
+      // A resumed join dials a host that already admitted this node, so the invitation is checked as of
+      // its issue time: its signature and the host it pins still count, its expiry does not.
       if (!invitation.protocolVersion()
           .equals(ProtocolVersion.V1)
-          || !invitation.verifyAt(Instant.now(), CompactBootstrapInvitation.DEFAULT_CLOCK_SKEW)) {
+          || !invitation.verifyAt(resumed ? invitation.issuedAt() : Instant.now(),
+              CompactBootstrapInvitation.DEFAULT_CLOCK_SKEW)) {
         throw new IllegalArgumentException("compact invitation is invalid or expired");
       }
       emit(OnboardingEventType.INVITE_PARSED, "");
@@ -200,13 +225,20 @@ public final class Onboarding {
       endpoint = OnboardingEndpoint.openClient(stunServer, retained);
       List<Candidate> candidates = endpoint.gatherCandidates("join");
       CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
-          Instant.now().truncatedTo(ChronoUnit.SECONDS), invitation.expiresAt(), candidates);
+          Instant.now().truncatedTo(ChronoUnit.SECONDS),
+          resumed ? Instant.now().plus(CompactBootstrapInvitation.MAX_LIFETIME)
+              : invitation.expiresAt(),
+          candidates);
       CompactAnswer answer = CompactAnswer.create(invitation, candidates);
       emit(OnboardingEventType.LOCAL_DESCRIPTOR_CREATED, "");
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       emit(OnboardingEventType.ANSWER_LINK, answer.shareLink());
-      return new PreparedJoin(local.identity(), localDescriptor, invitation, answer, endpoint,
-          applicationHandler, sessionAction, retained);
+      PreparedJoin prepared = new PreparedJoin(local.identity(), localDescriptor, invitation, answer,
+          endpoint, applicationHandler, sessionAction, retained);
+      if (resumed) {
+        prepared.started.set(true);
+      }
+      return prepared;
     } catch (Exception failure) {
       closeAfterFailedOpen(endpoint);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
@@ -342,7 +374,7 @@ public final class Onboarding {
           localDescriptor, remoteDescriptor, applicationHandler);
       endpoint = OnboardingEndpoint.openServer(local.identity(), expectedPeer, sessionId,
           capability, bootstrapHandler, stunServer, returningPeers,
-          session -> acceptReturning(session, sessionAction));
+          session -> acceptReturning(session, sessionAction), retainedReplay);
       endpoint.onIncompatiblePeer(mismatch -> emit(OnboardingEventType.INCOMPATIBLE_PEER, mismatch.message()));
       emit(OnboardingEventType.SESSION_CREATED, "");
       emit(OnboardingEventType.LISTENER_READY, "");
@@ -437,7 +469,7 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     Objects.requireNonNull(link, "link");
-    return importCompactInvitation(link, applicationHandler, sessionAction, false);
+    return importCompactInvitation(link, applicationHandler, sessionAction, false, false);
   }
 
   /**
@@ -457,7 +489,56 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     Objects.requireNonNull(link, "link");
-    return importCompactInvitation(link, applicationHandler, sessionAction, true);
+    return importCompactInvitation(link, applicationHandler, sessionAction, true, false);
+  }
+
+  /**
+   * Restores the join handle of a session a runtime kept before it restarted, from the invitation it
+   * was made with, so that {@link PreparedJoin#redial()} dials the host again with no new invitation.
+   * The handle counts as connected: the host admitted this node once, and admits it again only if its
+   * own rule still names it.
+   *
+   * @param link               the invitation link the first session was made with, expired or not
+   * @param applicationHandler optional application-stream handler
+   * @param sessionAction      callback invoked after control readiness, for each session {@code redial} makes
+   * @return open join handle
+   * @throws OnboardingFailure if the link is not an authentic invitation, or the transport cannot open
+   */
+  public PreparedJoin resumeRetainedJoin(String link,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(link, "link");
+    return importCompactInvitation(link, applicationHandler, sessionAction, true, true);
+  }
+
+  /**
+   * Opens the listening side of a host that restarted, on the UDP port it had, with no invitation: it
+   * admits only the peers {@code returningPeers} names, as {@link #createRetainedInvitation} does after
+   * its invitation is used, and nobody can connect with a capability. Each admitted session is passed
+   * to {@code sessionAction}, on another thread.
+   *
+   * @param port               the port the host listened on before
+   * @param applicationHandler optional application-stream handler
+   * @param sessionAction      callback invoked for each admitted session
+   * @param returningPeers     who may connect; read at every connection
+   * @return the open listener
+   * @throws OnboardingFailure if the identity cannot be loaded or the port cannot be bound
+   */
+  public ResumedHost resumeRetainedHost(int port,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers)
+      throws OnboardingFailure {
+    Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(returningPeers, "returning peers");
+    IdentityBootstrap.Result local = loadIdentity();
+    try {
+      return new ResumedHost(OnboardingEndpoint.openResumedServer(local.identity(), port,
+          applicationHandler, stunServer, returningPeers,
+          session -> acceptReturning(session, sessionAction), retainedReplay));
+    } catch (Exception failure) {
+      throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+    }
   }
 
   /**
@@ -701,6 +782,15 @@ public final class Onboarding {
     }
 
     /**
+     * Returns the UDP port this host listens on, which a restarted host binds again.
+     *
+     * @return local UDP port
+     */
+    public int listeningPort() {
+      return endpoint.port();
+    }
+
+    /**
      * Waits for the session and closes it after the callback.
      *
      * @throws OnboardingFailure if the session or descriptor exchange fails
@@ -795,6 +885,32 @@ public final class Onboarding {
   }
 
   /**
+   * The listening side of a host that restarted, owned until {@link #close()}.
+   */
+  public static final class ResumedHost implements AutoCloseable {
+
+    private final OnboardingEndpoint endpoint;
+
+    private ResumedHost(OnboardingEndpoint endpoint) {
+      this.endpoint = endpoint;
+    }
+
+    /**
+     * Returns the UDP port this listener is bound to.
+     *
+     * @return local UDP port
+     */
+    public int listeningPort() {
+      return endpoint.port();
+    }
+
+    @Override
+    public void close() {
+      endpoint.close();
+    }
+  }
+
+  /**
    * Opens join-side state for one invitation.
    *
    * <p>The instance is single-use: it keeps the local endpoint ready for the direct race, and
@@ -837,6 +953,15 @@ public final class Onboarding {
      */
     public String answerLink() {
       return answer.shareLink();
+    }
+
+    /**
+     * Returns the node ID of the host this handle dials.
+     *
+     * @return the host's node ID
+     */
+    public String hostNodeId() {
+      return compactInvitation.hostNodeId();
     }
 
     /**

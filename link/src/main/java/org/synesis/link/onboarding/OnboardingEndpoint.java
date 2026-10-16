@@ -17,6 +17,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +33,7 @@ import org.synesis.link.candidate.CandidateType;
 import org.synesis.link.candidate.StunCandidateProvider;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.portmap.RouterPortMapping;
+import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.session.InvitationAdmission;
 import org.synesis.link.session.LivenessConfiguration;
@@ -125,15 +127,44 @@ final class OnboardingEndpoint implements AutoCloseable {
    * @param returning          who may reconnect without the invitation, or {@code null} for a
    *                           one-shot endpoint
    * @param returned           receives each session admitted by {@code returning}
+   * @param retainedReplay     the guard of a retained endpoint, which the caller may have restored from disk
    */
   static OnboardingEndpoint openServer(NodeIdentity identity, String expectedPeer, UUID sessionId,
       byte[] capability, PeerSession.ApplicationStreamHandler applicationHandler,
-      InetSocketAddress stunServer, Predicate<String> returning, Consumer<PeerSession> returned)
+      InetSocketAddress stunServer, Predicate<String> returning, Consumer<PeerSession> returned,
+      ReplayGuard retainedReplay) throws Exception {
+    return openServer(identity, expectedPeer, sessionId, capability, applicationHandler, stunServer,
+        returning, returned, 0, false, retainedReplay);
+  }
+
+  /**
+   * Opens the listening side of a host that restarted: the same UDP {@code port}, and an admission
+   * whose invitation counts as already used, so the peers {@code returning} names (and nobody else)
+   * connect without one. The capability is random and told to no one, so no invitation can open it.
+   *
+   * @throws java.net.BindException when the port is taken
+   */
+  static OnboardingEndpoint openResumedServer(NodeIdentity identity, int port,
+      PeerSession.ApplicationStreamHandler applicationHandler, InetSocketAddress stunServer,
+      Predicate<String> returning, Consumer<PeerSession> returned, ReplayGuard retainedReplay)
       throws Exception {
+    byte[] capability = new byte[CompactBootstrapInvitation.MINIMIZED_CAPABILITY_BYTES];
+    new SecureRandom().nextBytes(capability);
+    return openServer(identity, null, UUID.randomUUID(), capability, applicationHandler, stunServer,
+        returning, returned, port, true, retainedReplay);
+  }
+
+  private static OnboardingEndpoint openServer(NodeIdentity identity, String expectedPeer,
+      UUID sessionId, byte[] capability, PeerSession.ApplicationStreamHandler applicationHandler,
+      InetSocketAddress stunServer, Predicate<String> returning, Consumer<PeerSession> returned,
+      int port, boolean invitationUsed, ReplayGuard retainedReplay) throws Exception {
     OnboardingEndpoint endpoint = new OnboardingEndpoint(stunServer);
     try {
       boolean retained = returning != null;
       endpoint.admission = new InvitationAdmission(sessionId, capability);
+      if (invitationUsed) {
+        endpoint.admission.markConsumed();
+      }
       if (retained) {
         endpoint.admission.admitReturning(returning, returned);
       }
@@ -148,11 +179,11 @@ final class OnboardingEndpoint implements AutoCloseable {
           NettyQuicTransport.sharedConnectionHandler(),
           NettySessionHandshake.serverInvitationStreamHandler(
               identity, expectedPeer, List.of(ProtocolVersion.V1),
-              retained ? new ReplayGuard(RETAINED_REPLAY_ENTRIES) : new ReplayGuard(),
+              retained ? retainedReplay : new ReplayGuard(),
               endpoint.established,
               retained ? LivenessConfiguration.RETAINED : LivenessConfiguration.DEFAULT,
               endpoint.admission, applicationHandler),
-          retained ? RETAINED_QUIC_IDLE : null));
+          retained ? RETAINED_QUIC_IDLE : null), port);
       return endpoint;
     } catch (Exception failure) {
       endpoint.close();
@@ -175,7 +206,7 @@ final class OnboardingEndpoint implements AutoCloseable {
           .trustManager(InsecureTrustManagerFactory.INSTANCE)
           .applicationProtocols(SynesisLink.ALPN)
           .build();
-      endpoint.bind(NettyQuicTransport.clientCodec(ssl, retained ? RETAINED_QUIC_IDLE : null));
+      endpoint.bind(NettyQuicTransport.clientCodec(ssl, retained ? RETAINED_QUIC_IDLE : null), 0);
       return endpoint;
     } catch (Exception failure) {
       endpoint.close();
@@ -183,11 +214,11 @@ final class OnboardingEndpoint implements AutoCloseable {
     }
   }
 
-  private void bind(ChannelHandler codec) throws Exception {
+  private void bind(ChannelHandler codec, int port) throws Exception {
     udp = new Bootstrap().group(group)
         .channel(NioDatagramChannel.class)
         .handler(codec)
-        .bind(new InetSocketAddress(0))
+        .bind(new InetSocketAddress(port))
         .sync()
         .channel();
     if (stunServer != null) {
@@ -197,6 +228,11 @@ final class OnboardingEndpoint implements AutoCloseable {
 
   Channel udp() {
     return udp;
+  }
+
+  /** The UDP port this endpoint listens or sends from. */
+  int port() {
+    return ((InetSocketAddress) udp.localAddress()).getPort();
   }
 
   /** Completes when the server side authenticates one peer; absent on a client endpoint. */
