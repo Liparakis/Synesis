@@ -1,3 +1,39 @@
+# 2026-10-16 — Two computers, one project: four real runs of ADR-0098 step 2 (PARTIAL)
+
+A = the owner's Windows computer, leader, real Claude Code (Sonnet 5.5, medium); it only dials out (no inbound
+firewall rule). B = a Linux VM on the same LAN, member, real Codex (GPT-6 Luna, high), hosting the invitation. Code
+remote: a bare repository on B, reached from A over SSH with a repository-local `core.sshCommand`. Each run was a fresh
+disposable project, joined with `project share` / `follow` / `add-member` and `link invite` / `link join`. Goal:
+`slug.py` and `wrap.py`, mandatory review, `python -m unittest` as validation. Details and timings:
+`D:\SynesisAcceptance\overnight-2026-10-16\TRAIL.md`.
+
+**Shown (VERIFIED from both logs and Git):**
+
+- Claims from both computers land in one log; the two logs stay identical entry for entry.
+- A member's lane goes through the shared remote: B pushed `refs/synesis/{prepared,snapshots}` before proposing, A
+  fetched them.
+- Review across computers: in run 4 a Codex reviewer on B reviewed Claude's `slug.py` from A (REVIEW request
+  ACCEPTED), and A merged it (`8b58d46`).
+- A merged a member's lane with no agent of its own acting: the reviewer's lane written on B (`review_slug.md`) was
+  merged by A (`ff1aa6e`) and A pushed the control branch (the remote's `master` = `ff1aa6e`). `python -m unittest` on
+  A: 6 tests OK.
+- The session held for 25+ minutes once the stream fix was in (runs 3 and 4); a member's controller waited for the
+  other computer's lane instead of ending (runs 2-4).
+
+**Defects the runs found, fixed the same night:** a controller ended when its own agents stopped although another
+computer's agent still held a lane (7e3d4bf8); the session could not come back after a drop and nothing recorded why
+(c16f19bd, which also found a hosting endpoint that accepted only one QUIC connection ever); every exchange leaked one
+of a connection's 64 QUIC streams, which stopped replication 12-16 minutes in, in runs 1 and 2 (e16638a1).
+
+**NOT REACHED.** The WorkGroup did not complete: `wrap.py` (written on B, 6 tests) stayed `REVIEW_PENDING`. Two causes,
+neither specific to two computers:
+- Under mandatory review a producer's lane stays open until reviewed, and an agent holding a producer lane cannot take
+  a reviewer lane (`SCOPE_EXTENSION_ROLE_CHANGE_REQUIRES_LIFECYCLE`), so two producers reviewing each other deadlock
+  (run 3; a test-design error, fixed in run 4 by a dedicated reviewer).
+- A reviewer's lane ends after the one candidate it took, a finished lane is not resumed, and a later agent was not
+  offered the open review ("I wasn't assigned to review it"), so the second module had nobody to review it (run 4).
+Also not reached: B fast-forwarding onto A's merged head (no new lane was allocated on B after the merge); redial after
+a real drop (no drop happened after the stream fix); two networks; the Windows gate on these commits.
 # 2026-10-16 — A Link connection ran out of streams after 64 application exchanges (ADR-0098 step 2, slice 6)
 
 Found in the same two-computer run as the redial work, and again in a second run: 12 to 16 minutes after connecting, the

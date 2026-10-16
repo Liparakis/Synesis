@@ -10,6 +10,13 @@ Built so far (`docs/agent/CURRENT.md`, 2026-10-15 and 2026-10-16):
 - **Step 1**, the compatibility number: `LinkCompatibility.CURRENT` = 4.
 - **From step 2's "First"**, heartbeats out of the log: `ParticipantActivity`.
 - **Found and fixed while writing this ADR:** one coordination folder and incremental log reads.
+- **Step 2, built 2026-10-16, PARTIAL:**
+  - The audit, member proposals, Link transport, code through a Git remote, merge outside the lock, joining, and
+    redial are built.
+  - In real runs between two computers, cross-computer claims, review and the leader merging a member's lane were
+    shown.
+  - A WorkGroup did not complete, because of review routing that is not specific to two computers.
+  - See `docs/agent/CURRENT.md`, "four real runs".
 
 It builds on ADR-0066 (overlay), ADR-0076 (adjacency reconciliation), ADR-0077 (multi-peer QUIC),
 ADR-0080 (project identity), ADR-0093 (conversations) and ADR-0097 (answer link). It changes
