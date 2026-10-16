@@ -148,6 +148,17 @@ final class NettyQuicLoopbackTest {
     }
   }
 
+  private static byte[] answered(String name, PeerSession session, byte[] payload)
+      throws Exception {
+    try {
+      return session.requestApplication(payload)
+          .toCompletableFuture()
+          .get(5, TimeUnit.SECONDS);
+    } catch (java.util.concurrent.TimeoutException | ExecutionException failure) {
+      throw new AssertionError(name + " was not answered: " + failure, failure);
+    }
+  }
+
   private static String readProcessOutput(Process process) throws java.io.IOException {
     return new String(process.getInputStream()
         .readAllBytes());
@@ -322,7 +333,7 @@ final class NettyQuicLoopbackTest {
       InetSocketAddress serverAddress = (InetSocketAddress) serverUdp.localAddress();
       client = QuicChannel.newBootstrap(clientUdp)
           .handler(new ChannelInboundHandlerAdapter())
-          .streamHandler(new ChannelInboundHandlerAdapter())
+          .streamHandler(NettySessionHandshake.clientApplicationStreamHandler())
           .remoteAddress(serverAddress)
           .connect()
           .sync()
@@ -332,7 +343,8 @@ final class NettyQuicLoopbackTest {
       QuicStreamChannel stream = client.createStream(QuicStreamType.BIDIRECTIONAL,
               NettySessionHandshake.clientStreamHandler(initiatorIdentity, responderIdentity.nodeId(),
                   transcript, localProof, new ReplayGuard(), clientSession,
-                  org.synesis.link.session.LivenessConfiguration.DEFAULT, null))
+                  org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                  (remoteNodeId, payload) -> CompletableFuture.completedFuture(payload)))
           .sync()
           .getNow();
       assertNotNull(stream);
@@ -371,10 +383,13 @@ final class NettyQuicLoopbackTest {
       assertArrayEquals(large, clientResult.requestApplication(large)
           .toCompletableFuture()
           .get(5, TimeUnit.SECONDS));
-      for (int index = 0; index < 8; index++) {
-        assertArrayEquals(applicationPayload, clientResult.requestApplication(applicationPayload)
-            .toCompletableFuture()
-            .get(5, TimeUnit.SECONDS));
+      // Each exchange takes a QUIC stream; more than the 64-stream credit proves ended streams
+      // return their credit, in both directions.
+      for (int index = 0; index < 200; index++) {
+        assertArrayEquals(applicationPayload,
+            answered("client-initiated request " + index, clientResult, applicationPayload));
+        assertArrayEquals(applicationPayload,
+            answered("server-initiated request " + index, serverResult, applicationPayload));
       }
       CompletableFuture<PeerSession> duplicate = new CompletableFuture<>();
       client.createStream(QuicStreamType.BIDIRECTIONAL,

@@ -1,3 +1,39 @@
+# 2026-10-16 — A Link connection ran out of streams after 64 application exchanges (ADR-0098 step 2, slice 6)
+
+Found in the same two-computer run as the redial work, and again in a second run: 12 to 16 minutes after connecting, the
+member's pulls stopped being answered (member marked the leader silent, `REPLICATION_STATE=DISCONNECTED`) while neither
+side's `replication.log` recorded a session end. The session was live (the control stream and its heartbeats were fine);
+only application requests hung. 64 pulls at 15 s is 16 minutes, and `NettyQuicTransport` gives each connection
+`initialMaxStreamsBidirectional(64)`.
+
+**Reproduction (before the fix).** `NettyQuicLoopbackTest.establishesIdentityBoundSessionOnLocalQuicControlStream` now
+makes 200 sequential application requests in each direction over one real loopback QUIC session (it used 8). On the old
+code request 60 of the client-initiated loop failed with `QuicTransportError{code=4, name='STREAM_LIMIT_ERROR'}`
+(`QUICHE_ERR_STREAM_LIMIT`): the control stream, one demo-work, one small and one 300 kB application exchange had used
+4 of the client's 64 bidirectional streams, and 60 more used the rest. Nothing was returned. After the fix all 400 requests
+are answered.
+
+**Root cause.** `StreamExchange` (`link/.../transport/control`) wrote the request and never ended the client's half of
+the stream (no FIN), then closed the channel once the reply was read. QUIC gives a stream back to the opener's limit only
+when both halves have ended; the abandoned request half kept every exchange counted for the life of the connection. The
+same code serves application and demo-work streams, and the leader-to-member NOTICE direction (the peer's stream limit is
+separate, so it hits at the same count on whichever side opens streams).
+
+**Fix.** The client calls `SHUTDOWN_OUTPUT` after the request write, and both sides set `ALLOW_HALF_CLOSURE` on the
+exchange stream (Netty otherwise closes the server's channel when the FIN arrives, before it replies). The limit stays 64.
+Wire format and published API are unchanged; a peer that does not send the FIN (older build) still works because the
+server replies and closes as before.
+
+**Defence in depth, not added.** Ending a session after repeated request timeouts is not reachable from the evidence
+once the leak is gone: a stream slot (`MAX_STREAMS`, 4 active) is released on every path through `channelInactive`
+(reply, 5 s timeout, error), so timeouts no longer accumulate, and a hung peer handler on a live control stream is
+already answered by the 5 s per-request timeout and the replication layer's silent-leader state. A rule that closes a
+session on N timeouts would also end sessions over a slow handler that liveness correctly considers alive. Not tested:
+a long run of handler timeouts (64 of them is over five minutes).
+
+Tests: link 182, coordination 306, project-record 60, relay 12, mcp-contract 20, workspace 767 (2 skipped), mcp 189, cli 164,
+all passing on the Linux gate with `repositoryHygieneCheck`.
+
 # 2026-10-16 — A dropped project session comes back by itself, and the reason it ended is written down (ADR-0098 step 2, slice 5)
 
 Found in the first real two-computer run today. Leader A was Windows with no inbound firewall rule (it can only dial

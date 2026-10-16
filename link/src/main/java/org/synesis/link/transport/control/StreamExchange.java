@@ -24,6 +24,12 @@ import org.synesis.link.session.PeerSession;
  * One bounded request and one reply over a bidirectional QUIC stream, shared by the application
  * and demo-work streams. The client holds a stream slot until the stream ends and gives up after
  * {@link #OPERATION_TIMEOUT_MILLIS}; the server answers once, within the same deadline, and closes.
+ *
+ * <p>The client ends its own half with a FIN right after the request, and both sides allow half-closure so
+ * that FIN does not close the server before it replies. A QUIC peer returns a stream to the other side's
+ * stream limit only when both halves have ended; a request half that is merely abandoned never ends, so
+ * every exchange used to cost one stream for good and the connection refused new ones after
+ * {@code initialMaxStreamsBidirectional} (64).
  */
 @SuppressWarnings("resource")
 final class StreamExchange {
@@ -77,6 +83,7 @@ final class StreamExchange {
         QuicStreamType.BIDIRECTIONAL, new ChannelInitializer<QuicStreamChannel>() {
           @Override
           protected void initChannel(QuicStreamChannel channel) {
+            channel.config().setOption(io.netty.channel.ChannelOption.ALLOW_HALF_CLOSURE, true);
             LengthPrefixedFrames.install(channel.pipeline(), maxFrameBytes);
             channel.pipeline()
                 .addLast(new ClientHandler<>(label, maxFrameBytes, request, reply, result,
@@ -105,6 +112,7 @@ final class StreamExchange {
       context.close();
       return;
     }
+    context.channel().config().setOption(io.netty.channel.ChannelOption.ALLOW_HALF_CLOSURE, true);
     ServerHandler server = new ServerHandler(label, maxFrameBytes, session, serve, release);
     context.pipeline()
         .replace(oldHandler, handlerName, server);
@@ -140,7 +148,8 @@ final class StreamExchange {
               context.close();
             }
           }, OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-      context.writeAndFlush(Unpooled.wrappedBuffer(request.get()));
+      context.writeAndFlush(Unpooled.wrappedBuffer(request.get()))
+          .addListener(io.netty.handler.codec.quic.QuicStreamChannel.SHUTDOWN_OUTPUT);
     }
 
     @Override
