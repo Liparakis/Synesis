@@ -1,3 +1,20 @@
+# 2026-10-16 — The project's validation command is not a part to claim (run 6 follow-up)
+
+Run 6 (`mp6-two-pc`, `python -m unittest` in `.synesis/project.json` `validation`, mandatory review) never completed its
+WorkGroup. A Codex agent whose lane had ended started a fresh session and said: "The README also names a whole
+repository acceptance check (`python -m unittest`), and neither active lane claims that check, so I'm taking that
+unclaimed integration verification". It announced a producer lane for `integration_report.md`, which waited for a
+reviewer nobody was left to be. The check was never unclaimed: `IntegrationOrchestrationService` runs the project's
+validation command on every integration.
+
+Guidance only, no authority change. `AgentNextActionService.claimRequiredResponse` (the lane-less caller's instruction)
+now ends with "Synesis runs this project's validation command (`<argv, space-joined>`) on every integration, so running
+or reporting it is not a part to claim." when `ProjectLocation.validation()` is set; without one the instruction is
+byte-identical. The managed `AGENTS.md` section and the provider manual carry the same rule in their "a lane exists to
+produce something the goal names" paragraph. Installed manuals and sections written earlier read as outdated until
+`synesis provider install` or `init` refreshes them. NOT REACHED: a second real run showing the agent no longer
+announces that lane.
+
 # 2026-10-16 — Two computers, one project: the goal integrated end to end (run 6)
 
 ADR-0098 step 2, after the review-guidance and session fixes (5c10bb54, 8b5f01e9). Build remaster53 on the Windows

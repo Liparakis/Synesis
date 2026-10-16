@@ -1,5 +1,6 @@
 package org.synesis.workspace;
 
+import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 import org.synesis.workspace.application.workspace.mutation.WorkspacePatchService;
 
 import org.synesis.workspace.application.workspace.mutation.PatchRequest;
@@ -387,6 +388,42 @@ class AgentNextActionServiceTest {
         assertEquals("ensure_session", ((Map<String, Object>) offered.getFirst().get("reviewerIntent")).get("tool"));
         // The only candidate is the owner's own snapshot, and a session that holds a lane takes no second one.
         assertTrue(CollaborationResponseMapper.openReviewCandidates(location, owner.intent().participant()).isEmpty());
+    }
+
+    private static final String VALIDATION_SENTENCE = " Synesis runs this project's validation command (`python -m unittest`) on every integration, so running or reporting it is not a part to claim.";
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void laneLessCallerIsToldTheValidationCommandIsNotAPartToClaim() throws Exception {
+        new ProjectApplicationService().setValidation(controlRoot, new ProjectCommandSpec(List.of("python", "-m", "unittest"), ".", 30), false);
+        prepareSessionAndTrust("codex", "fresh-owner-v");
+        prepareSessionAndTrust("codex", "fresh-newcomer-v");
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.announce(controlRoot, "codex", "fresh-owner-v", "Implement board creation", "Publish the board creation lane", List.of(ResourceSelector.pathExact("src/BoardCreate.java")));
+        AgentResponse with = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "fresh-newcomer-v"));
+        assertEquals(AgentReason.COORDINATION_INTENT_REQUIRED, with.reason(), with.toJson());
+        assertEquals(UNCLAIMED_ONLY + VALIDATION_SENTENCE, ((Map<String, Object>) with.result()).get("instruction"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void validationSentenceAccompaniesTheReviewAlternative() throws Exception {
+        new ProjectApplicationService().setValidation(controlRoot, new ProjectCommandSpec(List.of("python", "-m", "unittest"), ".", 30), false);
+        prepareSessionAndTrust("codex", "fresh-owner-r");
+        prepareSessionAndTrust("codex", "fresh-newcomer-r");
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(controlRoot, groupId, "Build a board", "CRUD and persistence", ReviewPolicy.mandatoryIndependent());
+        var owner = collaboration.announce(controlRoot, "codex", "fresh-owner-r", "Implement board creation", "Publish the board creation lane", List.of(ResourceSelector.pathExact("src/BoardCreate.java")), groupId);
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        appendMandatorySnapshot(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()), identity,
+                new ProviderSessionBindingService().find(location, "codex", "fresh-owner-r").orElseThrow(), owner.intent(), "snap_fresh_v", "src/BoardCreate.java");
+
+        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "fresh-newcomer-r"));
+        String instruction = (String) ((Map<String, Object>) response.result()).get("instruction");
+        assertTrue(instruction.contains("either choose a part that no listed participant claims, or review a snapshot awaiting review"), instruction);
+        assertTrue(instruction.endsWith(VALIDATION_SENTENCE), instruction);
     }
 
     private static void appendMandatorySnapshot(PredictionEventStore store,

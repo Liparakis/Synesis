@@ -606,7 +606,7 @@ public final class AgentNextActionService {
             }
         }
 
-        AgentResponse action = stagedAction(request, binding, worktree, store, callerIdentity, integrationPump);
+        AgentResponse action = stagedAction(request, location, binding, worktree, store, callerIdentity, integrationPump);
         if (operatorHolds(integrationPump, action, store, binding)) {
             return integrationPump;
         }
@@ -674,7 +674,7 @@ public final class AgentNextActionService {
     }
 
     /** Evaluates the stages after the integration pump, in the order {@link #durableCoordinationAction} documents. */
-    private AgentResponse stagedAction(NextActionRequest request, ProviderSessionBindingService.Binding binding, Path worktree, PredictionEventStore store, NodeIdentity callerIdentity,
+    private AgentResponse stagedAction(NextActionRequest request, ProjectLocation location, ProviderSessionBindingService.Binding binding, Path worktree, PredictionEventStore store, NodeIdentity callerIdentity,
             AgentResponse integrationPump) throws Exception {
         Map<String, Object> collaboration = CollaborationView.collaborationDetails(store, binding.sessionId(), null, binding.provider());
         LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
@@ -762,7 +762,7 @@ public final class AgentNextActionService {
                 noOpenWork.put("instruction", "Every lane announced in this project is finished or cancelled. Announce a new intent with ensure_session only if part of the goal is still not done.");
                 return new AgentResponse(AgentStatus.COMPLETED, null, null, noOpenWork);
             }
-            return claimRequiredResponse(store, lane.participantId(), collaboration);
+            return claimRequiredResponse(store, lane.participantId(), collaboration, location);
         }
 
         AgentResponse integrationState = integrationStateAction(store, actor);
@@ -837,7 +837,8 @@ public final class AgentNextActionService {
      * @param collaboration public collaboration projection
      * @return a {@code BLOCKED} response asking the caller to ensure its session
      */
-    private static AgentResponse claimRequiredResponse(PredictionEventStore store, String participantId, Map<String, Object> collaboration) {
+    private static AgentResponse claimRequiredResponse(PredictionEventStore store, String participantId, Map<String, Object> collaboration,
+            ProjectLocation location) {
         Map<String, Object> claimRequired = new LinkedHashMap<>(collaboration);
         claimRequired.put(NextActionKeys.CLAIMS_REQUIRED, true);
         claimRequired.put(NextActionKeys.REASON, AgentReason.COORDINATION_INTENT_REQUIRED.value());
@@ -848,8 +849,12 @@ public final class AgentNextActionService {
         String choice = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).isEmpty() ? "choose a part that no listed participant claims, and announce it by calling "
                 : "either choose a part that no listed participant claims, or review a snapshot awaiting review: reviewCandidates[i].reviewerIntent holds its ensure_session arguments, "
                         + "to which you add claims for your report or test path. Announce your choice by calling ";
+        // Run 6: a fresh agent read the README's "python -m unittest passes" as a part nobody
+        // claimed and announced a lane for it, though every integration already runs that command.
+        String validation = location.validation() == null ? "" : " Synesis runs this project's validation command (`" + String.join(" ", location.validation().argv())
+                + "`) on every integration, so running or reporting it is not a part to claim.";
         claimRequired.put("instruction", "This session holds no lane. Read the project goal with read_file, " + choice
-                + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing.");
+                + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing." + validation);
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, claimRequired);
     }
 
