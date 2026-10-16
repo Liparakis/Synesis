@@ -375,6 +375,8 @@ public final class NettySessionHandshake {
     // fails.
     private HandshakeTranscript transcript;
     private InvitationAdmission.Reservation reservation;
+    // Set when the peer was admitted as one coming back, with no capability and so no reservation.
+    private boolean returning;
 
     private StreamState(NodeIdentity localIdentity, String expectedRemoteNodeId,
         List<ProtocolVersion> supportedVersions, HandshakeTranscript transcript,
@@ -502,11 +504,21 @@ public final class NettySessionHandshake {
     }
 
     private void reserveAdmission() throws HandshakeException {
-      if (state.admission != null) {
-        state.reservation = state.admission.reserve(state.transcript)
-            .orElseThrow(
-                () -> new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED));
+      if (state.admission == null) {
+        return;
       }
+      // A peer coming back carries no capability (its first session used it up); the admission
+      // decides whether this node ID may. Everything else needs the invitation.
+      if (state.transcript.invitationCapability().length == 0) {
+        if (!state.admission.admitsReturning(state.transcript.nodeId(state.localRole.opposite()))) {
+          throw new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED);
+        }
+        state.returning = true;
+        return;
+      }
+      state.reservation = state.admission.reserve(state.transcript)
+          .orElseThrow(
+              () -> new HandshakeException(HandshakeFailureCode.HANDSHAKE_REPLAY_REJECTED));
     }
 
     private void checkIdentities() throws HandshakeException {
@@ -548,11 +560,20 @@ public final class NettySessionHandshake {
         PeerSession session = SessionAuthenticator.establish(state.localIdentity,
             state.expectedRemoteNodeId,
             state.transcript, localProof, remoteProof, state.replayGuard, Instant.now());
-        if (state.admission != null) {
+        CompletableFuture<PeerSession> ready = state.result;
+        if (state.returning) {
+          // The proofs have verified the identity; the rule is asked again so that a peer removed
+          // since the claim was read is refused. The shared result belongs to the first session.
+          if (!state.admission.admitsReturning(session.remoteNodeId())) {
+            throw new IllegalStateException("returning peer is no longer admitted");
+          }
+          ready = new CompletableFuture<>();
+          ready.thenAccept(state.admission::returned);
+        } else if (state.admission != null) {
           state.admission.authenticated(state.reservation);
         }
         state.session = session;
-        NettyControlStream control = NettyControlStream.create(session, state.result,
+        NettyControlStream control = NettyControlStream.create(session, ready,
             () -> state.controlClaimed.set(true), state.livenessConfiguration);
         context.pipeline()
             .replace(this, "synesis-control", control);

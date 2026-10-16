@@ -81,5 +81,21 @@ connection stays with the project's runtime after the command ends. From then on
 to A, and A merges B's lanes without an agent of its own. `synesis coordination status` on B shows
 `REPLICATION_STATE`. `synesis project remove-member <node ID>` on A stops serving a member; its earlier entries stay.
 
-Not done in step 2: the session is not redialled after it drops (run `link invite` and `link join` again), and a
-member list is local state of A.
+**A dropped link redials by itself.** The computer that ran `link join` (the one that dialed) dials the other again when
+the session ends, at the endpoints of the invitation it used, one second later and then every 2, 4, 8, 16, 30 seconds
+and every 30 seconds after that, for as long as it is still the leader of that member or a member of that leader. The
+computer that ran `link invite` keeps its port open and admits the redial with no new invitation, but only from the
+leader it follows (on a member) or from a current member (on a leader). Nothing needs doing; if the dialing computer
+can only dial out (no inbound firewall rule on Windows, say), that is why it is the one that dials. Both computers
+use a looser liveness timing than a one-shot `synesis host`/`join` (heartbeat 5 s, `SUSPECT` after 15 s, `EXPIRED`
+after 30 s), so a pause of up to half a minute does not end the session.
+
+`synesis coordination status` shows `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>` for the last session that
+ended, with the reason Link closed it for (`LIVENESS_EXPIRED`, `TRANSPORT_CLOSED`, `REMOTE_REQUEST`, `LOCAL_REQUEST`,
+`PROTOCOL_ERROR`) and how long it had lasted. The last 100 events (sessions starting and ending, the first failure of a
+redial, a redial that worked) are in `replication.log` beside `replication.status`, in the project's coordination
+folder (`.synesis/coordination`). While the link is down a member's proposals answer `LEADER_UNREACHABLE` at once, and
+the member catches up with a pull (within 15 seconds) once the link is back.
+
+Not done in step 2: a restart of either coordination server still needs a new `link invite` and `link join` (neither
+side remembers the other's endpoints or the invitation across a restart), and a member list is local state of A.

@@ -86,6 +86,8 @@ public final class MemberReplication implements AutoCloseable {
     private final AtomicBoolean pullQueued = new AtomicBoolean();
     private volatile PeerSession session;
     private volatile State state = State.DISCONNECTED;
+    // The last request over a session that looked live got no answer; proposals answer "unreachable" until a pull does.
+    private volatile boolean silent;
     private volatile CoordinationHttpServer served;
 
     /**
@@ -165,6 +167,7 @@ public final class MemberReplication implements AutoCloseable {
             throw new IllegalArgumentException("session peer is not the leader");
         }
         session = leader;
+        silent = false;
         requestPull();
     }
 
@@ -195,10 +198,17 @@ public final class MemberReplication implements AutoCloseable {
         if (state == State.DIVERGED) {
             return refusal("LEADER_LOG_DIVERGED");
         }
+        boolean proposal;
         try {
             ReplicationMessage message = ReplicationCodec.decode(request);
             if (!(message instanceof ReplicationMessage.Propose || message instanceof ReplicationMessage.Pull)) {
                 return refusal("REPLICATION_REQUEST_UNSUPPORTED");
+            }
+            proposal = message instanceof ReplicationMessage.Propose;
+            // The leader just failed to answer: say so at once instead of waiting out the exchange for every send of
+            // every proposal while the agent's append holds its lock. A pull still goes out, and an answer clears this.
+            if (silent && proposal) {
+                return outcome(new ProposalOutcome.Unreachable());
             }
         } catch (CoordinationException malformed) {
             return refusal(malformed.code());
@@ -214,11 +224,17 @@ public final class MemberReplication implements AutoCloseable {
             return outcome(new ProposalOutcome.Unreachable());
         }
         try {
-            return answer.get(RELAY_WAIT_SECONDS, TimeUnit.SECONDS);
+            byte[] reply = answer.get(RELAY_WAIT_SECONDS, TimeUnit.SECONDS);
+            silent = false;
+            return reply;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return outcome(new ProposalOutcome.NoAnswer());
         } catch (ExecutionException | TimeoutException lost) {
+            silent = true;
+            if (proposal) {
+                requestPull();
+            }
             return outcome(new ProposalOutcome.NoAnswer());
         }
     }
@@ -250,6 +266,7 @@ public final class MemberReplication implements AutoCloseable {
         }
         try {
             new PredictionEventStore(root, projectId).pullFrom(new ExchangeLeaderChannel(projectId, request -> relay(request)));
+            silent = false;
             setState(State.CONNECTED);
         } catch (CoordinationException failure) {
             if (failure.code().equals("LEADER_LOG_DIVERGED")) {

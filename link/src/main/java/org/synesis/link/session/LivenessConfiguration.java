@@ -31,6 +31,17 @@ public record LivenessConfiguration(
       Duration.ofSeconds(1), Duration.ofSeconds(3), Duration.ofSeconds(5), true);
 
   /**
+   * Timing for a session a runtime keeps for as long as it is wanted, not for one exchange: a
+   * heartbeat every five seconds (well inside the fifteen a home router's UDP mapping needs),
+   * suspicion after fifteen and expiry after thirty. {@link #DEFAULT} ends a session after five
+   * seconds of silence, which one stalled process, a busy event loop or a sleeping laptop
+   * produces; a long-lived project session ended there and nothing dialed it again (2026-10-16,
+   * two computers, about fifteen minutes in). Thirty seconds is six missed heartbeats.
+   */
+  public static final LivenessConfiguration RETAINED = new LivenessConfiguration(
+      Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(30), true);
+
+  /**
    * Creates a validated timing policy.
    *
    * @throws NullPointerException     if a duration is null

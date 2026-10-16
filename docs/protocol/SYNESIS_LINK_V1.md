@@ -18,12 +18,28 @@ which binds ALPN, both node identities and public keys, both nonces, session ID,
 and both epochs. Expected remote identity is checked before publishing
 `PeerSession`; wrong identities fail as `IDENTITY_MISMATCH`.
 
+### Returning peers
+
+An invitation admits one peer once. A runtime that keeps its sessions (the project's coordination server) may in
+addition tell the host endpoint which node IDs may come back after that: once the invitation is consumed the host
+accepts a handshake with an empty invitation capability from exactly those nodes (`WIRE_FORMAT.md`, "Returning-peer
+handshake"), on the same listening socket, so the UDP port in the invitation stays valid for as long as the host handle
+is open. Both identities are authenticated as for the first session and a transcript is accepted once per host
+process. Before the invitation is consumed, and on a host given no rule, nobody is admitted without the capability.
+The dialing side, which kept the invitation's endpoints, dials them again (the endpoint the last session was made over
+first) with a fresh session ID; when and how often is the caller's policy, not the protocol's. Neither side keeps this
+across a restart of the process.
+
 ## Control-ready liveness
 
 After reciprocal `CONTROL_READY`, the session becomes `LIVE` and owns one
 bounded one-shot heartbeat schedule. Defaults are one-second HEARTBEAT, three
 seconds to `SUSPECT`, and five seconds to `EXPIRED`. They are local `Duration`
-defaults, not wire constants.
+defaults, not wire constants. A session a runtime retains (`LivenessConfiguration.RETAINED`)
+uses a five-second HEARTBEAT, fifteen seconds to `SUSPECT` and thirty to `EXPIRED`, and its QUIC
+connection closes after sixty seconds without a packet; the one-shot `host` and `join` keep the
+defaults and set no idle timeout. A host's QUIC server codec uses a shareable connection handler,
+without which it accepted one connection and silently dropped every later one.
 
 HEARTBEAT and HEARTBEAT_ACK are 41-byte, versioned payloads bound to the current
 session UUID. Sequence zero is first and new inbound sequences must be

@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.synesis.link.SynesisLink;
 import org.synesis.link.candidate.Candidate;
 import org.synesis.link.candidate.CandidateDescriptor;
@@ -35,6 +36,7 @@ import org.synesis.link.protocol.LinkCompatibility;
 import org.synesis.link.protocol.ProtocolVersion;
 import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
+import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 
@@ -174,7 +176,7 @@ public final class Onboarding {
 
   private PreparedJoin importCompactInvitation(String link,
       PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+      Consumer<PeerSession> sessionAction, boolean retained) throws OnboardingFailure {
     CompactBootstrapInvitation invitation;
     try {
       invitation = CompactBootstrapInvitation.fromShareLink(link);
@@ -195,7 +197,7 @@ public final class Onboarding {
     emit(OnboardingEventType.HOST_IDENTITY_PINNED, invitation.hostNodeId());
     OnboardingEndpoint endpoint = null;
     try {
-      endpoint = OnboardingEndpoint.openClient(stunServer);
+      endpoint = OnboardingEndpoint.openClient(stunServer, retained);
       List<Candidate> candidates = endpoint.gatherCandidates("join");
       CandidateDescriptor localDescriptor = CandidateDescriptor.create(local.identity(),
           Instant.now().truncatedTo(ChronoUnit.SECONDS), invitation.expiresAt(), candidates);
@@ -204,7 +206,7 @@ public final class Onboarding {
       emit(OnboardingEventType.CANDIDATES_GATHERED, Integer.toString(candidates.size()));
       emit(OnboardingEventType.ANSWER_LINK, answer.shareLink());
       return new PreparedJoin(local.identity(), localDescriptor, invitation, answer, endpoint,
-          applicationHandler, sessionAction);
+          applicationHandler, sessionAction, retained);
     } catch (Exception failure) {
       closeAfterFailedOpen(endpoint);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
@@ -287,6 +289,41 @@ public final class Onboarding {
   public PreparedHost createCompactInvitation(String expectedPeer, boolean openRouterPort,
       PeerSession.ApplicationStreamHandler applicationHandler,
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    return createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, sessionAction,
+        null);
+  }
+
+  /**
+   * Opens a compact host handle for sessions a runtime keeps: they run under
+   * {@link org.synesis.link.session.LivenessConfiguration#RETAINED}, and the listening socket stays
+   * bound for as long as the handle is open. After the invitation is used, a peer that
+   * {@code returningPeers} names may connect again without one, and each such session is passed to
+   * {@code sessionAction} like the first, on another thread; a session whose action throws is
+   * closed.
+   *
+   * <p>The rule is read at every connection, so it should be cheap, and a peer it stops naming is
+   * refused from then on. A peer never named by it can use only the invitation.
+   *
+   * @param expectedPeer       optional expected responder node ID
+   * @param openRouterPort     whether to ask the home router for a port forward
+   * @param applicationHandler optional handler for non-bootstrap application payloads
+   * @param sessionAction      callback invoked after authenticated descriptor exchange
+   * @param returningPeers     who may reconnect without the invitation
+   * @return open compact host handle
+   * @throws OnboardingFailure if identity, listener, candidate, or compact-signing setup fails
+   */
+  public PreparedHost createRetainedInvitation(String expectedPeer, boolean openRouterPort,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers)
+      throws OnboardingFailure {
+    return createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, sessionAction,
+        Objects.requireNonNull(returningPeers, "returning peers"));
+  }
+
+  private PreparedHost createCompactInvitation(String expectedPeer, boolean openRouterPort,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers)
+      throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     IdentityBootstrap.Result local = loadIdentity();
     emit(local.created() ? OnboardingEventType.IDENTITY_CREATED
@@ -304,7 +341,8 @@ public final class Onboarding {
       PeerSession.ApplicationStreamHandler bootstrapHandler = CompactDescriptorExchange.compactApplicationHandler(
           localDescriptor, remoteDescriptor, applicationHandler);
       endpoint = OnboardingEndpoint.openServer(local.identity(), expectedPeer, sessionId,
-          capability, bootstrapHandler, stunServer);
+          capability, bootstrapHandler, stunServer, returningPeers,
+          session -> acceptReturning(session, sessionAction));
       endpoint.onIncompatiblePeer(mismatch -> emit(OnboardingEventType.INCOMPATIBLE_PEER, mismatch.message()));
       emit(OnboardingEventType.SESSION_CREATED, "");
       emit(OnboardingEventType.LISTENER_READY, "");
@@ -335,6 +373,21 @@ public final class Onboarding {
       closeAfterFailedOpen(endpoint);
       throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
     }
+  }
+
+  /**
+   * Runs the session action for a peer that came back, off the connection's event loop (the action
+   * may block on the peer), and closes a session the action rejected.
+   */
+  private void acceptReturning(PeerSession session, Consumer<PeerSession> sessionAction) {
+    CompletableFuture.runAsync(() -> {
+      try {
+        emitSession(session);
+        sessionAction.accept(session);
+      } catch (RuntimeException rejected) {
+        session.closeGracefully(SessionCloseReason.LOCAL_REQUEST);
+      }
+    });
   }
 
   /**
@@ -384,7 +437,27 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     Objects.requireNonNull(link, "link");
-    return importCompactInvitation(link, applicationHandler, sessionAction);
+    return importCompactInvitation(link, applicationHandler, sessionAction, false);
+  }
+
+  /**
+   * Imports a compact invitation for a session a runtime keeps: it runs under
+   * {@link org.synesis.link.session.LivenessConfiguration#RETAINED}, and when it ends
+   * {@link PreparedJoin#redial()} dials the host again without a new invitation.
+   *
+   * @param link               exact compact link received from the host
+   * @param applicationHandler optional application-stream handler
+   * @param sessionAction      callback invoked after control readiness, for the first session and for
+   *                           each one {@code redial} makes
+   * @return open join handle
+   * @throws OnboardingFailure if the link, identity, transport, or candidates are invalid
+   */
+  public PreparedJoin importRetainedInvitation(String link,
+      PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
+    Objects.requireNonNull(sessionAction, "session action");
+    Objects.requireNonNull(link, "link");
+    return importCompactInvitation(link, applicationHandler, sessionAction, true);
   }
 
   /**
@@ -489,7 +562,8 @@ public final class Onboarding {
   private PeerSession connectAndRun(NodeIdentity identity, HandshakeTranscript transcript,
       List<CandidatePair> pairs, Channel udp, Instant deadline,
       PeerSession.ApplicationStreamHandler applicationHandler, Consumer<PeerSession> sessionAction,
-      boolean keepAlive, SessionStep afterAuthentication)
+      boolean keepAlive, SessionStep afterAuthentication, LivenessConfiguration liveness,
+      Consumer<CandidatePair> onWinner)
       throws Exception {
     String hostNodeId = transcript.nodeId(HandshakeRole.RESPONDER);
     byte[] hostPublicKey = transcript.publicKeyEncoded(HandshakeRole.RESPONDER);
@@ -500,7 +574,7 @@ public final class Onboarding {
       try (CandidateRacer racer = new CandidateRacer(COMPACT_CONNECTION_POLICY)) {
         result = racer.race(pairs, hostNodeId,
                 pair -> ClientQuicConnectionAttempt.attempt(identity, hostNodeId, hostPublicKey,
-                    transcript, udp, pair, applicationHandler))
+                    transcript, udp, pair, applicationHandler, liveness))
             .completion()
             .toCompletableFuture()
             .get(RACE_BOUND.toSeconds(), TimeUnit.SECONDS);
@@ -527,6 +601,7 @@ public final class Onboarding {
       throw failure(OnboardingFailureCode.HOST_IDENTITY_MISMATCH, null);
     }
     afterAuthentication.run(session);
+    onWinner.accept(result.winner());
     emit(OnboardingEventType.PATH_SELECTED, result.winner().identifier());
     emitSession(session);
     sessionAction.accept(session);
@@ -736,11 +811,15 @@ public final class Onboarding {
     private final Consumer<PeerSession> sessionAction;
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final boolean retained;
+    /** The host endpoint the last session was made over; redialed first. */
+    private volatile Candidate lastRemote;
 
     private PreparedJoin(NodeIdentity identity, CandidateDescriptor localDescriptor,
         CompactBootstrapInvitation compactInvitation, CompactAnswer answer,
         OnboardingEndpoint endpoint, PeerSession.ApplicationStreamHandler applicationHandler,
-        Consumer<PeerSession> sessionAction) {
+        Consumer<PeerSession> sessionAction, boolean retained) {
+      this.retained = retained;
       this.identity = identity;
       this.answer = answer;
       this.localDescriptor = localDescriptor;
@@ -805,7 +884,63 @@ public final class Onboarding {
                   compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded(),
                   compactInvitation.expiresAt());
               emit(OnboardingEventType.DESCRIPTORS_EXCHANGED, "");
-            });
+            }, liveness(), winner -> lastRemote = winner.remote());
+      } catch (OnboardingFailure failure) {
+        throw failure;
+      } catch (Exception failure) {
+        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+      }
+    }
+
+    private LivenessConfiguration liveness() {
+      return retained ? LivenessConfiguration.RETAINED : LivenessConfiguration.DEFAULT;
+    }
+
+    /**
+     * Dials the host again after the session this handle made has ended, with no new invitation, and
+     * keeps the new session. One round of attempts is made, at the endpoint the last session was made
+     * over first and then the invitation's others; the caller decides when to try again and when to
+     * stop.
+     *
+     * <p>The dial carries no capability: the invitation was used up by the first session. The host
+     * admits it only if its own rule names this node (see
+     * {@link Onboarding#createRetainedInvitation}), and it authenticates both identities as for the first
+     * session, with a fresh session ID and fresh nonces, so a recorded dial cannot be replayed.
+     * The session action runs as for the first session, and a session it rejects is closed.
+     *
+     * @return the new authenticated, control-ready session
+     * @throws OnboardingFailure if this handle never connected or is closed, or no endpoint answers
+     *                           or admits this node
+     */
+    public PeerSession redial() throws OnboardingFailure {
+      if (!retained || !started.get() || closed.get()) {
+        throw failure(OnboardingFailureCode.CONNECTION_FAILED,
+            new IllegalStateException("redial needs an open, retained handle that connected"));
+      }
+      try {
+        List<Candidate> remotes = new java.util.ArrayList<>(compactInvitation.endpoints());
+        Candidate last = lastRemote;
+        if (last != null && remotes.remove(last)) {
+          remotes.add(0, last);
+        }
+        List<CandidatePair> pairs = CandidatePairs.onePerRemote(localDescriptor.candidates(),
+            remotes);
+        if (pairs.isEmpty()) {
+          throw failure(OnboardingFailureCode.NO_USABLE_CANDIDATE, null);
+        }
+        HandshakeTranscript transcript = handshakeTranscript(identity, UUID.randomUUID(),
+            new byte[0], compactInvitation.hostNodeId(), compactInvitation.publicKeyEncoded());
+        emit(OnboardingEventType.TRAVERSAL_STARTED, "");
+        return connectAndRun(identity, transcript, pairs, endpoint.udp(), Instant.now(),
+            applicationHandler, session -> {
+              try {
+                sessionAction.accept(session);
+              } catch (RuntimeException rejected) {
+                session.closeGracefully(SessionCloseReason.LOCAL_REQUEST);
+                throw rejected;
+              }
+            }, true, session -> {
+            }, liveness(), winner -> lastRemote = winner.remote());
       } catch (OnboardingFailure failure) {
         throw failure;
       } catch (Exception failure) {

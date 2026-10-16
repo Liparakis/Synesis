@@ -2,6 +2,7 @@ package org.synesis.link.session;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -10,6 +11,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.LinkCompatibility;
@@ -37,6 +39,10 @@ public final class InvitationAdmission implements AutoCloseable {
   /** {@link #AVAILABLE}, {@link #CONSUMED}, or the {@link Reservation} that currently holds it. */
   private final AtomicReference<Object> state = new AtomicReference<>(AVAILABLE);
   private final AtomicReference<Consumer<LinkCompatibility.Mismatch>> incompatiblePeer = new AtomicReference<>();
+  private final AtomicReference<Returning> returning = new AtomicReference<>();
+
+  private record Returning(Predicate<String> peers, Consumer<PeerSession> delivery) {
+  }
 
   /**
    * Sets who is told, once per invitation, that a connection came from a build with another
@@ -93,6 +99,48 @@ public final class InvitationAdmission implements AutoCloseable {
     reservation.expiry = scheduler.schedule(() -> state.compareAndSet(reservation, AVAILABLE),
         RESERVATION_TIMEOUT.toNanos(), TimeUnit.NANOSECONDS);
     return Optional.of(reservation);
+  }
+
+  /**
+   * Lets a peer that already used this invitation connect again without one, for as long as the
+   * caller's rule names it. The invitation is the only way in for a peer nobody has named; this is
+   * the way back in for a peer the project already knows (ADR-0098: a dropped session is redialed).
+   *
+   * <p>The rule is asked twice per connection, once for the identity a handshake claims and once for
+   * the identity its proofs verified, and is read afresh each time, so a peer removed in between is
+   * refused. It is never asked while the invitation is unused: until a first peer authenticated
+   * with the capability, nobody is admitted without it.
+   *
+   * @param peers    whether a node ID is a peer that may come back
+   * @param delivery receives each session admitted this way, on the connection's event loop; it must
+   *                 not block
+   */
+  public void admitReturning(Predicate<String> peers, Consumer<PeerSession> delivery) {
+    returning.set(new Returning(Objects.requireNonNull(peers, "peers"),
+        Objects.requireNonNull(delivery, "delivery")));
+  }
+
+  /**
+   * Tells whether a connection claiming this node ID may be admitted without the capability.
+   *
+   * @param remoteNodeId node ID the connection claims or has proved
+   * @return true only after the invitation was consumed, with a rule installed that names the node
+   */
+  public boolean admitsReturning(String remoteNodeId) {
+    Returning rule = returning.get();
+    return rule != null && state.get() == CONSUMED && rule.peers().test(remoteNodeId);
+  }
+
+  /**
+   * Hands a session admitted without the capability to its owner.
+   *
+   * @param session the authenticated session
+   */
+  public void returned(PeerSession session) {
+    Returning rule = returning.get();
+    if (rule != null) {
+      rule.delivery().accept(session);
+    }
   }
 
   /**

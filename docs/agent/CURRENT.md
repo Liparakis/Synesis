@@ -1,3 +1,78 @@
+# 2026-10-16 — A dropped project session comes back by itself, and the reason it ended is written down (ADR-0098 step 2, slice 5)
+
+Found in the first real two-computer run today. Leader A was Windows with no inbound firewall rule (it can only dial
+out); member B was a Linux VM. B hosted the invitation (`link invite --expect A`), A joined, both reported CONNECTED
+and replicated entries. About fifteen minutes later B's replication state became DISCONNECTED while both coordination
+servers still ran, and B's agents' proposals got `LEADER_OUTCOME_UNKNOWN`. Nothing logged why. Recovery needed a person
+to create a new invitation on B and join it from A.
+
+**Diagnosis (what the code showed, not a reproduction of the fifteen minutes).** Three things in the code explain a session
+that ended and stayed ended: (1) retained sessions ran under `LivenessConfiguration.DEFAULT` (heartbeat 1 s, `EXPIRED`
+after 5 s of silence), which a stalled process or a busy event loop crosses; (2) nothing dialed again, and the host
+could not have accepted a second connection anyway: its QUIC server codec was given a plain `ChannelInboundHandlerAdapter`
+as connection handler, which Netty refuses to add to a second connection, so a host accepted one connection and dropped
+the rest (found when the first redial test timed out); (3) when a leader holds the session open but stops answering,
+each proposal waited 8 s per send, three sends, with the agent's append lock held, and ended `LEADER_OUTCOME_UNKNOWN`.
+The actual cause of the drop at minute fifteen is still not known: nothing was recorded. It is now.
+
+**Recording.** `LinkRuntimeOwner` writes one line to a journal for each session start and end, with the end's
+`SessionCloseReason`, the liveness state it ended in, how long it lasted, and whether a newer session had replaced it,
+and for a redial's first failure and its outcome. `ReplicationJournal` (coordination, `replication.log` beside
+`replication.status`) keeps the last 100 lines, rewritten whole through a temporary file. `synesis coordination status`
+prints `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>` for both roles.
+
+**Timing.** Sessions retained by the owner (host `createRetainedInvitation`, join `importRetainedInvitation`) run under
+`LivenessConfiguration.RETAINED`: heartbeat 5 s (inside the 15 s a home router's UDP mapping needs, RFC 9308 allows 30 s),
+`SUSPECT` 15 s, `EXPIRED` 30 s (six missed heartbeats; it tolerates a pause of half a minute and is still well under
+the 2 min a member is suspected), and an explicit QUIC idle timeout of 60 s (twice the expiry, so liveness decides
+first and the timeout only reclaims a connection whose control stream already ended; before, an ended session's QUIC
+connection stayed open forever). One-shot `synesis host`/`join` and the onboarding handshake keep `DEFAULT` and no idle
+timeout. `LivenessConfiguration`'s invariants are unchanged.
+
+**Redial without an invitation.** Admission is a narrow second mode in `InvitationAdmission` (Link): once the invitation
+is consumed, a handshake with an empty invitation capability is admitted if the owner's rule names the claimed node,
+and again after both proofs verified. The rule is the replication role: a member names its configured leader; a leader
+names its current members (`LeaderReplication.isMember`, read from `replication.properties` per call, fail closed). A
+host with no rule, or an unused invitation, admits nobody without the capability. Replay protection is the existing
+transcript fingerprint in the host's `ReplayGuard`, sized 8,192 for a retained host because each redial adds one; the
+dialer picks a fresh session ID and nonces per attempt. Both identities are authenticated as before. The invitation
+path is untouched. The dialer is fixed to the original joiner (the firewalled leader in this run), unlike the
+lexicographic rule of ADR-0076's `OverlayReconciler`, because only it can reach the other. The joiner's `Redialer`
+(workspace) starts when its session ends, waits 1 s and doubles to 30 s forever while the rule still names the host and
+no session to it is held, and stops when it does not; a success ends the loop and the new session starts the next.
+`PreparedJoin.redial()` races the invitation's endpoints (the one the last session was made over first) from the same
+UDP socket. The host's listening socket stays bound for the life of its handle, so the port the redial targets is the
+one in the invitation (verified by the redial tests: the redial reaches the invitation's endpoint). A returning session
+is handed to the owner on another thread and closed if the owner rejects it.
+
+**Proposals while silent.** `MemberReplication` marks the leader silent when a request over a live-looking session gets
+no answer, asks for a pull at once, and answers later proposals `Unreachable` immediately (so the agent sees
+`LEADER_UNREACHABLE`, not three 8 s waits) until any answer arrives or a new session is attached. Pulls still go out.
+
+**Limits.** Neither side remembers the other across a restart of its coordination server: a restart still needs a new
+`link invite` and `link join` (persisting the endpoints is cheap, but a dialer that restarted would redial a host whose
+port changed). A host behind a NAT that only the joiner can cross is not helped: the joiner's outbound dial opens its
+own mapping, the host's side needs the port reachable, as for the first connection. A graceful `GOODBYE` from the host
+(its server shut down) is redialed too; a joiner dials a dead host every 30 s until the rule stops naming it. Only the
+joiner redials: a host whose joiner went away waits. The cause of the minute-fifteen drop is unproven.
+
+Tests: `ReturningPeerHandshakeTest` (link; a named node is admitted again; an unnamed node, a known ID signed by another
+key, a replayed handshake, an unused invitation, a host with no rule, and a removed node are refused),
+`RetainedOnboardingTest` (retained timing and idle, the one-shot path unchanged, the joiner's `redial`, a refusing
+host), `RedialerTest` (backoff doubles to the ceiling and stays; stops when unwanted; one loop per request;
+close), `LinkRuntimeOwnerRedialTest` (two owners over real QUIC on loopback: a closed session returns without an
+invitation, the journal names the reason on both sides; no redial once the rule says no; the used invitation admits
+no stranger), `ControlPlaneReplicationTest` (the real shape: member hosts, leader joins, the session is closed, the
+leader redials, and the member's next proposal is accepted; the journal and `lastDisconnect`), `ReplicationJournalTest`,
+`SilentLeaderTest`. Without the admission mode, the silent flag, or the retained liveness, the tests above fail (checked
+by turning each off in turn).
+
+Published contracts: no wire field or code added. A new public `Onboarding.createRetainedInvitation`,
+`importRetainedInvitation`, `PreparedJoin.redial`, `InvitationAdmission.admitReturning`/`admitsReturning`/`returned`,
+`LivenessConfiguration.RETAINED`, `PeerSession.livenessConfiguration`, `NettyQuicTransport` overloads with an idle
+timeout and `sharedConnectionHandler`, `LinkRuntimeOwner` constructor with a rule and a journal; the old signatures stay.
+`CoordinationServerLauncher.linkOwner` (package-private) took a journal argument.
+
 # 2026-10-16 — `synesis agents run` no longer ends while another computer's agent still holds a lane (ADR-0098 step 2)
 
 Found in a real two-computer run today: computer B's only agent (Codex) finished its lane, waited for a review that

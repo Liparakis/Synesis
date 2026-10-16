@@ -272,6 +272,16 @@ public final class PeerSession {
   }
 
   /**
+   * Returns the liveness timing this session runs under.
+   *
+   * @return the configuration; {@link LivenessConfiguration#DEFAULT} before the control stream is attached
+   */
+  public LivenessConfiguration livenessConfiguration() {
+    ControlBinding binding = control;
+    return binding == null ? LivenessConfiguration.DEFAULT : binding.livenessConfiguration();
+  }
+
+  /**
    * Returns an immutable safe liveness metrics snapshot.
    *
    * @return liveness metrics
@@ -433,6 +443,15 @@ public final class PeerSession {
      * @return immutable metrics snapshot
      */
     LivenessMetrics livenessMetrics();
+
+    /**
+     * Returns the timing this binding runs its liveness under.
+     *
+     * @return the configuration; {@link LivenessConfiguration#DEFAULT} for a binding that does not say
+     */
+    default LivenessConfiguration livenessConfiguration() {
+      return LivenessConfiguration.DEFAULT;
+    }
 
     /**
      * Registers a bounded asynchronous transition listener.

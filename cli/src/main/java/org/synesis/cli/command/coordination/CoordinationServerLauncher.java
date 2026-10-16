@@ -21,6 +21,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
+import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.identity.NodeIdentity;
@@ -117,7 +118,7 @@ final class CoordinationServerLauncher {
                     ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS) : null;
             var leaderReplication = mergeDriver != null
                     ? LeaderReplication.open(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
-            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication);
+            var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), replicationSettings.orElse(null), memberReplication, leaderReplication, new ReplicationJournal(projectData));
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
                 @Override
@@ -185,22 +186,26 @@ final class CoordinationServerLauncher {
      * A peer that is neither is still admitted, as before, and gets nothing from the log: the replication side
      * refuses it. The leader's member list is read afresh per request, so the check here only decides who is told
      * of new entries at once; a member added after its session was admitted pulls at its next interval.
+     *
+     * <p>A session that ends is dialed again by the computer that dialed it, and admitted again by the one that hosted it,
+     * without a new invitation, for exactly the nodes the replication side attaches: a member's leader and a leader's
+     * current members. Every session start and end is written to the replication journal, with the reason it ended.
      */
     static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSettings settings,
-            MemberReplication member, LeaderReplication leader) {
+            MemberReplication member, LeaderReplication leader, ReplicationJournal journal) {
         if (member != null) {
             return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, member.handler(), session -> {
                 if (session.remoteNodeId().equals(settings.leaderNodeId())) {
                     member.attach(session);
                 }
-            });
+            }, settings.leaderNodeId()::equals, journal::record);
         }
         if (leader != null) {
             return new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, leader.handler(), session -> {
                 if (leader.isMember(session.remoteNodeId())) {
                     leader.attach(session);
                 }
-            });
+            }, leader::isMember, journal::record);
         }
         return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
     }

@@ -98,6 +98,22 @@ descriptors over the authenticated `SLX1` application envelope and checks
 their node IDs, public keys, validity, and invitation expiry before using them.
 The capability creates no permanent trust or project membership.
 
+Who can connect to a hosting computer without an invitation. After its invitation is consumed, a host that the
+coordination server configured with a rule admits an empty-capability handshake from a node the rule names, and
+from no one else: a member admits its configured leader; a leader admits the members in its list, read afresh at
+each connection and again after the proofs verified, so a removed member is refused from then on. The node ID is
+the claimed identity until both proofs verify against the transcript's keys (an ID is derived from its key), so
+claiming a known ID without its key fails. A host with no rule, or an unused invitation, admits no one without the
+capability. The rule is a narrower grant than the invitation (it names one peer, not whoever holds a link) and
+creates no membership. Replay: each handshake carries a fresh session ID and nonces chosen by the dialer, the dialer
+verifies the host's proof over them, and the host refuses a transcript it has accepted before. The replay guard is
+process-local (8,192 entries for a retained host; a full guard refuses every later handshake, which needs a new
+invitation) and is gone after a restart, which is also when the host's port changes, so a recording from before
+the restart cannot reach the new endpoint. A peer holding the leader's or a member's key can come back at will,
+as it could when it first connected; stealing a key is outside this model. Resource use by an unnamed dialer is the
+invitation path's: one bounded handshake frame, a failure frame, a closed stream, and QUIC's idle timeout of sixty
+seconds for retained endpoints.
+
 The compatibility number is not an authentication check and is not a downgrade
 defence: an attacker can state any number, and a number stated in the handshake
 only makes an honest mismatch fail early with a clear message. The number in an

@@ -9,6 +9,7 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.MemberReplication;
+import org.synesis.coordination.replication.ReplicationJournal;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -58,6 +59,9 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
                     runtime.terminal().stdout("REPLICATION_STATE="
                             + MemberReplication.recordedState(projectData).orElse("NO_COORDINATION_SERVER"));
                 }
+                // The reason, the time and the details of the last session that ended; more is in replication.log.
+                ReplicationJournal.lastDisconnect(projectData)
+                        .ifPresent(line -> runtime.terminal().stdout("REPLICATION_LAST_DISCONNECT=" + line));
             });
             return ExitCodes.OK;
         } catch (Exception failure) {

@@ -50,6 +50,20 @@ The complete frame is at most 4,108 bytes. READY is session UUID plus maximum
 payload (`20` bytes), GOODBYE is UUID plus close reason (`17`), GOODBYE_ACK is
 UUID (`16`), and PROTOCOL_ERROR is UUID plus error code (`17`).
 
+## Returning-peer handshake (no invitation)
+
+A host whose invitation has been consumed may admit the peer that consumed it again. No frame or field is new. The
+dialer sends the same SLH1 envelope and SLT1 transcript as for an invitation, with two differences: the transcript's
+invitation capability is empty (length `0`; an invitation's is always `12` bytes), and the session ID and both nonces
+are fresh for the attempt. The host reads an empty capability as "returning peer", asks its local rule whether the
+claimed initiator node ID may come back, and if so runs the ordinary exchange: its own proof, both proofs verified
+against the transcript's node IDs and public keys, the transcript fingerprint accepted by the replay guard. The rule is
+asked a second time with the proved identity before the session is published. Every refusal is the existing
+`HANDSHAKE_REPLAY_REJECTED` (not named, not consumed, replayed) or `IDENTITY_PROOF_INVALID`/`IDENTITY_MISMATCH` (proof
+or identity); no code is added to the table, and a host that offers no rule answers every empty-capability handshake
+as `HANDSHAKE_REPLAY_REJECTED`, which is what an older build does. A peer with a wrong key fails the proof check: node ID
+is derived from the public key, and a transcript naming a node with another key cannot be built.
+
 ## SL-007 heartbeat payloads
 
 HEARTBEAT and HEARTBEAT_ACK payloads are fixed at 41 bytes:

@@ -34,11 +34,14 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
+import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.session.PeerSession;
+import org.synesis.link.session.SessionCloseReason;
 
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -92,6 +95,7 @@ final class ControlPlaneReplicationTest {
         final NodeIdentity node;
         final URI endpoint;
         final String commandToken;
+        final LinkRuntimeOwner owner;
 
         Computer(String name, NodeIdentity node, ReplicationSettings settings) throws Exception {
             Path root = temp.resolve(name);
@@ -103,8 +107,8 @@ final class ControlPlaneReplicationTest {
             MemberReplication member = settings.isMember() ? closing(MemberReplication.open(coordination, projectId)) : null;
             LeaderReplication leader = settings.isMember() ? null : closing(LeaderReplication.open(coordination, projectId));
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
-            LinkRuntimeOwner owner = closing(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
-                    new ProjectIdentity(projectId, createdAt), settings, member, leader));
+            this.owner = closing(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
+                    new ProjectIdentity(projectId, createdAt), settings, member, leader, new ReplicationJournal(coordination)));
             CoordinationService service = new CoordinationService(new PredictionEventStore(coordination, projectId), node);
             ProjectLocation location = new ProjectLocation(root, synesis, synesis.resolve("project.json"), profile, projectId, createdAt);
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, service, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), null);
@@ -185,6 +189,34 @@ final class ControlPlaneReplicationTest {
         // The leader's own entry reaches the member by the notice the attached session carries, well before the 15 s pull.
         assertTrue(new WorkIntentService(leader.store(), leaderNode).announce(lane("agt-a", "src/a.py")).acquired());
         await(() -> PredictionEventStore.recordedEvents(member.coordination) == 4);
+    }
+
+    /**
+     * The shape of the first real run: the member hosts the invitation and the leader joins it, so the leader (which
+     * can only dial out) is the one that dials again. A member's proposal after the session dropped and came back is
+     * accepted, with no new invitation, and the journal says why the session ended.
+     */
+    @Test
+    void aDroppedSessionIsDialedAgainByTheJoinerAndTheMembersNextProposalIsAccepted() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
+        leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
+        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
+        List<PeerSession> firstSessions = List.copyOf(leader.owner.get().sessions());
+
+        firstSessions.forEach(session -> session.closeGracefully(SessionCloseReason.LOCAL_REQUEST));
+
+        await(() -> leader.owner.get().sessions().stream().anyMatch(session -> !firstSessions.contains(session) && session.isUsable())
+                && member.owner.get().sessions().stream().anyMatch(PeerSession::isUsable));
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
+        assertEquals(4, leader.store().events().size());
+        assertTrue(ReplicationJournal.lastDisconnect(member.coordination).orElseThrow().startsWith("REMOTE_REQUEST "));
+        assertTrue(ReplicationJournal.lastDisconnect(leader.coordination).orElseThrow().startsWith("LOCAL_REQUEST "));
+        assertEquals(2, ReplicationJournal.read(member.coordination).stream().filter(line -> line.contains(" CONNECTED ")).count());
     }
 
     @Test

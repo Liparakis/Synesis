@@ -2,16 +2,19 @@ package org.synesis.workspace.transport.control;
 
 import java.security.GeneralSecurityException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.List;
 import java.util.Objects;
@@ -59,6 +62,18 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      * Number of recent frames the overlay forwarder remembers to drop duplicates.
      */
     private static final int DUPLICATE_GUARD_CAPACITY = 256;
+
+    private static final Predicate<String> NO_RETURNING_PEERS = peer -> false;
+
+    private static final Consumer<String> NO_JOURNAL = line -> {
+    };
+
+    /**
+     * Delay before the first redial and its ceiling: a dropped link usually returns within seconds, a sleeping
+     * laptop within minutes, and thirty seconds keeps a dead peer from being dialed more than twice a minute.
+     */
+    static final Duration REDIAL_FIRST = Duration.ofSeconds(1);
+    static final Duration REDIAL_CAP = Duration.ofSeconds(30);
 
     /**
      * Link-owned onboarding facade that creates and imports invitations.
@@ -126,6 +141,16 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     private final Consumer<PeerSession> sessionListener;
 
     /**
+     * Whether a node may come back without an invitation, and be redialed; see the constructor that takes it.
+     */
+    private final Predicate<String> returningPeers;
+
+    /**
+     * Receives one line for each session start and end and each redial outcome.
+     */
+    private final Consumer<String> journal;
+
+    /**
      * Accepted sessions by remote node id; at most one per peer, a newer session replaces an older one.
      */
     private final ConcurrentMap<String, PeerSession> sessions = new ConcurrentHashMap<>();
@@ -160,7 +185,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity) {
         this(onboarding, localIdentity, membership, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), null, session -> {
-        });
+        }, NO_RETURNING_PEERS, NO_JOURNAL);
     }
 
     /**
@@ -182,8 +207,38 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      */
     public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
             Consumer<PeerSession> sessionListener) {
+        this(onboarding, localIdentity, events, projectIdentity, projectHandler, sessionListener, NO_RETURNING_PEERS, NO_JOURNAL);
+    }
+
+    /**
+     * Creates a runtime owner like the one above, whose sessions come back by themselves (ADR-0098: a session that
+     * ended is dialed again, and a peer that was admitted once is admitted again, without a new invitation).
+     *
+     * <p>The computer that dialed an invitation redials its host, with a delay that doubles from one second to
+     * thirty, for as long as {@code returningPeers} names the host and no session to it is held. The computer that
+     * hosted the invitation admits a connection with no invitation from exactly the nodes {@code returningPeers}
+     * names, after authenticating both identities. Nobody else is admitted that way, and the rule is read at every
+     * connection and every attempt, so a node it stops naming is neither dialed nor admitted from then on. The
+     * hosting side keeps listening on the same port, which is why a redial at the invitation's endpoints reaches it.
+     * Neither side remembers this across a restart of the owner: a restart needs a new invitation.
+     *
+     * @param onboarding      Link-owned onboarding facade
+     * @param localIdentity   local authenticated node identity
+     * @param events          safe Link event sink
+     * @param projectIdentity canonical local project identity
+     * @param projectHandler  answers every application stream that is not the project-context exchange
+     * @param sessionListener called with each admitted session after the owner has registered it; a thrown
+     *                        exception rejects the session
+     * @param returningPeers whether a node is one this computer redials or admits again (a member's leader, a
+     *                       leader's members); read afresh each time and must not block
+     * @param journal        receives one line for each session start and end and each redial outcome, with the
+     *                       reason a session ended; it should be cheap and may be called from a Link thread
+     * @see #LinkRuntimeOwner(Onboarding, NodeIdentity, Consumer, ProjectIdentity, PeerSession.ApplicationStreamHandler, Consumer)
+     */
+    public LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, Consumer<OnboardingEvent> events, ProjectIdentity projectIdentity, PeerSession.ApplicationStreamHandler projectHandler,
+            Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal) {
         this(onboarding, localIdentity, null, events, Clock.systemUTC(), Objects.requireNonNull(projectIdentity, "project identity"), Objects.requireNonNull(projectHandler, "project handler"),
-                Objects.requireNonNull(sessionListener, "session listener"));
+                Objects.requireNonNull(sessionListener, "session listener"), Objects.requireNonNull(returningPeers, "returning peers"), Objects.requireNonNull(journal, "journal"));
     }
 
     /**
@@ -199,8 +254,10 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      *                                  membership belongs to a different project
      */
     private LinkRuntimeOwner(Onboarding onboarding, NodeIdentity localIdentity, OverlayMembershipSnapshot membership, Consumer<OnboardingEvent> events, Clock clock, ProjectIdentity projectIdentity,
-            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener) {
+            PeerSession.ApplicationStreamHandler projectHandler, Consumer<PeerSession> sessionListener, Predicate<String> returningPeers, Consumer<String> journal) {
         this.sessionListener = sessionListener;
+        this.returningPeers = returningPeers;
+        this.journal = journal;
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.localIdentity = Objects.requireNonNull(localIdentity, "local identity");
         this.events = Objects.requireNonNull(events, "events");
@@ -267,7 +324,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public PendingHost createInvitation(String expectedPeer, boolean openRouterPort) throws OnboardingFailure {
         ensureOpen();
-        Onboarding.PreparedHost delegate = onboarding.createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, this::acceptSession);
+        Onboarding.PreparedHost delegate = onboarding.createRetainedInvitation(expectedPeer, openRouterPort, applicationHandler, this::acceptSession, peer -> !closed.get() && returningPeers.test(peer));
         LiveHost result = new LiveHost(delegate);
         handles.add(result);
         result.startWait();
@@ -284,8 +341,14 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public PendingJoin importInvitation(String link) throws OnboardingFailure {
         ensureOpen();
-        Onboarding.PreparedJoin delegate = onboarding.importInvitation(link, applicationHandler, this::acceptSession);
+        AtomicReference<LiveJoin> dialer = new AtomicReference<>();
+        Onboarding.PreparedJoin delegate = onboarding.importRetainedInvitation(link, applicationHandler, session -> {
+            acceptSession(session);
+            // The handle is set before connect() can run, and a redial runs only after connect() returned.
+            dialer.get().watch(session);
+        });
         LiveJoin result = new LiveJoin(delegate);
+        dialer.set(result);
         handles.add(result);
         return result;
     }
@@ -375,14 +438,43 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
             // A session that closes during callback registration is removed by
             // its terminal completion below.
         }
+        record("CONNECTED peer=" + session.remoteNodeId() + " expiry=" + session.livenessConfiguration().expiryTimeout().toSeconds() + "s");
         session.terminalCompletion().whenComplete((ignored, failure) -> {
-            if (sessions.remove(session.remoteNodeId(), session)) {
+            boolean current = sessions.remove(session.remoteNodeId(), session);
+            if (current) {
                 unbind(session);
                 publish(OnboardingEventType.SESSION_CLOSED, "");
             }
+            recordEnd(session, current);
         });
         publishTopology();
         sessionListener.accept(session);
+    }
+
+    /**
+     * Records why a session ended, since nothing else keeps it once the session object is gone: the category Link
+     * closed it for (a peer that said goodbye, a transport that closed, silence past the expiry, a protocol error),
+     * the liveness state it ended in, and how long it lasted.
+     *
+     * @param session the ended session
+     * @param current false when a newer session to the same peer had already replaced it
+     */
+    private void recordEnd(PeerSession session, boolean current) {
+        record("DISCONNECT peer=" + session.remoteNodeId() + " reason=" + session.closeReason() + " liveness=" + session.livenessState()
+                + " lasted=" + Duration.between(session.establishedAt(), clock.instant()).toSeconds() + "s" + (current ? "" : " replaced=true"));
+    }
+
+    /**
+     * Hands a line to the journal; a failing journal never affects a session.
+     *
+     * @param line the event and its details
+     */
+    private void record(String line) {
+        try {
+            journal.accept(line);
+        } catch (RuntimeException ignored) {
+            // The journal explains the sessions; it does not decide them.
+        }
     }
 
     /**
@@ -593,12 +685,44 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         private final AtomicBoolean closedHandle = new AtomicBoolean();
 
         /**
+         * Dials the host again after a session ended.
+         */
+        private final Redialer redialer;
+
+        /**
+         * The host's node ID, known once the first session is established.
+         */
+        private volatile String peer;
+
+        /**
          * Wraps a prepared join.
          *
          * @param delegate underlying Link join operation
          */
         private LiveJoin(Onboarding.PreparedJoin delegate) {
             this.delegate = delegate;
+            this.redialer = new Redialer(this::redialWanted, delegate::redial, REDIAL_FIRST, REDIAL_CAP, LinkRuntimeOwner.this::record);
+        }
+
+        /**
+         * Redials the host for as long as this handle is open, the owner is open, no session to the host is held,
+         * and the rule still names the host.
+         *
+         * @return whether another dial is wanted
+         */
+        private boolean redialWanted() {
+            String host = peer;
+            return !closedHandle.get() && !closed.get() && host != null && !sessions.containsKey(host) && returningPeers.test(host);
+        }
+
+        /**
+         * Starts redialing when the session ends. Called for the first session and for every one a redial makes.
+         *
+         * @param session a session this handle established
+         */
+        private void watch(PeerSession session) {
+            peer = session.remoteNodeId();
+            session.terminalCompletion().whenComplete((ignored, failure) -> redialer.start());
         }
 
         /**
@@ -638,6 +762,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         public void close() {
             if (closedHandle.compareAndSet(false, true)) {
                 handles.remove(this);
+                redialer.close();
                 delegate.close();
             }
         }

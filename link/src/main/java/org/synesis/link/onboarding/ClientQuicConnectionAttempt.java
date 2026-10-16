@@ -15,6 +15,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.HandshakeProof;
 import org.synesis.link.protocol.HandshakeRole;
 import org.synesis.link.protocol.HandshakeTranscript;
+import org.synesis.link.session.LivenessConfiguration;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.ReplayGuard;
 import org.synesis.link.session.SessionAuthenticator;
@@ -34,14 +35,14 @@ final class ClientQuicConnectionAttempt {
 
   static ConnectionAttempt attempt(NodeIdentity identity, CandidateDescriptor host,
       HandshakeTranscript transcript, Channel udp, CandidatePair pair,
-      PeerSession.ApplicationStreamHandler applicationHandler) {
+      PeerSession.ApplicationStreamHandler applicationHandler, LivenessConfiguration liveness) {
     return attempt(identity, host.nodeId(), host.publicKeyEncoded(), transcript, udp, pair,
-        applicationHandler);
+        applicationHandler, liveness);
   }
 
   static ConnectionAttempt attempt(NodeIdentity identity, String hostNodeId,
       byte[] hostPublicKey, HandshakeTranscript transcript, Channel udp, CandidatePair pair,
-      PeerSession.ApplicationStreamHandler applicationHandler) {
+      PeerSession.ApplicationStreamHandler applicationHandler, LivenessConfiguration liveness) {
     return new ConnectionAttempt() {
       private volatile QuicChannel connection;
 
@@ -70,7 +71,7 @@ final class ClientQuicConnectionAttempt {
                 connection.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(identity, hostNodeId, transcript,
                         proof, new ReplayGuard(), established,
-                        org.synesis.link.session.LivenessConfiguration.DEFAULT,
+                        liveness,
                         applicationHandler));
                 established.whenComplete((session, failure) -> {
                   if (failure == null) {

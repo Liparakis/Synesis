@@ -357,6 +357,11 @@ public final class NettyControlStream extends SimpleChannelInboundHandler<ByteBu
   }
 
   @Override
+  public LivenessConfiguration livenessConfiguration() {
+    return livenessConfiguration;
+  }
+
+  @Override
   public LivenessMetrics livenessMetrics() {
     return liveness == null ? new LivenessMetrics(0, 0, 0, 0, 0, Duration.ZERO, Duration.ZERO, 0, 0,
         0, 0, 0)
