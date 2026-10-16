@@ -110,9 +110,13 @@ member  ──request──▶  leader ──append──▶  voters (majority a
 5. **Removal needs the owner's key.** A removal entry is valid only when signed by the owner key or
    by a key the recovery key has made the owner key. Invitations need any member's key and a
    committed entry.
-6. **Decisions are made against the leader's committed state.** A member's validation is advisory;
-   the leader runs the same rule again before it appends. A rejected request returns the existing
-   refusal, such as `CLAIM_EPOCH_STALE`.
+6. **Decisions are made against the leader's committed state.** A member runs the services on an
+   exact copy of the leader's log and proposes the entry it would append, naming the position it
+   expects. The leader commits it only if its log is still at that position and its projections
+   accept the entry. Every rule that guards authority lives in a projection, so the leader enforces
+   it on every entry, wherever the entry came from. A rejected proposal returns the existing
+   refusal, such as `OVERLAPPING_CLAIM`. (Reworded on 2026-10-16: the leader originally re-ran
+   every service rule. See "Step 2 design".)
 7. **Time used in a decision is the leader's.** A writer's clock appears only as information.
    Liveness of a remote member is the leader's observation, committed only when it changes. It
    never comes from a process ID on another computer.
@@ -256,6 +260,172 @@ changes. It is in the invitation and in the Link handshake. On a difference, bot
 new failure that names both numbers and which side is older. It is never reported as an invalid or
 expired invitation, which is what a version mismatch looks like today (`Onboarding`, VERIFIED).
 
+## Step 2 design (2026-10-16)
+
+The leader is fixed: the owner's computer, here **A**. Members, such as **B**, run their agents
+locally.
+
+### Trust model (USER-STATED, 2026-10-16)
+
+Members are people the owner trusts. The design favours throughput over defence against a hostile
+member. It must still show who did what: every entry is signed by the computer that made it, and
+the hash chain makes a silent edit or deletion visible on every copy.
+
+Two guards stay regardless of trust, because they stop accidents (a buggy build, an agent gone
+wrong), not malice:
+
+1. **Authority rules live in projections.** No two agents hold one file. Nobody reviews their own
+   work. A grant is used once. A claim epoch must be current.
+2. **A participant's entries come from the computer that introduced it.** An entry acting for a
+   participant is accepted only from the node that signed that participant's
+   `WORK_INTENT_ANNOUNCED`. B therefore cannot release or finish A's lanes.
+
+### Shape: the member proposes, the leader verifies
+
+The seam is the one place an entry is written: the file placement in `PredictionEventStore.append`.
+(Design by the Opus runner of the architect exploration; parts from the other three runners are
+named where used.)
+
+1. **On B, each append becomes a proposal.** B's service code runs unchanged: the tool, its
+   service, its rules, and its local Git and binding effects, against B's copy of A's log at head
+   *N*. The entry it would write is signed with B's node key and names *N* as the previous digest
+   and sequence. B sends it to A and waits.
+2. **On A, the proposal is checked:**
+   - its log is still at *N*;
+   - the Link session's node is the entry's signer, and a member;
+   - the event type is not one only the leader writes (a new flag on `PredictionEventType`, for
+     example `INTEGRATION_*`, `CONTROL_BRANCH_ADVANCED` and `TASK_INTEGRATED`);
+   - its projections accept the entry, as for a local append.
+
+   A then places the entry unchanged, under its append lock.
+3. **If A's head moved,** B gets the existing "lost its sequence" answer. B applies A's newer
+   entries, and its service runs again on the new head: today's retry loop, now across computers.
+4. **Members never append on their own** (invariant 1). On A, local appends are unchanged.
+
+Nothing changes in the 11 tools, their schemas or the services' public methods. Provider-session
+bindings stay on B and are checked there, as today. Because B signs its own entries, the services'
+assumption that "the signer is this computer" still holds on the computer that runs them.
+
+### Delivery of committed entries
+
+From the Fable runner:
+
+- A sends members a short notice when its head moves.
+- B then pulls the entries after its head, in pages, over a Link application stream. No entry has
+  to fit an overlay frame, which is bounded at about 4 KiB.
+- B also pulls every 15 seconds. That doubles as the NAT keepalive (see "Timing").
+- B writes the pulled entries into its own event folder, after verifying the chain. B's held wait
+  and every reader keep working unchanged.
+- A gap or a digest mismatch stops B loudly. B never repairs its copy by guessing.
+
+### Liveness of B's agents on A
+
+B's agents' calls are reads on B and never reach A. Every 15 seconds B sends, with its pull, the
+participants that made a call since the last one. A records them in `ParticipantActivity` at the
+time it **received** them (the leader's clock, invariant 7). A's run controller and absence guard
+then see B's agents as active.
+
+### Code
+
+The Git remote is configured on both computers.
+
+- **Before proposing an entry that names a commit,** B pushes `refs/synesis/snapshots/*` and
+  `refs/synesis/prepared/*`. That covers a snapshot, a prepared completion and a published
+  implementation.
+- **A fetches before deciding anything that reads those commits.** That means the merge, review
+  access and validation. A computes changed paths and tree hashes itself, rather than reading B's
+  claim (from the Fable runner). A missing or mismatched commit refuses with the existing
+  snapshot errors.
+- **After each control-branch advance,** A pushes the control branch. B fast-forwards before
+  giving out a new lane worktree.
+- A path written into an entry, such as the validation worktree path, is a path on the signer's
+  computer, and only that computer reads it.
+
+### Merging runs on A, outside the log lock
+
+The merge runs only on A. A guard in `orchestrateIntegration` covers its three triggers. A
+short-delayed pass also runs after any entry from a member, so A needs no agent of its own to merge
+B's work (from the Sonnet and Opus runners).
+
+Today the merge holds the append lock through the project's test gate, often minutes. Every writer
+gives up after 2 seconds, so B's proposals would fail through every merge. The Opus runner found
+this. Invariant 8 is therefore brought forward from step 5:
+
+1. The cherry-pick and the test gate run without the lock.
+2. The lock is taken only to record the result, and only if the control head and the lanes'
+   entries are still what the pass started from. Otherwise the pass starts again.
+
+This also stops one computer's merge from blocking its own agents.
+
+### Failure and retry
+
+- A resent proposal is the same bytes. A recognises an entry it already holds and answers with its
+  position.
+- A unreachable: `LEADER_UNREACHABLE`. No answer after resends: `LEADER_OUTCOME_UNKNOWN`. B's agent
+  keeps working inside its lane, and the next pull settles what happened.
+- B's own append lock is held across the round trip, so B's agents never race each other for a
+  position.
+- `LinkCompatibility.CURRENT` becomes 5, because the member protocol is new.
+
+### Smallest first slice
+
+1. **Two project roots on one computer, in one test.** One root is the leader and one a member,
+   joined by an in-process transport. Proposal, verification, pull, the attribution guard, and the
+   two projection rules moved out of the services.
+2. **Link as the transport.** Leader and member coordination servers, notices, pulls and
+   proposals.
+3. **Code through a bare Git remote,** and the merge moved outside the lock.
+4. **Joining.** A member is added through the existing invitation. In step 2 the member list is
+   local state on A; step 3 moves it into the log.
+5. **A real run:** A, and the virtual machine as B.
+   - B's claim of a file A holds is refused.
+   - Each side reviews the other's work.
+   - A merges B's lane with no agent of its own, and B fast-forwards.
+
+**Deferred:**
+- elections, terms, and leader time on entries (step 3);
+- membership in the log (step 3);
+- reconnecting a lost session (step 4);
+- capability contracts across computers;
+- batching proposals.
+
+### Settled before code (owner, 2026-10-16)
+
+- **The audit comes first, as its own change.**
+  - List every rule enforced only inside a service. Seen so far: `REVIEWER_REQUIRES_PRODUCER`,
+    `WORK_GROUP_NOT_ACTIVE` and `CLAIM_EPOCH_STALE`.
+  - Move the rules that guard authority into their projections. Leave purely helpful checks where
+    they are.
+  - Make an append validate against projections caught up to the durable head, not against what
+    the store held when it opened.
+  - On one computer this closes the gap where `finish_lane` and `cancel_lane` append without the
+    lock.
+- **Session lifetime.**
+  - Step 2's first real run accepts that both computers stay up.
+  - A drop is reported loudly on both. B's agents keep working inside their lanes and get
+    `LEADER_UNREACHABLE` for anything that needs A.
+  - Redialing the same peer from the endpoints already known follows straight after. It comes
+    before real use, because laptops sleep.
+- **Pre-push hooks.**
+  - Synesis pushes its own `refs/synesis/*` refs with local hooks off, as `GitProcessRunner`
+    already runs every Git command.
+  - The project's tests still run at the merge on A. Server-side protection still applies.
+  - A push to a real GitHub repository is tested early in step 2. If a host refuses custom refs,
+    the push reports `CODE_REMOTE_UNAVAILABLE` with the reason.
+
+### Rejected for step 2
+
+- **The leader re-runs every service** (the Haiku, Sonnet and Fable runners). B sends typed
+  commands, and A runs the full service code and signs every entry.
+  - It is the strongest against a hostile member.
+  - It needs about 25 operations reshaped into one type, three services split into local and
+    leader halves, and A learning about B's provider sessions.
+  - A would sign entries it did not author, so attribution becomes a field inside the entry instead
+    of a signature.
+  - Under the owner's trust model it costs more and shows less.
+- **Forwarding whole tool calls.** A would have to reach into B's disk, which is where agents
+  edit.
+
 ## Alternatives rejected
 
 - **The host is the server, for good.** Simple, but everything stops when that person leaves, and
@@ -302,7 +472,7 @@ Each step works and is tested on its own. Later steps build on earlier ones.
    - **Built:** the number in the invitation and handshake, and the loud failure.
    - **Done when:** two builds with different numbers fail with both numbers shown, in the CLI and
      the browser.
-2. **One fixed leader, one voter.**
+2. **One fixed leader, one voter.** See "Step 2 design".
    - **First:** done. One coordination folder and incremental reads on 2026-10-15; heartbeats out
      of the log on 2026-10-16.
    - **Built:**
