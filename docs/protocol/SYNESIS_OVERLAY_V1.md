@@ -244,8 +244,10 @@ window, nonce, or AEAD tag. The receiver keeps a bounded 64-entry replay
 window per E2E session and delivers each message ID at most once for the
 configured cache lifetime.
 
-The 3,840-byte plaintext bound keeps one v1 logical envelope within the
-existing 4,096-byte Link application payload bound after framing overhead.
+The 3,840-byte plaintext bound keeps one v1 logical envelope within a
+4,096-byte record, which was the Link application payload bound when this
+protocol was set (it is 512 KiB since compatibility 5; the record bound here
+is unchanged).
 Fragmentation is not part of v1; larger application objects need a later
 versioned contract.
 

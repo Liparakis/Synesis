@@ -7,6 +7,8 @@ import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.MemberReplication;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -40,13 +42,23 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
     public Integer call() {
         try {
             var location = CoordinationCliSupport.project(runtime, project);
-            var store = new PredictionEventStore(CoordinationCliSupport.data(location, data), location.projectId());
+            var projectData = CoordinationCliSupport.data(location, data);
+            var replication = ReplicationSettings.read(projectData);
+            var store = new PredictionEventStore(projectData, location.projectId());
             runtime.terminal().stdout("COORDINATION_STATUS=PASS");
             runtime.terminal().stdout("PROJECT_ID=" + location.projectId());
             runtime.terminal().stdout("PROJECT_SEQUENCE=" + store.headSequence());
             runtime.terminal().stdout("PREDICTIONS=" + store.projection().snapshot().size());
             runtime.terminal().stdout("TASKS=" + store.coordinationProjection().tasks().size());
             runtime.terminal().stdout("OWNERSHIPS=" + store.coordinationProjection().ownerships().size());
+            replication.ifPresent(settings -> {
+                runtime.terminal().stdout("REPLICATION_ROLE=" + (settings.isMember() ? "member" : "leader"));
+                if (settings.isMember()) {
+                    runtime.terminal().stdout("REPLICATION_LEADER=" + settings.leaderNodeId());
+                    runtime.terminal().stdout("REPLICATION_STATE="
+                            + MemberReplication.recordedState(projectData).orElse("NO_COORDINATION_SERVER"));
+                }
+            });
             return ExitCodes.OK;
         } catch (Exception failure) {
             runtime.terminal().stderr("COORDINATION_ERROR=" + failure.getMessage());

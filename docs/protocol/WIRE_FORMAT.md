@@ -6,7 +6,7 @@ order, and structured rejection. Java object serialization is prohibited.
 ## Compatibility number
 
 Two builds connect only if they carry the same **compatibility number**
-(`LinkCompatibility.CURRENT`, currently `4`). It is raised whenever any format
+(`LinkCompatibility.CURRENT`, currently `5`). It is raised whenever any format
 sent between computers changes, and for nothing else; it is not the build
 string. It is an unsigned 16-bit big-endian value in a position no later
 layout may move, so a build with another number can still read it and refuse
@@ -138,9 +138,70 @@ stream from the control handshake and the demo fixture:
 |-------:|------:|---------------------------------|
 |      0 |     4 | ASCII magic `SLA1`              |
 |      4 |     1 | frame version `1`               |
-|      5 |     N | opaque payload, `0..4096` bytes |
+|      5 |     N | opaque payload, `0..524288` bytes |
 
-The complete inner frame is at most 4,101 bytes. It is legal only after
+The payload bound is 512 KiB (`ApplicationStreamCodec.MAX_PAYLOAD_BYTES`); it was
+4,096 bytes until compatibility `5` and is independent of the 4,096-byte
+control-frame bound. The outer length prefix of an inbound stream is bounded by
+the handshake envelope (8,192 bytes) until the session is authenticated and by
+the application frame (524,293 bytes) after it, so an unauthenticated peer
+cannot make a side buffer more than a handshake frame.
+
+The complete inner frame is at most 524,293 bytes. It is legal only after
 reciprocal `CONTROL_READY`; it carries no project or application semantics.
 Unknown versions, malformed markers, oversized payloads, missing handlers, and
 terminal streams are rejected without publishing or reviving a session.
+
+## Project log replication protocol `SRL1`
+
+Compatibility `5`. Carried as the opaque payload of one Link application stream
+between a project leader and a member (ADR-0098 step 2), and as the body of the
+loopback `POST /replication` route of a member computer's coordination server,
+which relays a local process's request over the Link session. One request, one
+answer per stream. Big-endian, strict: every length is checked before
+allocation, nothing may follow the last field, and a message is at most
+524,288 bytes (the Link application payload bound).
+
+Header, all messages: `SRL1` (4 bytes), version `1` (1 byte), kind (1 byte).
+
+| Kind | Name | Direction | Fields after the header |
+|-----:|------|-----------|-------------------------|
+|  `1` | PROPOSE | member to leader | project UUID (16), entry length u32 `1..81920`, entry bytes: one signed log entry exactly as it would be placed |
+|  `2` | PULL | member to leader | project UUID (16), after u64 (member's head sequence), max entries u32 `1..1024`, max bytes u32 `1..524288` (soft) |
+|  `3` | NOTICE | leader to member | project UUID (16), head u64 |
+| `16` | ACCEPTED | answer to PROPOSE | sequence u64 of the entry on the leader's log |
+| `17` | HEAD_MOVED | answer to PROPOSE | leader's head u64; nothing was placed |
+| `18` | REFUSED | answer to PROPOSE, PULL, NOTICE | code length u8 `1..64`, code (UTF-8); nothing was placed |
+| `19` | UNREACHABLE | made by a relay | none: the request was not sent |
+| `20` | NO_ANSWER | made by a relay | none: the request may have been sent and was lost |
+| `21` | ENTRIES | answer to PULL | count u16 `0..1024`, then per entry length u32 `1..81920` and bytes, in sequence order |
+| `22` | NOTICED | answer to NOTICE | none |
+
+- **Who sent it is never a field.** The leader takes the sender from the
+  authenticated Link session (`PeerSession.remoteNodeId`) and requires it to
+  be the signer of a proposed entry and a member of the project. A pull from a
+  node that is not a member is `REFUSED PROPOSER_NOT_A_MEMBER`.
+- **A pull page** holds at most the requested entries and about 256 KiB (the
+  leader caps `max bytes` there), plus at least one entry when one exists.
+- **A proposal sent again** carries the same bytes; the leader answers an entry
+  it already holds as `ACCEPTED` with its sequence. A relay that cannot get an
+  answer reports NO_ANSWER and the log sends the same bytes again, up to three
+  times, then reports `LEADER_OUTCOME_UNKNOWN`.
+- **Refusal codes** are the leader's: the codes a local append gives
+  (`OVERLAPPING_CLAIM`, ...), `PROPOSAL_SENDER_MISMATCH`, `PROPOSER_NOT_A_MEMBER`,
+  `EVENT_TYPE_LEADER_ONLY`, `PROPOSAL_PROJECT_MISMATCH`,
+  `PROPOSAL_SIGNATURE_INVALID`, `PROPOSAL_MALFORMED`,
+  `REPLICATION_REQUEST_UNSUPPORTED`, `REPLICATION_MESSAGE_INVALID`.
+- **Notices are advisory.** A member also pulls every 15 seconds, which keeps
+  the path through a home router open.
+
+Local files of a computer, never sent to a peer, in the coordination folder
+beside `events/`:
+
+- `replication.properties`: `role=member` then `leader=<node ID>`, or
+  `role=leader` then any number of `member=<node ID>`. Absent means leader. A
+  file that does not follow this exactly makes the log refuse every append and
+  pull with `REPLICATION_ROLE_INVALID`.
+- `replication.endpoint`: `127.0.0.1:<port>`, written by a member's
+  coordination server while it runs; only a loopback host is ever used.
+- `replication.status`: `CONNECTED`, `DISCONNECTED` or `DIVERGED`.

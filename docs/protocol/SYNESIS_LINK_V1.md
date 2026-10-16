@@ -153,7 +153,7 @@ state; stream limits and cleanup are local bounds.
 SL-014 adds one transport-neutral `PeerSession` operation for a bounded opaque
 byte exchange after reciprocal `CONTROL_READY`. The authenticated remote node
 ID remains the Link session identity; `isUsable()` remains the readiness gate.
-Link owns `SLA1` framing, the 4,096-byte payload bound, one-operation
+Link owns `SLA1` framing, the 512 KiB payload bound (4,096 bytes until compatibility 5), one-operation
 five-second deadline, stream limits, and cleanup. Link never interprets,
 authorizes, persists, retries, or orders the payload across streams. The seam
 is intended for a future higher-level protocol and does not change the

@@ -13,7 +13,10 @@ package org.synesis.link.protocol;
  * format byte of the handshake envelope. A build that finds a different number refuses to go on,
  * with an {@link IncompatibleVersionException} before it parses anything else.
  *
- * <p>It starts at 4 because the invitation and answer layouts before this rule, which carried no
+ * <p>It stands at 5: the member protocol for the replicated project log (ADR-0098) is new, and
+ * the application-stream payload bound grew from 4 KiB to 512 KiB with it.
+ *
+ * <p>It started at 4 because the invitation and answer layouts before this rule, which carried no
  * number, were the third generation ({@code SLB3}, {@code SLA3}). Builds from before the rule
  * cannot read the number, so they report a newer link as invalid; that cannot be fixed.
  *
@@ -22,7 +25,7 @@ package org.synesis.link.protocol;
 public final class LinkCompatibility {
 
   /** The compatibility number of this build. */
-  public static final int CURRENT = 4;
+  public static final int CURRENT = 5;
 
   private LinkCompatibility() {
   }

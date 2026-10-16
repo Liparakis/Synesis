@@ -18,6 +18,8 @@ import org.synesis.cli.ui.StaticResourceHandler;
 
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.onboarding.Onboarding;
@@ -89,6 +91,8 @@ final class CoordinationServerLauncher {
             }
             var identityDirectory = CoordinationCliSupport.identity(location, identity);
             var node = CoordinationCliSupport.loadIdentity(identityDirectory);
+            // A folder whose replication settings cannot be read must not be served as a leader's.
+            var replicationSettings = ReplicationSettings.read(projectData);
             var store = new PredictionEventStore(projectData, location.projectId());
             var service = new CoordinationService(store, node);
             if (!isLoopback(host)) {
@@ -114,8 +118,14 @@ final class CoordinationServerLauncher {
             try (control;
                     linkOwner;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
-                    var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler())) {
+                    var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
+                    // A member's agents reach the leader through this server; the Link session arrives at attach.
+                    var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
+                            ? MemberReplication.open(projectData, location.projectId()) : null) {
                 server.start();
+                if (memberReplication != null) {
+                    memberReplication.serve(server);
+                }
                 Thread parentWatcher = parentPid > 0 ? parentWatcher(parentPid) : null;
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();
                 try {

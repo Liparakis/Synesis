@@ -9,9 +9,12 @@ import java.util.Objects;
 public final class ApplicationStreamCodec {
 
   /**
-   * Maximum opaque application payload accepted by the frame codec.
+   * Maximum opaque application payload accepted by the frame codec: 512 KiB. It is independent of the
+   * 4 KiB control-frame bound. The project log replication protocol sends one entry of up to 64 KiB
+   * and answers a pull with a page of about 256 KiB plus one entry, so a payload this size carries
+   * either with room to spare, and still fits inside the initial QUIC connection window of 1 MiB.
    */
-  static final int MAX_PAYLOAD_BYTES = ControlFrame.MAX_PAYLOAD;
+  public static final int MAX_PAYLOAD_BYTES = 512 * 1024;
   /**
    * Maximum total encoded frame size, including magic and version bytes.
    */

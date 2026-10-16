@@ -366,6 +366,11 @@ final class NettyQuicLoopbackTest {
           .toCompletableFuture()
           .get(5, TimeUnit.SECONDS));
       assertEquals(initiatorIdentity.nodeId(), applicationRemote.get());
+      byte[] large = new byte[300_000];
+      new java.util.Random(7).nextBytes(large);
+      assertArrayEquals(large, clientResult.requestApplication(large)
+          .toCompletableFuture()
+          .get(5, TimeUnit.SECONDS));
       for (int index = 0; index < 8; index++) {
         assertArrayEquals(applicationPayload, clientResult.requestApplication(applicationPayload)
             .toCompletableFuture()

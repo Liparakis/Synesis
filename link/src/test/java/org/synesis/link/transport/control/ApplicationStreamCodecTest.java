@@ -1,6 +1,7 @@
 package org.synesis.link.transport.control;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
@@ -17,6 +18,14 @@ final class ApplicationStreamCodecTest {
     byte[] payload = new byte[]{0, 1, 2, (byte) 255};
     assertArrayEquals(payload,
         ApplicationStreamCodec.decode(ApplicationStreamCodec.encode(payload)));
+  }
+
+  @Test
+  void carriesAPayloadFarLargerThanAControlFrame() {
+    byte[] payload = new byte[ApplicationStreamCodec.MAX_PAYLOAD_BYTES];
+    assertEquals(512 * 1024, payload.length);
+    assertEquals(payload.length, ApplicationStreamCodec.decode(ApplicationStreamCodec.encode(payload)).length);
+    assertEquals(payload.length + 5, ApplicationStreamCodec.MAX_FRAME_BYTES);
   }
 
   @Test

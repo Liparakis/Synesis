@@ -20,6 +20,8 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.persistence.ReplicationExchange;
+import org.synesis.coordination.persistence.ReplicationMessage;
 
 /**
  * Loopback HTTP command and server-sent-event adapter for one coordinator.
@@ -29,6 +31,10 @@ public final class CoordinationHttpServer implements AutoCloseable {
     private final CoordinationService service;
     private final HttpServer server;
     private final ExecutorService executor;
+    /**
+     * Where this computer's processes send proposals and pulls for a leader, or null when this computer has none.
+     */
+    private volatile ReplicationExchange relay;
 
     /**
      * Creates a loopback-only server.
@@ -104,6 +110,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
         server.setExecutor(executor);
         server.createContext("/command", this::command);
         server.createContext("/events", this::events);
+        server.createContext("/replication", this::replicate);
         if (codexLifecycleHandler != null) {
             server.createContext("/codex-lifecycle/v1", codexLifecycleHandler);
         }
@@ -160,9 +167,18 @@ public final class CoordinationHttpServer implements AutoCloseable {
      * @throws IOException when payload validation or durable I/O fails
      */
     private static byte[] readBounded(HttpExchange exchange) throws IOException {
+        return readBounded(exchange, 64 * 1024);
+    }
+
+    /**
+     * Reads the HTTP body while enforcing a given request-size bound.
+     *
+     * @throws IOException when the body exceeds the bound or reading fails
+     */
+    private static byte[] readBounded(HttpExchange exchange, int limit) throws IOException {
         long declared = exchange.getRequestHeaders().getFirst("Content-Length") == null ? -1
                 : Long.parseLong(exchange.getRequestHeaders().getFirst("Content-Length"));
-        if (declared > 64 * 1024) {
+        if (declared > limit) {
             throw new CoordinationException("request exceeds bound");
         }
         try (var input = exchange.getRequestBody();
@@ -175,7 +191,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
                  */
                 @Override
                 public void write(int value) throws IOException {
-                    if (bytes.size() >= 64 * 1024) {
+                    if (bytes.size() >= limit) {
                         throw new CoordinationException("request exceeds bound");
                     }
                     bytes.write(value);
@@ -189,7 +205,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
                 @Override
                 @SuppressWarnings("NullableProblems")
                 public void write(byte[] value, int offset, int length) throws IOException {
-                    if (bytes.size() + length > 64 * 1024) {
+                    if (bytes.size() + length > limit) {
                         throw new CoordinationException("request exceeds bound");
                     }
                     bytes.write(value, offset, length);
@@ -210,6 +226,16 @@ public final class CoordinationHttpServer implements AutoCloseable {
         try (var output = exchange.getResponseBody()) {
             output.write(body);
         }
+    }
+
+    /**
+     * Sets, or with null removes, where this computer's processes relay proposals and pulls for the project's
+     * leader. Only a member computer's coordination server has one.
+     *
+     * @param exchange the relay, or null
+     */
+    public void relay(ReplicationExchange exchange) {
+        this.relay = exchange;
     }
 
     /**
@@ -291,6 +317,34 @@ public final class CoordinationHttpServer implements AutoCloseable {
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Relays one replication request of a local process to the leader and returns the encoded answer. Answers 503
+     * when this computer has no relay, which tells the caller that nothing was sent.
+     *
+     * @throws IOException when the request body cannot be read or the answer cannot be written
+     */
+    private void replicate(HttpExchange exchange) throws IOException {
+        ReplicationExchange current = relay;
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            send(exchange, 405, new byte[0]);
+        } else if (current == null) {
+            send(exchange, 503, new byte[0]);
+        } else {
+            byte[] body;
+            try {
+                body = readBounded(exchange, ReplicationMessage.MAX_BYTES);
+            } catch (CoordinationException tooLarge) {
+                send(exchange, 413, new byte[0]);
+                return;
+            }
+            try {
+                send(exchange, 200, current.exchange(body));
+            } catch (IOException lost) {
+                send(exchange, 502, new byte[0]);
+            }
         }
     }
 }

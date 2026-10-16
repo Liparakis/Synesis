@@ -140,8 +140,9 @@ ownership, project, or task semantics.
 The SL-014 seam accepts bytes only from an authenticated control-ready Link
 session. The session's verified remote node ID is available to the higher-level
 handler; addresses and TLS success are not substitutes. `SLA1`, explicit outer
-length framing, a 4,096-byte payload bound, a five-second deadline, a four
-stream limit, and idempotent release constrain memory, time, and native
+length framing, a 512 KiB payload bound (4,096 bytes before compatibility 5;
+an inbound stream opened before authentication is held to a handshake frame),
+a five-second deadline, a four stream limit, and idempotent release constrain memory, time, and native
 resources. Invalid markers, versions, oversized input, missing handlers,
 terminal use, and handler failure close the stream without changing liveness or
 publishing a session. Link does not interpret, persist, authorize, or retry the

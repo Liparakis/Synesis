@@ -1,3 +1,63 @@
+# 2026-10-16 — A member's proposals and pulls travel to the leader over Link (ADR-0098 step 2, slice 2)
+
+Two computers, each with its own project root, node identity and coordination server, joined by a real
+authenticated QUIC session. The slice-1 `LeaderChannel`, `LeaderEndpoint` and `PredictionEventStore` API are
+used unchanged. Joining a project (invitation to member list) and redialing a lost session are not here.
+
+**What changed.**
+
+- **The role is on disk.** `replication.properties` in the coordination folder, beside `events/` and never in it,
+  holds `role=leader` and `member=<node>` lines, or `role=member` and `leader=<node>`. `ReplicationRole.of` reads
+  it each time a log is opened, so every agent's MCP process on a member computer is a member without being told.
+  No file is a leader (every log today). A file that cannot be read or parsed gives a role that refuses every
+  append and pull with `REPLICATION_ROLE_INVALID`; reads still work, and it is never taken for a leader.
+  `synesis coordination status` prints `REPLICATION_ROLE`, and for a member `REPLICATION_LEADER` and
+  `REPLICATION_STATE`; it fails with `COORDINATION_ERROR=REPLICATION_ROLE_INVALID` for a bad file. The in-memory
+  registration of slice 1 stays and wins, for tests.
+- **A process reaches Link through its computer's coordination server.** Only that server holds the session. It
+  writes `replication.endpoint` (`127.0.0.1:<port>`) when it starts and deletes it on exit; a member's `LeaderChannel`
+  is `ExchangeLeaderChannel` over `LoopbackExchange`, a POST to `/replication` on that address, which the server
+  relays over the session (`MemberReplication.relay`). No file, a stale port, a non-loopback host or a server with no
+  session is "not sent": `LEADER_UNREACHABLE` at once, nothing appended. A request that may have left and got no
+  answer is sent again as the same bytes, then `LEADER_OUTCOME_UNKNOWN`. `CoordinationServerLauncher` starts the
+  member side when the file says member; a malformed file stops the server.
+- **Protocol `SRL1`** (`ReplicationMessage`, `ReplicationCodec`, documented in `WIRE_FORMAT.md`): PROPOSE, PULL and
+  NOTICE with the outcomes ACCEPTED, HEAD_MOVED, REFUSED, ENTRIES, NOTICED, plus UNREACHABLE and NO_ANSWER that a relay
+  makes. Version 1, strict, no byte left over, at most 512 KiB. The sender is never a field: `LeaderReplication`
+  passes the Link session's remote node to `LeaderEndpoint.accept`, and refuses a pull from a non-member.
+- **Notice and pull.** `LeaderReplication` counts event files every 200 ms (agents' processes append too) and sends
+  NOTICE to attached members when the count changed. `MemberReplication` pulls on a notice and every 15 seconds and
+  applies after checking the chain. `LEADER_LOG_DIVERGED` stops pulling and proposing for good, logs at SEVERE and
+  writes `DIVERGED` to `replication.status`.
+- **Link.** The application payload bound is 512 KiB, no longer tied to the 4 KiB control frame
+  (`ApplicationStreamCodec.MAX_PAYLOAD_BYTES`). A responder also bounded every inbound stream at the handshake
+  envelope's 8 KiB, so a larger request to it could never arrive; a stream opened after authentication is now
+  allowed a full application frame, one opened before it is not. `LinkCompatibility.CURRENT` is 5, and the SLB3, SLA3
+  and envelope vectors were regenerated.
+- **The seam for slice 4:** `LeaderReplication.attach(session)` and `MemberReplication.attach(session)` take an
+  authenticated, control-ready session whose remote node is a member (leader side) or the leader (member side), and
+  `handler()` is what the session must be created with. Tests use `Onboarding` for that; nothing in the product does yet.
+
+**Found on the way.**
+
+- `PeerSession.isUsable()` stays true after a session ended, because the control stream never clears its ready flag.
+  `requestApplication` on such a session fails later instead of at once. `Sessions.live` also checks
+  `terminalCompletion`.
+- Slice 1 reported `LEADER_UNREACHABLE` for a proposal whose first send had been lost and whose resend found no
+  session, although the first send may have arrived. It is now `LEADER_OUTCOME_UNKNOWN`.
+- A member holds its append lock across the round trip. A relay waits up to 8 s and a proposal is sent up to three
+  times, so other writers on that computer (2 s lock wait) can fail while the leader is slow or lost.
+
+Tests: new `LinkReplicationTest` (two roots, two identities, two servers, one QUIC session on loopback),
+`ReplicationProtocolTest` (exact bytes and strict rejection), `ReplicationRoleFileTest`, three cases in
+`CoordinationLogLocationTest`, a 300 KB echo in `NettyQuicLoopbackTest`. Mutations that each fail tests: ignoring the
+file, taking a bad file for a leader, `isUsable` alone as liveness, `UNREACHABLE` after a lost send, the old 4 KiB bound,
+and the old 8 KiB bound on a responder's streams. VERIFIED on Linux only.
+
+NOT REACHED: the Windows gate; a second computer; joining; redialing; leader-side wiring in the server (nothing
+creates `LeaderReplication` outside tests); the 15-second activity report of a member's agents (the `PULL` message
+carries no participants; it needs its own message); Git and the merge.
+
 # 2026-10-16 — A member's log proposes entries to a leader's log (ADR-0098 step 2, slice 1)
 
 Two project roots on one computer, in one test: a leader log and a member log joined by an in-process

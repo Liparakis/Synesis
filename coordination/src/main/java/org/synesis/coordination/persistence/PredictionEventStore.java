@@ -82,7 +82,7 @@ public final class PredictionEventStore implements ProjectionView {
      * Largest page a member asks the leader for, in entries and in encoded bytes.
      */
     private static final int PULL_PAGE_ENTRIES = 256;
-    private static final int PULL_PAGE_BYTES = 1 << 20;
+    private static final int PULL_PAGE_BYTES = 1 << 18;
 
     /**
      * Clock used for newly appended event timestamps.
@@ -176,7 +176,7 @@ public final class PredictionEventStore implements ProjectionView {
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.clock = CoordinationNullException.requireNonNull(clock, "clock");
         Files.createDirectories(eventsDirectory);
-        this.role = ReplicationRole.of(root);
+        this.role = ReplicationRole.of(root, this.projectId);
         cleanupTemporaryFiles();
         load();
     }
@@ -393,7 +393,9 @@ public final class PredictionEventStore implements ProjectionView {
                     return false;
                 }
                 case ProposalOutcome.Refused refused -> throw new CoordinationException(refused.code());
-                case ProposalOutcome.Unreachable unreachable -> throw new CoordinationException("LEADER_UNREACHABLE");
+                // An earlier send may have arrived, so after one "nothing was sent" is no longer true.
+                case ProposalOutcome.Unreachable unreachable -> throw new CoordinationException(
+                        sends > 1 ? "LEADER_OUTCOME_UNKNOWN" : "LEADER_UNREACHABLE");
                 case ProposalOutcome.NoAnswer noAnswer -> {
                     if (sends >= MAX_PROPOSAL_SENDS) {
                         throw new CoordinationException("LEADER_OUTCOME_UNKNOWN");
@@ -546,9 +548,23 @@ public final class PredictionEventStore implements ProjectionView {
         if (!role.isMember()) {
             throw new CoordinationException("NOT_A_MEMBER");
         }
+        return pullFrom(role.channel());
+    }
+
+    /**
+     * Brings a member's copy up to the leader's log through a given channel, a page at a time. The member's
+     * coordination server uses it with its own Link channel; a process that opened the log reaches the server
+     * through {@link #pullFromLeader()}.
+     *
+     * @param channel the connection to the leader
+     * @return how many entries were new
+     * @throws IOException              with {@code LEADER_UNREACHABLE} or {@code LEADER_LOG_DIVERGED}
+     * @throws GeneralSecurityException when signature verification fails
+     */
+    public synchronized int pullFrom(LeaderChannel channel) throws IOException, GeneralSecurityException {
         int applied = 0;
         while (true) {
-            List<byte[]> page = role.channel().pull(durableHead().sequence(), PULL_PAGE_ENTRIES, PULL_PAGE_BYTES);
+            List<byte[]> page = channel.pull(durableHead().sequence(), PULL_PAGE_ENTRIES, PULL_PAGE_BYTES);
             int fresh = page.isEmpty() ? 0 : applyCommitted(page);
             if (fresh == 0) {
                 return applied;

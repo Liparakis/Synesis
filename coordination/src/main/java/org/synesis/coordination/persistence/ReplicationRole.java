@@ -3,7 +3,11 @@ package org.synesis.coordination.persistence;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -11,11 +15,11 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * proposes entries to the leader and keeps a copy (ADR-0098). A log with no role registered is a leader, which is
  * every log today.
  *
- * <p>The role is looked up by coordination folder, not passed to each store, because the services open a fresh
- * {@link PredictionEventStore} for every decision and know only the folder. It lives in memory for the process
- * because a member's {@link LeaderChannel} is a live connection; the setup that makes a computer a member
- * registers it again at start. A persisted member list and leader identity belong to the Link slice that has a
- * connection to restore.</p>
+ * <p>The role of a computer is kept in {@link ReplicationSettings}, so that every process that opens the log
+ * resolves the same one: a member's log, opened by an agent's own process, reaches the leader through its
+ * computer's coordination server ({@link LoopbackExchange}) and never appends on its own. A file that cannot be
+ * read is a role that refuses every append and every pull ({@link #refusing}); it is never taken for a leader.
+ * Tests may register a role in memory instead; that takes precedence.</p>
  *
  * @param leaderNodeId the leader's node, for a member; null for the leader
  * @param channel      the connection to the leader, for a member; null for the leader
@@ -48,6 +52,27 @@ public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
     }
 
     /**
+     * A role that fails closed: every proposal is refused with the code and every pull fails with it. It is what a
+     * log resolves to when its settings cannot be read, so it can neither decide nor propose.
+     *
+     * @param code the code every append and pull fails with
+     * @return the refusing role
+     */
+    static ReplicationRole refusing(String code) {
+        return memberOf("unknown", new LeaderChannel() {
+            @Override
+            public ProposalOutcome propose(byte[] encodedEvent) {
+                return new ProposalOutcome.Refused(code);
+            }
+
+            @Override
+            public List<byte[]> pull(long after, int maxEntries, int maxBytes) throws IOException {
+                throw new CoordinationException(code);
+            }
+        });
+    }
+
+    /**
      * Tells whether this log proposes to a leader instead of deciding.
      *
      * @return true for a member
@@ -73,14 +98,30 @@ public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
     }
 
     /**
-     * Returns the role of the log in a coordination folder.
+     * Returns the role of the log in a coordination folder: the registered one, else the one in its settings file,
+     * else the leader.
      *
      * @param coordinationRoot the folder holding {@code events}
-     * @return the registered role, or the leader role
+     * @param projectId        the project the log belongs to
+     * @return the role; a refusing role when the settings file cannot be read
      * @throws IOException when the folder cannot be resolved
      */
-    static ReplicationRole of(Path coordinationRoot) throws IOException {
-        return ROLES.getOrDefault(key(coordinationRoot), LEADER);
+    static ReplicationRole of(Path coordinationRoot, UUID projectId) throws IOException {
+        Path key = key(coordinationRoot);
+        ReplicationRole registered = ROLES.get(key);
+        if (registered != null) {
+            return registered;
+        }
+        try {
+            Optional<ReplicationSettings> settings = ReplicationSettings.read(key);
+            if (settings.isEmpty() || !settings.get().isMember()) {
+                return LEADER;
+            }
+            return memberOf(settings.get().leaderNodeId(),
+                    new ExchangeLeaderChannel(projectId, new LoopbackExchange(key)));
+        } catch (CoordinationException invalid) {
+            return refusing(invalid.code());
+        }
     }
 
     private static Path key(Path coordinationRoot) throws IOException {

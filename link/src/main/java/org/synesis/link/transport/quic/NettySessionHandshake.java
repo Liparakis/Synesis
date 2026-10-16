@@ -293,9 +293,14 @@ public final class NettySessionHandshake {
           state = stateFactory.get();
           channel.parent().attr(CLIENT_STATE).setIfAbsent(state);
         }
-        LengthPrefixedFrames.install(channel.pipeline(), HandshakeEnvelope.MAX_BYTES);
+        // A stream opened after the session is authenticated may carry a full application frame;
+        // one opened before it may carry only a handshake frame, so an unauthenticated peer
+        // cannot make this side buffer more than that.
+        int frameBound = state.session == null ? HandshakeEnvelope.MAX_BYTES
+            : Math.max(HandshakeEnvelope.MAX_BYTES, ApplicationStreamCodec.MAX_FRAME_BYTES);
+        LengthPrefixedFrames.install(channel.pipeline(), frameBound);
         channel.pipeline()
-            .addLast(new HandshakeStreamHandler(state));
+            .addLast(new HandshakeStreamHandler(state, frameBound));
       }
     };
   }
@@ -399,14 +404,16 @@ public final class NettySessionHandshake {
   private static final class HandshakeStreamHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     private final StreamState state;
+    private final int frameBound;
     private boolean sent;
 
-    private HandshakeStreamHandler(StreamState state) {
+    private HandshakeStreamHandler(StreamState state, int frameBound) {
       this.state = state;
+      this.frameBound = frameBound;
     }
 
-    private static byte[] readBytes(ByteBuf message) {
-      return LengthPrefixedFrames.read(message, HandshakeEnvelope.MAX_BYTES,
+    private byte[] readBytes(ByteBuf message) {
+      return LengthPrefixedFrames.read(message, frameBound,
           "handshake frame exceeds supported bound");
     }
 
