@@ -1,3 +1,27 @@
+# 2026-10-16 — Two computers, one project: the goal integrated end to end (run 6)
+
+ADR-0098 step 2, after the review-guidance and session fixes (5c10bb54, 8b5f01e9). Build remaster53 on the Windows
+leader, the same tree on the Linux member (a VM on the LAN). Project `mp6-two-pc`: `slug.py` and `wrap.py`,
+mandatory review, `python -m unittest` validation; README: two writers, two reviewers. Two Claude Code agents (Sonnet
+5.5, medium) on the leader, two Codex agents (GPT-6 Luna, high) on the member, the same prompt for all four.
+
+**Shown (VERIFIED from both logs and Git):**
+
+| Module | Written on | Reviewed on | Merged by the leader |
+| --- | --- | --- | --- |
+| `slug.py` | leader (Claude) | member (Codex), REVIEW request ACCEPTED | `0735e02` |
+| `wrap.py` | member (Codex) | leader (Claude), REVIEW request ACCEPTED | `9df5414` |
+
+The member reviewer's `review_slug.md` was merged too (`50b59a0`). The leader's head, the shared remote's `master` and
+the member's own checkout all ended at `9df5414`. `python -m unittest` on the leader: 12 tests, OK. The Link session
+stayed connected for the whole run (about 9 minutes of work, 51 entries, both logs identical).
+
+**NOT REACHED: the WorkGroup did not reach COMPLETED.** After its review, the member's reviewer started a fresh
+session and announced an extra lane the goal does not name (`integration_report.md`); under mandatory review it
+waited for a reviewer nobody was left to be, and the member's run ended STALLED. The goal's acceptance criteria were
+all met; the extra lane is agent behaviour that the provider manual already discourages (a lane exists to produce
+something the goal names). Not reached either: two networks, a real drop and redial during a run, the Windows gate
+before this entry.
 # 2026-10-16 — A finished producer on another computer can now start a reviewer lane (real run 5)
 
 Real run 5 of ADR-0098 step 2: leader A (Windows), member B (Linux VM). B's Codex #1 wrote `slug.py` in a producer lane;

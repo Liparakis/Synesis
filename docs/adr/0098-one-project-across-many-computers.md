@@ -17,6 +17,11 @@ Built so far (`docs/agent/CURRENT.md`, 2026-10-15 and 2026-10-16):
     shown.
   - A WorkGroup did not complete, because of review routing that is not specific to two computers.
   - See `docs/agent/CURRENT.md`, "four real runs".
+  - **Run 6, same day:** after the review-guidance and session fixes, the whole goal integrated.
+    - Each module was written on one computer, reviewed on the other, and merged by the leader.
+    - All three heads ended equal, and the tests pass.
+    - The WorkGroup stayed ACTIVE only because an agent opened an extra lane the goal does not name.
+    - See `docs/agent/CURRENT.md`, "run 6".
 
 It builds on ADR-0066 (overlay), ADR-0076 (adjacency reconciliation), ADR-0077 (multi-peer QUIC),
 ADR-0080 (project identity), ADR-0093 (conversations) and ADR-0097 (answer link). It changes
