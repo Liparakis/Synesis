@@ -380,6 +380,11 @@ project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge 
 
 ### Not done
 
+- A lane its agent cancelled does not start a fresh session on `ensure_session`: the session is told its lane is
+  closed (`CLOSE`), as an existing test requires so that cancelled work is not announced again, and a task in the same
+  process is refused. The controller starts such an agent again on a new connection once its lane has ended. Letting
+  the same process take a next lane after a cancel needs a decision between the two.
+
 - `keep` reads only the lease, not the log. A participant that was suspended while its controller still kept it (only
   possible if the controller was stopped past the grace period) is resumed on the same connection and refused
   `SESSION_EPOCH_FENCED`; it is not continued by its own agent until the run ends. A controller agent that the resume

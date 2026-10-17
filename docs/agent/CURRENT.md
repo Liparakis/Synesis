@@ -1,3 +1,94 @@
+# 2026-10-17 — A waiting agent keeps its session (ADR-0099 amendment) and the PC + VM rerun (COMPLETED)
+
+Fixes for the five defects of the overnight entry below, with the owner's approval of the three rule changes
+(2026-10-17, recorded in ADR-0099, "Amendment of 2026-10-17: a waiting agent keeps its session"). Four more defects
+were found by the real reruns and fixed the same way; each fix has a test that fails on the previous code.
+
+**Root cause of 1, 2 and 5 (VERIFIED in run `run-0e6c908a`).** The run controller gave every process of an agent a new
+connection identity and recorded the old one ended; the MCP server also closed its own lease at end of input. A
+Codex agent's process exits at every WAIT, so every wait became a departure: SUSPENDED and RECOVERY_HELD within seconds,
+and each resume a new session with no lane. `claude#2` was resumed ten times and in resumes 6 to 8 claimed a new module
+while `continuation_available` offered its own held lane: "four modules" were four sessions of one conversation.
+
+**Changed.**
+- Decision 1 (rule): one connection identity per controller agent, reused on every resume, so the same session and
+  lane. `SessionLeaseService.keep` points the lease at the controller (only a lease naming the controller or a live
+  descendant of it, never a closed or terminal one) and renews it; the MCP server's close then no longer applies (pid
+  fence). `AgentRunController.keepOrEnd` keeps a session while the agent runs or may come back, and otherwise ends it
+  and runs recovery at once (`ControllerConnections.ended`); a busy lock decides nothing. Interactive agents unchanged.
+  The Stop hook does not renew: the process it holds is alive.
+- Decision 2 (rule): `--max-resumes` bounds idle resumes in a row (nothing recorded while the process ran), any
+  progress resets it. An agent whose lane ended while it was stopped is resumed once on a new connection.
+- Decision 3 (guidance): review candidates only for `ACTIVE` authors.
+- Decision 4 (rule): `ensure_session` on a connection whose lane completed starts a fresh session (the fence lets it
+  through); `ProviderSessionBindingService.ensure` refuses `SESSION_AUTHORITY_OPEN` while the ended session still holds a
+  grant, request or command.
+- Decision 5: documented, one open lane per agent follows from one session per agent.
+- Found by the reruns: the controller's observer cached a connection's participant and ended kept sessions that had
+  just taken their next lane (run 1; `EventLogObserver.participantOf` now reads the binding each time); a completed lane
+  could not record the review it held (run 3; the fence admits the tools whose policy admits completed bindings, and
+  only grant consumption and the review decision accept one downstream); the leader merged accepted member work only on
+  a member entry or a leader agent call (run 3; `MergeDriver.repeatEvery`, 30 s); a reviewer lane whose module was
+  integrated through another reviewer waited for ever while other modules were open (run 4; it is now told it may cancel
+  , though a cancelled lane still does not start a fresh session; see Open).
+
+**Tests (fail before, pass after; Windows).** `McpRecoveryContinuationTest.freshSessionIsNotLedToReviewASuspendedAuthorWhileAContinuationWaits`,
+`...aReviewerWhoseModuleWasIntegratedElsewhereIsToldItMayCancel`,
+`McpSyn039NoChangeCompletionTest.aConnectionWhoseLaneCompletedStartsAFreshSessionForItsNextTask`,
+`ProviderSessionBindingServiceTest.sessionWhoseLaneEndedKeepsItsSessionWhileItStillHoldsARequest`,
+`ParticipantActivityTest.theRunControllerSeesTheLaneAConnectionTookInAFreshSession`,
+`McpProducersReviewEachOtherTest.aProducerWhoseOwnModuleWasIntegratedStillFinishesTheReviewItHolds`; new classes or API
+(compile-time "before"): `LeaseKeeperTest` 3, `ControllerConnectionsTest.aSessionIsNotGivenUpBecauseTheProjectLockWasBusy`,
+`AgentRunControllerTest` (kept session, lane ended, idle budget; three budget tests rewritten for the new meaning),
+`MergeDriverTest.aRepeatingDriverRunsPassesWithNoMemberEntry`. Windows gate (`check`) on the code before the last four
+fixes: every module green (link 199, coordination 324, project-record 60, relay 12, mcp-contract 20, workspace 837 with
+1 skipped, mcp 199) except one `cli` test, `ControlPlaneReplicationTest.aMemberAddedOrRemoved...` (LEADER_UNREACHABLE
+for PROPOSER_NOT_A_MEMBER), which passed alone on rerun. After the last fixes only the affected classes were rerun.
+Windows gate (`check`) on the final code before the last correction: two failures, both from late changes,
+`SyntheticTwoProcessCollaborationTest.cancellingTheLastOpenLane...` (a cancelled lane's session is told CLOSE; the change
+that gave it a fresh session was reverted) and `ReviewAdmissionOrderIndependenceTest.reviewerWhoseProducerLeft...`
+(instruction wording, test updated); those classes and the changed ones pass on Windows. The whole gate was not rerun
+after that correction. The Linux gate was not usable: the Podman machine died at every test start.
+
+**Review.** Independent thermo-nuclear review (Sonnet 5.5, medium; effort metadata unavailable). Acted on: a transient
+lock failure ended a kept session; the open-authority rule moved into the binding service so both routes to a fresh
+session follow it, with a refusal test; duplicate process-identity code. Not changed, with reasons in the ADR: the
+budget does not bound resumes for progress (counting them starves the waiting agent again); `keep` reads only the
+lease; a keeper on Windows reads AMBIGUOUS, never recovered.
+
+**Real runs, this PC (leader, two `claude:sonnet:medium`, MCP JVMs capped `-Xmx384m` from run 3) and the VM (member,
+two `codex:gpt-6-luna:high`), README.twopc-big, one-link join each time, `AGENT_SESSION_KEPT` for all four agents in
+every run, on Windows and Linux.**
+- Run 1, `mp10-big`, remaster59: 4 of 7 modules (3 snapshots) in 6 min, five participants, none held; then the observer defect
+  ended two kept sessions (count, cli held). Stopped. PARTIAL.
+- Run 2, `mp11-big`, remaster60: environment failure, not a product result. Three MCP JVMs died at start with
+  "insufficient memory" (free commit 2 GB: another session's Android emulator and Studio, the VM's 8 GB); their
+  `hs_err` files in the checkout raised `control_checkout_foreign_changes` on the VM. VM reduced to 5 GB.
+- Run 3, `mp13-big`, remaster60: 2 modules; then the review-grant fence and the merge-pass gap. Stopped. PARTIAL.
+- Run 4, `mp14-big`, remaster62: 6 of 7 modules integrated in about 25 min (`python -m unittest`: 27 tests OK), `cli.py`
+  published and waiting for review, which no agent could take (cancelled lane not ended; reviewer lane waiting on an
+  integrated module). Stopped. PARTIAL.
+- Run 5, `mp15-big`, remaster63: 6 of 7 in about 10 min, `cli.py` lane active; stopped by me for a PC restart.
+  Interrupted, not a result.
+- Run 6, `mp16-big`, remaster63, after the restart: **COMPLETED** on both computers (`AGENT_RUN_RESULT=COMPLETED`,
+  791 s on the VM, 793 s here; `AGENT_RESUMES` 13 on the VM, 6 here). All seven modules on `master` in 7 snapshots;
+  checked independently: `python -m unittest` 36 tests OK, `python cli.py slug "Hello World!"` prints `hello-world`,
+  an unknown command prints the usage line and returns 2. Seven reviews, all ACCEPTED, none by the author (mandatory
+  independent review): four across computers (Claude reviewing Codex twice, Codex reviewing Claude twice), three
+  between agents of one computer. Nine participants in all, none SUSPENDED or RECOVERY_HELD. Real current-build
+  acceptance proven for: blind discovery, concurrent claims, kept sessions across waits on Windows (Claude) and Linux
+  (Codex), cross-computer review admission and decision, leader merge of member work, WorkGroup completion, durable
+  goal completion. The build differed from the committed code in one reverted line (a cancelled lane counted as ended;
+  no lane was cancelled in this run).
+
+**Open.** An agent that cancels a lane (for instance a reviewer whose module was integrated through another review)
+cannot take a next lane in the same process: its session is told CLOSE and a task is refused
+(`workspace_generation_changed` in run 4); giving it a fresh session conflicts with the tested CLOSE behaviour and needs a
+decision. The controller still starts it again on a new connection once its lane has ended. A first process that exits within 2 s of opening its lease closes it before the controller keeps it (old
+behaviour then). `link join` that returns WAITING before the answer is pasted makes the answer fail (`LINK_STATE=FAILED`,
+no reason printed); a join left waiting longer worked. `provider install codex` reports DEGRADED (hook trust
+REVIEW_REQUIRED) as before.
+
 # 2026-10-17 — Overnight real run, this PC and the VM: woken agents meet the liveness lease (stopped, NOT REACHED)
 
 **Run.** remaster57 (master `597637a6` plus the design commits) on this PC (leader, two `claude:sonnet:medium`) and the

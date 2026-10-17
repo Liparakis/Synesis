@@ -672,11 +672,11 @@ final class McpRecoveryContinuationTest {
      * Fourth real run on the ADR-0099 amendment: a reviewer lane's module was integrated through
      * another reviewer, while other modules of the same work group were still open. The lane was told
      * to wait for ever. It is now told that no open producer lane claims what it reviews, and that it
-     * may cancel and take other work; a cancelled lane's connection then starts a fresh session.
+     * may cancel.
      */
     @Test
     @SuppressWarnings("unchecked")
-    void aReviewerWhoseModuleWasIntegratedElsewhereIsToldItMayCancelAndTakeOtherWork(@TempDir Path temp) throws Exception {
+    void aReviewerWhoseModuleWasIntegratedElsewhereIsToldItMayCancel(@TempDir Path temp) throws Exception {
         Path project = initializedProject(temp.resolve("moot-reviewer-project"));
         ProjectLocation location = new ProjectApplicationService().locate(project);
         McpProviderTestSupport.install(location, "codex");
@@ -699,10 +699,6 @@ final class McpRecoveryContinuationTest {
         assertEquals("wait", next.get("nextAction"), next.toString());
         assertTrue(String.valueOf(((Map<String, Object>) next.get("result")).get("instruction")).contains("cancel_lane"), next.toString());
 
-        String before = new ProviderSessionBindingService().find(location, "codex", "reviewer").orElseThrow().sessionId();
-        assertEquals("completed", innerResult(reviewer.handleMessage(toolCall("cancel_lane", "{\"reason\":\"slug.py was integrated after another review\"}"))).get("status"));
-        assertEquals("ready", innerResult(reviewer.handleMessage(toolCall("ensure_session", "{}"))).get("status"));
-        assertNotEquals(before, new ProviderSessionBindingService().find(location, "codex", "reviewer").orElseThrow().sessionId(), "a cancelled lane's connection starts a fresh session");
     }
 
     private static void publishForReview(Path project, ProjectLocation location, String connection, WorkIntent intent, String snapshotId, String path) throws Exception {

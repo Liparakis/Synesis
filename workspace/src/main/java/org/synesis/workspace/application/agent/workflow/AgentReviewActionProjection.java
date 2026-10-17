@@ -185,8 +185,7 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
                 // here for ever while other modules of the same work group were still open. A
                 // session holds one lane, so the reviewer cannot take the implementation over itself.
                 result.put("instruction", "No open producer lane claims what this lane reviews: its producer left, or its work was integrated after another review. "
-                        + "Nothing will be submitted for this lane to review until a participant announces it again. Keep waiting, or call cancel_lane with the reason if no producer is coming; "
-                        + "then call ensure_session again to take other work.");
+                        + "Nothing will be submitted for this lane to review until a participant announces it again. Keep waiting, or call cancel_lane with the reason if no producer is coming.");
             }
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
             result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());

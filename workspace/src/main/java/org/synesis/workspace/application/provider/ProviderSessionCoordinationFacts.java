@@ -27,8 +27,7 @@ final class ProviderSessionCoordinationFacts {
 
     /**
      * Reports whether the durable log says this session's lane has ended: detached after a clean
-     * shutdown, completed because its last intent was released, or cancelled. A cancelled lane is as
-     * over as a completed one; its agent took no next lane until this said so (ADR-0099, amendment). The log is the authority, not
+     * shutdown, or completed because its last intent was released. The log is the authority, not
      * the local binding file. A lane integrated by another computer completes the participant in
      * the replicated log but never touches this computer's binding, which would stay BOUND to a
      * participant that can no longer announce.
@@ -42,8 +41,7 @@ final class ProviderSessionCoordinationFacts {
             String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
             return location.openCoordinationStore().collaborationProjection().participantState(participant)
                     .map(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.DETACHED
-                            || state == org.synesis.coordination.domain.collaboration.Participant.State.COMPLETED
-                            || state == org.synesis.coordination.domain.collaboration.Participant.State.CANCELLED).orElse(false);
+                            || state == org.synesis.coordination.domain.collaboration.Participant.State.COMPLETED).orElse(false);
         } catch (Exception ignored) {
             return false;
         }
