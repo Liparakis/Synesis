@@ -86,6 +86,11 @@ publishes `slug.py` and asks for review. `get_next_action` answers WAIT. Under t
 When `reviewer-1` waits for that admission, the same thing happens on Ben's computer: the grant is recorded on the
 leader and replicated to Ben's log, and the grant wakes `reviewer-1`.
 
+This example is step 2 of ADR-0098, as built. From ADR-0098 step 3 there is no leader: Ben's request is written to
+Ben's own log and arrives in Ana's copy of it, and the grant is written to Ana's log and arrives in Ben's copy. The
+wake is unchanged: the hook and the controller still react to what lands in their own computer's copy, now of every
+computer's log.
+
 ### No agent sleeps
 
 - `run_command` refuses an argv that does nothing but sleep, before anything runs, with `POLICY_DENIED`,
@@ -172,7 +177,8 @@ member may do this.
 Latency across computers is the replication latency plus at most 400 ms. A member's proposal is appended to the
 leader's log when the leader accepts it, so a leader-side agent sees it at once. An entry written on the leader
 reaches a member by the leader's notice and the member's pull of what follows its head; the member also pulls
-every 15 s without a notice. See "Evidence" for the measured numbers.
+every 15 s without a notice. See "Evidence" for the measured numbers. From ADR-0098 step 3 the same holds with
+"the writer" in place of "the leader": the computer that wrote an entry sends the notice, and its peers pull.
 
 ### The run controller
 
@@ -250,8 +256,9 @@ on yet ends with WAIT again, and the agent ends its turn again.
   (a lane that ended, the consumer side of capability requests), both fixed, and such a test would catch the next.
 
 - **Per-member wake permission** (USER-STATED 2). Today any member may wake any lane. Later, the owner may limit
-  which members may message or request which lanes. That is a rule on who may write those events, on the leader,
-  not on the hooks.
+  which members may message or request which lanes. That is a rule on who may write those events, not on the hooks:
+  on the leader in step 2, and from ADR-0098 step 3 a rule on how an arriving entry counts, applied by every
+  computer.
 - **Codex.** If a Codex release runs a project's reviewed hooks headless, or offers a hook trust Synesis can
   lawfully set for its own hook only, install the same `Stop` hook for Codex.
 
