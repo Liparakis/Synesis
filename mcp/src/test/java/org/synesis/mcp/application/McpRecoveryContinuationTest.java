@@ -494,6 +494,163 @@ final class McpRecoveryContinuationTest {
         assertFalse(((Map<String, Object>) producerEnsured.get("result")).containsKey("reviewCandidates"), producerEnsured.toString());
     }
 
+    /**
+     * Real run "Two homes, one project", defect 3: an author published a snapshot for mandatory
+     * review and its agent left (RECOVERY_HELD). A fresh agent was offered that snapshot for review,
+     * claimed a reviewer lane and asked to join; the request was addressed to the held author, which
+     * cannot answer, and a session holding a lane may not continue another. The fresh agent is now
+     * pointed at continuing the author instead, and as its successor admits the next reviewer.
+     */
+    @Test
+    void freshSessionContinuesAHeldAuthorBeforeItsSnapshotIsOfferedForReview(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("held-author-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        ensureAndTrust(sessions, location, project, "held-author");
+        ensureAndTrust(sessions, location, project, "fresh-one");
+        ensureAndTrust(sessions, location, project, "fresh-two");
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build slug", "Review the exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var author = collaboration.announce(project, "codex", "held-author", "Implement slug", "Publish slug", List.of(ResourceSelector.pathExact("slug.py")), groupId);
+        publishForReview(project, location, "held-author", author.intent(), "snap_held_slug", "slug.py");
+        holdForRecovery(project, location, "held-author", author.intent().participant());
+
+        McpProtocolHandler first = new McpProtocolHandler(sessions, project, "codex", "fresh-one");
+        Map<String, Object> firstEnsured = (Map<String, Object>) innerResult(first.handleMessage(toolCall("ensure_session", "{}"))).get("result");
+        assertFalse(firstEnsured.containsKey("reviewCandidates"), "a held author cannot admit a reviewer: " + firstEnsured);
+        List<Map<String, Object>> continuations = (List<Map<String, Object>>) firstEnsured.get("continuationCandidates");
+        assertEquals(1, continuations.size(), firstEnsured.toString());
+        assertEquals(author.intent().intentId().toString(), continuations.getFirst().get("sourceIntentId"));
+
+        Map<String, Object> continuation = continuationArguments(first.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("continuation", continuation.get("kind"), continuation.toString());
+        Map<String, Object> continued = (Map<String, Object>) innerResult(first.handleMessage(toolCall("request_coordination", ProviderJson.write(continuation)))).get("result");
+        assertEquals("CONTINUED", continued.get("status"), continued.toString());
+        String successorIntent = String.valueOf(continued.get("successorIntentId"));
+
+        McpProtocolHandler second = new McpProtocolHandler(sessions, project, "codex", "fresh-two");
+        Map<String, Object> secondEnsured = (Map<String, Object>) innerResult(second.handleMessage(toolCall("ensure_session", "{}"))).get("result");
+        List<Map<String, Object>> offered = (List<Map<String, Object>>) secondEnsured.get("reviewCandidates");
+        assertEquals("snap_held_slug", offered.getFirst().get("snapshotId"), secondEnsured.toString());
+        assertFalse(secondEnsured.containsKey("continuationCandidates"), secondEnsured.toString());
+
+        collaboration.announce(project, "codex", "fresh-two", "Review slug", "Independently review the exact snapshot", List.of(ResourceSelector.pathExact("review_slug.md")), groupId, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("slug.py")));
+        String request = second.handleMessage(toolCall("request_coordination", "{\"kind\":\"work_group_join\",\"payload\":{\"workGroupId\":\"" + groupId + "\",\"intentId\":\"" + successorIntent
+                + "\",\"snapshotId\":\"snap_held_slug\",\"proposal\":\"Review this exact immutable snapshot\"}}"));
+        assertEquals("completed", innerResult(request).get("status"), request);
+
+        Map<String, Object> admission = innerResult(first.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("respond_coordination", admission.get("nextAction"), admission.toString());
+        Map<String, Object> admit = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) admission.get("result")).get("workflow")).get("arguments");
+        assertEquals("completed", innerResult(first.handleMessage(toolCall("respond_coordination", ProviderJson.write(admit)))).get("status"));
+
+        Map<String, Object> review = innerResult(second.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("request_coordination", review.get("nextAction"), review.toString());
+        Map<String, Object> grantPayload = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) review.get("result")).get("workflow")).get("arguments")).get("payload");
+        assertTrue(grantPayload.containsKey("grantId"), review.toString());
+    }
+
+    /**
+     * Two authors held, as in the real run. Once one fresh agent continues the first author, a second
+     * fresh agent is pointed at reviewing that author's snapshot, not at continuing the other author:
+     * two successors and no reviewer would wait on each other until the run stalled.
+     */
+    @Test
+    void secondFreshSessionReviewsTheContinuedAuthorRatherThanContinuingAnother(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("two-held-authors-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        for (String connection : List.of("author-slug", "author-wrap", "fresh-one", "fresh-two")) {
+            ensureAndTrust(sessions, location, project, connection);
+        }
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build slug and wrap", "Review each exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var slug = collaboration.announce(project, "codex", "author-slug", "Implement slug", "Publish slug", List.of(ResourceSelector.pathExact("slug.py")), groupId);
+        var wrap = collaboration.announce(project, "codex", "author-wrap", "Implement wrap", "Publish wrap", List.of(ResourceSelector.pathExact("wrap.py")), groupId);
+        publishForReview(project, location, "author-slug", slug.intent(), "snap_slug", "slug.py");
+        publishForReview(project, location, "author-wrap", wrap.intent(), "snap_wrap", "wrap.py");
+        holdForRecovery(project, location, "author-slug", slug.intent().participant());
+        holdForRecovery(project, location, "author-wrap", wrap.intent().participant());
+
+        assertEquals("COMMITTED", collaboration.continueLane(project, "codex", "fresh-one", null, slug.intent().intentId(), slug.intent().version()).status());
+
+        McpProtocolHandler second = new McpProtocolHandler(sessions, project, "codex", "fresh-two");
+        Map<String, Object> ensured = (Map<String, Object>) innerResult(second.handleMessage(toolCall("ensure_session", "{}"))).get("result");
+        assertEquals(List.of("snap_slug"), ((List<Map<String, Object>>) ensured.get("reviewCandidates")).stream().map(candidate -> candidate.get("snapshotId")).toList(), ensured.toString());
+        assertFalse(ensured.containsKey("continuationCandidates"), ensured.toString());
+
+        Map<String, Object> next = innerResult(second.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("coordination_intent_required", next.get("reason"), next.toString());
+        assertTrue(String.valueOf(((Map<String, Object>) next.get("result")).get("instruction")).contains("review a snapshot awaiting review"), next.toString());
+    }
+
+    /**
+     * The state the real run stalled in: a reviewer already waits for a held author to admit it. A
+     * fresh agent is pointed at continuing that author before reviewing another live author's
+     * snapshot, and as the successor admits the waiting reviewer.
+     */
+    @Test
+    void freshSessionContinuesTheHeldAuthorAWaitingReviewerAskedFirst(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("waiting-reviewer-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        for (String connection : List.of("author-held", "author-live", "reviewer-waiting", "fresh")) {
+            ensureAndTrust(sessions, location, project, connection);
+        }
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build slug and wrap", "Review each exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var held = collaboration.announce(project, "codex", "author-held", "Implement slug", "Publish slug", List.of(ResourceSelector.pathExact("slug.py")), groupId);
+        var live = collaboration.announce(project, "codex", "author-live", "Implement wrap", "Publish wrap", List.of(ResourceSelector.pathExact("wrap.py")), groupId);
+        publishForReview(project, location, "author-held", held.intent(), "snap_slug", "slug.py");
+        publishForReview(project, location, "author-live", live.intent(), "snap_wrap", "wrap.py");
+        collaboration.announce(project, "codex", "reviewer-waiting", "Review slug", "Independently review the exact snapshot", List.of(ResourceSelector.pathExact("review_slug.md")), groupId, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("slug.py")));
+        McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex", "reviewer-waiting");
+        reviewer.handleMessage(toolCall("request_coordination", "{\"kind\":\"work_group_join\",\"payload\":{\"workGroupId\":\"" + groupId + "\",\"intentId\":\"" + held.intent().intentId()
+                + "\",\"snapshotId\":\"snap_slug\",\"proposal\":\"Review this exact immutable snapshot\"}}"));
+        holdForRecovery(project, location, "author-held", held.intent().participant());
+        assertEquals("owner_response_pending", innerResult(reviewer.handleMessage(toolCall("get_next_action", "{}"))).get("reason"));
+
+        McpProtocolHandler fresh = new McpProtocolHandler(sessions, project, "codex", "fresh");
+        Map<String, Object> ensured = (Map<String, Object>) innerResult(fresh.handleMessage(toolCall("ensure_session", "{}"))).get("result");
+        assertFalse(ensured.containsKey("reviewCandidates"), ensured.toString());
+        Map<String, Object> continuation = continuationArguments(fresh.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals(held.intent().intentId().toString(), ((Map<String, Object>) continuation.get("payload")).get("intentId"), continuation.toString());
+        assertEquals("CONTINUED", ((Map<String, Object>) innerResult(fresh.handleMessage(toolCall("request_coordination", ProviderJson.write(continuation)))).get("result")).get("status"));
+
+        Map<String, Object> admission = innerResult(fresh.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("respond_coordination", admission.get("nextAction"), admission.toString());
+    }
+
+    private static void publishForReview(Path project, ProjectLocation location, String connection, WorkIntent intent, String snapshotId, String path) throws Exception {
+        String session = new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().sessionId();
+        SnapshotProvenance provenance = new SnapshotProvenance(intent.workGroupId(), intent.intentId(), intent.authorityLineageId(), intent.participant(), session, intent.version(), List.of(), List.of(),
+                List.of("PATH_EXACT:" + path), "refs/synesis/snapshots/" + snapshotId, "integrity-" + snapshotId, "manifest-" + snapshotId);
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(intent.taskId(), snapshotId, "node", "supervisor", "worker", session, intent.baseCommit(), "candidate-commit", List.of(path), List.of(),
+                "Publish candidate", provenance, true);
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        store(project).append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), snapshot.encode(), identity);
+    }
+
+    private static void holdForRecovery(Path project, ProjectLocation location, String connection, String participant) throws Exception {
+        String session = new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().sessionId();
+        RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location, session);
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var lifecycle = new org.synesis.coordination.application.WorkIntentService(store(project), identity);
+        lifecycle.suspend(participant);
+        lifecycle.holdRecovery(participant, recovery.root() + "#" + recovery.contentHash());
+    }
+
     private static Path initializedProject(Path project) throws Exception {
         Files.createDirectories(project);
         git(project, "init");

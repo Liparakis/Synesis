@@ -734,7 +734,7 @@ public final class AgentNextActionService {
             }
         }
 
-        AgentResponse continuation = RecoveryContinuationProjection.continuationAction(lane.participantId(), collaboration);
+        AgentResponse continuation = RecoveryContinuationProjection.continuationAction(store, lane.participantId(), collaboration);
         if (callerIntent.isEmpty() && continuation != null) {
             // A caller that holds no lane has nothing of its own for a project-wide wait to keep
             // reachable, and a continuation is its only way to a lane. A resumed implementer whose

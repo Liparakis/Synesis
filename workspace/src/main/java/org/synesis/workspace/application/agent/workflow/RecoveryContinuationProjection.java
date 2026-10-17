@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
@@ -128,17 +129,43 @@ final class RecoveryContinuationProjection {
     }
 
     /**
+     * Lists the continuation candidates a caller is pointed at before any review: none when it can
+     * instead be admitted as the reviewer of a snapshot and no waiting reviewer needs one of them.
+     *
+     * <p>A session holds one lane, and an author whose snapshot awaits review needs two: a reviewer
+     * and someone in the author's lane to admit it. A held author named by a pending review request
+     * comes first, because that reviewer waits for its successor (ADR-0085). Otherwise a review the
+     * caller can be admitted to comes first, because it completes a pair a continued author is
+     * waiting in; continuing a second held author instead left two successors waiting for reviewers
+     * that never came. With no such review, every available continuation is offered.</p>
+     *
+     * @param store         current project projection
+     * @param participantId exact caller participant
+     * @param candidates    the caller's continuation candidates, from {@link #continuationCandidates}
+     * @return the available candidates to offer, empty when there are none or a review comes first
+     */
+    static List<Map<String, Object>> continuationsFirst(PredictionEventStore store, String participantId, List<Map<String, Object>> candidates) {
+        List<Map<String, Object>> available = candidates.stream().filter(candidate -> Boolean.TRUE.equals(candidate.get(NextActionKeys.AVAILABLE))).toList();
+        boolean awaitedByReviewer = available.stream().anyMatch(candidate -> store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.status() == CoordinationRequest.Status.PENDING && request.kind() == CoordinationRequest.Kind.REVIEW
+                        && request.conflictingIntentId().toString().equals(candidate.get(NextActionKeys.SOURCE_INTENT_ID))));
+        return awaitedByReviewer || AgentReviewActionProjection.reviewCandidatesFor(store, participantId).isEmpty() ? available : List.of();
+    }
+
+    /**
      * Returns the highest-priority explicit successor action for the current participant.
      *
      * <p>With exactly one available candidate the executable payload is included; with several the
      * caller must choose explicitly because no candidate is ever auto-assigned.</p>
      *
+     * @param store         current project projection
      * @param participantId exact caller participant
      * @param collaboration public collaboration projection
-     * @return a continuation action, or {@code null} when no candidate is available
+     * @return a continuation action, or {@code null} when no candidate is available or a review
+     *         comes first (see {@link #continuationsFirst})
      */
-    static AgentResponse continuationAction(String participantId, Map<String, Object> collaboration) {
-        List<Map<String, Object>> available = projectedList(collaboration, NextActionKeys.CONTINUATION_CANDIDATES).stream().filter(candidate -> Boolean.TRUE.equals(candidate.get(NextActionKeys.AVAILABLE))).toList();
+    static AgentResponse continuationAction(PredictionEventStore store, String participantId, Map<String, Object> collaboration) {
+        List<Map<String, Object>> available = continuationsFirst(store, participantId, projectedList(collaboration, NextActionKeys.CONTINUATION_CANDIDATES));
         if (available.isEmpty()) {
             return null;
         }

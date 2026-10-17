@@ -1,3 +1,44 @@
+# 2026-10-17 — A fresh agent continues a held author before it is offered that author's snapshot for review (defect 3)
+
+**Defect** ("Two homes, one project", first attempt, defect 3; agent logs of run `run-6105f17e`). Two snapshots were
+`REVIEW_PENDING` and both authors were `RECOVERY_HELD`. Each fresh agent's task-less `ensure_session` answer listed both
+snapshots as `reviewCandidates` with a ready `reviewerIntent` and no `continuationCandidates`; each claimed a reviewer lane
+and sent `work_group_join`. The request is addressed to the author, who could not answer, and a session that holds a lane
+cannot continue another (`CURRENT_PARTICIPANT_HOLDS_A_LANE`), so both waited on `owner_response_pending` until their polls
+ran out and the run ended `STALLED`.
+
+**Rule (unchanged, ADR-0085 "Producer successor review requests").** A pending review request follows only the
+author's lawful successor, who answers it; no review is accepted automatically, and presence is not consent (ADR-0083).
+So admission does need a live author lane, and the gap was routing.
+
+**Changed (guidance only; no authority or admission rule).**
+- `reviewCandidatesFor` (claim-required instruction and `ensure_session`) leaves out a snapshot whose author lane is
+  `RECOVERY_HELD`. It is offered again once that lane is continued.
+- A lane-less caller is pointed at continuation or review in this order: a held lane that a pending review request names
+  (the reviewer waits for its successor); else a review it can be admitted to; else any held lane
+  (`RecoveryContinuationProjection.continuationsFirst`). An author awaiting review needs two lanes, a successor and a
+  reviewer, so with two fresh agents and two held authors the second agent now reviews the continued author instead of
+  continuing the other one (two successors would wait for reviewers that never come).
+- `ensure_session` shows the same choice (`CollaborationResponseMapper.openLaneChoices`): either
+  `continuationCandidates` with `continuationInstruction`, or `reviewCandidates`. Additive result fields.
+
+**Tests** (`McpRecoveryContinuationTest`, all three fail before the change):
+`freshSessionContinuesAHeldAuthorBeforeItsSnapshotIsOfferedForReview` (held author, fresh agent continues, second fresh
+agent is offered the review, requests it, the successor admits it, the reviewer gets its grant);
+`secondFreshSessionReviewsTheContinuedAuthorRatherThanContinuingAnother` (two held authors);
+`freshSessionContinuesTheHeldAuthorAWaitingReviewerAskedFirst` (the stalled state itself: a reviewer already waits on a
+held author; a fresh agent continues that author and is shown the admission).
+Windows runs: the class 9/9 (3/3 failing without the change); `:workspace:test` 799/799 and `:mcp:test` 192/193 before the
+review refactor, the one failure `McpSyn039NoChangeCompletionTest.staleWorkspaceGenerationIsRejectedWithoutRelease` with
+`NoSuchFileException` on its own worktree (no review or continuation path; it passed 13/13 on rerun); after the refactor
+`AgentNextActionServiceTest`, `AgentWorkflowReducerTest`, `McpRecoveryContinuationTest`, `McpSyn039NoChangeCompletionTest`,
+`McpAdmissionRecoveryTest` 68/68, and `:workspace:check`/`:mcp:check` gates without tests plus `repositoryHygieneCheck` pass.
+The Linux gate was not usable: the Podman WSL machine stopped mid-run three times.
+
+**Not done.** No real run yet. Two fresh agents that both read the choice before either acts can still continue two
+different held authors (each then waits for a reviewer); a later agent is pointed at reviewing. The public collaboration
+projection's `reviewCandidates` still lists a held author's snapshot (it is project state), so a caller of another
+provider, which cannot continue that lane, could still pick it from the raw list.
 # 2026-10-17 — A member that cannot fetch says why, at join and to every agent (defect 1 of "Two homes, one project")
 
 **Cause.** On a member, `ProviderWorktreeAllocation.withWorktree` runs `CodeRemote.followLeaderIfMember` (a `git fetch`

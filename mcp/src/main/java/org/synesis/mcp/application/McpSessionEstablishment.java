@@ -198,23 +198,26 @@ final class McpSessionEstablishment {
     /**
      * Adds the review candidates this session could take up to an admission that announced nothing,
      * so an agent that announces right after {@code ensure_session} sees them beside the unclaimed
-     * parts. Guidance only: a failure to read them leaves the admission reply as it was.
+     * parts. A held lane that comes before any review is listed instead, as
+     * {@code continuationCandidates}: its author cannot admit a reviewer until it is continued.
+     * Guidance only: a failure to read them leaves the admission reply as it was.
      *
      * @param admitted          the admission reply
      * @param activeProjectRoot the connection's currently selected control project root
-     * @return the reply, with {@code reviewCandidates} in its result when there are any
+     * @return the reply, with {@code reviewCandidates} or {@code continuationCandidates} in its
+     *         result when there are any
      */
     private AgentResponse withOpenReviewCandidates(AgentResponse admitted, Path activeProjectRoot) {
         try {
             ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
             String sessionId = authorityResolver.resolve(location, provider, connectionInstanceId).sessionId();
-            List<Map<String, Object>> candidates = CollaborationResponseMapper.openReviewCandidates(location, WorkspaceCollaborationService.participantHandle(sessionId));
-            if (candidates.isEmpty() || !(admitted.toMap().get("result") instanceof Map<?, ?> current)) {
+            Map<String, Object> choices = CollaborationResponseMapper.openLaneChoices(location, WorkspaceCollaborationService.participantHandle(sessionId), provider);
+            if (choices.isEmpty() || !(admitted.toMap().get("result") instanceof Map<?, ?> current)) {
                 return admitted;
             }
             Map<String, Object> result = new LinkedHashMap<>();
             current.forEach((key, value) -> result.put(String.valueOf(key), value));
-            result.put("reviewCandidates", candidates);
+            result.putAll(choices);
             return new AgentResponse(admitted.status(), admitted.reason(), admitted.nextAction(), result);
         } catch (Exception unreadable) {
             return admitted;

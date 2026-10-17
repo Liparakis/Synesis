@@ -70,6 +70,34 @@ public final class CollaborationResponseMapper {
     }
 
     /**
+     * Says what a session that holds no lane yet may take up, as {@code ensure_session} shows it to
+     * an agent that announces right after: the held lanes to continue first, in the form
+     * {@code get_next_action} offers them, or else the {@link #openReviewCandidates review
+     * candidates}. It is the choice {@code get_next_action} would make (see
+     * {@link RecoveryContinuationProjection#continuationsFirst}). Guidance only; it grants nothing.
+     *
+     * @param location    project location
+     * @param participant exact participant handle of the session
+     * @param provider    the session's provider; a lane is continued only from its own provider
+     * @return {@code continuationCandidates} with {@code continuationInstruction}, or
+     *         {@code reviewCandidates}, or an empty map when there is neither or the session holds a lane
+     * @throws Exception if the project log cannot be read
+     */
+    public static Map<String, Object> openLaneChoices(org.synesis.workspace.application.project.ProjectLocation location, String participant, String provider) throws Exception {
+        PredictionEventStore store = NextActionSupport.openEventStore(location).orElse(null);
+        if (store == null || NextActionSupport.activeIntentOf(store, participant).isPresent()) {
+            return Map.of();
+        }
+        List<Map<String, Object>> continuations = RecoveryContinuationProjection.continuationsFirst(store, participant, RecoveryContinuationProjection.continuationCandidates(store, participant, provider));
+        if (!continuations.isEmpty()) {
+            return Map.of("continuationCandidates", continuations, "continuationInstruction", "A lane whose agent has left must be continued before its work can be reviewed or finished. "
+                    + "Continue one by calling request_coordination with continuationCandidates[i].continuationRequest, or call get_next_action.");
+        }
+        List<Map<String, Object>> reviews = openReviewCandidates(location, participant);
+        return reviews.isEmpty() ? Map.of() : Map.of("reviewCandidates", reviews);
+    }
+
+    /**
      * Describes a lane by what it is for and the files it claims: what a caller needs to tell
      * whose a file is, without an identifier to copy.
      *

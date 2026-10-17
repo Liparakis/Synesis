@@ -585,17 +585,27 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
 
 /**
      * Lists the review candidates a participant may take up: those whose snapshot neither it nor
-     * the lane now holding that work produced. Independence is still enforced at admission; this
-     * only keeps guidance from pointing a caller at work it would be refused.
+     * the lane now holding that work produced, and whose author can admit a reviewer. Independence
+     * is still enforced at admission; this only keeps guidance from pointing a caller at work it
+     * would be refused or never answered.
+     *
+     * <p>A review request is answered by the author's lane, and while that lane is held for
+     * recovery only its successor can answer it (ADR-0085). A caller that claimed a reviewer lane
+     * for such a snapshot could neither be admitted nor, holding a lane, continue the author: in a
+     * real run both fresh agents did this and the run stalled. Such a caller is pointed at the
+     * continuation instead, and the snapshot is offered again once the author's lane is continued.</p>
      *
      * @param store         current project projection
      * @param participantId exact participant handle
-     * @return the open candidates the participant did not produce
+     * @return the open candidates the participant did not produce and whose author is not held
      */
     static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
+        var collaboration = store.collaborationProjection();
         return reviewCandidates(store).stream().filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> {
             WorkIntent producer = reviewProducerIntent(store, snapshot);
-            return !snapshot.provenance().participant().equals(participantId) && (producer == null || !producer.participant().equals(participantId));
+            boolean ownWork = snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
+            boolean authorHeld = producer != null && collaboration.participantState(producer.participant()).orElse(null) == Participant.State.RECOVERY_HELD;
+            return !ownWork && !authorHeld;
         }).isPresent()).toList();
     }
 
