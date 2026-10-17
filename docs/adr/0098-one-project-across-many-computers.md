@@ -5,6 +5,10 @@
 Accepted on 2026-10-16 by the repository owner. The decisions marked USER-STATED were made by the
 owner on 2026-10-15. Each step under "Build order" is built and evidenced on its own.
 
+**Amended by ADR-0100 (2026-10-17):** a computer that cannot reach the leader keeps working on a branch of the log
+and merges back on return. That replaces the rejection of "each member decides alone" for work done apart, narrows
+invariant 1 and the claim invariant, changes decision 5 for computers that are away, and reshapes step 3.
+
 Built so far (`docs/agent/CURRENT.md`, 2026-10-15 and 2026-10-16):
 
 - **Step 1**, the compatibility number: `LinkCompatibility.CURRENT` = 4 (6 after step 2).
