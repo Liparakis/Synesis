@@ -31,16 +31,20 @@ The owner's answers below leave these gaps. Each is the designer's choice, open 
    seconds at most; one that does not answer in time counts as not connected. If two connected computers claim
    overlapping paths at the same moment, the claim of the lower node ID keeps the paths, and the other agent is told
    `OVERLAPPING_CLAIM` before it may write.
-2. **The original reviewer cannot be reached for a re-review.** Any other agent that is not the author reviews it, but
-   only once work has stalled (item 4).
+2. **The original reviewer cannot be reached for a re-review.** If its own computer judges its session gone
+   (`SessionLeasePolicy`), any other agent that is not the author reviews the re-merge at once. If its computer is not
+   connected, another non-author reviews it once work has stalled (item 4).
 3. **Agents in a dispute do not agree.** Until one of them records a new verdict, the snapshot counts as rejected. The
    author revises it, or, once the goal is met without it, it goes to the trash.
-4. **"Work has stalled"** means: no agent on this computer has other work, and the goal waits on a lane whose computer
-   is not connected now. No timer. A redial within Link's retained-session time (30 s) is still "connected".
+4. **"Work has stalled"** means: no agent on this computer has other work, and the goal waits on a lane or a re-review
+   whose computer is not connected now. No timer. A redial within Link's retained-session time (30 s) is still
+   "connected". The cost: a short blip while this computer's agents are idle can trigger a takeover, and the away
+   version then goes to the trash, recoverable. That is the owner's choice.
 5. **Two diverged copies of `main`.** Of two connected computers whose copies have diverged, the one with the higher
-   node ID re-merges its own work on top of the other's `main` (re-merge, re-review, tests), and the other then
-   fast-forwards to the result. The lower node ID never has to merge, so the two never chase each other. A mirror
-   remote has no node ID: a refused push to it is handled the same way, by the computer that pushed.
+   node ID re-merges its own work on top of the other's `main` (re-merge, a last merge of its old head if needed,
+   re-review, tests), and the other then fast-forwards to the result. The lower node ID never has to merge, so the two
+   never chase each other. A mirror remote has no node ID: after a refused push to it, the pusher re-merges only if it
+   is the higher node ID or the other computer is not connected; otherwise it waits.
 6. **The trash** is `refs/synesis/trash/<lane>/<epoch>` plus a log entry naming it. The UI lists it. Emptying it is a
    person's action, and the only way work is ever deleted.
 
@@ -138,7 +142,7 @@ Kept as stated unless marked.
 3. **Deciding** by a voter majority with a tie rule. *Superseded by the premise:* nothing is decided by voting.
 4. **Scale**, hundreds of members. *Deferred:* the premise is a handful of people. Scale is later, if ever.
 5. **A member lost in the middle of a lane.** *Narrowed:* a computer's own agent that died is handled by that computer,
-   as today. A computer that is away keeps its lanes (item 6).
+   as today. A computer that is away keeps its lanes until work stalls (answer 7).
 6. **Code** travels through a Git remote, or over Link when none is configured. *Superseded on 2026-10-17 evening:*
    code always travels over Link; a remote is an optional mirror that nothing depends on (answer 12).
 7. **Merging by declared parts**, each with its own queue. *Deferred:* `main` orders merges by itself. Parts are a
@@ -229,7 +233,7 @@ Only rules that prevent harm that cannot be undone:
 6. **A claim is a lock wherever it can be checked:** on one computer, and between connected computers (owner's answer
    1).
 
-Messages and review requests are how agents talk, as engineers do. Nothing waits for a computer that is away, and no
+Messages and review requests are how agents talk, as engineers do. No `main` waits for a computer that is away, and no
 path needs an administrator.
 
 ### Each computer writes only its own log
@@ -311,10 +315,14 @@ into a computer: each one fetches and moves its own `main` itself.
    pair by pair, and every step only adds commits, so the copies converge. (DERIVED; checked by a property test.)
 2. **How.** One merge commit per own integration not yet in the other copy, oldest first. Each merge has that
    integration as a parent, so a lane based on it keeps its base (today's rule, `STALE_BASE`,
-   `IntegrationOrchestrationService.java:346-347`, accepts it unchanged). Then the validation command runs on the
-   result.
+   `IntegrationOrchestrationService.java:346-347`, accepts it unchanged). Then one more merge commit brings in this
+   copy's old head if it is not yet an ancestor of the result. Once a head is itself a re-merge commit, rebuilding
+   "the other's `main` plus own integrations" need not contain it, and without that last merge the result would not
+   fast-forward this copy. Then the validation command runs on the result.
 3. **Review again.** Each re-merge is reviewed again by the reviewer of the original work (owner's answer 4), who sees
-   what the re-merge changed against what it reviewed. If that reviewer cannot be reached, the re-merge waits; once
+   what the re-merge changed against what it reviewed. If that reviewer cannot be reached, the re-merge waits. A
+   reviewer also counts as unreachable when its own computer judges its session gone (`SessionLeasePolicy`), even
+   though that computer is connected; any other agent that is not the author then reviews at once. Otherwise, once
    work has stalled, any other agent that is not the author reviews it (designer item 2). Only then does the result
    become this computer's `main`, and the other computers fast-forward to it.
 4. **If Git cannot merge,** the path a cherry-pick conflict takes today runs: `INTEGRATION_CONFLICTED` and
@@ -331,8 +339,11 @@ removed.
 
 - A computer fetches from it as from one more peer, and pushes its `main` there with no force, as
   `publishControlBranch` already does (`CodeRemote.java:248`).
-- A refused push means the mirror holds a copy that diverged from this one. It is handled as any diverged copy: fetch,
-  re-merge, re-review, test, push. The remote decides nothing that Link does not also decide.
+- A refused push means the mirror holds a copy that diverged from this one. The pusher re-merges onto it (fetch,
+  re-merge, re-review, test, push) only if it is the higher node ID of the two computers whose copies diverged, or the
+  other computer is not connected. Otherwise it waits: the higher node ID is already re-merging over Link, and the
+  mirror catches up from the result. Without this, two computers could re-merge onto each other's copy, one over Link
+  and one through the mirror, and stay diverged for ever. The remote decides nothing that Link does not also decide.
 - Snapshot refs may also go there, so a reviewer can fetch from it when the author's computer is off.
 
 Before a lane starts, the computer updates its `main` from the newest copy it can reach, as `followLeader` does today
@@ -355,12 +366,17 @@ a round into the next one instead of starting over. (REQUIRES-MEASUREMENT.)
 - **A lane of a computer that is away is left alone while there is other work.** It is a lock that cannot be checked,
   and the computer is probably still working on it.
 - **When work stalls, another agent takes it over** (owner's answer 7). "Stalled" means no agent on this computer has
-  other work, and a goal waits on a lane whose computer is not connected now (designer item 4). An agent then continues
-  the lane from its last snapshot that reached this computer, through today's lane continuation. The continuation is
+  other work, and a goal waits on a lane or a re-review whose computer is not connected now (designer item 4). An
+  agent then continues the lane from its last snapshot that reached this computer, through today's lane continuation. The continuation is
   the taker's own entry, so attribution holds: no computer acts for another's agents.
 - **When the away computer reconnects,** its agent is told the lane was taken over: stop, release your locks and
   anything you hold, close your lane. It does that with its own entries. Its unfinished version goes to the trash
-  (designer item 6), so it is not lost.
+  (designer item 6), so it is not lost. If its agent had already integrated the lane onto its own `main` before
+  reconnecting, nothing can be trashed, because `main` only moves forward: the two integrations meet as diverged
+  copies, and the re-merge (and, where Git cannot merge, a combine lane) settles them.
+- **A short drop can trigger a takeover.** With no timer, a PC whose agents are idle can take over a lane during a
+  blip of a few seconds, and the away computer's version then goes to the trash. That is what the owner chose; the
+  trash keeps it recoverable.
 - If two computers that are apart from each other both take over the same lane, both continuations stand and meet like
   any overlap: a combine lane at `main`.
 
