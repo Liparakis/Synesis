@@ -55,8 +55,11 @@ Before leaving, Bob can **reserve** `web/`, so that computers which have seen th
 
 ## What the code does today (VERIFIED)
 
-- **Admission runs at append time only, never at replay** (`AppendAdmission.java:28-29`). An entry another computer
-  wrote therefore needs its own rule for how it counts, or it skips every authority rule.
+- **Projections throw while applying, not only at append.** Each projection's `validate` and `apply` run in one fold
+  (`PredictionEventStore.java:139-151`), and `apply` throws too: for example `OVERLAPPING_CLAIM`
+  (`CollaborationProjection.java:555-557`) and `REVIEW_DECISION_ALREADY_RECORDED`
+  (`TaskCompletionProjection.java:628-630`). Only `AppendAdmission` is append-time only (`AppendAdmission.java:28-29`).
+  An entry from another computer that hit one of these throws would stop that log's copy for good.
 - **Claims:** a local claim that overlaps an active one is refused `OVERLAPPING_CLAIM`
   (`CollaborationProjection.java:557`).
 - **Attribution:** an entry may act only for participants its signer introduced, except the leader's
@@ -72,17 +75,20 @@ Before leaving, Bob can **reserve** `web/`, so that computers which have seen th
 ### When entries from two computers meet
 
 Each computer judges its own appends with today's rules. An entry that arrives from another computer is a signed fact
-and is never refused. Each case below says how it counts. The rule must give the same result whichever computer sees
-the two entries first (ADR-0098, "Order does not decide"). (DERIVED.)
+and must always apply: every projection throw it could reach becomes one of the outcomes below. Where two computers
+write about one thing, the projection keeps the set of what was written, so the result is the same whichever entry a
+computer sees first, and an answer that arrives before what it answers is kept until that arrives (ADR-0098, "Order
+does not decide"). (DERIVED.)
 
 | # | What happened | How it counts | Who settles it |
 | --- | --- | --- | --- |
 | 1 | **Overlapping claims**, made while the two computers could not see each other | Both lanes stand. Each agent's next answer names the other lane and its computer | Nobody, until `main`. The second lane to reach `main` is re-merged; a code conflict is a combine lane (row 12) |
 | 2 | **One snapshot integrated twice** | Cannot happen: only the computer whose lane it is merges it (ADR-0098) | none |
 | 3 | **An entry acting for another computer's participant** | Counts for nothing, reported loudly. Every computer runs attribution with no exemption | A person, if it ever appears: it means a faulty build |
-| 4 | **Two review verdicts on one snapshot** | Same verdict: agreed. Different verdicts: a dispute, and the snapshot does not reach `main` while it is open | Answer 6: a reviewer who gave neither verdict reviews the merged result. If it cannot decide, or no such reviewer exists, `OPERATOR_REQUEST_RAISED`. If the snapshot is already on `main`, the re-review is of that code, and a rejection opens a repair lane |
+| 4 | **Two review verdicts on one snapshot** | The snapshot's review state is the set of verdicts. Same verdict: agreed. Different verdicts: `REVIEW_DISPUTED`, in either order, and the merge pass skips the snapshot while the dispute is open. Today a second verdict throws `REVIEW_DECISION_ALREADY_RECORDED` (`TaskCompletionProjection.java:628-630`), so two computers would end in opposite states | Answer 6: a reviewer who gave neither verdict reviews the merged result. If it cannot decide, or no such reviewer exists, `OPERATOR_REQUEST_RAISED`. If the snapshot is already on `main`, the re-review is of that code, and a rejection opens a repair lane |
 | 5 | **A self-review**, made by a faulty build | Counts for nothing, reported loudly | The snapshot waits for a lawful review |
-| 6 | **Two answers to one operator request** | Same answer: agreed. Different answers: a dispute | A new operator request naming both answers, for any member |
+| 6 | **Two answers to one operator request**, or two raises for one condition | Two raises for the same condition count as one request (today the second throws `OPERATOR_REQUEST_ALREADY_OPEN`, `OperatorRequestProjection.java:95`). Same answer: agreed. Different answers: a dispute | A new operator request naming both answers, for any member |
+| 6a | **Two computers mark one WorkGroup COMPLETED** (`LaneCompletionService.java:245-251`, from ADR-0098 step 4) | A second COMPLETED counts as the first. Completion itself is read from Git | none |
 | 7 | **Work added to a goal already finished on `main`** | The lane stands, outside the finished goal | An operator request: "open a new goal for it, or set it aside?" (ADR-0098 item 8) |
 | 8 | **A lane continued on two computers**, possible only after the owner released an away computer's lanes | Both lanes stand; the returning computer's later snapshots go to a combine lane | An agent, in the combine lane |
 | 9 | **The same task taken on both sides** with different paths | Both stand. No rule limits a task to one lane: `TASK_ALREADY_CLAIMED` (`CoordinationProjection.java:174`) guards only the legacy `TASK_CLAIMED` of `synesis task claim` (VERIFIED) | none |
@@ -133,7 +139,10 @@ RESERVATION_ENDED  {id, reason: HANDED_IN | RELEASED | OWNER_BROKE | MEMBER_REMO
   because the computer is probably still working on it, and a takeover would make two versions every time.
 - The owner can release such lanes: `synesis reserve break --lanes-of <node>`. After that an agent may continue a lane
   from its last snapshot that reached the other computers, and row 8 applies if the away computer kept working.
-- Removing a computer ends its reservations and releases its lanes, under the same owner signature.
+- A goal that waits only on lanes of computers not heard from for one day, by this computer's own clock, raises an
+  operator request: "goal X waits only on lanes of node Y, last seen T; release them?" (ADR-0098 item 6).
+- Removing a computer ends its reservations and releases its lanes, under the same owner signature. Entries it writes
+  afterwards are still copied, so no copy is left incomplete, and count for nothing.
 - A computer's own agent that died is still handled by that computer, as today: the lane is held for the grace period,
   then continued from its last snapshot.
 
