@@ -260,6 +260,28 @@ public interface ProviderIntegration {
     }
 
     /**
+     * Returns an optional managed stop hook: the entry through which a provider's Stop event holds an agent told WAIT
+     * until something arrives for its lane (ADR-0099).
+     *
+     * @param launcher generated Synesis launcher
+     * @param profile  local provider profile
+     * @return hook object, or {@code null} when the provider runs no Stop hook Synesis can rely on
+     */
+    default Map<String, Object> managedStopHook(Path launcher, Path profile) {
+        return null;
+    }
+
+    /**
+     * Identifies an optional managed stop hook.
+     *
+     * @param value candidate JSON value
+     * @return true when the value belongs to this integration
+     */
+    default boolean isManagedStopHook(Object value) {
+        return false;
+    }
+
+    /**
      * Identifies a managed hook entry during lifecycle operations.
      *
      * @param value candidate JSON value

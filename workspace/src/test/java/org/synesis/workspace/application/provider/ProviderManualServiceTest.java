@@ -46,11 +46,13 @@ class ProviderManualServiceTest {
       assertTrue(content.contains("workflow.maxUnchangedPolls` unchanged responses (default 3)"));
       assertTrue(content.contains("workflow.recoveryDeadlineEpochMillis` is present"));
       assertTrue(content.contains("does not consume the unchanged-poll limit"));
+      assertTrue(content.contains("Synesis wakes you at that time"));
       assertTrue(content.contains("stop polling until a fresh state-change signal or human input"));
       assertTrue(content.contains("call `get_next_action` once with `"));
       assertTrue(content.contains(
           "optional `integrationCheck` input only evaluates explicitly supplied compatibility facts"));
-      assertTrue(content.contains("For repeated WAIT (including `recommendedTool=get_next_action`)"));
+      assertTrue(content.contains("When `get_next_action` projects WAIT, end your turn"));
+      assertTrue(content.contains("`run_command` refuses a command that only sleeps"));
       assertTrue(content.contains(
           "Do not report success merely because your own lane is complete"));
       assertTrue(content.contains(

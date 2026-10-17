@@ -1,3 +1,64 @@
+# 2026-10-17 — Agents are woken, they do not wait (ADR-0099, "Two homes, bigger goal" defect 2)
+
+**Defect.** Told WAIT, agents slept: 16 `run_command` sleeps of 20 to 900 s in run `run-fb2eab33` (`python -c
+"import time; time.sleep(590)"`), while the review request addressed to the sleeping author went unanswered.
+Owner decisions (2026-10-17): agents never wait themselves; provider hooks wake them; any member may wake any lane on
+any computer (per-member permission is a recorded future item).
+
+**Provider capabilities, verified on this PC.** Claude Code 2.1.291 in `claude -p` stream-json mode: a `Stop` hook's
+`{"decision":"block","reason":...}` continues the turn and the model acts on the reason; the next stop has
+`stop_hook_active: true`; a hook past its `timeout` lets the turn end; hooks inherit the controller's connection
+variable; a `PreToolUse` deny reason reaches the model. Codex 0.162.0 has the same `Stop` schema, but `codex exec` ran
+none of a project's hooks (plain, `--enable hooks` with `--config` hooks, `--dangerously-bypass-hook-trust`; not even
+`SessionStart`), so Codex agents are woken only by the run controller after they stop.
+
+**Changed.**
+- `run_command` refuses an argv that only sleeps (`POLICY_DENIED`, `reason: SLEEP_COMMAND_REFUSED`, instruction to end
+  the turn), before anything runs. One rule, `SleepCommands`, also denies pure shell sleeps of run-controller agents in
+  the Claude `PreToolUse` hook (matcher now `Edit|Write|Bash|PowerShell`); interactive sessions are not affected.
+- A managed Claude `Stop` entry (`synesis-claude-code-stop`, `timeout` 660 s). When `get_next_action` answers WAIT to a
+  run-controller connection, the MCP server writes the caller's lane view to `.synesis/local/waits/<sha256>.json`;
+  any other answer removes it. On Stop, `LaneWake` holds the agent up to ten minutes, watching the local log's head
+  every 400 ms, and blocks the stop with what arrived (a request for or answer to its lane, a grant, a review result,
+  its task's state, a contract or capability request, a message, its WorkGroup, its lane ending) or when the time its
+  wait names passes; at most three wakes without a new WAIT. Replicated events land in the local log, so another
+  computer's event wakes the agent with no new transport, and `send_message` is the existing way to wake another lane.
+- Guidance (managed AGENTS.md section, provider manual, `get_next_action` description): on WAIT, end your turn.
+  Replaces commit `394a0d38`'s "wait within your turn", whose controller wait (keep a run waiting while another computer
+  is connected) this builds on. The run controller's resume trigger already covers every event addressed to a stopped
+  agent's lane (it resumes on any progress and on messages), so no second trigger was added.
+
+**Tests** (fail before: the classes did not exist, or the old answer ran the sleep): `SleepCommandsTest` 4,
+`LaneWakeTest` 11, `LaneWakeAcrossComputersTest` 1 (leader and member joined by a real Link session on loopback: a
+request made on the leader wakes the member's waiting agent through replication, measured 209 ms on Linux and 211 ms
+on Windows, so the leader's notice and not the 15 s pull carried it), `HookClaudeStopTest` 4,
+`McpToolMalformedArgumentsTest.runCommandRefusesACommandThatOnlySleepsWithoutRunningIt`, and the managed-file golden
+tests updated. Linux gate before the review fixes: every module green (workspace 828, mcp 194, cli 199, coordination
+319, link 199) once the catalog golden file was updated (description change; wire digest unchanged, content digest
+changed). After the review fixes: the affected classes pass on Windows, and the whole Linux gate (`check`) is green:
+link 199, coordination 319, project-record 60, relay 12, mcp-contract 20, workspace 831 (2 skipped), mcp 194, cli 199.
+The Windows gate was not run.
+
+**Review** (thermo-nuclear, independent Opus reviewer). Fixed: a lane that ended (integrated, revoked, continued) let
+the agent stop silently; the consumer side of capability requests was not watched; waits that end at a time had no
+wake, and the recovery-deadline guidance still said to wait until an epoch; shell sleeps were refused to people too;
+`sleep 600 && echo done` passed; notes were never removed. Recorded, not done: one list of managed hook entries per
+provider; a fitness test over every WAIT reason. Not tested: the consumer-side capability wake (one filter line using
+the projection's own `matchesRequester`).
+
+**Real run, one computer** (`0.1.0-dev.remaster57-20261017` run from its extracted zip with `PATH` and
+`SYNESIS_MCP_LAUNCHER` pointing at it, so the installed remaster56 and its daemon were not touched; project `wake-2`,
+`README.review.md`, mandatory review, two `claude:sonnet:medium` agents, `run-7d3f2bac`). `AGENT_RUN_RESULT=COMPLETED`
+in 68 s, `AGENT_RESUMES=0`, snapshot integrated, `python -m unittest` OK, no sleep in either log. The writer published,
+was told WAIT, ended its turn (02:16:37 UTC) and was woken by its Stop hook 4 s later: "a review result; your task's
+completion state changed"; told WAIT again during integration, it ended its turn and was woken with "your lane has
+ended", then saw COMPLETED and stopped. Hook diagnostics: 2 `WOKEN`, 2 `STOP_ALLOWED`; the waits folder was empty at
+the end. Real current-build acceptance proven on one computer: Stop-hook wake on a review result and on lane end.
+NOT REACHED: a real two-computer run with this build (the wake across computers is proven at source level only), a
+Codex agent, a wake on a review request to admit (in this run the 20 s held `get_next_action` caught it).
+A first attempt (`wake-1`) is not a product result: its `.mcp.json` named the installed remaster56 MCP server
+(the MCP launcher resolves `%LOCALAPPDATA%` before `PATH`), whose catalog digest did not match the new manual, so
+claims were refused with `manual_attestation_required`. The user-wide manual was restored to remaster56 afterwards.
 # 2026-10-17 — A producer waiting for review may review the others (ADR-0089 amended; defect 1 of "Two homes, bigger goal")
 
 Owner decision of 2026-10-17: an agent whose own published snapshot waits for mandatory review may review other agents'

@@ -11,6 +11,7 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentRecord;
 import org.synesis.workspace.application.provider.continuity.ManagedAttachmentService;
 import org.synesis.workspace.application.provider.continuity.RuntimeAuthenticator;
+import org.synesis.workspace.provider.ProviderIntegration;
 
 /**
  * Main process entrypoint for the Synesis Model Context Protocol (MCP) server.
@@ -108,6 +109,7 @@ public final class SynesisMcpServer {
         AgentSessionService sessionService = new AgentSessionService();
         McpProtocolHandler handler = new McpProtocolHandler(sessionService, projectRoot, provider, connectionInstanceId, projectRootPinned, managedAttachment);
         handler.holdWaitsFor(waitHold());
+        handler.noteWaitsForWake(connectionInstanceId.equals(boundedEnvironmentOrNull(ProviderIntegration.CONNECTION_INSTANCE_VARIABLE)));
         McpStdioServer server = new McpStdioServer(handler);
 
         try {

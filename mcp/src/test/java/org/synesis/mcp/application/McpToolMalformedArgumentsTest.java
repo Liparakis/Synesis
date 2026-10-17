@@ -242,6 +242,16 @@ class McpToolMalformedArgumentsTest {
     }
 
     @Test
+    void runCommandRefusesACommandThatOnlySleepsWithoutRunningIt() {
+        // An agent told to wait ran this for 590 s while its review request went unanswered (ADR-0099).
+        long started = System.nanoTime();
+        String frame = call(bound, "run_command", "{'argv':['python','-c','import time; time.sleep(590)'],'timeoutSeconds':620}");
+        assertTrue(System.nanoTime() - started < java.util.concurrent.TimeUnit.SECONDS.toNanos(30), "refused before anything ran");
+        assertText("{'status':'blocked','reason':'policy_denied','result':{'reason':'SLEEP_COMMAND_REFUSED'}}", frame);
+        assertTrue(String.valueOf(innerResponse(frame).get("result")).contains("end your turn"), frame);
+    }
+
+    @Test
     void finishLaneReportsInvalidArguments() {
         for (String arguments : List.of("{'outcome':5}", "{'outcome':'bogus'}", "{'intentId':'zz'}", "{'claimEpoch':0}", "{'summary':5}")) {
             assertText(denied("reason", "INVALID_FINISH_LANE_ARGUMENTS", "request_human_help"), call(bound, "finish_lane", arguments));

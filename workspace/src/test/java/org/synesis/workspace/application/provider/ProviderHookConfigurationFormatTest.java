@@ -76,7 +76,9 @@ class ProviderHookConfigurationFormatTest {
             + claudeHook()
             + "],\"SessionStart\":["
             + USER_SESSION
-            + "],\"PostToolUse\":[]}}"
+            + "],\"PostToolUse\":[],\"Stop\":["
+            + claudeStopHook()
+            + "]}}"
             + System.lineSeparator(),
         read(settings));
   }
@@ -89,7 +91,7 @@ class ProviderHookConfigurationFormatTest {
     new ProviderApplicationService().install(location, "claude");
 
     assertEquals(
-        "{\"hooks\":{\"PreToolUse\":[" + USER_PRE_TOOL + "," + claudeHook() + "]}}"
+        "{\"hooks\":{\"PreToolUse\":[" + USER_PRE_TOOL + "," + claudeHook() + "],\"Stop\":[" + claudeStopHook() + "]}}"
             + System.lineSeparator(),
         read(settings));
   }
@@ -102,7 +104,7 @@ class ProviderHookConfigurationFormatTest {
         worktree, ProviderRegistry.find("claude"), launcher, location.profile());
 
     assertEquals(
-        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[]}}"
+        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[],\"Stop\":[" + claudeStopHook() + "]}}"
             + System.lineSeparator(),
         read(worktree.resolve(".claude/settings.json")));
   }
@@ -128,6 +130,8 @@ class ProviderHookConfigurationFormatTest {
             + claudeHook()
             + "],\"SessionStart\":["
             + USER_SESSION
+            + "],\"Stop\":["
+            + claudeStopHook()
             + "]}}"
             + System.lineSeparator(),
         read(worktree.resolve(".claude/settings.json")));
@@ -142,7 +146,7 @@ class ProviderHookConfigurationFormatTest {
     ProviderHookConfiguration.materializeHook(worktree, claude, launcher, location.profile());
 
     assertEquals(
-        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[]}}"
+        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[],\"Stop\":[" + claudeStopHook() + "]}}"
             + System.lineSeparator(),
         read(worktree.resolve(".claude/settings.json")));
   }
@@ -185,7 +189,7 @@ class ProviderHookConfigurationFormatTest {
     Path settings = root.resolve(".claude/settings.json");
     write(
         settings,
-        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[]}}");
+        "{\"hooks\":{\"PreToolUse\":[" + claudeHook() + "],\"SessionStart\":[],\"Stop\":[" + claudeStopHook() + "]}}");
 
     new ProviderApplicationService().uninstall(location, "claude");
 
@@ -307,9 +311,19 @@ class ProviderHookConfigurationFormatTest {
         quoted(launcher)
             + " hook claude --profile "
             + quoted(location.profile());
-    return "{\"id\":\"synesis-claude-code\",\"matcher\":\"Edit|Write\",\"hooks\":[{\"type\":\"command\",\"command\":"
+    return "{\"id\":\"synesis-claude-code\",\"matcher\":\"Edit|Write|Bash|PowerShell\",\"hooks\":[{\"type\":\"command\",\"command\":"
         + json(command)
         + "}]}";
+  }
+
+  private String claudeStopHook() {
+    String command =
+        quoted(launcher)
+            + " hook claude --profile "
+            + quoted(location.profile());
+    return "{\"id\":\"synesis-claude-code-stop\",\"hooks\":[{\"type\":\"command\",\"command\":"
+        + json(command)
+        + ",\"timeout\":660}]}";
   }
 
   private String codexHook() {

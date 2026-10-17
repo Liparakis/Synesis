@@ -13,7 +13,7 @@ import picocli.CommandLine.Option;
 /**
  * Runs the Claude Code hook adapter with clean JSON stdout.
  */
-@Command(name = "claude", description = "Process a Claude Code PreToolUse event.", mixinStandardHelpOptions = true)
+@Command(name = "claude", description = "Process a Claude Code PreToolUse or Stop event.", mixinStandardHelpOptions = true)
 public final class HookClaudeCodeCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;

@@ -60,7 +60,14 @@ final class ProviderHookConfiguration {
         if (configuredWindows == null) {
             configuredWindows = command.get("commandWindows");
         }
-        return windowsCommand == null || windowsCommand.equals(configuredWindows);
+        return (windowsCommand == null || windowsCommand.equals(configuredWindows)) && stopHookCurrent(object(root.get(provider.hookGroup())), provider, launcher, profile);
+    }
+
+    /** Whether the group holds exactly the provider's current managed stop entry, or none when it has none. */
+    private static boolean stopHookCurrent(Map<String, Object> group, ProviderIntegration provider, Path launcher, Path profile) {
+        Map<String, Object> expected = provider.managedStopHook(launcher, profile);
+        List<Object> managed = group == null ? List.of() : list(group.get("Stop")).stream().filter(provider::isManagedStopHook).toList();
+        return expected == null ? managed.isEmpty() : managed.size() == 1 && expected.equals(managed.getFirst());
     }
 
     /**
@@ -76,18 +83,19 @@ final class ProviderHookConfiguration {
      * Replaces the provider's managed entries in the hook group of {@code root}, leaving every other
      * entry in place.
      *
-     * @return whether the group already held exactly the current managed pre-tool entry
+     * @return whether the group already held exactly the current managed pre-tool and stop entries
      */
     static boolean mergeManagedHooks(Map<String, Object> root, ProviderIntegration provider, Path launcher, Path profile, EmptySessionStart whenEmpty) {
         Map<String, Object> group = object(root.computeIfAbsent(provider.hookGroup(), ignored -> new LinkedHashMap<>()));
         List<Object> preToolHooks = list(group.computeIfAbsent("PreToolUse", ignored -> new ArrayList<>()));
-        boolean current = preToolHooks.stream().filter(provider::isManagedHook).count() == 1 && provider.managedHook(launcher, profile).equals(preToolHooks.stream().filter(provider::isManagedHook).findFirst().orElse(null));
-        replaceManagedHooks(group, preToolHooks, list(group.get("SessionStart")), provider, launcher, profile, whenEmpty);
+        boolean current = preToolHooks.stream().filter(provider::isManagedHook).count() == 1 && provider.managedHook(launcher, profile).equals(preToolHooks.stream().filter(provider::isManagedHook).findFirst().orElse(null))
+                && stopHookCurrent(group, provider, launcher, profile);
+        replaceManagedHooks(group, preToolHooks, list(group.get("SessionStart")), list(group.get("Stop")), provider, launcher, profile, whenEmpty);
         return current;
     }
 
-    private static void replaceManagedHooks(Map<String, Object> group, List<Object> preToolHooks, List<Object> sessionHooks, ProviderIntegration provider, Path launcher, Path profile,
-            EmptySessionStart whenEmpty) {
+    private static void replaceManagedHooks(Map<String, Object> group, List<Object> preToolHooks, List<Object> sessionHooks, List<Object> stopHooks, ProviderIntegration provider, Path launcher,
+            Path profile, EmptySessionStart whenEmpty) {
         preToolHooks.removeIf(provider::isManagedHook);
         preToolHooks.add(provider.managedHook(launcher, profile));
         sessionHooks.removeIf(provider::isManagedSessionHook);
@@ -100,6 +108,17 @@ final class ProviderHookConfiguration {
             group.remove("SessionStart");
         } else {
             group.put("SessionStart", sessionHooks);
+        }
+        // A Stop list the user wrote, even an empty one, is theirs; only one this removal empties is dropped.
+        boolean removedStop = stopHooks.removeIf(provider::isManagedStopHook);
+        Map<String, Object> stopHook = provider.managedStopHook(launcher, profile);
+        if (stopHook != null) {
+            stopHooks.add(stopHook);
+        }
+        if (!stopHooks.isEmpty()) {
+            group.put("Stop", stopHooks);
+        } else if (removedStop) {
+            group.remove("Stop");
         }
     }
 
@@ -126,7 +145,12 @@ final class ProviderHookConfiguration {
         boolean removed = hooks.removeIf(provider::isManagedHook);
         List<Object> sessionHooks = list(group.get("SessionStart"));
         boolean removedSession = sessionHooks.removeIf(provider::isManagedSessionHook);
-        removed = removed || removedSession;
+        List<Object> stopHooks = list(group.get("Stop"));
+        boolean removedStop = stopHooks.removeIf(provider::isManagedStopHook);
+        removed = removed || removedSession || removedStop;
+        if (removedStop && stopHooks.isEmpty()) {
+            group.remove("Stop");
+        }
         if (sessionHooks.isEmpty()) {
             group.remove("SessionStart");
         } else {
@@ -214,7 +238,7 @@ final class ProviderHookConfiguration {
                     throw providerConflict("session hook ownership is ambiguous");
                 }
             }
-            replaceManagedHooks(group, preToolHooks, sessionHooks, provider, launcher, profile, EmptySessionStart.KEEP);
+            replaceManagedHooks(group, preToolHooks, sessionHooks, hookList(group, "Stop"), provider, launcher, profile, EmptySessionStart.KEEP);
             String updated = ProviderJson.write(root) + System.lineSeparator();
             if (Files.isSymbolicLink(config) || (Files.exists(config, java.nio.file.LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(config, java.nio.file.LinkOption.NOFOLLOW_LINKS))) {
                 throw providerConflict("hook path changed to a non-regular file");

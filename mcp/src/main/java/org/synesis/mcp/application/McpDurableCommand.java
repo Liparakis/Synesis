@@ -29,6 +29,7 @@ import org.synesis.workspace.lifecycle.command.ProjectCommandProcessAnchor;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 import org.synesis.workspace.lifecycle.lease.SessionProcessIdentity;
+import org.synesis.workspace.project.SleepCommands;
 
 /**
  * Runs the {@code run_command} tool: validates its arguments and executes the command against a
@@ -144,6 +145,8 @@ final class McpDurableCommand {
         }
         if (argv == null || argv.isEmpty() || malformedWorkingDirectory || malformedTimeout || unsupportedField) {
             agentResponse = AgentResponse.blocked(AgentReason.INVALID_PATH);
+        } else if (SleepCommands.onlySleeps(argv)) {
+            agentResponse = sleepRefused();
         } else {
             try {
                 var snapshot = validationSnapshotSelector(arguments);
@@ -171,6 +174,18 @@ final class McpDurableCommand {
             }
         }
         return agentResponse;
+    }
+
+    /**
+     * Refuses a command that only sleeps (ADR-0099). Agents slept here for up to fifteen minutes while the review they
+     * waited for was asked of them; an agent waits by ending its turn, and Synesis wakes it.
+     */
+    private static AgentResponse sleepRefused() {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("reason", "SLEEP_COMMAND_REFUSED");
+        result.put("instruction", "Do not wait by sleeping. When Synesis says WAIT, end your turn: Synesis wakes you when something arrives for your lane, "
+                + "from this computer or another one of the project.");
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, null, result);
     }
 
     /**

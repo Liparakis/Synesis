@@ -36,6 +36,7 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.agent.workflow.NextActionRequest;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.agent.workflow.ProjectChangeWait;
+import org.synesis.workspace.application.agent.run.LaneWake;
 import org.synesis.workspace.application.capability.ContractConsumerService;
 import org.synesis.workspace.application.capability.ContractOwnerService;
 import org.synesis.workspace.application.conversation.ConversationService;
@@ -44,6 +45,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.integration.ImplementationPublicationService;
 import org.synesis.workspace.application.integration.ImplementationValidationService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
 
 /**
@@ -85,6 +87,10 @@ final class McpCoordinationTools {
      * How long a caller told to wait is held before it is answered.
      */
     private Duration waitHold = Duration.ZERO;
+    /**
+     * Whether this connection's identity came from the run controller, whose agents' Stop hooks read the wait notes.
+     */
+    private boolean notesWaitsForWake;
     /**
      * The wait the last next-action call answered, when it is to be held.
      */
@@ -187,6 +193,12 @@ final class McpCoordinationTools {
      * @return the response to serialize
      */
     AgentResponse getNextAction(Map<String, Object> arguments, Path activeProjectRoot) {
+        AgentResponse answer = nextAction(arguments, activeProjectRoot);
+        noteForWake(activeProjectRoot, answer);
+        return answer;
+    }
+
+    private AgentResponse nextAction(Map<String, Object> arguments, Path activeProjectRoot) {
         AgentResponse agentResponse;
         boolean completionRequested;
         pendingWait = null;
@@ -218,6 +230,48 @@ final class McpCoordinationTools {
             pendingWait = location != null && answer.nextAction() == AgentNextAction.WAIT && agentResponse == answer ? new PendingWait(location, head) : null;
         }
         return agentResponse;
+    }
+
+    /**
+     * Says whether this connection's next-action answers are noted for its agent's Stop hook (ADR-0099). Only a
+     * connection whose identity the run controller gave its process has a hook that can find the note.
+     *
+     * @param notes whether to note them
+     */
+    void noteWaitsForWake(boolean notes) {
+        this.notesWaitsForWake = notes;
+    }
+
+    /**
+     * Notes, after any messages were handed over, that the caller was told WAIT and what its lane looked like then, or
+     * that it was given something else. The note only lets the agent's Stop hook hold it and wake it; a note that cannot
+     * be written means the agent is not held, and the run controller resumes it once it stops.
+     */
+    private void noteForWake(Path activeProjectRoot, AgentResponse answer) {
+        if (!notesWaitsForWake) {
+            return;
+        }
+        try {
+            ProjectLocation location = new ProjectApplicationService().locate(activeProjectRoot);
+            var binding = answer.nextAction() == AgentNextAction.WAIT ? new ProviderSessionBindingService().find(location, provider, connectionInstanceId) : java.util.Optional.<ProviderSessionBindingService.Binding>empty();
+            if (binding.isPresent()) {
+                LaneWake.Requester requester = new LaneWake.Requester(location.loadOrCreateIdentity().nodeId(), binding.get().supervisorId(), binding.get().workerId());
+                LaneWake.noteWait(location, connectionInstanceId, WorkspaceCollaborationService.participantHandle(binding.get().sessionId()), requester, waitEnds(answer));
+            } else {
+                LaneWake.clearWait(location, connectionInstanceId);
+            }
+        } catch (Exception unavailable) {
+            System.err.println("SYNESIS_MCP_WAIT_NOTE_FAILURE=" + (unavailable.getMessage() == null ? unavailable.getClass().getSimpleName() : unavailable.getMessage()));
+        }
+    }
+
+    /** The moment a WAIT answer names as the end of the wait: a recovery deadline or a requester's answer period. */
+    private static java.util.OptionalLong waitEnds(AgentResponse answer) {
+        if (!(answer.result() instanceof Map<?, ?> result)) {
+            return java.util.OptionalLong.empty();
+        }
+        return java.util.stream.Stream.of("recoveryDeadlineEpochMillis", "requesterAnswerDeadlineEpochMillis").map(result::get)
+                .filter(Number.class::isInstance).mapToLong(value -> ((Number) value).longValue()).min();
     }
 
     /**

@@ -318,6 +318,17 @@ public final class McpProtocolHandler {
     }
 
     /**
+     * Says whether the next-action answers of this connection are noted for its agent's Stop hook (ADR-0099). The run
+     * controller gives each agent process its connection identity in the environment, which is how the hook finds the
+     * note; no other connection's agent has such a hook, so nothing is noted for it.
+     *
+     * @param notes whether to note them
+     */
+    public void noteWaitsForWake(boolean notes) {
+        coordinationTools.noteWaitsForWake(notes);
+    }
+
+    /**
      * What a tool call must satisfy before dispatch, one row per catalog tool.
      *
      * @param attestation       whether these arguments, possibly {@code null}, can increase authority and so need a

@@ -6,11 +6,14 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.agent.run.LaneWake;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.JsonFields;
 import org.synesis.workspace.infrastructure.diagnostics.LocalDiagnostics;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.project.SleepCommands;
+import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.claude.ClaudeCodeHookAdapter;
 import org.synesis.workspace.provider.codex.CodexHookAdapter;
 
@@ -95,11 +98,76 @@ public final class HookApplicationService {
      * @return structured hook result
      */
     public HookExecutionResult claudeCode(Path profile, InputStream input) {
-        ClaudeCodeHookAdapter.Result result = new ClaudeCodeHookAdapter(profile).processStream(input);
+        String json;
+        try {
+            // Unbounded as before: a Write event carries the whole file.
+            json = input == null ? "" : new String(input.readAllBytes(), StandardCharsets.UTF_8).trim();
+        } catch (java.io.IOException unreadable) {
+            json = "";
+        }
+        return claudeCode(profile, json, System.getenv(ProviderIntegration.CONNECTION_INSTANCE_VARIABLE), LaneWake.HOLD);
+    }
+
+    /**
+     * Processes one Claude Code hook event for the agent behind a connection (ADR-0099). Only an agent the run
+     * controller started has a connection identity; such an agent is held on its Stop event while it waits, and is
+     * refused a shell command that only sleeps, since it waits by ending its turn and is woken. Anything else is the
+     * PreToolUse constraint check it always was.
+     *
+     * @param profile              local profile directory
+     * @param json                 the event
+     * @param connectionInstanceId the connection identity the run controller gave the agent's process, or {@code null}
+     * @param hold                 longest hold of a Stop event
+     * @return structured hook result
+     */
+    HookExecutionResult claudeCode(Path profile, String json, String connectionInstanceId, java.time.Duration hold) {
+        Map<String, Object> event = parsed(json);
+        boolean runAgent = connectionInstanceId != null && !connectionInstanceId.isBlank();
+        if (event != null && "Stop".equals(event.get("hook_event_name"))) {
+            return claudeStop(event, runAgent ? connectionInstanceId : null, hold);
+        }
+        if (runAgent && event != null && object(event.get("tool_input")) instanceof Map<String, Object> toolInput && toolInput.get("command") instanceof String command
+                && SleepCommands.onlySleeps(command)) {
+            String reason = "Do not wait by sleeping. When Synesis says WAIT, end your turn: Synesis wakes you when something arrives for your lane.";
+            LocalDiagnostics.hook(null, "claude", "PreToolUse", "BLOCKED", "sleep refused");
+            return new HookExecutionResult("BLOCKED", "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":" + ProviderJson.write(reason) + "}}", reason);
+        }
+        ClaudeCodeHookAdapter.Result result = new ClaudeCodeHookAdapter(profile).processJson(json);
         // The adapter resolves the project from the event it reads; without one the record goes
         // to the diagnostics that belong to no project.
         LocalDiagnostics.hook(null, "claude", "PreToolUse", result.outcome().name(), result.humanReason());
         return new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason());
+    }
+
+    private static Map<String, Object> parsed(String json) {
+        try {
+            return object(ProviderJson.parse(json));
+        } catch (RuntimeException notJson) {
+            return null;
+        }
+    }
+
+    /**
+     * Answers a Stop event: holds the agent while it was told WAIT and nothing has arrived for its lane, then tells it
+     * so. Any failure lets it stop: the run controller resumes a stopped agent on the next progress, while a stop
+     * refused for nothing would keep it running.
+     */
+    private static HookExecutionResult claudeStop(Map<String, Object> event, String connectionInstanceId, java.time.Duration hold) {
+        Path projectRoot = null;
+        String reason = null;
+        try {
+            if (connectionInstanceId != null && event.get("cwd") instanceof String cwd) {
+                ProjectLocation location = new ProjectApplicationService().locate(Path.of(cwd));
+                projectRoot = location.root();
+                reason = LaneWake.awaitAddressed(location, connectionInstanceId, hold).orElse(null);
+            }
+        } catch (Exception unavailable) {
+            reason = null;
+        }
+        HookExecutionResult result = reason == null ? new HookExecutionResult("STOP_ALLOWED", "{}", null)
+                : new HookExecutionResult("WOKEN", ProviderJson.write(Map.of("decision", "block", "reason", reason)), reason);
+        LocalDiagnostics.hook(projectRoot, "claude", "Stop", result.outcome(), result.humanReason());
+        return result;
     }
 
     /**

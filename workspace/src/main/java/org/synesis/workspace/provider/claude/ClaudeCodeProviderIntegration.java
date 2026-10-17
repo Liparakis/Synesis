@@ -14,6 +14,10 @@ import org.synesis.workspace.provider.ProviderSupportLevel;
  */
 public final class ClaudeCodeProviderIntegration implements ProviderIntegration {
 
+    private static final String STOP_HOOK_ID = "synesis-claude-code-stop";
+    // A long, as ProviderJson reads a written number back, so a written entry compares equal to this one.
+    private static final long STOP_HOOK_TIMEOUT_SECONDS = 660L;
+
     /**
      * Creates the Claude Code integration.
      */
@@ -160,9 +164,31 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
         return "synesis-claude-code";
     }
 
+    /** The shell tools are matched so a command that only sleeps is refused there too (ADR-0099). */
     @Override
     public String matcher() {
-        return "Edit|Write";
+        return "Edit|Write|Bash|PowerShell";
+    }
+
+    /**
+     * Holds an agent told WAIT on its Stop event until something arrives for its lane (ADR-0099). Claude Code lets the
+     * turn end when a hook outlives its timeout, so the timeout is the hold, ten minutes, plus a minute to answer.
+     */
+    @Override
+    public Map<String, Object> managedStopHook(Path launcher, Path profile) {
+        Map<String, Object> command = new LinkedHashMap<>();
+        command.put("type", "command");
+        command.put("command", hookCommand(launcher, profile));
+        command.put("timeout", STOP_HOOK_TIMEOUT_SECONDS);
+        Map<String, Object> hook = new LinkedHashMap<>();
+        hook.put("id", STOP_HOOK_ID);
+        hook.put("hooks", List.of(command));
+        return hook;
+    }
+
+    @Override
+    public boolean isManagedStopHook(Object value) {
+        return value instanceof Map<?, ?> hook && STOP_HOOK_ID.equals(hook.get("id"));
     }
 
     @Override
