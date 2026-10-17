@@ -14,6 +14,7 @@ import org.synesis.link.protocol.IncompatibleVersionException;
 import org.synesis.link.protocol.ProjectInvitation;
 
 import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.transport.control.ProjectSharing;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 
@@ -101,6 +102,16 @@ public final class LinkJoinCommand extends LinkOperationCommand {
         if (project) {
             runtime.terminal().stdout("PROJECT_FOLDER=" + folder);
             runtime.terminal().stdout("NEXT=the owner of the project accepts this computer with 'synesis link accept'");
+            // Reported, not refused: the person can sign in afterwards, and the invitation is single use.
+            if (started.get("codeRemote") instanceof String remote) {
+                try {
+                    CodeRemote.check(folder, remote);
+                    runtime.terminal().stdout("CODE_REMOTE_CHECK=REACHABLE");
+                } catch (CodeRemote.Refused refused) {
+                    runtime.terminal().stdout("CODE_REMOTE_CHECK=" + refused.code());
+                    runtime.terminal().stdout("CODE_REMOTE_DETAIL=" + refused.detail());
+                }
+            }
         }
         return String.valueOf(started.get("operationId"));
     }

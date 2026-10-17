@@ -515,6 +515,24 @@ describe("shared project invitations", () => {
     expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("They have to accept this computer");
     expect(screen.queryByLabelText("Project folder")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("joins and says what to run when this computer cannot fetch from the code remote", async () => {
+    const user = userEvent.setup();
+    const detail = "fatal: could not read Username for 'https://github.com': terminal prompts disabled. Run `git fetch synesis` once in a terminal in this project's folder and sign in if Git asks, so that it can fetch without asking; then try again.";
+    const openProjectLink = vi.fn().mockResolvedValue({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz", folder: "C:\\work\\project",
+      codeRemote: "synesis", codeRemoteCheck: "CODE_REMOTE_UNAVAILABLE", codeRemoteDetail: detail});
+    const client = {openProjectLink, join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+
+    expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("They have to accept this computer");
+    expect(screen.getByRole("alert")).toHaveTextContent("agents here cannot start yet");
+    expect(screen.getByRole("alert")).toHaveTextContent("git fetch synesis");
   });
 
   it("asks for the folder when the project is not on this computer, names the URL to clone from, and uses the chosen folder", async () => {

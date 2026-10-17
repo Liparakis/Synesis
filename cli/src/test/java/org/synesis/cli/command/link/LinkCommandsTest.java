@@ -36,6 +36,7 @@ import org.synesis.link.protocol.ProjectInvitation;
 import org.synesis.link.protocol.ProtocolVersion;
 
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 
 import picocli.CommandLine;
@@ -244,6 +245,24 @@ class LinkCommandsTest {
     }
 
     @Test
+    void joiningAProjectLinkSaysWhenThisComputerCannotFetchFromTheCodeRemoteAndStillJoins() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+        registry.register(root);
+        GitProcessRunner.run(root, "init");
+        GitProcessRunner.run(root, "remote", "add", "synesis", tmp.resolve("gone.git").toString());
+        runtime.connectsAfterReads = 2;
+        runtime.peerNode = "sl1-host";
+        runtime.codeRemote = "synesis";
+
+        Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), projectLink("https://example.test/p.git"));
+
+        assertEquals(ExitCodes.OK, joined.exit(), joined.toString());
+        assertTrue(joined.stdout().contains("CODE_REMOTE_CHECK=CODE_REMOTE_UNAVAILABLE"), joined.toString());
+        assertTrue(joined.stdout().stream().anyMatch(line -> line.startsWith("CODE_REMOTE_DETAIL=") && line.contains("git fetch synesis")), joined.toString());
+        assertTrue(joined.stdout().contains("LINK_STATE=CONNECTED"), joined.toString());
+    }
+
+    @Test
     void joiningAProjectLinkOfAProjectNotOnThisComputerTellsWhereToCloneFromAndDoesNothing() throws Exception {
         KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
 
@@ -326,6 +345,7 @@ class LinkCommandsTest {
         List<Map<String, Object>> joinRequests = List.of();
         String operation = "op-1";
         String inviteKind = "PROJECT";
+        String codeRemote;
         private int networkReads;
 
         @Override
@@ -341,7 +361,13 @@ class LinkCommandsTest {
                     default -> Map.of("operationId", "op-1", "inviteUri", "synesis://project/SLP1-test", "expiresAt", "2026-10-16T12:00:00Z", "kind", "PROJECT", "codeRemoteName", "origin",
                             "codeRemoteUrl", "https://example.test/p.git");
                 };
-                case "join-project-link", "join" -> Map.of("operationId", "op-2", "answerUri", "synesis://answer/SLA3-test", "peerIdentity", "sl1-host", "expiresAt", "2026-10-16T12:00:00Z");
+                case "join-project-link", "join" -> {
+                    Map<String, Object> started = new java.util.HashMap<>(Map.of("operationId", "op-2", "answerUri", "synesis://answer/SLA3-test", "peerIdentity", "sl1-host", "expiresAt", "2026-10-16T12:00:00Z"));
+                    if (codeRemote != null) {
+                        started.put("codeRemote", codeRemote);
+                    }
+                    yield started;
+                }
                 case "accept-join" -> Map.of("state", "ACCEPTED");
                 case "decline-join" -> Map.of("state", "DECLINED");
                 default -> Map.of("operationId", operation, "state", "SENDING_TO_JOINER");

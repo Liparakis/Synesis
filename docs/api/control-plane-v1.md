@@ -211,7 +211,12 @@ puts the file and the remote back. The same link can be opened again after a fai
 (`409`, nothing written): `LOG_NOT_EMPTY` (a member's log is a copy of the leader's, so it must be empty),
 `FOLLOWING_ANOTHER_LEADER`, `ALREADY_A_LEADER`, `INVITER_IS_THIS_COMPUTER`. The response is `200` with `state:
 "CONNECTING"`, `operationId`, `answerUri` (for a friend on another network), `peerIdentity`, `expiresAt`, `folder`,
-`role: "member"`, `leaderNodeId` and `codeRemote`.
+`role: "member"`, `leaderNodeId` and `codeRemote`. When `codeRemote` is set, the answer also carries `codeRemoteCheck`:
+`REACHABLE` when `git ls-remote <codeRemote> HEAD` answered with no prompt (the way every lane on a member fetches the
+leader's head), else the refusal code (`CODE_REMOTE_UNAVAILABLE`) with `codeRemoteDetail`, Git's reason with any URL
+credentials removed and the command to run (`git fetch <codeRemote>` once in a terminal, signing in if asked). The check
+runs after the join and never refuses it: the person can sign in afterwards, and the invitation is single use. `synesis
+link join` prints the same as `CODE_REMOTE_CHECK` and `CODE_REMOTE_DETAIL`.
 
 #### `POST /api/v1/commands/join-project-link`
 

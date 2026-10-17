@@ -288,6 +288,8 @@ final class ProjectLinkFlowTest {
         assertNotNull(opened.body().get("answerUri"), "the answer link for a friend on another network");
         assertEquals(ReplicationSettings.member(owner.node.nodeId()).withCodeRemote("synesis"), friend.role());
         assertEquals(REMOTE_URL, GitProcessRunner.run(friendProject.root(), "remote", "get-url", "synesis").strip());
+        assertEquals("CODE_REMOTE_UNAVAILABLE", opened.body().get("codeRemoteCheck"), "the join goes on and says this computer cannot fetch without a prompt");
+        assertTrue(String.valueOf(opened.body().get("codeRemoteDetail")).contains("git fetch synesis"), opened.toString());
 
         // Authenticated and identity-checked, but not served until the owner accepts.
         await(() -> {

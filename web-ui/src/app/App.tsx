@@ -950,6 +950,7 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
   const [answerUri, setAnswerUri] = useState("");
   const [message, setMessage] = useState("");
   const [problem, setProblem] = useState("");
+  const [codeRemoteProblem, setCodeRemoteProblem] = useState("");
   const [busy, setBusy] = useState(false);
   const [details, setDetails] = useState<ProjectLinkDescription | null>(null);
   useEffect(() => {
@@ -973,6 +974,7 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
     setBusy(true);
     setProblem("");
     setMessage("");
+    setCodeRemoteProblem("");
     try {
       if (!text.startsWith(PROJECT_LINK_PREFIX)) {
         const response = await client.join(text);
@@ -990,6 +992,10 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
       setFolderNeeded(null);
       setAnswerUri(response.answerUri ?? "");
       setMessage("Connecting to the owner of the project. They have to accept this computer before any work is shared. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
+      // The join goes on: the person can fix this afterwards, and agents here cannot start until they do.
+      if (response.codeRemoteCheck && response.codeRemoteCheck !== "REACHABLE") {
+        setCodeRemoteProblem(`This computer cannot fetch the project's code without a sign-in, so agents here cannot start yet. ${response.codeRemoteDetail ?? response.codeRemoteCheck}`);
+      }
       await onRegistered?.();
     } catch (error) {
       setProblem(projectLinkMessage(error));
@@ -1034,6 +1040,7 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
       </div>}
       {answerUri && <CopyField label="Answer link" value={answerUri}/>}
       {message && <p className="action-message" role="status">{message}</p>}
+      {codeRemoteProblem && <p className="action-message selection-error" role="alert">{codeRemoteProblem}</p>}
       {problem && <p className="action-message selection-error" role="alert">{problem}</p>}
     </div>
   );

@@ -284,6 +284,10 @@ export interface ProjectLinkResponse {
   expiresAt?: string;
   folder?: string;
   codeRemote?: string | null;
+  /** Whether this computer can fetch from codeRemote without a prompt: REACHABLE, or the refusal code. */
+  codeRemoteCheck?: string;
+  /** Git's reason and what to run when the check failed. */
+  codeRemoteDetail?: string;
 }
 
 export interface JoinRequestSnapshot {

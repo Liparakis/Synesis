@@ -24,6 +24,7 @@ import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.IncompatibleVersionException;
 import org.synesis.link.protocol.ProjectInvitation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -179,6 +180,7 @@ final class ProjectLinkEndpoints {
         }
         Map<String, Object> response = sameFolder(folder.get()) ? joinHere(invitation) : joinThere(folder.get(), invitation);
         response.put("folder", folder.get().toString());
+        checkCodeRemote(folder.get(), response);
         sendJson(exchange, 200, response);
     }
 
@@ -277,6 +279,25 @@ final class ProjectLinkEndpoints {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw failure(503, "PROJECT_RUNTIME_UNAVAILABLE", "the runtime of the project could not be reached");
+        }
+    }
+
+    /**
+     * Says whether this computer can fetch from the code remote without a prompt. A member fetches the leader's head
+     * before every lane, so a sign-in Git has not stored stops every agent here. It is reported and the join is kept:
+     * the person can sign in afterwards, and the invitation is single use. It runs after the join, outside the
+     * folder runtime's request, so a slow remote cannot time that request out.
+     */
+    private static void checkCodeRemote(Path folder, Map<String, Object> response) {
+        if (!(response.get("codeRemote") instanceof String remote)) {
+            return;
+        }
+        try {
+            CodeRemote.check(folder, remote);
+            response.put("codeRemoteCheck", "REACHABLE");
+        } catch (CodeRemote.Refused refused) {
+            response.put("codeRemoteCheck", refused.code());
+            response.put("codeRemoteDetail", refused.detail());
         }
     }
 

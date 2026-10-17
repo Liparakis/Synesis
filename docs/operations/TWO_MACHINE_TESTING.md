@@ -74,6 +74,14 @@ A bare repository on a shared folder or a host works.
    whose URL matches A's; if none matches, a remote named `synesis` is added), and connects. It refuses, and writes
    nothing, when B's copy already has log entries (`LOG_NOT_EMPTY`), follows another leader, or leads members of its
    own. B should not start agents before this.
+
+   B's computer then asks the code remote for its head the way agents will, with no prompt (`git ls-remote`). If that
+   fails, the join still goes on, and the UI (or `CODE_REMOTE_CHECK=CODE_REMOTE_UNAVAILABLE` and `CODE_REMOTE_DETAIL`)
+   says what Git said and what to run: `git fetch <remote>` once in a terminal in the project folder, signing in if Git
+   asks, so the sign-in is stored. Until then every agent on B stops with `workspace_not_ready` and the same detail, and
+   `synesis provider status` shows `WORKTREE_BINDING_DIAGNOSTIC=CODE_REMOTE_UNAVAILABLE`. Synesis reads Git's system
+   configuration (where Git for Windows registers its credential manager) but not `~/.gitconfig`, so a credential
+   helper set only there, for example by `gh auth setup-git`, is not used.
 3. **A (the owner) accepts.** B's connection is authenticated and the project identity is checked, but nothing is served
    on it until A's person accepts it. The Network view lists `<node> wants to join <project>` with **Accept** and
    **Decline**; or run `synesis link requests`, then `synesis link accept <node ID>` or `synesis link decline <node ID>`.
