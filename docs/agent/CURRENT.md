@@ -1,3 +1,32 @@
+# 2026-10-17 — A firewall rule left naming an earlier version is reported (defect 4 below)
+
+**Why.** The rule "Synesis Link" names one version's `runtime\bin\java.exe`. Only `install`/`repair --allow-link` and
+the wizard replace it, so an update without the option left it naming remaster47 while remaster56 ran, and this
+computer stopped accepting dials with no message.
+
+**What changed.** Reported, not refreshed: the command line asks for elevation only when told to (ADR-0096 decision 2)
+and an unattended update cannot answer a prompt; the wizard already refreshes the rule once it exists.
+
+- Installer: a successful `install`, `repair`, `update --execute` or `update --rollback` without `--allow-link` reads
+  the rule (`netsh ... show rule ... verbose`, no elevation) and, when no rule program ends with the active payload's
+  `<version folder>\runtime\bin\java.exe`, prints `LINK_FIREWALL=STALE`, `LINK_FIREWALL_RULE_PROGRAM=`, a `WARNING=`
+  line and `LINK_FIREWALL_FIX=` (`--allow-link`, or `netsh advfirewall firewall set rule name="Synesis Link" new
+  program="..."`). No rule, or a rule without a program, prints nothing. With `--allow-link` the rule is replaced as
+  before, now also on `update --execute` and `--rollback`.
+- `synesis link invite` on Windows reads the same rule for its own `java.home` and prints `LINK_FIREWALL=MISSING` or
+  `STALE` and a `NOTE=` with the command, and that the answer link still connects. Nothing is printed when the rules
+  cannot be read.
+- Paths are compared from the version folder on, and found by their shape, because netsh translates its labels, prints
+  in the console code page, and may print 8.3 short names (the tests' temporary root came back as `LIPARA~1`).
+- No stable program path: the runtime exists only inside version folders that rollback keeps, and the firewall matches
+  the listening process (ADR-0096, "A rule for the stable launcher").
+
+**Tests.** Source semantics only; no real update was run against the real rule (reading it here showed the regular
+expression finds the remaster56 path, and a missing rule exits 1). Go: every bootstrap package passes on Windows,
+with new tests for German netsh output, a stale rule after `update --execute` and `repair`, a current rule spelled
+with a short name, and rollback. Windows `:cli:check repositoryHygieneCheck`: 197 CLI tests, 0 failures, Javadoc
+passes; `LinkFirewallRuleTest` (4) and `LinkCommandsTest` (18) included. The Linux gate did not run: the Podman
+machine dropped its connection 15 s into both attempts.
 # 2026-10-17 — The leader says whether each member is connected (defect 5 below)
 
 **Change.** `LeaderReplication` writes `replication.members` beside the events folder: one line per member the role file

@@ -226,6 +226,7 @@ func assertNoLegacyLayout(t *testing.T, paths layout.Paths) {
 func init() {
 	allowLinkProgram = func(string) error { return nil }
 	removeLinkRuleForUninstall = func() error { return nil }
+	linkRulePrograms = func() ([]string, bool) { return nil, false }
 }
 
 func withoutPathMutation(t *testing.T) {

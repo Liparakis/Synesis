@@ -79,7 +79,7 @@ class LinkCommandsTest {
     }
 
     private Run invite(String... arguments) {
-        return run(cli -> new LinkInviteCommand(cli, project -> runtime, 5), arguments);
+        return run(cli -> new LinkInviteCommand(cli, project -> runtime, 5, List::of), arguments);
     }
 
     @Test
@@ -110,6 +110,14 @@ class LinkCommandsTest {
 
         assertEquals(ExitCodes.OK, plain.exit(), plain.toString());
         assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://join/SLB3-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "LINK_STATE=PENDING"), plain.stdout());
+    }
+
+    @Test
+    void inviteSaysAfterTheLinksWhenTheFirewallKeepsTheOtherComputerFromDialing() throws Exception {
+        Run invited = run(cli -> new LinkInviteCommand(cli, project -> runtime, 5, () -> List.of("LINK_FIREWALL=MISSING", "NOTE=fix it")), "--wait-seconds", "0");
+
+        assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
+        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://project/SLP1-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "CODE_REMOTE=origin", "CODE_REMOTE_URL=https://example.test/p.git", "LINK_FIREWALL=MISSING", "NOTE=fix it", "LINK_STATE=PENDING"), invited.stdout());
     }
 
     @Test

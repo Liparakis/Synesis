@@ -89,3 +89,32 @@ func TestAnUnknownCommandIsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestProgramsReadsThePathsWhateverLanguageNetshLabelsThemIn(t *testing.T) {
+	output := "\r\nRegelname:                            Synesis Link\r\n" +
+		"----------------------------------------------------------------------\r\n" +
+		"Aktiviert:                            Ja\r\n" +
+		`Programm:                             C:\Users\A B\AppData\Local\Synesis\versions\0.1.0-a\runtime\bin\java.exe   ` + "\r\n" +
+		"Aktion:                               Zulassen\r\nOK.\r\n"
+	original := netsh
+	var seen []string
+	netsh = func(args ...string) ([]byte, error) {
+		seen = args
+		return []byte(output), nil
+	}
+	t.Cleanup(func() { netsh = original })
+
+	programs, exists := Programs()
+
+	if !exists || !reflect.DeepEqual(programs, []string{`C:\Users\A B\AppData\Local\Synesis\versions\0.1.0-a\runtime\bin\java.exe`}) {
+		t.Fatalf("programs = %q, exists = %v", programs, exists)
+	}
+	if strings.Join(seen, " ") != "advfirewall firewall show rule name=Synesis Link verbose" {
+		t.Fatalf("netsh %v", seen)
+	}
+
+	recordNetsh(t, false)
+	if programs, exists := Programs(); exists || programs != nil {
+		t.Fatalf("a missing rule gave %q, %v", programs, exists)
+	}
+}

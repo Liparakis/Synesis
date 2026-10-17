@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -41,6 +42,21 @@ func addArgs(program string) []string {
 func Exists() bool {
 	_, err := netsh("advfirewall", "firewall", "show", "rule", "name="+RuleName)
 	return err == nil
+}
+
+// programPath finds an absolute Windows path in netsh's output. The labels
+// netsh prints are translated, so the path is found by its shape.
+var programPath = regexp.MustCompile(`[A-Za-z]:\\.*\S`)
+
+// Programs reports whether a rule named RuleName is present and the programs
+// such rules name. Reading the rules needs no elevation. A rule that names no
+// program adds nothing to programs.
+func Programs() (programs []string, exists bool) {
+	output, err := netsh("advfirewall", "firewall", "show", "rule", "name="+RuleName, "verbose")
+	if err != nil {
+		return nil, false
+	}
+	return programPath.FindAllString(string(output), -1), true
 }
 
 // RunElevated implements the "link-firewall" command the installer starts

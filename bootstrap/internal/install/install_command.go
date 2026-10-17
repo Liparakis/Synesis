@@ -34,7 +34,7 @@ func ReportOperation(observers []OperationProgress, stage, status, detail string
 // RunInstall implements both "install" and "update": fetch and verify the
 // manifest, resolve the platform-appropriate artifact, verify its checksum,
 // and atomically activate it.
-func RunInstall(operation string, args []string, observers ...OperationProgress) error {
+func RunInstall(operation string, args []string, observers ...OperationProgress) (err error) {
 	flags := flag.NewFlagSet(operation, flag.ContinueOnError)
 	manifestURL := flags.String("manifest", os.Getenv("SYNESIS_MANIFEST_URL"), "manifest URL")
 	bundlePath := flags.String("bundle", "", "verified local bundle path")
@@ -53,6 +53,13 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 	if err != nil {
 		return err
 	}
+	// Install, update and rollback all change the active runtime, the program
+	// the firewall rule must name, so each that succeeds ends with this step.
+	defer func() {
+		if err == nil && !*prepare {
+			reportLinkFirewall(paths.Root, *allowLink)
+		}
+	}()
 	if *rollback {
 		return rollbackVersioned(paths)
 	}
@@ -87,9 +94,6 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 			return err
 		}
 		fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
-		if *allowLink {
-			reportAllowLink(paths.Root)
-		}
 		return nil
 	}
 	if *manifestURL == "" {
@@ -129,9 +133,6 @@ func RunInstall(operation string, args []string, observers ...OperationProgress)
 		return err
 	}
 	fmt.Printf("INSTALL_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
-	if *allowLink {
-		reportAllowLink(paths.Root)
-	}
 	return nil
 }
 
@@ -172,9 +173,7 @@ func RunRepair(args []string, observers ...OperationProgress) error {
 		return err
 	}
 	fmt.Printf("REPAIR_RESULT=SUCCESS\nVERSION=%s\nPLATFORM=%s\n", m.Version, releasemanifest.PlatformID())
-	if *allowLink {
-		reportAllowLink(paths.Root)
-	}
+	reportLinkFirewall(paths.Root, *allowLink)
 	return nil
 }
 

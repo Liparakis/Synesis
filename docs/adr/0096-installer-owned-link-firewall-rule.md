@@ -66,3 +66,17 @@ user and holds none. (VERIFIED.)
 `--allow-link` flag, the `link-firewall` command, and the wizard checkbox. The
 installer's tests pass, with the rule commands and the elevation replaced by
 recorders. See `docs/agent/CURRENT.md` for what was shown with a real prompt.
+
+Added on 2026-10-17, after a stale rule silently stopped a real host (see
+`docs/agent/CURRENT.md`, "Two homes, one project", defect 4): a command-line
+`install`, `repair`, `update --execute` or `update --rollback` without
+`--allow-link` reads the rule, which needs no elevation, and when it names
+another version's `java.exe` prints `LINK_FIREWALL=STALE`, the rule's program,
+a `WARNING=` line and `LINK_FIREWALL_FIX=` with the command. It does not
+refresh the rule itself: decision 2 keeps the command line from asking for
+elevation unless told to, and an unattended update cannot answer a prompt. The
+wizard already refreshes it (decision 2). `synesis link invite` on Windows
+also reads the rule and prints `LINK_FIREWALL=MISSING` or `STALE` with the
+command that fixes it. A stable program path was not added: the runtime lives
+only in version folders that rollback keeps, and the firewall matches the
+process that listens (see "A rule for the stable launcher").
