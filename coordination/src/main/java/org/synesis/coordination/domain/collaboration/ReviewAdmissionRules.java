@@ -7,10 +7,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
+import org.synesis.coordination.domain.identity.AuthorityLineageId;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.exception.CoordinationException;
@@ -96,7 +99,7 @@ public final class ReviewAdmissionRules {
         if (target.role() != WorkIntent.Role.PRODUCER) {
             throw new CoordinationException("REVIEW_TARGET_NOT_PRODUCER");
         }
-        if (requester.equals(target.participantIdentity())) {
+        if (requester.equals(target.participantIdentity()) || authoredInLineage(current, requester, target.lineage())) {
             throw new CoordinationException("REVIEW_SELF_NOT_ALLOWED");
         }
         List<WorkIntent> requesterIntents = current.collaborationProjection().activeIntents().stream()
@@ -114,10 +117,9 @@ public final class ReviewAdmissionRules {
                 throw new CoordinationException("REVIEW_WORK_GROUP_MISMATCH");
             }
 
-            // An explicitly requested reciprocal review may be issued by an
-            // active producer lane. Automatic review admission remains
-            // restricted to explicit reviewer intents in the workspace
-            // projection, so this does not restore peer-order inference.
+            // A producer lane may ask to review another lane of its work
+            // group. Admission still requires a reviewer lane or authorship
+            // of a snapshot in the group (validateReviewAdmission).
             return;
         }
         if (sameGroupReviewers.stream().noneMatch(reviewer -> reviewTargetsMatch(reviewer, target))) {
@@ -153,9 +155,39 @@ public final class ReviewAdmissionRules {
                 .filter(intent -> intent.workGroupId().equals(target.workGroupId()))
                 .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER)
                 .anyMatch(reviewer -> reviewTargetsMatch(reviewer, target));
-        if (!matchingReviewer) {
+        // An author of the work group may review the others' snapshots (ADR-0089, amended
+        // 2026-10-17). Authorship, not the wait for its own review, is the test: it holds from the
+        // request to the grant, so an admission cannot turn unlawful under the producer that is
+        // answering it because the requester's own snapshot was decided in between.
+        if (!matchingReviewer && !authoredInGroup(current, requester, target)) {
             throw new CoordinationException("REVIEWER_INTENT_REQUIRED");
         }
+    }
+
+    /**
+     * Returns whether the participant published a snapshot in the target's work group.
+     */
+    private static boolean authoredInGroup(ProjectionView current, ParticipantId participant, WorkIntent target) {
+        return authored(current, participant).anyMatch(provenance -> provenance.workGroupIdentity().equals(target.group()));
+    }
+
+    /**
+     * Returns whether the participant published a snapshot in the authority lineage: work of that
+     * lineage is then its own, even when another participant now holds the lane by continuation,
+     * and it is never admitted to review it.
+     *
+     * @param current     project projections
+     * @param participant the participant that would review
+     * @param lineage     the authority lineage of the work to review
+     * @return {@code true} when the participant may not review work of the lineage
+     */
+    public static boolean authoredInLineage(ProjectionView current, ParticipantId participant, AuthorityLineageId lineage) {
+        return authored(current, participant).anyMatch(provenance -> provenance.lineageIdentity().equals(lineage));
+    }
+
+    private static Stream<SnapshotProvenance> authored(ProjectionView current, ParticipantId participant) {
+        return current.taskCompletionProjection().allSnapshots().stream().map(TaskSnapshotRecord::provenance)
+                .filter(provenance -> provenance.participantIdentity().equals(participant));
     }
 
     /**

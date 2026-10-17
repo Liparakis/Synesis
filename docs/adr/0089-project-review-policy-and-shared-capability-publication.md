@@ -64,10 +64,80 @@ owner's lane closed, and its requester waited for an answer nobody could give.
 
 - A project with mandatory review does not integrate a lane until a reviewer
   has accepted its snapshot. Two producers in such a project and no reviewer
-  never integrate; that is the policy the project stated.
+  never integrate; that is the policy the project stated. (Amended 2026-10-17
+  below: the producers review one another.)
 - The owner asserts the contract of the request it names. Its other requesters
   receive the same commit on the strength of their own accepted contracts, and
   each still validates it. No requester's validation is taken from another's.
 - A requester that validated and stopped is needed again when the owner
   revises. Its lane is still open, so the controller resumes it.
 - The tool catalog and the CLI surface are unchanged.
+
+## Amendment 2026-10-17: a producer waiting for review may review the others
+
+Decided by the repository owner after the run recorded in
+`docs/agent/CURRENT.md` as "Two homes, bigger goal". Four writers in a project
+with mandatory review each published and then held a `WAIT` for its own
+review. A producer waiting on its review was offered no other work, and with no
+dedicated reviewer no review ever started.
+
+- A participant that published a snapshot in a work group may be admitted to
+  review another lane's snapshot in that group, without a reviewer lane. Before,
+  admission required a reviewer lane of the requester and refused anyone else
+  with `REVIEWER_INTENT_REQUIRED`; a participant that published nothing in the
+  group still is.
+- A participant is never admitted to review work of an authority lineage it
+  published a snapshot in, so it cannot review a continuation of its own work
+  either. The request is refused with `REVIEW_SELF_NOT_ALLOWED`, as a request
+  to review its own lane already was. Every other independence check is kept.
+- `get_next_action` offers a producer whose current snapshot awaits review the
+  open review candidates of its work group that it did not author, before its
+  wait. With one candidate the request is executable; with several, the
+  producer chooses, as every review candidate is chosen. With none it waits as
+  before.
+- A review admission asked of a lane is shown before anything else about
+  review: before the lane's own wait for an answer to a review request it made,
+  and before a review or a correction it owes. Producers that ask to review
+  each other are each requester and owner, and each waiting for its own answer,
+  none would answer another's. Answering is one call, and the review or
+  correction is shown on the next.
+
+**Representation.** The review is taken by a request bound to the exact
+snapshot, and its authority is the grant the snapshot's owner issues to the
+reviewer's participant. The reviewer keeps its one lane, claim epoch and claims;
+it announces no reviewer lane. Two alternatives were rejected. A second,
+reviewer, lane for the same participant breaks "a session holds one lane": the
+lane identity is derived from the session, and every lookup of a participant's
+lane would have to choose between two, so lane ownership and the epoch a
+mutation is fenced on would become ambiguous. A separate session for the review
+is something an agent cannot open: one provider connection is bound to one
+session.
+
+**Why authorship and not the wait.** The owner's decision names a producer
+whose snapshot is waiting. Admission is checked when the request is made, when
+the owner accepts it and when the grant is issued. If eligibility were the wait
+itself, a reviewer whose own snapshot was accepted and integrated in between
+would be refused at acceptance, and the owner would be shown an admission it
+could never give. Authorship holds across that window. The wait is still what
+starts it: only a waiting producer is offered candidates. An author whose lane
+has ended therefore stays eligible in its work group, as a finished lane already
+was for review requests (`COMPLETED_REVIEW_SCOPE_MISMATCH` limits it to that
+group). A participant that reviewed a snapshot and later continues that lineage
+is not refused the continuation; from then on it is an author of the lineage and
+cannot review it again.
+
+**Consequences.**
+
+- A project with mandatory review and only producers completes once each
+  snapshot has been reviewed by another producer.
+- While a producer holds a consumed review grant, its `read_file` and
+  `run_command` read the immutable review snapshot, as for any reviewer, and
+  its review action comes before a correction of its own rejected snapshot.
+- Two producers may still ask for the same candidate at the same moment. The
+  owner can admit one; accepting the other is refused with
+  `REVIEW_CANDIDATE_ALREADY_ASSIGNED` and the owner must reject it. This was
+  already so for two reviewer lanes and is recorded, not changed, here.
+- The tool catalog, the MCP schemas, the CLI surface and the persisted formats
+  are unchanged. The next-action answer for a waiting producer may now carry
+  `nextAction: request_coordination` and `actionableReviewCandidates` where it
+  carried only `wait`.

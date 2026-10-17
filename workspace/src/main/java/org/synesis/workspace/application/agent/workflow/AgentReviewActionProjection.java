@@ -17,8 +17,10 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -585,9 +587,9 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
 
 /**
      * Lists the review candidates a participant may take up: those whose snapshot neither it nor
-     * the lane now holding that work produced, and whose author can admit a reviewer. Independence
-     * is still enforced at admission; this only keeps guidance from pointing a caller at work it
-     * would be refused or never answered.
+     * the lane now holding that work produced, in an authority lineage it never published in, and
+     * whose author can admit a reviewer. Independence is still enforced at admission; this only keeps
+     * guidance from pointing a caller at work it would be refused or never answered.
      *
      * <p>A review request is answered by the author's lane, and while that lane is held for
      * recovery only its successor can answer it (ADR-0085). A caller that claimed a reviewer lane
@@ -601,9 +603,11 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
      */
     static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
         var collaboration = store.collaborationProjection();
+        ParticipantId caller = new ParticipantId(participantId);
         return reviewCandidates(store).stream().filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> {
             WorkIntent producer = reviewProducerIntent(store, snapshot);
-            boolean ownWork = snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
+            boolean ownWork = ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity())
+                    || snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
             boolean authorHeld = producer != null && collaboration.participantState(producer.participant()).orElse(null) == Participant.State.RECOVERY_HELD;
             return !ownWork && !authorHeld;
         }).isPresent()).toList();

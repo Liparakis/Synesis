@@ -1,0 +1,225 @@
+package org.synesis.mcp.application;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.PredictionEventStore;
+
+import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderManualService;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
+
+/**
+ * Producers of a project with mandatory review and no reviewer review one another while their own
+ * snapshots wait (ADR-0089, amended 2026-10-17): the run recorded as "Two homes, bigger goal" in
+ * {@code docs/agent/CURRENT.md}, where four writers each held a wait for their own review.
+ */
+final class McpProducersReviewEachOtherTest {
+
+    private static final List<String> MODULES = List.of("slug.py", "wrap.py", "roman.py", "csvline.py");
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fourWaitingProducersReviewEveryOtherSnapshotAndNeverTheirOwn(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("producers-review-each-other"));
+        List<Producer> producers = new ArrayList<>();
+        for (int index = 0; index < MODULES.size(); index++) {
+            producers.add(producer(project, "producer-" + index, MODULES.get(index)));
+        }
+        List<String> snapshots = new ArrayList<>();
+        for (Producer producer : producers) {
+            snapshots.add(publish(producer));
+        }
+
+        Producer first = producers.getFirst();
+        Map<String, Object> offered = result(first.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        List<Map<String, Object>> candidates = (List<Map<String, Object>>) offered.get("actionableReviewCandidates");
+        assertEquals("request_coordination", offered.get("nextProtocolAction"), offered.toString());
+        assertEquals(Set.copyOf(snapshots.subList(1, 4)), candidates.stream().map(candidate -> String.valueOf(candidate.get("snapshotId"))).collect(Collectors.toSet()), offered.toString());
+        Map<String, Object> ownSnapshot = Map.of("kind", "work_group_join", "payload",
+                Map.of("workGroupId", offered.get("workGroupId"), "intentId", first.intentId(), "snapshotId", snapshots.getFirst(), "proposal", "Review my own module"));
+        String selfReview = first.handler().handleMessage(toolCall("request_coordination", ownSnapshot));
+        assertTrue(selfReview.contains("REVIEW_SELF_NOT_ALLOWED"), selfReview);
+
+        // Each producer prefers the next one's snapshot, so the reviews form a ring rather than
+        // all landing on the first candidate; the choice stays the producer's.
+        boolean progressed = true;
+        for (int round = 0; round < 30 && progressed; round++) {
+            progressed = false;
+            for (int index = 0; index < producers.size(); index++) {
+                progressed |= step(producers.get(index), producers.get((index + 1) % producers.size()).participant());
+            }
+        }
+
+        PredictionEventStore store = store(project);
+        Set<String> producerParticipants = producers.stream().map(Producer::participant).collect(Collectors.toSet());
+        for (String snapshot : snapshots) {
+            ReviewValidationPayload decision = store.workGroupProjection().reviewValidationForSnapshot(snapshot).orElseThrow(() -> new AssertionError("no review of " + snapshot));
+            assertEquals("ACCEPTED", decision.result(), snapshot);
+            assertTrue(producerParticipants.contains(decision.targetParticipant()), decision.toString());
+            assertNotEquals(decision.sourceParticipant(), decision.targetParticipant(), decision.toString());
+        }
+        // Review was taken through grants; no producer announced a second, reviewer, lane.
+        assertEquals(MODULES.size(), store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED).count());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aProducerWaitingForItsOwnReviewRequestIsStillShownTheAdmissionAskedOfIt(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("admission-not-hidden"));
+        List<Producer> producers = new ArrayList<>();
+        List<String> snapshots = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            producers.add(producer(project, "admission-" + index, MODULES.get(index)));
+            snapshots.add(publish(producers.get(index)));
+        }
+        Producer slug = producers.get(0);
+        Producer wrap = producers.get(1);
+        Producer roman = producers.get(2);
+        String workGroupId = String.valueOf(store(project).collaborationProjection().intent(java.util.UUID.fromString(slug.intentId())).orElseThrow().workGroupId());
+        answered(slug.handler().handleMessage(toolCall("request_coordination", Map.of("kind", "work_group_join", "payload",
+                Map.of("workGroupId", workGroupId, "intentId", wrap.intentId(), "snapshotId", snapshots.get(1), "proposal", "Review wrap.py")))));
+        answered(roman.handler().handleMessage(toolCall("request_coordination", Map.of("kind", "work_group_join", "payload",
+                Map.of("workGroupId", workGroupId, "intentId", slug.intentId(), "snapshotId", snapshots.get(0), "proposal", "Review slug.py")))));
+
+        Map<String, Object> next = result(slug.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertEquals("respond_coordination", next.get("nextAction"), next.toString());
+        Map<String, Object> context = (Map<String, Object>) next.get("nextProtocolContext");
+        assertEquals(roman.participant(), context.get("requester"), next.toString());
+    }
+
+    /**
+     * Takes the next step get_next_action offers the producer, preferring the snapshot of
+     * {@code preferredAuthor} when it must choose among review candidates.
+     *
+     * @return {@code true} when a step was taken, {@code false} when the producer was told to wait
+     */
+    @SuppressWarnings("unchecked")
+    private static boolean step(Producer producer, String preferredAuthor) throws Exception {
+        Map<String, Object> next = result(producer.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        Map<String, Object> workflow = (Map<String, Object>) next.get("workflow");
+        Object tool = workflow.get("recommendedTool");
+        // ensure_session refreshes a workspace another producer's integration made stale.
+        if (tool != null && List.of("request_coordination", "respond_coordination", "ensure_session").contains(tool) && workflow.get("arguments") instanceof Map<?, ?> arguments) {
+            return answered(producer.handler().handleMessage(toolCall((String) tool, (Map<String, Object>) arguments)));
+        }
+        if ("review_decision".equals(next.get("nextProtocolAction"))) {
+            Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) next.get("nextProtocolPayload"));
+            payload.put("result", "accepted");
+            return answered(producer.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", payload))));
+        }
+        if ("request_coordination".equals(next.get("nextProtocolAction")) && next.get("actionableReviewCandidates") instanceof List<?> listed && !listed.isEmpty()) {
+            List<Map<String, Object>> candidates = (List<Map<String, Object>>) listed;
+            Map<String, Object> chosen = candidates.stream().filter(candidate -> preferredAuthor.equals(candidate.get("participant"))).findFirst().orElse(candidates.getFirst());
+            return answered(producer.handler().handleMessage(toolCall("request_coordination", (Map<String, Object>) chosen.get("requestCoordination"))));
+        }
+        if (!"COMPLETED".equals(next.get("state"))) {
+            assertEquals("wait", next.get("nextAction"), next.toString());
+        }
+        return false;
+    }
+
+    private static boolean answered(String response) {
+        assertFalse(response.contains("\"isError\":true"), response);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String publish(Producer producer) throws Exception {
+        Files.writeString(producer.worktree().resolve(producer.module()), "def run(value):\n    return value\n");
+        Map<String, Object> projection = result(producer.handler().handleMessage(toolCall("get_next_action", Map.of("completionRequested", true))));
+        Map<String, Object> workflow = (Map<String, Object>) projection.get("workflow");
+        assertEquals("finish_lane", workflow.get("recommendedTool"), projection.toString());
+        Map<String, Object> published = result(producer.handler().handleMessage(toolCall("finish_lane", (Map<String, Object>) workflow.get("arguments"))));
+        assertEquals("REVIEW_PENDING", published.get("snapshotState"), published.toString());
+        return String.valueOf(published.get("snapshotId"));
+    }
+
+    private static Producer producer(Path project, String connection, String module) throws Exception {
+        AgentSessionService sessions = new AgentSessionService();
+        sessions.ensureSession(new SessionResolutionRequest(project, "codex", connection, null, false));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var binding = bindings.find(location, "codex", connection).orElseThrow();
+        Path worktree = Path.of(binding.worktreePath());
+        bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
+        var claim = new WorkspaceCollaborationService().announce(project, "codex", connection, "Write " + module, "Reviewed by a non-author", List.of(ResourceSelector.pathExact(module)));
+        assertTrue(claim.acquired(), module);
+        return new Producer(new McpProtocolHandler(sessions, project, "codex", connection), claim.intent().intentId().toString(), WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, module);
+    }
+
+    private static Path mandatoryReviewProject(Path project) throws Exception {
+        Files.createDirectories(project);
+        git(project, "init");
+        git(project, "config", "user.name", "Mutual Review Test");
+        git(project, "config", "user.email", "mutual-review@example.test");
+        Files.writeString(project.resolve("README.md"), "# Four modules, each reviewed by a non-author\n");
+        git(project, "add", ".");
+        git(project, "commit", "-m", "baseline");
+        ProjectLocation location = new ProjectApplicationService().init(project).location();
+        Files.writeString(location.metadataFile(), "{\"schemaVersion\":2,\"projectId\":\"" + location.projectId() + "\",\"createdAt\":\"" + location.createdAt() + "\",\"review\":{\"mandatory\":true}}");
+        git(project, "commit", "-am", "require review");
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        return project;
+    }
+
+    private static PredictionEventStore store(Path project) throws Exception {
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        return new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> result(String response) {
+        Map<String, Object> outer = (Map<String, Object>) ProviderJson.parse(response);
+        Map<String, Object> rpcResult = (Map<String, Object>) outer.get("result");
+        List<Map<String, Object>> content = (List<Map<String, Object>>) rpcResult.get("content");
+        Map<String, Object> envelope = (Map<String, Object>) ProviderJson.parse((String) content.getFirst().get("text"));
+        Map<String, Object> result = new LinkedHashMap<>((Map<String, Object>) envelope.get("result"));
+        result.put("nextAction", envelope.get("nextAction"));
+        return result;
+    }
+
+    private static String toolCall(String name, Map<String, Object> arguments) {
+        return ProviderJson.write(Map.of("jsonrpc", "2.0", "id", 1, "method", "tools/call", "params", Map.of("name", name, "arguments", arguments)));
+    }
+
+    private static void git(Path root, String... arguments) throws Exception {
+        String[] command = new String[arguments.length + 3];
+        command[0] = "git";
+        command[1] = "-C";
+        command[2] = root.toString();
+        System.arraycopy(arguments, 0, command, 3, arguments.length);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException(output);
+        }
+    }
+
+    private record Producer(McpProtocolHandler handler, String intentId, String participant, Path worktree, String module) {
+
+    }
+}

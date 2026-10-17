@@ -50,8 +50,9 @@ final class ReviewLaneProjection {
     }
 
     /**
-     * Resolves the review-related actions of a lane, strongest first: pending review requests,
-     * review actions, reviewer wait, correction revision, then review coordination and grant waits.
+     * Resolves the review-related actions of a lane, strongest first: review admissions asked of
+     * it, its own pending review requests, review actions, reviewer wait, correction revision, then
+     * review coordination and grant waits.
      *
      * @param snapshotService inspects the assigned worktree for the revision and grant stages
      * @param store         current project projection
@@ -64,7 +65,14 @@ final class ReviewLaneProjection {
      */
     static AgentResponse reviewLaneAction(TaskSnapshotService snapshotService, PredictionEventStore store, Map<String, Object> collaboration, LaneScope lane, boolean reviewOnly, boolean finishAsked) {
         String participant = lane.participantId();
-        AgentResponse response = AgentReviewActionProjection.pendingReviewRequestResponse(collaboration, store, participant);
+        // A review admission asked of this lane comes before anything the lane waits for itself.
+        // A producer that reviews while its own snapshot waits is also a requester, and producers
+        // that each wait for their own request to be answered never answer one another's.
+        AgentResponse response = pendingCoordinationResponse(collaboration, true);
+        if (response != null) {
+            return response;
+        }
+        response = AgentReviewActionProjection.pendingReviewRequestResponse(collaboration, store, participant);
         if (response != null) {
             return response;
         }
@@ -259,7 +267,8 @@ final class ReviewLaneProjection {
     }
 
     /**
-     * Projects the wait state for an implementer whose exact snapshot awaits review.
+     * Projects the wait state for an implementer whose exact snapshot awaits review, or, while a
+     * snapshot of another lane is open for it to review, the offer to review that one.
      *
      * <p>A continuation preserves authority lineage, but a predecessor snapshot is not the
      * successor's executable review revision. The wait therefore stays bound to the exact current
@@ -269,7 +278,8 @@ final class ReviewLaneProjection {
      *
      * @param store         current project projection
      * @param participantId exact caller participant
-     * @return a {@code WAITING} response, or {@code null} when no snapshot awaits review
+     * @return a {@code WAITING} response, the review offer, or {@code null} when no snapshot awaits
+     *         review
      */
     private static AgentResponse reviewPendingAction(PredictionEventStore store, String participantId) {
         if (isNullOrBlank(participantId)) {
@@ -295,10 +305,46 @@ final class ReviewLaneProjection {
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
             result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
             result.put(NextActionKeys.CLAIM_EPOCH, intent.version());
+            List<Map<String, Object>> reviewable = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).stream()
+                    .filter(candidate -> intent.workGroupId().toString().equals(candidate.get(NextActionKeys.WORK_GROUP_ID))).toList();
+            if (!reviewable.isEmpty()) {
+                return reviewWhileWaitingAction(result, reviewable);
+            }
             putNextProtocol(result, NextActionProtocol.ACTION_WAIT, NextActionProtocol.KIND_REVIEW_VALIDATION, reviewPendingPayload(intent, snapshot, participantId));
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
         }
         return null;
+    }
+
+    /**
+     * Offers a producer whose snapshot awaits review the other lanes' snapshots it may review
+     * (ADR-0089, amended 2026-10-17). Told only to wait, producers with no reviewer among them
+     * each waited for a review none of them was free to give.
+     *
+     * <p>The review is taken by a request bound to the exact snapshot, and its authority is the
+     * grant the snapshot's owner issues: the producer keeps its one lane and claim epoch. As for
+     * every review candidate, one is never chosen for the caller among several.</p>
+     *
+     * @param waiting    the wait the producer would otherwise be shown
+     * @param reviewable open candidates of its work group it did not author, never empty
+     * @return a {@code REQUEST_COORDINATION} response carrying the candidates
+     */
+    private static AgentResponse reviewWhileWaitingAction(Map<String, Object> waiting, List<Map<String, Object>> reviewable) {
+        Map<String, Object> result = new LinkedHashMap<>(waiting);
+        result.put(NextActionKeys.ACTIONABLE_REVIEW_CANDIDATES, reviewable);
+        result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_REQUEST_COORDINATION);
+        String choice;
+        if (reviewable.size() == 1 && reviewable.getFirst().get("requestCoordination") instanceof Map<?, ?> request) {
+            result.put(NextActionKeys.NEXT_PROTOCOL_KIND, request.get(NextActionKeys.KIND));
+            result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, request.get(NextActionKeys.PAYLOAD));
+            choice = "ask for it with request_coordination and nextProtocolPayload";
+        } else {
+            result.put(NextActionKeys.REVIEW_CANDIDATE_SELECTION_REQUIRED, true);
+            choice = "choose one of actionableReviewCandidates and ask for it with request_coordination and that candidate's requestCoordination";
+        }
+        result.put("instruction", "Your snapshot is waiting for review by another lane. Meanwhile review a snapshot of another lane: " + choice
+                + ". Its owner admits you; then follow get_next_action to inspect it and decide. Your own lane stays yours.");
+        return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 
     /** Builds the exact wait payload for the lane and immutable snapshot awaiting review. */

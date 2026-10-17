@@ -1,3 +1,33 @@
+# 2026-10-17 — A producer waiting for review may review the others (ADR-0089 amended; defect 1 of "Two homes, bigger goal")
+
+Owner decision of 2026-10-17: an agent whose own published snapshot waits for mandatory review may review other agents'
+snapshots, never its own. In that run, four writers each held `WAIT` for their own review, were offered nothing
+else, and with no dedicated reviewer no review started. Two things kept them there. Admission refused any requester
+without a reviewer lane (`REVIEWER_INTENT_REQUIRED` in `ReviewAdmissionRules.validateReviewAdmission`), and a session
+holds one lane, so a producer could not take one. And `get_next_action` (`ReviewLaneProjection.reviewPendingAction`)
+answered the waiting producer with the wait alone.
+
+**Changed.**
+- Admission (`ReviewAdmissionRules`): a participant that published a snapshot in the work group may be admitted without
+  a reviewer lane. A participant that published a snapshot in the target's authority lineage is refused
+  `REVIEW_SELF_NOT_ALLOWED`, so a continuation of its own work is not reviewable by it either. The review is a grant to
+  the participant; it keeps its one producer lane and claim epoch.
+- `get_next_action`: a producer whose current snapshot awaits review is offered, before its wait, the open candidates
+  of its work group outside its own lineages (`nextAction: request_coordination`, `actionableReviewCandidates`; an
+  executable payload when there is one, the producer's choice when there are several).
+- A review admission asked of a lane comes before the lane's own wait for an answer to its review request, so producers
+  that ask to review one another answer one another.
+- `reviewCandidatesFor` leaves out candidates in a lineage the caller published in, by the admission's own rule
+  (`ReviewAdmissionRules.authoredInLineage`). The rule is tested at admission; the guidance for a continued lane has no
+  test of its own.
+
+**Proven at source level only** (Linux gate): `McpProducersReviewEachOtherTest` (four producers, no reviewer, every
+snapshot accepted by another producer, self-review refused, no reviewer lane announced; an admission not hidden by the
+producer's own request), and two `WorkIntentServiceTest` cases. All three failed on the previous code. No real run yet.
+
+**Open.** Two producers asking for the same candidate at once: the owner can admit one and must reject the other
+(`REVIEW_CANDIDATE_ALREADY_ASSIGNED` on accept). Defects 2 to 4 of that entry are separate tasks (defect 3 is the held-author fix just below).
+
 # 2026-10-17 — A fresh agent continues a held author before it is offered that author's snapshot for review (defect 3)
 
 **Defect** ("Two homes, one project", first attempt, defect 3; agent logs of run `run-6105f17e`). Two snapshots were
