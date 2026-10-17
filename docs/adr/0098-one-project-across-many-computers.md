@@ -23,51 +23,59 @@ The owner also said, on 2026-10-17 (USER-STATED):
 
 ## Status
 
-### For the owner to confirm
+### Decided by the designer
 
-Each item gives the recommended answer. **Item 0 is moot:** nothing is decided by a majority any more, so a connected
-group without one simply keeps working together.
+The owner's answers below leave these gaps. Each is the designer's choice, open to the owner:
 
-1. **Claims are hints.** Example: Ana's PC and Bob's laptop are connected, and Ana's agent holds `web/app.js`. Bob's
-   agent cannot claim it, as today. On the train, Bob's agent claims `web/app.js` too, because the laptop cannot see
-   Ana's claim. Both lanes stand. When the two computers meet, both agents are told, and whichever reaches `main`
-   second gets the other's change merged in. **Yes.**
-2. **Each computer merges its own lanes onto `main`.** Example: Bob's agent finishes and gets a review on the train.
-   Bob's laptop merges it, and pushes it to `main` when it is online again. Ana's PC does not merge Bob's work for
-   him. **Yes.**
-3. **When `main` moved, Synesis merges the new `main` in, as `git pull` does, and does not rewrite this computer's
-   merges.** Example: Bob merged two lanes on the train. At home `main` has moved. Synesis adds one merge commit per
-   lane on top of the new `main`, runs the tests, and pushes. A lane Bob started from his second merge still has its
-   starting point in the history. **Yes.**
-4. **A re-merge that Git does cleanly and that passes the tests is not reviewed again.** Example: Ana changed
-   `server/api.py`, Bob changed `web/app.js`, and both were reviewed. Bob's re-merge needs no new review. The cost:
-   if Ana renamed a function and Bob's new code still calls the old name somewhere the tests do not cover, that
-   mistake reaches `main` unreviewed. Only a result an agent had to combine is reviewed again. **Yes.**
-5. **Two different review verdicts on one snapshot are a dispute.** Example: before the train, Bob's laptop handed in a
-   snapshot. On the train Bob's agent accepts it; at home Ana's agent rejects it. Whichever computer hears of both
-   first, the snapshot is disputed and stays off `main`. A third agent reviews it again; if it cannot decide, an
-   operator request asks a person. **Yes.**
-6. **A computer that is away keeps its lanes.** Example: Bob's laptop holds `docs/` and Bob is away for two weeks.
-   Nobody else continues that lane. If a goal then waits only on Bob's lanes, each other computer, after one day by its
-   own clock, raises an operator request: "goal X waits only on lanes of Bob's laptop, last seen Monday; release
-   them?". Only the owner releases them. **Yes, with one day.**
-7. **Removing a computer ends its lanes and reservations.** Example: the owner removes Carol's old laptop. Its lanes and
-   reservations end at once. Anything that laptop writes later is still copied, so every copy stays complete, but it
-   counts for nothing. **Yes.**
-8. **Work that arrives for a goal already finished becomes an operator request.** Example: the goal "add a login page"
-   is done on `main`, then Bob's laptop comes back with one more lane for it. A person is asked: start a new goal for
-   it, or set it aside. **Yes.**
-9. **Reservations are optional and come late in the build order.** Example: before a trip Bob reserves `web/`; the
-   computers that have seen it do not claim inside it. A two-minute Wi-Fi drop does not end it; Bob is asked to hand it
-   in when he is back. It belongs to the laptop, not to Bob, so Bob's desktop cannot claim inside it either. **Yes.**
-10. **Without a Git host, `main` lives on the owner's computer.** Example: there is no GitHub. While Ana's PC is off,
-    Bob keeps working and merging on his laptop, and his merges reach `main` once Ana's PC is on again. **Yes.**
-11. **Moving from step 2.** Example: after updating, Ana makes a new invitation and Bob joins again. The old log stays
-    on disk as an archive, and no conversion is written (prerelease formats, ADR-0088). **Yes.**
+1. **A lock between connected computers.** A claim's answer waits until every connected computer has seen it, a few
+   seconds at most; one that does not answer in time counts as not connected. If two connected computers claim
+   overlapping paths at the same moment, the claim of the lower node ID keeps the paths, and the other agent is told
+   `OVERLAPPING_CLAIM` before it may write.
+2. **The original reviewer cannot be reached for a re-review.** Any other agent that is not the author reviews it, but
+   only once work has stalled (item 4).
+3. **Agents in a dispute do not agree.** Until one of them records a new verdict, the snapshot counts as rejected. The
+   author revises it, or, once the goal is met without it, it goes to the trash.
+4. **"Work has stalled"** means: no agent on this computer has other work, and the goal waits on a lane whose computer
+   is not connected now. No timer. A redial within Link's retained-session time (30 s) is still "connected".
+5. **Two diverged copies of `main`.** Of two connected computers whose copies have diverged, the one with the higher
+   node ID re-merges its own work on top of the other's `main` (re-merge, re-review, tests), and the other then
+   fast-forwards to the result. The lower node ID never has to merge, so the two never chase each other. A mirror
+   remote has no node ID: a refused push to it is handled the same way, by the computer that pushed.
+6. **The trash** is `refs/synesis/trash/<lane>/<epoch>` plus a log entry naming it. The UI lists it. Emptying it is a
+   person's action, and the only way work is ever deleted.
 
-Accepted on 2026-10-16 by the repository owner. Rewritten on 2026-10-17 against the premise, as a design: no code
-exists for steps 3 to 8 below. ADR-0100 is folded into this model; it now describes how work from separate copies meets
-on `main`. ADR-0099 (agents are woken) is unchanged in substance.
+### The owner's answers (USER-STATED, 2026-10-17 evening)
+
+"A collaborative framework, not Stalin administration." Agents "act as engineers having a discussion", and do not
+"behave like juniors always asking for babysitting". So no path here needs an administrator.
+
+0. **A connected group without a majority:** moot; nothing is voted on.
+1. **Claims stay locks wherever they can be checked:** on one computer (which keeps different harnesses, such as Claude
+   and Codex, from colliding) and between connected computers. While computers are apart a lock cannot be checked, so
+   both may edit, and an agent merges the two when they meet (a combine lane).
+2. **Agents work in their own worktrees and branches** and merge into the project's default branch (`main`, `master`
+   or whatever it is). This ADR calls it `main`.
+3. **When `main` moved,** pull and re-merge, as `git pull` does.
+4. **A re-merge is reviewed again, by the same reviewer** that reviewed the original work.
+5. **Two different verdicts:** no third agent. The agents involved settle it themselves through messages (ADR-0093),
+   like engineers discussing. The dispute and how it ended are recorded and shown in the UI. An agent also writes it to
+   a file of its own only if the user tells it to.
+6. **Work that arrives for a goal already met goes to the trash,** recoverable until a person empties it.
+7. **An away computer's work is taken over only when work stalls:** no other work is left and something waits on it.
+   When that computer's agent reconnects, it is told: stop, release your locks and anything you hold, close your lane.
+   Its unfinished version goes to the trash, recoverable.
+8. **Removing a computer ends its open work.**
+9. **Projects shared with a step-2 build are invited again once** after the update.
+10. **No reservations at all:** "you cannot reserve files because you might go offline; if you never come back we need
+    administrative action to take over."
+11. **Every computer keeps a full copy of `main`.**
+12. **A Git host is never mandatory.** The project works peer to peer over Link with no remote. A remote, if there is
+    one (GitHub, GitLab, Gitea, a bare repository over SSH, any Git remote), may co-exist as an extra place to exchange
+    code and as a mirror, but nothing may depend on it.
+
+Accepted on 2026-10-16 by the repository owner. Rewritten on 2026-10-17 against the premise, as a design, and settled
+by the owner's answers that evening: no code exists for steps 3 to 7 below. ADR-0100 is folded into this model; it
+now describes how work from separate copies meets on `main`. ADR-0099 (agents are woken) is unchanged in substance.
 
 Built so far (`docs/agent/CURRENT.md`, 2026-10-15 to 2026-10-17):
 
@@ -107,7 +115,9 @@ ASSUMED or REQUIRES-MEASUREMENT.
 - Without the leader, a member's agents cannot claim, hand in or merge: an append fails with `LEADER_UNREACHABLE` or
   `LEADER_OUTCOME_UNKNOWN` (VERIFIED: `PredictionEventStore.java:402-406`).
 - Two friends connected to each other while the owner's computer is off do not coordinate at all.
-- The designs for steps 3 to 6 fixed this with voting, elections and leader leases. The premise rules those out.
+- Code moves only through a Git remote, which a shared project must have (VERIFIED: `CodeRemote.java:57-69`).
+- The earlier designs for steps 3 to 6 fixed this with voting, elections and leader leases. The premise rules those
+  out.
 
 ### What the real runs taught
 
@@ -129,7 +139,8 @@ Kept as stated unless marked.
 4. **Scale**, hundreds of members. *Deferred:* the premise is a handful of people. Scale is later, if ever.
 5. **A member lost in the middle of a lane.** *Narrowed:* a computer's own agent that died is handled by that computer,
    as today. A computer that is away keeps its lanes (item 6).
-6. **Code** travels through a Git remote, or over Link when none is configured.
+6. **Code** travels through a Git remote, or over Link when none is configured. *Superseded on 2026-10-17 evening:*
+   code always travels over Link; a remote is an optional mirror that nothing depends on (answer 12).
 7. **Merging by declared parts**, each with its own queue. *Deferred:* `main` orders merges by itself. Parts are a
    scale feature.
 8. **Signals** are log entries, not chat messages. A message decides nothing (ADR-0093).
@@ -187,9 +198,9 @@ one mechanism, not an online mode and an offline mode. (DERIVED from the premise
 | a clone | a computer's copy of the project: its checkout and its coordination log |
 | a commit | a log entry, signed by the computer that wrote it and chained to its previous entry |
 | fetch | pulling the other computers' logs |
-| `main` on the remote | `main` on the Git remote, or on the owner's computer when there is none |
-| push, refused unless it fast-forwards | merging onto `main` |
-| pull, merge, push again | re-merging when `main` moved |
+| `main` | the default branch, a full copy on every computer; a Git remote, if any, is one more mirror |
+| fetch and fast-forward | a computer moving its `main` to a newer copy it got over Link |
+| pull, merge, then share | re-merging when two copies of `main` diverged |
 | a merge conflict | a combine lane for an agent |
 
 ```text
@@ -197,7 +208,7 @@ one mechanism, not an online mode and an offline mode. (DERIVED from the premise
                          \        \  /
  VM (friend)  own log ──●──●──●──●──●──●──▶       (the VM keeps writing while cut off)
 
- main (Git remote)  ──M1──────M2──M3──▶            only fast-forwards; each Mi reviewed and tested
+ main (every copy)  ──M1──────M2──M3──▶            moves only forward; each Mi reviewed and tested
 ```
 
 ### The rules that stay hard
@@ -207,17 +218,19 @@ Only rules that prevent harm that cannot be undone:
 1. **No work is silently lost.** No entry is ever removed or replaced. No snapshot commit becomes unreachable. A
    combine keeps both versions until an agent has made one change from them.
 2. **Every entry is signed and attributable.** A computer writes only its own log, and acts only for participants it
-   introduced. No computer acts for another's agents, the owner's computer included (from step 4; until then the
+   introduced. No computer acts for another's agents, the owner's computer included (from step 5; until then the
    owner's computer merges every lane and keeps today's exemption).
 3. **No self-approval** where review is required (`REVIEW_SELF_NOT_ALLOWED`: `ReviewAdmissionRules.java:103`,
    `AppendAdmission.java:168`, `:351`).
 4. **History is tamper-evident.** Each log is a hash chain signed by its writer, and every computer holds a copy of
    every log, so an edited or dropped entry shows as a mismatch against the other copies.
-5. **`main` only fast-forwards,** and only with work that was reviewed where review is required and that passed the
-   project's validation command.
+5. **`main` only fast-forwards,** and only with work that was reviewed where review is required, re-merges included,
+   and that passed the project's validation command.
+6. **A claim is a lock wherever it can be checked:** on one computer, and between connected computers (owner's answer
+   1).
 
-Everything else is guidance that helps agents avoid each other: claims, reservations, messages, review requests. A
-computer enforces it against what it knows. Nothing waits for a computer that is away.
+Messages and review requests are how agents talk, as engineers do. Nothing waits for a computer that is away, and no
+path needs an administrator.
 
 ### Each computer writes only its own log
 
@@ -244,81 +257,126 @@ computer enforces it against what it knows. Nothing waits for a computer that is
   Today it would not: each projection's `validate` and `apply` run in one fold (`PredictionEventStore.java:139-151`),
   and the projections throw while applying, for example `OVERLAPPING_CLAIM` in `CollaborationProjection.announce`
   (`CollaborationProjection.java:555-557`). One such throw on an arriving entry would stop that log's copy for good,
-  and the copies would never agree. So in step 3 every throw an arriving entry can reach becomes one of two outcomes:
+  and the copies would never agree. So in step 4 every throw an arriving entry can reach becomes one of two outcomes:
   - **both stand**, recorded so agents are told (two overlapping claims);
   - **counts for nothing, reported loudly** (an entry acting for another computer's participant, a self-review).
 
   ADR-0100's table lists the cases. Where two computers write about one thing, the projection keeps the set of what
   was written, so the order does not matter (below).
-- **Where two entries meet on one thing** (VERIFIED order-dependent today, fixed in step 3):
+- **Where two entries meet on one thing** (VERIFIED order-dependent today, fixed in step 4):
   - **Review verdicts.** A second verdict throws `REVIEW_DECISION_ALREADY_RECORDED`
     (`TaskCompletionProjection.java:628-630`), so a computer that saw ACCEPTED first and one that saw REJECTED first
-    would end in opposite states. A snapshot's review state becomes the set of verdicts: two different verdicts are
-    `REVIEW_DISPUTED` in either order, and the merge pass skips a disputed snapshot.
+    would end in opposite states. A snapshot's review state becomes the latest verdict of each reviewer (a reviewer
+    may record a new verdict, which replaces its own earlier one). Two different verdicts are `REVIEW_DISPUTED` in
+    either order. A disputed snapshot counts as rejected, so the merge pass skips it, until one reviewer records a new
+    verdict (designer item 3).
   - **Operator requests.** A second raise for one condition throws `OPERATOR_REQUEST_ALREADY_OPEN`
     (`OperatorRequestProjection.java:95`). Two raises for the same condition count as one request; two different
-    answers are a dispute.
+    answers keep it open, and a new answer replaces its answerer's own.
   - **WorkGroup completion.** `LaneCompletionService` writes `WORK_GROUP_STATUS_CHANGED` COMPLETED
-    (`LaneCompletionService.java:245-251`), and from step 4 two computers may both write it. A second COMPLETED for the
+    (`LaneCompletionService.java:245-251`), and from step 5 two computers may both write it. A second COMPLETED for the
     same group counts as the first. Completion itself is read from Git ("Getting onto `main`").
 
-### Claims are hints
+### Claims are locks wherever they can be checked
 
-- A computer refuses a claim that overlaps an active claim it knows about (`OVERLAPPING_CLAIM`,
-  `CollaborationProjection.java:557`). Connected computers know each other's claims within seconds, so connected agents
-  avoid overlap up front, as the owner asked (ADR-0100, answer 4).
-- Overlap is possible only between claims made while their computers could not see each other. Both lanes stand. Each
-  agent's next answer says which lane on which computer overlaps it, so they can message each other (ADR-0093).
-- The overlap is settled where it matters, at `main`: the second lane to arrive is re-merged, and if Git cannot combine
-  it, an agent does, in a combine lane (ADR-0100).
+- **On one computer** a claim is a lock, as today: the append lock serializes every process, whatever harness runs it,
+  and an overlapping claim is refused `OVERLAPPING_CLAIM` (`CollaborationProjection.java:555-557`). This is what keeps
+  Claude and Codex agents on one computer from colliding (owner's answer 1).
+- **Between connected computers** a claim is a lock too. The claim is written locally, then its answer waits until
+  every connected computer has applied it, a few seconds at most. A computer that already holds an overlapping active
+  claim answers so, and the claim is refused before the agent may write. Two claims made at the same moment on two
+  connected computers: the lower node ID keeps the paths, the other is refused (designer item 1). A computer that does
+  not answer in time counts as not connected.
+- **Between computers that are apart** a lock cannot be checked. Both claims stand, and both agents are told as soon as
+  their computers meet. The overlap is settled at `main`: the second lane to arrive is re-merged, and if Git cannot
+  combine it, an agent does, in a combine lane (ADR-0100).
+- The refused or losing claim is an ordinary entry of its computer's log, so the copies stay complete.
 
 ### Getting onto `main`
 
-Each computer's merge pass integrates its own reviewed lanes into its own `main`, as the leader's pass does today:
-cherry-pick, the validation command, record. Then:
+`main` is the project's default branch, whatever its name (owner's answer 2). **Every computer keeps a full copy of
+it, and no Git host is ever needed** (owner's answers 11 and 12). Agents work in their own worktrees and branches. Each
+computer's merge pass integrates its own reviewed lanes into its own copy of `main`, as the leader's pass does today:
+cherry-pick, the validation command, record.
 
-1. **Push** `main` with no force, as `publishControlBranch` already does (`CodeRemote.java:248`). The remote refuses it
-   unless it fast-forwards. That refusal is the only ordering `main` needs. No computer decides it.
-2. **If refused:** fetch `main`, and merge it in with one merge commit per local integration, oldest first. Each merge
-   has that integration as a parent, so a lane based on it keeps its base (today's rule, `STALE_BASE`,
-   `IntegrationOrchestrationService.java:346-347`, accepts it unchanged). Run the validation command on the result,
-   then push again.
-3. **If Git cannot merge,** the path a cherry-pick conflict takes today runs: `INTEGRATION_CONFLICTED` and
+**Sharing `main` over Link, the normal path.** A computer whose `main` moved tells the computers it is connected to.
+Each fetches the new head over Link ("Code over Link") and fast-forwards its own copy if it can. Nothing is ever pushed
+into a computer: each one fetches and moves its own `main` itself.
+
+**When two copies have diverged** (each holds merges the other lacks, usually because their computers were apart):
+
+1. **Who re-merges.** Of the two, the computer with the higher node ID takes the other's `main` and re-merges its own
+   integrations on top of it, as `git pull` does. The other then fast-forwards to the result. The lower node ID never
+   has to merge, so the two never chase each other (designer item 5). With three or more copies the same rule applies
+   pair by pair, and every step only adds commits, so the copies converge. (DERIVED; checked by a property test.)
+2. **How.** One merge commit per own integration not yet in the other copy, oldest first. Each merge has that
+   integration as a parent, so a lane based on it keeps its base (today's rule, `STALE_BASE`,
+   `IntegrationOrchestrationService.java:346-347`, accepts it unchanged). Then the validation command runs on the
+   result.
+3. **Review again.** Each re-merge is reviewed again by the reviewer of the original work (owner's answer 4), who sees
+   what the re-merge changed against what it reviewed. If that reviewer cannot be reached, the re-merge waits; once
+   work has stalled, any other agent that is not the author reviews it (designer item 2). Only then does the result
+   become this computer's `main`, and the other computers fast-forward to it.
+4. **If Git cannot merge,** the path a cherry-pick conflict takes today runs: `INTEGRATION_CONFLICTED` and
    `REPAIR_REQUIRED` (`IntegrationOrchestrationService.java:920-925`). Its repair lane is the combine lane: an agent
-   other than the author combines the two versions, and the result is reviewed (ADR-0100). Merging one integration at a time keeps each
-   conflict inside one lane, which the existing one-source repair lane needs (`RepairLaneTransfer.java:53-61`).
-4. **If the validation command fails** on the merged result, today's validation-failure path runs.
-5. **A person** is needed only when an agent says it cannot combine or cannot decide (an operator request).
+   other than the author combines the two versions, and the result is reviewed (ADR-0100). Merging one integration at
+   a time keeps each conflict inside one lane, which the existing one-source repair lane needs
+   (`RepairLaneTransfer.java:53-61`).
+5. **If the validation command fails** on the merged result, today's validation-failure path runs.
+6. **Agents settle what they disagree on** by messages (ADR-0093). Synesis does not route the decision to a person.
 
-Before a lane starts, the computer updates its `main` from the shared one, as `followLeader` does today
+**A Git remote, when there is one,** is an extra place to exchange code and a mirror: GitHub, GitLab, Gitea, a bare
+repository over SSH, any Git remote. Nothing depends on it, and a project works the same with it unreachable or
+removed.
+
+- A computer fetches from it as from one more peer, and pushes its `main` there with no force, as
+  `publishControlBranch` already does (`CodeRemote.java:248`).
+- A refused push means the mirror holds a copy that diverged from this one. It is handled as any diverged copy: fetch,
+  re-merge, re-review, test, push. The remote decides nothing that Link does not also decide.
+- Snapshot refs may also go there, so a reviewer can fetch from it when the author's computer is off.
+
+Before a lane starts, the computer updates its `main` from the newest copy it can reach, as `followLeader` does today
 (`CodeRemote.java:209-228`).
 
-A lane is on `main` when its integration commit is an ancestor of `main`. Every computer can read that from Git, so no
-entry has to announce it. A goal is complete when every lane it names is on `main`.
+A lane is on `main` when its integration commit is an ancestor of `main`. Every computer reads that from its own copy,
+so no entry has to announce it. A goal is complete when every lane it names is on `main`.
 
-The rule is the same whether the push happens a second after the merge or a week later.
+The rule is the same whether two copies meet a second after the merge or a week later.
 
-**Two pushers in turn.** If the validation command takes ten minutes, two computers can keep refusing each other: each
-re-merges and tests while the other pushes. Every refusal means another computer's push succeeded, so `main` always
-moves forward, and one computer waits at most one round per other computer pushing at the same moment. With a handful
-of computers that is bounded. (DERIVED.) If it shows up in practice, a computer waits a random few seconds before
-retrying. (REQUIRES-MEASUREMENT.)
+**Two re-mergers in turn.** If the validation command and the re-review take ten minutes, a higher node ID can keep
+re-merging while new merges keep arriving. Every round still ends with a copy that holds more than before, and with a
+handful of computers the rounds are few. (DERIVED.) If it shows up in practice, a computer gathers what arrived during
+a round into the next one instead of starting over. (REQUIRES-MEASUREMENT.)
 
 ### Computers that are away
 
-- A computer that cannot be reached keeps its lanes, held, until it is back. Nobody continues them automatically. The
-  owner can release them (`synesis reserve break --lanes-of <node>`, ADR-0100).
 - No computer judges another computer's agents present or absent. A computer judges only its own agents, with its own
   clock, as `SessionLeasePolicy` does today.
-- What "away" means is only what a person sees: the time of the last entry from that computer.
-- **A goal must not wait in silence.** When a goal waits only on lanes held by computers this computer has not heard
-  from for one day by its own clock, it raises an operator request: "goal X waits only on lanes of node Y, last seen
-  T; release them?" (item 6). The owner answers by releasing them or not. No decision reads another computer's clock:
-  "last seen" is when this computer last received an entry from Y.
+- **A lane of a computer that is away is left alone while there is other work.** It is a lock that cannot be checked,
+  and the computer is probably still working on it.
+- **When work stalls, another agent takes it over** (owner's answer 7). "Stalled" means no agent on this computer has
+  other work, and a goal waits on a lane whose computer is not connected now (designer item 4). An agent then continues
+  the lane from its last snapshot that reached this computer, through today's lane continuation. The continuation is
+  the taker's own entry, so attribution holds: no computer acts for another's agents.
+- **When the away computer reconnects,** its agent is told the lane was taken over: stop, release your locks and
+  anything you hold, close your lane. It does that with its own entries. Its unfinished version goes to the trash
+  (designer item 6), so it is not lost.
+- If two computers that are apart from each other both take over the same lane, both continuations stand and meet like
+  any overlap: a combine lane at `main`.
+
+### The trash
+
+Work that must leave the way without being lost goes to the trash: late work for a goal already met (owner's answer
+6), a taken-over computer's unfinished version (answer 7), a disputed snapshot the author gave up on (designer item 3).
+
+- Its commits are kept under `refs/synesis/trash/<lane>/<epoch>`, and an entry of the computer that put it there names
+  them, with the reason.
+- The UI lists the trash. A person can bring an item back as a new lane, or empty it. Emptying is the only way work is
+  ever deleted, and only a person does it.
 
 ### Membership and keys
 
-Membership moves into the owner's log (step 5). The owner key lives on one computer, so the owner's entries form one
+Membership moves into the owner's log (step 6). The owner key lives on one computer, so the owner's entries form one
 line and never conflict.
 
 | Entry | Valid when |
@@ -335,35 +393,32 @@ line and never conflict.
 - An owner statement signs the project, the action, the subject and the membership revision, so it cannot be replayed
   later.
 - The recovery key is shown once as 24 words and stored nowhere.
-- Removal also ends the removed computer's lanes and reservations (item 7).
+- Removal also ends the removed computer's open work (owner's answer 8).
 
 ### Links
 
 - A handful of computers. Each keeps a session to every other member it can reach, dialing the other's `MEMBER_CARD`.
   Today replication runs on control-plane sessions, one per computer, to its inviter. The overlay, which links everyone
   up to three members (`OverlayTopologyPolicy.java:28`), is off in production and is not needed for this.
-- Two members that cannot dial each other still get each other's entries through any computer both reach.
+- Two members that cannot dial each other still get each other's entries and commits through any computer both reach.
 - Topology for more members is later, if ever ("Not needed under the premise").
 
-### Code
+### Code over Link (step 3; the first-class path)
 
-- **With a Git remote,** as step 2 built: a computer pushes its snapshot and prepared refs before it writes an entry
-  that names them, and a reviewer fetches before it reviews.
-- **Without one,** `main` lives on the owner's computer, and commits move over Link as thin Git bundles ("Code over
-  Link", step 8). A computer that wants `main` advanced asks the owner's computer, which fetches the commit from it,
-  checks that it fast-forwards and that its tree matches, and moves `main`. Nothing is ever pushed into a member.
+Today code moves only through a Git remote: `CodeRemote.of` refuses a shared project without `code.remote`
+(VERIFIED: `CodeRemote.java:57-69`). Step 3 makes Link the path that always works.
 
-### Code over Link (step 8, condensed from the 2026-10-17 design)
-
-- A second `CodeMover` next to `CodeRemote` (VERIFIED operations: `pushRefs` `CodeRemote.java:131`, `ensureCommit`
-  `:176`, `followLeader` `:209`, `publishControlBranch` `:238`).
-- A member serves only commits that an entry in its copy names, from `refs/synesis/` and `main`. A peer never chooses a
-  Git command.
+- A second `CodeMover` beside `CodeRemote` does the same four things over Link (VERIFIED operations: `pushRefs`
+  `CodeRemote.java:131`, `ensureCommit` `:176`, `followLeader` `:209`, `publishControlBranch` `:238`). "Push before
+  naming" becomes "hold the refs until the lane ends". "Ensure a commit" fetches it from any connected computer that
+  holds it. "Publish" only tells peers the new head.
+- A computer serves only commits that an entry in its copy of the logs names, or its `main`, from `refs/synesis/` and
+  `main`. A peer never chooses a Git command, and nothing is pushed into a computer.
 - Pieces of at most 200 MB per transfer, resumable (USER-STATED, ADR-0100 answer 8): planned at 150 MB, 256 KiB chunks
   each with a SHA-256, resumed from the first missing chunk. Prepared pieces are kept 24 h for resuming. These numbers
   are engineering starting values, not owner decisions (REQUIRES-MEASUREMENT).
-- Joining clones from the invitation's URL when it can, otherwise fetches over Link once the owner has accepted the
-  join.
+- Joining fetches the repository over Link once the owner has accepted the join. When the invitation carries a remote
+  URL, cloning from it first is a faster start, never a requirement.
 - Each piece is checked: its hash, `git bundle verify`, then a fetch with object checking into a fixed ref. The final
   commit and tree must equal the ones wanted.
 - Today Git runs with 10 s locally, 30 s against a remote and 64 KiB of output (`GitProcessRunner.java:21`, `:28`,
@@ -396,13 +451,13 @@ holds every log. A snapshot that lets old entries go is left for later (UNKNOWN 
 
 Source comments cite these numbers, so they keep them.
 
-1. One history; a member never appends on its own. *Replaced in step 3* by "a computer appends only to its own log".
+1. One history; a member never appends on its own. *Replaced in step 4* by "a computer appends only to its own log".
 2. One leader per term. *Not needed.*
 3. The voter set changes only by an entry the voters commit. *Not needed.*
 4. An even voter set holds the owner's computer. *Not needed.*
 5. Removal needs the owner's key. *Stays* ("Membership and keys").
 6. Decisions are made against the leader's committed state, and every authority rule lives in a projection. *The
-   projection half stays.* The leader half is replaced in step 3 by local judgement plus the rules for arriving entries.
+   projection half stays.* The leader half is replaced in step 4 by local judgement plus the rules for arriving entries.
 7. Time used in a decision is the decider's. *Stays as:* no decision reads another computer's clock.
 8. A merge never holds the log. *Stays.*
 9. Parts are locked in a fixed order. *Deferred* with parts.
@@ -410,25 +465,26 @@ Source comments cite these numbers, so they keep them.
 
 ### What happens to step 2
 
-Step 2 is the working baseline until step 3 ships, and most of it stays after.
+Step 2 is the working baseline until the steps below replace its parts, and most of it stays.
 
 - **Stays:** Link sessions, redial and the replay guard; the one-link join and the owner's approval; `PULL` and `NOTICE`
   with chain checks and paging; the 15 s pull; the loopback route from agents' processes to their computer's server;
-  code through a Git remote with push before naming; the merge outside the lock with its head check; the projection
-  rules of the 2026-10-16 audit; the compatibility number.
-- **Removed in step 3:** the member's proposal path (`PredictionEventStore.java:250-259`, `LeaderEndpoint.accept`).
+  the merge outside the lock with its head check; the projection rules of the 2026-10-16 audit; the compatibility
+  number. Code through a Git remote stays as the optional mirror.
+- **Changed in step 3:** a shared project no longer needs `code.remote` (`CodeRemote.java:57-69`); code moves over Link.
+- **Removed in step 4:** the member's proposal path (`PredictionEventStore.java:250-259`, `LeaderEndpoint.accept`).
   Every computer appends as the leader does today.
-- **Removed in step 4:** the member's skip of the merge pass (`IntegrationOrchestrationService.java:480-484`), and the
+- **Removed in step 5:** the member's skip of the merge pass (`IntegrationOrchestrationService.java:480-484`), and the
   leader's exemption from attribution (`ParticipantAttribution.java:60`). Leader-only types
   (`PredictionEventType.java:396`) become "written only by the computer whose lane they are about". Until then the
   owner's computer merges every lane, and its merge pass writes entries for other computers' lanes (the release after
   an integration), so it keeps both.
-- **Simplified in step 5:** `replication.properties` keeps only `role=shared` and `code.remote=`. Members come from the
-  owner's log.
-- **The owner's computer** keeps three duties: the owner key, approving joins, and holding `main` when there is no Git
-  host. It is otherwise a member like the others. It is not a coordinator.
-- **Migration** (item 11): a project shared with a step-2 build is shared again after the update, and its old log is
-  kept as an archive. A project on one computer changes nothing: its `events/` is already its own log.
+- **Simplified in step 6:** `replication.properties` keeps only `role=shared` and an optional `code.remote=`. Members
+  come from the owner's log.
+- **The owner's computer** keeps two duties: the owner key and approving joins. It is otherwise a member like the
+  others. It is not a coordinator, and it does not hold `main` for anyone.
+- **Migration** (owner's answer 9): a project shared with a step-2 build is invited again once after the update, and its
+  old log is kept as an archive. A project on one computer changes nothing: its `events/` is already its own log.
 
 ### Not needed under the premise
 
@@ -445,15 +501,22 @@ Each was designed on 2026-10-16 or 2026-10-17 and is dropped, with the reason.
 - **Working apart after 90 s, `synesis offline`, branches that return** (ADR-0100's first form): every computer works
   on its own copy all the time.
 - **Proposals in doubt** and `LEADER_OUTCOME_UNKNOWN`: appends are local.
-- **Taking over a lost computer's lane after minutes of silence:** an away computer is probably still working on it.
+- **Taking over a lane after minutes of silence:** a takeover happens only when work stalls, never on a timer.
 - **Cross-computer liveness judged by a leader:** no computer needs another's agents judged absent.
 - **A coordinator or merger for other computers' lanes:** two computers could then merge one lane. Its own computer
-  merges it when back, which the premise accepts.
+  merges it, or another agent takes the lane over when work stalls.
+- **Reservations** (owner's answer 10): "you cannot reserve files because you might go offline; if you never come back
+  we need administrative action to take over."
+- **A third agent for disputes, operator requests for disputes or away computers, the owner releasing an away
+  computer's lanes** (owner's answers 5 and 7): agents settle disputes by talking, and take over stalled work
+  themselves. No path needs an administrator.
+- **`main` held by the owner's computer, or by a Git host** (owner's answers 11 and 12): every computer keeps a full
+  copy.
 - **1,024 members, hashed rings, degree 8, snapshot version 2, signed voter messages through a third member:** a
   handful of people. Later, if a project ever needs it.
 - **Courier hole punching between members:** the answer link already makes the first connection across two homes, and
   entries flow through any computer both reach. Later, if pairs that cannot connect turn out common.
-- **Parts, their queues and per-part mergers:** `main` orders merges by itself. A scale feature, later.
+- **Parts, their queues and per-part mergers:** a scale feature, later.
 
 ## Alternatives rejected
 
@@ -462,102 +525,113 @@ Each was designed on 2026-10-16 or 2026-10-17 and is dropped, with the reason.
 - **Step 2 plus voting** (the step 3 design). Needs majorities, elections and leases, and a connected group without a
   majority still stops coordinating. The premise rules it out.
 - **One shared log with entries taken back on conflict.** Every local reader would see entries disappear.
-- **A server run by Synesis.** Out of scope (ADR-0097). A Git host already gives `main` a home.
-- **Chat messages as signals.** A model can ignore or misread a message (ADR-0093).
+- **The Git remote's refused push as the order of `main`.** The simplest ordering, but it makes the project depend on
+  the remote (owner's answer 12).
+- **A server run by Synesis.** Out of scope (ADR-0097).
+- **Chat messages as signals.** A model can ignore or misread a message (ADR-0093). Messages carry the discussion;
+  entries carry what was decided.
 
 ## Consequences
 
 - No computer ever stops for lack of a connection, and no write waits on another computer.
-- Connected agents still avoid overlap up front. Overlap between work done apart costs a re-merge, and sometimes a
+- A project needs no Git host. With one, it works the same, and losing it changes nothing.
+- Connected agents never overlap. Overlap between work done apart costs a re-merge, a re-review, and sometimes a
   combine lane.
-- `main` is the one place that must be single. With a Git host it is always reachable. Without one, merges onto `main`
-  wait for the owner's computer.
-- Nobody can block `main` by being away. Nobody can take over an away computer's lanes either, except the owner.
-- Without a central gate, a buggy build could push work onto `main` that was not reviewed. Every computer audits `main`
-  when it fetches it (a fitness function) and reports such a commit loudly. A Git host's branch protection can add
-  prevention; Synesis does not configure it.
-- Each computer stores every log.
+- Every re-merge is reviewed again, so reviewers see more work when copies diverge often.
+- Every computer's copy of `main` moves only forward. Two copies that diverged converge when their computers meet.
+- Nobody blocks `main` by being away: when work stalls, another agent takes the lane over.
+- Without a central gate, a buggy build could put work onto a copy of `main` that was not reviewed. Every computer
+  audits `main` when it fetches it (a fitness function) and reports such a commit loudly.
+- Each computer stores every log and the whole repository.
 - Agents can still get around the operator gate with `run_command` (recorded, deferred).
 - A removed member keeps its copy. Removal ends future access, not past access.
 
 ## Build order
 
 Each step is small, works on its own, and ends with a real run on this PC and `synesis-peer-vm` (scripts in
-`D:\SynesisAcceptance\`, disposable projects, Synesis used normally in them). ADR-0100's lab scenarios S1 to S5 are
-the shared runs. Compatibility goes up by one in each step that changes a format sent between computers.
+`D:\SynesisAcceptance\`, disposable projects, Synesis used normally in them). **Every done-when runs with no Git remote
+at all.** A remote is added only where a step says so, as a mirror. ADR-0100's lab scenarios S1 to S5 are the shared
+runs. Compatibility goes up by one in each step that changes a format sent between computers.
 
 **Prerequisite, not a step of this ADR: waiting is not absence.** The overnight stall (`docs/agent/CURRENT.md`,
 2026-10-17, causes 1 to 3) is fixed first, under ADR-0099. Every run below needs agents that wait for a review without
 losing their lanes.
 
 1. **The compatibility number.** DONE.
-2. **One fixed leader.** DONE 2026-10-16 (run 7). The baseline.
-3. **Each computer writes its own log.** Two computers.
+2. **One fixed leader.** DONE 2026-10-16 (run 7), with a Git remote. The baseline.
+3. **Code over Link.** Link becomes the path code always takes.
+   - **Built:** the Link code mover ("Code over Link"); `code.remote` optional; a reviewer fetches a snapshot from its
+     author's computer, the leader fetches before it merges, and members follow `main`, all over Link; joining fetches
+     the repository over Link.
+   - **Done when:** run 7 again with no Git remote: the WorkGroup completes on both computers and `main` is equal on
+     both. A 450 MB history joins over Link in three or more pieces through an interruption. Compatibility 7.
+4. **Each computer writes its own log, and claims lock between connected computers.**
    - **Built:** own `events/` plus `peers/<node>/events/`; the local applied order; notice and pull per log; the
-     proposal path removed. Every projection throw an arriving entry can reach becomes "both stand" or "counts for
-     nothing, reported" (ADR-0100's table; the sites are listed under "Unresolved"). Review verdicts kept as a set, with
-     `REVIEW_DISPUTED` in either order and disputed snapshots skipped by the merge pass; duplicate operator raises and
-     duplicate COMPLETED counted once; an answer that arrives before what it answers kept until that arrives. Merging
-     still happens on the owner's computer, reading every log, with its exemption from attribution. Members still come
-     from the role file.
-   - **Done when:** S1 with the VM's cable cut for 20 minutes mid-run, plus one overlapping claim and one review given
-     on both sides during the cut. Both sides keep claiming, publishing and reviewing, and no agent ever sees
-     `LEADER_UNREACHABLE`. Within one pull after reconnecting, both computers hold byte-identical copies of both logs,
-     and both show the overlap and the disputed review the same way. The owner's computer merges the VM's other
-     reviewed lanes, and the disputed snapshot stays off `main`. Compatibility 7.
-4. **Each computer merges its own lanes onto `main`.**
-   - **Built:** the merge pass on every computer; push with no force; on refusal fetch, one merge commit per local
-     integration, the validation command, push again; the combine lane through the repair path; "on `main`" read from
-     Git; the update from `main` before a lane starts; attribution with no exemption, and integration entries written
-     only by the lane's own computer.
-   - **Done when:** S1 again, now with both sides merging locally during the cut. After reconnecting, the second pusher
-     re-merges with no person, the tests pass, and `main` is equal on the remote, the PC and the VM. S2 (one file both
-     sides change) ends with a combine lane opened for an agent, reviewed and merged. S5 (the VM's server killed during
-     a re-merge) ends the same as S1.
-5. **Membership in the owner's log, and a third computer.**
+     proposal path removed; a claim's answer waiting for connected computers (designer item 1). Every projection throw
+     an arriving entry can reach becomes "both stand" or "counts for nothing, reported" (ADR-0100's table; the sites
+     are under "Unresolved"). Review verdicts kept per reviewer, with `REVIEW_DISPUTED` in either order and a disputed
+     snapshot counted as rejected; duplicate operator raises and duplicate COMPLETED counted once; an answer that
+     arrives before what it answers kept until that arrives. Merging still happens on the owner's computer, with its
+     exemption from attribution. Members still come from the role file.
+   - **Done when:** while connected, a claim on the VM that overlaps a PC claim is refused. Then S1 with the VM's cable
+     cut for 20 minutes, plus one overlapping claim and one review given on both sides during the cut. Both sides keep
+     claiming, publishing and reviewing, and no agent sees `LEADER_UNREACHABLE`. Within one pull after reconnecting,
+     both computers hold byte-identical copies of both logs and show the overlap and the dispute the same way. The
+     disputed snapshot stays off `main`. Compatibility 8.
+5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.**
+   - **Built:** the merge pass on every computer; sharing `main` over Link; the diverged-copy rule (designer item 5);
+     one merge commit per integration; re-review of each re-merge by the original reviewer; the combine lane through the
+     repair path; "on `main`" read from each copy; attribution with no exemption, and integration entries written only
+     by the lane's own computer; a Git remote as an optional mirror.
+   - **Done when:** S1 with both sides merging during the cut. After reconnecting, the higher node ID re-merges, the
+     original reviewers review again, the tests pass, and `main` is equal on the PC and the VM. S2 (one file both sides
+     change) ends with a combine lane, reviewed and merged. S5 (the VM's server killed during a re-merge) ends the same
+     as S1. Then S1 once more with a bare repository as a mirror, made unreachable halfway: the result is the same, and
+     the mirror catches up when it is back.
+6. **Membership in the owner's log, and a third computer.**
    - **Built:** the membership entries above, durable join requests, the owner and recovery keys, `MEMBER_CARD` and
      dialing every member, `role=shared`.
    - **Done when:** a third computer (a Podman container on this PC if the VM reaches it, otherwise a clone of the VM)
      joins by the one link and the owner accepts on the PC. Then Synesis on the PC is stopped; the PC itself stays on,
-     because the container and the Git remote may run on it. The VM and the third computer keep working together: each
-     sees the other's claims, and an overlapping claim is refused. With Synesis on the PC started again, all of it
-     reaches `main`. The owner removes the third computer: its lanes end, and an entry it writes afterwards is copied
-     and counts for nothing. Compatibility 8.
-6. **Disputes and away computers.**
-   - **Built:** settling a dispute: re-review by a third agent, then an operator request; two answers to one operator
-     request; work for a finished goal; held lanes of an away computer and the owner's release; the one-day operator
-     request for a goal that waits only on an away computer.
-   - **Done when:** S3 (a review dispute) ends with a re-review or an operator request. A lane of the VM held through a
-     cut raises the operator request (with the interval shortened for the run), is released by the owner, and is
-     continued on the PC.
-7. **Reservations** (optional).
-   - **Built:** `RESERVATION_MADE` and `RESERVATION_ENDED`, `synesis reserve`, `reserve end`, `reserve break`.
-   - **Done when:** S4: a reservation on the VM refuses the PC's claim in `web/` while both are connected, and stays
-     until handed in.
-8. **Code over Link without a Git host.**
-   - **Built:** "Code over Link" above, `main` on the owner's computer, joining over Link.
-   - **Done when:** S1 with no Git host ends with `main` equal on both computers, and a 450 MB history joins over Link
-     in three or more pieces through an interruption.
+     because the container runs on it. The VM and the third computer keep working together: each sees the other's
+     claims, an overlapping claim is refused, and their copies of `main` meet. With Synesis on the PC started again,
+     all three copies of `main` become equal. The owner removes the third computer: its open work ends, and an entry it
+     writes afterwards is copied and counts for nothing. Compatibility 9.
+7. **Disputes, taking over stalled work, and the trash.**
+   - **Built:** agents of a dispute told to settle it by messages, and a new verdict replacing a reviewer's own;
+     the dispute and its end shown in the UI; the stall test (designer item 4) and takeover through lane continuation;
+     the reconnecting agent told to stop, release and close; the trash (designer item 6) for late work and for a
+     taken-over version.
+   - **Done when:** S3 (a review dispute) ends with the two reviewers agreeing by messages, or with the snapshot counted
+     as rejected, and the UI shows either. A lane of the VM is taken over on the PC while the VM is cut off and nothing
+     else is left to do. When the VM reconnects, its agent stops, releases its locks and closes its lane, and its
+     version is listed in the trash. Late work for a met goal lands in the trash.
 
-The two-homes run with the friend's PC is repeated after step 4 as a check, not a done criterion.
+The two-homes run with the friend's PC is repeated after step 5 as a check, not a done criterion.
 
 ## Fitness functions
 
-- **Nothing taken back:** no code path deletes or renames a file in `events/`, in `peers/`, or under `refs/synesis/`.
+- **Nothing taken back:** no code path deletes or renames a file in `events/`, in `peers/`, or under `refs/synesis/`,
+  except a person emptying the trash.
 - **Every copy is the writer's:** a log copied through any computer is byte-identical to the writer's, and every entry
   in `peers/<node>/events/` is signed by that node.
 - **Arriving entries always apply:** for every entry type, applying an entry from another computer's log never throws.
 - **Order does not decide:** a property test applies the same logs in random arrival orders, each log in its own order,
   answers before requests included. Every decision is the same: which claims overlap, which reviews count, disputes,
   operator requests, WorkGroup status, membership.
+- **Connected claims lock:** no two active overlapping lanes exist whose computers were connected when the second
+  claim was made.
 - **Own participants only:** no entry in one computer's log acts for a participant another computer introduced.
-- **`main` only fast-forwards:** an architecture test that no push of `main` uses force or a `+` refspec.
-- **`main` is audited:** every integration on `main` names a snapshot with an accepted review by a non-author, where
-  review is required, and a passed validation. Checked on every fetch of `main`.
+- **`main` moves only forward:** no copy of `main` is ever moved to a commit that does not contain its old head, and no
+  push to a mirror uses force or a `+` refspec.
+- **Copies converge:** a property test over random merges, cuts and meetings ends with every copy of `main` equal.
+- **`main` is audited:** every integration and re-merge on `main` names a snapshot with an accepted review by a
+  non-author, where review is required, and a passed validation. Checked on every fetch of `main`.
+- **No remote needed:** the whole build order's tests pass with no Git remote configured.
 - **No other computer's clock:** no decision reads the clock of an entry another computer wrote, and no liveness of
   another computer's agents is judged.
-- **Short appends:** no lock is held across a Git or process call, the bundle commands of step 8 included.
-- **Nothing pushed into a member** (step 8): the Link code mover runs no `git push` and no command a peer chose.
+- **Short appends:** no lock is held across a Git or process call, the bundle commands included.
+- **Nothing pushed into a computer:** the Link code mover runs no `git push` toward a peer and no command a peer chose.
 
 ## Unresolved
 
@@ -565,14 +639,16 @@ The two-homes run with the friend's PC is repeated after step 4 as a check, not 
   sites per projection (VERIFIED by count on this branch): `CollaborationProjection` 49, `WorkGroupProjection` 15,
   `CapabilityRequestProjection` 13, `TaskCompletionProjection` 11, `ContractProjection` 10, `CoordinationProjection`
   5, `PredictionProjection` 4, `OperatorRequestProjection` 3, `ConversationProjection` 2; plus `AppendAdmission`,
-  which runs as the last stage. Step 3 classifies each as "both stand", "counts for nothing, reported", or "cannot be
+  which runs as the last stage. Step 4 classifies each as "both stand", "counts for nothing, reported", or "cannot be
   reached by an entry from another log" (malformed payloads, which the chain and signature checks already stop). Also
   open from the 2026-10-16 audit: `CLAIM_EPOCH_STALE` is thrown in `LaneClaimService` and `WorkGroupService` too, and
   whether the projections cover every case is not verified.
-- **A third computer for step 5:** whether QUIC from the VM reaches a Podman container on this PC.
+- **The diverged-copy rule with three or more copies** is reasoned, not proven. The property test of step 5 checks it.
+- **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)
-- **How often overlaps and combine lanes happen** in real runs. (REQUIRES-MEASUREMENT, steps 3 and 4.)
-- **Log growth** over months, with every computer holding every log. (UNKNOWN.)
+- **How often overlaps, re-merges and combine lanes happen** in real runs, and how much re-review they cost.
+  (REQUIRES-MEASUREMENT, steps 4 and 5.)
+- **Log and repository growth** over months, with every computer holding everything. (UNKNOWN.)
 - **Code over Link sizes:** the ratio of disk usage to bundle size, and the time to write a 200 MB bundle on a laptop.
-  (REQUIRES-MEASUREMENT, step 8.)
+  (REQUIRES-MEASUREMENT, step 3.)
