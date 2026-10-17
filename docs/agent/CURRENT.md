@@ -1,3 +1,28 @@
+# 2026-10-17 — Two homes, bigger goal: every module written, none reviewed (stopped, NOT REACHED)
+
+**Run.** Same two computers and build as the entry below, project reset (new identity `177b07d3`, repository
+force-pushed, old copies archived and removed from the registry). Goal: six independent modules plus `cli.py` that
+depends on them, mandatory review by a non-author, no fixed roles (`README.twopc-big.md`). Joining by one link and an
+answer link, accepted 03:08; two `claude:sonnet:medium` agents on each computer from about 03:10; one reviewer-only
+agent added on the owner at 03:26 and replaced at 03:38. Stopped by the owner at about 03:52: WorkGroup completion NOT
+REACHED, nothing integrated, 33 log entries, the link stayed up throughout. Proven again on real current builds:
+one-link admission, concurrent claims from both computers (owner: `slug`+`wrap`, `count`; friend: `roman`,
+`csvline`), publication on both sides, a cross-computer review request admitted by its author (`roman`).
+
+**Why it stalled.**
+
+1. Every writer published and then held a `WAIT` for its own review. A producer waiting on its review is offered no
+   other work, so with no fixed reviewer nobody was free to review (the README design, by ADR-0089 rules).
+2. Review admission needs the author to answer, and the authors were asleep: agents on both computers waited with
+   shell `sleep 240`/`sleep 1200`, or through Synesis itself with `run_command python -c "import time;
+   time.sleep(590)"` (owner `claude#2`, repeatedly), while the action said `retryAfterMs=5000`. Long sleeps also stretch
+   `maxUnchangedPolls=12` into hours. The owner's `claude#2` admitted the `count` review only after its reviewer had
+   stopped at 12 unchanged polls of about 20 s.
+3. A reviewer whose process exited left its lane `RECOVERY_HELD`; the replacement reviewer reported those snapshots
+   (`roman`, `csvline`) as no longer open for review and did not continue the held lanes (see the open task on
+   reviews whose author is gone).
+4. Agent logs are written only when the provider process exits, so neither person could see a running agent's steps.
+
 # 2026-10-17 — Two homes, one project: four agents completed a WorkGroup across two networks (remaster56)
 
 **Run.** Owner (this PC, leader) and a friend's Windows PC (member) on two home networks, build
