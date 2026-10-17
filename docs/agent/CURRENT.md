@@ -1,3 +1,38 @@
+# 2026-10-17 — A member that cannot fetch says why, at join and to every agent (defect 1 of "Two homes, one project")
+
+**Cause.** On a member, `ProviderWorktreeAllocation.withWorktree` runs `CodeRemote.followLeaderIfMember` (a `git fetch`
+with no prompt). When Git had no stored sign-in, the binding was saved `FAILED` with `lastSeenState`
+`CODE_REMOTE_UNAVAILABLE`, and Git's reason was dropped there. Readiness then answered `workspace_stale` /
+`SESSION_NOT_ACTIVE`, `ensure_session` `workspace_not_ready` / `SESSION_NOT_ACTIVE`, both retryable, and
+`provider install` only `WORKTREE_BINDING_STATUS=FAILED`. Nothing at join time asked the remote.
+
+**Change (uncommitted).**
+- `CodeRemote.Refused.detail()`: Git's first `fatal:`/`error:` line (it was the last line, which for a missing
+  repository is generic advice), with `user:password@` removed from any URL, then "Run `git fetch <remote>` once in a
+  terminal in this project's folder and sign in if Git asks ...; then try again." `CodeRemote.check(root, remote)` runs
+  `git ls-remote <remote> HEAD` through the same runner (refuses a name starting with `-`).
+- `Binding.lastSeenDetail` (new last record component; the old 24-argument constructor stays). Set only with the
+  `lastSeenState` of a code-remote refusal and cleared whenever that state changes. Persisted as `lastSeenDetail` only
+  when set, so other bindings are written as before; same schema version.
+- `WorkspaceReadinessService`: a binding with no worktree and a detail answers `blocked`, `workspace_not_ready`,
+  `request_human_help`, result `{diagnostic: <lastSeenState>, detail}`. `ensure_session` returns that same answer
+  (`AgentSessionFailure` keeps a `blocked` readiness answer whole). The next ensure still retries the fetch, so the
+  agent starts once the person has signed in.
+- `provider install`/`status`: `WORKTREE_BINDING_DIAGNOSTIC` (when there is no worktree) and `WORKTREE_BINDING_DETAIL`.
+- Join: warning, never refusal (the invitation is single use and the fix comes after). `open-project-link` adds
+  `codeRemoteCheck` (`REACHABLE` or the code) and `codeRemoteDetail`; the check runs in the runtime that answers the UI,
+  after the join, so it cannot time out the folder runtime's request. `synesis link join` prints `CODE_REMOTE_CHECK` and
+  `CODE_REMOTE_DETAIL` itself (its request timeout is 15 s, the Git remote timeout 30 s). The UI join panel shows the
+  detail as an alert under the connecting message. Docs: control-plane-v1 (`open-project-link`), TWO_MACHINE_TESTING.
+
+**Changed on purpose.** The answer for this case was retryable (`retry_required`/`ensure_session`) and is now `blocked`/
+`request_human_help`; readiness's reason for it moves from `workspace_stale` to `workspace_not_ready`. No new
+`AgentReason` value, because `AgentReason.fromValue` throws on an unknown value and replayed command answers are parsed
+with it. Every Git refusal message from `CodeRemote` now ends with the `git fetch` sentence.
+
+**Not done.** Synesis's Git runs with `GIT_CONFIG_NOGLOBAL=1`, so a credential helper set only in `~/.gitconfig`
+(`gh auth setup-git`) is not used, and `git fetch` in a terminal can succeed while Synesis still fails; the detail does
+not say this (the friend guide does). Not run on two real computers.
 # 2026-10-17 — A run keeps waiting while another computer of the project is connected (defect 2 of "Two homes")
 
 **Why no resume.** The first two-home run's agent logs (`agent-runs/4ff01567-.../run-8b50f524-...`) show both owner
