@@ -239,12 +239,18 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     /**
      * Whether a peer that this computer's role file names (the leader's members, a member's
      * leader) is connected according to the replication journal. A journal line about a node
-     * that is no longer a peer of the project counts for nothing.
+     * that is no longer a peer of the project counts for nothing. An unreadable role file or
+     * journal reads as not connected: this only decides whether a run keeps waiting, and must not
+     * end the run.
      */
-    private static boolean otherComputerConnected(java.nio.file.Path coordination) throws IOException {
-        java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId()) : settings.members())
-                .orElse(java.util.Set.of());
-        return ReplicationJournal.connectedPeers(coordination).stream().anyMatch(peers::contains);
+    private static boolean otherComputerConnected(java.nio.file.Path coordination) {
+        try {
+            java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId()) : settings.members())
+                    .orElse(java.util.Set.of());
+            return ReplicationJournal.connectedPeers(coordination).stream().anyMatch(peers::contains);
+        } catch (IOException unreadable) {
+            return false;
+        }
     }
 
     /**

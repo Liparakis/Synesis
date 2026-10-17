@@ -797,7 +797,8 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
                 unbind(session);
                 publish(OnboardingEventType.SESSION_CLOSED, "");
             }
-            recordEnd(session, current);
+            // close() empties the map before closing its sessions; those ended, nothing replaced them.
+            recordEnd(session, current || closed.get());
         });
         publishTopology();
         sessionListener.accept(session);

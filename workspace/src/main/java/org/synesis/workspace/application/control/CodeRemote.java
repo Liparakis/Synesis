@@ -262,22 +262,26 @@ public final class CodeRemote {
         try {
             GitProcessRunner.runRemote(repository, command.toArray(String[]::new));
         } catch (IOException failure) {
-            // Agents cannot answer a sign-in prompt, so the person is told how to give Git the credential once.
-            throw new Refused(UNAVAILABLE, reason(failure) + ". Run `git fetch " + name + "` once in a terminal in this project's folder "
-                    + "and sign in if Git asks, so that it can fetch without asking; then try again.");
+            // Agents cannot answer a sign-in prompt, so the person is told how to give Git the credential once. A
+            // refused push is as likely a rejected ref as a missing sign-in, so it is only pointed at the remote.
+            String next = "push".equals(command.getFirst())
+                    ? ". Check in a terminal in this project's folder that `git push --dry-run " + name + "` works; then try again."
+                    : ". Run `git fetch " + name + "` once in a terminal in this project's folder and sign in if Git asks, so that it can fetch without asking; then try again.";
+            throw new Refused(UNAVAILABLE, reason(failure) + next);
         }
     }
 
     /**
      * Git's own explanation: its first {@code fatal:} or {@code error:} line, which says what refused (the lines after
-     * it are generic advice), else its last line. Credentials in a URL are removed, because the reason is shown to
-     * agents and stored in the session binding.
+     * it are generic advice), else its last line of its own. Lines the remote server wrote ({@code remote:}) are not
+     * Git's and are left out. Credentials in a URL are removed, because the reason is shown to agents and stored in
+     * the session binding.
      */
     private static String reason(Exception failure) {
         String message = String.valueOf(failure.getMessage());
         int output = message.indexOf("output=");
         String text = (output >= 0 ? message.substring(output + "output=".length()) : message).strip();
-        List<String> lines = text.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
+        List<String> lines = text.lines().map(String::strip).filter(line -> !line.isEmpty() && !line.startsWith("remote:")).toList();
         text = lines.stream().filter(line -> line.startsWith("fatal:") || line.startsWith("error:")).findFirst()
                 .orElse(lines.isEmpty() ? text : lines.getLast());
         text = URL_CREDENTIALS.matcher(text).replaceAll("$1");

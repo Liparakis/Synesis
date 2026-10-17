@@ -103,6 +103,24 @@ class LinkRuntimeOwnerRedialTest {
     }
 
     @Test
+    void closingTheOwnerRecordsItsSessionsAsEndedNotReplaced() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity dialerNode = identity(temp.resolve("dialer"));
+        try (LinkRuntimeOwner dialer = owner("dialer", dialerNode, node -> false, dialerJournal)) {
+            LinkRuntimeOwner host = owner("host", hostNode, node -> node.equals(dialerNode.nodeId()), hostJournal);
+            ControlPlaneLinkOperations.PendingHost invitation = host.createInvitation(null, false);
+            dialer.importInvitation(invitation.invitationLink()).connect();
+            await(() -> sessionWith(host, dialerNode) != null && sessionWith(dialer, hostNode) != null);
+
+            host.close();
+
+            // A reader of the journal skips replaced lines, so a clean stop written as one left the peer connected.
+            await(() -> hostJournal.stream().anyMatch(line -> line.startsWith("DISCONNECT peer=" + dialerNode.nodeId())));
+            assertTrue(hostJournal.stream().filter(line -> line.startsWith("DISCONNECT")).noneMatch(line -> line.endsWith("replaced=true")), hostJournal.toString());
+        }
+    }
+
+    @Test
     void aDialerTheRuleNoLongerNamesIsNotDialedAndTheHostDoesNotAdmitAnUnnamedNode() throws Exception {
         NodeIdentity hostNode = identity(temp.resolve("host"));
         NodeIdentity dialerNode = identity(temp.resolve("dialer"));

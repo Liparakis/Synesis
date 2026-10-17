@@ -47,6 +47,20 @@ final class CodeRemoteCheckTest {
     }
 
     @Test
+    void aRefusedPushIsNotToldToSignInForAFetch() throws Exception {
+        TestGit.run(clone, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
+        Path coordination = temp.resolve("coordination");
+        java.nio.file.Files.createDirectories(coordination);
+        org.synesis.coordination.persistence.ReplicationSettings.leader(java.util.Set.of()).withCodeRemote("origin").write(coordination);
+        CodeRemote remote = CodeRemote.of(coordination).orElseThrow();
+
+        CodeRemote.Refused refused = assertThrows(CodeRemote.Refused.class, () -> remote.pushRefs(clone, "refs/synesis/probe"));
+
+        assertTrue(refused.detail().contains("git push --dry-run origin"), refused.detail());
+        assertFalse(refused.detail().contains("git fetch"), refused.detail());
+    }
+
+    @Test
     void credentialsInTheRemoteUrlNeverReachTheDetail() throws Exception {
         TestGit.run(clone, "remote", "set-url", "origin", "https://alice:s3cret@127.0.0.1:1/org/project.git");
 

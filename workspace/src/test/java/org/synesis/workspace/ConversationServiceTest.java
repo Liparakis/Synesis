@@ -476,6 +476,9 @@ class ConversationServiceTest {
 
         ReplicationSettings.member("sl1-stranger").write(location.coordinationDirectory());
         assertTrue(observer.observe().otherComputerConnected(), "a member sees its leader");
+
+        java.nio.file.Files.writeString(location.coordinationDirectory().resolve("replication.properties"), "role=neither\n");
+        assertFalse(observer.observe().otherComputerConnected(), "an unreadable role file only stops the waiting; it does not end the run");
     }
 
     @Test
