@@ -1,3 +1,34 @@
+# 2026-10-17 — Review findings on "a producer waiting for review may review the others" fixed
+
+An independent review of the entry below found three defects, all coming from review authority no longer needing a
+reviewer lane. ADR-0089's amendment is updated with them.
+
+**Changed.**
+- Self-approval by continuation, fixed fail closed: a lane held for recovery is not continued by a participant holding an
+  undecided review grant on it (`REVIEW_SELF_NOT_ALLOWED`, `AppendAdmission.requireLawfulContinuation`). Role isolation
+  had refused only a successor holding a reviewer lane, so a producer reviewing a lane through a grant could continue it
+  and accept its snapshot as its owner.
+- Stranded reviews: a continuation now carries the source owner's review grants and its own review requests to the
+  successor whatever the lane's role (`WorkGroupProjection.migrateReviewGrants`, `CoordinationRequests.retargetReviewRequest`),
+  and the successor is shown the carried grant (`AgentReviewActionProjection.hasExplicitReviewGrant`). Admission without
+  a reviewer lane now also needs a lane of the requester in the group, so every such reviewer has a lane to be continued
+  from. A session holding an open grant or request cannot be terminalized (`terminalBlockers`), so no terminal-participant
+  rule was added.
+- An owner asked twice for one snapshot: the admission offered to the owner is checked by the acceptance rules first, and
+  an accept that would be refused is offered as `REJECTED` with the refusal (`AgentReviewActionProjection.reviewAcceptanceAction`).
+  The owner is no longer shown the same refused accept, and the second requester gets its answer.
+- One rule, `ReviewAdmissionRules.holdsReview`, now says whether a grant already holds a snapshot's review, for admission
+  and for the candidates agents are shown.
+
+**Proven at source level only** (Linux gate): `AppendAdmissionTest.aSuccessorCannotTakeOverALaneItHoldsAnUndecidedReviewGrantOn`,
+`WorkIntentServiceTest.theReviewAProducerHeldMovesToTheParticipantThatContinuesItsLane` and
+`anAuthorWhoseLaneHasEndedIsNotAdmittedToReview`, `McpProducersReviewEachOtherTest.anOwnerAskedTwiceForOneSnapshotAdmitsOneAndIsToldToRejectTheOther`.
+All four failed on the previous code. No real run yet.
+
+**Open.** A producer whose own snapshot integrates while it holds a review grant keeps the grant with no lane; if its
+agent then dies, nothing continues that review (the separate task on reviews whose agent is gone). A participant that
+handed a lineage's lane off before publishing in it is not excluded from reviewing it.
+
 # 2026-10-17 — Agents are woken, they do not wait (ADR-0099, "Two homes, bigger goal" defect 2)
 
 **Defect.** Told WAIT, agents slept: 16 `run_command` sleeps of 20 to 900 s in run `run-fb2eab33` (`python -c

@@ -302,6 +302,23 @@ final class AppendAdmissionTest {
     }
 
     @Test
+    void aSuccessorCannotTakeOverALaneItHoldsAnUndecidedReviewGrantOn(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        Held held = heldLane(temp, project, group);
+        // A producer may review without a reviewer lane, so the grant is all that marks it a reviewer.
+        LaneGrant review = new LaneGrant(UUID.randomUUID(), group, held.owner().intentId(), held.target().participant(), 1, true);
+        new WorkGroupService(new PredictionEventStore(temp, project), identity).issue(review);
+
+        assertEquals("REVIEW_SELF_NOT_ALLOWED",
+                refusal(temp, project, held.target().intentId(), PredictionEventType.LANE_CONTINUATION_ACCEPTED,
+                        continuation(held, held.reference())));
+        assertThrows(IOException.class, () -> service(temp, project).continueEligibleFromRecovery(new LaneContinuation(UUID.randomUUID(),
+                held.owner().intentId(), held.target(), held.owner().participant(), held.target().participant(),
+                held.owner().version(), held.reference())));
+    }
+
+    @Test
     void aGrantWhoseLaneHasASuccessorCannotBeConsumed(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         UUID group = UUID.randomUUID();

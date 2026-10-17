@@ -68,7 +68,7 @@ final class ReviewLaneProjection {
         // A review admission asked of this lane comes before anything the lane waits for itself.
         // A producer that reviews while its own snapshot waits is also a requester, and producers
         // that each wait for their own request to be answered never answer one another's.
-        AgentResponse response = pendingCoordinationResponse(collaboration, true);
+        AgentResponse response = pendingCoordinationResponse(store, collaboration, true);
         if (response != null) {
             return response;
         }
@@ -106,7 +106,7 @@ final class ReviewLaneProjection {
         if (reviewResponse != null) {
             return reviewResponse;
         }
-        AgentResponse coordinationResponse = pendingCoordinationResponse(collaboration, reviewOnly);
+        AgentResponse coordinationResponse = pendingCoordinationResponse(store, collaboration, reviewOnly);
         if (coordinationResponse != null) {
             return coordinationResponse;
         }
@@ -485,16 +485,17 @@ final class ReviewLaneProjection {
     /**
      * Builds the response for pending coordination, optionally limited to review requests.
      *
+     * @param store         current project projection, to check a review admission before offering it
      * @param collaboration public collaboration projection containing {@code pendingCoordination}
      * @param reviewOnly    {@code true} to answer only review-acceptance requests
      * @return a {@code RESPOND_COORDINATION} response, or {@code null} when nothing qualifies
      */
-    private static AgentResponse pendingCoordinationResponse(Map<String, Object> collaboration, boolean reviewOnly) {
+    private static AgentResponse pendingCoordinationResponse(PredictionEventStore store, Map<String, Object> collaboration, boolean reviewOnly) {
         List<Map<String, Object>> pending = projectedList(collaboration, NextActionKeys.PENDING_COORDINATION);
         if (pending.isEmpty()) {
             return null;
         }
-        Map<String, Object> reviewAcceptance = AgentReviewActionProjection.reviewAcceptanceAction(pending);
+        Map<String, Object> reviewAcceptance = AgentReviewActionProjection.reviewAcceptanceAction(store, pending);
         if (reviewOnly && reviewAcceptance == null) {
             return null;
         }

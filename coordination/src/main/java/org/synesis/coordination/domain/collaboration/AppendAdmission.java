@@ -148,6 +148,25 @@ public final class AppendAdmission {
             throw new CoordinationException("LANE_GRANT_TARGET_MISMATCH");
         }
         requireRoleIsolation(collaboration, source, continuation);
+        requireNoOpenReviewOf(view.workGroupProjection(), source, continuation);
+    }
+
+    /**
+     * Refuses a successor that holds an undecided review grant on the source lane. Since a producer
+     * may review without a reviewer lane (ADR-0089, amended 2026-10-17), role isolation alone let
+     * such a reviewer take over the lane it was reviewing and then accept that lane's snapshot:
+     * the owner deciding on its own lane.
+     */
+    private static void requireNoOpenReviewOf(WorkGroupProjection workGroups, WorkIntent source,
+            LaneContinuation continuation) throws IOException {
+        boolean reviewing = workGroups.grants().stream()
+                .filter(grant -> grant.targetIntent().equals(source.identity()))
+                .filter(grant -> grant.targetParticipantIdentity().equals(continuation.targetOwner()))
+                .filter(grant -> !workGroups.continuationGrant(grant.identity()) && !workGroups.grantSuperseded(grant.identity()))
+                .anyMatch(grant -> workGroups.reviewValidationForGrant(grant.identity()).isEmpty());
+        if (reviewing) {
+            throw new CoordinationException("REVIEW_SELF_NOT_ALLOWED");
+        }
     }
 
     private static void announced(WorkIntent intent, ProjectionView view) throws IOException {

@@ -96,7 +96,7 @@ final class CoordinationRequests {
             WorkIntent target,
             LaneContinuation continuation,
             CoordinationRequest request) {
-        if (source.role() == WorkIntent.Role.PRODUCER && request.status() == CoordinationRequest.Status.PENDING
+        if (request.status() == CoordinationRequest.Status.PENDING
                 && request.kind() == CoordinationRequest.Kind.REVIEW && request.targetIdentity()
                 .equals(continuation.sourceOwner()) && request.conflictingIntent().equals(source.identity())) {
             return new CoordinationRequest(request.requestId(),
@@ -109,7 +109,8 @@ final class CoordinationRequests {
                     request.status(),
                     request.snapshotId());
         }
-        if (source.role() == WorkIntent.Role.REVIEWER && (request.status() == CoordinationRequest.Status.PENDING
+        // Not only a reviewer lane asks for reviews: a producer may too (ADR-0089, amended 2026-10-17).
+        if ((request.status() == CoordinationRequest.Status.PENDING
                 || request.status() == CoordinationRequest.Status.ACCEPTED)
                 && request.kind() == CoordinationRequest.Kind.REVIEW && request.requesterIdentity()
                 .equals(continuation.sourceOwner())) {

@@ -376,7 +376,17 @@ static Map<String, Object> enrichPendingRequest(Map<String, Object> request, Pre
         return enriched;
     }
 
-static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pendingCoordination) {
+/**
+     * Builds the owner's answer to the first review admission asked of it: accept, or reject with
+     * the refusal that accepting would meet. Several producers may ask for the same snapshot; only
+     * one can be admitted, and an owner shown an accept that is refused every time was shown it
+     * again ahead of its own work, while the requester waited for an answer that never came.
+     *
+     * @param store               current project projection
+     * @param pendingCoordination pending requests addressed to the owner
+     * @return the response action, or {@code null} when no review admission is pending
+     */
+    static Map<String, Object> reviewAcceptanceAction(PredictionEventStore store, List<Map<String, Object>> pendingCoordination) {
         for (Map<String, Object> request : pendingCoordination) {
             if (!"REVIEW".equals(request.get(NextActionKeys.KIND))) {
                 continue;
@@ -388,10 +398,11 @@ static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pend
             if (!(requestId instanceof String) || !(intentId instanceof String) || !(workGroupId instanceof String) || !(claimEpoch instanceof Number)) {
                 continue;
             }
+            String refusal = admissionRefusal(store, (String) requestId);
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("coordinationRequest", requestId);
-            payload.put("coordinationStatus", CoordinationRequest.Status.ACCEPTED.name());
-            payload.put("proposal", "admitted");
+            payload.put("coordinationStatus", (refusal == null ? CoordinationRequest.Status.ACCEPTED : CoordinationRequest.Status.REJECTED).name());
+            payload.put("proposal", refusal == null ? "admitted" : "not admitted: " + refusal);
             Map<String, Object> context = new LinkedHashMap<>();
             context.put(NextActionKeys.REQUEST_ID, requestId);
             context.put(NextActionKeys.KIND, request.get(NextActionKeys.KIND));
@@ -403,6 +414,23 @@ static Map<String, Object> reviewAcceptanceAction(List<Map<String, Object>> pend
             return Map.of(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_RESPOND_COORDINATION, NextActionKeys.NEXT_PROTOCOL_KIND, NextActionProtocol.KIND_COORDINATION_RESPONSE, NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload, "nextProtocolContext", context);
         }
         return null;
+    }
+
+    /**
+     * Returns the refusal that accepting the review request would meet, by the rules the
+     * acceptance itself is checked against, or {@code null} when it would be admitted.
+     */
+    private static String admissionRefusal(PredictionEventStore store, String requestId) {
+        CoordinationRequest request = store.collaborationProjection().requests().stream().filter(candidate -> candidate.requestId().toString().equals(requestId)).findFirst().orElse(null);
+        if (request == null) {
+            return null;
+        }
+        try {
+            ReviewAdmissionRules.validateReviewApproval(store, request, CoordinationRequest.Status.ACCEPTED);
+            return null;
+        } catch (java.io.IOException refused) {
+            return refused.getMessage();
+        }
     }
 
 static List<Map<String, Object>> reviewActions(PredictionEventStore store, String participantId, Set<UUID> reviewGroupFilter) {
@@ -555,9 +583,9 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
                     WorkIntent producer = reviewProducerIntent(store, snapshot);
                     return producer == null ? Stream.empty() : Stream.of(new SnapshotProducer(snapshot, producer));
                 }).filter(source -> workGroups.grants().stream()
-                        .noneMatch(grant -> !workGroups.grantSuperseded(grant.grantId()) && !workGroups.continuationGrant(grant.grantId()) && (source.snapshot().snapshotId().equals(grant.snapshotId()) || (
+                        .noneMatch(grant -> ReviewAdmissionRules.holdsReview(store, grant) && (source.snapshot().snapshotId().equals(grant.snapshotId()) || (
                                 grant.snapshotId() == null && grant.workGroupId().equals(source.snapshot().provenance().workGroupId()) && grant.targetIntentId().equals(source.snapshot().provenance().laneId())
-                                        && grant.claimEpoch() == source.snapshot().provenance().claimEpoch())) && (workGroups.grantAvailable(grant.grantId()) || workGroups.grantConsumed(grant.grantId()))))
+                                        && grant.claimEpoch() == source.snapshot().provenance().claimEpoch()))))
                 .filter(source -> collaboration.requests().stream()
                         .noneMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && source.snapshot().snapshotId().equals(request.snapshotId()) && (request.status() == CoordinationRequest.Status.PENDING
                                 || request.status() == CoordinationRequest.Status.ACCEPTED))).sorted(Comparator.comparing(source -> source.snapshot().snapshotId())).map(source -> {
@@ -714,12 +742,14 @@ static boolean hasPublishedReviewRequiredSnapshot(PredictionEventStore store, Wo
     }
 
 /**
-     * Returns whether a durable accepted review request authorizes this grant recipient.
+     * Returns whether a durable accepted review request authorizes this grant recipient: the grant
+     * its acceptance issued, or the successor of that grant a continuation carried forward to the
+     * participant that now holds the request, for the same snapshot.
      */
     static boolean hasExplicitReviewGrant(PredictionEventStore store, LaneGrant grant, String participantId) {
         return store.collaborationProjection().requests().stream().filter(request -> request.kind() == CoordinationRequest.Kind.REVIEW).filter(request -> request.status() == CoordinationRequest.Status.ACCEPTED)
                 .filter(request -> request.requester().equals(participantId)).filter(request -> request.conflictingIntentId().equals(grant.targetIntentId()))
-                .anyMatch(request -> LaneGrant.reviewGrantId(request.requestId()).equals(grant.grantId()));
+                .anyMatch(request -> LaneGrant.reviewGrantId(request.requestId()).equals(grant.grantId()) || (request.snapshotId() != null && request.snapshotId().equals(grant.snapshotId())));
     }
 
 /**

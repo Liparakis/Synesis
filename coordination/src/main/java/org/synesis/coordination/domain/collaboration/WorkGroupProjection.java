@@ -312,21 +312,27 @@ public final class WorkGroupProjection {
     }
 
     /**
-     * Carries forward eligible unreviewed grants to a lawful successor lane.
+     * Carries forward eligible unreviewed grants to a lawful successor lane: the reviews the source
+     * owner held, and the snapshot-less grants on the source lane.
+     *
+     * <p>Both are carried whatever the lane's role. A producer may hold review grants (ADR-0089,
+     * amended 2026-10-17), and carrying only a reviewer lane's left the grants of a producer that
+     * died addressed to it, and the snapshots they named with nobody to review them.</p>
      *
      * @param continuation proposed successor continuation
      * @throws IOException when payload validation or durable I/O fails
      */
     private void migrateReviewGrants(LaneContinuation continuation) throws IOException {
-        boolean reviewer = continuation.targetIntent().role() == WorkIntent.Role.REVIEWER;
         for (LaneGrant grant : List.copyOf(grants.values())) {
             if (!grant.group().equals(continuation.targetIntent().group())
                     || continuationGrants.contains(grant.identity()) || supersededGrants.contains(grant.identity())
                     || validations.containsKey(grant.identity())) {
                 continue;
             }
-            LaneGrant successor = reviewer ? reviewerSuccessor(grant, continuation)
-                    : producerSuccessor(grant, continuation);
+            LaneGrant successor = reviewerSuccessor(grant, continuation);
+            if (successor == null) {
+                successor = producerSuccessor(grant, continuation);
+            }
             if (successor == null) {
                 continue;
             }

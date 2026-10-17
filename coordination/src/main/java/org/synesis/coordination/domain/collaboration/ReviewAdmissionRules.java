@@ -155,11 +155,13 @@ public final class ReviewAdmissionRules {
                 .filter(intent -> intent.workGroupId().equals(target.workGroupId()))
                 .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER)
                 .anyMatch(reviewer -> reviewTargetsMatch(reviewer, target));
-        // An author of the work group may review the others' snapshots (ADR-0089, amended
-        // 2026-10-17). Authorship, not the wait for its own review, is the test: it holds from the
-        // request to the grant, so an admission cannot turn unlawful under the producer that is
-        // answering it because the requester's own snapshot was decided in between.
-        if (!matchingReviewer && !authoredInGroup(current, requester, target)) {
+        // A producer of the work group that has published may review the others' snapshots
+        // (ADR-0089, amended 2026-10-17). It must still hold its lane: a reviewer with no lane
+        // has nothing to be continued from if its agent dies, and its grant would hold the
+        // snapshot from every other reviewer.
+        boolean holdsLaneInGroup = current.collaborationProjection().activeIntents().stream()
+                .anyMatch(intent -> intent.participantIdentity().equals(requester) && intent.group().equals(target.group()));
+        if (!matchingReviewer && !(holdsLaneInGroup && authoredInGroup(current, requester, target))) {
             throw new CoordinationException("REVIEWER_INTENT_REQUIRED");
         }
     }
@@ -290,10 +292,7 @@ public final class ReviewAdmissionRules {
         boolean assigned = current.workGroupProjection().grants().stream()
                 .filter(grant -> grant.snapshot().filter(snapshotId::equals).isPresent())
                 .filter(grant -> !grant.grantId().equals(ownGrantId))
-                .filter(grant -> !current.workGroupProjection().continuationGrant(grant.grantId()))
-                .filter(grant -> !current.workGroupProjection().grantSuperseded(grant.grantId()))
-                .anyMatch(grant -> current.workGroupProjection().grantAvailable(grant.grantId())
-                        || current.workGroupProjection().grantConsumed(grant.grantId()));
+                .anyMatch(grant -> holdsReview(current, grant));
         boolean acceptedWithoutGrant = current.collaborationProjection().requests().stream()
                 .filter(request -> request.kind() == CoordinationRequest.Kind.REVIEW)
                 .filter(request -> request.snapshot().filter(snapshotId::equals).isPresent())
@@ -305,6 +304,21 @@ public final class ReviewAdmissionRules {
         if (assigned || acceptedWithoutGrant) {
             throw new CoordinationException("REVIEW_CANDIDATE_ALREADY_ASSIGNED");
         }
+    }
+
+    /**
+     * Returns whether a grant still holds the review it names: a review grant, not superseded,
+     * available or consumed. The one rule for whether a snapshot already has its reviewer, for
+     * admission and for the candidates agents are shown.
+     *
+     * @param current project projections
+     * @param grant   the grant to test
+     * @return {@code true} when no other reviewer may be admitted to what the grant names
+     */
+    public static boolean holdsReview(ProjectionView current, LaneGrant grant) {
+        WorkGroupProjection workGroups = current.workGroupProjection();
+        return !workGroups.continuationGrant(grant.identity()) && !workGroups.grantSuperseded(grant.identity())
+                && (workGroups.grantAvailable(grant.identity()) || workGroups.grantConsumed(grant.identity()));
     }
 
     /**

@@ -110,6 +110,44 @@ final class McpProducersReviewEachOtherTest {
         assertEquals(roman.participant(), context.get("requester"), next.toString());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void anOwnerAskedTwiceForOneSnapshotAdmitsOneAndIsToldToRejectTheOther(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("one-snapshot-two-requests"));
+        List<Producer> producers = new ArrayList<>();
+        List<String> snapshots = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            producers.add(producer(project, "twice-" + index, MODULES.get(index)));
+            snapshots.add(publish(producers.get(index)));
+        }
+        Producer roman = producers.get(2);
+        String workGroupId = String.valueOf(store(project).collaborationProjection().intent(java.util.UUID.fromString(roman.intentId())).orElseThrow().workGroupId());
+        Map<String, Object> reviewRoman = Map.of("kind", "work_group_join", "payload",
+                Map.of("workGroupId", workGroupId, "intentId", roman.intentId(), "snapshotId", snapshots.get(2), "proposal", "Review roman.py"));
+        answered(producers.get(0).handler().handleMessage(toolCall("request_coordination", reviewRoman)));
+        answered(producers.get(1).handler().handleMessage(toolCall("request_coordination", reviewRoman)));
+
+        assertEquals("ACCEPTED", ownerAnswer(roman).get("coordinationStatus"));
+        Map<String, Object> second = ownerAnswer(roman);
+        assertEquals("REJECTED", second.get("coordinationStatus"), second.toString());
+        assertTrue(String.valueOf(second.get("proposal")).contains("REVIEW_CANDIDATE_ALREADY_ASSIGNED"), second.toString());
+
+        Map<String, Object> loser = result(producers.get(1).handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertFalse(Boolean.TRUE.equals(loser.get("reviewRequestPending")), loser.toString());
+        assertEquals(1, store(project).workGroupProjection().grants().size());
+    }
+
+    /** Executes the owner's recommended answer to the review admission asked of it and returns that answer. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> ownerAnswer(Producer owner) {
+        Map<String, Object> next = result(owner.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        Map<String, Object> workflow = (Map<String, Object>) next.get("workflow");
+        assertEquals("respond_coordination", workflow.get("recommendedTool"), next.toString());
+        Map<String, Object> arguments = (Map<String, Object>) workflow.get("arguments");
+        answered(owner.handler().handleMessage(toolCall("respond_coordination", arguments)));
+        return (Map<String, Object>) arguments.get("payload");
+    }
+
     /**
      * Takes the next step get_next_action offers the producer, preferring the snapshot of
      * {@code preferredAuthor} when it must choose among review candidates.

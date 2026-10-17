@@ -626,6 +626,82 @@ final class WorkIntentServiceTest {
     }
 
     @Test
+    void theReviewAProducerHeldMovesToTheParticipantThatContinuesItsLane(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = mandatoryGroup(temp, project, groupId, identity);
+        WorkIntent slug = lane(project, groupId, "agt-slug", WorkIntent.Role.PRODUCER, "slug.py", List.of());
+        WorkIntent wrap = lane(project, groupId, "agt-wrap", WorkIntent.Role.PRODUCER, "wrap.py", List.of());
+        TaskSnapshotPayload wrapSnapshot = publishBoth(temp, project, identity, service, slug, wrap);
+        CoordinationRequest request = service.request(slug.participant(), wrap.intentId(), CoordinationRequest.Kind.REVIEW,
+                "Review wrap.py", wrapSnapshot.snapshotId());
+        service.respond(wrap.participant(), request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted");
+        LaneGrant held = new PredictionEventStore(temp, project).workGroupProjection().grants().getFirst();
+
+        String reference = temp.resolve("recovery").toAbsolutePath() + "#hash";
+        service.suspend(slug.participant());
+        service.holdRecovery(slug.participant(), reference);
+        WorkIntent successor = new WorkIntent(UUID.randomUUID(), project, "agt-continuer", "codex", slug.taskId(), slug.goal(),
+                slug.acceptance(), slug.baseCommit(), slug.selectors(), slug.version() + 1, groupId, slug.authorityLineageId(),
+                WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of(), slug.knownDependencies());
+        service.continueEligibleFromRecovery(new LaneContinuation(UUID.randomUUID(), slug.intentId(), successor,
+                slug.participant(), successor.participant(), slug.version(), reference));
+
+        PredictionEventStore continued = new PredictionEventStore(temp, project);
+        assertTrue(continued.workGroupProjection().grantSuperseded(held.grantId()));
+        List<LaneGrant> carried = continued.workGroupProjection().grants().stream()
+                .filter(grant -> wrapSnapshot.snapshotId().equals(grant.snapshotId()))
+                .filter(grant -> !continued.workGroupProjection().grantSuperseded(grant.grantId())).toList();
+        assertEquals(List.of(successor.participant()), carried.stream().map(LaneGrant::targetParticipant).toList());
+        assertEquals(successor.participant(), continued.collaborationProjection().requests().stream()
+                .filter(candidate -> candidate.requestId().equals(request.requestId())).findFirst().orElseThrow().requester());
+    }
+
+    @Test
+    void anAuthorWhoseLaneHasEndedIsNotAdmittedToReview(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = mandatoryGroup(temp, project, groupId, identity);
+        WorkIntent slug = lane(project, groupId, "agt-slug", WorkIntent.Role.PRODUCER, "slug.py", List.of());
+        WorkIntent wrap = lane(project, groupId, "agt-wrap", WorkIntent.Role.PRODUCER, "wrap.py", List.of());
+        TaskSnapshotPayload wrapSnapshot = publishBoth(temp, project, identity, service, slug, wrap);
+        CoordinationRequest request = service.request(slug.participant(), wrap.intentId(), CoordinationRequest.Kind.REVIEW,
+                "Review wrap.py", wrapSnapshot.snapshotId());
+        service.release(slug.intentId(), slug.participant());
+
+        IOException refused = assertThrows(IOException.class,
+                () -> service.respond(wrap.participant(), request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted"));
+        assertEquals("REVIEWER_INTENT_REQUIRED", refused.getMessage());
+        assertTrue(new PredictionEventStore(temp, project).workGroupProjection().grants().isEmpty());
+    }
+
+    private static WorkIntentService mandatoryGroup(Path temp, UUID project, UUID groupId, NodeIdentity identity) throws Exception {
+        new WorkGroupService(new PredictionEventStore(temp, project), identity).create(new WorkGroup(groupId,
+                project,
+                "Build modules",
+                "Every module reviewed by a non-author",
+                1,
+                WorkGroup.Status.ACTIVE,
+                ReviewPolicy.mandatoryIndependent()));
+        return new WorkIntentService(new PredictionEventStore(temp, project), identity);
+    }
+
+    /** Announces both lanes, publishes a snapshot of each, and returns the second one's. */
+    private static TaskSnapshotPayload publishBoth(Path temp, UUID project, NodeIdentity identity, WorkIntentService service,
+            WorkIntent first, WorkIntent second) throws Exception {
+        assertTrue(service.announce(first).acquired());
+        assertTrue(service.announce(second).acquired());
+        TaskSnapshotPayload secondSnapshot = snapshot(second, "snap_" + second.participant(), second.selectors().getFirst().value());
+        for (TaskSnapshotPayload published : List.of(snapshot(first, "snap_" + first.participant(), first.selectors().getFirst().value()), secondSnapshot)) {
+            new PredictionEventStore(temp, project).append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED,
+                    identity.nodeId(), published.encode(), identity);
+        }
+        return secondSnapshot;
+    }
+
+    @Test
     void aParticipantIsNotAdmittedToReviewALaneOfItsOwnAuthorityLineage(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         UUID groupId = UUID.randomUUID();
