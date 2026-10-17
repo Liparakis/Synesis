@@ -139,6 +139,36 @@ final class McpSyn039NoChangeCompletionTest {
         fixture.handler.close();
     }
 
+    /**
+     * Overnight run across two computers, defect 4: an agent whose lane had been integrated asked, in
+     * the same process, for a reviewer lane and was sent to a human (SESSION_RECOVERY_STATE_UNAVAILABLE)
+     * while work remained. The completed session is not revived; ensure_session starts a fresh one on
+     * the same connection, as it already does for a lane that ended elsewhere (commit 8b5f01e9).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aConnectionWhoseLaneCompletedStartsAFreshSessionForItsNextTask(@TempDir Path temp) throws Exception {
+        Fixture fixture = prepare(temp, "syn039-next-task");
+        String firstParticipant = fixture.store().collaborationProjection().intent(fixture.intentId()).orElseThrow().participant();
+        Map<String, Object> projection = innerResult(fixture.handler.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
+        Map<String, Object> finishArguments = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) projection.get("result")).get("workflow")).get("arguments");
+        assertEquals("completed", innerResult(fixture.handler.handleMessage(toolCall("finish_lane", ProviderJson.write(finishArguments)))).get("status"));
+
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("goal", "Write the release notes");
+        task.put("acceptance", "notes.md lists the change");
+        task.put("claims", List.of(Map.of("kind", "path_exact", "path", "notes.md")));
+        Map<String, Object> next = innerResult(fixture.handler.handleMessage(toolCall("ensure_session", ProviderJson.write(Map.of("task", task)))));
+
+        assertEquals("ready", next.get("status"), next.toString());
+        var lane = fixture.store().collaborationProjection().activeIntents().stream().filter(intent -> intent.goal().equals("Write the release notes")).findFirst().orElseThrow();
+        assertNotEquals(firstParticipant, lane.participant(), "the completed session is not revived");
+        assertEquals("COMPLETED", fixture.store().collaborationProjection().participantState(firstParticipant).orElseThrow().name());
+        Map<String, Object> patched = innerResult(fixture.handler.handleMessage(toolCall("apply_patch", "{\"path\":\"notes.md\",\"create\":true,\"content\":\"notes\\n\"}")));
+        assertEquals("completed", patched.get("status"), patched.toString());
+        fixture.handler.close();
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void mutationRequiredAcceptanceCannotCompleteAsNoChange(@TempDir Path temp) throws Exception {

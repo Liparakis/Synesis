@@ -112,12 +112,7 @@ public final class SessionLeaseService {
             processIdentity = prev.processIdentity();
             createdAt = prev.createdAtEpochMillis();
         } else {
-            long pid = ProcessHandle.current().pid();
-            String exec = ProcessHandle.current().info().command().orElse("java");
-            String cmd = ProcessHandle.current().info().commandLine().orElse(exec);
-            long start = ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(now);
-            String nonce = UUID.randomUUID().toString();
-            processIdentity = new SessionProcessIdentity(pid, exec, cmd, start, nonce);
+            processIdentity = identityOf(ProcessHandle.current(), now, UUID.randomUUID().toString());
             createdAt = now;
         }
 
@@ -260,6 +255,67 @@ public final class SessionLeaseService {
         } catch (IOException ignored) {
             return false;
         }
+    }
+
+    /**
+     * Makes the calling process the keeper of a connection's lease and refreshes its heartbeat, so the
+     * session stays live while the process it started is stopped and will be started again on the same
+     * connection (ADR-0099, amendment: a waiting agent keeps its session).
+     *
+     * <p>Only a lease that names the caller itself, or a live process descended from it, is taken: a
+     * process can keep only the sessions of processes it started. A closed or terminal lease is never
+     * reopened. The liveness rule is unchanged: a live keeper with a fresh heartbeat is
+     * {@link SessionLeaseState#ACTIVE}, and a keeper that is gone is an absence like any other. A
+     * keeper's heartbeat younger than the policy's heartbeat interval is left as it is.</p>
+     *
+     * @param controlRoot          control project root
+     * @param connectionInstanceId exact connection identity
+     * @param policy               lease policy, for the clock and the heartbeat interval
+     * @return {@code true} when the caller keeps the lease; {@code false} when it cannot: there is no
+     *         lease, it is closed or terminal, or it names a process the caller did not start
+     * @throws IOException when the project lock or the lease store was unavailable, so nothing was
+     *                     decided and the caller may ask again
+     */
+    public boolean keep(Path controlRoot, String connectionInstanceId, SessionLeasePolicy policy) throws IOException {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        Objects.requireNonNull(policy, "policy");
+        ProcessHandle keeper = ProcessHandle.current();
+        Optional<SessionLeaseRecord> current = store.load(controlRoot, connectionInstanceId);
+        if (current.isPresent() && current.get().leaseState() == SessionLeaseState.ACTIVE && current.get().processIdentity().pid() == keeper.pid()
+                && policy.nowMillis() - current.get().lastHeartbeatEpochMillis() < policy.heartbeatInterval().toMillis()) {
+            return true;
+        }
+        try (ProjectAppendLock appendLock = ProjectAppendLock.acquire(coordinationRoot(controlRoot))) {
+            if (!appendLock.isHeld()) {
+                throw new IOException("event append lock unavailable");
+            }
+            Optional<SessionLeaseRecord> existing = store.load(controlRoot, connectionInstanceId);
+            if (existing.isEmpty() || existing.get().leaseState() != SessionLeaseState.ACTIVE) {
+                return false;
+            }
+            SessionLeaseRecord previous = existing.get();
+            SessionProcessIdentity named = previous.processIdentity();
+            if (named.pid() != keeper.pid() && !startedBy(keeper, named)) {
+                return false;
+            }
+            store.save(controlRoot, new SessionLeaseRecord(previous.schemaVersion(), previous.projectId(), previous.provider(), previous.connectionInstanceId(), previous.workerNodeId(),
+                    previous.sessionId(), identityOf(keeper, policy.nowMillis(), named.connectionNonce()), previous.synesisVersion(), previous.createdAtEpochMillis(), policy.nowMillis(),
+                    SessionLeaseState.ACTIVE));
+            return true;
+        }
+    }
+
+    /** Whether the named process is alive and descended from the keeper, its start time fencing a reused pid. */
+    private static boolean startedBy(ProcessHandle keeper, SessionProcessIdentity named) {
+        return keeper.descendants().anyMatch(descendant -> descendant.pid() == named.pid() && descendant.isAlive()
+                && descendant.info().startInstant().map(java.time.Instant::toEpochMilli).map(start -> start == named.processStartTime()).orElse(true));
+    }
+
+    private static SessionProcessIdentity identityOf(ProcessHandle process, long now, String nonce) {
+        String executable = process.info().command().orElse("java");
+        long start = process.info().startInstant().map(java.time.Instant::toEpochMilli).orElse(now);
+        return new SessionProcessIdentity(process.pid(), executable, process.info().commandLine().orElse(executable), start, nonce);
     }
 
     private ProcessEvidenceState evidence(SessionLeaseRecord record) {

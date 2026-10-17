@@ -1,6 +1,8 @@
 package org.synesis.workspace.application.collaboration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -99,6 +101,28 @@ class ParticipantActivityTest {
         AgentRunController.Observation seen = new EventLogObserver(location).observe();
         assertEquals(seen.headSequence(), seen.lastActivitySequence("codex", "chat-a").orElseThrow(),
                 "a call after the last event has looked at all of it");
+    }
+
+    /**
+     * Real run across two computers on the ADR-0099 amendment: an agent finished its lane and, on the
+     * same connection, started a fresh session for its next lane. The run controller's observer kept
+     * the participant it had first found for that connection, saw no open lane, ended the session,
+     * and the new lane went to recovery.
+     */
+    @Test
+    void theRunControllerSeesTheLaneAConnectionTookInAFreshSession(@TempDir Path temp) throws Exception {
+        ProjectLocation location = project(temp.resolve("fresh"));
+        EventLogObserver observer = new EventLogObserver(location);
+        lane(location, "chat-a", "src/a.txt");
+        String first = new ProviderSessionBindingService().find(location, "codex", "chat-a").orElseThrow().sessionId();
+        assertTrue(observer.observe().holdsOpenLane("codex", "chat-a"));
+
+        service.release(location.root(), "codex", "chat-a");
+        assertFalse(observer.observe().holdsOpenLane("codex", "chat-a"), "its first lane ended");
+
+        lane(location, "chat-a", "src/b.txt");
+        assertNotEquals(first, new ProviderSessionBindingService().find(location, "codex", "chat-a").orElseThrow().sessionId(), "the next lane is a fresh session");
+        assertTrue(observer.observe().holdsOpenLane("codex", "chat-a"), "the same connection holds its next lane");
     }
 
     @Test

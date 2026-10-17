@@ -5,6 +5,7 @@ import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -98,6 +99,21 @@ public final class ProviderSessionTerminalizationService {
                 return false;
             }
         }).findFirst().orElse(null);
+    }
+
+    /**
+     * Returns what one exact session still holds open: the same blockers that stop its terminal seal.
+     * A completed session holding none of them leaves nothing that a fresh session started on its
+     * connection could strand (ADR-0099, amendment, decision 4).
+     *
+     * @param location initialized project
+     * @param binding  exact binding of the session
+     * @return blocker codes in report order; empty when the session holds nothing open
+     * @throws IOException              when the coordination log cannot be read
+     * @throws GeneralSecurityException when the coordination log cannot be authenticated
+     */
+    public static Set<String> openAuthority(ProjectLocation location, ProviderSessionBindingService.Binding binding) throws IOException, GeneralSecurityException {
+        return terminalBlockers(location.openCoordinationStore(), binding, WorkspaceCollaborationService.participantHandle(binding.sessionId()));
     }
 
     private static Set<String> terminalBlockers(PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {

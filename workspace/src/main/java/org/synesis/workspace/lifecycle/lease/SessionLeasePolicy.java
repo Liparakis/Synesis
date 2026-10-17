@@ -69,7 +69,6 @@ public final class SessionLeasePolicy {
      *
      * @return duration
      */
-    @SuppressWarnings("unused")
     Duration heartbeatInterval() {
         return heartbeatInterval;
     }

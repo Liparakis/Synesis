@@ -20,7 +20,6 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
-import org.synesis.workspace.infrastructure.digest.Sha256;
 
 /**
  * Observes a project by replaying its durable coordination log. It only reads.
@@ -76,7 +75,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     };
 
     private final ProjectLocation location;
-    private final Map<String, java.util.Optional<String>> participants = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, java.util.Optional<String>> lastKnownParticipants = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Creates an observer for one initialized project.
@@ -270,29 +269,26 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     }
 
     /**
-     * Returns the participant of the session behind one connection, or {@code null} when it has
-     * none. The controller asks only about connections of its own processes that have ended, and
-     * gave each a connection identity of its own, so what is found, or not found, for one cannot
-     * change and is kept: asked on every observation for every stopped agent, the lookup listed
-     * and verified every binding each time.
+     * Returns the participant of the session behind one connection now, or {@code null} when it has
+     * none. It is read again on every call: a connection keeps its identity across the agent's
+     * processes and starts a fresh session once its lane has ended (ADR-0099, amendment), so the
+     * answer for one connection changes. A participant kept from an earlier look ended a kept
+     * session whose agent had just taken its next lane, and that lane went to recovery.
      */
     private String participantOf(String provider, String connectionInstanceId) {
         if (provider == null || connectionInstanceId == null) {
             return null;
         }
         String key = provider + '|' + connectionInstanceId;
-        java.util.Optional<String> known = participants.get(key);
-        if (known == null) {
-            try {
-                String fingerprint = Sha256.hex(connectionInstanceId);
-                known = new ProviderSessionBindingService().list(location, provider).stream().filter(binding -> fingerprint.equals(binding.providerInstanceFingerprint()))
-                        .map(binding -> WorkspaceCollaborationService.participantHandle(binding.sessionId())).findFirst();
-            } catch (Exception unavailable) {
-                // Not an answer, so not kept: asked again at the next observation.
-                return null;
-            }
-            participants.put(key, known);
+        try {
+            String participant = new ProviderSessionBindingService().find(location, provider, connectionInstanceId).map(binding -> WorkspaceCollaborationService.participantHandle(binding.sessionId()))
+                    .orElse(null);
+            lastKnownParticipants.put(key, java.util.Optional.ofNullable(participant));
+            return participant;
+        } catch (Exception unavailable) {
+            // An unreadable binding is not "no lane": the controller would end a session it can
+            // still come back to. The answer of the last look stands until the file reads again.
+            return lastKnownParticipants.getOrDefault(key, java.util.Optional.empty()).orElse(null);
         }
-        return known.orElse(null);
     }
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import org.synesis.coordination.persistence.ProjectAppendLock;
@@ -133,6 +134,12 @@ public final class ProviderSessionBindingService {
                     throw new BindingException("SESSION_TERMINAL", "The exact provider session has an irreversible terminal fence");
                 }
                 if (laneEnded(location, binding) && !hasActiveManagedAttachment(location, binding)) {
+                    // The fresh binding replaces this one at the connection's path, so a session that
+                    // still holds a grant, a request or a command would lose it (ADR-0099, amendment).
+                    Set<String> open = ProviderSessionTerminalizationService.openAuthority(location, binding);
+                    if (!open.isEmpty()) {
+                        throw new BindingException("SESSION_AUTHORITY_OPEN", String.join(",", open));
+                    }
                     return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
                 }
                 if (binding.state().resumesOnEnsure()) {

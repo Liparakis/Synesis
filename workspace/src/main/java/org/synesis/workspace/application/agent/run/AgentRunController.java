@@ -33,13 +33,15 @@ import org.synesis.workspace.provider.ProviderIntegration.HeadlessSession;
  * continuation, and never writes to the coordination log. Every decision an agent then makes is
  * still made through Synesis.</p>
  *
- * <p>A resumed agent is a new connection, so Synesis sees a new session; the lane it left is
- * recovered and offered for continuation by the ordinary recovery path. That path starts once a
- * connection is known to have ended. A provider that kills its MCP server instead of closing it
- * leaves no such proof, and Synesis would wait out its abrupt-loss grace period before believing
- * it. The controller started the process and saw it exit, so it gives each process its own
- * connection identity and reports that connection ended: the one fact it adds, and only about
- * its own children.</p>
+ * <p>An agent keeps one connection identity, so one Synesis session and its one lane, across its
+ * processes: an agent told to wait ends its turn, and a Codex agent's process exits then, so a
+ * session that lived only as long as one process made every wait a departure (ADR-0099, amendment).
+ * While the controller can come back to an agent it keeps that session: the lease names the
+ * controller, which renews it. When it cannot come back (the lane ended, nothing to resume, the
+ * budget is spent) or the run ends, it reports the connection ended, proof of the same kind as end
+ * of input, and the lane is recovered by the ordinary path. Where a session could not be kept, the
+ * next process gets a new identity and the old lane is recovered and offered for continuation, as
+ * before.</p>
  *
  * <p>An owner waiting a bounded time for a requester's answer also ends its process. The log does
  * not move when that time passes, so the controller reads the deadline and resumes the owner's
@@ -150,22 +152,31 @@ public final class AgentRunController {
                 heads.addLast(new HeadAt(now, observation.headSequence()));
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
-                        connections.ended(agent.connectionId);
-                        agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit);
+                        agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit, observation.progressedSince(agent.startedAtSequence),
+                                agent.holdsOpenLane(observation));
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
+                    keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener);
                 }
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
+                        if (agent.process == null && observation.progressedSince(agent.stoppedAtSequence)) {
+                            // Any progress resets the budget, which bounds idle resumes in a row only.
+                            agent.idleResumes = 0;
+                        }
                         // Only an agent whose own lane is open has something to come back to. Resumed
                         // for another lane's progress, an agent with nothing left looked for work,
                         // announced lanes to verify what was already integrated, and each of those
-                        // woke the others: 38 resumes in a run whose work was done.
-                        if (!agent.resumable(request.maxResumesPerAgent()) || !agent.holdsOpenLane(observation)) {
+                        // woke the others: 38 resumes in a run whose work was done. The exception is
+                        // an agent whose lane ended while it was stopped: it is resumed once, in a new
+                        // session, to take the next piece of work, as a Claude agent woken by its Stop
+                        // hook for its lane ending does in the same process.
+                        boolean laneEnded = agent.heldLaneAtStop && !agent.holdsOpenLane(observation);
+                        if (!agent.resumable(request.maxResumesPerAgent()) || !(laneEnded || agent.holdsOpenLane(observation))) {
                             continue;
                         }
-                        if (observation.heldByOperator(agent.spec.provider())) {
+                        if (!laneEnded && observation.heldByOperator(agent.spec.provider())) {
                             // Its published work waits for an operator. Resumed, it took its lane
                             // back, published the same work again and was refused again: eleven
                             // times in one real run, each on another lane's progress.
@@ -174,17 +185,19 @@ public final class AgentRunController {
                         OptionalLong answerDeadline = observation.answerDeadline(agent.spec.provider());
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
                         OptionalLong message = agent.newestUnreadMessage(observation);
-                        boolean messageWaiting = message.isPresent() && message.getAsLong() > Math.max(agent.stoppedAtSequence, agent.resumedForMessage);
-                        if (observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
+                        boolean messageWaiting = agent.unreadMessageWaiting(observation);
+                        if (laneEnded || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
                             // Whatever it is resumed for, it reads its messages then. A message
                             // it stops without acting on does not resume it again.
                             agent.resumedForMessage = Math.max(agent.resumedForMessage, message.orElse(0L));
+                            agent.heldLaneAtStop = false;
+                            agent.resumed = true;
                             agent.resumes++;
                             agent.startedAtSequence = observation.headSequence();
-                            HeadlessOptions options = agent.connect(connections.open());
+                            HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open()) : agent.spec.options().withConnection(agent.connectionId);
                             agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
                                     agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
                             listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
@@ -224,9 +237,34 @@ public final class AgentRunController {
             for (Agent agent : agents) {
                 if (agent.process != null) {
                     agent.process.stop();
-                    connections.ended(agent.connectionId);
+                }
+                if (!agent.connectionEnded) {
+                    agent.endConnection(connections);
                 }
             }
+        }
+    }
+
+    /**
+     * Keeps the session of an agent the controller can still come back to, and otherwise ends its
+     * connection, once. A running agent's session is kept as soon as its MCP server has opened it, so
+     * that its end of input no longer closes it. A session that could not be kept was closed by its
+     * own MCP server, so it is ended and the agent's next process gets a new identity.
+     */
+    private void keepOrEnd(Agent agent, Observation observation, int maxResumes, Consumer<String> listener) {
+        if (agent.connectionEnded) {
+            return;
+        }
+        boolean mayComeBack = agent.process != null || agent.resumable(maxResumes) && agent.holdsOpenLane(observation);
+        if (mayComeBack && connections.keep(agent.connectionId)) {
+            if (!agent.sessionKept) {
+                agent.sessionKept = true;
+                listener.accept("AGENT_SESSION_KEPT=" + agent.label());
+            }
+            return;
+        }
+        if (agent.process == null) {
+            agent.endConnection(connections);
         }
     }
 
@@ -244,8 +282,8 @@ public final class AgentRunController {
             // stall or a resume limit would send the reader to the agents for the cause.
             return Outcome.NEEDS_OPERATOR;
         }
-        boolean limitReached = agents.stream()
-                .anyMatch(agent -> agent.resumes >= maxResumes && agent.holdsOpenLane(observation) && observation.progressedSince(agent.stoppedAtSequence));
+        boolean limitReached = agents.stream().anyMatch(agent -> agent.idleResumes >= maxResumes && agent.holdsOpenLane(observation)
+                && (observation.progressedSince(agent.stoppedAtSequence) || agent.unreadMessageWaiting(observation)));
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
     }
 
@@ -323,7 +361,8 @@ public final class AgentRunController {
          */
         NO_WORK_ANNOUNCED,
         /**
-         * Work progressed that an agent should see, but that agent has been resumed as often as allowed.
+         * An agent whose lane is open was resumed as often in a row as allowed, and nothing was recorded
+         * in the log while any of those processes ran.
          */
         RESUME_LIMIT_REACHED,
         /**
@@ -382,11 +421,26 @@ public final class AgentRunController {
         String open();
 
         /**
-         * Records that the process using a connection has exited.
+         * Records that a connection has ended: no process of this controller will use it again.
          *
          * @param connectionInstanceId identity returned by {@link #open()}
          */
         void ended(String connectionInstanceId);
+
+        /**
+         * Keeps the session of a connection alive while the controller can still start a process on
+         * it, whether or not one is running now. Called at every observation, so it must be cheap
+         * when nothing needs renewing.
+         *
+         * @param connectionInstanceId identity returned by {@link #open()}
+         * @return {@code true} when the session is kept or nothing could be decided this time;
+         *         {@code false} when it cannot be kept (not opened yet, already closed, or not
+         *         started by this controller), which leaves the connection to end when its process
+         *         does
+         */
+        default boolean keep(String connectionInstanceId) {
+            return false;
+        }
     }
 
     /**
@@ -636,7 +690,7 @@ public final class AgentRunController {
      * @param prompt             the one prompt every agent starts with
      * @param timeout            overall time limit
      * @param pollInterval       time between observations
-     * @param maxResumesPerAgent how often one agent may be resumed
+     * @param maxResumesPerAgent how many resumes in a row of one agent may record nothing in the log
      */
     public record Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent) {
 
@@ -686,6 +740,16 @@ public final class AgentRunController {
         private final List<String> connectionIds = new ArrayList<>();
         private int exitCode;
         private int resumes;
+        /** Processes in a row during which nothing was recorded in the log; any progress resets it. */
+        private int idleResumes;
+        /** Whether its current or last process was a resume rather than its first start. */
+        private boolean resumed;
+        /** Whether its lane was open when its process last ended. */
+        private boolean heldLaneAtStop;
+        /** Whether its current connection has been reported ended. */
+        private boolean connectionEnded;
+        /** Whether the session of its current connection has been kept at least once. */
+        private boolean sessionKept;
 
         private Agent(int index, AgentSpec spec) {
             this.index = index;
@@ -696,11 +760,18 @@ public final class AgentRunController {
             return spec.provider() + "#" + index;
         }
 
-        /** Gives the next process of this agent its own connection identity. */
+        /** Gives this agent a new connection identity, for its processes from now on. */
         private HeadlessOptions connect(String identity) {
             connectionId = identity;
             connectionIds.add(identity);
+            connectionEnded = false;
+            sessionKept = false;
             return spec.options().withConnection(identity);
+        }
+
+        private void endConnection(Connections connections) {
+            connections.ended(connectionId);
+            connectionEnded = true;
         }
 
         /**
@@ -716,9 +787,15 @@ public final class AgentRunController {
          * @param lastActivity   log head at the last recorded call of the agent, when it has one
          * @param seenBeforeExit log head shortly before the process ended, when the controller
          *                       has been observing that long
+         * @param progressed     whether anything was recorded in the log while the process ran
+         * @param holdsLane      whether the agent's lane is open now
          */
-        private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit) {
+        private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit, boolean progressed, boolean holdsLane) {
             exitCode = process.exitCode();
+            if (resumed) {
+                idleResumes = progressed ? 0 : idleResumes + 1;
+            }
+            heldLaneAtStop = holdsLane;
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
@@ -741,8 +818,14 @@ public final class AgentRunController {
                     .mapToLong(OptionalLong::getAsLong).max();
         }
 
+        /** Whether a message for its lane arrived that it has not been resumed for. */
+        private boolean unreadMessageWaiting(Observation observation) {
+            OptionalLong message = newestUnreadMessage(observation);
+            return message.isPresent() && message.getAsLong() > Math.max(stoppedAtSequence, resumedForMessage);
+        }
+
         private boolean resumable(int maxResumes) {
-            return process == null && providerSessionId != null && resumes < maxResumes;
+            return process == null && providerSessionId != null && idleResumes < maxResumes;
         }
     }
 }

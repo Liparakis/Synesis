@@ -67,6 +67,49 @@ final class AgentRunControllerTest {
         assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
     }
 
+    /**
+     * Overnight run across two computers: an agent that ended its turn on WAIT came back as a new
+     * session, its lane held for recovery, and claimed a new module instead. A kept session is resumed
+     * on its own connection, so into its own lane, and is ended only when the run ends.
+     */
+    @Test
+    void aStoppedAgentWithAnOpenLaneKeepsItsSessionAndIsResumedOnTheSameConnection() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(2, 6, 3);
+        script.at(0).head(5).announced();
+        script.at(4).head(9).progressAfter(5);
+        script.at(6).head(14).progressAfter(9).complete();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(2), "the resume is the same session");
+        assertEquals(1, script.events.stream().filter("AGENT_SESSION_KEPT=claude#1"::equals).count(), script.events.toString());
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "ended conn-2"), script.connections,
+                "no connection is ended while its agent may come back; both are ended when the run does");
+    }
+
+    @Test
+    void aKeptSessionIsEndedOnceItsLaneEndsAndItsAgentIsResumedOnceInANewSession() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        // claude's lane is open when it stops and ends afterwards; codex keeps the run going.
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).laneEnded("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3"), script.connections.subList(0, 4),
+                "its session is ended when its lane ends, and the next process is a new session");
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches,
+                "resumed once to take the next work, then not again: it holds no lane");
+        assertEquals(List.of(3), script.resumedAtTicks);
+    }
+
     @Test
     void runWhereEveryLaneWasCancelledIsNotReportedAsCompleted() throws Exception {
         Script script = new Script();
@@ -271,8 +314,13 @@ final class AgentRunControllerTest {
         assertEquals(AgentRunController.Outcome.NO_WORK_ANNOUNCED, script.run(8).outcome());
     }
 
+    /**
+     * Overnight run across two computers: every WAIT now ends a process, and a budget that counted
+     * every resume ran out (8 for claude#2, 7 for codex#1), after which a review request addressed to
+     * them could no longer resume them. Only resumes in a row that recorded nothing count.
+     */
     @Test
-    void resumesAreBoundedPerAgent() throws Exception {
+    void anAgentResumedWhileTheLogMovesIsNotStarvedByItsBudget() throws Exception {
         Script script = new Script();
         // The peer never stops and keeps producing progress; the first agent stops every tick.
         script.lifetimes(1, 1_000, 1, 1, 1, 1);
@@ -281,26 +329,46 @@ final class AgentRunControllerTest {
 
         AgentRunController.Result result = script.run(2, Duration.ofSeconds(40));
 
-        assertEquals(2, result.resumes(), "the limit is per agent");
+        assertTrue(result.resumes() > 10, "progress while it ran resets the budget: " + result.resumes());
         assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
         assertTrue(script.stopped.contains("codex#2"), "a running agent is stopped when the time limit passes");
         assertTrue(script.connections.contains("ended conn-2"), "a stopped agent's connection has ended too: " + script.connections);
     }
 
     @Test
-    void resumeLimitIsNamedWhenProgressIsLeftUnseen() throws Exception {
+    void resumesInARowThatRecordNothingAreBoundedAndTheLimitIsNamed() throws Exception {
         Script script = new Script();
-        // The peer progresses twice; the first agent may only be resumed for the first. The peer
-        // stops long after its own last progress, so it is taken to have seen it.
-        script.lifetimes(1, 40, 1);
-        script.at(0).head(1).announced();
-        script.at(2).head(4).progressAfter(1);
-        script.at(4).head(8).progressAfter(4);
+        // Messages keep arriving for claude's lane and it acts on none of them; nothing else moves.
+        // codex, without a lane of its own, keeps the run going until tick 10.
+        script.lifetimes(1, 10, 1, 1, 1, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(2).head(5).message("claude#1", 6);
+        script.at(4).head(5).message("claude#1", 7);
+        script.at(6).head(5).message("claude#1", 8);
+        script.at(8).head(5).message("claude#1", 9);
 
-        AgentRunController.Result result = script.run(1);
+        AgentRunController.Result result = script.run(2, Duration.ofSeconds(20));
 
-        assertEquals(1, result.resumes());
+        assertEquals(2, result.resumes(), "two resumes in a row recorded nothing, so a third is not made");
         assertEquals(AgentRunController.Outcome.RESUME_LIMIT_REACHED, result.outcome());
+    }
+
+    @Test
+    void progressBetweenIdleResumesResetsTheBudget() throws Exception {
+        Script script = new Script();
+        // As above, but work is recorded between the second and the third message.
+        script.lifetimes(1, 10, 1, 1, 1, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(2).head(5).message("claude#1", 6);
+        script.at(4).head(5).message("claude#1", 7);
+        script.at(5).head(8).progressAfter(5);
+        script.at(7).head(8).message("claude#1", 9);
+
+        script.run(2, Duration.ofSeconds(20));
+
+        assertEquals(List.of(2, 4, 5, 7), script.resumedAtTicks, "the progress itself and the later message each resume it");
     }
 
     @Test
@@ -342,11 +410,10 @@ final class AgentRunControllerTest {
         script.at(0).head(1).announced();
         script.endlessProgress = true;
 
-        AgentRunController.Result result = script.run(3, Duration.ofSeconds(40));
+        script.run(3, Duration.ofSeconds(40));
 
-        assertEquals(3, result.resumes());
-        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#1 session-1", "resume claude#1 session-1", "resume claude#1 session-1"), script.launches,
-                "the provider's lane is open, but claude#2's own lane ended");
+        assertTrue(script.launches.size() > 5, script.launches.toString());
+        assertTrue(script.launches.stream().skip(2).allMatch("resume claude#1 session-1"::equals), "the provider's lane is open, but claude#2's own lane ended: " + script.launches);
     }
 
     @Test
@@ -636,6 +703,8 @@ final class AgentRunControllerTest {
         private final List<Integer> lifetimes = new ArrayList<>();
         private final java.util.TreeMap<Integer, State> states = new java.util.TreeMap<>();
         private boolean endlessProgress;
+        /** Whether the controller's sessions can be kept, as real leases opened by its own children can. */
+        private boolean keepSessions;
         private int tick;
         private int launched;
 
@@ -666,6 +735,11 @@ final class AgentRunControllerTest {
                 @Override
                 public void ended(String connectionInstanceId) {
                     connections.add("ended " + connectionInstanceId);
+                }
+
+                @Override
+                public boolean keep(String connectionInstanceId) {
+                    return keepSessions && !connections.contains("ended " + connectionInstanceId);
                 }
             };
             AgentRunController controller = new AgentRunController(this::start, this::observe, named, () -> tick * 1_000L, millis -> tick++);
@@ -775,7 +849,8 @@ final class AgentRunControllerTest {
 
                 @Override
                 public boolean holdsOpenLane(String provider, String connectionInstanceId) {
-                    return hasOpenLane(provider) && !withoutOwnLane.contains(agentOf.get(connectionInstanceId)) && laneHeldUnder(connectionInstanceId);
+                    return hasOpenLane(provider) && !withoutOwnLane.contains(agentOf.get(connectionInstanceId)) && !state.endedLanes.contains(agentOf.get(connectionInstanceId))
+                            && laneHeldUnder(connectionInstanceId);
                 }
 
                 @Override
@@ -826,6 +901,13 @@ final class AgentRunControllerTest {
         private boolean otherComputer;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
+        private final List<String> endedLanes = new ArrayList<>();
+
+        /** The lane of this agent, by its label, has ended: integrated, cancelled or continued by another. */
+        private State laneEnded(String agent) {
+            endedLanes.add(agent);
+            return this;
+        }
 
         /** A message addressed to the lane of this agent, by its label, at this log position. */
         private State message(String agent, long sequence) {

@@ -632,6 +632,79 @@ final class McpRecoveryContinuationTest {
         assertEquals("respond_coordination", admission.get("nextAction"), admission.toString());
     }
 
+    /**
+     * Overnight run across two computers, defect 3: an author whose agent left was SUSPENDED before it
+     * was held, and fresh agents were offered its snapshot for review while a continuation was waiting
+     * for them. A suspended author cannot admit a reviewer either, so the fresh agent is pointed at the
+     * held lane and not at a review that would wait on nobody.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void freshSessionIsNotLedToReviewASuspendedAuthorWhileAContinuationWaits(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("suspended-author-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        for (String connection : List.of("author-held", "author-suspended", "fresh")) {
+            ensureAndTrust(sessions, location, project, connection);
+        }
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build slug and wrap", "Review each exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var held = collaboration.announce(project, "codex", "author-held", "Implement slug", "Publish slug", List.of(ResourceSelector.pathExact("slug.py")), groupId);
+        var suspended = collaboration.announce(project, "codex", "author-suspended", "Implement wrap", "Publish wrap", List.of(ResourceSelector.pathExact("wrap.py")), groupId);
+        publishForReview(project, location, "author-suspended", suspended.intent(), "snap_wrap", "wrap.py");
+        holdForRecovery(project, location, "author-held", held.intent().participant());
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        new org.synesis.coordination.application.WorkIntentService(store(project), identity).suspend(suspended.intent().participant());
+
+        McpProtocolHandler fresh = new McpProtocolHandler(sessions, project, "codex", "fresh");
+        Map<String, Object> ensured = (Map<String, Object>) innerResult(fresh.handleMessage(toolCall("ensure_session", "{}"))).get("result");
+        assertFalse(ensured.containsKey("reviewCandidates"), "a suspended author cannot admit a reviewer: " + ensured);
+        List<Map<String, Object>> continuations = (List<Map<String, Object>>) ensured.get("continuationCandidates");
+        assertEquals(List.of(held.intent().intentId().toString()), continuations.stream().map(candidate -> candidate.get("sourceIntentId")).toList(), ensured.toString());
+        Map<String, Object> continuation = continuationArguments(fresh.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals(held.intent().intentId().toString(), ((Map<String, Object>) continuation.get("payload")).get("intentId"), continuation.toString());
+    }
+
+    /**
+     * Fourth real run on the ADR-0099 amendment: a reviewer lane's module was integrated through
+     * another reviewer, while other modules of the same work group were still open. The lane was told
+     * to wait for ever. It is now told that no open producer lane claims what it reviews, and that it
+     * may cancel and take other work; a cancelled lane's connection then starts a fresh session.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReviewerWhoseModuleWasIntegratedElsewhereIsToldItMayCancelAndTakeOtherWork(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("moot-reviewer-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        for (String connection : List.of("producer-slug", "producer-cli", "reviewer")) {
+            ensureAndTrust(sessions, location, project, connection);
+        }
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build slug and cli", "Review each exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        collaboration.announce(project, "codex", "producer-slug", "Implement slug", "Publish slug", List.of(ResourceSelector.pathExact("slug.py")), groupId);
+        collaboration.announce(project, "codex", "producer-cli", "Implement cli", "Publish cli", List.of(ResourceSelector.pathExact("cli.py")), groupId);
+        collaboration.announce(project, "codex", "reviewer", "Review slug", "Independently review slug", List.of(ResourceSelector.pathExact("review_slug.md")), groupId, WorkIntent.Role.REVIEWER,
+                List.of(ResourceSelector.pathExact("slug.py")));
+        collaboration.release(project, "codex", "producer-slug");
+
+        McpProtocolHandler reviewer = new McpProtocolHandler(sessions, project, "codex", "reviewer");
+        Map<String, Object> next = innerResult(reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("wait", next.get("nextAction"), next.toString());
+        assertTrue(String.valueOf(((Map<String, Object>) next.get("result")).get("instruction")).contains("cancel_lane"), next.toString());
+
+        String before = new ProviderSessionBindingService().find(location, "codex", "reviewer").orElseThrow().sessionId();
+        assertEquals("completed", innerResult(reviewer.handleMessage(toolCall("cancel_lane", "{\"reason\":\"slug.py was integrated after another review\"}"))).get("status"));
+        assertEquals("ready", innerResult(reviewer.handleMessage(toolCall("ensure_session", "{}"))).get("status"));
+        assertNotEquals(before, new ProviderSessionBindingService().find(location, "codex", "reviewer").orElseThrow().sessionId(), "a cancelled lane's connection starts a fresh session");
+    }
+
     private static void publishForReview(Path project, ProjectLocation location, String connection, WorkIntent intent, String snapshotId, String path) throws Exception {
         String session = new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().sessionId();
         SnapshotProvenance provenance = new SnapshotProvenance(intent.workGroupId(), intent.intentId(), intent.authorityLineageId(), intent.participant(), session, intent.version(), List.of(), List.of(),

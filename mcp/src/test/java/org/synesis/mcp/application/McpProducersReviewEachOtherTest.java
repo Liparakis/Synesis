@@ -137,6 +137,63 @@ final class McpProducersReviewEachOtherTest {
         assertEquals(1, store(project).workGroupProjection().grants().size());
     }
 
+    /**
+     * Real run across two computers on the ADR-0099 amendment: an agent held a review grant for
+     * roman.py, its own csvline.py was integrated meanwhile, and its review decision was refused at
+     * the recovery fence (SESSION_RECOVERY_STATE_UNAVAILABLE). Nobody else could review roman.py,
+     * since the grant held it, and the run stopped. A completed lane may still finish a review it
+     * holds.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aProducerWhoseOwnModuleWasIntegratedStillFinishesTheReviewItHolds(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("finish-held-review"));
+        List<Producer> producers = new ArrayList<>();
+        List<String> snapshots = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            producers.add(producer(project, "held-review-" + index, MODULES.get(index)));
+            snapshots.add(publish(producers.get(index)));
+        }
+        Producer slug = producers.get(0);
+        Producer wrap = producers.get(1);
+        Producer roman = producers.get(2);
+        String workGroupId = String.valueOf(store(project).collaborationProjection().intent(java.util.UUID.fromString(slug.intentId())).orElseThrow().workGroupId());
+        // A real agent binds its connection through ensure_session, which is what the recovery fence guards.
+        answered(wrap.handler().handleMessage(toolCall("ensure_session", Map.of())));
+
+        Map<String, Object> slugReview = reviewDecision(wrap, slug, snapshots.get(0), workGroupId);
+        Map<String, Object> wrapReview = reviewDecision(roman, wrap, snapshots.get(1), workGroupId);
+        wrapReview.put("result", "accepted");
+        answered(roman.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", wrapReview))));
+        for (int look = 0; look < 3 && !"COMPLETED".equals(store(project).collaborationProjection().participantState(wrap.participant()).orElseThrow().name()); look++) {
+            // The author's next look integrates its accepted snapshot, as a real agent's does.
+            wrap.handler().handleMessage(toolCall("get_next_action", Map.of("completionRequested", true)));
+        }
+        assertEquals("COMPLETED", store(project).collaborationProjection().participantState(wrap.participant()).orElseThrow().name(), "wrap.py was integrated");
+
+        slugReview.put("result", "accepted");
+        String decided = wrap.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", slugReview)));
+        assertFalse(decided.contains("SESSION_RECOVERY_STATE_UNAVAILABLE"), decided);
+        assertEquals("ACCEPTED", store(project).workGroupProjection().reviewValidationForSnapshot(snapshots.get(0)).orElseThrow().result());
+    }
+
+    /**
+     * Asks to review one author's snapshot, has the author admit it, consumes the grant, and returns
+     * the review decision payload the reviewer is then offered.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> reviewDecision(Producer reviewer, Producer author, String snapshot, String workGroupId) {
+        answered(reviewer.handler().handleMessage(toolCall("request_coordination", Map.of("kind", "work_group_join", "payload",
+                Map.of("workGroupId", workGroupId, "intentId", author.intentId(), "snapshotId", snapshot, "proposal", "Review " + author.module())))));
+        assertEquals("ACCEPTED", ownerAnswer(author).get("coordinationStatus"));
+        Map<String, Object> consume = (Map<String, Object>) result(reviewer.handler().handleMessage(toolCall("get_next_action", Map.of()))).get("workflow");
+        assertEquals("request_coordination", consume.get("recommendedTool"), consume.toString());
+        answered(reviewer.handler().handleMessage(toolCall("request_coordination", (Map<String, Object>) consume.get("arguments"))));
+        Map<String, Object> next = result(reviewer.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertEquals("review_decision", next.get("nextProtocolAction"), next.toString());
+        return new LinkedHashMap<>((Map<String, Object>) next.get("nextProtocolPayload"));
+    }
+
     /** Executes the owner's recommended answer to the review admission asked of it and returns that answer. */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> ownerAnswer(Producer owner) {

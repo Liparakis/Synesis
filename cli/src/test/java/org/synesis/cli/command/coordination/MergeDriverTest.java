@@ -74,4 +74,12 @@ final class MergeDriverTest {
             assertEquals(0, overlap.get());
         }
     }
+
+    @Test
+    void aRepeatingDriverRunsPassesWithNoMemberEntry() throws Exception {
+        CountDownLatch twoPasses = new CountDownLatch(2);
+        try (MergeDriver _ = new MergeDriver(twoPasses::countDown, 10).repeatEvery(50)) {
+            assertTrue(twoPasses.await(10, TimeUnit.SECONDS), "accepted member work is merged although no member entry follows it");
+        }
+    }
 }

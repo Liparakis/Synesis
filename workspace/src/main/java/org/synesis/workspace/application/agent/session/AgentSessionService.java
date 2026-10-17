@@ -169,6 +169,11 @@ public final class AgentSessionService {
             if (AgentResponse.SESSION_TERMINAL_STATE_UNAVAILABLE.equals(ex.code())) {
                 return AgentResponse.sessionTerminalStateUnavailable(ex);
             }
+            if ("SESSION_AUTHORITY_OPEN".equals(ex.code())) {
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, java.util.Map.of("reason", "SESSION_AUTHORITY_OPEN", "openAuthority",
+                        java.util.List.of(ex.getMessage().split(",")), "instruction",
+                        "This session's lane has ended, but it still holds what openAuthority lists. Call get_next_action and finish that first; then call ensure_session again to start a fresh session for your next task."));
+            }
             // The code alone left nothing to diagnose when a session could not be bound once in a real run.
             return AgentFailures.internal(request.projectRoot(), "session.bind", ex, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {

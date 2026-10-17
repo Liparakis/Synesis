@@ -245,8 +245,159 @@ on yet ends with WAIT again, and the agent ends its turn again.
   by the request, with no sleep call in its log.
 - No `run_command` in an agent log whose argv only sleeps succeeds.
 
+## Amendment of 2026-10-17: a waiting agent keeps its session
+
+Written after the overnight run across this PC and the VM (`docs/agent/CURRENT.md`, "Overnight real run, this PC and
+the VM"). Decisions 1, 2 and 4 change rules; the owner approved each as written here on 2026-10-17 (USER-STATED).
+Decisions 3 and 5 change no rule.
+
+### What went wrong (VERIFIED in the agent logs of run `run-0e6c908a`)
+
+The run controller gave every process of an agent a new connection identity and recorded the old one as ended when the
+process exited; the MCP server also closed its own lease at end of input. A closed lease is taken as proof that the agent
+is gone, so its participant was suspended and held for recovery within seconds. Under this ADR ending the turn is how an
+agent waits, and a Codex agent's process exits at every WAIT, so every wait became a departure. Each resume was then a new
+session with no lane: `claude#2` was resumed ten times; in resumes 6, 7 and 8 it was offered its own held lane
+(`continuation_available`) and claimed a new module instead. "One agent claimed four modules" was four sessions of one
+provider conversation, each leaving a held lane behind, and dozens of participants churned through `RECOVERY_HELD` and
+`DETACHED` while review requests waited on held authors.
+
+### Decision 1: the run controller keeps its agents' sessions (rule change)
+
+**Example.** Codex agent `codex#1` on the VM publishes `slug.py` and is told WAIT. Its process exits. Before, the VM's
+Synesis recorded `codex#1` as gone: its lane went to recovery, and the review request Claude sent from this PC waited on
+nobody. Now the controller that started `codex#1` still intends to resume it, so it keeps the session alive: the lease
+of that connection names the controller process and the controller renews it. `codex#1` stays `ACTIVE` in the log on both
+computers; Claude's request is addressed to a live author; the controller resumes `codex#1` into the same session and
+the same lane, and it admits the reviewer.
+
+- **One connection identity per controller agent.** The controller opens one identity for each agent and passes it to
+  every process of that agent, first start and resumes. Same identity means the same binding, the same session and the
+  same lane (exact resolution, `SessionAuthorityResolver`). Nothing is revived: a binding that is completed or terminal
+  stays so, and `RECOVERY_HELD` or `DETACHED` are never reattached (ADR-0055).
+- **The lease names its keeper.** `SessionLeaseService.keep` points the lease of a connection at the controller process
+  and refreshes its heartbeat, under the project append lock. It takes over only a lease that is not closed or terminal
+  and that names either the controller itself or a live descendant of it (its agent's MCP server), so it can only keep
+  sessions of processes it started. The liveness rule is unchanged and already right: keeper alive and heartbeat fresh
+  is `ACTIVE`; keeper gone is an absence that becomes recoverable after the grace period. The MCP server's own close at
+  end of input then no longer applies (its pid is not the one the lease names), and a resumed MCP server renews a lease
+  that names the keeper.
+- **While the controller can come back to an agent, it keeps it**: the agent's process runs, or it is stopped with an
+  open lane, a provider session to resume and budget left (Decision 2). Otherwise, and when the run ends, the
+  controller ends the connection as before (closed cleanly) and runs the ordinary recovery at once, which the MCP
+  server's close used to do; with every agent stopped, nobody else would.
+- **Bounded.** A kept lane cannot be taken over while the run lives: at most `--timeout-minutes` (30 by default). A
+  controller that is killed stops renewing; its agents' lanes become recoverable after the existing five-minute grace,
+  as for any lost process. A first process that exits before the controller's next look (2 s) closed its own lease;
+  that agent then falls back to the old behaviour (a new connection on resume).
+- **The controller asks the connection's current session at every look.** A kept connection starts a fresh session
+  when its lane has ended (Decision 4), so which participant it stands for changes; the observer had kept the first
+  answer per connection, and in the first real run on this amendment it ended two kept sessions that had just taken
+  their next lane, which went to recovery (`docs/agent/CURRENT.md`).
+- **The Stop hook does not renew.** The agent it holds is a running process, which the controller keeps anyway; and
+  for an agent without a controller, a live MCP process is never recoverable however quiet it is (`SUSPECTED_STALE`
+  drives nothing).
+- **Interactive agents without a controller**: unchanged. Their session lives as long as the provider's MCP process.
+  Ending a turn keeps the process, so the lane stays theirs; closing the provider ends the session and its lane is
+  recovered, as before. A provider resumed by hand starts a new MCP process with a new identity, so a new session.
+
+### Decision 2: `--max-resumes` bounds idle resumes in a row (rule change)
+
+The budget counted every resume, and every WAIT now costs one, so a busy agent ran out (8 for `claude#2`, 7 for
+`codex#1`) and a review request addressed to it could no longer resume it. Now a resume is idle when nothing was recorded
+in the log while that process ran (`BOOKKEEPING` excluded), and the budget bounds idle resumes **in a row**: any progress
+resets the count. An agent resumed for a review request that it answers is not idle; an agent resumed again and again
+into a project where nothing moves is stopped after the budget, as before. The resume trigger, `BOOKKEEPING`,
+`holdsOpenLane` and `heldByOperator` are unchanged. Name, default (8) and `AGENT_RESUMES` stay; the option's meaning
+narrows.
+
+Progress recorded while the agent was stopped resets the count too, and that progress is what resumes it, so the budget
+in practice bounds resumes for messages and answer deadlines after which nothing happens, and `RESUME_LIMIT_REACHED`
+names those (or a budget of 0). Resumes for progress are bounded by the progress itself, by `holdsOpenLane` and by the
+run's time limit, not by the budget. Counting them would starve the agent again: a waiting author resumed for other
+modules' work finds nothing to do each time, and eight such resumes would leave it asleep when its review request came.
+
+One addition with the same rule as the Stop hook's "your lane has ended" wake: an agent that stopped holding a lane and
+whose lane then ended (integrated, cancelled, continued by another) is resumed once while work is open, on a new
+connection and so in a fresh session, to take the next piece of work, as a Claude agent woken by its hook does in the
+same process (Decision 4). Its kept connection is ended when its lane ends. A first start is not a resume and is not
+counted.
+
+### Decision 3: reviews are offered only for active authors (guidance only)
+
+`reviewCandidatesFor` offers a snapshot only when its author's participant is `ACTIVE` in the log. A suspended author
+cannot answer a review request any more than a held one, and neither can one whose lane has ended (completed, cancelled,
+revoked, detached) or that the log does not know; a snapshot still waiting for review has an active author in every
+ordinary history, so this hides only snapshots nobody could admit a reviewer to. Only the log counts, the same on every computer; a stale lease
+does not, because an agent told WAIT makes no call until woken and is not absent.
+
+### Decision 4: a completed session may start a fresh one on the same connection (rule change)
+
+ADR-0030 and ADR-0055 forbid reviving a completed binding, and that stays. Commit `8b5f01e9` already makes
+`ensure_session` start a fresh binding (new session, participant and worktree) for a connection whose lane ended. What
+refused `claude#1` was the recovery fence in front of it, which reads only bound sessions. The fence now lets
+`ensure_session` through for an exact completed binding, as it lets the closing `get_next_action` through; every other
+tool stays fenced. The binding service, where the fresh binding is made and for both routes there (a binding marked
+completed here, a lane that ended in the log), refuses `SESSION_AUTHORITY_OPEN` while the ended session still holds
+authority (a review grant, a review request, a command: the blockers of terminalization), because the fresh binding
+replaces the one that holds it; the agent is pointed to `get_next_action` to finish it first.
+
+Finishing it has to be possible, and on an ordinary connection it was not. In the third real run on this amendment an
+agent held the review grant of `roman.py` when its own `csvline.py` was integrated; its review decision was refused at
+the same fence, nobody else could review `roman.py` while the grant held it, and the run stopped. The fence now lets a
+completed binding through to the tools whose policy already admits one (`request_coordination`,
+`respond_coordination`; the rule a managed connection had, `ManagedAdmissionState.REVIEW_ONLY`). Downstream only
+consuming a review grant and recording a review decision accept a completed binding, and both check the grant
+(`SessionAuthorityResolver.resolveReview`); every other coordination operation resolves a bound binding and fails
+closed as before.
+
+### Decision 5: one open lane per agent (documented, no new rule)
+
+A session holds one lane, and with Decision 1 a controller agent has one session at a time, so it holds at most one
+open lane; it takes the next piece of work only after its lane has ended. No admission limit is added.
+
+### Merging a member's work no one here calls in for (ADR-0098, found in the same runs)
+
+The leader merges a member's work in a pass after each member entry, and every agent call on the leader runs the same
+pass. In the third run a member's `wrap.py` was accepted by a reviewer on the leader; its author on the member, woken,
+found nothing to record, and every agent on the leader was waiting, so no pass ran and the accepted work waited until
+the run's end (one pass by hand merged it at once). The leader's merge driver now also runs a pass every 30 s while the
+project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge does nothing.
+
+### Published contracts of the amendment
+
+- Session lease file (local, never replicated): same format; `processIdentity` may now name the run controller that
+  keeps the session rather than the MCP server process.
+- `synesis agents run --max-resumes`: same name and default, narrower meaning (Decision 2).
+- `ensure_session` on a connection whose lane completed now starts a fresh session instead of refusing
+  `SESSION_RECOVERY_STATE_UNAVAILABLE`; new refusal reason `SESSION_AUTHORITY_OPEN` with `openAuthority` and
+  `instruction` (additive).
+- A connection whose lane completed may now call `request_coordination` and `respond_coordination`; consuming a
+  review grant and recording a review decision succeed for it, every other operation is refused downstream as before
+  instead of at the fence with `SESSION_RECOVERY_STATE_UNAVAILABLE`.
+- Java API, additive: `SessionLeaseService.keep`, `ProviderSessionTerminalizationService.openAuthority`, and a default
+  method `keep` on `AgentRunController.Connections` (an implementation without it keeps the old behaviour).
+
+### Not done
+
+- `keep` reads only the lease, not the log. A participant that was suspended while its controller still kept it (only
+  possible if the controller was stopped past the grace period) is resumed on the same connection and refused
+  `SESSION_EPOCH_FENCED`; it is not continued by its own agent until the run ends. A controller agent that the resume
+  rule will not wake (its lanes wait for an operator) also keeps its lane until the run ends. Both are bounded by
+  `--timeout-minutes`.
+- `ControllerConnections.ended` gives up after its attempts when the project lock stays busy, as before; the lease then
+  names the controller until the run ends and is recovered after the grace period.
+
+- A binding whose worker is clean, holds private commits and is behind a moved control head is replaced by a new
+  binding on `ensure_session` (`ProviderSessionBindingService.resumeStale`), which would strand an open lane of a kept
+  session. Agents write through `apply_patch` and snapshots are made with `commit-tree`, so their worktrees stay dirty and
+  take the refresh path instead; the case is recorded, not fixed.
+
 ## Future
 
+- **Resume only for what is addressed to the lane.** The controller still resumes a stopped agent on any progress.
+  With idle resumes counted in a row, that cannot starve it, but a Codex agent waiting for review is resumed for
+  unrelated progress too. The Stop hook's lane-view comparison could decide the controller's resumes as well.
 - **One list of managed hook entries per provider.** `ProviderIntegration` now has three parallel pairs
   (`managedHook`, `managedSessionHook`, `managedStopHook` and their `isManaged...` checks), and
   `ProviderHookConfiguration` repeats the replace/remove/compare steps for each. A list of managed entries keyed

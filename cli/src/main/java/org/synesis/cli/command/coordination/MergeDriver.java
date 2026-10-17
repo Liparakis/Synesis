@@ -66,6 +66,20 @@ final class MergeDriver implements AutoCloseable {
     }
 
     /**
+     * Also asks for a pass at a fixed interval while the driver lives. A member's work can become
+     * mergeable with no member entry after it: its snapshot was accepted by a reviewer on this
+     * computer, and its author, woken, found nothing to record. With no agent here calling in, that
+     * work waited for ever (real run across two computers, 2026-10-17); the next pass merges it.
+     *
+     * @param intervalMillis time between passes
+     * @return this driver
+     */
+    MergeDriver repeatEvery(long intervalMillis) {
+        runner.scheduleWithFixedDelay(this::onMemberEntry, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        return this;
+    }
+
+    /**
      * Asks for a pass: called when a member's entry went on the log. Returns at once.
      */
     void onMemberEntry() {

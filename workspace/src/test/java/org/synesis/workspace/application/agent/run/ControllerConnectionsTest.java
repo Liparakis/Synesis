@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.agent.run;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,6 +79,37 @@ final class ControllerConnectionsTest {
 
         assertEquals(SessionLeaseState.CLOSED_CLEANLY, store.load(project, ended).orElseThrow().leaseState(),
                 "an end met by a busy project lock must still be recorded");
+    }
+
+    /**
+     * A busy project lock decides nothing: ending the session over it would send a waiting agent's
+     * lane to recovery although the controller will resume it.
+     */
+    @Test
+    void aSessionIsNotGivenUpBecauseTheProjectLockWasBusy(@TempDir Path temp) throws Exception {
+        Path project = Files.createDirectories(temp.resolve("project"));
+        new ProjectApplicationService().init(project);
+        SessionLeaseStore store = new SessionLeaseStore();
+        ControllerConnections connections = new ControllerConnections(project, new SessionLeaseService());
+        String waiting = connections.open();
+        SessionLeaseRecord lease = activeLease(waiting);
+        store.save(project, lease);
+
+        CountDownLatch held = new CountDownLatch(1);
+        Thread holder = Thread.ofPlatform().start(() -> {
+            try (ProjectAppendLock _ = ProjectAppendLock.acquire(project.resolve(".synesis").resolve("coordination"))) {
+                held.countDown();
+                Thread.sleep(3_000L);
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+        });
+        held.await();
+        assertTrue(connections.keep(waiting), "nothing was decided, so the session is not given up");
+        holder.join();
+
+        assertEquals(lease, store.load(project, waiting).orElseThrow(), "nothing was written either");
+        assertFalse(connections.keep(waiting), "once decided, a lease naming a process the controller did not start is not kept");
     }
 
     @Test

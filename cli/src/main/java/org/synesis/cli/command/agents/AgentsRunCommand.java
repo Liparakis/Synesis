@@ -50,7 +50,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
     private String project;
     @Option(names = "--timeout-minutes", defaultValue = "30", description = "Stop after this many minutes if work is unfinished (default: 30).")
     private long timeoutMinutes;
-    @Option(names = "--max-resumes", defaultValue = "8", description = "How often one agent may be resumed (default: 8).")
+    @Option(names = "--max-resumes", defaultValue = "8", description = "How many times in a row one agent may be resumed with nothing recorded in the log while it ran; any progress resets the count (default: 8).")
     private int maxResumes;
     @Option(names = "--poll-seconds", defaultValue = "2", description = "Seconds between checks of coordination state (default: 2).")
     private long pollSeconds;

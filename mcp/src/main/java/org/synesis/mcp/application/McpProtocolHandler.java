@@ -333,7 +333,7 @@ public final class McpProtocolHandler {
      *
      * @param attestation       whether these arguments, possibly {@code null}, can increase authority and so need a
      *                          valid provider manual attestation
-     * @param completedBindings whether a completed managed connection may still call the tool
+     * @param completedBindings whether a connection whose lane completed may still call the tool, managed or not
      * @param skipsLease        whether the call leaves the ordinary activity lease renewal to the tool itself
      */
     private record ToolPolicy(Predicate<Map<String, Object>> attestation, boolean completedBindings, boolean skipsLease) {
@@ -607,7 +607,7 @@ public final class McpProtocolHandler {
             return refusal;
         }
         renewLeaseForActivity(policy, managedState);
-        refusal = refuseFencedRecovery(id, tool, arguments);
+        refusal = refuseFencedRecovery(id, tool, arguments, policy);
         if (refusal != null) {
             return refusal;
         }
@@ -662,14 +662,16 @@ public final class McpProtocolHandler {
     /**
      * Stops a bound connection whose lane is recovery-fenced or whose recovery state cannot be read.
      * Active bindings pass through the fence; completed bindings reach only the completion service's
-     * exact durable-result replay checks.
+     * exact durable-result replay checks, the closing inbox read, a fresh session, and the tools whose
+     * policy admits a completed binding.
      *
      * @param id        JSON-RPC request identifier
      * @param tool      raw tool name
      * @param arguments tool arguments, possibly {@code null}
+     * @param policy    policy of the called tool
      * @return the refusal reply, or {@code null} to continue
      */
-    private String refuseFencedRecovery(Object id, String tool, Map<String, Object> arguments) {
+    private String refuseFencedRecovery(Object id, String tool, Map<String, Object> arguments, ToolPolicy policy) {
         if (!sessionEstablishment.isSessionBound()) {
             return null;
         }
@@ -683,10 +685,16 @@ public final class McpProtocolHandler {
             }
         } catch (Exception failure) {
             // A lane that completed has no active binding left to fence, and its agent's
-            // closing inbox read must be told so rather than sent to a human. Only that
-            // read is let through: every mutating tool still fails closed here.
-            boolean closingRead = McpToolCatalog.GET_NEXT_ACTION.equals(tool) && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
-            if (!closingRead) {
+            // closing inbox read must be told so rather than sent to a human. Only that read,
+            // ensure_session, which starts a fresh session for the agent's next task without
+            // reviving the completed one (ADR-0099, amendment), and the coordination tools are
+            // let through. Of those, only consuming a review grant and recording a review decision
+            // accept a completed binding, checking the grant (SessionAuthorityResolver.resolveReview),
+            // so a review it holds can still be finished, as on a managed connection; every other
+            // operation and every mutating tool still fails closed.
+            boolean completedLaneMayContinue = (policy.completedBindings() || McpToolCatalog.ENSURE_SESSION.equals(tool))
+                    && sessionEstablishment.exactBindingCompleted(projectRoots.activeProjectRoot());
+            if (!completedLaneMayContinue) {
                 System.err.println("SYNESIS_MCP_RECOVERY_FENCE_CHECK_FAILURE=" + failure.getClass().getSimpleName());
                 return textResultResponse(id, policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", "SESSION_RECOVERY_STATE_UNAVAILABLE").toJson());
             }

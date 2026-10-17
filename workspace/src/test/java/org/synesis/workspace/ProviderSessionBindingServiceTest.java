@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -220,6 +221,39 @@ final class ProviderSessionBindingServiceTest {
         assertNotEquals(ended.sessionId(), next.sessionId());
         assertEquals(gitHead(root), next.baseCommit());
         assertEquals(open.sessionId(), stillOpen.sessionId());
+    }
+
+    /**
+     * A fresh binding replaces the one at the connection's path. A session whose lane ended but that
+     * still holds a request open would lose it, so it keeps its session until that is answered
+     * (ADR-0099, amendment, decision 4).
+     */
+    @Test
+    void sessionWhoseLaneEndedKeepsItsSessionWhileItStillHoldsARequest() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-lane-ended-open-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "ended@example.invalid");
+        git(root, "config", "user.name", "Lane Ended Test");
+        git(root, "commit", "-m", "baseline");
+        var service = new ProviderSessionBindingService();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId());
+        var intents = new WorkIntentService(store, identity);
+
+        var open = service.ensure(location, "codex", "open-lane").binding();
+        UUID openIntent = announce(intents, location, open, "open.py");
+        var ended = service.ensure(location, "codex", "ended-lane").binding();
+        String endedParticipant = WorkspaceCollaborationService.participantHandle(ended.sessionId());
+        UUID endedIntent = announce(intents, location, ended, "ended.py");
+        intents.request(endedParticipant, openIntent, CoordinationRequest.Kind.CONTRACT, "Agree the interface");
+        intents.release(endedIntent, endedParticipant);
+
+        var refused = assertThrows(ProviderSessionBindingService.BindingException.class, () -> service.ensure(location, "codex", "ended-lane"));
+        assertEquals("SESSION_AUTHORITY_OPEN", refused.code());
+        assertEquals(ended.sessionId(), service.find(location, "codex", "ended-lane").orElseThrow().sessionId());
     }
 
     private static UUID announce(WorkIntentService intents, ProjectLocation location, ProviderSessionBindingService.Binding binding, String path) throws Exception {

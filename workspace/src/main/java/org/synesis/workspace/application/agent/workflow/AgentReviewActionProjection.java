@@ -178,12 +178,15 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
             result.put(NextActionKeys.STATE, "REVIEWER_PENDING");
             result.put(NextActionKeys.REVIEWER_PENDING, true);
             boolean producerLaneOpen = store.collaborationProjection().activeIntents().stream()
-                    .anyMatch(intent -> intent.workGroupId().equals(reviewer.workGroupId()) && intent.role() == WorkIntent.Role.PRODUCER);
+                    .anyMatch(intent -> intent.workGroupId().equals(reviewer.workGroupId()) && intent.role() == WorkIntent.Role.PRODUCER && reviewTargetsMatch(reviewer, intent));
             if (!producerLaneOpen) {
-                // Reached when the producer left after this reviewer was admitted. A session holds
-                // one lane, so the reviewer cannot take the implementation over itself.
-                result.put("instruction", "No producer lane exists in this work group any more, so nothing will be submitted for review until a participant announces one. "
-                        + "Keep waiting, or call cancel_lane with the reason if no producer is coming.");
+                // Reached when the producer left after this reviewer was admitted, or when what it
+                // reviews was integrated through another reviewer: in a real run two agents waited
+                // here for ever while other modules of the same work group were still open. A
+                // session holds one lane, so the reviewer cannot take the implementation over itself.
+                result.put("instruction", "No open producer lane claims what this lane reviews: its producer left, or its work was integrated after another review. "
+                        + "Nothing will be submitted for this lane to review until a participant announces it again. Keep waiting, or call cancel_lane with the reason if no producer is coming; "
+                        + "then call ensure_session again to take other work.");
             }
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
             result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
@@ -623,11 +626,18 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
      * recovery only its successor can answer it (ADR-0085). A caller that claimed a reviewer lane
      * for such a snapshot could neither be admitted nor, holding a lane, continue the author: in a
      * real run both fresh agents did this and the run stalled. Such a caller is pointed at the
-     * continuation instead, and the snapshot is offered again once the author's lane is continued.</p>
+     * continuation instead, and the snapshot is offered again once the author's lane is continued.
+     * An author that is suspended, or otherwise not active, cannot answer either: it is held moments
+     * later, and in the overnight run across two computers fresh agents took reviews of suspended
+     * authors while a continuation waited for them.</p>
+     *
+     * <p>Only the participant state in the log counts, the same on every computer. A quiet author is
+     * not an absent one: an agent told WAIT makes no call until it is woken, so a session lease that has
+     * gone stale says nothing about whether the author will answer (ADR-0099).</p>
      *
      * @param store         current project projection
      * @param participantId exact participant handle
-     * @return the open candidates the participant did not produce and whose author is not held
+     * @return the open candidates the participant did not produce and whose author is active
      */
     static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
         var collaboration = store.collaborationProjection();
@@ -636,8 +646,8 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
             WorkIntent producer = reviewProducerIntent(store, snapshot);
             boolean ownWork = ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity())
                     || snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
-            boolean authorHeld = producer != null && collaboration.participantState(producer.participant()).orElse(null) == Participant.State.RECOVERY_HELD;
-            return !ownWork && !authorHeld;
+            boolean authorAbsent = producer != null && collaboration.participantState(producer.participant()).orElse(null) != Participant.State.ACTIVE;
+            return !ownWork && !authorAbsent;
         }).isPresent()).toList();
     }
 

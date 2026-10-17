@@ -1,19 +1,26 @@
 package org.synesis.workspace.application.agent.run;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.reconciliation.ReconciliationService;
 
 /**
- * Gives each provider process the controller starts its own connection identity, and records in
- * the project's session leases that the connection ended when the process exits.
+ * Gives each agent the controller starts its connection identity, keeps the session of a connection
+ * while the controller can still start a process on it, and records in the project's session leases
+ * that the connection ended when it will not.
  *
- * <p>An MCP server that reaches end of input closes its own lease. One that is killed with its
- * provider cannot, and its lease then looks like an abrupt loss that Synesis only accepts after a
- * grace period. The controller watched its child exit, which is proof of the same kind as end of
- * input, so it closes the lease the same way. It can only name connections it opened itself.</p>
+ * <p>An MCP server that reaches end of input closes its own lease, and one that is killed with its
+ * provider leaves an abrupt loss that Synesis only accepts after a grace period. Neither is true of
+ * an agent that ended its turn to wait and will be resumed on the same connection, so the controller
+ * keeps that session: the lease names the controller process, which renews it (ADR-0099, amendment).
+ * When the controller ends a connection it has seen its process exit, which is proof of the same
+ * kind as end of input, so it closes the lease the same way. It can only keep or end connections of
+ * processes it started.</p>
  */
 public final class ControllerConnections implements AgentRunController.Connections {
 
@@ -25,6 +32,7 @@ public final class ControllerConnections implements AgentRunController.Connectio
 
     private final Path projectRoot;
     private final SessionLeaseService leases;
+    private final SessionLeasePolicy policy = new SessionLeasePolicy();
 
     /**
      * Creates the connections of one project.
@@ -54,8 +62,26 @@ public final class ControllerConnections implements AgentRunController.Connectio
         // abrupt-loss grace period passes, and the agent resumed to continue it is offered nothing.
         for (int attempt = 0; attempt < END_RECORD_ATTEMPTS; attempt++) {
             if (leases.markClosedCleanly(projectRoot, connectionInstanceId)) {
+                // The MCP server's own close recovered the lane at once; a kept session's server
+                // no longer closes it, and with every agent stopped nobody else would.
+                try {
+                    new ReconciliationService().reconcileEligible(projectRoot);
+                } catch (Exception unavailable) {
+                    // The next admission or inbox read reconciles it.
+                }
                 return;
             }
+        }
+    }
+
+    @Override
+    public boolean keep(String connectionInstanceId) {
+        try {
+            return leases.keep(projectRoot, Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"), policy);
+        } catch (IOException busy) {
+            // Nothing was decided. The last renewal holds for minutes, and the next observation asks
+            // again; ending the session over a busy lock would send its lane to recovery.
+            return true;
         }
     }
 }
