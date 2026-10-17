@@ -126,6 +126,8 @@ public final class AgentRunController {
         // and the head at the newest observation that is older.
         Deque<HeadAt> heads = new ArrayDeque<>();
         OptionalLong seenBeforeExit = OptionalLong.empty();
+        // Why the run last said it waits with every agent stopped, so each wait is reported once.
+        Wait reportedWait = null;
         try {
             int index = 0;
             long headAtStart = observer.observe().headSequence();
@@ -192,22 +194,27 @@ public final class AgentRunController {
                     }
                 }
                 // With every agent stopped the run is over, unless a stopped owner is only waiting
-                // for its answer period to end: nothing in the log will announce that moment.
-                if (agents.stream().noneMatch(agent -> agent.process != null) && !awaitingDeadline) {
-                    Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                    // Our agents stopped, but a participant this controller did not start (another
-                    // computer's agent, an interactive agent) still holds a lane. Ending now would
-                    // leave nobody here to review or integrate its work, so keep polling until it
-                    // progresses, ends, or the deadline passes.
-                    boolean foreignLaneOpen = outcome == Outcome.STALLED && observation.foreignActiveLaneOpen(agents.stream()
-                            .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList());
-                    if (!foreignLaneOpen) {
-                        if (outcome == Outcome.NEEDS_OPERATOR) {
-                            observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
+                // for its answer period to end (nothing in the log will announce that moment), or
+                // work can still move without any agent of this run.
+                Wait waiting = null;
+                if (agents.stream().noneMatch(agent -> agent.process != null)) {
+                    if (awaitingDeadline) {
+                        waiting = Wait.ANSWER_DEADLINE;
+                    } else {
+                        Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
+                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent()) : null;
+                        if (waiting == null) {
+                            if (outcome == Outcome.NEEDS_OPERATOR) {
+                                observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
+                            }
+                            return new Result(outcome, resumes(agents));
                         }
-                        return new Result(outcome, resumes(agents));
                     }
                 }
+                if (waiting != null && waiting != reportedWait) {
+                    listener.accept("AGENT_RUN_WAITING=" + waiting);
+                }
+                reportedWait = waiting;
                 if (clockMillis.getAsLong() >= deadline) {
                     return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
                 }
@@ -242,6 +249,41 @@ public final class AgentRunController {
         return limitReached ? Outcome.RESUME_LIMIT_REACHED : Outcome.STALLED;
     }
 
+    /**
+     * Why a run whose agents have all stopped and saw nothing progress may still see its work move
+     * without them, or {@code null} when it cannot. Either way the wait is bounded by the run's own
+     * deadline, and the progress it waits for is what resumes the agents here.
+     *
+     * <p>A participant this controller did not start (another computer's agent, an interactive
+     * agent) may still hold a lane, and ending now would leave nobody here to review or integrate
+     * its work. Or nothing foreign holds a lane yet, but another computer sharing the log is
+     * connected and an agent here can come back to an open lane of its own: that computer's agents
+     * can still claim the review or give the admission the lane waits for. In the first run across
+     * two homes both agents here published, waited for a review, and stopped before the other
+     * computer's agents had claimed anything; the run ended STALLED although those agents went on
+     * to review.</p>
+     */
+    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes) {
+        if (observation.foreignActiveLaneOpen(agents.stream()
+                .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList())) {
+            return Wait.FOREIGN_LANE_OPEN;
+        }
+        if (observation.otherComputerConnected() && agents.stream().anyMatch(agent -> agent.resumable(maxResumes) && agent.holdsOpenLane(observation))) {
+            return Wait.OTHER_COMPUTER_CONNECTED;
+        }
+        return null;
+    }
+
+    /** Why a run whose agents have all stopped keeps waiting, as printed in {@code AGENT_RUN_WAITING}. */
+    private enum Wait {
+        /** A stopped owner's answer period has not ended. */
+        ANSWER_DEADLINE,
+        /** A participant this controller did not start holds an open lane. */
+        FOREIGN_LANE_OPEN,
+        /** Another computer of the project is connected and an agent here can come back to its lane. */
+        OTHER_COMPUTER_CONNECTED
+    }
+
     /** The log head the controller observed at one moment. */
     private record HeadAt(long millis, long sequence) {
     }
@@ -266,7 +308,9 @@ public final class AgentRunController {
         ALL_WORK_CANCELLED,
         /**
          * Every agent has stopped and resuming any would change nothing: nothing has progressed
-         * since it stopped, or no lane it took is still open.
+         * since it stopped, or no lane it took is still open. Nothing is left that could progress
+         * without them either: no foreign participant holds a lane, and no other computer of the
+         * project is connected while an agent here could come back to a lane of its own.
          */
         STALLED,
         /**
@@ -522,6 +566,18 @@ public final class AgentRunController {
          * @return {@code true} while another active participant holds an open lane
          */
         default boolean foreignActiveLaneOpen(List<Connection> managed) {
+            return false;
+        }
+
+        /**
+         * Reports whether another computer sharing this project's log is connected to this one:
+         * for the leader a member, for a member its leader. Its agents can claim and serve lanes
+         * that no agent here can, such as the review a lane here waits for. A computer whose
+         * Synesis process died may still be reported connected, so a caller bounds its wait.
+         *
+         * @return {@code true} while another computer of the project is connected
+         */
+        default boolean otherComputerConnected() {
             return false;
         }
 

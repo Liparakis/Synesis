@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -37,6 +38,21 @@ final class ReplicationJournalTest {
 
         assertEquals(Optional.empty(), ReplicationJournal.lastDisconnect(root));
         assertEquals(Optional.empty(), ReplicationJournal.lastDisconnect(root.resolve("absent")));
+    }
+
+    @Test
+    void aPeerIsConnectedWhenItsNewestSessionLineSaysSoAndAReplacedSessionsEndDoesNotDisconnectIt() {
+        ReplicationJournal journal = new ReplicationJournal(root);
+        journal.record("CONNECTED peer=nodeA expiry=30s");
+        journal.record("CONNECTED peer=nodeB expiry=30s");
+        journal.record("DISCONNECT peer=nodeB reason=LIVENESS_EXPIRED liveness=EXPIRED lasted=840s");
+        journal.record("REDIAL_FAILED attempt=1 cause=ConnectTimeoutException");
+        journal.record("CONNECTED peer=nodeC expiry=30s");
+        journal.record("CONNECTED peer=nodeC expiry=30s");
+        journal.record("DISCONNECT peer=nodeC reason=TRANSPORT_CLOSED liveness=ALIVE lasted=3s replaced=true");
+
+        assertEquals(Set.of("nodeA", "nodeC"), ReplicationJournal.connectedPeers(root));
+        assertEquals(Set.of(), ReplicationJournal.connectedPeers(root.resolve("absent")));
     }
 
     @Test

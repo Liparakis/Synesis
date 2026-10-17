@@ -1,3 +1,27 @@
+# 2026-10-17 — A run keeps waiting while another computer of the project is connected (defect 2 of "Two homes")
+
+**Why no resume.** The first two-home run's agent logs (`agent-runs/4ff01567-.../run-8b50f524-...`) show both owner
+agents publishing (`REVIEW_PENDING`, `validation_required`, `maxUnchangedPolls` 12), polling five times, then ending
+their turn on a 45 s background timer, which ends a headless process. Nothing was recorded after they stopped (events 8
+to 11 at 02:13 are their exits), so `progressedSince` was false and no agent was resumed. No participant of the friend
+held a lane (its bindings had failed, defect 1), so `foreignActiveLaneOpen` was false too, and the run ended `STALLED`
+although `replication.log` shows the friend `CONNECTED` from 23:08 to 23:22 UTC. In the successful run the friend's
+reviewers held lanes and recorded reviews: that foreign lane and that progress were the state missing the first time.
+
+**Rule.** When every agent has stopped and the run would end `STALLED`, it also keeps waiting while another computer of
+the project is connected (`Observation.otherComputerConnected`: for the leader a member, for a member its leader, whose
+newest `CONNECTED`/`DISCONNECT` line in `replication.log` is a start; `ReplicationJournal.connectedPeers`) and one of its
+agents can be resumed and holds an open lane. The bound is the run's own deadline, as for a foreign lane; progress from
+the other computer resumes the agents by the existing path. Each wait is printed once when it begins:
+`AGENT_RUN_WAITING=FOREIGN_LANE_OPEN`, `OTHER_COMPUTER_CONNECTED`, or `ANSWER_DEADLINE`. The managed `AGENTS.md`
+section and the provider manual now say to wait within the turn, not on a background timer, since a headless run ends
+with the turn.
+
+**Limits.** The journal is what a computer last recorded: a runtime that died leaves `CONNECTED`, and a dropped link
+that is redialing reads as disconnected, so the run then ends as before. Two computers whose stopped agents wait on
+each other with nobody to serve them now both wait until `--timeout-minutes` and end `TIMED_OUT` instead of `STALLED`.
+Source semantics proven (`AgentRunControllerTest`, `ConversationServiceTest`, `ReplicationJournalTest`); not yet run
+across two real computers.
 # 2026-10-17 — A firewall rule left naming an earlier version is reported (defect 4 below)
 
 **Why.** The rule "Synesis Link" names one version's `runtime\bin\java.exe`. Only `install`/`repair --allow-link` and

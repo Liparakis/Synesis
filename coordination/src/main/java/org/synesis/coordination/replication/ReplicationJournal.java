@@ -7,8 +7,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The last {@value #MAX_LINES} things that happened to a computer's Link sessions to its peers, kept in
@@ -19,7 +21,8 @@ import java.util.Optional;
  * <p>One line per event, {@code <instant> <event> key=value ...}. Writers are the coordination server's own threads,
  * which this class serializes; the file is rewritten whole through a temporary file and moved into place, so a
  * reader sees a complete old or a complete new file. A line that cannot be written is lost, never thrown: the journal
- * explains the replication, it must not stop it.
+ * explains the replication, it must not stop it. It decides no session; the one reader that acts on it is a run of
+ * agents deciding whether to keep waiting for another computer ({@link #connectedPeers}).
  */
 public final class ReplicationJournal {
 
@@ -34,6 +37,7 @@ public final class ReplicationJournal {
     public static final int MAX_LINES = 100;
 
     private static final System.Logger LOGGER = System.getLogger(ReplicationJournal.class.getName());
+    private static final String CONNECTED = "CONNECTED";
     private static final String DISCONNECT = "DISCONNECT";
 
     private final Path root;
@@ -81,6 +85,31 @@ public final class ReplicationJournal {
         } catch (IOException none) {
             return List.of();
         }
+    }
+
+    /**
+     * The peers whose newest session line is a start. The end of a session that a newer one to the same peer replaced
+     * says nothing about the peer. A process that dies leaves its last start in place, so a reader that waits on this
+     * must bound the wait itself.
+     *
+     * @param root the coordination folder
+     * @return node IDs of the peers connected as far as the journal says; empty when there is no journal
+     */
+    public static Set<String> connectedPeers(Path root) {
+        Set<String> connected = new HashSet<>();
+        for (String line : read(root)) {
+            String[] parts = line.split(" ");
+            if (parts.length < 3 || !parts[2].startsWith("peer=") || line.endsWith(" replaced=true")) {
+                continue;
+            }
+            String peer = parts[2].substring("peer=".length());
+            if (parts[1].equals(CONNECTED)) {
+                connected.add(peer);
+            } else if (parts[1].equals(DISCONNECT)) {
+                connected.remove(peer);
+            }
+        }
+        return Set.copyOf(connected);
     }
 
     /**

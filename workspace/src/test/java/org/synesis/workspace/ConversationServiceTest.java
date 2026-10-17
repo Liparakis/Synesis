@@ -22,6 +22,8 @@ import org.synesis.coordination.domain.conversation.ConversationMessage;
 import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.ReplicationJournal;
 
 import org.synesis.link.identity.IdentityBootstrap;
 
@@ -455,6 +457,25 @@ class ConversationServiceTest {
         intents.suspend(laneOf(C).participant());
 
         assertFalse(observer.observe().foreignActiveLaneOpen(onlyA), "a suspended holder will not progress, so nothing is waited for");
+    }
+
+    @Test
+    void theRunObserverSeesAnotherComputerConnectedOnlyWhenItIsAPeerOfTheProjectAndItsLatestSessionIsOpen() throws Exception {
+        ProjectLocation location = projectService.locate(projectRoot);
+        EventLogObserver observer = new EventLogObserver(location);
+        ReplicationJournal journal = new ReplicationJournal(location.coordinationDirectory());
+        journal.record("CONNECTED peer=sl1-stranger expiry=30s");
+        assertFalse(observer.observe().otherComputerConnected(), "an unshared project has no other computer, whatever the journal says");
+
+        ReplicationSettings.leader(java.util.Set.of("sl1-member")).write(location.coordinationDirectory());
+        assertFalse(observer.observe().otherComputerConnected(), "a node that is not a member counts for nothing");
+        journal.record("CONNECTED peer=sl1-member expiry=30s");
+        assertTrue(observer.observe().otherComputerConnected());
+        journal.record("DISCONNECT peer=sl1-member reason=LIVENESS_EXPIRED liveness=EXPIRED lasted=840s");
+        assertFalse(observer.observe().otherComputerConnected(), "the member dropped");
+
+        ReplicationSettings.member("sl1-stranger").write(location.coordinationDirectory());
+        assertTrue(observer.observe().otherComputerConnected(), "a member sees its leader");
     }
 
     @Test

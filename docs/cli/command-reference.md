@@ -85,6 +85,18 @@ that time passes, so the command also resumes a stopped owner once when such a
 deadline of its provider has passed, and does not end the run while one is
 still pending. The owner's next read is what raises the operator request.
 
+Work can also move without any agent of this run. When every agent has stopped
+and nothing progressed, the command keeps waiting while a participant it did not
+start (another computer's agent, an interactive agent) holds an open lane, or
+while another computer of the project is connected (for the leader a member, for
+a member its leader, as `replication.log` last recorded) and an agent here can
+come back to an open lane of its own: that computer's agents can still claim the
+review or give the admission the lane waits for. Their progress resumes the
+agents here as above. Each wait lasts at most until `--timeout-minutes`, and its
+start is printed once as `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN`,
+`AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED` or, for the answer period above,
+`AGENT_RUN_WAITING=ANSWER_DEADLINE`.
+
 The command ends with `AGENT_RUN_RESULT`: `COMPLETED` when no lane is open and
 every work group that ever had a lane is closed (a group created ahead of its
 lanes that never received one holds no work) and at least one group finished its work,

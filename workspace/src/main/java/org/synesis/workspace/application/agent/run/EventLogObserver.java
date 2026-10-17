@@ -13,6 +13,8 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.workspace.application.collaboration.ParticipantActivity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
@@ -133,7 +135,13 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        boolean otherComputerConnected = otherComputerConnected(coordination);
         return new AgentRunController.Observation() {
+
+            @Override
+            public boolean otherComputerConnected() {
+                return otherComputerConnected;
+            }
 
             @Override
             public List<String> operatorRequests() {
@@ -226,6 +234,17 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 return false;
             }
         };
+    }
+
+    /**
+     * Whether a peer that this computer's role file names (the leader's members, a member's
+     * leader) is connected according to the replication journal. A journal line about a node
+     * that is no longer a peer of the project counts for nothing.
+     */
+    private static boolean otherComputerConnected(java.nio.file.Path coordination) throws IOException {
+        java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId()) : settings.members())
+                .orElse(java.util.Set.of());
+        return ReplicationJournal.connectedPeers(coordination).stream().anyMatch(peers::contains);
     }
 
     /**

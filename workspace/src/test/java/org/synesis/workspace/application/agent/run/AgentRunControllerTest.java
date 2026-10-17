@@ -162,6 +162,78 @@ final class AgentRunControllerTest {
         assertTrue(script.tick < 30);
     }
 
+    /**
+     * The first run across two homes (2026-10-17): both agents here published their work, waited
+     * for a review nobody here could give, and stopped before the other computer's agents had
+     * claimed anything. Nothing foreign held a lane yet, and the run ended STALLED with no resume.
+     */
+    @Test
+    void agentsStoppedWithTheirLanesOpenWhileAnotherComputerIsConnectedAreResumedWhenItsReviewArrives() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3, 3, 3);
+        script.at(0).head(7).announced().otherComputer();
+        script.at(40).head(9).progressAfter(7).otherComputer();
+        script.at(46).head(12).progressAfter(9).complete();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+        assertEquals(2, result.resumes(), "the review from the other computer woke both authors");
+        assertEquals(List.of(40, 40), script.resumedAtTicks);
+        assertEquals(List.of("AGENT_STARTED=claude#1", "AGENT_STARTED=codex#2", "AGENT_EXITED=claude#1 exitCode=0", "AGENT_EXITED=codex#2 exitCode=0",
+                "AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED", "AGENT_RESUMED=claude#1 resume=1", "AGENT_RESUMED=codex#2 resume=1",
+                "AGENT_EXITED=claude#1 exitCode=0", "AGENT_EXITED=codex#2 exitCode=0", "AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED"), script.events,
+                "each wait is reported once, when it begins");
+    }
+
+    @Test
+    void aRunWaitingForAnotherComputerThatNeverActsIsTimedOutAtTheDeadline() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().otherComputer();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(30));
+
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
+        assertEquals(0, result.resumes());
+        assertEquals(30, script.tick, "it waited for the deadline instead of stalling");
+        assertTrue(script.events.contains("AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED"), script.events.toString());
+    }
+
+    @Test
+    void aConnectedComputerKeepsNoRunGoingWhenNoAgentHereHasALaneToComeBackTo() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.closedLaneProviders.addAll(List.of("claude", "codex"));
+        script.at(0).head(7).announced().otherComputer();
+
+        assertEquals(AgentRunController.Outcome.STALLED, script.run(8, Duration.ofSeconds(30)).outcome());
+        assertTrue(script.tick < 30);
+        assertTrue(script.events.stream().noneMatch(event -> event.startsWith("AGENT_RUN_WAITING=")), script.events.toString());
+    }
+
+    @Test
+    void aConnectedComputerKeepsNoRunGoingWhenNoAgentHereCanBeResumed() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.withoutSessionId.addAll(List.of("claude#1", "codex#2"));
+        script.at(0).head(7).announced().otherComputer();
+
+        assertEquals(AgentRunController.Outcome.STALLED, script.run(8, Duration.ofSeconds(30)).outcome());
+        assertTrue(script.tick < 30);
+    }
+
+    @Test
+    void aRunKeptOpenByAForeignLaneSaysSo() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().foreignLane().otherComputer();
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("AGENT_RUN_WAITING=FOREIGN_LANE_OPEN"), script.events.stream().filter(event -> event.startsWith("AGENT_RUN_WAITING=")).toList());
+    }
+
     /** A run nobody in it can continue says who can, and names the request instead of a stall. */
     @Test
     void runLeftWithAnOpenOperatorRequestSaysItNeedsAnOperator() throws Exception {
@@ -729,6 +801,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean otherComputerConnected() {
+                    return state.otherComputer;
+                }
+
+                @Override
                 public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
                     Long sequence = laneHeldUnder(connectionInstanceId) ? state.messages.get(agentOf.get(connectionInstanceId)) : null;
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
@@ -746,6 +823,7 @@ final class AgentRunControllerTest {
         private boolean complete;
         private boolean allCancelled;
         private boolean foreignLane;
+        private boolean otherComputer;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
 
@@ -781,6 +859,12 @@ final class AgentRunControllerTest {
         /** A lane of an active participant this controller did not start is open. */
         private State foreignLane() {
             foreignLane = true;
+            return this;
+        }
+
+        /** Another computer sharing the project's log is connected to this one. */
+        private State otherComputer() {
+            otherComputer = true;
             return this;
         }
 
