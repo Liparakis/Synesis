@@ -4,11 +4,22 @@
 
 ### For the owner to confirm
 
-Choices the designers made that the owner's answers did not settle. Each line gives the recommended answer. Items 1
-to 9 are ADR-0100's list, unchanged. Items 10 to 22 come from the step 3 to 6 designs below.
+Choices the designers made that the owner's answers did not settle. Each line gives the recommended answer. Item 0
+is a conflict between two of the owner's own decisions, and only the owner can settle it. Items 1 to 9 are ADR-0100's
+list (its item 10 is item 23 here). Items 10 to 25 come from the step 3 to 6 designs and their review.
 
-1. A computer starts working apart by itself after 90 s without the coordinator, and only when an agent needs to
-   write. `synesis offline` starts it by hand. **Yes.**
+0. **A connected group without a voter majority. Your choice is needed.** Example: five members. Three are away, and
+   your computer and one friend's are online and can reach each other. An absent voter counts until it is removed
+   (your decision of 2026-10-15), so the two of you are not a majority. Neither can commit, each works apart alone,
+   and overlaps between the two of you are combined only when the others return. That goes against your words of
+   2026-10-17: "voting only coordinates the connected computers, nobody waits on a dropped one" and "online, claims
+   prevent overlaps up front". Two options:
+   - **(a) Recommended:** the connected group that holds your computer shares one branch. Your computer decides it
+     with step 2's fixed-leader rules, so claims prevent overlaps among the group. The branch merges back into the
+     shared log when a majority returns. Designed in "Step 3 design", "Option (a)".
+   - **(b)** Keep the strict majority rule: each cut-off computer works apart alone. This is what is written now.
+1. A computer starts working apart by itself after 90 s without the coordinator, while one of its lanes is open or an
+   agent needs to write, and its waiting agents are woken. `synesis offline` starts it by hand. **Yes.**
 2. A review made while apart stands; only the merge and the tests are redone on return, unless both sides reviewed the
    same snapshot. **Yes.**
 3. Coming back does not end a person's reservation; the person is asked to hand it in. **Yes.**
@@ -16,7 +27,8 @@ to 9 are ADR-0100's list, unchanged. Items 10 to 22 come from the step 3 to 6 de
 5. The lanes of a computer that is away are held until it returns, never taken over automatically; the owner can
    release them. **Yes.**
 6. Work that returns for a goal already finished becomes an operator request. **Yes.**
-7. Computers cut off together each work on their own branch; a shared branch for a cut-off group comes later. **Yes.**
+7. Computers cut off together each work on their own branch; a shared branch for a cut-off group comes later. **Yes,
+   except for the owner's group if item 0 is (a).**
 8. Step 3 keeps "an entry is final once most voters hold it"; voting does not only elect. **Yes.**
 9. Overlapping claims made apart are put on hold until the other lane ends, never admitted side by side. **Yes.**
 10. Elections wait 30 to 60 s, not 10 to 20 s, so a Link stall starts none and a new coordinator is in place before
@@ -43,6 +55,11 @@ to 9 are ADR-0100's list, unchanged. Items 10 to 22 come from the step 3 to 6 de
 21. When joining, Synesis clones from the invitation's URL when it can. Otherwise it fetches the code over Link, once
     the owner has accepted the join. **Yes.**
 22. Git bundle commands get a 10-minute limit and never run while a lock is held. **Yes.**
+23. Removing a computer also ends its reservations and releases its lanes, under the same owner signature. **Yes.**
+24. `synesis log rejoin` returns only the entries that computer signed. Entries other computers signed are kept, and
+    each of those computers returns its own. **Yes.**
+25. With two computers, the friend's PC never writes to the shared log while your PC is off. It always works apart
+    and merges back on return. This follows from the tie rule, whatever item 0 says. **Accept.**
 
 Accepted on 2026-10-16 by the repository owner. The decisions marked USER-STATED were made by the
 owner on 2026-10-15. Each step under "Build order" is built and evidenced on its own.
@@ -549,8 +566,11 @@ mesh, and the three rules for merges across a leader change.
 
 1. **A computer outside the majority works apart.** A leader that steps down by check-quorum, and a follower that
    reaches no leader, each open a branch from their committed `events/` head after ADR-0100's 90 s, if an agent needs
-   to write. The uncommitted tail is not part of the branch, because it was never in `events/`. Computers cut off
-   together each have their own branch (ADR-0100 change 5).
+   to write. The uncommitted tail is not placed on the branch as it stands, because it was never in `events/`. Every
+   proposal this computer signed and staged or relayed, but never saw committed, is in doubt whatever its role was. A
+   deposed leader's own staged entries are included, with the same identity (ADR-0100, "proposals in doubt").
+   Computers cut off together each have their own branch (ADR-0100 change 5), unless the owner picks option (a) of
+   item 0 (below).
 2. **Two voters.** The owner's side still decides by the tie rule. While the owner sleeps, the friend works apart and
    returns. Nobody waits.
 3. **Owner decision 4's last bullet is reversed.** What a "lost" computer did alone is a branch that returns, not
@@ -566,6 +586,41 @@ mesh, and the three rules for merges across a leader change.
 **What is dropped:** "the minority commits nothing" as an expected result; `synesis log set-aside` and
 `events-set-aside/<term>/`, replaced by the narrower `synesis log rejoin`; lane takeover across computers (ADR-0100,
 "Away computers").
+
+**The open conflict (owner to decide, item 0).** The denominator stays the committed voter set ("The tie rule"),
+because an absent voter counts until removed (decision 3, 2026-10-15). So a connected group without that majority
+cannot commit, even with the owner's computer in it, and each of its computers branches alone. That goes against the
+owner's words of 2026-10-17, "voting only coordinates the connected computers" and "online, claims prevent overlaps
+up front". This design does not pick silently. Option (b), the strict rule, is what the sections above describe.
+Option (a) is specified next, so that it can be built if the owner picks it.
+
+### Option (a): the owner's connected group shares one branch
+
+- **Who.** Only the group that holds the owner's computer, O. At most one such group exists, because O is one
+  computer. Every other cut-off computer branches alone, as under (b).
+- **When.** O has had no voter majority for ADR-0100's 90 s, and a lane is open or an agent needs to write. O then
+  opens a **group branch** from its committed head. It is an ADR-0100 branch whose decider is O, with step 2's
+  fixed-leader rules:
+  - members connected to O propose to O;
+  - O judges each proposal with the same projections and admission, and places it in `branches/<id>/events/`;
+  - members pull the branch from O into their own `branches/<id>/events/`, and their view is `trunk[1..fork]` plus
+    the group branch.
+  - Claims therefore prevent overlaps inside the group.
+- **Joining it.** A connected member that already has its own open branch first returns that branch into the group
+  branch, by ADR-0100's return, with the group branch in the trunk's place. A member that cannot reach O keeps its own
+  branch.
+- **Code.** O merges into its own checkout, and members follow O's control head (the code remote, or step 6).
+- **Rules.** ADR-0100's B1 to B5 hold per signer. Membership, parts and voters do not change on a group branch.
+- **Return.** When a voter majority is reachable again, the group branch returns by ADR-0100's return plan, in branch
+  order, and O sequences it. Each entry is proposed again by its own signer, because only the signer may act for its
+  participants. O asks that member to sign the entry again at the trunk position, then relays it. If the signer cannot
+  be reached, its entries, and the entries that depend on them, wait until it is back.
+- **Where it plugs in:**
+  - `MemberReplication` gains the states `GROUP_LEADING` and `GROUP_MEMBER` beside `APART`;
+  - `LogBranch` gains a branch pulled from O;
+  - `BranchReturn` gains signer-sequenced proposing;
+  - `BRANCH_RETURNED` names the group branch, and lists its signers.
+- **Cost.** About one more slice after ADR-0100's slice 4. (DERIVED)
 
 **Done when (revised).** Lab A passes with five containers on one Podman network: every scenario 20 times, and the
 real-agent run. That proves the algorithm and nothing about real homes. Voters in three homes need each other's
@@ -661,7 +716,8 @@ The owner's rule is "more than half, or exactly half including the owner's compu
 weighted majority: each voter counts 1, and the owner's computer counts one and a half. A set wins with more than half
 the total weight. With an odd number of voters the extra half changes nothing. Every place that counts agreement calls
 the same function: pre-votes, votes, commits and check-quorum. The denominator is the committed voter set, never the
-reachable one: an absent voter counts (USER-STATED). (DERIVED)
+reachable one: an absent voter counts (USER-STATED). (DERIVED) What a connected group without that majority does is
+open; see item 0 and "Option (a)".
 
 **Changing one voter at a time is not safe with this rule** (Opus runner, DERIVED by counterexample).
 
@@ -796,7 +852,8 @@ the lower node ID dials the other's card with `resumeRetainedJoin`. The host adm
   removal token made on the owner's computer and used on another (Fable runner). It fits the same payload signature.
 - **Recovery with a quorum alive.** On the new computer, `synesis project recover` takes the recovery words and a
   project link from any member. It proposes `OWNER_CHANGED`, signed by the recovery key. The entry replaces the owner
-  key, the owner's computer and the recovery key, and admits the new computer as a voter. A join request that carries
+  key, the owner's computer and the recovery key, and admits the new computer as a voter. Admitting a voter is a voter
+  change, so it obeys joint agreement and the one-pending rule ("The tie rule"). A join request that carries
   a valid recovery signature needs no other approval, since the recovery key is the owner's authority. Without this,
   an owner whose only computer is gone could never be approved back in.
 - **Recovery or reset without a quorum** (owner decision 4) is a declared fork, because no normal entry can commit:
@@ -805,14 +862,20 @@ the lower node ID dials the other's card with `resumeRetainedJoin`. The host adm
   - `VOTERS_RESET{voters, forkAfter}` is signed by the owner key or the recovery key, proposed on a surviving computer,
     and committed by a quorum of the **new** set alone.
   - Before proposing it, the command refuses unless the voters it drops have been unreachable for at least the lane
-    grace (5 minutes). The person must type their names to confirm.
+    grace (5 minutes). The person must type their names to confirm. The 5 minutes are judged by the proposing
+    computer, which may be the one that is cut off, so the confirm text says so: "these voters have not been reachable
+    from this computer for 5 minutes; they may still be working together elsewhere".
   - Revised for ADR-0100. Most old-set computers return with nothing in `events/` past `forkAfter`: what they did
     alone was in their tail or on a branch, and it returns as any branch does. The exception is old voters that were
     still a majority together, for example two stolen laptops that were in fact both on. They committed entries past
     `forkAfter` into their own `events/`. (DERIVED)
   - Such a computer stops with `LEADER_LOG_DIVERGED`, as today. `synesis log rejoin` then moves its entries after
-    `forkAfter` into `branches/<id>/events/`. Their chain already continues from `forkAfter`, so they form an ordinary
-    ADR-0100 branch that returns and merges back. (DERIVED)
+    `forkAfter` into `branches/<id>/events/`. Their chain already continues from `forkAfter`, so the chain check
+    passes unchanged. (DERIVED)
+  - Rejoin keeps ADR-0100's "a branch is one computer's chain" for what returns. Only entries this node signed are
+    proposed again. Entries other computers signed are `BRANCH_ONLY`: kept in the archive and never proposed from
+    here. Each of those computers returns its own entries from its own copy. **DECIDED BY DESIGNER, owner to
+    confirm** (item 24).
   - Rejoin refuses while an agent session on that computer is active, because its readers would see entries
     disappear. It is the only path that takes entries out of `events/`, and it needs a `VOTERS_RESET`, which needs the
     owner's signature. ADR-0100 dropped set-aside but still needs these entries moved, and this rule fills that gap.
@@ -1179,7 +1242,8 @@ command (`IntegrationWorkspaceService.java:142`). Its records are leader-only (`
 
 - **The merger.** `PART_MERGER_SET{part, node}` is leader-only.
   - The leader names the most reliable connected computer that passes the code check (step 3's score), by default
-    itself.
+    itself. Scores exist only once picking starts, so until a project has six members the coordinator merges every
+    part.
   - It replaces a merger that has been out of reach for 5 minutes (item 18).
   - A merger that is away merges only into its own checkout, so replacing it never makes two versions.
 - **The merge.** `MergeDriver` runs on each computer, for its parts. It prepares on the current control head: the
@@ -1212,8 +1276,9 @@ ADR-0100 narrows decision 5:
 - **On the branch,** the branch's own computer merges every part.
 - **On return,** the lanes the branch merged reach the trunk ready (ADR-0100, `REDONE_BY_TRUNK`). Each gets one
   `MERGE_QUEUED` under the trunk's current parts, in branch order.
-- **No new wait cycle.** `WAITING_FOR_RETURNED_BASE` holds a lane until the lanes under it have merged. Those lanes are
-  earlier in every queue.
+- **No new wait cycle.** `WAITING_FOR_RETURNED_BASE` holds a lane until the lanes under it have ended: integrated, or
+  set aside (ADR-0100, revised). Those lanes are earlier in every queue. If one was set aside, a conflicting
+  cherry-pick opens a combine lane.
 
 ### Tests
 
@@ -1494,7 +1559,15 @@ Investigated on 2026-10-15. What is left:
 - **Code without a remote:** settled by "Step 6 design" (200 MB pieces, resumable chunks). Still to measure: the
   ratio of disk usage to bundle size, and the time to write a 200 MB bundle on a laptop. (REQUIRES-MEASUREMENT.)
 - **Gap closed here:** ADR-0100 dropped `synesis log set-aside`, but a forced voter reset can leave committed entries
-  in an old voter's `events/`. `synesis log rejoin` covers that case ("Step 3 design"; owner to confirm, item 12).
+  in an old voter's `events/`. `synesis log rejoin` covers that case ("Step 3 design"; owner to confirm, items 12 and
+  24).
+- **A connected group without a voter majority:** each computer works apart (option b) or the owner's group shares a
+  branch (option a). Open for the owner (item 0).
+- **The audit of rules that live only in services is incomplete.** `CLAIM_EPOCH_STALE` is still thrown in
+  `LaneClaimService.java:141` and `WorkGroupService.java:131`. The projections also throw it
+  (`CollaborationProjection.java:510`, `817`, `907`; `AppendAdmission.java:124`). Whether they cover every case the
+  services check is not verified. That matters for ADR-0100, because a returned entry is judged only by the
+  projections.
 Fixed on 2026-10-15, found while investigating this ADR: **two coordination folders on one
 computer.**
 - Agents wrote `.synesis/coordination`. The coordination server, and with it the browser dashboard

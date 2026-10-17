@@ -208,14 +208,22 @@ ADR-0098's invariants 2 to 10 are unchanged.
 
 ### When a computer starts working apart
 
-- **By itself:** the coordinator has been unreachable for 90 s and an agent needs to append.
+- **By itself:** the coordinator has been unreachable for 90 s, and either a lane of this computer is open or an agent
+  needs to append. (Revised 2026-10-17: an agent told WAIT has ended its turn and never appends, so "needs to append"
+  alone would never fire.)
   - Until then appends get `LEADER_UNREACHABLE` as today, so a short drop makes no branch.
+  - Opening the branch changes the view's generation. The run controller resumes every stopped agent that holds an
+    open lane on a generation change. That is one more ADR-0099 resume trigger. While a branch is open, ADR-0099's
+    Stop hook and `ProjectChangeWait` watch the view's head, not the head of `events/`.
   - The real runs saw drops redial within about 90 s (`docs/agent/CURRENT.md`, 2026-10-16 and 2026-10-17).
   - REQUIRES-MEASUREMENT. **DECIDED BY DESIGNER, owner to confirm:** the 90 s figure, and starting by itself at all.
 - **On request:** `synesis offline [--reserve <path>...] [--note "..."]`. With `--reserve` it reserves first, while
   still connected, and then opens the branch.
-- **Proposals in doubt** (`LEADER_OUTCOME_UNKNOWN`) are kept as bytes by the server. They become the first entries of
-  the branch, with the same entry identity. At return, a check by identity finds them on the trunk if they had
+- **Proposals in doubt** are kept as bytes by the server. They are every proposal this computer signed and its server
+  staged or relayed but never saw committed, whatever role the server had. That covers a member's
+  `LEADER_OUTCOME_UNKNOWN` and a deposed leader's own staged tail. Entries in that tail that another computer signed
+  are in doubt on that computer, which resends them. The proposals in doubt become the first entries of the branch,
+  with the same entry identity. At return, a check by identity finds them on the trunk if they had
   committed, and proposes them if not. A service run again can therefore never duplicate them. (DERIVED; this also
   closes a gap step 2 has today.)
 - **The opening** happens under `ProjectAppendLock` and is done only by the server. It writes `branches/<id>/fork`
@@ -256,7 +264,9 @@ When the coordinator is reachable again and a branch is open, the server runs th
 
 4. **Propose each `REPROPOSE` entry in branch order.** The entry keeps its payload and identity and gets the trunk
    head's position. An entry the trunk already holds (same computer, same identity and type after the fork) is skipped.
-   A refusal is classified as one of these, then handled as the conflict table says:
+   That check runs before any refusal is classified. A duplicate identity is refused `OVERLAPPING_CLAIM`
+   (VERIFIED: `CollaborationProjection.java:556-557`), so it would otherwise look like row 1. A refusal is then
+   classified as one of these, and handled as the conflict table says:
    - **defer**;
    - **agreed**, when both sides reached the same verdict;
    - **dispute**;
@@ -306,9 +316,13 @@ When the coordinator is reachable again and a branch is open, the server runs th
 - **Lanes based on a branch merge.** A lane claimed on the branch after a branch merge has a base `Cb_i` that the trunk
   never holds, so today's rule would refuse it `STALE_BASE`. One rule is added in `validateSnapshotMetadata`:
   - A base is accepted when it is an ancestor of the control head, or when it is a branch control commit that a
-    committed `BRANCH_RETURNED` lists as absorbed and every snapshot the branch had integrated up to it is
-    `INTEGRATED` on the trunk.
+    committed `BRANCH_RETURNED` lists as absorbed and every snapshot the branch had integrated up to it has ended on
+    the trunk.
+  - A snapshot has ended when it is integrated or set aside: refused, cancelled, or replaced by a combine lane.
+    (Revised 2026-10-17. "Integrated" alone could wait for ever on a snapshot that never integrates.)
   - Until then the snapshot waits (`WAITING_FOR_RETURNED_BASE`). That is not a failure.
+  - When an earlier snapshot ended without integrating, the waiting lane's cherry-pick onto the control head may
+    conflict. That conflict opens a combine lane, as any code conflict does.
   - This keeps the branch's merge order. Nobody rebases an agent's live worktree.
 - **A code conflict** at any of these cherry-picks records `INTEGRATION_CONFLICTED` and `REPAIR_REQUIRED`, as today.
   The repair lane is answer 1's "combine these" lane:
@@ -321,15 +335,15 @@ When the coordinator is reachable again and a branch is open, the server runs th
 
 | # | What happened while apart | Prevented on the branch? | What the trunk does at return | Who resolves, and how it is written |
 | --- | --- | --- | --- | --- |
-| 1 | **Overlapping claims.** Both sides claimed overlapping paths while apart. Lanes and reservations from before the fork were seen by both sides, so only two lanes both claimed apart can overlap. (DERIVED) | No | Proposed `WORK_INTENT_ANNOUNCED` refused `OVERLAPPING_CLAIM` only if the trunk lane is still active. If the trunk lane has ended, the claim is accepted and any code overlap is a combine lane at merge. If it is active: the returning lane and its later entries are **deferred** and listed in `BRANCH_RETURNED`, and its paths are held as a reservation for it | When the trunk lane ends, the returning computer proposes the deferred entries again, and the reservation ends (`LANE_REJOINED`). The lane merges after the trunk lane. A code conflict is a combine lane (answer 1). The trunk never holds two overlapping active lanes (answer 4) |
+| 1 | **Overlapping claims.** Both sides claimed overlapping paths while apart. Lanes and reservations from before the fork were seen by both sides, so only two lanes both claimed apart can overlap. (DERIVED) | No | Proposed `WORK_INTENT_ANNOUNCED` refused `OVERLAPPING_CLAIM` only if the trunk lane is still active. If the trunk lane has ended, the claim is accepted and any code overlap is a combine lane at merge. If it is active: the returning lane and its later entries are **deferred** and listed in `BRANCH_RETURNED`, and its paths are held as a reservation for it | When the trunk lane ends, the returning computer proposes the deferred entries again, and the reservation ends (`LANE_REJOINED`). The deferred entries are kept as bytes in `branches/<id>/deferred/`, forced to disk, so they survive a restart and a second branch. They are proposed only to the trunk. The lane merges after the trunk lane. A code conflict is a combine lane (answer 1). The trunk never holds two overlapping active lanes (answer 4) |
 | 2 | **Double integration** of one snapshot | Yes, by B2 | none | none |
 | 3 | **Acting for another computer's participant** | Yes, by B1 | none | none |
-| 4 | **A review decided on both sides** (a snapshot handed in before the fork) | No | Proposed review refused as already reviewed. Same verdict: agreed. Different verdict: a review dispute, and the snapshot does not integrate while it is open | Answer 6: a review request to a reviewer who was neither earlier reviewer, on the merged result. If that agent says it cannot decide, `OPERATOR_REQUEST_RAISED`, answerable by any member. If the trunk had already integrated the snapshot, the re-review is of the integrated code, and a rejection opens a repair lane |
+| 4 | **A review decided on both sides** (a snapshot handed in before the fork) | No | Proposed review refused as already reviewed. Same verdict: agreed. Different verdict: a review dispute, and the snapshot does not integrate while it is open | Answer 6: a review request to a reviewer who was neither earlier reviewer, on the merged result. If that agent says it cannot decide, `OPERATOR_REQUEST_RAISED`, answerable by any member. If no eligible reviewer exists (every agent is the author or an earlier reviewer), the operator request is raised at once. If the trunk had already integrated the snapshot, the re-review is of the integrated code, and a rejection opens a repair lane |
 | 5 | **A lane continued twice** | By B3 on the branch. On the trunk, a lane of an away computer is not taken over (see "Away computers") | Only reachable if a person broke that hold. The proposed continuation is refused | Both kept: the branch's last snapshot of that lane goes to "combine" (row 8) |
 | 6 | **An operator request answered on both sides** | No (any member may answer, ADR-0098 decision 9) | Proposed answer refused. Same answer: agreed. Different answer: a dispute | A new operator request naming both answers, for any member (answer 6) |
 | 7 | **A WorkGroup completed on one side** while the other added work to it | The branch never completes a group for the trunk (`BRANCH_ONLY`) | Proposed claim refused `WORK_GROUP_NOT_ACTIVE`. A group cannot be made active again (`AppendAdmission.java:247-249`) | An operator request: "the returned lane X belongs to the finished goal G; open a new goal for it, or set it aside?" **DECIDED BY DESIGNER, owner to confirm** |
 | 8 | **The branch kept working in a lane the trunk ended** (the trunk integrated a snapshot handed in before the fork, and released the lane) | No | Proposed snapshot refused `SNAPSHOT_COMPLETION_EVIDENCE_STALE` | Listed in `BRANCH_RETURNED` to combine. The trunk's merge pass treats it as a conflicting snapshot and writes `REPAIR_REQUIRED`, so the repair lane combines it (answer 1). ASSUMED: the repair path needs only the snapshot record that `BRANCH_RETURNED` carries; checked in slice 4 |
-| 9 | **The same task taken on both sides** with disjoint paths | No | UNKNOWN whether any rule limits a task to one lane. If none: both are accepted and both merge, and overlapping code is a combine lane | Checked in slice 1. If a rule exists, it is row 1 |
+| 9 | **The same task taken on both sides** with disjoint paths | No | No rule limits a task to one lane (VERIFIED). `TASK_ALREADY_CLAIMED` (`CoordinationProjection.java:174`) guards only the legacy `TASK_CLAIMED`, which only the `synesis task claim` command writes (`TaskClaimCommand.java:55`), never an agent's lane. Both are accepted and both merge, and overlapping code is a combine lane | none beyond row 1 |
 | 10 | **Contracts and capability requests** changed on both sides | No | The contract projection's own refusal | An operator request naming both. ASSUMED rare; counted in the lab |
 | 11 | **Messages and deliveries** | Nothing to conflict | Proposed, always admitted | none |
 | 12 | **Two computers returning** with overlapping work | n/a | Their proposals interleave on the coordinator. The first decided wins a contested path; the second is deferred (row 1) | as row 1 |
@@ -348,7 +362,7 @@ USER-STATED (answer 3): a reservation lasts until the person is back. Everyone s
 
 ```text
 RESERVATION_MADE   {id, node, selectors, note, origin: PERSON | DEFERRED_RETURN}   proposed by its node, while connected
-RESERVATION_ENDED  {id, reason: HANDED_IN | RELEASED | OWNER_BROKE | LANE_REJOINED, ownerStatement?}
+RESERVATION_ENDED  {id, reason: HANDED_IN | RELEASED | OWNER_BROKE | LANE_REJOINED | MEMBER_REMOVED, ownerStatement?}
 ```
 
 - **Made** with `synesis reserve <path>...` or `synesis offline --reserve <path>...`, on a computer that can reach the
@@ -357,7 +371,8 @@ RESERVATION_ENDED  {id, reason: HANDED_IN | RELEASED | OWNER_BROKE | LANE_REJOIN
   - A reservation asked for while apart is refused `RESERVATION_NEEDS_SHARED_LOG`, because nobody could see it.
 - **What it guarantees.** On the trunk, and on every branch forked after it, a claim that overlaps another computer's
   reservation is refused `RESERVED_BY_OTHER_COMPUTER`. It is one more case in `CollaborationProjection`'s overlap check
-  for claims and scope extensions. The holder's own computer may claim inside it.
+  for claims and scope extensions. The holder's own computer may claim inside a `PERSON` reservation. A
+  `DEFERRED_RETURN` reservation admits only the deferred lane it holds for, not other lanes of the same computer.
 - **What it cannot guarantee.** A computer that was already apart when the reservation was made never saw it.
   - Its claim in the reserved paths arrives at return as row 1, with the reservation in the trunk lane's place: the
     lane is deferred until the reservation ends.
@@ -383,6 +398,9 @@ that is away is now probably still working on that lane, so a takeover would mak
 
 - A lane of a computer that cannot be reached is held until the computer returns, like a reservation.
 - The owner can release it, the same way as breaking a reservation: `synesis reserve break --lanes-of <node>`.
+- **Removing a computer ends its holds.** `MEMBER_REMOVED` also ends that node's reservations (reason
+  `MEMBER_REMOVED`) and releases its lanes, under the same owner signature. Otherwise a removed computer's holds would
+  last for ever. **DECIDED BY DESIGNER, owner to confirm** (ADR-0098 item 23).
 - Decision 5 still applies to a computer's own agent that died, judged by that computer: a lane held, then continued
   from the last snapshot it handed in.
 
@@ -443,8 +461,9 @@ computers keep preventing overlap up front while the owner's computer is off. (D
 1. **Owner decision 4's last bullet is reversed.** "Whatever it decided alone after losing contact is set aside for a
    person, never merged" becomes "it is a branch and returns like any other" (USER-STATED premise).
 2. **A leader that steps down by check-quorum,** or a follower that reaches no leader, works apart: if its agents need
-   to append, its server opens a branch from its committed `events/` head. The uncommitted tail is not part of the
-   branch, because it was never in `events/`.
+   to append, its server opens a branch from its committed `events/` head. The uncommitted tail is not placed on the
+   branch as it stands, because it was never in `events/`. The tail's entries that this computer signed are
+   proposals in doubt and become the branch's first entries ("When a computer starts working apart").
 3. **`VOTERS_RESET` stays, its fork does not.** The owner key or the recovery key may still force a new voter set when
    more than half the voters are gone for good. A computer of the old set that comes back with entries after
    `forkAfter` no longer stops for a person. Those entries become a branch forked at `forkAfter`, and it returns.
@@ -454,6 +473,8 @@ computers keep preventing overlap up front while the owner's computer is off. (D
    - Computers cut off together do not form a small coordinator of their own in the first version. Their overlaps are
      resolved at return (row 12).
    - **DECIDED BY DESIGNER, owner to confirm.** The same branch mechanism allows a shared minority branch later.
+     ADR-0098 item 0 asks the owner whether the group that holds the owner's computer should share one branch now,
+     and specifies that branch ("Step 3 design", "Option (a)").
 6. **Lab A's expectations:**
    - "the minority commits nothing" becomes "the minority's computers branch, keep working, and return";
    - "Same history" becomes "every `events/` byte-identical after healing, every branch sealed and named by exactly one
@@ -503,8 +524,7 @@ Each slice works and is tested on its own.
    in-process channel that can be cut. This slice holds:
    - `LogBranch`, the composite view, the generation reset, and `recordedEvents` over the view;
    - the return treatment and the return plan;
-   - `BranchReturn`, the rules B1 to B4, and the `BRANCH_RETURNED` rule;
-   - a check for a one-lane-per-task rule (row 9).
+   - `BranchReturn`, the rules B1 to B4, and the `BRANCH_RETURNED` rule.
 
    Tests:
    - `branchThenReturnLeavesOneTrunk`: after the return, `events/` is byte-identical on both roots, the branch folder
@@ -611,7 +631,14 @@ Also recorded: the return time and the number of merge passes (REQUIRES-MEASUREM
 - Every store gains a full rebuild on a generation change. A caller that keeps a value worked out from the projections
   between calls is wrong after a switch. Slice 1 sweeps the long-lived holders.
 - In step 2, two friends online together while the owner is away do not coordinate with each other. Their overlaps
-  are settled at return. Step 3 removes that while three or more computers stay connected.
+  are settled at return.
+  - Step 3 removes that only while the connected computers hold a majority of the voters, because an absent voter
+    counts until it is removed (ADR-0098 decision 3).
+  - A connected group without that majority does not coordinate either, even when it holds the owner's computer. Each
+    of its computers works apart, and overlaps between them are combined only at return.
+  - This goes against the owner's words of 2026-10-17, that voting only coordinates the connected computers and that
+    claims prevent overlaps up front while online. ADR-0098's "For the owner to confirm", item 0, puts the choice to
+    the owner.
 - A computer away for months returns a long branch. Nothing bounds its size yet. (UNKNOWN)
 
 ## Unresolved
@@ -626,12 +653,12 @@ Also recorded: the return time and the number of merge passes (REQUIRES-MEASUREM
     `IntegrationOrchestrationService.java:1039-1052`).
 - ASSUMED, checked in slice 4:
   - the repair path needs only the snapshot record `BRANCH_RETURNED` carries (row 8).
-- UNKNOWN: whether a task can be taken twice with disjoint paths (row 9).
+- Answered 2026-10-17: a task can be taken twice with disjoint paths, since no rule limits a task to one lane (row 9).
 
 ## Decided by the designer, owner to confirm
 
-1. A computer starts working apart by itself after 90 s without the coordinator, and only when an agent needs to
-   append. It can also be started by hand with `synesis offline`.
+1. A computer starts working apart by itself after 90 s without the coordinator, while one of its lanes is open or an
+   agent needs to append (revised 2026-10-17). It can also be started by hand with `synesis offline`.
 2. A review made while apart stands. Only the merge and the tests are redone on return, unless both sides reviewed the
    same snapshot.
 3. A return does not end a person's reservation. The person is asked to hand it in.
@@ -644,3 +671,8 @@ Also recorded: the return time and the number of merge passes (REQUIRES-MEASUREM
    readers.
 9. Overlapping claims made apart are deferred rather than admitted side by side, so the trunk never holds two
    overlapping active lanes, and the combine goes through the existing one-source repair lane.
+10. Removing a computer also ends its reservations and releases its lanes, under the same owner signature (added
+    2026-10-17).
+
+Gathered with the step 3 to 6 items, and the open question about a connected group without a majority, in ADR-0098's
+"For the owner to confirm".
