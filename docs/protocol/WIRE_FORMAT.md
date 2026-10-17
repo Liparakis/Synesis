@@ -253,3 +253,9 @@ beside `events/`:
 - `replication.endpoint`: `127.0.0.1:<port>`, written by a member's
   coordination server while it runs; only a loopback host is ever used.
 - `replication.status`: `CONNECTED`, `DISCONNECTED` or `DIVERGED`.
+- `replication.members`: written by a leader's coordination server while it
+  runs, one line per member its settings name, `<node ID> CONNECTED|DISCONNECTED
+  <ISO-8601 instant>`: whether that member's session is attached, and since
+  when (for a member with no session yet, since the server started). Readers
+  skip lines that do not follow this. Removed when the server stops; absent
+  with no members.

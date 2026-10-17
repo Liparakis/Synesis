@@ -8,6 +8,7 @@ import org.synesis.cli.command.CoordinationCliSupport;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.replication.ReplicationJournal;
 import picocli.CommandLine.Command;
@@ -58,6 +59,11 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
                     runtime.terminal().stdout("REPLICATION_LEADER=" + settings.leaderNodeId());
                     runtime.terminal().stdout("REPLICATION_STATE="
                             + MemberReplication.recordedState(projectData).orElse("NO_COORDINATION_SERVER"));
+                } else {
+                    // The role file names the members; the running leader server only says how each is connected.
+                    var recorded = LeaderReplication.recordedMembers(projectData);
+                    settings.members().stream().sorted().forEach(node -> runtime.terminal().stdout("REPLICATION_MEMBER=" + node + " "
+                            + recorded.map(members -> connection(members.get(node))).orElse("STATE=NO_COORDINATION_SERVER")));
                 }
                 // The reason, the time and the details of the last session that ended; more is in replication.log.
                 ReplicationJournal.lastDisconnect(projectData)
@@ -68,5 +74,12 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
             runtime.terminal().stderr("COORDINATION_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
         }
+    }
+
+    /**
+     * A member the running server has not recorded was named after its last write and has not connected since.
+     */
+    private static String connection(LeaderReplication.MemberConnection recorded) {
+        return recorded == null ? "STATE=DISCONNECTED" : "STATE=" + recorded.state() + " since=" + recorded.since();
     }
 }

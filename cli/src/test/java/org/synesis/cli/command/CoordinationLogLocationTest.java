@@ -113,6 +113,40 @@ class CoordinationLogLocationTest {
     }
 
     @Test
+    void aLeaderComputerReportsEachMembersConnectionWhileItsServerRunsAndLeavesNothingBehind() throws Exception {
+        Path coordination = location.coordinationDirectory();
+        ReplicationSettings.leader(java.util.Set.of("sl1-member-b", "sl1-member-a")).write(coordination);
+        Result stopped = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
+        assertEquals(0, stopped.exit(), stopped.toString());
+        assertTrue(stopped.stdout().contains("REPLICATION_ROLE=leader"), stopped.toString());
+        assertEquals(List.of("REPLICATION_MEMBER=sl1-member-a STATE=NO_COORDINATION_SERVER",
+                "REPLICATION_MEMBER=sl1-member-b STATE=NO_COORDINATION_SERVER"), memberLines(stopped), stopped.toString());
+
+        java.util.concurrent.CompletableFuture<Result> served = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> CliHarness.run(tmp.resolve("cli-profile"), "coordination", "serve", "--project", project, "--port", "0",
+                        "--duration-seconds", "6"));
+        Path membersFile = coordination.resolve("replication.members");
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+        while (!Files.exists(membersFile) && System.nanoTime() < deadline) {
+            Thread.sleep(25);
+        }
+        assertTrue(Files.exists(membersFile), "the leader server must record its members' connections");
+
+        Result running = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
+        List<String> members = memberLines(running);
+        assertEquals(2, members.size(), running.toString());
+        assertTrue(members.get(0).matches("REPLICATION_MEMBER=sl1-member-a STATE=DISCONNECTED since=\\S+Z"), running.toString());
+        assertTrue(members.get(1).matches("REPLICATION_MEMBER=sl1-member-b STATE=DISCONNECTED since=\\S+Z"), running.toString());
+
+        assertEquals(0, served.get(30, java.util.concurrent.TimeUnit.SECONDS).exit());
+        assertTrue(Files.notExists(membersFile));
+    }
+
+    private static List<String> memberLines(Result status) {
+        return status.stdout().stream().filter(line -> line.startsWith("REPLICATION_MEMBER=")).toList();
+    }
+
+    @Test
     void aReplicationFileThatCannotBeReadFailsStatusAndRefusesAgentAppends() throws Exception {
         Files.writeString(Files.createDirectories(location.coordinationDirectory()).resolve(ReplicationSettings.FILE), "role=boss\n");
 

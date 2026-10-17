@@ -5,13 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.synesis.coordination.replication.LeaderReplication.MemberConnection.State.CONNECTED;
+import static org.synesis.coordination.replication.LeaderReplication.MemberConnection.State.DISCONNECTED;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -336,6 +341,43 @@ final class LinkReplicationTest {
         assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
         assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
         assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot));
+    }
+
+    @Test
+    void theLeaderRecordsWhetherEachMemberIsConnectedAndSinceWhenAndRemovesTheRecordWhenItStops() throws Exception {
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        await(() -> recorded(member.nodeId()).filter(found -> found.state() == DISCONNECTED).isPresent(), 8);
+        Instant serving = recorded(member.nodeId()).orElseThrow().since();
+
+        computers.attach();
+        await(() -> recorded(member.nodeId()).filter(found -> found.state() == CONNECTED).isPresent(), 8);
+        Instant connected = recorded(member.nodeId()).orElseThrow().since();
+        assertFalse(connected.isBefore(serving));
+
+        computers.memberSession.closeGracefully(SessionCloseReason.LOCAL_REQUEST).toCompletableFuture()
+                .get(10, TimeUnit.SECONDS);
+        await(() -> recorded(member.nodeId()).filter(found -> found.state() == DISCONNECTED).isPresent(), 10);
+        assertFalse(recorded(member.nodeId()).orElseThrow().since().isBefore(connected));
+
+        computers.leaderSide.close();
+        assertEquals(Optional.empty(), LeaderReplication.recordedMembers(leaderRoot));
+    }
+
+    @Test
+    void theLeadersRecordNamesOnlyCurrentMembersAndSkipsLinesItCannotRead() throws Exception {
+        Files.writeString(leaderRoot.resolve(LeaderReplication.MEMBERS_FILE),
+                "sl1-removed CONNECTED 2026-10-17T10:00:00Z\nsl1-garbled CONNECTED yesterday\nhalf-a-line\n");
+        assertEquals(Map.of("sl1-removed", new LeaderReplication.MemberConnection(CONNECTED, Instant.parse("2026-10-17T10:00:00Z"))),
+                LeaderReplication.recordedMembers(leaderRoot).orElseThrow());
+
+        closing(new LeaderReplication(leaderRoot, project, Set.of(member.nodeId())));
+
+        await(() -> recorded(member.nodeId()).isPresent(), 8);
+        assertEquals(Set.of(member.nodeId()), LeaderReplication.recordedMembers(leaderRoot).orElseThrow().keySet());
+    }
+
+    private Optional<LeaderReplication.MemberConnection> recorded(String nodeId) {
+        return LeaderReplication.recordedMembers(leaderRoot).map(members -> members.get(nodeId));
     }
 
     @Test

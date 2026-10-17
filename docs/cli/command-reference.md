@@ -102,6 +102,20 @@ command out of the project checkout (ADR-0091). Neither provider's policy is
 ever loosened outside the Synesis tools. Agent output is kept as log files under the Synesis state directory,
 outside the project.
 
+`synesis coordination status` reads durable coordination state and changes
+nothing. On a project shared across computers (ADR-0098) it adds
+`REPLICATION_ROLE=leader|member`. A member also prints `REPLICATION_LEADER=<node>`
+and `REPLICATION_STATE=CONNECTED|DISCONNECTED|DIVERGED|NO_COORDINATION_SERVER`. A
+leader prints one `REPLICATION_MEMBER=<node> STATE=<state> since=<time>` line per
+member its role file names, sorted by node: `STATE=CONNECTED` while that member's
+session is attached, `STATE=DISCONNECTED` after it ended or, for a member that has
+not connected since the leader's coordination server started, since that start
+(with no `since` for a member added while that server runs that has not connected
+yet), and `STATE=NO_COORDINATION_SERVER` with no `since` when that server is not
+running. Both roles print `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>`
+for the last session that ended, when there is one. Further `KEY=VALUE` fields may
+be added to these lines.
+
 ## Project validation
 
 A project can declare one command that must pass before its work is integrated.

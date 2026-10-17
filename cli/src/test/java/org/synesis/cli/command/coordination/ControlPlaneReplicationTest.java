@@ -224,6 +224,8 @@ final class ControlPlaneReplicationTest {
         Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
         await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOnLeader(leader, memberNode));
+        Instant firstConnected = LeaderReplication.recordedMembers(leader.coordination).orElseThrow().get(memberNode.nodeId()).since();
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
         List<PeerSession> firstSessions = List.copyOf(leader.owner.get().sessions());
 
@@ -231,11 +233,19 @@ final class ControlPlaneReplicationTest {
 
         await(() -> leader.owner.get().sessions().stream().anyMatch(session -> !firstSessions.contains(session) && session.isUsable())
                 && member.owner.get().sessions().stream().anyMatch(PeerSession::isUsable));
+        // The leader says the member is connected again, from the redialed session's start.
+        await(() -> connectedOnLeader(leader, memberNode)
+                && LeaderReplication.recordedMembers(leader.coordination).orElseThrow().get(memberNode.nodeId()).since().isAfter(firstConnected));
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
         assertEquals(4, leader.store().events().size());
         assertTrue(ReplicationJournal.lastDisconnect(member.coordination).orElseThrow().startsWith("REMOTE_REQUEST "));
         assertTrue(ReplicationJournal.lastDisconnect(leader.coordination).orElseThrow().startsWith("LOCAL_REQUEST "));
         assertEquals(2, ReplicationJournal.read(member.coordination).stream().filter(line -> line.contains(" CONNECTED ")).count());
+    }
+
+    private static boolean connectedOnLeader(Computer leader, NodeIdentity member) {
+        return LeaderReplication.recordedMembers(leader.coordination)
+                .map(members -> members.get(member.nodeId())).filter(found -> found.state() == LeaderReplication.MemberConnection.State.CONNECTED).isPresent();
     }
 
     private boolean hasUsableSessionOtherThan(Computer computer, List<PeerSession> earlier) {

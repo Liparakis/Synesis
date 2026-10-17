@@ -1,16 +1,24 @@
 package org.synesis.coordination.replication;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -36,8 +44,19 @@ import org.synesis.link.session.PeerSession;
  * <p>The head is watched by counting event files, because the log is also appended by other processes of the
  * leader computer (agents' MCP servers) that this object never sees. A notice is advisory: a member that misses
  * one pulls anyway at its next interval.</p>
+ *
+ * <p>Whether each current member has an attached session, and since when, is written to {@value #MEMBERS_FILE} for
+ * {@code synesis coordination status}, the leader's counterpart of a member's {@code replication.status}. Only a
+ * session attached here counts: a peer Link admitted that the settings do not name is not a member. The file is
+ * removed when this object closes, so a file that is present was written by a server that ran or is running.</p>
  */
 public final class LeaderReplication implements AutoCloseable {
+
+    /**
+     * Name of the file holding each current member's connection, next to the events folder: one line per member,
+     * {@code <node> CONNECTED|DISCONNECTED <instant>}.
+     */
+    public static final String MEMBERS_FILE = "replication.members";
 
     /**
      * How often the log is checked for a head that moved since the last notice.
@@ -48,6 +67,32 @@ public final class LeaderReplication implements AutoCloseable {
      * deadline on a slow uplink.
      */
     private static final int MAX_PAGE_BYTES = 256 * 1024;
+    private static final System.Logger LOGGER = System.getLogger(LeaderReplication.class.getName());
+
+    /**
+     * Whether a member has a live session to the leader.
+     *
+     * @param state whether its session is attached now
+     * @param since when that session was attached or ended; for a member with no session yet, when the leader
+     *              started serving
+     */
+    public record MemberConnection(State state, Instant since) {
+
+        /**
+         * A member's session, as {@code synesis coordination status} and {@value LeaderReplication#MEMBERS_FILE}
+         * name it.
+         */
+        public enum State {
+            /**
+             * From the attach of its session until that session ends.
+             */
+            CONNECTED,
+            /**
+             * No attached session.
+             */
+            DISCONNECTED
+        }
+    }
 
     private final Path root;
     private final UUID projectId;
@@ -56,6 +101,8 @@ public final class LeaderReplication implements AutoCloseable {
     private final Runnable afterMemberEntry;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, Long> noticed = new ConcurrentHashMap<>();
+    private final Map<String, MemberConnection> connections = new ConcurrentHashMap<>();
+    private final Instant started = Instant.now();
     private final ExecutorService requests = Executors.newCachedThreadPool(daemon("synesis-replication-leader"));
     private final ScheduledExecutorService notices = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-replication-notice"));
@@ -103,6 +150,7 @@ public final class LeaderReplication implements AutoCloseable {
         this.endpoint = new LeaderEndpoint(root, projectId, members);
         notices.scheduleWithFixedDelay(this::noticeAll, NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
                 TimeUnit.MILLISECONDS);
+        notices.execute(this::writeConnections);
     }
 
     /**
@@ -167,6 +215,35 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
+     * Reads the connections a leader server on this computer last wrote. Lines that cannot be read are skipped; a
+     * member the file does not name has had no session since that write.
+     *
+     * @param root the leader's coordination folder
+     * @return each recorded member's connection by node, or empty when no leader server recorded any
+     */
+    public static Optional<Map<String, MemberConnection>> recordedMembers(Path root) {
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(root.resolve(MEMBERS_FILE), StandardCharsets.UTF_8);
+        } catch (IOException none) {
+            return Optional.empty();
+        }
+        Map<String, MemberConnection> recorded = new HashMap<>();
+        for (String line : lines) {
+            String[] parts = line.strip().split(" ");
+            if (parts.length != 3) {
+                continue;
+            }
+            try {
+                recorded.put(parts[0], new MemberConnection(MemberConnection.State.valueOf(parts[1]), Instant.parse(parts[2])));
+            } catch (IllegalArgumentException | DateTimeParseException unreadable) {
+                // Skipped like any other line that does not follow the format.
+            }
+        }
+        return Optional.of(Map.copyOf(recorded));
+    }
+
+    /**
      * Tells whether a node may propose and pull now.
      *
      * @param nodeId a node ID
@@ -201,8 +278,56 @@ public final class LeaderReplication implements AutoCloseable {
         if (!isMember(session.remoteNodeId())) {
             throw new IllegalArgumentException("session peer is not a member");
         }
-        sessions.put(session.remoteNodeId(), session);
-        noticed.remove(session.remoteNodeId());
+        String node = session.remoteNodeId();
+        // One lock over the session map and the record, so the end of an old session cannot be recorded after the
+        // attach of its successor.
+        synchronized (connections) {
+            sessions.put(node, session);
+            noticed.remove(node);
+            recordConnection(node, MemberConnection.State.CONNECTED);
+        }
+        session.terminalCompletion().whenComplete((ignored, failure) -> {
+            synchronized (connections) {
+                // A session replaced by a newer one to the same member does not make that member disconnected.
+                if (sessions.remove(node, session)) {
+                    recordConnection(node, MemberConnection.State.DISCONNECTED);
+                }
+            }
+        });
+    }
+
+    private void recordConnection(String node, MemberConnection.State state) {
+        connections.put(node, new MemberConnection(state, Instant.now()));
+        try {
+            // On the notice thread, so writes are in order and file work stays off the Link event loop.
+            notices.execute(this::writeConnections);
+        } catch (RejectedExecutionException closed) {
+            // Closed: the file is gone, and a session that ends while the server stops is not news.
+        }
+    }
+
+    /**
+     * Writes one line for every member the settings name now, replacing the file whole so a reader never sees half
+     * of it. With no members there is nothing to say, and no file.
+     */
+    private void writeConnections() {
+        Path file = root.resolve(MEMBERS_FILE);
+        List<String> lines = members.get().stream().sorted().map(node -> {
+            MemberConnection connection = connections.getOrDefault(node, new MemberConnection(MemberConnection.State.DISCONNECTED, started));
+            return node + " " + connection.state() + " " + connection.since();
+        }).toList();
+        try {
+            if (lines.isEmpty()) {
+                Files.deleteIfExists(file);
+                return;
+            }
+            Path temporary = root.resolve(MEMBERS_FILE + ".tmp");
+            Files.write(temporary, lines, StandardCharsets.UTF_8);
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException | RuntimeException unwritable) {
+            // The file explains the replication; it must not stop it.
+            LOGGER.log(System.Logger.Level.WARNING, "Could not record the members' connections.", unwritable);
+        }
     }
 
     private byte[] serve(String sender, byte[] payload) {
@@ -273,12 +398,24 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
-     * Stops watching the head and answering. Attached sessions belong to their owner and are not closed.
+     * Stops watching the head and answering, and removes the record of the members' connections. Attached sessions
+     * belong to their owner and are not closed.
      */
     @Override
     public void close() {
         notices.shutdownNow();
         requests.shutdownNow();
+        try {
+            // A write still running must not put the file back after it is removed.
+            notices.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        try {
+            Files.deleteIfExists(root.resolve(MEMBERS_FILE));
+        } catch (IOException stuck) {
+            LOGGER.log(System.Logger.Level.WARNING, "Could not remove the record of the members' connections.", stuck);
+        }
     }
 
     private static java.util.concurrent.ThreadFactory daemon(String name) {

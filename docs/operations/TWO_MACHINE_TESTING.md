@@ -96,7 +96,10 @@ replaces it. `follow` and `share` stop the project's runtime if the installation
 `LINK_STATE=WAITING` when `--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended
 without a session. `CONNECTED` means the session exists, not that A accepted it. The connection stays with the project's
 runtime after the command ends. Once A has accepted, B pulls A's log and sends its entries to A, and A merges B's lanes
-without an agent of its own. `synesis coordination status` on B shows `REPLICATION_STATE`.
+without an agent of its own. `synesis coordination status` on B shows `REPLICATION_STATE`. On A it shows one line per
+member, `REPLICATION_MEMBER=<node> STATE=CONNECTED since=<time>` while that member's session is up and
+`STATE=DISCONNECTED since=<time>` after it ended (or, for a member that has not connected since A's coordination server
+started, since that start). `STATE=NO_COORDINATION_SERVER` means A's coordination server is not running.
 
 **A dropped link redials by itself.** The computer that ran `link join` (the one that dialed) dials the other again when
 the session ends, at the endpoints of the invitation it used, one second later and then every 2, 4, 8, 16, 30 seconds
@@ -110,7 +113,7 @@ after 30 s), so a pause of up to half a minute does not end the session.
 `synesis coordination status` shows `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>` for the last session that
 ended, with the reason Link closed it for (`LIVENESS_EXPIRED`, `TRANSPORT_CLOSED`, `REMOTE_REQUEST`, `LOCAL_REQUEST`,
 `PROTOCOL_ERROR`) and how long it had lasted. The last 100 events (sessions starting and ending, the first failure of a
-redial, a redial that worked) are in `replication.log` beside `replication.status`, in the project's coordination
+redial, a redial that worked) are in `replication.log` beside `replication.status` (B) and `replication.members` (A), in the project's coordination
 folder (`.synesis/coordination`). While the link is down a member's proposals answer `LEADER_UNREACHABLE` at once, and
 the member catches up with a pull (within 15 seconds) once the link is back.
 

@@ -1,3 +1,19 @@
+# 2026-10-17 — The leader says whether each member is connected (defect 5 below)
+
+**Change.** `LeaderReplication` writes `replication.members` beside the events folder: one line per member the role file
+names, `<node> CONNECTED|DISCONNECTED <instant>`. A member is `CONNECTED` from the attach of its session (only sessions
+`ReplicationSide` attaches, so a held joiner never counts) until that session ends; a session replaced by a newer one
+does not mark it disconnected. A member with no session yet is `DISCONNECTED` since the server started. Writes run on
+the notice thread, whole through a temporary file; the file is removed on close and absent with no members.
+`synesis coordination status` on a leader prints `REPLICATION_MEMBER=<node> STATE=CONNECTED|DISCONNECTED since=<time>`
+per role-file member, sorted, or `STATE=NO_COORDINATION_SERVER` with no file. Additive: existing keys and the member's
+`replication.status` are unchanged. Docs: TWO_MACHINE_TESTING, WIRE_FORMAT, the CLI command reference.
+
+**Evidence.** Source semantics proven: `LinkReplicationTest` (connect, end, close removes the file; unreadable lines
+skipped, removed members dropped), `CoordinationLogLocationTest` (a real `coordination serve` of a leader, before,
+during, after), `ControlPlaneReplicationTest` (connected again after the redial, through the launcher's wiring). Not run:
+real two-computer acceptance. Known limit, shared with `replication.status`: a server that crashed leaves its last
+record behind.
 # 2026-10-17 — Two homes, bigger goal: every module written, none reviewed (stopped, NOT REACHED)
 
 **Run.** Same two computers and build as the entry below, project reset (new identity `177b07d3`, repository
