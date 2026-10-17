@@ -358,6 +358,9 @@ final class ControlPlaneReplicationTest {
         ReplicationSettings.leader(Set.of()).write(leader.coordination);
 
         Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of()));
+        // The stopped leader's sessions take longer to end on Windows than on Linux; wait for that, not a fixed time.
+        await(() -> a.owner.get().sessions().stream().noneMatch(PeerSession::isUsable) && member.owner.get().sessions().stream().noneMatch(PeerSession::isUsable)
+                && journaled(restarted, "HOST_RESUME_SKIPPED") && journaled(restarted, "DIAL_RESUME_SKIPPED"));
         settle();
 
         assertTrue(restarted.owner.get().sessions().isEmpty());
