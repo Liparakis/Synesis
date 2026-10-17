@@ -1,3 +1,41 @@
+# 2026-10-17 — Overnight real run, this PC and the VM: woken agents meet the liveness lease (stopped, NOT REACHED)
+
+**Run.** remaster57 (master `597637a6` plus the design commits) on this PC (leader, two `claude:sonnet:medium`) and the
+bridged VM (member, two `codex:gpt-6-luna:high`), project `mp9-big` (seven modules, `cli.py` depending on six,
+mandatory review, no dedicated reviewers), code remote a bare repository on the VM over SSH. Joined with the one link:
+`link invite` printed `LINK_FIREWALL=STALE` and its NOTE (the installer had too), the VM's `link join` printed
+`CODE_REMOTE_CHECK=REACHABLE`, the answer link connected, `link accept`, and the leader's status printed
+`REPLICATION_MEMBER=... STATE=CONNECTED`. 204 log entries, 114 proposed by the VM. Stopped at 07:10: one module
+(`roman`) integrated, completion NOT REACHED.
+
+**Proven on real current builds.** The firewall report (install and invite), the join-time fetch check, the leader's
+member state, the Stop hook installed for Claude, producers reviewing each other on one computer (`roman`), and across
+computers: a Codex agent on the VM was admitted to the review of `slug` written by Claude here, ran its tests and
+accepted it; Codex agents ended their turn on WAIT and were resumed by the run (ADR-0099).
+
+**Setup error, mine.** The first VM run ended `NO_WORK_ANNOUNCED` in 25 s: the VM's `PATH` put the raw launcher
+`/opt/synesis/synesis/bin/synesis` first, `provider install codex` wrote it into `~/.codex/config.toml`, and Codex
+starts MCP servers without `JAVA_HOME`, so no Synesis tools loaded. Reinstalled through the wrapper
+`/usr/local/bin/synesis` (it exports `JAVA_HOME`). Not a product defect, but `provider install` could refuse a
+launcher that cannot start without the caller's environment.
+
+**Why it stalled (open, design-level).**
+
+1. Waiting now ends the turn (ADR-0099), but the session lease still reads that as absence (stale 2 min, grace
+   5 min, `SessionLeasePolicy`). A Codex agent has no process between resumes and a Claude agent may sit up to 10 min
+   in its Stop hook, so ordinary waits turn producers into absent authors: their lanes go SUSPENDED and then
+   RECOVERY_HELD, and review requests addressed to them wait on nobody.
+2. `--max-resumes` (default 8) now counts waits: `claude#2` reached 8 and `codex#1` 7, after which a request addressed
+   to them can no longer resume them. A retry with `--max-resumes 30` did not help, because of 3.
+3. Fresh agents of a restarted run were offered reviews of snapshots whose authors were gone but not yet RECOVERY_HELD
+   (`reviewCandidatesFor` excludes only RECOVERY_HELD), took reviewer lanes, and then could not continue the held
+   authors (one lane per session). All four waited on authors; both controllers waited on each other
+   (`FOREIGN_LANE_OPEN` / `OTHER_COMPUTER_CONNECTED`).
+4. A Claude agent whose lane was integrated was refused a new reviewer lane: `ensure_session` with a task hits the
+   recovery fence on its COMPLETED binding (`McpProtocolHandler.refuseFencedRecovery`, `SESSION_RECOVERY_STATE_UNAVAILABLE`),
+   so it stopped while work remained.
+5. One Claude agent claimed four modules in turn while others had none, then waited on four reviews at once.
+
 # 2026-10-17 — Review findings on "a producer waiting for review may review the others" fixed
 
 An independent review of the entry below found three defects, all coming from review authority no longer needing a
