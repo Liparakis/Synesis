@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
@@ -23,7 +24,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  *
  * <p>Only {@code refs/synesis/*} and the control branch are ever pushed. Every command runs through
  * {@link GitProcessRunner} (no global configuration, hooks off, no signing) with its remote timeout. A remote
- * that cannot be reached, refuses the ref or times out is {@link #UNAVAILABLE} with a short reason.</p>
+ * that cannot be reached, refuses the ref or times out is {@link #UNAVAILABLE} with a short reason a person can act
+ * on ({@link Refused#detail()}): Git's own line, with any credentials in a URL removed, and the command to run.</p>
  */
 public final class CodeRemote {
 
@@ -35,6 +37,7 @@ public final class CodeRemote {
 
     private static final String SYNESIS_NAMESPACE = "refs/synesis/";
     private static final int MAX_REASON_CHARS = 200;
+    private static final Pattern URL_CREDENTIALS = Pattern.compile("([A-Za-z][A-Za-z0-9+.-]*://)[^/@\\s]+@");
 
     private final String name;
     private final boolean member;
@@ -99,6 +102,22 @@ public final class CodeRemote {
         } catch (CoordinationException unreadable) {
             return true;
         }
+    }
+
+    /**
+     * Asks a remote for its head the way a fetch would ({@code git ls-remote}), with no prompt: what a member checks
+     * when it joins, because every lane it starts fetches the leader's head through this remote first.
+     *
+     * @param repository a worktree of the project's clone
+     * @param remoteName the remote code moves through
+     * @throws Refused {@link #UNAVAILABLE} when the remote cannot be read
+     */
+    public static void check(Path repository, String remoteName) throws Refused {
+        if (Objects.requireNonNull(remoteName, "remoteName").isBlank() || remoteName.startsWith("-")) {
+            // The name can come from another runtime's answer; Git must never read it as an option.
+            throw new Refused(UNAVAILABLE, "the code remote name is not usable: " + remoteName.strip());
+        }
+        new CodeRemote(remoteName, true).remote(repository, List.of("ls-remote", remoteName, "HEAD"));
     }
 
     /**
@@ -239,21 +258,29 @@ public final class CodeRemote {
         return "refs/remotes/" + name + "/" + branch;
     }
 
-    private static void remote(Path repository, List<String> command) throws Refused {
+    private void remote(Path repository, List<String> command) throws Refused {
         try {
             GitProcessRunner.runRemote(repository, command.toArray(String[]::new));
         } catch (IOException failure) {
-            throw new Refused(UNAVAILABLE, reason(failure));
+            // Agents cannot answer a sign-in prompt, so the person is told how to give Git the credential once.
+            throw new Refused(UNAVAILABLE, reason(failure) + ". Run `git fetch " + name + "` once in a terminal in this project's folder "
+                    + "and sign in if Git asks, so that it can fetch without asking; then try again.");
         }
     }
 
-    /** The last line of Git's own explanation, which is where it says what refused. */
+    /**
+     * Git's own explanation: its first {@code fatal:} or {@code error:} line, which says what refused (the lines after
+     * it are generic advice), else its last line. Credentials in a URL are removed, because the reason is shown to
+     * agents and stored in the session binding.
+     */
     private static String reason(Exception failure) {
         String message = String.valueOf(failure.getMessage());
         int output = message.indexOf("output=");
         String text = (output >= 0 ? message.substring(output + "output=".length()) : message).strip();
-        int lastLine = text.lastIndexOf('\n');
-        text = (lastLine >= 0 ? text.substring(lastLine + 1) : text).strip();
+        List<String> lines = text.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
+        text = lines.stream().filter(line -> line.startsWith("fatal:") || line.startsWith("error:")).findFirst()
+                .orElse(lines.isEmpty() ? text : lines.getLast());
+        text = URL_CREDENTIALS.matcher(text).replaceAll("$1");
         return text.length() > MAX_REASON_CHARS ? text.substring(0, MAX_REASON_CHARS) : text;
     }
 
@@ -268,6 +295,9 @@ public final class CodeRemote {
         /** The refusal code. */
         private final String code;
 
+        /** What was missing, or Git's reason and what to run. */
+        private final String detail;
+
         /**
          * Creates a refusal.
          *
@@ -277,6 +307,16 @@ public final class CodeRemote {
         Refused(String code, String reason) {
             super(code + ": " + reason);
             this.code = code;
+            this.detail = reason;
+        }
+
+        /**
+         * Returns what a person reads: what was missing, or Git's reason with no credentials and the command to run.
+         *
+         * @return the detail
+         */
+        public String detail() {
+            return detail;
         }
 
         /**
