@@ -114,7 +114,7 @@ public final class AgentSessionService {
             if ("PROVIDER_CONFIGURATION_CONFLICT".equals(readiness.internalReason())) {
                 throw AgentSessionFailure.of(AgentSessionFailure.Code.PROVIDER_CONFIGURATION_CONFLICT);
             }
-            throw AgentSessionFailure.workspaceNotReady(readiness.internalReason());
+            throw AgentSessionFailure.workspaceNotReady(readiness);
         }
         binding = readiness.binding();
 
@@ -182,7 +182,7 @@ public final class AgentSessionService {
             case PROVIDER_INTEGRATION_REQUIRED -> new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_INTEGRATION_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, null);
             case PROVIDER_CONFIGURATION_CONFLICT ->
                     new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_CONFIGURATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("diagnostic", "PROVIDER_CONFIGURATION_CONFLICT"));
-            case WORKSPACE_NOT_READY -> workspaceNotReady(failure.diagnostic());
+            case WORKSPACE_NOT_READY -> failure.answer() != null ? failure.answer() : workspaceNotReady(failure.diagnostic());
         };
     }
 

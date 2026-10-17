@@ -3,6 +3,7 @@ package org.synesis.workspace.application.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -11,6 +12,7 @@ import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +42,9 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
@@ -215,6 +219,35 @@ class CodeExchangeMemberTest {
         assertFalse(channel.proposed(PredictionEventType.TASK_SNAPSHOT_CREATED));
         assertEquals(proposedBefore, channel.proposed.size(), "no entry was proposed");
         assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED));
+    }
+
+    @Test
+    void aMemberThatCannotFetchTellsTheAgentAndTheInstallWhyAndStartsOnceItCan() throws Exception {
+        String url = TestGit.output(memberRoot, "remote", "get-url", "origin");
+        TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
+        replicate();
+
+        Map<String, String> status = new ProviderApplicationService().status(member, "codex").values();
+        assertEquals("FAILED", status.get("WORKTREE_BINDING_STATUS"), status.toString());
+        assertEquals("CODE_REMOTE_UNAVAILABLE", status.get("WORKTREE_BINDING_DIAGNOSTIC"), status.toString());
+        assertTrue(status.get("WORKTREE_BINDING_DETAIL").contains("git fetch origin"), status.toString());
+
+        AgentResponse ensured = new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-1", null, false));
+        Map<String, Object> answer = ensured.toMap();
+        assertEquals(AgentStatus.BLOCKED, ensured.status(), ensured.toJson());
+        assertEquals("workspace_not_ready", answer.get("reason"));
+        assertEquals("request_human_help", answer.get("nextAction"));
+        Map<?, ?> result = (Map<?, ?>) answer.get("result");
+        assertEquals("CODE_REMOTE_UNAVAILABLE", result.get("diagnostic"));
+        assertTrue(String.valueOf(result.get("detail")).contains("does not appear to be a git repository"), ensured.toJson());
+        assertTrue(String.valueOf(result.get("detail")).contains("git fetch origin"), ensured.toJson());
+        assertEquals(answer, new WorkspaceReadinessService().assess(member, "codex", "m-1").response().toMap(), "every operation gives the same answer");
+
+        TestGit.run(memberRoot, "remote", "set-url", "origin", url);
+        AgentResponse recovered = new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-1", null, false));
+
+        assertEquals(AgentStatus.READY, recovered.status(), recovered.toJson());
+        assertNull(bindings.find(member, "codex", "m-1").orElseThrow().lastSeenDetail(), "the explanation goes with the failure");
     }
 
     @Test

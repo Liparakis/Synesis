@@ -88,7 +88,8 @@ final class ProviderBindingFile {
                     number(value, "lastVerifiedProjectSequence").longValue(),
                     nullable(value, "providerTrustState") == null ? "WORKSPACE_UNVERIFIED" : nullable(value, "providerTrustState"),
                     number(value, "bindingVersion").intValue(),
-                    nullable(value, "completedAt"));
+                    nullable(value, "completedAt"),
+                    nullable(value, "lastSeenDetail"));
         } catch (RuntimeException failure) {
             throw new IOException("malformed provider session binding", failure);
         }
@@ -120,6 +121,10 @@ final class ProviderBindingFile {
         value.put("providerTrustState", binding.providerTrustState());
         value.put("bindingVersion", binding.bindingVersion());
         value.put("completedAt", binding.completedAt());
+        // Written only when set, so a binding without a failure is spelled as before and older readers ignore the key.
+        if (binding.lastSeenDetail() != null) {
+            value.put("lastSeenDetail", binding.lastSeenDetail());
+        }
         writeText(path, ProviderJson.write(value) + System.lineSeparator());
     }
 

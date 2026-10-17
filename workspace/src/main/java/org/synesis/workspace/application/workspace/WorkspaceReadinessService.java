@@ -79,6 +79,18 @@ public final class WorkspaceReadinessService {
         return new ReadinessResult(false, null, null, response, internalReason);
     }
 
+    /**
+     * A worktree that could not be allocated for a reason a person must fix, such as a code remote this computer cannot
+     * fetch from without a sign-in (ADR-0098). The next ensure retries the allocation, but retrying alone cannot
+     * succeed, so the agent is told to stop and pass the detail on.
+     */
+    private static ReadinessResult allocationNeedsPerson(ProviderSessionBindingService.Binding binding) {
+        String code = Objects.requireNonNullElse(binding.lastSeenState(), "WORKSPACE_ALLOCATION_FAILED");
+        AgentResponse response = new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_NOT_READY, AgentNextAction.REQUEST_HUMAN_HELP,
+                java.util.Map.of("diagnostic", code, "detail", binding.lastSeenDetail()));
+        return new ReadinessResult(false, null, null, response, code);
+    }
+
     private static ReadinessResult unavailableProvider(String provider, String status) {
         AgentResponse response = new AgentResponse(AgentStatus.BLOCKED, AgentReason.PROVIDER_INTEGRATION_REQUIRED, AgentNextAction.REQUEST_HUMAN_HELP, java.util.Map.of("provider", provider, "status", status));
         return new ReadinessResult(false, null, null, response, "PROVIDER_INTEGRATION_REQUIRED");
@@ -156,6 +168,9 @@ public final class WorkspaceReadinessService {
             ProviderSessionBindingService.Binding binding = bindingOptional.get();
             if ("PROVIDER_CONFIGURATION_CONFLICT".equals(binding.lastSeenState())) {
                 return unavailable(AgentReason.PROVIDER_CONFIGURATION_CONFLICT, "PROVIDER_CONFIGURATION_CONFLICT");
+            }
+            if (binding.worktreePath() == null && binding.lastSeenDetail() != null) {
+                return allocationNeedsPerson(binding);
             }
             if (!"BOUND".equals(binding.status()) || binding.worktreePath() == null) {
                 return unavailable(AgentReason.WORKSPACE_STALE, "SESSION_NOT_ACTIVE");

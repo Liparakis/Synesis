@@ -71,7 +71,7 @@ final class ProviderWorktreeAllocation {
             Binding allocated = binding.withAllocatedWorktree(worktreeId, location.root().toString(), path.toString(), branch, baseCommit);
             return verifyBinding(location.root(), allocated);
         } catch (CodeRemote.Refused refused) {
-            return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", refused.code());
+            return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", refused.code(), refused.detail());
         } catch (Exception failure) {
             String diagnostic = String.valueOf(failure.getMessage()).contains("PROVIDER_CONFIGURATION_CONFLICT") ? "PROVIDER_CONFIGURATION_CONFLICT" : "WORKSPACE_ALLOCATION_FAILED";
             return binding.withoutWorktree(location.root().toString(), baseCommit, "FAILED", diagnostic);

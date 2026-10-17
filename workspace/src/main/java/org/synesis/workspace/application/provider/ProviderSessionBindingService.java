@@ -678,10 +678,47 @@ public final class ProviderSessionBindingService {
      * @param providerTrustState          provider trust state
      * @param bindingVersion              binding version
      * @param completedAt                 terminal timestamp, when complete
+     * @param lastSeenDetail              what a person can do about a failed worktree allocation, or {@code null}; set only
+     *                                    with the {@code lastSeenState} it explains (a code-remote refusal) and cleared with it
      */
     public record Binding(int schemaVersion, String sessionId, String projectId, String nodeId, String provider, String providerInstanceFingerprint, String supervisorId, String workerId, String worktreeId,
                           String worktreePath, String controlCheckoutPath, String branch, String baseCommit, String gitCommonDir, String creationState, String verificationState, String lastSeenState, String status,
-                          long createdAtEpochMillis, long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState, int bindingVersion, String completedAt) {
+                          long createdAtEpochMillis, long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState, int bindingVersion, String completedAt, String lastSeenDetail) {
+
+        /**
+         * Creates a binding with no failure detail, as every binding was before {@link #lastSeenDetail()} existed.
+         *
+         * @param schemaVersion               binding schema version
+         * @param sessionId                   session identity
+         * @param projectId                   project identity
+         * @param nodeId                      project node identity
+         * @param provider                    provider identifier
+         * @param providerInstanceFingerprint hashed provider-instance evidence
+         * @param supervisorId                supervisor actor identity
+         * @param workerId                    worker actor identity
+         * @param worktreeId                  assigned worktree identity, when allocated
+         * @param worktreePath                assigned worktree path, when allocated
+         * @param controlCheckoutPath         canonical control checkout path
+         * @param branch                      assigned branch, when allocated
+         * @param baseCommit                  Git base commit
+         * @param gitCommonDir                Git common directory identity
+         * @param creationState               worktree creation state
+         * @param verificationState           worktree verification state
+         * @param lastSeenState               last-seen binding state
+         * @param status                      lifecycle status
+         * @param createdAtEpochMillis        creation timestamp
+         * @param lastSeenEpochMillis         last-seen timestamp
+         * @param lastVerifiedProjectSequence last verified project sequence
+         * @param providerTrustState          provider trust state
+         * @param bindingVersion              binding version
+         * @param completedAt                 terminal timestamp, when complete
+         */
+        public Binding(int schemaVersion, String sessionId, String projectId, String nodeId, String provider, String providerInstanceFingerprint, String supervisorId, String workerId, String worktreeId,
+                       String worktreePath, String controlCheckoutPath, String branch, String baseCommit, String gitCommonDir, String creationState, String verificationState, String lastSeenState, String status,
+                       long createdAtEpochMillis, long lastSeenEpochMillis, long lastVerifiedProjectSequence, String providerTrustState, int bindingVersion, String completedAt) {
+            this(schemaVersion, sessionId, projectId, nodeId, provider, providerInstanceFingerprint, supervisorId, workerId, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir,
+                    creationState, verificationState, lastSeenState, status, createdAtEpochMillis, lastSeenEpochMillis, lastVerifiedProjectSequence, providerTrustState, bindingVersion, completedAt, null);
+        }
 
         /**
          * Returns the typed lifecycle status; stored text this build does not know reads as
@@ -748,21 +785,26 @@ public final class ProviderSessionBindingService {
         }
 
         Binding withoutWorktree(String controlCheckoutPath, String baseCommit, String creationState, String lastSeenState) {
-            return withWorkspace(SCHEMA_VERSION, null, null, controlCheckoutPath, null, baseCommit, gitCommonDir, creationState, "UNVERIFIED", lastSeenState, System.currentTimeMillis(), "WORKSPACE_UNVERIFIED");
+            return withoutWorktree(controlCheckoutPath, baseCommit, creationState, lastSeenState, null);
+        }
+
+        Binding withoutWorktree(String controlCheckoutPath, String baseCommit, String creationState, String lastSeenState, String detail) {
+            return withWorkspace(SCHEMA_VERSION, null, null, controlCheckoutPath, null, baseCommit, gitCommonDir, creationState, "UNVERIFIED", lastSeenState, detail, System.currentTimeMillis(),
+                    "WORKSPACE_UNVERIFIED");
         }
 
         Binding withAllocatedWorktree(String worktreeId, String controlCheckoutPath, String worktreePath, String branch, String baseCommit) {
-            return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", "UNVERIFIED", "WORKTREE_ALLOCATED", System.currentTimeMillis(),
+            return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", "UNVERIFIED", "WORKTREE_ALLOCATED", null, System.currentTimeMillis(),
                     providerTrustState);
         }
 
         Binding withWorktreeVerification(String controlCheckoutPath, String gitCommonDir, boolean verified, String trustState) {
             return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", verified ? "VERIFIED" : "UNVERIFIED",
-                    verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", System.currentTimeMillis(), trustState);
+                    verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", null, System.currentTimeMillis(), trustState);
         }
 
         Binding withVerifiedWorkspaceTrust(long verifiedAt) {
-            return withWorkspace(schemaVersion, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, creationState, "VERIFIED", "WORKSPACE_VERIFIED", verifiedAt, "VERIFIED");
+            return withWorkspace(schemaVersion, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, creationState, "VERIFIED", "WORKSPACE_VERIFIED", null, verifiedAt, "VERIFIED");
         }
 
         private Binding ended(ProviderBindingStatus endState, String trustState) {
@@ -794,7 +836,8 @@ public final class ProviderSessionBindingService {
                     lastVerifiedProjectSequence,
                     trustState,
                     bindingVersion,
-                    newCompletedAt);
+                    newCompletedAt,
+                    Objects.equals(newLastSeenState, lastSeenState) ? lastSeenDetail : null);
         }
 
         private Binding withWorkspace(int newSchemaVersion,
@@ -807,6 +850,7 @@ public final class ProviderSessionBindingService {
                 String newCreationState,
                 String newVerificationState,
                 String newLastSeenState,
+                String newLastSeenDetail,
                 long newLastSeenEpochMillis,
                 String trustState) {
             return new Binding(newSchemaVersion,
@@ -832,7 +876,8 @@ public final class ProviderSessionBindingService {
                     lastVerifiedProjectSequence,
                     trustState,
                     bindingVersion,
-                    completedAt);
+                    completedAt,
+                    newLastSeenDetail);
         }
     }
 

@@ -56,6 +56,12 @@ final class ProviderResults {
                 values.put("BRANCH", binding.branch() == null ? "UNASSIGNED" : binding.branch());
                 values.put("BASE_COMMIT", binding.baseCommit());
                 values.put("WORKTREE_BINDING_STATUS", "VERIFIED".equals(binding.verificationState()) ? "BOUND" : binding.creationState());
+                if (binding.worktreePath() == null && binding.lastSeenState() != null) {
+                    values.put("WORKTREE_BINDING_DIAGNOSTIC", binding.lastSeenState());
+                }
+                if (binding.lastSeenDetail() != null) {
+                    values.put("WORKTREE_BINDING_DETAIL", binding.lastSeenDetail());
+                }
                 values.put("WORKSPACE_TRUST_STATUS", binding.verificationState());
                 boolean fallback = ensured != null ? ensured.fallbackEvidence() : new ProviderSessionBindingService().isFallbackEvidence(location, provider, binding);
                 values.put("SESSION_EVIDENCE", fallback ? "FALLBACK" : "EXPLICIT");
