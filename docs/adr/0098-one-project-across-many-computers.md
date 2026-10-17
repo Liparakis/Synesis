@@ -7,7 +7,7 @@ owner on 2026-10-15. Each step under "Build order" is built and evidenced on its
 
 Built so far (`docs/agent/CURRENT.md`, 2026-10-15 and 2026-10-16):
 
-- **Step 1**, the compatibility number: `LinkCompatibility.CURRENT` = 4.
+- **Step 1**, the compatibility number: `LinkCompatibility.CURRENT` = 4 (6 after step 2).
 - **From step 2's "First"**, heartbeats out of the log: `ParticipantActivity`.
 - **Found and fixed while writing this ADR:** one coordination folder and incremental log reads.
 - **Step 2, DONE 2026-10-16 (run 7).** Writers and reviewers on both computers. The WorkGroup COMPLETED, and both
@@ -119,7 +119,7 @@ member  ──request──▶  leader ──append──▶  voters (majority a
    including the owner's computer. Two sides of a split can never both reach that. (DERIVED: two
    disjoint sets cannot both hold more than half, and only one can hold the owner's computer.)
 3. **The voter set changes only by an entry the current voters commit.** Automatic picking proposes;
-   it never installs.
+   it never installs. While a change is pending, both the old and the new set must agree ("Step 3 design").
 4. **With an even number of voters, the owner's computer is one of them**, so the tie rule always
    has someone to apply to.
 5. **Removal needs the owner's key.** A removal entry is valid only when signed by the owner key or
@@ -476,6 +476,454 @@ longer the documented way in.
 - **Forwarding whole tool calls.** A would have to reach into B's disk, which is where agents
   edit.
 
+## Step 3 design (2026-10-17)
+
+Step 2 has one fixed leader, chosen by a local file. Step 3 lets the leader move: a project keeps working after losing
+any minority of its voters, including the leader and the owner's computer. Membership, the owner key and removal move
+into the log. (Design by the Opus and Fable runners of the architect exploration, merged; the runner each part comes
+from is named where it matters.)
+
+Not built yet: no code exists for this section.
+
+### Settled before code (owner, 2026-10-17)
+
+The owner answered four questions:
+
+1. **Joins while the owner is away.** This is a project setting the owner controls. The default is that a member's
+   invitation waits for the owner. The other choice is that any member may approve. Changing the setting needs the
+   owner key. (USER-STATED)
+   - Example: Bob invites Carol on Saturday and the owner's computer is off until Monday. With the default, Carol's
+     computer connects and shows "waiting for the owner". The request is a log entry, so it survives restarts, and the
+     owner accepts or declines on Monday.
+2. **What "reliable" means for picking voters.** The share of the last 7 days a computer was connected, counting only
+   computers that can reach the code remote now. At most one voter changes per day. (USER-STATED)
+3. **Where the owner key lives.** Only on the owner's computer, stored next to that computer's node key and never
+   copied. To act as owner from another computer, the owner uses the recovery key there once, which makes that
+   computer the owner's computer. (USER-STATED)
+4. **Losing more than half the voters for good.** Yes: the owner key or the recovery key may force a new voter set.
+   (USER-STATED)
+   - Example: three voters, two laptops stolen. The owner names the desktop and a friend's PC as the voters and work
+     continues.
+   - If a "lost" computer was only asleep and comes back, whatever it decided alone after losing contact is set aside
+     for a person to look at. It is never merged.
+
+### What the code showed (VERIFIED, 2026-10-17)
+
+- **Every process reads `events/` directly**: agents' MCP servers, the run controller (`EventLogObserver`), the held
+  wait (`ProjectChangeWait`), and the hooks work in flight. Each verifies entries once (`VerifiedEventPrefixes`).
+  Anything placed there must never be taken back.
+- **A member's entry names its own position.** The sequence and the previous digest are inside the bytes the member
+  signs (`PredictionEvent`). The entry has no term field.
+- **Each `PredictionEventStore` fixes its role when it is opened.** A store opened while its computer led would keep
+  writing `events/` after it stopped leading (Fable runner).
+- **Leader services call `store.append` while holding `ProjectAppendLock`** (`ConsumerAbsenceGuard.reconcile`, the
+  merge pass). If those appends went to a decider that takes the same lock, as `LeaderEndpoint.accept` does now, they
+  would deadlock (Opus runner).
+- **A new leader can wait forever on an old leader's merge.** The merge commit is pushed only with the control branch,
+  after the pass. `IntegrationOrchestrationService.branchCannotHold` treats Git's "unknown commit" as "the branch
+  could hold it", so the started attempt is waited on with no end (Opus runner).
+- **No liveness crosses computers today.** `PULL` carries no participants; `ParticipantActivity` is local, and
+  `ConsumerAbsenceGuard` judges only participants with a provider binding on its own computer. The step-2 section
+  "Liveness of B's agents on A" describes behaviour that was never built. A leader change therefore changes no
+  liveness judgement today.
+- **Join requests live in memory.** `LinkRuntimeOwner` holds them, and they end with the invitation (10 minutes at
+  most).
+- `LinkCompatibility.CURRENT` is 6. Step 3 makes it 7.
+
+### Shape: a small Raft, one entry in flight, committed entries only in `events/`
+
+Raft with pre-vote and check-quorum, as "Timing" says, written in the `coordination` module and carried over Link
+sessions. Load is about 0.2 entries per second for five lanes ("The log's size"), so the design takes these
+simplifications (DERIVED):
+
+1. **One entry in flight per project.** The leader stages one entry, waits until a quorum stores it, places it, and
+   only then stages the next. At home round trips of 7 to 34 ms that allows about ten commits a second.
+2. **`events/` holds committed entries only, on every computer.** The uncommitted tail lives beside it in
+   `replication.tail/`, and the vote in `replication.vote`. Only the coordination server writes either, and it forces
+   both to disk before answering. Agents, hooks, the run controller and the UI never read them. Nothing a local reader
+   saw is ever taken back. The tail is normally empty or one entry. At a term start it holds an earlier entry and the
+   new `TERM_STARTED`.
+3. **The term is derived, not stored in entries.** A leader's first entry in its term is `TERM_STARTED{term}`, which it
+   writes and signs itself. An entry's term is the term of the last `TERM_STARTED` at or before it. That is exactly
+   Raft's per-entry term, because a leader appends `TERM_STARTED` before any entry of its term. A member's signed
+   proposal therefore stays valid across a leader change.
+4. **The hash chain replaces Raft's previous-index and previous-term check.** A previous digest pins the whole prefix,
+   which is stronger.
+5. **On a shared project, every append goes through the computer's coordination server, the leader's own agents
+   included.** Agents' processes propose over the loopback route members already use. The server judges the entry
+   when it leads and forwards it when it does not.
+   - This gives one write path per computer. The fixed-role store problem goes away, because every process of a shared
+     project is just a proposer.
+   - The server's commit path takes a lock inside its own process, never `ProjectAppendLock`, which removes the
+     deadlock. `ProjectAppendLock` keeps its member meaning: it lines up this computer's proposers.
+   - An unshared project, one with no `replication.properties`, writes directly as today.
+
+```text
+agent process ─append─▶ loopback /replication ─▶ this computer's server
+                                                   │ leading?  judge on committed state (projections + AppendAdmission)
+                                                   │           stage in replication.tail, send REPLICATE to voters
+                                                   │           quorum stored it ─▶ place in events/, ACCEPTED(seq)
+                                                   └ not leading: forward to the leader's session, or UNREACHABLE
+```
+
+### The tie rule, and why voter changes need both quorums
+
+The owner's rule is "more than half, or exactly half including the owner's computer". It is written once, as a
+weighted majority: each voter counts 1, and the owner's computer counts one and a half. A set wins with more than half
+the total weight. With an odd number of voters the extra half changes nothing. Every place that counts agreement calls
+the same function: pre-votes, votes, commits and check-quorum. The denominator is the committed voter set, never the
+reachable one: an absent voter counts (USER-STATED). (DERIVED)
+
+**Changing one voter at a time is not safe with this rule** (Opus runner, DERIVED by counterexample).
+
+- Example: the voters are the owner's computer A, B and C, and C is being removed. In the new set {A, B}, A alone is
+  exactly half and holds the owner's computer, so A alone decides.
+- A commits the removal with B's help. Then A is cut off, and keeps committing alone.
+- B holds the removal but never heard that it was committed, so B still counts {A, B, C}. B and C are a majority of
+  that set: B is elected and commits different entries. Two histories.
+- The usual argument fails because {A}, a quorum of the new set, and {B, C}, a quorum of the old set, share no voter.
+
+The fix is **joint agreement while a voter change is pending.** A computer whose log holds an uncommitted voter change
+needs a quorum of the old set and of the new set, for votes and commits alike. Once the change is committed, the new
+set alone counts. It still takes one entry per change. In the example, B needs A to win the new set, so B cannot be
+elected. Two Raft rules stay with it: one voter change pending at a time, and a new leader commits its own
+`TERM_STARTED` before it proposes any voter change (Ongaro, 2015).
+
+This is reasoned, not model-checked. The first slice's simulation tests it, and the counterexample is a named
+regression test.
+
+**Two voters.** The other computer alone is never more than half. A two-computer project therefore cannot decide while
+the owner's computer sleeps. This is the arithmetic of the tie rule, and step 2 behaves the same way. A third computer
+that is always on removes it. (DERIVED)
+
+### Who stands for election
+
+All voters run the same election. The timeouts favour two kinds of computer:
+
+- **The owner's computer** draws its election timeout from the low end of the range, so it usually wins while it is
+  up (Fable runner).
+- **A voter whose last code-remote check failed** uses a timeout twice as long. It still votes, and it leads only when
+  nobody else stands (both runners). It checks with `CodeRemote.check` at start and every 10 minutes.
+- **Leadership transfer is deferred.** A leader that cannot reach the code remote takes claims and reviews, and its
+  merge pass answers `CODE_REMOTE_UNAVAILABLE`, as it does today.
+
+### A proposal in flight across a leader change
+
+A proposal's bytes name its position N+1 and the digest of N, and never change. The member resends the same bytes, as
+in step 2. (DERIVED)
+
+| What happened before the leader changed | What the resend gets |
+| --- | --- |
+| The old leader committed the entry | Every later leader holds it (Raft's leader completeness), so the answer is `ACCEPTED(N+1)` once the new leader's `TERM_STARTED` has committed. |
+| The entry was staged and some voters stored it, but it was not committed | If the new leader holds it, the new leader commits it before its `TERM_STARTED`, and the answer is `ACCEPTED`. If not, position N+1 is the new `TERM_STARTED` and the answer is `HEAD_MOVED`. The old entry can never commit, so re-running the service cannot duplicate it. |
+| Nobody stored the entry | The new leader treats it as a fresh proposal: `ACCEPTED` or `HEAD_MOVED`. |
+| No leader yet (an election takes 10 to 20 s) | The relay answers `UNREACHABLE` at once. After the resends the agent gets `LEADER_OUTCOME_UNKNOWN` and keeps working inside its lane. The next pull settles what happened. |
+
+A voter that is not the leader answers a proposal with `REFUSED NOT_LEADER`. The relay then tries once more on the
+session of the leader it knows.
+
+### Leader time: a derived term, and the leader's clock only in the leader's entries
+
+"What this changes" said that entries gain a term and the leader's time. This design adds neither field. (DERIVED)
+
+- The term is derived (see above).
+- Invariant 7 holds as long as no rule decides anything from the clock of an entry a member wrote. Entries the leader
+  writes (`TERM_STARTED`, `INTEGRATION_*`, and liveness changes later) already carry the leader's clock, because the
+  leader is their writer.
+- The one rule that read a writer's clock is the replay of old `PARTICIPANT_HEARTBEAT` entries. A shared project's
+  leader refuses that type from a proposal. `ParticipantActivity.overlay` prefers the time recorded on its own
+  computer whenever one exists, so a remote clock that runs fast cannot delay suspicion (Fable runner).
+- A field on every entry would have changed the bytes members sign, voided every proposal in flight at a leader
+  change, and changed every reader of the format, with no rule needing it.
+- When member liveness becomes leader-observed (step 5), a new leader counts every participant as seen at its own
+  `TERM_STARTED`. A leader change can then only lengthen a grace period, never shorten it.
+
+### Membership in the log
+
+New entry types, all decoded in a new package `coordination/domain/membership`:
+
+| Entry | Payload | Valid when (checked by `MembershipProjection`) |
+| --- | --- | --- |
+| `PROJECT_SHARED` | owner computer and its key; owner public key; recovery public key; join policy `OWNER` | it is the first membership entry, and the owner key signs its statement |
+| `TERM_STARTED` | term | the signer leads that term, and the term is higher than the last one (leader-only) |
+| `JOIN_REQUESTED` | joiner node and key; the member that invited it | it is proposed by the inviting member's server while it holds the joiner's session |
+| `JOIN_ANSWERED` | node; accepted or declined; approval | the request is open; the owner key signs it, or, under policy `ANY_MEMBER`, any member proposes it |
+| `MEMBER_REMOVED` | node; owner signature | the owner key signs it (invariant 5) |
+| `MEMBER_CARD` | a retained invitation link of the member's own listener | the signer is that member |
+| `JOIN_POLICY_SET` | `OWNER` or `ANY_MEMBER`; owner signature | the owner key signs it |
+| `OWNER_CHANGED` | new owner computer and its key; new owner public key; new recovery public key; signature | the owner key or the recovery key signs it. If the new owner's computer is not yet a member, this entry also admits it (see "Recovery") |
+
+Deferred to the slices that need them: `VOTER_SET_CHANGED` (automatic picking, pin and exclude) and `VOTERS_RESET`.
+
+Rules (DERIVED):
+
+- **Owner authority is a signature inside the payload, never the entry's signer.** Every entry stays signed by the
+  node that proposed it, as today. The owner key signs `SHA-256("SYNESIS-OWNER-1" ‖ project ‖ action ‖ subject ‖
+  membership revision)`. Because the revision is in the statement, an old signature cannot be replayed after
+  membership has moved.
+- **Every member of a project of five or fewer is a voter** (USER-STATED). A sixth member joins without a vote: it
+  pulls like any member and is simply not in the voter set. Automatic picking (below) is what later gives it a vote.
+- **Invariant 4 is a projection rule** on every voter change: an even voter set contains the owner's computer.
+- **`MembershipProjection` is the only authority.** It is one more stage of `PredictionEventStore` and appears on
+  `ProjectionView`. It decides who may propose and pull (`LeaderEndpoint`), whom Link admits and redials
+  (`returningPeers`), who votes, what the run controller counts as another computer of the project, and later the
+  overlay.
+- **`replication.properties` shrinks to `role=shared` and an optional `code.remote=`.** The `leader=` and `member=`
+  lines go away. A step-2 file refuses with `REPLICATION_ROLE_RESHARE`, so a project shared with a step-2 build is
+  invited again (prerelease formats, ADR-0088).
+- **`ProjectionView.leaderEntry()` becomes "the signer leads now".** On the leader, that means the entry's signer is
+  this node and this node leads. Leader-only types are accepted only from the current leader, so a deposed leader's
+  merge pass cannot record anything.
+- **The overlay view derives from the committed log** (ADR-0066/0080 change). Each computer builds its own
+  `OverlayMembershipSnapshot` from the projection at each membership revision, signs it with its own node key, and
+  uses the revision as the snapshot revision. Every computer derives the same set from the same log, so propagating
+  snapshots between computers is retired, and `OverlayMembershipView`'s single-authority rule holds per computer. The
+  overlay stays off in step 3. The wiring, and raising the 32-member limit, come with step 4.
+
+### Sessions between voters
+
+Elections need every voter to reach every other voter, but today each computer has one session, to its inviter. Each
+member publishes a `MEMBER_CARD`, a retained invitation of its own listener. For every pair of members with no session,
+the lower node ID dials the other's card with `resumeRetainedJoin`. The host admits the dial because its
+`returningPeers` now names committed members. Five voters make ten sessions. (DERIVED; both runners)
+
+- ASSUMED: `resumeRetainedJoin` accepts a card past its invitation's expiry. If it does not, cards need a form that
+  does not expire.
+- REQUIRES-MEASUREMENT: whether cards dial between two home networks. A pair that cannot connect directly is step 4,
+  through a third member.
+- `PULL` is answered by any member, since committed entries are the same everywhere.
+
+### Owner key, node key and recovery key
+
+| Key | Made | Kept | Signs |
+| --- | --- | --- | --- |
+| Node key | at install, unchanged | identity folder | every entry its computer proposes |
+| Owner key | at the first project invitation | `<identity>/owner/<project>.key` on the owner's computer only (USER-STATED) | statements inside `PROJECT_SHARED`, `JOIN_ANSWERED` under the default policy, `MEMBER_REMOVED`, `JOIN_POLICY_SET` and `OWNER_CHANGED`; later voter pins and part declarations |
+| Recovery key | with the owner key | nowhere: shown once as 24 words, to be written down | only `OWNER_CHANGED` and `VOTERS_RESET` |
+
+- **Removing a member** is done on the owner's computer, which signs and proposes the entry. Elsewhere, `remove-member`
+  refuses with `OWNER_KEY_NOT_HERE`. The owner's way to act from another computer is recovery. Deferred: a one-line
+  removal token made on the owner's computer and used on another (Fable runner). It fits the same payload signature.
+- **Recovery with a quorum alive.** On the new computer, `synesis project recover` takes the recovery words and a
+  project link from any member. It proposes `OWNER_CHANGED`, signed by the recovery key. The entry replaces the owner
+  key, the owner's computer and the recovery key, and admits the new computer as a voter. A join request that carries
+  a valid recovery signature needs no other approval, since the recovery key is the owner's authority. Without this,
+  an owner whose only computer is gone could never be approved back in.
+- **Recovery or reset without a quorum** (owner decision 4) is a declared fork, because no normal entry can commit:
+  - Example: a two-voter project {owner A, B} loses A. B alone is never a quorum, so not even a recovery entry can
+    commit.
+  - `VOTERS_RESET{voters, forkAfter}` is signed by the owner key or the recovery key, proposed on a surviving computer,
+    and committed by a quorum of the **new** set alone.
+  - Before proposing it, the command refuses unless the voters it drops have been unreachable for at least the lane
+    grace (5 minutes). The person must type their names to confirm.
+  - A computer of the old set that returns with entries after `forkAfter` stops with `LEADER_LOG_DIVERGED`, as today.
+    `synesis log set-aside` then moves those entries to `events-set-aside/<term>/` and pulls again. It refuses while
+    an agent session on that computer is active, because its readers would see entries disappear.
+  - This is the only way invariant 1 can break, and it needs the owner's signature.
+
+### Joining, with approval when the owner is away
+
+```text
+inviting member M                     joiner J                        whoever may approve
+  link invite ─SLP1 link────────────▶ open-project-link
+                                      follow: role=shared, empty log
+  holds J's session ◀───────── dial ─
+  proposes JOIN_REQUESTED{J, by M}    (committed: survives restarts and the 10-minute hold)
+                                                                       sees it (UI, synesis link requests)
+                                                                       JOIN_ANSWERED{J, accepted}, owner-signed
+                                                                       by default
+  J is now a member: M serves the held session, or admits J's redial
+  J pulls the log, proposes MEMBER_CARD; the voters dial each other's cards
+```
+
+- **Default policy `OWNER`:** only the owner's computer can answer. The request waits in the log, any member's
+  `synesis link requests` lists it, and J's computer redials M until it is a member.
+- **`ANY_MEMBER`:** after the owner commits `JOIN_POLICY_SET{ANY_MEMBER}`, a `JOIN_ANSWERED` from any member is valid.
+  It is the same path and one projection branch.
+- The owner still sees who approved whom, because each answer is an entry signed by the computer that made it.
+
+### Automatic voter picking
+
+Picking matters only above five members. It is designed here and built after step 3's done criterion.
+
+- **Reliability** (owner decision 2) is the share of the last 7 days a computer was connected to whoever led, counted
+  in whole 10-minute windows.
+  - It is read from committed connection changes that the leaders write with their own clock. Those entries come
+    with step 5's leader-observed liveness, which picking therefore waits for.
+  - Only computers whose latest code-remote check passed count. Each member reports a change in that result as an
+    entry.
+  - Ties go to the longer unbroken connection, then the node ID.
+- **The swap rule.** When a non-voter has been more reliable than the least reliable unpinned voter, by at least 20
+  percentage points, for 24 hours, the leader proposes one swap. There is at most one swap a day, and the joint
+  agreement rule applies.
+- **Owner control.** Pinned voters are never swapped out. Excluded members are never picked. The owner's computer is
+  kept in while the count is even. Picking only proposes; the voters commit (invariant 3).
+
+### Merges when the leader moves
+
+- **Only the leader merges.** `MergeDriver` starts when its computer starts leading and stops when it stops. The pass
+  guard reads the replica's state instead of `isReplicationMember()`.
+- **Push before naming** (both runners). The merge commit is pushed to `refs/synesis/integration/<attemptId>` before
+  `INTEGRATION_COMMIT_CREATED` is proposed. This extends the step-2 rule that a member pushes before it proposes an
+  entry naming a commit.
+- **A new leader aligns first.** Before its first pass, `CodeRemote.alignWithLog`:
+  1. fetches `refs/synesis/*` and the control branch;
+  2. fast-forwards the checkout to the commit named by the last committed `CONTROL_BRANCH_ADVANCED`;
+  3. publishes the branch, with no force, so two leaders cannot rewrite it.
+- **A started attempt from an earlier term** is completed by the existing `recoverAdvancedControlBranch` when its
+  commit is held or can be fetched. Otherwise it ends as `INTERRUPTED_BY_LEADER_CHANGE`, and a later pass merges and
+  tests again.
+  - That reason does not count toward the "died twice" operator request.
+  - `branchCannotHold` treats "unknown commit after a successful fetch" as "cannot hold", which removes the endless
+    wait.
+
+### Wire and files
+
+- **SRL version 2** (`ReplicationCodec`), with the sender always the authenticated session's node, never a field:
+  - `VOTE_REQUEST{project, term, preVote, lastSequence, lastDigest, lastTerm}`;
+  - `VOTE{term, granted}`;
+  - `REPLICATE{project, term, committedSequence, committedDigest, tail}`, which is also the 1-second heartbeat;
+  - `REPLICATED{term, stored, committedSequence}`.
+
+  `PROPOSE`, `PULL` and `NOTICE` keep their shape. `LinkCompatibility.CURRENT` goes to 7.
+- **Local files in the coordination folder, never replicated:**
+  - `replication.tail/` and `replication.vote`, both forced to disk;
+  - `replication.state`, which is advisory (`term`, `leader`, own role, code-remote check), for status, the merge
+    guard and the relay. It is never authority.
+  - Journal lines `LEADER term= node=`, `ELECTION_STARTED`, `STEPPED_DOWN reason=`, `COMMITTED seq= term=`. The
+    parser of `ReplicationJournal.connectedPeers` already skips unknown kinds.
+- **Classes that change:**
+  - `PredictionEventStore`: `admit` splits into `judge` and the existing place path; it gains the membership stage.
+  - `ReplicationRole`: `memberOf` becomes `shared`.
+  - `ReplicationSettings`: the new format.
+  - `LeaderEndpoint`: members come from the projection, and the commit replaces `admit`.
+  - `LeaderReplication`: serves only while leading.
+  - `MemberReplication`: relays to whoever leads.
+  - `ReplicationSide` (cli) is replaced by a `Replica` in `coordination/replication`, a shell around a pure
+    `Consensus` core that a deterministic simulation drives.
+  - `ProjectSharing`: proposes entries instead of writing member lines.
+  - `LinkRuntimeOwner`: durable requests, and `returningPeers` from the projection.
+  - `IntegrationOrchestrationService`, `CodeRemote` and `EventLogObserver`, as described above.
+
+### The lab
+
+Scripts go in `D:\SynesisAcceptance\step3\`, beside `link-vm`. Only disposable projects are used, and Synesis is used
+normally in them.
+
+**Lab A, the done criterion.** Five Podman containers from the Linux-gate image, on one Podman network with
+`NET_ADMIN`:
+
+- Each container is a computer with its own identity and coordination server. A sixth container serves the bare Git
+  remote. Container 1 is the owner's computer.
+- `lab-up.ps1 -Voters 3|4|5` joins every computer through the one link and the owner's approval.
+- A load driver in the test jar appends a steady mix on every computer: overlapping claims, releases and snapshots, 2
+  to 5 appends a second in total. It records every `ACCEPTED(seq, eventId)` it saw.
+- `fault.ps1` provides `split` (iptables both ways), `heal`, `kill`, `pause`/`resume` (a sleeping laptop), `restart`,
+  and `netem` (home delay and loss).
+- `check.ps1` runs these checks:
+  1. **Same history:** after healing and 60 seconds, every `events/` is byte-identical. Before that, each is a prefix
+     of the longest.
+  2. **No acknowledged entry lost.**
+  3. **No double claims.**
+  4. **At most one `TERM_STARTED` per term.**
+  5. **No file in `events/` removed or replaced:** a watcher in each container records every change.
+
+| Scenario | Fault | Expected |
+| --- | --- | --- |
+| Split, odd | 5 voters; {1,2} against {3,4,5} for 60 s | {3,4,5} keeps committing and {1,2} commits nothing; one history |
+| Split, tie | 4 voters; {1,2} against {3,4}, owner in 1 | {1,2} decides by the tie rule; one history |
+| Leader loss | kill the leader under load; restart it after 2 min | a new `TERM_STARTED` within 30 s; the old leader rejoins as follower; one history |
+| Leader sleep | pause the leader 60 s | check-quorum deposes it; on waking, pre-vote stops it from deposing the new leader |
+| Voter loss | kill a follower for 5 min | no election; it catches up by `PULL` |
+| Voter change during a split | remove a voter while splitting the old and new majorities | at most one side commits (the counterexample as a regression) |
+| Merge across a leader change | kill the leader between `INTEGRATION_COMMIT_CREATED` and `CONTROL_BRANCH_ADVANCED`, and after | the new leader aligns and completes or merges again; the remote's branch equals the log's last advanced commit |
+
+Each scenario runs 20 times with random fault timing. A last run uses real agents (Sonnet 5.5, medium) on three
+computers, with the leader killed mid-run, to show agents get through a leader change.
+
+**Lab B, timing on real networks.** The Windows host, `synesis-peer-vm` and a third voter:
+
+- The third voter is a Podman container if QUIC from the VM reaches it (REQUIRES-MEASUREMENT); otherwise a clone of
+  the VM.
+- Faults: unplugging the VM's virtual cable (`VBoxManage ... setlinkstate1 off`), Windows sleep, VM pause.
+- The two-homes pair is used for the measurements across homes.
+
+| Timer (from "Timing") | Measured by | Starting value holds if |
+| --- | --- | --- |
+| Heartbeat 1 s | Link round trip every second for 24 h, with an upload saturating the link 10 minutes an hour; p50 and p99 | p99 under 500 ms |
+| Election timeout 10–20 s | elections in 72 idle hours, three voters, two homes | none a day; more than one raises the floor |
+| Pre-vote, check-quorum | the leader-sleep scenario, 20 runs | no term change caused by the computer that woke |
+| Recovery after leader loss | time from kill to the new `TERM_STARTED`, 50 kills | p95 under 30 s |
+| Keepalive 15 s | each home router's UDP mapping lifetime, by halving the keepalive interval | lifetime above 30 s |
+| Claim latency | proposal to `ACCEPTED`, LAN and two homes | p99 under 2 s at home |
+
+Link's retained sessions now expire after 30 s, not 5 s (step 2). An election can therefore start before Link
+notices a dead session. With pre-vote this is harmless: a voter that lost only its own session to a working leader
+cannot win a pre-vote. (DERIVED; the 72-hour count confirms it.)
+
+### Smallest first slice
+
+1. **The consensus core and its simulation, with no IO.** `Consensus`, the quorum function, and the membership rules
+   for voter changes. A seeded simulation of 3 to 5 voters covers loss, delay, reordering, splits, and crash and
+   restart with the vote and tail kept on disk. It checks same history, no acknowledged entry lost, and one leader per
+   term. The counterexample is a named regression.
+2. **Membership in the log.** The entry types, `MembershipProjection`, owner and recovery keys made at the first
+   invitation, `role=shared`, and every reader of the member list moved to the projection. This slice still runs with
+   one leader.
+3. **The replica over an in-process transport.**
+   - `Replica`, the tail and vote files, SRL version 2, and the `judge`/place split.
+   - Every shared append goes through loopback, and `ReplicationSide` is deleted.
+   - Test: three project roots in one JVM, as in step 2's `LinkReplicationTest`.
+4. **The voter mesh over Link.** `MEMBER_CARD`, card dialing, `returningPeers` from the projection, and
+   compatibility 7. Test: three servers on loopback QUIC.
+5. **Merges across a leader change.** Push before naming, `alignWithLog`, and `INTERRUPTED_BY_LEADER_CHANGE`.
+6. **Lab A to the done criterion, then Lab B,** and the Timing table updated from the measurements.
+7. **Owner overrides.** `OWNER_CHANGED` by recovery, `VOTERS_RESET`, `synesis log set-aside`, and
+   `JOIN_POLICY_SET{ANY_MEMBER}`.
+
+**Deferred:**
+- automatic voter picking, which waits for step 5's leader-observed liveness;
+- voter pin and exclude;
+- removal tokens;
+- leadership transfer;
+- wiring the overlay snapshot (step 4);
+- routes through a third member (step 4);
+- members' activity reports and lane takeover (step 5);
+- proposal batching;
+- a log snapshot.
+
+### Work in flight this must fit
+
+- **"Keep an agent run alive while the other computer works."** `EventLogObserver.otherComputerConnected` reads the
+  role file's members and leader, which slice 2 removes. It reads the projection's other members instead.
+  `ReplicationJournal.connectedPeers` and its line format stay. The meaning widens from "my leader or my members" to
+  "any other member", which is what a project with several voters means. Slice 2 lands after that work merges.
+- **"Wake agents with hooks instead of polling."** It reacts to `events/`, which stays committed-only, so no agent is
+  woken by an entry that is later dropped. `TERM_STARTED` and membership entries do land in `events/`. They are marked
+  as recording no lane state, so a leader change does not wake every agent. Both changes add to
+  `PredictionEventType`, a small merge.
+
+### Rejected for step 3
+
+- **A Raft library (Apache Ratis, SOFAJRaft).**
+  - It brings its own log, so `events/` would become a second copy written after it.
+  - It brings its own transport, which would need an adapter onto Link application streams.
+  - It counts plain majorities, so the owner's tie rule cannot be expressed; giving the owner's computer a second
+    voter identity would break "a member is a computer".
+  - Ratis adds about 15 MB to the installer.
+- **A term and the leader's time as fields of every entry.** The bytes members sign would change, so every proposal
+  in flight at a leader change would be refused. Every reader of the format would change too. No rule needs either
+  field.
+- **Uncommitted entries in `events/`, removed on conflict.** Every local reader would have to cope with entries
+  disappearing.
+- **The owner's computer leads; a deputy takes over on an owner-signed handover.** The least code, but the owner's
+  absence is exactly the case the owner wants covered.
+- **Leases with the owner as preferred primary.** Home computers sleep and wake with a jumped clock, the reason
+  "Timing" already rejects lease reads.
+- **Single-voter changes without joint agreement.** Unsafe with the tie rule, as the counterexample shows.
+- **Always an odd number of voters, dropping the tie rule.** It avoids the counterexample, but with two computers one
+  could not vote, and the tie rule is the owner's.
+
 ## Alternatives rejected
 
 - **The host is the server, for good.** Simple, but everything stops when that person leaves, and
@@ -497,8 +945,10 @@ longer the documented way in.
   log, with owner-only removal.
 - **ADR-0077:** the topology policy gains long-range links above a size threshold.
 - **ADR-0093:** unchanged. Messages travel in the log and still decide nothing.
-- **Formats:** log entries gain a term and the leader's time; the handshake gains the compatibility
-  number. Under ADR-0088, prerelease formats may change without migration.
+- **Formats:** the handshake gains the compatibility number. Log entries keep their format: the term is derived
+  from each leader's `TERM_STARTED` entry, and the leader's clock is in the entries the leader writes ("Step 3
+  design", which replaced "entries gain a term and the leader's time"). Under ADR-0088, prerelease formats may change
+  without migration.
 - **`OverlayMembershipSnapshot` holds at most 32 members.** The limit rises with step 3.
 
 ## Consequences
@@ -532,7 +982,7 @@ Each step works and is tested on its own. Later steps build on earlier ones.
      - Code moves through a Git remote.
    - **Done when:** an agent on one computer and an agent on another claim, review and integrate one
      WorkGroup, with no two agents ever holding the same file.
-3. **Voters, elections and membership in the log.**
+3. **Voters, elections and membership in the log.** See "Step 3 design".
    - **Built:** terms, voter-set entries, the owner key and the recovery key, owner-only removal,
      and the tie rule.
    - **Done when:** a split, a leader's loss and a voter's loss in a three- to five-member lab each
