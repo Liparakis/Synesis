@@ -18,7 +18,7 @@ It amends ADR-0098, "One project across many computers":
 - It reshapes ADR-0098's paused step 3, the design on branch `claude/youthful-stonebraker-7f907c` at commit `43eaaba3`.
 - It changes ADR-0098's decision 5 for computers that are away.
 
-ADR-0099 is taken by the hook work on branch `claude/happy-engelbart-9d0481`.
+ADR-0099 is the hook work, `docs/adr/0099-agents-are-woken-not-waiting.md`.
 
 Mode: evolution of the existing system. Claims are marked VERIFIED (file:line on `claude/bold-borg-51ee1c` at
 `11b4aa5c`), USER-STATED, DERIVED, ASSUMED, UNKNOWN or REQUIRES-MEASUREMENT.
