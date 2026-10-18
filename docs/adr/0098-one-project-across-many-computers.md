@@ -1280,9 +1280,15 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 - **The diverged-copy rule with three or more copies** is reasoned, not proven. The property test of step 5 checks it.
 - **A claim-lock test that failed once under load.** `ClaimLockTest.ofTwoOverlappingClaimsMadeAtTheSameMomentExactly
   TheLowerNodesStands`, race 3, failed in the whole Linux gate on 2026-10-18 (31ac93cc): both overlapping claims
-  stood (the member's claim got no `OVERLAPPING_CLAIM`). It passed alone five times in a row. Either the test's timing
-  is too tight for a loaded machine or the 5 s wait for connected computers lets both stand when an answer comes late;
-  which one is not known yet. To look at, and to fix only if it shows a real race. (FLAKY, step 4.)
+  stood (the member's claim got no `OVERLAPPING_CLAIM`). It passed alone five times in a row. Looked at on
+  2026-10-18: not a race in the product. The test announces each claim in a scratch store of its own, so neither
+  computer's log holds either claim, and the only thing that can make one give way is the other's check being under
+  way at the same moment (`LogExchange.checking`). On a loaded machine one thread's whole check can finish before the
+  other's starts; then neither sees the other and both stand. In the product a claim is in its computer's log before
+  it is checked, so a check that comes second finds it (`judgeClaim` reads the log) and exactly one stands, which
+  `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` covers through the
+  services. Left as it is: the test could count a race in which both stood as one where the two checks did not
+  overlap, and require enough overlapping ones. (FLAKY, test only, step 4.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)
