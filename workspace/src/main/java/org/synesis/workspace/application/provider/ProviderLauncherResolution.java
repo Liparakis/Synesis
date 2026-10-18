@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * Decides which Synesis executable provider hooks and MCP entries invoke. A launcher on the
  * {@code PATH} wins, then an explicitly configured one, then the per-user install location, and the
- * Windows native launcher is preferred over the script of the same name. The answer is written into
+ * Windows native launcher is preferred over the script of the same name. An MCP entry runs the same
+ * build as the hooks, so one agent never talks to two versions. The answer is written into
  * files outside the repository, so it must not depend on the caller's working directory. It is
  * separate from {@link ProviderApplicationService} so the search order can be read and tested on
  * its own.
@@ -99,26 +100,34 @@ final class ProviderLauncherResolution {
     }
 
     /**
-     * Resolves the native stdio MCP launcher when the local distribution provides it, falling back to
-     * the CLI launcher for development installs.
+     * Resolves the MCP launcher of the build the provider hooks run, from {@link #launcher()}: the native stdio MCP
+     * launcher beside it when that build has one, otherwise the CLI launcher itself (a development build).
      *
      * @return native MCP launcher or development fallback
      */
     static Path mcpLauncherPath() {
-        String executable = isWindows() ? "synesis-mcp.exe" : "synesis-mcp";
-        String configured = System.getProperty("synesis.mcp.launcher", System.getenv("SYNESIS_MCP_LAUNCHER"));
+        return mcpLauncher(launcher(), System.getProperty("synesis.mcp.launcher", System.getenv("SYNESIS_MCP_LAUNCHER")), isWindows());
+    }
+
+    /**
+     * Returns the MCP launcher for the build whose CLI launcher is {@code cli}, unless one is configured.
+     *
+     * <p>The installed launcher is not preferred over {@code cli}: it starts whichever version is activated, so a
+     * build run from {@code PATH} had its hooks on itself and its agents' MCP servers on the installed, older build.
+     * That older server could not read an entry type the newer build wrote and failed every call (PC + VM run,
+     * 2026-10-18, ADR-0098 step 5 designer item 23).</p>
+     *
+     * @param cli        the CLI launcher the hooks run
+     * @param configured explicitly configured MCP launcher, or {@code null}
+     * @param windows    whether Windows launcher names apply
+     * @return absolute MCP launcher
+     */
+    static Path mcpLauncher(Path cli, String configured, boolean windows) {
+        String executable = windows ? "synesis-mcp.exe" : "synesis-mcp";
         Path configuredPath = configuredPath(configured);
         if (configuredPath != null && Files.isRegularFile(configuredPath)) {
             return configuredPath.toAbsolutePath().normalize();
         }
-        String localAppData = System.getenv("LOCALAPPDATA");
-        if (isWindows() && localAppData != null && !localAppData.isBlank()) {
-            Path installed = Path.of(localAppData, "Synesis", "bin", executable);
-            if (Files.isRegularFile(installed)) {
-                return installed.toAbsolutePath().normalize();
-            }
-        }
-        Path cli = launcher();
         Path candidate = cli.getParent() == null ? Path.of(executable) : cli.getParent().resolve(executable);
         return Files.isRegularFile(candidate) ? candidate.toAbsolutePath().normalize() : cli;
     }
