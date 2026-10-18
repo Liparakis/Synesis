@@ -940,6 +940,24 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     - **Not covered yet:** a second advance of the same re-merge that conflicts after the first was combined (built
       on the combine's base, untested), a combine lane on another computer, and a combine the agent cannot make:
       its messages go to the authors, and the lane stays open until someone changes it.
+23. **One agent, one build** (second real step 5 run, s5-run2, 2026-10-18). The PC ran the acceptance build from
+    `PATH` while an older build was still the installed one. `provider install` pointed the hooks at the `PATH` build
+    and the agents' MCP entry at the installed `synesis-mcp.exe`, because the MCP launcher was looked for in the install
+    location first (`ProviderLauncherResolution.mcpLauncherPath`), and the installed launcher starts whichever version
+    is activated. That older MCP server could not read `REMERGE_SNAPSHOT_CREATED` (wire code 81, new in this step). Once
+    the re-merge wrote one, every store it opened failed with "invalid event type", and every call of the PC's
+    reviewer of gcd was answered `SESSION_TERMINAL_STATE_UNAVAILABLE` (`durable_state_ambiguous`, not retry-safe). The
+    reviewer read gcd but could not record its verdict, and both controllers kept waiting for it. The log was sound:
+    the run's own build answers that session `review_decision` from the same files. **Rule:** an MCP entry runs the
+    build its hooks run, through that build's native MCP launcher or else its CLI launcher; an explicitly configured
+    MCP launcher still wins.
+    - **The re-merge was lawful.** No lane was merged while the link was down. Within a second of the reconnect each
+      computer merged its own reviewed lane onto the same head (primes on the PC, fib on the VM). The PC, the higher
+      node ID, re-merged onto the VM's copy, the original reviewer of primes (on the VM, not its author) accepted the
+      re-merge snapshot, and only then did the PC advance; the VM's audit took the result, so both copies are equal.
+    - **Not done:** an older build that meets an entry type it does not know still reports `durable_state_ambiguous`
+      and asks for a person; naming it "this Synesis is older than the project's log" would have shown the cause at
+      once. `agents run` does not check that its agents' MCP server is its own build.
 
 ### Step 6: Membership in the owner's log
 

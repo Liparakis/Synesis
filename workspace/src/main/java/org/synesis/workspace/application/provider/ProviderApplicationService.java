@@ -62,8 +62,8 @@ public final class ProviderApplicationService {
     }
 
     /**
-     * Resolves the native stdio MCP launcher when the local distribution provides it, falling back to
-     * the CLI launcher for development installs.
+     * Resolves the MCP launcher of the build the provider hooks run: its native stdio MCP launcher
+     * when that build has one, otherwise its CLI launcher (development installs).
      *
      * @return native MCP launcher or development fallback
      */
