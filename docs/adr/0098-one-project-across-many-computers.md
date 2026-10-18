@@ -1070,6 +1070,11 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 - **Every throw an arriving entry can reach.** Classified on 2026-10-18 in ADR-0100, "Every rule an arriving entry
   can reach", and built in step 4; what still depends on order is designer item 18.
 - **The diverged-copy rule with three or more copies** is reasoned, not proven. The property test of step 5 checks it.
+- **A claim-lock test that failed once under load.** `ClaimLockTest.ofTwoOverlappingClaimsMadeAtTheSameMomentExactly
+  TheLowerNodesStands`, race 3, failed in the whole Linux gate on 2026-10-18 (31ac93cc): both overlapping claims
+  stood (the member's claim got no `OVERLAPPING_CLAIM`). It passed alone five times in a row. Either the test's timing
+  is too tight for a loaded machine or the 5 s wait for connected computers lets both stand when an answer comes late;
+  which one is not known yet. To look at, and to fix only if it shows a real race. (FLAKY, step 4.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)
